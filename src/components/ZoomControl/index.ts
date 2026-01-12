@@ -1,2 +1,2 @@
 // src/components/ZoomControl/index.ts
-export { ZoomControl } from './ZoomControl';
+export { ZoomControl } from './ZoomControl'

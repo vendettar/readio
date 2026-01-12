@@ -1,36 +1,36 @@
-import path from "path"
-import { defineConfig, type PluginOption } from 'vite'
-import react from '@vitejs/plugin-react'
-import { TanStackRouterVite } from '@tanstack/router-plugin/vite'
 import { createRequire } from 'node:module'
+import path from 'node:path'
+import { TanStackRouterVite } from '@tanstack/router-plugin/vite'
+import react from '@vitejs/plugin-react'
+import { defineConfig, type PluginOption } from 'vite'
 
 // https://vite.dev/config/
-const require = createRequire(import.meta.url);
+const require = createRequire(import.meta.url)
 
 // Only enable bundle analysis when ANALYZE=1
-const shouldAnalyze = process.env.ANALYZE === '1';
+const shouldAnalyze = process.env.ANALYZE === '1'
 
 function getVisualizerPlugin(): PluginOption | null {
-  if (!shouldAnalyze) return null;
+  if (!shouldAnalyze) return null
 
   try {
     const mod = require('rollup-plugin-visualizer') as {
-      visualizer?: (options: Record<string, unknown>) => PluginOption;
-    };
-    if (typeof mod.visualizer !== 'function') return null;
+      visualizer?: (options: Record<string, unknown>) => PluginOption
+    }
+    if (typeof mod.visualizer !== 'function') return null
     return mod.visualizer({
       filename: 'stats.html',
       open: true,
       gzipSize: true,
       brotliSize: true,
-    });
+    })
   } catch {
     // Optional dev dependency; skip if not installed.
-    return null;
+    return null
   }
 }
 
-const visualizerPlugin = getVisualizerPlugin();
+const visualizerPlugin = getVisualizerPlugin()
 
 export default defineConfig({
   plugins: [
@@ -43,7 +43,7 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      '@': path.resolve(__dirname, './src'),
     },
   },
   build: {

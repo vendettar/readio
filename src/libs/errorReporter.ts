@@ -1,9 +1,9 @@
 // src/libs/errorReporter.ts
 // Optional error reporting infrastructure for production error tracking
 
-type ErrorReporter = (error: Error, info: { componentStack?: string }) => void;
+type ErrorReporter = (error: Error, info: { componentStack?: string }) => void
 
-let errorReporter: ErrorReporter = () => { };
+let errorReporter: ErrorReporter = () => {}
 
 /**
  * Configure a custom error reporter for production error tracking.
@@ -14,7 +14,7 @@ let errorReporter: ErrorReporter = () => { };
  * });
  */
 export function setErrorReporter(reporter: ErrorReporter): void {
-    errorReporter = reporter;
+  errorReporter = reporter
 }
 
 /**
@@ -22,5 +22,5 @@ export function setErrorReporter(reporter: ErrorReporter): void {
  * No-op if no reporter is configured.
  */
 export function reportError(error: Error, info: { componentStack?: string }): void {
-    errorReporter(error, info);
+  errorReporter(error, info)
 }

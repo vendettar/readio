@@ -98,7 +98,7 @@ When performing UI integration or refactoring, check the following:
 
 - [ ] When an effect depends on an element referenced by a ref, consider if that element might only be created in a later render.
 - [ ] If a ref points to a conditionally rendered element (e.g., `{condition && <element ref={ref} />}`), the condition variable must be in the dependency array.
-- [ ] Use ESLint's `react-hooks/exhaustive-deps` rule, but understand its warnings.
+- [ ] Use Biome's `useExhaustiveDependencies` rule, but understand its warnings.
 
 ### Audio Player
 

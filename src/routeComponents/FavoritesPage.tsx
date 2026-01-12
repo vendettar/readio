@@ -1,50 +1,56 @@
-import { Star, MoreHorizontal } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
-import { useI18n } from '../hooks/useI18n';
-import { type Favorite } from '../libs/dexieDb';
-import { useExploreStore } from '../store/exploreStore';
-import { Button } from '../components/ui/button';
-import { formatDuration, formatDateStandard } from '../libs/dateUtils';
-import { getDiscoveryArtworkUrl } from '../libs/imageUtils';
-import { stripHtml } from '../libs/htmlUtils';
+import { MoreHorizontal, Star } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { InteractiveArtwork } from '../components/interactive/InteractiveArtwork'
+import { InteractiveTitle } from '../components/interactive/InteractiveTitle'
+import { Button } from '../components/ui/button'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '../components/ui/dropdown-menu';
-import { InteractiveTitle } from '../components/interactive/InteractiveTitle';
-import { InteractiveArtwork } from '../components/interactive/InteractiveArtwork';
-import { useEpisodePlayback } from '../hooks/useEpisodePlayback';
-import { useSubscriptionMap } from '../hooks/useSubscriptionMap';
+} from '../components/ui/dropdown-menu'
+import { useEpisodePlayback } from '../hooks/useEpisodePlayback'
+import { useI18n } from '../hooks/useI18n'
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
+import { useSubscriptionMap } from '../hooks/useSubscriptionMap'
+import { formatDateStandard, formatDuration } from '../libs/dateUtils'
+import type { Favorite } from '../libs/dexieDb'
+import { stripHtml } from '../libs/htmlUtils'
+import { getDiscoveryArtworkUrl } from '../libs/imageUtils'
+import { useExploreStore } from '../store/exploreStore'
 
 export default function FavoritesPage() {
-  const { t } = useI18n();
+  const { t } = useI18n()
 
-  const { favorites, loadFavorites, favoritesLoaded, removeFavorite, loadSubscriptions, subscriptionsLoaded } = useExploreStore();
-  const { playFavorite } = useEpisodePlayback();
-  const [isInitialLoading, setIsInitialLoading] = useState(!favoritesLoaded);
+  const {
+    favorites,
+    loadFavorites,
+    favoritesLoaded,
+    removeFavorite,
+    loadSubscriptions,
+    subscriptionsLoaded,
+  } = useExploreStore()
+  const { playFavorite } = useEpisodePlayback()
+  const [isInitialLoading, setIsInitialLoading] = useState(!favoritesLoaded)
 
   // Keyboard shortcuts
-  useKeyboardShortcuts({ isModalOpen: false });
+  useKeyboardShortcuts({ isModalOpen: false })
 
   // Load favorites and subscriptions
   useEffect(() => {
     if (!favoritesLoaded || !subscriptionsLoaded) {
       Promise.all([
         !favoritesLoaded ? loadFavorites() : Promise.resolve(),
-        !subscriptionsLoaded ? loadSubscriptions() : Promise.resolve()
-      ]).finally(() => setIsInitialLoading(false));
+        !subscriptionsLoaded ? loadSubscriptions() : Promise.resolve(),
+      ]).finally(() => setIsInitialLoading(false))
     }
-  }, [favoritesLoaded, loadFavorites, subscriptionsLoaded, loadSubscriptions]);
+  }, [favoritesLoaded, loadFavorites, subscriptionsLoaded, loadSubscriptions])
 
-  const subscriptionMap = useSubscriptionMap();
-
+  const subscriptionMap = useSubscriptionMap()
 
   const handleRemoveFavorite = async (key: string) => {
-    await removeFavorite(key);
-  };
+    await removeFavorite(key)
+  }
 
   return (
     <div className="h-full overflow-y-auto">
@@ -53,7 +59,9 @@ export default function FavoritesPage() {
         style={{ paddingLeft: 'var(--page-margin-x)', paddingRight: 'var(--page-margin-x)' }}
       >
         <header className="mb-12">
-          <h1 className="text-4xl font-bold text-foreground tracking-tight mb-3">{t('favoritesTitle')}</h1>
+          <h1 className="text-4xl font-bold text-foreground tracking-tight mb-3">
+            {t('favoritesTitle')}
+          </h1>
           <p className="text-xl text-muted-foreground font-medium">{t('favoritesSubtitle')}</p>
         </header>
 
@@ -79,38 +87,45 @@ export default function FavoritesPage() {
         {!isInitialLoading && favorites.length > 0 && (
           <div className="space-y-0">
             {favorites.map((favorite: Favorite) => {
-              const duration = favorite.duration ? formatDuration(favorite.duration, t) : null;
-              const cleanDescription = favorite.description ? stripHtml(favorite.description) : '';
-              const hasEpisodeArtwork = !!favorite.episodeArtworkUrl;
-              const artworkUrl = hasEpisodeArtwork ? favorite.episodeArtworkUrl : favorite.artworkUrl;
+              const duration = favorite.duration ? formatDuration(favorite.duration, t) : null
+              const cleanDescription = favorite.description ? stripHtml(favorite.description) : ''
+              const hasEpisodeArtwork = !!favorite.episodeArtworkUrl
+              const artworkUrl = hasEpisodeArtwork
+                ? favorite.episodeArtworkUrl
+                : favorite.artworkUrl
 
               return (
-                <div
-                  key={favorite.key}
-                  className="group/episode relative smart-divider-group pr-4"
-                >
+                <div key={favorite.key} className="group/episode relative smart-divider-group pr-4">
                   {/* Hover Background */}
                   <div className="absolute inset-y-0 -left-[var(--page-gutter-x)] right-0 rounded-lg bg-foreground/5 opacity-0 group-hover/episode:opacity-100 transition-opacity duration-300 pointer-events-none" />
 
                   <div className="relative flex items-center gap-4 py-3 z-10">
                     {/* Artwork with Navigation & Play */}
                     {(() => {
-                      const collectionId = subscriptionMap.get(favorite.feedUrl);
-                      const episodeId = favorite.episodeId; // Only use actual GUID/ID for navigation
+                      const collectionId = subscriptionMap.get(favorite.feedUrl)
+                      const episodeId = favorite.episodeId // Only use actual GUID/ID for navigation
                       const Artwork = (
                         <InteractiveArtwork
                           src={getDiscoveryArtworkUrl(artworkUrl, 160)}
-                          to={collectionId && episodeId ? "/podcast/$id/episode/$episodeId" : undefined}
-                          params={collectionId && episodeId ? { id: collectionId, episodeId: encodeURIComponent(episodeId) } : undefined}
+                          to={
+                            collectionId && episodeId
+                              ? '/podcast/$id/episode/$episodeId'
+                              : undefined
+                          }
+                          params={
+                            collectionId && episodeId
+                              ? { id: collectionId, episodeId: encodeURIComponent(episodeId) }
+                              : undefined
+                          }
                           onPlay={() => playFavorite(favorite)}
                           playButtonSize="md"
                           playIconSize={20}
                           hoverGroup="episode"
                           size="lg"
                         />
-                      );
+                      )
 
-                      return Artwork;
+                      return Artwork
                     })()}
 
                     <div className="flex-1 min-w-0 flex items-center justify-between">
@@ -118,18 +133,30 @@ export default function FavoritesPage() {
                         {/* Title */}
                         <div className="mb-0.5 z-20 relative">
                           {(() => {
-                            const collectionId = subscriptionMap.get(favorite.feedUrl);
-                            const episodeId = favorite.episodeId; // Only GUID for navigation
+                            const collectionId = subscriptionMap.get(favorite.feedUrl)
+                            const episodeId = favorite.episodeId // Only GUID for navigation
 
                             return (
                               <InteractiveTitle
                                 title={favorite.episodeTitle}
-                                to={collectionId && episodeId ? "/podcast/$id/episode/$episodeId" : undefined}
-                                params={collectionId && episodeId ? { id: collectionId, episodeId: encodeURIComponent(episodeId) } : undefined}
-                                onClick={!(collectionId && episodeId) ? () => playFavorite(favorite) : undefined}
+                                to={
+                                  collectionId && episodeId
+                                    ? '/podcast/$id/episode/$episodeId'
+                                    : undefined
+                                }
+                                params={
+                                  collectionId && episodeId
+                                    ? { id: collectionId, episodeId: encodeURIComponent(episodeId) }
+                                    : undefined
+                                }
+                                onClick={
+                                  !(collectionId && episodeId)
+                                    ? () => playFavorite(favorite)
+                                    : undefined
+                                }
                                 className="text-sm leading-tight"
                               />
-                            );
+                            )
                           })()}
                         </div>
 
@@ -139,9 +166,7 @@ export default function FavoritesPage() {
                             {favorite.podcastTitle}
                             {favorite.podcastTitle && favorite.pubDate && ' • '}
                             {favorite.pubDate && (
-                              <span>
-                                {formatDateStandard(favorite.pubDate)}
-                              </span>
+                              <span>{formatDateStandard(favorite.pubDate)}</span>
                             )}
                           </div>
                         )}
@@ -157,7 +182,7 @@ export default function FavoritesPage() {
                       {/* Right Side Actions */}
                       <div className="flex items-center flex-shrink-0 gap-12">
                         {duration && (
-                          <span className="text-xs text-muted-foreground font-medium whitespace-nowrap min-w-16 text-right">
+                          <span className="text-xs text-muted-foreground font-medium whitespace-nowrap w-20 text-left">
                             {duration}
                           </span>
                         )}
@@ -209,12 +234,11 @@ export default function FavoritesPage() {
                   {/* Separator */}
                   <div className="absolute bottom-0 left-0 right-4 h-px bg-border group-hover/episode:opacity-0 transition-opacity smart-divider" />
                 </div>
-              );
+              )
             })}
           </div>
         )}
       </div>
     </div>
-  );
+  )
 }
-

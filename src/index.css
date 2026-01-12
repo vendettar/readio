@@ -93,7 +93,6 @@
     --chart-5: 340 75% 55%;
   }
 
-
   /* Reading Backgrounds - separate from global theme */
   [data-reading-bg] {
     --reading-bg: hsl(var(--background));
@@ -142,22 +141,24 @@
 .reading-area {
   background-color: var(--reading-bg, hsl(var(--background)));
   color: var(--reading-fg, hsl(var(--foreground)));
-  transition: background-color 0.3s ease, color 0.3s ease;
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease;
 }
 
 .readio-highlight::before,
 .readio-highlight::after,
 .readio-overlay-rect.start::before,
 .readio-overlay-rect.end::after {
-  content: '';
+  content: "";
   position: absolute;
   width: var(--sel-pin-head-d);
   height: var(--sel-pin-total-h);
   z-index: -1;
   pointer-events: none;
   background-color: var(--color-highlight);
-  -webkit-mask-image: url('./assets/selection-pin.svg');
-  mask-image: url('./assets/selection-pin.svg');
+  -webkit-mask-image: url("./assets/selection-pin.svg");
+  mask-image: url("./assets/selection-pin.svg");
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
   -webkit-mask-size: 100% 100%;

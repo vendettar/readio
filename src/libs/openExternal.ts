@@ -4,9 +4,9 @@
  * @param target Target window name (default: '_blank')
  */
 export function openExternal(url: string, target: string = '_blank'): void {
-    try {
-        window.open(url, target, 'noopener,noreferrer');
-    } catch (error) {
-        console.error('[openExternal] Failed to open URL:', url, error);
-    }
+  try {
+    window.open(url, target, 'noopener,noreferrer')
+  } catch (error) {
+    console.error('[openExternal] Failed to open URL:', url, error)
+  }
 }

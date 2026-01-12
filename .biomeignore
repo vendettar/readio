@@ -1,0 +1,10 @@
+public/**
+local/**
+dist/**
+coverage/**
+node_modules/**
+./src/index.css
+**/*.css
+eslint.config.js
+./eslint.config.js
+/eslint.config.js

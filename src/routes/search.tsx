@@ -1,7 +1,7 @@
-import { createFileRoute, lazyRouteComponent } from '@tanstack/react-router';
+import { createFileRoute, lazyRouteComponent } from '@tanstack/react-router'
 
 interface SearchParams {
-  q?: string;
+  q?: string
 }
 
 export const Route = createFileRoute('/search')({
@@ -9,6 +9,6 @@ export const Route = createFileRoute('/search')({
   validateSearch: (search: Record<string, unknown>): SearchParams => {
     return {
       q: typeof search.q === 'string' ? search.q : undefined,
-    };
+    }
   },
-});
+})

@@ -1,44 +1,58 @@
 // src/routes/podcast/$id/episode/$episodeId.tsx
 // Single episode detail page - Maximum information extraction
 
-import React, { useState } from 'react';
-import { Link, useParams } from '@tanstack/react-router';
-import { useQuery } from '@tanstack/react-query';
-import { Play, Star, Calendar, Clock, ExternalLink, FileText, List, HardDrive, AlertTriangle } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { useI18n } from '@/hooks/useI18n';
-import { usePlayerStore } from '@/store/playerStore';
-import { useExploreStore } from '@/store/exploreStore';
-import { lookupPodcastFull, fetchPodcastFeed, lookupPodcastEpisodes } from '@/libs/discoveryProvider';
-import { getDiscoveryArtworkUrl } from '@/libs/imageUtils';
-import { stripHtml } from '@/libs/htmlUtils';
-import { formatRelativeTime, formatDuration } from '@/libs/dateUtils';
-import { cn } from '@/lib/utils';
-import { openExternal } from '@/libs/openExternal';
+import { useQuery } from '@tanstack/react-query'
+import { Link, useParams } from '@tanstack/react-router'
+import {
+  AlertTriangle,
+  Calendar,
+  Clock,
+  ExternalLink,
+  FileText,
+  HardDrive,
+  List,
+  Play,
+  Star,
+} from 'lucide-react'
+import React, { useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { useI18n } from '@/hooks/useI18n'
+import { cn } from '@/lib/utils'
+import { formatDuration, formatRelativeTime } from '@/libs/dateUtils'
+import {
+  fetchPodcastFeed,
+  lookupPodcastEpisodes,
+  lookupPodcastFull,
+} from '@/libs/discoveryProvider'
+import { stripHtml } from '@/libs/htmlUtils'
+import { getDiscoveryArtworkUrl } from '@/libs/imageUtils'
+import { openExternal } from '@/libs/openExternal'
+import { useExploreStore } from '@/store/exploreStore'
+import { usePlayerStore } from '@/store/playerStore'
 
 // Helper to format file size
 function formatFileSize(bytes?: number): string | null {
-  if (!bytes || bytes <= 0) return null;
-  const mb = bytes / (1024 * 1024);
+  if (!bytes || bytes <= 0) return null
+  const mb = bytes / (1024 * 1024)
   if (mb >= 1000) {
-    return `${(mb / 1024).toFixed(1)} GB`;
+    return `${(mb / 1024).toFixed(1)} GB`
   }
-  return `${mb.toFixed(1)} MB`;
+  return `${mb.toFixed(1)} MB`
 }
 
 export default function PodcastEpisodeDetailPage() {
-  const { t } = useI18n();
-  const { id, episodeId } = useParams({ from: '/podcast/$id/episode/$episodeId' });
-  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
+  const { t } = useI18n()
+  const { id, episodeId } = useParams({ from: '/podcast/$id/episode/$episodeId' })
+  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false)
 
   // Load favorites on mount
-  const loadFavorites = useExploreStore((state) => state.loadFavorites);
-  const favoritesLoaded = useExploreStore((state) => state.favoritesLoaded);
+  const loadFavorites = useExploreStore((state) => state.loadFavorites)
+  const favoritesLoaded = useExploreStore((state) => state.favoritesLoaded)
   React.useEffect(() => {
     if (!favoritesLoaded) {
-      loadFavorites();
+      loadFavorites()
     }
-  }, [favoritesLoaded, loadFavorites]);
+  }, [favoritesLoaded, loadFavorites])
 
   // Fetch podcast metadata via Lookup API
   const {
@@ -50,31 +64,32 @@ export default function PodcastEpisodeDetailPage() {
     queryFn: () => lookupPodcastFull(id),
     staleTime: 1000 * 60 * 60, // 1 hour
     gcTime: 1000 * 60 * 60 * 24, // 24 hours
-  });
+  })
 
   // Fetch episodes via RSS feed (only when we have feedUrl)
+  const feedUrl = podcast?.feedUrl
   const {
     data: feed,
     isLoading: isLoadingFeed,
     error: feedError,
   } = useQuery({
     queryKey: ['podcast', 'feed', podcast?.feedUrl],
-    queryFn: () => fetchPodcastFeed(podcast!.feedUrl),
+    queryFn: () => fetchPodcastFeed(feedUrl ?? ''),
     enabled: !!podcast?.feedUrl,
     staleTime: 1000 * 60 * 30, // 30 minutes
     gcTime: 1000 * 60 * 60 * 6, // 6 hours
-  });
+  })
 
   // Find the episode from the feed
-  let decodedEpisodeId = (episodeId || '').trim();
+  let decodedEpisodeId = (episodeId || '').trim()
   try {
-    decodedEpisodeId = decodeURIComponent(decodedEpisodeId);
+    decodedEpisodeId = decodeURIComponent(decodedEpisodeId)
   } catch {
     // Keep raw param if decoding fails.
   }
 
   // STEP 1: Direct ID Match (Fastest)
-  let episode = feed?.episodes.find(ep => ep.id === decodedEpisodeId);
+  let episode = feed?.episodes.find((ep) => ep.id === decodedEpisodeId)
 
   // STEP 2: Match Recovery Strategy (If direct GUID match fails)
   // Sometimes iTunes API GUID vs RSS GUID have subtle differences or iTunes GUID is missing
@@ -83,19 +98,23 @@ export default function PodcastEpisodeDetailPage() {
     queryFn: () => lookupPodcastEpisodes(id, 'us', 50),
     enabled: !!feed && !episode, // Only run if feed is loaded but episode not found
     staleTime: 1000 * 60 * 60,
-  });
+  })
 
   if (!episode && feed && itunesEpisodes) {
     // Try to find the metadata in iTunes results using the GUID or trackId
-    const itunesMeta = itunesEpisodes.find(ep => ep.episodeGuid === decodedEpisodeId || String(ep.trackId) === decodedEpisodeId);
+    const itunesMeta = itunesEpisodes.find(
+      (ep) => ep.episodeGuid === decodedEpisodeId || String(ep.trackId) === decodedEpisodeId
+    )
 
     if (itunesMeta) {
       // 1. Try to find in RSS feed using iTunes metadata (Title or URL match)
-      episode = feed.episodes.find(ep => {
-        const titleMatch = ep.title.trim().toLowerCase() === itunesMeta.trackName.trim().toLowerCase();
-        const urlMatch = itunesMeta.episodeUrl && ep.audioUrl.includes(itunesMeta.episodeUrl.split('?')[0]);
-        return titleMatch || urlMatch;
-      });
+      episode = feed.episodes.find((ep) => {
+        const titleMatch =
+          ep.title.trim().toLowerCase() === itunesMeta.trackName.trim().toLowerCase()
+        const urlMatch =
+          itunesMeta.episodeUrl && ep.audioUrl.includes(itunesMeta.episodeUrl.split('?')[0])
+        return titleMatch || urlMatch
+      })
 
       // 2. If STILL not in RSS (e.g. older episode dropped from RSS list), create a Virtual Episode from iTunes data
       if (!episode) {
@@ -113,25 +132,25 @@ export default function PodcastEpisodeDetailPage() {
           fileSize: undefined,
           transcriptUrl: undefined,
           chaptersUrl: undefined,
-        };
+        }
       }
     }
   }
 
   // Favorite state
-  const { addFavorite, removeFavorite, isFavorited } = useExploreStore();
-  const favorited = podcast && episode ? isFavorited(podcast.feedUrl, episode.audioUrl) : false;
+  const { addFavorite, removeFavorite, isFavorited } = useExploreStore()
+  const favorited = podcast && episode ? isFavorited(podcast.feedUrl, episode.audioUrl) : false
 
   // Player actions
-  const setAudioUrl = usePlayerStore((state) => state.setAudioUrl);
-  const play = usePlayerStore((state) => state.play);
+  const setAudioUrl = usePlayerStore((state) => state.setAudioUrl)
+  const play = usePlayerStore((state) => state.play)
 
   const handlePlayEpisode = () => {
-    if (!podcast || !episode) return;
+    if (!podcast || !episode) return
     const coverArt = getDiscoveryArtworkUrl(
       episode.artworkUrl || podcast.artworkUrl600 || podcast.artworkUrl100,
       600
-    );
+    )
     // Pass metadata for History/Favorites consistency with Show Page
     setAudioUrl(episode.audioUrl, episode.title, coverArt, {
       description: episode.description,
@@ -140,21 +159,21 @@ export default function PodcastEpisodeDetailPage() {
       artworkUrl: coverArt,
       publishedAt: episode.pubDate ? new Date(episode.pubDate).getTime() : undefined,
       duration: episode.duration,
-    });
-    play();
-  };
+    })
+    play()
+  }
 
   const handleToggleFavorite = () => {
-    if (!podcast || !episode) return;
+    if (!podcast || !episode) return
     if (favorited) {
-      removeFavorite(`${podcast.feedUrl}::${episode.audioUrl}`);
+      removeFavorite(`${podcast.feedUrl}::${episode.audioUrl}`)
     } else {
-      addFavorite(podcast, episode);
+      addFavorite(podcast, episode)
     }
-  };
+  }
 
   // Loading state: Include iTunes recovery phase to prevent "Flash of Empty State"
-  const isLoading = isLoadingPodcast || isLoadingFeed || (isLoadingItunes && !episode);
+  const isLoading = isLoadingPodcast || isLoadingFeed || (isLoadingItunes && !episode)
   if (isLoading) {
     return (
       <div className="h-full overflow-y-auto bg-background text-foreground">
@@ -180,7 +199,7 @@ export default function PodcastEpisodeDetailPage() {
           </div>
         </div>
       </div>
-    );
+    )
   }
 
   // Error state - podcast not found
@@ -193,7 +212,7 @@ export default function PodcastEpisodeDetailPage() {
           </div>
         </div>
       </div>
-    );
+    )
   }
 
   // Error state - feed error
@@ -206,7 +225,7 @@ export default function PodcastEpisodeDetailPage() {
           </div>
         </div>
       </div>
-    );
+    )
   }
 
   // Error state - episode not found
@@ -219,33 +238,33 @@ export default function PodcastEpisodeDetailPage() {
           </div>
         </div>
       </div>
-    );
+    )
   }
 
   // Get artwork URL (episode-specific or podcast fallback)
   const artworkUrl = getDiscoveryArtworkUrl(
     episode.artworkUrl || podcast.artworkUrl600 || podcast.artworkUrl100,
     600
-  );
+  )
 
   // Description handling - prioritize rich content then strip for safety
-  const contentSource = episode.descriptionHtml || episode.description || '';
-  const cleanDescription = stripHtml(contentSource);
-  const shouldTruncateDescription = cleanDescription.length > 500;
+  const contentSource = episode.descriptionHtml || episode.description || ''
+  const cleanDescription = stripHtml(contentSource)
+  const shouldTruncateDescription = cleanDescription.length > 500
 
   // Format metadata
-  const relativeTime = formatRelativeTime(episode.pubDate, t);
-  const duration = formatDuration(episode.duration, t);
-  const fileSize = formatFileSize(episode.fileSize);
+  const relativeTime = formatRelativeTime(episode.pubDate, t)
+  const duration = formatDuration(episode.duration, t)
+  const fileSize = formatFileSize(episode.fileSize)
 
   // Build season/episode label
-  let episodeLabel = '';
+  let episodeLabel = ''
   if (episode.seasonNumber && episode.episodeNumber) {
-    episodeLabel = `S${episode.seasonNumber} · E${episode.episodeNumber}`;
+    episodeLabel = `S${episode.seasonNumber} · E${episode.episodeNumber}`
   } else if (episode.episodeNumber) {
-    episodeLabel = `E${episode.episodeNumber}`;
+    episodeLabel = `E${episode.episodeNumber}`
   } else if (episode.seasonNumber) {
-    episodeLabel = `S${episode.seasonNumber}`;
+    episodeLabel = `S${episode.seasonNumber}`
   }
 
   return (
@@ -269,9 +288,7 @@ export default function PodcastEpisodeDetailPage() {
           {/* Metadata */}
           <div className="flex-1 space-y-3">
             {/* Episode Title */}
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-              {episode.title}
-            </h1>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{episode.title}</h1>
 
             {/* Badges Row: Season/Episode, Type, Explicit */}
             <div className="flex flex-wrap items-center gap-2">
@@ -299,11 +316,7 @@ export default function PodcastEpisodeDetailPage() {
             </div>
 
             {/* Podcast Name - Link to Show Page */}
-            <Button
-              asChild
-              variant="ghost"
-              className="p-0 h-auto hover:bg-transparent"
-            >
+            <Button asChild variant="ghost" className="p-0 h-auto hover:bg-transparent">
               <Link
                 to="/podcast/$id"
                 params={{ id }}
@@ -350,15 +363,12 @@ export default function PodcastEpisodeDetailPage() {
                 size="icon"
                 onClick={handleToggleFavorite}
                 className={cn(
-                  "w-10 h-10 rounded-md border-border hover:bg-muted transition-colors",
-                  favorited && "text-primary"
+                  'w-10 h-10 rounded-md border-border hover:bg-muted transition-colors',
+                  favorited && 'text-primary'
                 )}
                 aria-label={favorited ? t('ariaRemoveFavorite') : t('ariaAddFavorite')}
               >
-                <Star
-                  size={18}
-                  className={cn("stroke-2", favorited && "fill-current")}
-                />
+                <Star size={18} className={cn('stroke-2', favorited && 'fill-current')} />
               </Button>
 
               {episode.link && (
@@ -366,7 +376,9 @@ export default function PodcastEpisodeDetailPage() {
                   variant="outline"
                   size="sm"
                   className="rounded-md h-10 px-4 text-sm"
-                  onClick={() => openExternal(episode.link!)}
+                  onClick={() => {
+                    if (episode.link) openExternal(episode.link)
+                  }}
                 >
                   <ExternalLink size={14} className="mr-1.5" />
                   {t('viewOriginal')}
@@ -384,7 +396,9 @@ export default function PodcastEpisodeDetailPage() {
                 variant="secondary"
                 size="sm"
                 className="rounded-md h-9 px-4 text-sm"
-                onClick={() => openExternal(episode.transcriptUrl!)}
+                onClick={() => {
+                  if (episode.transcriptUrl) openExternal(episode.transcriptUrl)
+                }}
               >
                 <FileText size={14} className="mr-1.5" />
                 {t('viewTranscript')}
@@ -395,7 +409,9 @@ export default function PodcastEpisodeDetailPage() {
                 variant="secondary"
                 size="sm"
                 className="rounded-md h-9 px-4 text-sm"
-                onClick={() => openExternal(episode.chaptersUrl!)}
+                onClick={() => {
+                  if (episode.chaptersUrl) openExternal(episode.chaptersUrl)
+                }}
               >
                 <List size={14} className="mr-1.5" />
                 {t('viewChapters')}
@@ -411,8 +427,8 @@ export default function PodcastEpisodeDetailPage() {
             <div className="relative">
               <div
                 className={cn(
-                  "text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap",
-                  !isDescriptionExpanded && shouldTruncateDescription && "line-clamp-6"
+                  'text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap',
+                  !isDescriptionExpanded && shouldTruncateDescription && 'line-clamp-6'
                 )}
               >
                 {cleanDescription}
@@ -431,5 +447,5 @@ export default function PodcastEpisodeDetailPage() {
         )}
       </div>
     </div>
-  );
+  )
 }

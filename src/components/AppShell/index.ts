@@ -1,5 +1,5 @@
 // src/components/AppShell/index.ts
-export { AppShell } from './AppShell';
-export { Sidebar } from './Sidebar';
-export { MiniPlayer } from './MiniPlayer';
-export { FullPlayer } from './FullPlayer';
+export { AppShell } from './AppShell'
+export { FullPlayer } from './FullPlayer'
+export { MiniPlayer } from './MiniPlayer'
+export { Sidebar } from './Sidebar'

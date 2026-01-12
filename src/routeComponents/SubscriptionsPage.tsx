@@ -1,47 +1,42 @@
 // src/routes/subscriptions.tsx
-import { useNavigate } from '@tanstack/react-router';
-import { LayoutGrid, CircleMinus } from 'lucide-react';
-import { useEffect, useState } from 'react';
-import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
-import { useI18n } from '../hooks/useI18n';
-import { useExploreStore } from '../store/exploreStore';
-import { PodcastCard } from '../components/PodcastCard/PodcastCard';
-import type { Subscription } from '../libs/dexieDb';
+import { useNavigate } from '@tanstack/react-router'
+import { CircleMinus, LayoutGrid } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { PodcastCard } from '../components/PodcastCard/PodcastCard'
+import { useI18n } from '../hooks/useI18n'
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
+import type { Subscription } from '../libs/dexieDb'
+import { useExploreStore } from '../store/exploreStore'
 
 export default function SubscriptionsPage() {
-  const { t } = useI18n();
-  const navigate = useNavigate();
-  const {
-    subscriptions,
-    loadSubscriptions,
-    subscriptionsLoaded,
-    unsubscribe
-  } = useExploreStore();
-  const [isInitialLoading, setIsInitialLoading] = useState(!subscriptionsLoaded);
+  const { t } = useI18n()
+  const navigate = useNavigate()
+  const { subscriptions, loadSubscriptions, subscriptionsLoaded, unsubscribe } = useExploreStore()
+  const [isInitialLoading, setIsInitialLoading] = useState(!subscriptionsLoaded)
 
   // Keyboard shortcuts
-  useKeyboardShortcuts({ isModalOpen: false });
+  useKeyboardShortcuts({ isModalOpen: false })
 
   // Load subscriptions
   useEffect(() => {
     if (!subscriptionsLoaded) {
-      loadSubscriptions().finally(() => setIsInitialLoading(false));
+      loadSubscriptions().finally(() => setIsInitialLoading(false))
     }
-  }, [subscriptionsLoaded, loadSubscriptions]);
+  }, [subscriptionsLoaded, loadSubscriptions])
 
   const handlePodcastClick = (subscription: Subscription) => {
     // Navigate to podcast detail page using collectionId if available
     if (subscription.collectionId) {
-      navigate({ to: '/podcast/$id', params: { id: subscription.collectionId } });
+      navigate({ to: '/podcast/$id', params: { id: subscription.collectionId } })
     } else if (subscription.feedUrl) {
       // Fallback search
-      navigate({ to: '/search', search: { q: subscription.title } });
+      navigate({ to: '/search', search: { q: subscription.title } })
     }
-  };
+  }
 
   const handleUnsubscribe = async (feedUrl: string) => {
-    await unsubscribe(feedUrl);
-  };
+    await unsubscribe(feedUrl)
+  }
 
   return (
     <div className="h-full overflow-y-auto">
@@ -50,7 +45,9 @@ export default function SubscriptionsPage() {
         style={{ paddingLeft: 'var(--page-margin-x)', paddingRight: 'var(--page-margin-x)' }}
       >
         <header className="mb-12">
-          <h1 className="text-4xl font-bold text-foreground tracking-tight">{t('subscriptionsTitle')}</h1>
+          <h1 className="text-4xl font-bold text-foreground tracking-tight">
+            {t('subscriptionsTitle')}
+          </h1>
         </header>
 
         {/* Loading */}
@@ -83,12 +80,12 @@ export default function SubscriptionsPage() {
                 artworkUrl={subscription.artworkUrl}
                 {...(subscription.collectionId
                   ? {
-                    to: '/podcast/$id',
-                    params: { id: subscription.collectionId },
-                  }
+                      to: '/podcast/$id',
+                      params: { id: subscription.collectionId },
+                    }
                   : {
-                    onClick: () => handlePodcastClick(subscription),
-                  })}
+                      onClick: () => handlePodcastClick(subscription),
+                    })}
                 menuItems={[
                   {
                     label: t('unsubscribe'),
@@ -103,5 +100,5 @@ export default function SubscriptionsPage() {
         )}
       </div>
     </div>
-  );
+  )
 }

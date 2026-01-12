@@ -3,13 +3,13 @@
  * Utility for handling image asset transformations
  */
 
-import { getAppConfig } from './runtimeConfig';
+import { getAppConfig } from './runtimeConfig'
 
 /**
  * Fallback image for podcasts/episodes
  */
 export function getFallbackPodcastImage(): string {
-    return getAppConfig().FALLBACK_PODCAST_IMAGE;
+  return getAppConfig().FALLBACK_PODCAST_IMAGE
 }
 
 /**
@@ -19,16 +19,16 @@ export function getFallbackPodcastImage(): string {
  * @returns Resized URL string, or fallback image if url is empty
  */
 export function getDiscoveryArtworkUrl(url: string | undefined, size: number = 600): string {
-    if (!url) return getFallbackPodcastImage();
+  if (!url) return getFallbackPodcastImage()
 
-    // Only apply size replacement to iTunes-style URLs (contain NxNbb pattern)
-    // Example: https://is1-ssl.mzstatic.com/.../100x100bb.jpg
-    const iTunesPattern = /\d+x\d+bb\.(jpg|png|jpeg)/;
-    if (iTunesPattern.test(url)) {
-        const sizeString = `${size}x${size}bb`;
-        return url.replace(/\d+x\d+bb/, sizeString);
-    }
+  // Only apply size replacement to iTunes-style URLs (contain NxNbb pattern)
+  // Example: https://is1-ssl.mzstatic.com/.../100x100bb.jpg
+  const iTunesPattern = /\d+x\d+bb\.(jpg|png|jpeg)/
+  if (iTunesPattern.test(url)) {
+    const sizeString = `${size}x${size}bb`
+    return url.replace(/\d+x\d+bb/, sizeString)
+  }
 
-    // For non-iTunes URLs (like RSS feed images), return as-is
-    return url;
+  // For non-iTunes URLs (like RSS feed images), return as-is
+  return url
 }

@@ -1,17 +1,17 @@
 /**
  * Readio Runtime Configuration (Defaults)
- * 
+ *
  * This file contains safe defaults and is committed to Git.
- * 
+ *
  * LOCAL CUSTOMIZATION:
  * Create a file named `env.local.js` (NOT committed to Git) to override:
- * 
+ *
  *   window.__READIO_ENV__ = {
  *     ...window.__READIO_ENV__,
  *     READIO_CORS_PROXY_URL: 'https://your-proxy.com',
  *     READIO_CORS_PROXY_PRIMARY: true,
  *   };
- * 
+ *
  * See env.local.js.example for a template.
  */
 
@@ -54,6 +54,6 @@ window.__READIO_ENV__ = window.__READIO_ENV__ || {
   READIO_FALLBACK_PODCAST_IMAGE: '/placeholder-podcast.svg',
 
   // --- Cache TTLs (ms) ---
-  READIO_CACHE_TTL_EPISODES_MS: 3600000,    // 1 hour
-  READIO_RECOMMENDED_TTL_MS: 86400000,     // 24 hours
-};
+  READIO_CACHE_TTL_EPISODES_MS: 3600000, // 1 hour
+  READIO_RECOMMENDED_TTL_MS: 86400000, // 24 hours
+}

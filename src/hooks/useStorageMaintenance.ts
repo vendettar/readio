@@ -1,64 +1,70 @@
 // src/hooks/useStorageMaintenance.ts
 // Hook for storage maintenance actions (delete session, clear cache, wipe all)
 
-import { useState, useCallback } from 'react';
-import { DB } from '../libs/dexieDb';
-import { toast } from '../libs/toast';
-import { logError } from '../libs/logger';
-import type { TranslationKey } from '../libs/translations';
+import { useCallback, useState } from 'react'
+import { DB } from '../libs/dexieDb'
+import { logError } from '../libs/logger'
+import { toast } from '../libs/toast'
+import type { TranslationKey } from '../libs/translations'
 
 interface UseStorageMaintenanceOptions {
-    reload: () => Promise<void>;
-    t: (key: TranslationKey) => string;
+  reload: () => Promise<void>
+  t: (key: TranslationKey) => string
 }
 
 export function useStorageMaintenance({ reload, t }: UseStorageMaintenanceOptions) {
-    const [isClearing, setIsClearing] = useState(false);
+  const [isClearing, setIsClearing] = useState(false)
 
-    const deleteSession = useCallback(async (id: string) => {
-        try {
-            await DB.deletePlaybackSession(id);
-            toast.success(t('toastDeleted'));
-            await reload();
-        } catch (err) {
-            logError('[useStorageMaintenance] Failed to delete session:', err);
-            toast.error(t('toastDeleteFailed'));
+  const deleteSession = useCallback(
+    async (id: string) => {
+      try {
+        await DB.deletePlaybackSession(id)
+        toast.success(t('toastDeleted'))
+        await reload()
+      } catch (err) {
+        logError('[useStorageMaintenance] Failed to delete session:', err)
+        toast.error(t('toastDeleteFailed'))
+      }
+    },
+    [reload, t]
+  )
+
+  const clearSessionCache = useCallback(
+    async (id: string) => {
+      try {
+        const session = await DB.getPlaybackSession(id)
+        if (session?.audioId) {
+          await DB.deleteAudioBlob(session.audioId)
+          await DB.updatePlaybackSession(id, { audioId: null, hasAudioBlob: false })
+          toast.success(t('toastAudioRemoved'))
+          await reload()
         }
-    }, [reload, t]);
+      } catch (err) {
+        logError('[useStorageMaintenance] Failed to clear cache:', err)
+        toast.error(t('toastRemoveFavoriteFailed'))
+      }
+    },
+    [reload, t]
+  )
 
-    const clearSessionCache = useCallback(async (id: string) => {
-        try {
-            const session = await DB.getPlaybackSession(id);
-            if (session?.audioId) {
-                await DB.deleteAudioBlob(session.audioId);
-                await DB.updatePlaybackSession(id, { audioId: null, hasAudioBlob: false });
-                toast.success(t('toastAudioRemoved'));
-                await reload();
-            }
-        } catch (err) {
-            logError('[useStorageMaintenance] Failed to clear cache:', err);
-            toast.error(t('toastRemoveFavoriteFailed'));
-        }
-    }, [reload, t]);
+  const wipeAll = useCallback(async () => {
+    setIsClearing(true)
+    try {
+      await DB.clearAllData()
+      toast.success(t('toastAllDataCleared'))
+      await reload()
+    } catch (err) {
+      logError('[useStorageMaintenance] Failed to wipe all:', err)
+      toast.error(t('toastWipeFailed'))
+    } finally {
+      setIsClearing(false)
+    }
+  }, [reload, t])
 
-    const wipeAll = useCallback(async () => {
-        setIsClearing(true);
-        try {
-            await DB.clearAllData();
-            toast.success(t('toastAllDataCleared'));
-            await reload();
-        } catch (err) {
-            logError('[useStorageMaintenance] Failed to wipe all:', err);
-            toast.error(t('toastWipeFailed'));
-        } finally {
-            setIsClearing(false);
-        }
-    }, [reload, t]);
-
-    return {
-        deleteSession,
-        clearSessionCache,
-        wipeAll,
-        isClearing,
-    };
+  return {
+    deleteSession,
+    clearSessionCache,
+    wipeAll,
+    isClearing,
+  }
 }
