@@ -1,83 +1,94 @@
-import React from 'react';
-import { useNavigate, useSearch } from '@tanstack/react-router';
-import { Search, Loader2, Podcast, Mic2, CirclePlus, CircleMinus, History, Star, FileAudio, Library } from 'lucide-react';
-import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
-import { useI18n } from '../hooks/useI18n';
-import { useGlobalSearch, type LocalSearchResult } from '../hooks/useGlobalSearch';
-import { usePlayerStore } from '../store/playerStore';
-import { lookupPodcastFull, type SearchEpisode } from '../libs/discoveryProvider';
-import { SearchResultItem } from '../components/GlobalSearch/SearchResultItem';
-import { SearchEpisodeItem } from '../components/GlobalSearch/SearchEpisodeItem';
-import { PodcastCard } from '../components/PodcastCard/PodcastCard';
-import { useExploreStore } from '../store/exploreStore';
-import { executeLocalSearchAction } from '../libs/localSearchActions';
-import { useEpisodePlayback } from '../hooks/useEpisodePlayback';
-import { toast } from '../libs/toast';
+import { useNavigate, useSearch } from '@tanstack/react-router'
+import {
+  CircleMinus,
+  CirclePlus,
+  FileAudio,
+  History,
+  Library,
+  Loader2,
+  Mic2,
+  Podcast,
+  Search,
+  Star,
+} from 'lucide-react'
+import React from 'react'
+import { SearchEpisodeItem } from '../components/GlobalSearch/SearchEpisodeItem'
+import { SearchResultItem } from '../components/GlobalSearch/SearchResultItem'
+import { PodcastCard } from '../components/PodcastCard/PodcastCard'
+import { useEpisodePlayback } from '../hooks/useEpisodePlayback'
+import { type LocalSearchResult, useGlobalSearch } from '../hooks/useGlobalSearch'
+import { useI18n } from '../hooks/useI18n'
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
+import { lookupPodcastFull, type SearchEpisode } from '../libs/discoveryProvider'
+import { executeLocalSearchAction } from '../libs/localSearchActions'
+import { toast } from '../libs/toast'
+import { useExploreStore } from '../store/exploreStore'
+import { usePlayerStore } from '../store/playerStore'
 
 export default function SearchPage() {
-  const { t } = useI18n();
-  const navigate = useNavigate();
-  const { q: query = '' } = useSearch({ from: '/search' });
-  const setAudioUrl = usePlayerStore((s) => s.setAudioUrl);
-  const play = usePlayerStore((s) => s.play);
-  const setEpisodeMetadata = usePlayerStore((s) => s.setEpisodeMetadata);
-  const subscribe = useExploreStore((s) => s.subscribe);
-  const unsubscribe = useExploreStore((s) => s.unsubscribe);
-  const isSubscribed = useExploreStore((s) => s.isSubscribed);
+  const { t } = useI18n()
+  const navigate = useNavigate()
+  const { q: query = '' } = useSearch({ from: '/search' })
+  const setAudioUrl = usePlayerStore((s) => s.setAudioUrl)
+  const play = usePlayerStore((s) => s.play)
+  const setEpisodeMetadata = usePlayerStore((s) => s.setEpisodeMetadata)
+  const subscribe = useExploreStore((s) => s.subscribe)
+  const unsubscribe = useExploreStore((s) => s.unsubscribe)
+  const isSubscribed = useExploreStore((s) => s.isSubscribed)
 
   // Keyboard shortcuts
-  useKeyboardShortcuts({ isModalOpen: false });
+  useKeyboardShortcuts({ isModalOpen: false })
 
   // Load subscriptions/favorites on mount to ensure UI state is correct
-  const loadSubscriptions = useExploreStore((s) => s.loadSubscriptions);
-  const loadFavorites = useExploreStore((s) => s.loadFavorites);
-  const subscriptionsLoaded = useExploreStore((s) => s.subscriptionsLoaded);
+  const loadSubscriptions = useExploreStore((s) => s.loadSubscriptions)
+  const loadFavorites = useExploreStore((s) => s.loadFavorites)
+  const subscriptionsLoaded = useExploreStore((s) => s.subscriptionsLoaded)
 
   React.useEffect(() => {
     if (!subscriptionsLoaded) {
-      loadSubscriptions();
+      loadSubscriptions()
     }
-  }, [subscriptionsLoaded, loadSubscriptions]);
+  }, [subscriptionsLoaded, loadSubscriptions])
 
   React.useEffect(() => {
     const checkFavorites = async () => {
-      // useExploreStore handles the 'loaded' flag internally, 
+      // useExploreStore handles the 'loaded' flag internally,
       // but it's safer to just call it if we need fresh data
-      await loadFavorites();
-    };
-    checkFavorites();
-  }, [loadFavorites]);
+      await loadFavorites()
+    }
+    checkFavorites()
+  }, [loadFavorites])
 
   // Search results
-  const { playSearchEpisode } = useEpisodePlayback();
+  const { playSearchEpisode } = useEpisodePlayback()
 
   const { podcasts, episodes, local, isLoading, isEmpty } = useGlobalSearch(query, true, {
     subscriptionLimit: Infinity,
     favoriteLimit: Infinity,
     historyLimit: Infinity,
     fileLimit: Infinity,
-  });
+  })
 
   // Handler for direct playback from artwork (Fast)
   const handlePlaySearchEpisode = async (episode: SearchEpisode) => {
-    if (!episode.episodeUrl) return;
+    if (!episode.episodeUrl) return
 
     // Optimization: Feed URL is now available in SearchEpisode (entity=podcastEpisode)!
     // Only lookup if it's missing (e.g. from a hypothetical source that lacks it)
-    let podcastFeedUrl = episode.feedUrl;
+    let podcastFeedUrl = episode.feedUrl
     if (!podcastFeedUrl) {
-      const fullPodcast = await lookupPodcastFull(episode.collectionId.toString());
-      podcastFeedUrl = fullPodcast?.feedUrl;
+      const fullPodcast = await lookupPodcastFull(episode.collectionId.toString())
+      podcastFeedUrl = fullPodcast?.feedUrl
     }
 
     if (!podcastFeedUrl) {
-      toast.error(t('errorPodcastFeedNotFound'));
-      navigate({ to: '/podcast/$id', params: { id: episode.collectionId.toString() } });
-      return;
+      toast.error(t('errorPodcastFeedNotFound'))
+      navigate({ to: '/podcast/$id', params: { id: episode.collectionId.toString() } })
+      return
     }
 
-    playSearchEpisode(episode, podcastFeedUrl);
-  };
+    playSearchEpisode(episode, podcastFeedUrl)
+  }
 
   const handleSelectLocalResult = (result: LocalSearchResult) => {
     void executeLocalSearchAction(result, {
@@ -85,8 +96,8 @@ export default function SearchPage() {
       setAudioUrl,
       play,
       setEpisodeMetadata,
-    });
-  };
+    })
+  }
 
   return (
     <div className="h-full overflow-y-auto">
@@ -150,15 +161,15 @@ export default function SearchPage() {
                     const getStatusLabel = () => {
                       switch (result.type) {
                         case 'subscription':
-                          return t('badgeSubscribed');
+                          return t('badgeSubscribed')
                         case 'favorite':
-                          return t('badgeFavorited');
+                          return t('badgeFavorited')
                         case 'history':
-                          return t('historyTitle');
+                          return t('historyTitle')
                         case 'file':
-                          return t('filesTitle');
+                          return t('filesTitle')
                       }
-                    };
+                    }
                     return (
                       <SearchResultItem
                         key={result.id}
@@ -167,14 +178,18 @@ export default function SearchPage() {
                         extraSubtitle={getStatusLabel()}
                         artworkUrl={result.artworkUrl}
                         icon={
-                          result.type === 'subscription' ? Podcast :
-                            result.type === 'favorite' ? Star :
-                              result.type === 'history' ? History : FileAudio
+                          result.type === 'subscription'
+                            ? Podcast
+                            : result.type === 'favorite'
+                              ? Star
+                              : result.type === 'history'
+                                ? History
+                                : FileAudio
                         }
                         onClick={() => handleSelectLocalResult(result)}
                         className="py-3"
                       />
-                    );
+                    )
                   })}
                 </div>
               </section>
@@ -189,7 +204,7 @@ export default function SearchPage() {
                 </h2>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
                   {podcasts.map((podcast) => {
-                    const subscribed = isSubscribed(podcast.feedUrl);
+                    const subscribed = isSubscribed(podcast.feedUrl)
                     return (
                       <PodcastCard
                         key={podcast.collectionId}
@@ -197,23 +212,28 @@ export default function SearchPage() {
                         title={podcast.collectionName}
                         subtitle={podcast.artistName}
                         artworkUrl={podcast.artworkUrl600 || podcast.artworkUrl100}
-                        onClick={() => navigate({ to: '/podcast/$id', params: { id: String(podcast.collectionId) } })}
+                        onClick={() =>
+                          navigate({
+                            to: '/podcast/$id',
+                            params: { id: String(podcast.collectionId) },
+                          })
+                        }
                         menuItems={[
                           {
                             label: subscribed ? t('unsubscribe') : t('subscribe'),
                             icon: subscribed ? <CircleMinus size={14} /> : <CirclePlus size={14} />,
                             onClick: () => {
                               if (subscribed) {
-                                unsubscribe(podcast.feedUrl);
+                                unsubscribe(podcast.feedUrl)
                               } else {
-                                subscribe(podcast);
+                                subscribe(podcast)
                               }
                             },
                             variant: subscribed ? 'destructive' : 'default',
                           },
                         ]}
                       />
-                    );
+                    )
                   })}
                 </div>
               </section>
@@ -241,5 +261,5 @@ export default function SearchPage() {
         )}
       </div>
     </div>
-  );
+  )
 }

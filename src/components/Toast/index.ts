@@ -1,2 +1,2 @@
 // src/components/Toast/index.ts
-export * from './ToastContainer';
+export * from './ToastContainer'

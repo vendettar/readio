@@ -12,7 +12,7 @@
  * @returns Namespaced key string
  */
 export function nsKey(namespace: string, key: string): string {
-    return `${namespace}:${key}`;
+  return `${namespace}:${key}`
 }
 
 // ============ Basic JSON Helpers ============
@@ -24,13 +24,13 @@ export function nsKey(namespace: string, key: string): string {
  * @returns Parsed value or null if not found or parse error
  */
 export function getJson<T = unknown>(key: string, storage: Storage = localStorage): T | null {
-    try {
-        const raw = storage.getItem(key);
-        if (raw === null) return null;
-        return JSON.parse(raw) as T;
-    } catch {
-        return null;
-    }
+  try {
+    const raw = storage.getItem(key)
+    if (raw === null) return null
+    return JSON.parse(raw) as T
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -41,19 +41,19 @@ export function getJson<T = unknown>(key: string, storage: Storage = localStorag
  * @returns true if successful, false otherwise
  */
 export function setJson(key: string, value: unknown, storage: Storage = localStorage): boolean {
-    try {
-        storage.setItem(key, JSON.stringify(value));
-        return true;
-    } catch {
-        return false;
-    }
+  try {
+    storage.setItem(key, JSON.stringify(value))
+    return true
+  } catch {
+    return false
+  }
 }
 
 // ============ TTL Helpers ============
 
 interface StoredWithTimestamp<T> {
-    data: T;
-    at: number;
+  data: T
+  at: number
 }
 
 /**
@@ -64,14 +64,14 @@ interface StoredWithTimestamp<T> {
  * @returns Parsed value if within TTL, null otherwise
  */
 export function getJsonWithTtl<T = unknown>(
-    key: string,
-    ttlMs: number,
-    storage: Storage = localStorage
+  key: string,
+  ttlMs: number,
+  storage: Storage = localStorage
 ): T | null {
-    const stored = getJson<StoredWithTimestamp<T>>(key, storage);
-    if (!stored || typeof stored.at !== 'number') return null;
-    if (Date.now() - stored.at > ttlMs) return null;
-    return stored.data;
+  const stored = getJson<StoredWithTimestamp<T>>(key, storage)
+  if (!stored || typeof stored.at !== 'number') return null
+  if (Date.now() - stored.at > ttlMs) return null
+  return stored.data
 }
 
 /**
@@ -82,11 +82,11 @@ export function getJsonWithTtl<T = unknown>(
  * @returns true if successful, false otherwise
  */
 export function setJsonWithTtl<T = unknown>(
-    key: string,
-    value: T,
-    storage: Storage = localStorage
+  key: string,
+  value: T,
+  storage: Storage = localStorage
 ): boolean {
-    return setJson(key, { data: value, at: Date.now() }, storage);
+  return setJson(key, { data: value, at: Date.now() }, storage)
 }
 
 // ============ Cleanup Helpers ============
@@ -97,11 +97,11 @@ export function setJsonWithTtl<T = unknown>(
  * @param storage Storage instance (localStorage or sessionStorage)
  */
 export function removeItem(key: string, storage: Storage = localStorage): void {
-    try {
-        storage.removeItem(key);
-    } catch {
-        // Silently fail
-    }
+  try {
+    storage.removeItem(key)
+  } catch {
+    // Silently fail
+  }
 }
 
 /**
@@ -109,11 +109,11 @@ export function removeItem(key: string, storage: Storage = localStorage): void {
  * @param storage Storage instance (localStorage or sessionStorage)
  */
 export function clearStorage(storage: Storage = localStorage): void {
-    try {
-        storage.clear();
-    } catch {
-        // Silently fail
-    }
+  try {
+    storage.clear()
+  } catch {
+    // Silently fail
+  }
 }
 
 /**
@@ -122,16 +122,18 @@ export function clearStorage(storage: Storage = localStorage): void {
  * @param storage Storage instance
  */
 export function clearNamespace(prefix: string, storage: Storage = localStorage): void {
-    try {
-        const keysToRemove: string[] = [];
-        for (let i = 0; i < storage.length; i++) {
-            const key = storage.key(i);
-            if (key && key.startsWith(prefix)) {
-                keysToRemove.push(key);
-            }
-        }
-        keysToRemove.forEach(key => storage.removeItem(key));
-    } catch {
-        // Silently fail
+  try {
+    const keysToRemove: string[] = []
+    for (let i = 0; i < storage.length; i++) {
+      const key = storage.key(i)
+      if (key?.startsWith(prefix)) {
+        keysToRemove.push(key)
+      }
     }
+    keysToRemove.forEach((key) => {
+      storage.removeItem(key)
+    })
+  } catch {
+    // Silently fail
+  }
 }

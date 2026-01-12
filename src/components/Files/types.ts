@@ -6,4 +6,4 @@
  * - comfortable: Default spacing with larger padding
  * - compact: Reduced spacing for denser display
  */
-export type ViewDensity = 'comfortable' | 'compact';
+export type ViewDensity = 'comfortable' | 'compact'

@@ -1,3 +1,4 @@
 // src/components/Transcript/index.ts
-export { TranscriptView } from './TranscriptView';
-export { SubtitleLine } from './SubtitleLine';
+
+export { SubtitleLine } from './SubtitleLine'
+export { TranscriptView } from './TranscriptView'

@@ -32,6 +32,7 @@ sample*/
 issue*/
 
 # Local tools
+.vite/
 .claude/
 
 local/
