@@ -1,0 +1,131 @@
+# Readio (React Rewrite) Regression Checklist (Reusable)
+
+> Purpose: Use this checklist for "full regression self-checks" when making major changes (UI/IA redesigns, old code cleanup, routing adjustments, caption/selection refactors, cache/DB modifications) to avoid missing details.
+> Principle: Based on the **actual current code** and `docs/technology_roadmap.md`; outdated items should be updated/deleted promptly.
+
+---
+
+## 0) Project Hard Constraints (Align Every Time)
+
+- [ ] **First-release Mindset: No backward-compatibility for old data** (IndexedDB / localStorage / caches can be cleared and rebuilt; do not introduce migration layers).
+- [ ] **Update `docs/handoff_doc.md` after every change** (Describe actual current state only; no process notes).
+- [ ] **User messages must not expose technical terms** (CORS, HTTP status codes, stack traces go to console/log; UI uses natural language only).
+- [ ] UI: Use Tailwind + shadcn/ui tokens; do not invent new tokens (see `docs/design_system.md`).
+- [ ] Transcript: **Every word must remain visible** (Multi-line wrapping required; no `ellipsis/nowrap` truncation).
+
+---
+
+## 1) App Shell / IA (UI Structure Regression)
+
+The current UI follows the App Shell pattern:
+- `src/components/AppShell/AppShell.tsx`
+- `src/components/AppShell/Sidebar.tsx`
+- `src/components/AppShell/MiniPlayer.tsx`
+- `src/components/AppShell/FullPlayer.tsx`
+
+Checkpoints:
+- [ ] Sidebar groups match routes:
+  - Browse: `/gallery`
+  - Library: `/subscriptions`, `/favorites`, `/history`, `/local-files`
+- [ ] Sidebar active state matches the URL (`useLocation().pathname`).
+- [ ] MiniPlayer persists when **audioLoaded** is true (Normal mode), and clicking the main body enters immersion mode (non-button area).
+- [ ] Immersion mode is controlled by `src/store/immersionStore.ts` (state-driven); `FullPlayer` renders when `isImmersed=true`.
+- [ ] FullPlayer can correctly exit immersion mode (`exitImmersion()`), returning to the App Shell.
+
+---
+
+## 2) Routing & Persistent Player Architecture (High Risk)
+
+Background: Routing/UI shell changes are the most common cause of `<audio>` unmounting or broken seek logic.
+
+- [ ] `<audio>` must remain mounted in `src/routes/__root.tsx` (Routing changes must not interrupt playback).
+- [ ] Seek/Progress bar logic must use the store (Avoid direct DOM queries).
+  - `onSeek` → `store.seekTo()` → `store.pendingSeek` → `__root.tsx` effect updates `audio.currentTime`.
+  - Forbidden: `document.querySelector(...)` or passing `audioRef` to deep components to directly modify `currentTime`.
+- [ ] Back/Forward: Browser navigation works correctly across different routes (e.g., jumping between Sidebar links).
+
+---
+
+## 3) Transcript: Virtual List + Multi-line Visibility (Core Experience)
+
+Background: Fixed-height virtual lists force truncation, violating product requirements; zoom/highlight/selection often conflict with viewport rendering.
+
+- [ ] Transcript virtual list uses **`react-virtuoso` dynamic height**: `src/components/Transcript/TranscriptView.tsx`.
+- [ ] Multi-line visibility: No text truncation (No `text-overflow: ellipsis` or `white-space: nowrap` on transcript text).
+- [ ] Following mode anchors to center: `scrollToIndex({ align: 'center' })`.
+- [ ] Manual scrolling by the user exits Following mode (Avoid "programmatic scroll false positives").
+- [ ] Zoom changes (`zoomScale` / `--zoom-scale`) do not cause virtual list measurement drift.
+- [ ] Lookup highlighting: Highlights refresh correctly when viewport changes without flickering (rAF batched).
+
+Quick Regression Points:
+- [ ] Smooth scrolling for 1000+ caption lines.
+- [ ] Long text is never truncated; every word is visible.
+- [ ] Auto-scroll works during playback (centered), and manual scrolling pauses following.
+- [ ] Selection, lookup, and highlights remain correct after viewport changes.
+
+---
+
+## 4) IndexedDB / Dexie (Cleanup Strategy + Test Stability)
+
+Background: Issues have occurred where deleting the DB invalidated instances or caused cross-test contamination.
+
+- [ ] Standardized DB using Dexie: `src/libs/dexieDb.ts` (DB name: `readio-v2`).
+- [ ] `DB.clearAllData()` must be table-level clearing (transaction + `table.clear()`); do not use `db.delete()`.
+- [ ] Test isolation: `fake-indexeddb` + clear DB before every test suite.
+- [ ] `src/libs/__tests__/dbMigration.test.ts` focuses on initialization and CRUD assertions during the "clearable data" phase (No data persistence assertions).
+
+Quick Regression Points:
+- [ ] Playback progress restores after page refresh (session restore).
+- [ ] Uploading and playback work correctly after a DB wipe.
+
+---
+
+## 5) i18n (Lightweight t(key) Pattern)
+
+- [ ] New/Modified UI text must use `t(key)` (`src/hooks/useI18n.tsx`).
+- [ ] New keys must be added to all supported languages in `src/libs/translations.ts`.
+- [ ] UI contains no technical jargon.
+
+---
+
+## 6) Network & CORS Proxy (Direct/Proxy Fallback + Runtime Config)
+
+- [ ] Unified fetching via `src/libs/fetchUtils.ts` (direct ↔ proxy fallback, supports `proxyPrimary`).
+- [ ] Default `public/env.js` provided to avoid 404s (`index.html` loads it).
+- [ ] Support for `window.__READIO_ENV__`:
+  - `READIO_CORS_PROXY_URL`
+  - `READIO_CORS_PROXY_PRIMARY`
+
+---
+
+## 7) Observability / Error Isolation
+
+- [ ] Global logging via `src/libs/logger.ts` (`error` always outputs; other levels only in DEV).
+- [ ] RootErrorBoundary does not leak technical details in production.
+- [ ] Critical section crashes do not bring down the whole app (e.g., Transcript crash shouldn't cause a global white screen).
+
+---
+
+## 8) Build & Bundle (Advisory)
+
+- [ ] `npm run build` passes.
+- [ ] `ANALYZE=1 npm run build` generates `stats.html` (Local analysis only; do not commit).
+
+---
+
+## 9) Clean Code Regression (Post-cleanup Validation)
+
+- [ ] `src/main.tsx` only imports global styles that are still in use (Current: `src/styles/original.css`, `src/styles/overrides.css`).
+- [ ] No unreferenced exports or index barrel remnants after component deletion.
+- [ ] No broken className references causing UI regression after CSS deletion (Especially in Transcript/Selection).
+
+---
+
+## 10) Smoke Test (Required after every major change)
+
+- [ ] `npm run test:run`
+- [ ] `npm run build`
+- [ ] Manual test:
+  - [ ] 5 main Sidebar routes open correctly: `/gallery`, `/subscriptions`, `/favorites`, `/history`, `/local-files`.
+  - [ ] Player: Playback is uninterrupted by route/immersion changes.
+  - [ ] Transcript: Multi-line visibility + following + selection lookup + highlighting.
