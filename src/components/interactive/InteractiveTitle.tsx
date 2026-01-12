@@ -76,13 +76,7 @@ export function InteractiveTitle({
           buttonClassName
         )}
       >
-        <Link
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          to={to as any}
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          params={params as any}
-          className={cn('transition-all', className)}
-        >
+        <Link to={to as any} params={params as any} className={cn('transition-all', className)}>
           <span
             className={cn(
               clampClass,

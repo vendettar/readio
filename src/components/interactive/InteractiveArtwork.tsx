@@ -114,13 +114,7 @@ export function InteractiveArtwork({
           variant="ghost"
           className="p-0 h-auto hover:bg-transparent block w-full h-full"
         >
-          <Link
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            to={to as any}
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            params={params as any}
-            className="block w-full h-full"
-          >
+          <Link to={to as any} params={params as any} className="block w-full h-full">
             <img
               src={src}
               alt={alt}

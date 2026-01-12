@@ -174,7 +174,6 @@ export function FolderCard({
       measureRef(node)
     } else if (measureRef && 'current' in measureRef) {
       const mutableRef = measureRef as React.MutableRefObject<HTMLDivElement | null>
-      // eslint-disable-next-line react-hooks/immutability
       mutableRef.current = node
     }
   }, [measureRef, node])

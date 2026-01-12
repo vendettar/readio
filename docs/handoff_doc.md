@@ -38,6 +38,7 @@ Readio 是一个浏览器内播客播放器，支持：
 ## 2. 本地开发 / 构建 / 测试
 
 构建与测试脚本：`npm install`、`npm run dev`、`npm run build`、`npm run test:run`、`npm run test:e2e`。
+代码质量工具：已迁移至 Biome（`npm run lint`、`npm run format`、`npm run check`），不再使用 ESLint/Prettier。
 
 ### UI Primitives（统一交互组件）
 
