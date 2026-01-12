@@ -85,7 +85,6 @@ export function TranscriptView({
         behavior: 'smooth',
       })
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFollowing, currentIndex, subtitles.length]) // Only trigger when isFollowing changes to true
 
   // Detect user scroll - disable following

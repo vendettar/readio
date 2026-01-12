@@ -150,7 +150,6 @@ export const COUNTRY_OPTIONS = [
 
 // ========== Shared Cache Logic ==========
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const memoryCache = new Map<string, { data: any; at: number }>()
 
 function getCache<T>(key: string, ttl?: number): T | null {
@@ -198,7 +197,6 @@ export async function fetchTopPodcasts(
     const data = await fetchJsonWithFallback<{ feed?: { results?: unknown[] } }>(url, {
       signal: signal || fetchSignal,
     })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const results = (data?.feed?.results || []).map((item) => mapRssResult(item as any))
     setCache(cacheKey, results)
     return results
@@ -220,7 +218,6 @@ export async function fetchTopEpisodes(
     const data = await fetchJsonWithFallback<{ feed?: { results?: unknown[] } }>(url, {
       signal: signal || fetchSignal,
     })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const results = (data?.feed?.results || []).map((item) => mapRssEpisodeResult(item as any))
     setCache(cacheKey, results)
     return results
@@ -242,7 +239,6 @@ export async function fetchTopSubscriberPodcasts(
     const data = await fetchJsonWithFallback<{ feed?: { results?: unknown[] } }>(url, {
       signal: signal || fetchSignal,
     })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const results = (data?.feed?.results || []).map((item) => mapRssResult(item as any))
     setCache(cacheKey, results)
     return results
@@ -277,7 +273,6 @@ export async function searchPodcasts(
     const data = await fetchJsonWithFallback<{ results?: unknown[] }>(url, {
       signal: signal || fetchSignal,
     })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const results = (data?.results || []).map((item) => mapITunesResult(item as any))
     setCache(cacheKey, results)
     return results
@@ -311,7 +306,6 @@ export async function searchEpisodes(
     const data = await fetchJsonWithFallback<{ results?: unknown[] }>(url, {
       signal: signal || fetchSignal,
     })
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const results = (data?.results || []).map((item) => mapITunesEpisodeResult(item as any))
     setCache(cacheKey, results)
     return results
@@ -336,7 +330,6 @@ export async function lookupPodcastsByIds(
     })
     const results = (data?.results || [])
       .filter((r: unknown) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const item = r as any
         return (
           item.kind === 'podcast' ||
@@ -344,7 +337,6 @@ export async function lookupPodcastsByIds(
           item.wrapperType === 'track'
         )
       })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .map((item) => mapLookupResult(item as any))
     setCache(cacheKey, results)
     return results
@@ -370,11 +362,9 @@ export async function lookupPodcastFull(
     // OR wrapperType='collection' for collection lookups
     const result = (data?.results || [])
       .filter((r: unknown) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const item = r as any
         return item.kind === 'podcast' || item.wrapperType === 'collection'
       })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .map((item) => mapITunesResult(item as any))[0]
     if (!result) {
       throw new Error('Podcast not found')
@@ -408,7 +398,6 @@ export async function lookupEpisode(
     const results = data?.results || []
     if (results.length === 0) return null
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const episode = mapITunesEpisodeResult(results[0] as any)
     setCache(cacheKey, episode)
     return episode
@@ -609,7 +598,6 @@ function parseRssXml(xmlText: string): ParsedFeed {
 
 // ========== Mapping Helpers ==========
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapRssResult(item: any): DiscoveryPodcast {
   return {
     id: String(item.id || ''),
@@ -621,7 +609,6 @@ function mapRssResult(item: any): DiscoveryPodcast {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapRssEpisodeResult(item: any): DiscoveryPodcast {
   return {
     id: String(item.id || ''),
@@ -636,7 +623,6 @@ function mapRssEpisodeResult(item: any): DiscoveryPodcast {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapITunesResult(item: any): Podcast {
   return {
     collectionId: item.collectionId || 0,
@@ -654,7 +640,6 @@ function mapITunesResult(item: any): Podcast {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapITunesEpisodeResult(item: any): SearchEpisode {
   // iTunes Episode API returns: artworkUrl60, artworkUrl160, artworkUrl600 (NOT artworkUrl100)
   // We use artworkUrl160 as the "100" equivalent for consistency with Podcast API
@@ -681,7 +666,6 @@ function mapITunesEpisodeResult(item: any): SearchEpisode {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapLookupResult(item: any): DiscoveryPodcast {
   return {
     id: String(item.collectionId || ''),
