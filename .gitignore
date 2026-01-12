@@ -1,0 +1,45 @@
+# Dependency directories
+node_modules/
+vendor/
+
+# Build artifacts
+dist/
+build/
+out/
+stats.html
+*.tsbuildinfo
+
+# Logs and coverage
+*.log
+coverage/
+.nyc_output/
+
+# Env/config
+.env
+.env.local
+public/env.local.js
+
+# Editors and OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Temporary
+*.tmp
+*.swp
+sample*/
+issue*/
+
+# Local tools
+.claude/
+
+local/
+
+# Playwright
+/tests/.output/
+
+.tanstack/
+# Local runtime config template is tracked, actual local overrides
+# use: git update-index --assume-unchanged public/env.js
+# public/env.js
