@@ -69,7 +69,7 @@ export default function SettingsPage() {
 
   return (
     <div className="h-full overflow-y-auto bg-background text-foreground">
-      <div className="px-12 py-14 max-w-screen-2xl mx-auto min-h-full">
+      <div className="px-[var(--page-margin-x)] pt-[var(--page-margin-x)] pb-32 max-w-content mx-auto min-h-full">
         <header className="mb-12">
           <h1 className="text-4xl font-bold tracking-tight mb-3">{t('settings')}</h1>
           <p className="text-xl text-muted-foreground font-medium">{t('settingsSubtitle')}</p>
@@ -223,7 +223,7 @@ export default function SettingsPage() {
                               <span className="capitalize">
                                 {item.source === 'local'
                                   ? t('sourceLocal')
-                                  : item.source === 'gallery'
+                                  : item.source === 'explore'
                                     ? t('sourcePodcast')
                                     : item.source}
                               </span>

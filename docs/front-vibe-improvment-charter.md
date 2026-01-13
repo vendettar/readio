@@ -177,7 +177,17 @@ The audit result must be returned using the following structure:
 ## Verification Checklist
 - `npm run test:run`
 - `npm run build`
-- (If routing touched) manual: back/forward, open/close `/gallery` and `/local-files`, playback not interrupted
+- (If routing touched) manual: back/forward, open/close `/explore` and `/files`, playback not interrupted
+
+### 5.0 Project-Specific Review Checklist (Readio)
+
+- Playback continuity: `<audio>` remains mounted at root; routing/UI updates must not interrupt audio.
+- Interaction rules: no nested interactives; no full-card overlays; all interactivity uses shadcn/ui (`Button`/`asChild`).
+- i18n: all user-facing strings must use `t(key)`; new keys must be added to all languages.
+- Inline styles: only allowed for CSS variables, virtualization, or cursor-positioned popups; otherwise forbidden.
+- Explore rules: no in-page search; no “Trending/Hot” sections.
+- Files rules: single-level folders; density toggle; view controls bar; rename conflicts handled.
+- Dropdown/Popover: premium overlay styling and propagation rules consistent.
 
 ### 5.1 Documentation rule (mandatory)
 

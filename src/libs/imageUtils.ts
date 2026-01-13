@@ -21,14 +21,14 @@ export function getFallbackPodcastImage(): string {
 export function getDiscoveryArtworkUrl(url: string | undefined, size: number = 600): string {
   if (!url) return getFallbackPodcastImage()
 
-  // Only apply size replacement to iTunes-style URLs (contain NxNbb pattern)
+  // Only apply size replacement to Apple artwork URLs (contain NxNbb pattern)
   // Example: https://is1-ssl.mzstatic.com/.../100x100bb.jpg
-  const iTunesPattern = /\d+x\d+bb\.(jpg|png|jpeg)/
-  if (iTunesPattern.test(url)) {
+  const applePattern = /\d+x\d+bb\.(jpg|png|jpeg)/
+  if (applePattern.test(url)) {
     const sizeString = `${size}x${size}bb`
     return url.replace(/\d+x\d+bb/, sizeString)
   }
 
-  // For non-iTunes URLs (like RSS feed images), return as-is
+  // For non-Apple artwork URLs (like RSS feed images), return as-is
   return url
 }

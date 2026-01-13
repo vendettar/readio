@@ -19,6 +19,7 @@ import {
 import React, { useRef, useState } from 'react'
 import { useI18n } from '../../hooks/useI18n'
 import { cn } from '../../lib/utils'
+import { getDiscoveryArtworkUrl } from '../../libs/imageUtils'
 import { formatTimeLabel } from '../../libs/subtitles'
 import { useImmersionStore } from '../../store/immersionStore'
 import { usePlayerStore } from '../../store/playerStore'
@@ -193,9 +194,12 @@ export function MiniPlayer() {
         >
           {coverArtUrl ? (
             <img
-              src={coverArtUrl}
+              src={getDiscoveryArtworkUrl(coverArtUrl, 100)}
               alt=""
               className="w-12 h-12 rounded-md object-cover shadow-sm bg-muted"
+              onError={(e) => {
+                e.currentTarget.src = '/placeholder-podcast.svg'
+              }}
             />
           ) : (
             <div className="w-12 h-12 rounded-md bg-muted flex items-center justify-center">

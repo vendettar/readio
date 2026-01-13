@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { Play } from 'lucide-react'
-import type React from 'react'
+import React from 'react'
 import { useI18n } from '../../hooks/useI18n'
 import { cn } from '../../lib/utils'
 import { getDiscoveryArtworkUrl } from '../../libs/imageUtils'
@@ -24,6 +24,7 @@ interface InteractiveArtworkProps {
   // Size variants if needed
   size?: 'sm' | 'md' | 'lg' | 'xl'
   referrerPolicy?: React.ImgHTMLAttributes<HTMLImageElement>['referrerPolicy']
+  fallbackSrc?: string
 }
 
 /**
@@ -47,8 +48,10 @@ export function InteractiveArtwork({
   hoverGroup,
   size = 'md',
   referrerPolicy = 'no-referrer',
+  fallbackSrc,
 }: InteractiveArtworkProps) {
   const { t } = useI18n()
+  const [hasError, setHasError] = React.useState(false)
   const sizeClasses = {
     sm: 'w-12 h-12',
     md: 'w-16 h-16',
@@ -99,7 +102,7 @@ export function InteractiveArtwork({
   )
 
   const resolvedPlayIconSize = playIconSize ?? playIconSizeMap[size]
-  const artworkUrl = getDiscoveryArtworkUrl(src)
+  const artworkUrl = getDiscoveryArtworkUrl(!hasError ? src : fallbackSrc)
 
   return (
     <div
@@ -121,6 +124,7 @@ export function InteractiveArtwork({
               src={artworkUrl}
               alt={alt}
               referrerPolicy={referrerPolicy}
+              onError={() => setHasError(true)}
               className={cn(
                 'w-full h-full object-cover transition-transform duration-500',
                 hoverScale && hoverScaleClass
@@ -133,6 +137,7 @@ export function InteractiveArtwork({
           src={artworkUrl}
           alt={alt}
           referrerPolicy={referrerPolicy}
+          onError={() => setHasError(true)}
           className={cn(
             'w-full h-full object-cover transition-transform duration-500',
             hoverScale && hoverScaleClass
@@ -140,7 +145,7 @@ export function InteractiveArtwork({
         />
       )}
 
-      {/* 2. Play Button Layer (Absolute Overlay - Avoids nesting inside Link/Button above) */}
+      {/* 2. Play Button Layer (Absolute Overlay) */}
       {onPlay && (
         <div className={overlayClassName}>
           <Button

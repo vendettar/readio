@@ -4,7 +4,6 @@ import { cn } from '@/lib/utils'
 export interface BaseEpisodeRowProps {
   /**
    * The artwork component, typically InteractiveArtwork.
-   * If not provided, a play button overlay or placeholder layout might be needed depending on usage.
    */
   artwork?: React.ReactNode
 
@@ -54,6 +53,10 @@ export interface BaseEpisodeRowProps {
   isLast?: boolean
 }
 
+/**
+ * BaseEpisodeRow: Standardized presentational component matching the original Readio UI.
+ * Handles hover states, absolute gutter elements, and divider logic properly.
+ */
 export function BaseEpisodeRow({
   artwork,
   title,
@@ -68,43 +71,54 @@ export function BaseEpisodeRow({
 }: BaseEpisodeRowProps) {
   return (
     <div
-      className={cn(
-        'group/episode relative pr-4',
-        'focus-within:bg-secondary/20 hover:bg-secondary/10 transition-colors duration-200 rounded-lg',
-        className
-      )}
+      className={cn('group/episode relative pr-4 smart-divider-group', className)}
       data-testid="episode-row"
     >
-      <div className="relative flex items-center gap-4 py-3">
-        {/* Artwork Area */}
-        {artwork && <div className="relative flex-shrink-0">{artwork}</div>}
+      {/* 
+        Hover Background Layer 
+        - inset-y-0: Extends from top edge to bottom edge (divider).
+        - Shifted left to cover the "gutter" area for episodes without artwork.
+        - Rounded-lg matches the legacy design.
+      */}
+      <div
+        className={cn(
+          'absolute inset-y-0 -left-[var(--page-gutter-x)] right-0 rounded-lg bg-foreground/5 opacity-0 group-hover/episode:opacity-100 transition-opacity duration-300 pointer-events-none z-0'
+        )}
+      />
+
+      <div className="relative flex items-center gap-4 py-3 z-10">
+        {/* Artwork Area - Optional */}
+        {artwork && <div className="relative flex-shrink-0 z-20">{artwork}</div>}
 
         <div className="flex-1 min-w-0 flex items-center justify-between">
           <div className="flex-1 min-w-0 pr-12 py-1">
-            {/* Subtitle / Top Meta */}
+            {/* Subtitle Line (e.g. Podcast Title • Date) */}
             {subtitle && (
-              <div className="text-xxs text-muted-foreground font-medium mb-0.5 uppercase tracking-wider leading-tight line-clamp-1">
+              <div className="text-xs text-muted-foreground/80 mb-0.5 line-clamp-1 font-normal tracking-tight">
                 {subtitle}
               </div>
             )}
 
-            {/* Title */}
-            <div className="mb-0.5 relative text-sm leading-tight">{title}</div>
+            {/* Title Line (Anchor for absolute gutter play buttons) */}
+            <div className="mb-0.5 relative z-20">{title}</div>
 
-            {/* Description */}
+            {/* Description Line */}
             {description && (
-              <p
+              <div
                 className={cn(
-                  'text-xs text-muted-foreground leading-snug font-light mt-1 line-clamp-2',
+                  'text-xs text-muted-foreground/80 leading-snug font-light line-clamp-1 mb-1',
+                  descriptionLines === 2 && 'line-clamp-2',
                   descriptionLines === 3 && 'line-clamp-3'
                 )}
               >
                 {description}
-              </p>
+              </div>
             )}
+
+            {/* Bottom Meta (if any, e.g. history playback progress) */}
           </div>
 
-          {/* Right Side Actions */}
+          {/* Right Side Actions & Post-Title Meta (e.g. Duration) */}
           <div className="flex items-center flex-shrink-0 gap-12">
             {meta && (
               <span className="text-xs text-muted-foreground font-medium whitespace-nowrap w-20 text-left">
@@ -113,7 +127,11 @@ export function BaseEpisodeRow({
             )}
 
             {actions && (
-              <div className="flex items-center gap-1 opacity-0 group-hover/episode:opacity-100 group-focus-within/episode:opacity-100 transition-opacity duration-200">
+              <div className="flex items-center gap-1">
+                {/* 
+                  Actions are kept in the DOM but usually only visible on hover 
+                  Managed by the caller, but here we provide a stable container.
+                */}
                 {actions}
               </div>
             )}
@@ -121,9 +139,15 @@ export function BaseEpisodeRow({
         </div>
       </div>
 
-      {/* Separator */}
-      {showDivider && !isLast && (
-        <div className="absolute bottom-0 left-0 right-4 h-px bg-border group-hover/episode:opacity-0 transition-opacity smart-divider" />
+      {/* Separator Line */}
+      {showDivider && (
+        <div
+          className={cn(
+            'absolute bottom-0 left-0 right-4 h-px bg-border transition-opacity duration-200 smart-divider',
+            'group-hover/episode:opacity-0', // Hide self on hover
+            isLast && 'hidden'
+          )}
+        />
       )}
     </div>
   )

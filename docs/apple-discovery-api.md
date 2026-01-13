@@ -1,6 +1,6 @@
-# iTunes & Apple Podcasts API Documentation
+# Apple Discovery API (iTunes Implementation)
 
-This document provides a reference for the iTunes and Apple Podcasts APIs used in the Readio project. Each section includes a description, the API URL, and a `curl` command for testing, followed by the **complete** JSON response.
+This document provides a reference for the Apple/iTunes APIs used in the Readio project as the implementation for the Discovery Provider. Each section includes a description, the API URL, and a `curl` command for testing.
 
 ## 1. Top Charts (Apple Podcasts RSS API)
 
@@ -99,56 +99,11 @@ curl "https://rss.marketingtools.apple.com/api/v2/us/podcasts/top/1/podcast-epis
 }
 ```
 
-### 💎 Top Subscriber Podcasts
-Fetches podcasts with high subscriber growth/count.
-- **URL**: `https://rss.marketingtools.apple.com/api/v2/{country}/podcasts/top-subscriber/{limit}/podcasts.json`
-- **Example**: Top 1 subscriber podcasts in the US.
-```bash
-curl "https://rss.marketingtools.apple.com/api/v2/us/podcasts/top-subscriber/1/podcasts.json"
-```
-**Full Response**:
-```json
-{
-  "feed": {
-    "title": "Top Subscriber Shows",
-    "id": "https://rss.applemarketingtools.com/api/v2/us/podcasts/top-subscriber/1/podcasts.json",
-    "author": {
-      "name": "Apple",
-      "url": "https://www.apple.com/"
-    },
-    "links": [
-      {
-        "self": "https://rss.applemarketingtools.com/api/v2/us/podcasts/top-subscriber/1/podcasts.json"
-      }
-    ],
-    "copyright": "Copyright © 2026 Apple Inc. All rights reserved.",
-    "country": "us",
-    "icon": "https://www.apple.com/favicon.ico",
-    "updated": "Fri, 9 Jan 2026 05:49:55 +0000",
-    "results": [
-      {
-        "artistName": "The New York Times",
-        "id": "1200361736",
-        "name": "The Daily",
-        "kind": "podcasts",
-        "artworkUrl100": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts221/v4/ab/64/66/ab6466a9-9a7d-e20e-7a3d-bc5be37d29ce/mza_15084852813176276273.jpg/100x100bb.png",
-        "genres": [
-          {
-            "genreId": "1489",
-            "name": "News",
-            "url": "https://itunes.apple.com/us/genre/id1489"
-          }
-        ],
-        "url": "https://podcasts.apple.com/us/podcast/the-daily/id1200361736"
-      }
-    ]
-  }
-}
-```
+
 
 ---
 
-## 2. Search & discovery (iTunes Search API)
+## 2. Search & discovery (Provider Search API)
 
 Used for keyword-based searching.
 
@@ -264,7 +219,7 @@ curl "https://itunes.apple.com/search?term=The+Daily&country=us&media=podcast&en
 
 ---
 
-## 3. Metadata Lookup (iTunes Lookup API)
+## 3. Metadata Lookup (Provider Lookup API)
 
 Used for retrieving reliable data using a specific ID (Track ID or Collection ID).
 
@@ -330,7 +285,7 @@ curl "https://itunes.apple.com/lookup?id=917918570&country=us&entity=podcast"
 ### 🎯 Lookup Episode (The "Podcast + Episode" Approach)
 **Note**: The iTunes Lookup API often fails to retrieve a specific episode by its single `trackId` directly. The most reliable method is to lookup the **Podcast ID** and include episodes.
 
-> ⚠️ **Critical Limitation (Tested 2026-01-09)**: The `limit` parameter is **ineffective** for most podcasts. Even with `limit=300`, the API only returns ~25 episodes (matching what the podcast provider puts in their RSS feed). For example, "The Daily" has `trackCount: 2475` but the API only returns 23 episodes. **You cannot retrieve a podcast's full episode archive via this API.**
+> ⚠️ **Critical Limitation (Tested 2026-01-09)**: The `limit` parameter is **ineffective** for most podcasts. Even with `limit=300`, the Provider API only returns ~25 episodes (matching what the podcast provider puts in their RSS feed). For example, "The Daily" has `trackCount: 2475` but the API only returns 23 episodes. **You cannot retrieve a podcast's full episode archive via this API.**
 
 - **URL Prefix**: `https://itunes.apple.com/lookup`
 - **Params**: `id={PODCAST_ID}`, `entity=podcastEpisode`, `limit=1`

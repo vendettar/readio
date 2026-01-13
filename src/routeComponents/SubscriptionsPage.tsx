@@ -25,9 +25,9 @@ export default function SubscriptionsPage() {
   }, [subscriptionsLoaded, loadSubscriptions])
 
   const handlePodcastClick = (subscription: Subscription) => {
-    // Navigate to podcast detail page using collectionId if available
-    if (subscription.collectionId) {
-      navigate({ to: '/podcast/$id', params: { id: subscription.collectionId } })
+    // Navigate to podcast detail page using providerPodcastId if available
+    if (subscription.providerPodcastId) {
+      navigate({ to: '/podcast/$id', params: { id: subscription.providerPodcastId } })
     } else if (subscription.feedUrl) {
       // Fallback search
       navigate({ to: '/search', search: { q: subscription.title } })
@@ -40,10 +40,7 @@ export default function SubscriptionsPage() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div
-        className="py-14 max-w-screen-2xl mx-auto min-h-full"
-        style={{ paddingLeft: 'var(--page-margin-x)', paddingRight: 'var(--page-margin-x)' }}
-      >
+      <div className="px-[var(--page-margin-x)] pt-[var(--page-margin-x)] pb-32 max-w-content mx-auto min-h-full">
         <header className="mb-12">
           <h1 className="text-4xl font-bold text-foreground tracking-tight">
             {t('subscriptionsTitle')}
@@ -78,10 +75,10 @@ export default function SubscriptionsPage() {
                 title={subscription.title}
                 subtitle={subscription.author}
                 artworkUrl={subscription.artworkUrl}
-                {...(subscription.collectionId
+                {...(subscription.providerPodcastId
                   ? {
                       to: '/podcast/$id',
-                      params: { id: subscription.collectionId },
+                      params: { id: subscription.providerPodcastId },
                     }
                   : {
                       onClick: () => handlePodcastClick(subscription),

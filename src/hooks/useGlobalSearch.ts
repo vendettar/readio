@@ -1,5 +1,5 @@
 // src/hooks/useGlobalSearch.ts
-// Unified search hook combining iTunes API and local IndexedDB content
+// Unified search hook combining Discovery Provider API and local IndexedDB content
 
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
@@ -11,12 +11,7 @@ import {
   type PlaybackSession,
   type Subscription,
 } from '../libs/dexieDb'
-import {
-  type Podcast,
-  type SearchEpisode,
-  searchEpisodes,
-  searchPodcasts,
-} from '../libs/discoveryProvider'
+import discovery, { type Podcast, type SearchEpisode } from '../libs/discovery'
 import { formatFileSize } from '../libs/formatters'
 import { getAppConfig } from '../libs/runtimeConfig'
 import { useExploreStore } from '../store/exploreStore'
@@ -108,19 +103,19 @@ export function useGlobalSearch(
     }
   }, [enabled, subscriptionsLoaded, favoritesLoaded, loadSubscriptions, loadFavorites])
 
-  // iTunes Podcast Search
+  // Discovery Provider: Podcast Search
   const { data: podcasts = [], isLoading: isLoadingPodcasts } = useQuery({
     queryKey: ['globalSearch', 'podcasts', normalizedQuery, country],
-    queryFn: ({ signal }) => searchPodcasts(normalizedQuery, country, 20, signal),
+    queryFn: ({ signal }) => discovery.searchPodcasts(normalizedQuery, country, 20, signal),
     enabled: shouldSearch,
     staleTime: 5 * 60 * 1000,
     placeholderData: (prev) => prev,
   })
 
-  // iTunes Episode Search
+  // Discovery Provider: Episode Search
   const { data: episodes = [], isLoading: isLoadingEpisodes } = useQuery({
     queryKey: ['globalSearch', 'episodes', normalizedQuery, country],
-    queryFn: ({ signal }) => searchEpisodes(normalizedQuery, country, 50, signal),
+    queryFn: ({ signal }) => discovery.searchEpisodes(normalizedQuery, country, 50, signal),
     enabled: shouldSearch,
     staleTime: 5 * 60 * 1000,
     placeholderData: (prev) => prev,

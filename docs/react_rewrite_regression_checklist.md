@@ -25,8 +25,8 @@ The current UI follows the App Shell pattern:
 
 Checkpoints:
 - [ ] Sidebar groups match routes:
-  - Browse: `/gallery`
-  - Library: `/subscriptions`, `/favorites`, `/history`, `/local-files`
+  - Browse: `/explore`
+  - Library: `/subscriptions`, `/favorites`, `/history`, `/files`
 - [ ] Sidebar active state matches the URL (`useLocation().pathname`).
 - [ ] MiniPlayer persists when **audioLoaded** is true (Normal mode), and clicking the main body enters immersion mode (non-button area).
 - [ ] Immersion mode is controlled by `src/store/immersionStore.ts` (state-driven); `FullPlayer` renders when `isImmersed=true`.
@@ -126,6 +126,6 @@ Quick Regression Points:
 - [ ] `npm run test:run`
 - [ ] `npm run build`
 - [ ] Manual test:
-  - [ ] 5 main Sidebar routes open correctly: `/gallery`, `/subscriptions`, `/favorites`, `/history`, `/local-files`.
+  - [ ] 5 main Sidebar routes open correctly: `/explore`, `/subscriptions`, `/favorites`, `/history`, `/files`.
   - [ ] Player: Playback is uninterrupted by route/immersion changes.
   - [ ] Transcript: Multi-line visibility + following + selection lookup + highlighting.

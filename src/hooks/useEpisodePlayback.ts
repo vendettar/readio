@@ -1,5 +1,5 @@
 import type { Favorite } from '../libs/dexieDb'
-import type { Episode, Podcast, SearchEpisode } from '../libs/discoveryProvider'
+import type { Episode, Podcast, SearchEpisode } from '../libs/discovery'
 import { getDiscoveryArtworkUrl } from '../libs/imageUtils'
 import { usePlayerStore } from '../store/playerStore'
 
@@ -34,9 +34,9 @@ export function useEpisodePlayback() {
    */
   const playSearchEpisode = (episode: SearchEpisode, feedUrl?: string) => {
     const artwork = getDiscoveryArtworkUrl(episode.artworkUrl600 || episode.artworkUrl100, 600)
-    const episodeId = episode.episodeGuid || episode.trackId.toString()
+    const episodeId = episode.episodeGuid || episode.providerEpisodeId.toString()
 
-    setAudioUrl(episode.episodeUrl, episode.trackName, artwork, {
+    setAudioUrl(episode.episodeUrl || '', episode.trackName, artwork, {
       description: episode.description,
       podcastTitle: episode.collectionName,
       podcastFeedUrl: feedUrl || episode.feedUrl,

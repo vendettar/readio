@@ -38,7 +38,7 @@ describe('ExploreStore', () => {
 
   describe('Subscriptions', () => {
     const mockPodcast = {
-      collectionId: 123,
+      providerPodcastId: 123,
       collectionName: 'Test Podcast',
       artistName: 'Test Artist',
       artworkUrl100: 'http://example.com/art.jpg',
@@ -66,7 +66,7 @@ describe('ExploreStore', () => {
 
   describe('Favorites', () => {
     const mockPodcast = {
-      collectionId: 123,
+      providerPodcastId: 123,
       collectionName: 'Test Podcast',
       artistName: 'Test Artist',
       artworkUrl100: 'http://example.com/art.jpg',

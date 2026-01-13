@@ -20,22 +20,24 @@ export const DiscoveryPodcastSchema = z.object({
   releaseDate: z.string().optional(),
   duration: z.number().nonnegative().optional(),
   feedUrl: z.string().url().optional(),
+  providerPodcastId: z.string().optional(),
+  providerEpisodeId: z.string().optional(),
 })
 
 /**
  * Extended Podcast type returned by iTunes Search API
  */
 export const PodcastSchema = z.object({
-  collectionId: z.number().int().positive(),
+  providerPodcastId: z.number().int().positive(),
   collectionName: z.string().min(1),
   artistName: z.string().optional(),
   artworkUrl100: z.string().url().optional(),
   artworkUrl600: z.string().url().optional(),
   feedUrl: z.string().url().optional(),
   collectionViewUrl: z.string().url().optional(),
-  genres: z.array(z.string().min(1)),
   artistId: z.number().int().positive().optional(),
   primaryGenreName: z.string().optional(),
+  genres: z.array(z.string()).optional(),
   trackCount: z.number().int().nonnegative().optional(),
 })
 
@@ -43,20 +45,20 @@ export const PodcastSchema = z.object({
  * Episode result from iTunes Search API (entity=podcastEpisode)
  */
 export const SearchEpisodeSchema = z.object({
-  trackId: z.number().int().positive(),
-  trackName: z.string().min(1),
-  collectionId: z.number().int().positive(),
-  collectionName: z.string().min(1),
-  artistName: z.string().optional(),
-  artworkUrl100: z.string().url().optional(),
+  providerEpisodeId: z.number().int().positive(), // Was trackId
+  providerPodcastId: z.number().int().positive(), // Was collectionId
+  trackName: z.string(),
+  collectionName: z.string(),
+  feedUrl: z.string().url().optional(),
+  episodeUrl: z.string().url().optional(),
+  releaseDate: z.string().datetime().optional(),
+  trackTimeMillis: z.number().int().optional(),
   artworkUrl600: z.string().url().optional(),
-  episodeUrl: z.string().url(),
-  episodeGuid: z.string().optional(),
-  releaseDate: z.string().min(1),
-  trackTimeMillis: z.number().int().nonnegative().optional(),
   description: z.string().optional(),
   shortDescription: z.string().optional(),
-  feedUrl: z.string().url().optional(),
+  episodeGuid: z.string().optional(),
+  artworkUrl100: z.string().url().optional(),
+  artistName: z.string().optional(),
 })
 
 /**
@@ -71,14 +73,18 @@ export const EpisodeSchema = z.object({
   pubDate: z.string().min(1),
   artworkUrl: z.string().url().optional(),
   duration: z.number().nonnegative().optional(),
-  seasonNumber: z.number().int().positive().optional(),
-  episodeNumber: z.number().int().positive().optional(),
+  seasonNumber: z.number().int().nonnegative().optional(),
+  episodeNumber: z.number().int().nonnegative().optional(),
   episodeType: z.enum(['full', 'trailer', 'bonus']).optional(),
   explicit: z.boolean().optional(),
   link: z.string().url().optional(),
   fileSize: z.number().int().nonnegative().optional(),
   transcriptUrl: z.string().url().optional(),
   chaptersUrl: z.string().url().optional(),
+  itunesTrackId: z.string().optional(),
+  collectionName: z.string().optional(),
+  artistName: z.string().optional(),
+  feedUrl: z.string().optional(),
 })
 
 /**

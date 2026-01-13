@@ -1,6 +1,6 @@
 import { MoreHorizontal, Star } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { BaseEpisodeRow } from '../components/EpisodeRow/BaseEpisodeRow'
+import { BaseEpisodeRow, GutterPlayButton } from '../components/EpisodeRow'
 import { InteractiveArtwork } from '../components/interactive/InteractiveArtwork'
 import { InteractiveTitle } from '../components/interactive/InteractiveTitle'
 import { Button } from '../components/ui/button'
@@ -55,7 +55,7 @@ export default function FavoritesPage() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="w-full max-w-5xl mx-auto px-[var(--page-gutter-x)] pt-4 pb-32">
+      <div className="w-full max-w-content mx-auto px-[var(--page-margin-x)] pt-[var(--page-margin-x)] pb-32">
         <header className="mb-12">
           <h1 className="text-4xl font-bold text-foreground tracking-tight mb-3">
             {t('favoritesTitle')}
@@ -92,54 +92,50 @@ export default function FavoritesPage() {
                 ? favorite.episodeArtworkUrl
                 : favorite.artworkUrl
 
+              // Extract navigation params to avoid IIFEs in JSX
+              const providerPodcastId = subscriptionMap.get(favorite.feedUrl)
+              const episodeId = favorite.episodeId
+              const hasNavigation = !!(providerPodcastId && episodeId)
+              const navigationTo = hasNavigation ? '/podcast/$id/episode/$episodeId' : undefined
+              const navigationParams = hasNavigation
+                ? { id: providerPodcastId, episodeId: encodeURIComponent(episodeId) }
+                : undefined
+
               return (
                 <BaseEpisodeRow
                   key={favorite.key}
                   isLast={index === favorites.length - 1}
-                  artwork={(() => {
-                    const collectionId = subscriptionMap.get(favorite.feedUrl)
-                    const episodeId = favorite.episodeId // Only use actual GUID/ID for navigation
-                    return (
+                  artwork={
+                    artworkUrl ? (
                       <InteractiveArtwork
                         src={getDiscoveryArtworkUrl(artworkUrl, 160)}
-                        to={
-                          collectionId && episodeId ? '/podcast/$id/episode/$episodeId' : undefined
-                        }
-                        params={
-                          collectionId && episodeId
-                            ? { id: collectionId, episodeId: encodeURIComponent(episodeId) }
-                            : undefined
-                        }
+                        to={navigationTo}
+                        params={navigationParams}
                         onPlay={() => playFavorite(favorite)}
                         playButtonSize="md"
                         playIconSize={20}
                         hoverGroup="episode"
                         size="lg"
                       />
-                    )
-                  })()}
-                  title={(() => {
-                    const collectionId = subscriptionMap.get(favorite.feedUrl)
-                    const episodeId = favorite.episodeId // Only GUID for navigation
-
-                    return (
+                    ) : undefined
+                  }
+                  title={
+                    <>
+                      {!artworkUrl && (
+                        <GutterPlayButton
+                          onPlay={() => playFavorite(favorite)}
+                          ariaLabel={t('btnPlayOnly')}
+                        />
+                      )}
                       <InteractiveTitle
                         title={favorite.episodeTitle}
-                        to={
-                          collectionId && episodeId ? '/podcast/$id/episode/$episodeId' : undefined
-                        }
-                        params={
-                          collectionId && episodeId
-                            ? { id: collectionId, episodeId: encodeURIComponent(episodeId) }
-                            : undefined
-                        }
-                        onClick={
-                          !(collectionId && episodeId) ? () => playFavorite(favorite) : undefined
-                        }
+                        to={navigationTo}
+                        params={navigationParams}
+                        onClick={!hasNavigation ? () => playFavorite(favorite) : undefined}
                         className="text-sm leading-tight"
                       />
-                    )
-                  })()}
+                    </>
+                  }
                   subtitle={
                     (favorite.podcastTitle || favorite.pubDate) && (
                       <>

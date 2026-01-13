@@ -10,7 +10,7 @@ import { Button } from '../../components/ui/button'
 import { useEpisodePlayback } from '../../hooks/useEpisodePlayback'
 import { useI18n } from '../../hooks/useI18n'
 import { cn } from '../../lib/utils'
-import { fetchPodcastFeed, lookupPodcastFull } from '../../libs/discoveryProvider'
+import discovery from '../../libs/discovery'
 import { formatCompactNumber } from '../../libs/formatters'
 import { stripHtml } from '../../libs/htmlUtils'
 import { getDiscoveryArtworkUrl } from '../../libs/imageUtils'
@@ -38,7 +38,7 @@ export default function PodcastShowPage() {
     error: podcastError,
   } = useQuery({
     queryKey: ['podcast', 'lookup', id],
-    queryFn: () => lookupPodcastFull(id),
+    queryFn: () => discovery.getPodcast(id),
     staleTime: 1000 * 60 * 60, // 1 hour
     gcTime: 1000 * 60 * 60 * 24, // 24 hours
   })
@@ -51,7 +51,20 @@ export default function PodcastShowPage() {
     error: feedError,
   } = useQuery({
     queryKey: ['podcast', 'feed', podcast?.feedUrl],
-    queryFn: () => fetchPodcastFeed(feedUrl ?? ''),
+    queryFn: async () => {
+      try {
+        return await discovery.fetchPodcastFeed(feedUrl ?? '')
+      } catch (err) {
+        console.error('[PodcastShowPage] RSS feed failed, falling back to iTunes API:', err)
+        const episodes = await discovery.getPodcastEpisodes(id)
+        return {
+          title: podcast?.collectionName || '',
+          description: '',
+          artworkUrl: podcast?.artworkUrl600,
+          episodes,
+        }
+      }
+    },
     enabled: !!podcast?.feedUrl,
     staleTime: 1000 * 60 * 30, // 30 minutes
     gcTime: 1000 * 60 * 60 * 6, // 6 hours
@@ -123,7 +136,7 @@ export default function PodcastShowPage() {
 
   return (
     <div className="h-full overflow-y-auto bg-background text-foreground custom-scrollbar">
-      <div className="w-full max-w-5xl mx-auto px-[var(--page-gutter-x)] pt-8 pb-32">
+      <div className="w-full max-w-content mx-auto px-[var(--page-margin-x)] pt-[var(--page-margin-x)] pb-32">
         {/* Hero Section */}
         <div className="flex flex-col md:flex-row gap-8 mb-10">
           {/* Artwork */}

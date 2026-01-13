@@ -54,13 +54,10 @@ export function InteractiveTitle({
           className
         )}
       >
-        <span
-          className={cn(
-            clampClass,
-            'overflow-hidden hover:underline decoration-primary/30 underline-offset-4 transition-all'
-          )}
-        >
-          {title}
+        <span className={cn(clampClass, 'overflow-hidden')}>
+          <span className="group-hover/episode:underline group-hover/item:underline group-hover/card:underline hover:underline">
+            {title}
+          </span>
         </span>
       </Button>
     )
@@ -77,13 +74,10 @@ export function InteractiveTitle({
         )}
       >
         <Link to={to as any} params={params as any} className={cn('transition-all', className)}>
-          <span
-            className={cn(
-              clampClass,
-              'overflow-hidden hover:underline decoration-primary/30 underline-offset-4 transition-all'
-            )}
-          >
-            {title}
+          <span className={cn(clampClass, 'overflow-hidden')}>
+            <span className="group-hover/episode:underline group-hover/item:underline group-hover/card:underline hover:underline">
+              {title}
+            </span>
           </span>
         </Link>
       </Button>

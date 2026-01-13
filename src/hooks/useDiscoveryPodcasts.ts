@@ -3,14 +3,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { getEditorPicksForRegion } from '../constants/app'
-import {
-  type DiscoveryPodcast,
-  fetchTopEpisodes,
-  fetchTopPodcasts,
-  fetchTopSubscriberPodcasts,
-  lookupPodcastFull,
-  lookupPodcastsByIds,
-} from '../libs/discoveryProvider'
+import discovery, { type DiscoveryPodcast } from '../libs/discovery'
 import { getAppConfig } from '../libs/runtimeConfig'
 
 // ========== CONFIGURATION ==========
@@ -32,7 +25,6 @@ function generateMockPodcasts(count: number, prefix: string = 'Podcast'): Discov
 const MOCK_TOP_PODCASTS = generateMockPodcasts(30, 'Top Show')
 const MOCK_EDITOR_PICKS = generateMockPodcasts(30, 'Editor Pick')
 const MOCK_TOP_EPISODES = generateMockPodcasts(30, 'Episode')
-const MOCK_SUBSCRIBER_PODCASTS = generateMockPodcasts(30, 'Subscriber Show')
 
 // Query keys
 const QUERY_KEYS = {
@@ -48,7 +40,7 @@ export function useTopPodcasts(country: string = 'us', limit: number = 25) {
     queryKey: QUERY_KEYS.topPodcasts(country),
     queryFn: ({ signal }) => {
       if (USE_MOCK_DATA) return Promise.resolve(MOCK_TOP_PODCASTS.slice(0, limit))
-      return fetchTopPodcasts(country, limit, signal)
+      return discovery.fetchTopPodcasts(country, limit, signal)
     },
     staleTime: 12 * 60 * 60 * 1000, // 12 hours
     gcTime: 72 * 60 * 60 * 1000, // 72 hours
@@ -67,14 +59,8 @@ export function useEditorPicks(country: string = 'us') {
       if (USE_MOCK_DATA) return MOCK_EDITOR_PICKS
 
       // Get region-specific Editor's Picks
-      const picksIds = getEditorPicksForRegion(country)
-
-      // If region has no configured picks, return empty array
-      if (!picksIds || picksIds.length === 0) {
-        return []
-      }
-
-      return lookupPodcastsByIds([...picksIds], country, signal)
+      const picks = getEditorPicksForRegion(country)
+      return picks ? discovery.lookupPodcastsByIds([...picks], country, signal) : []
     },
     staleTime: 24 * 60 * 60 * 1000, // 24 hours (Editor's Picks change very slowly)
     gcTime: 72 * 60 * 60 * 1000,
@@ -90,23 +76,7 @@ export function useTopEpisodes(country: string = 'us', limit: number = 25) {
     queryKey: ['topEpisodes', country],
     queryFn: ({ signal }) => {
       if (USE_MOCK_DATA) return Promise.resolve(MOCK_TOP_EPISODES.slice(0, limit))
-      return fetchTopEpisodes(country, limit, signal)
-    },
-    staleTime: 12 * 60 * 60 * 1000,
-    gcTime: 72 * 60 * 60 * 1000,
-    retry: USE_MOCK_DATA ? 0 : 2,
-  })
-}
-
-/**
- * Hook for fetching Top Subscriber Podcasts
- */
-export function useTopSubscriberPodcasts(country: string = 'us', limit: number = 25) {
-  return useQuery({
-    queryKey: ['topSubscriberPodcasts', country],
-    queryFn: ({ signal }) => {
-      if (USE_MOCK_DATA) return Promise.resolve(MOCK_SUBSCRIBER_PODCASTS.slice(0, limit))
-      return fetchTopSubscriberPodcasts(country, limit, signal)
+      return discovery.fetchTopEpisodes(country, limit, signal)
     },
     staleTime: 12 * 60 * 60 * 1000,
     gcTime: 72 * 60 * 60 * 1000,
@@ -115,5 +85,5 @@ export function useTopSubscriberPodcasts(country: string = 'us', limit: number =
 }
 
 // Re-export types and utils
-export { lookupPodcastFull }
+
 export type { DiscoveryPodcast }

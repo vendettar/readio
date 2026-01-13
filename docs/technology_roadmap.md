@@ -78,7 +78,7 @@ Current Phase (Initial Development; Clearable Data):
 | i18n | Lightweight `t(key)` pattern | Standardized usage: No hardcoded user-facing strings; no i18next needed until advanced formatting/collaboration is required. |
 
 Routing Principles (UX Baseline):
-- **Persistent Player**: The player (including `<audio>` and state components) is hoisted to `__root.tsx` (Global layout) to ensure **playback is never interrupted** when navigating between routes like `/gallery` or `/local-files`.
+- **Persistent Player**: The player (including `<audio>` and state components) is hoisted to `__root.tsx` (Global layout) to ensure **playback is never interrupted** when navigating between routes like `/explore` or `/files`.
 
 ### 2.4 Large Lists
 

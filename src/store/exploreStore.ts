@@ -2,8 +2,7 @@
 import { create } from 'zustand'
 import type { Favorite, Subscription } from '../libs/dexieDb'
 import { DB } from '../libs/dexieDb'
-import type { Episode, ParsedFeed, Podcast } from '../libs/discoveryProvider'
-import { fetchPodcastFeed, searchPodcasts } from '../libs/discoveryProvider'
+import discovery, { type Episode, type ParsedFeed, type Podcast } from '../libs/discovery'
 import { abortRequestsWithPrefix } from '../libs/requestManager'
 import { getAppConfig } from '../libs/runtimeConfig'
 import { toast } from '../libs/toast'
@@ -40,7 +39,8 @@ function abortAll(): void {
   abortSearch()
   abortPodcast()
   // Also abort any inflight requests via requestManager
-  abortRequestsWithPrefix('GET:https://itunes.apple.com')
+  // Use the search URL prefix from config to cancel pending requests
+  abortRequestsWithPrefix(`GET:${getAppConfig().DISCOVERY_SEARCH_URL}`)
 }
 
 export type ExploreView = 'search' | 'subscriptions' | 'favorites' | 'podcast' | 'episode'
@@ -179,7 +179,7 @@ export const useExploreStore = create<ExploreState>((set, get) => ({
     set({ searchLoading: true, searchErrorKey: null })
 
     try {
-      const results = await searchPodcasts(query, get().country, 20, signal)
+      const results = await discovery.searchPodcasts(query, 'us', 30, signal)
       set({ searchResults: results, searchLoading: false })
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
@@ -216,7 +216,7 @@ export const useExploreStore = create<ExploreState>((set, get) => ({
     const signal = podcastAbortController.signal
 
     try {
-      const feed = await fetchPodcastFeed(podcast.feedUrl, signal)
+      const feed = await discovery.fetchPodcastFeed(podcast.feedUrl, signal)
       set({ podcastFeed: feed, podcastLoading: false })
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
@@ -260,7 +260,7 @@ export const useExploreStore = create<ExploreState>((set, get) => ({
       author: podcast.artistName ?? '',
       artworkUrl: podcast.artworkUrl600 || podcast.artworkUrl100 || '',
       addedAt: Date.now(),
-      collectionId: podcast.collectionId?.toString(),
+      providerPodcastId: podcast.providerPodcastId?.toString(),
     }
     try {
       await DB.addSubscription(sub)

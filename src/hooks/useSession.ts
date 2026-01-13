@@ -145,7 +145,7 @@ export function useSession() {
             id,
             progress: 0,
             duration: duration || 0,
-            source: localTrackId ? 'local' : 'gallery',
+            source: localTrackId ? 'local' : 'explore',
             // Save lookup keys immediately so we can find it next time
             audioUrl: !audioUrl.startsWith('blob:') ? audioUrl : undefined,
             audioFilename: audioTitle,

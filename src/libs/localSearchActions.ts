@@ -23,8 +23,8 @@ export async function executeLocalSearchAction(
   switch (result.type) {
     case 'subscription': {
       const subscription = result.data as Subscription
-      if (subscription.collectionId) {
-        deps.navigate({ to: '/podcast/$id', params: { id: subscription.collectionId } })
+      if (subscription.providerPodcastId) {
+        deps.navigate({ to: '/podcast/$id', params: { id: subscription.providerPodcastId } })
       } else if (subscription.title) {
         deps.navigate({ to: '/search', search: { q: subscription.title } })
       } else {

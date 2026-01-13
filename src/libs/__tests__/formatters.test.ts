@@ -7,13 +7,13 @@ describe('formatters - pure functions', () => {
     it('should format bytes correctly', () => {
       expect(formatFileSize(0, 'en')).toMatch(/0\s?B/i)
       expect(formatFileSize(500, 'en')).toMatch(/500\s?B/i)
-      expect(formatFileSize(1023, 'en')).toMatch(/1023\s?B/i)
+      expect(formatFileSize(1023, 'en')).toMatch(/1[,\s]?023\s?B/i)
     })
 
     it('should format kilobytes correctly', () => {
       expect(formatFileSize(1024, 'en')).toMatch(/^1(\.|,)?0?\s?kB/i)
       expect(formatFileSize(1536, 'en')).toMatch(/^1(\.|,)?5\s?kB/i)
-      expect(formatFileSize(1024 * 1023, 'en')).toMatch(/^1023(\.|,)?0?\s?kB/i)
+      expect(formatFileSize(1024 * 1023, 'en')).toMatch(/^1[,\s]?023(\.|,)?0?\s?kB/i)
     })
 
     it('should format megabytes correctly', () => {

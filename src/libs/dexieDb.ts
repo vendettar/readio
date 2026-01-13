@@ -9,7 +9,7 @@ const getDbName = () => getAppConfig().DB_NAME
 
 export interface PlaybackSession {
   id: string // Primary key
-  source: 'local' | 'gallery' // Origin of content
+  source: 'local' | 'explore' // Origin of content
   title: string // Display name
 
   // Metadata
@@ -71,7 +71,7 @@ export interface Subscription {
   author: string
   artworkUrl: string
   addedAt: number
-  collectionId?: string // iTunes collection ID for navigation
+  providerPodcastId?: string // Apple provider collection ID for navigation
 }
 
 export interface Favorite {
@@ -147,7 +147,7 @@ class ReadioDB extends Dexie {
         'id, lastPlayedAt, source, createdAt, audioUrl, audioFilename, localTrackId, episodeId',
       audioBlobs: 'id, storedAt',
       subtitles: 'id, storedAt',
-      subscriptions: 'feedUrl, addedAt, collectionId',
+      subscriptions: 'feedUrl, addedAt, providerPodcastId',
       favorites: 'key, addedAt, episodeId',
       settings: 'key',
       folders: '++id, name, createdAt',

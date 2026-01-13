@@ -6,11 +6,7 @@ import { useEffect } from 'react'
 import { type LocalSearchResult, useGlobalSearch } from '../../hooks/useGlobalSearch'
 import { useI18n } from '../../hooks/useI18n'
 import { useOnClickOutside } from '../../hooks/useOnClickOutside'
-import {
-  lookupPodcastFull,
-  type Podcast as PodcastType,
-  type SearchEpisode,
-} from '../../libs/discoveryProvider'
+import discovery, { type Podcast as PodcastType, type SearchEpisode } from '../../libs/discovery'
 import { formatTimestamp } from '../../libs/formatters'
 import { getDiscoveryArtworkUrl } from '../../libs/imageUtils'
 import { executeLocalSearchAction } from '../../libs/localSearchActions'
@@ -107,7 +103,7 @@ export function SearchOverlay() {
 
   const handlePodcastClick = (podcast: PodcastType) => {
     closeOverlay()
-    navigate({ to: '/podcast/$id', params: { id: String(podcast.collectionId) } })
+    navigate({ to: '/podcast/$id', params: { id: String(podcast.providerPodcastId) } })
   }
 
   const handleEpisodeClick = async (episode: SearchEpisode) => {
@@ -115,17 +111,17 @@ export function SearchOverlay() {
 
     let feedUrl = episode.feedUrl
     if (!feedUrl) {
-      const fullPodcast = await lookupPodcastFull(episode.collectionId.toString())
+      const fullPodcast = await discovery.getPodcast(episode.providerPodcastId.toString())
       feedUrl = fullPodcast?.feedUrl
     }
 
     if (!feedUrl) {
-      navigate({ to: '/podcast/$id', params: { id: String(episode.collectionId) } })
+      navigate({ to: '/podcast/$id', params: { id: String(episode.providerPodcastId) } })
       return
     }
 
     const artwork = getDiscoveryArtworkUrl(episode.artworkUrl600 || episode.artworkUrl100, 600)
-    setAudioUrl(episode.episodeUrl, episode.trackName, artwork, {
+    setAudioUrl(episode.episodeUrl || '', episode.trackName, artwork, {
       description: episode.description,
       podcastTitle: episode.collectionName,
       podcastFeedUrl: feedUrl,
@@ -201,7 +197,7 @@ export function SearchOverlay() {
 
                 return (
                   <Button
-                    key={`suggest-${podcast.collectionId}`}
+                    key={`suggest-${podcast.providerPodcastId}`}
                     variant="ghost"
                     onClick={() => handlePodcastClick(podcast)}
                     className="w-full flex items-center gap-1.5 px-2 py-1 rounded-md hover:bg-muted/50 transition-colors text-left justify-start h-auto"
@@ -230,7 +226,7 @@ export function SearchOverlay() {
               <SectionHeader title={t('searchPodcasts')} />
               {podcasts.slice(0, 3).map((podcast) => (
                 <PodcastItem
-                  key={podcast.collectionId}
+                  key={podcast.providerPodcastId}
                   podcast={podcast}
                   onClick={() => handlePodcastClick(podcast)}
                 />
@@ -244,7 +240,7 @@ export function SearchOverlay() {
               <SectionHeader title={t('searchEpisodes')} />
               {episodes.slice(0, 5).map((episode) => (
                 <EpisodeItem
-                  key={episode.trackId}
+                  key={episode.providerEpisodeId}
                   episode={episode}
                   onClick={() => handleEpisodeClick(episode)}
                 />

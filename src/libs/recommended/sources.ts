@@ -1,47 +1,26 @@
-// src/libs/recommended/sources.ts
-import { fetchJsonWithFallback, fetchTextWithFallback } from '../fetchUtils'
-import { deduplicatedFetch, getRequestKey } from '../requestManager'
-import { getAppConfig } from '../runtimeConfig'
-import {
-  readChartCacheWithStatus,
-  readLookupCache,
-  writeChartCache,
-  writeLookupCache,
-} from './cache'
+import discovery, { type DiscoveryPodcast } from '../discovery'
 import type { RecommendedPodcast } from './types'
+
+// Mapper function
+function mapToRecommended(p: DiscoveryPodcast): RecommendedPodcast {
+  return {
+    id: p.id || '',
+    title: p.name || '',
+    author: p.artistName || '',
+    artworkUrl: p.artworkUrl100 || '', // DiscoveryPodcast usually has 100
+    feedUrl: p.feedUrl || '',
+    genreNames: p.genres ? p.genres.map((g) => g.name) : [],
+  }
+}
 
 export async function fetchDiscoveryChartIds(
   country: string,
   limit: number = 50,
   signal?: AbortSignal
 ): Promise<string[]> {
-  const config = getAppConfig()
-  const url = `${config.RSS_FEED_BASE_URL}/${country}/podcasts/top/${limit}/podcasts.json`
-  const cached = readChartCacheWithStatus(country)
-  if (cached && cached.ids.length > 0 && cached.status === 'fresh') {
-    return cached.ids
-  }
-
-  const requestKey = getRequestKey(url)
-  try {
-    return await deduplicatedFetch<string[]>(requestKey, async (fetchSignal) => {
-      const controller = new AbortController()
-      if (signal) signal.addEventListener('abort', () => controller.abort())
-      fetchSignal.addEventListener('abort', () => controller.abort())
-
-      const contents = await fetchTextWithFallback(url, { signal: controller.signal })
-      const data = JSON.parse(contents)
-      const results = data?.feed?.results
-      if (!Array.isArray(results)) throw new Error('Invalid data format')
-
-      const chartIds = results.map((item: { id?: string }) => String(item.id || '')).filter(Boolean)
-      writeChartCache(country, chartIds)
-      return chartIds
-    })
-  } catch (error) {
-    if (cached && cached.ids.length > 0) return cached.ids
-    throw error
-  }
+  // Use discovery provider to get top podcasts and extract IDs
+  const podcasts = await discovery.fetchTopPodcasts(country, limit, signal)
+  return podcasts.map((p: DiscoveryPodcast) => p.id).filter((id): id is string => !!id)
 }
 
 export async function lookupPodcastsByIds(
@@ -50,51 +29,8 @@ export async function lookupPodcastsByIds(
   signal?: AbortSignal
 ): Promise<RecommendedPodcast[]> {
   if (ids.length === 0) return []
-  const cached = readLookupCache(country)
-  if (cached) {
-    const found = ids.map((id) => cached[id]).filter(Boolean)
-    if (found.length === ids.length) return found
-  }
-
-  const batchIds = ids.slice(0, 200)
-  const config = getAppConfig()
-  const url = `${config.ITUNES_LOOKUP_URL}?id=${batchIds.join(',')}&entity=podcast&country=${country}`
-  const requestKey = getRequestKey(url)
-
-  return deduplicatedFetch<RecommendedPodcast[]>(requestKey, async (fetchSignal) => {
-    const controller = new AbortController()
-    if (signal) signal.addEventListener('abort', () => controller.abort())
-    fetchSignal.addEventListener('abort', () => controller.abort())
-
-    interface LookupResponse {
-      results?: Record<string, unknown>[]
-    }
-    const data = await fetchJsonWithFallback<LookupResponse>(url, { signal: controller.signal })
-    const results = Array.isArray(data?.results) ? data.results : []
-
-    const podcasts: RecommendedPodcast[] = []
-    const entries: Record<string, RecommendedPodcast> = cached || {}
-
-    results.forEach((item: Record<string, unknown>) => {
-      const id = String(item.collectionId || item.trackId || '')
-      if (!id) return
-      const podcast: RecommendedPodcast = {
-        id,
-        title: String(item.collectionName || item.trackName || ''),
-        author: String(item.artistName || ''),
-        artworkUrl: String(item.artworkUrl600 || item.artworkUrl100 || ''),
-        feedUrl: String(item.feedUrl || ''),
-        genreNames: Array.isArray(item.genres) ? (item.genres as string[]) : [],
-      }
-      if (podcast.feedUrl && podcast.title) {
-        podcasts.push(podcast)
-        entries[id] = podcast
-      }
-    })
-
-    writeLookupCache(country, entries)
-    return podcasts
-  })
+  const podcasts = await discovery.lookupPodcastsByIds(ids, country, signal)
+  return podcasts.map(mapToRecommended)
 }
 
 export async function fetchTopPodcastsFromSource(
@@ -102,6 +38,7 @@ export async function fetchTopPodcastsFromSource(
   limit: number = 50,
   signal?: AbortSignal
 ): Promise<RecommendedPodcast[]> {
-  const ids = await fetchDiscoveryChartIds(country, limit, signal)
-  return lookupPodcastsByIds(ids, country, signal)
+  // Optimization: fetchTopPodcasts directly returns objects, no need for two-step ID+Lookup
+  const podcasts = await discovery.fetchTopPodcasts(country, limit, signal)
+  return podcasts.map(mapToRecommended)
 }

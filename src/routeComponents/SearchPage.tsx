@@ -8,7 +8,7 @@ import { useEpisodePlayback } from '../hooks/useEpisodePlayback'
 import { type LocalSearchResult, useGlobalSearch } from '../hooks/useGlobalSearch'
 import { useI18n } from '../hooks/useI18n'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
-import { lookupPodcastFull, type SearchEpisode } from '../libs/discoveryProvider'
+import discovery, { type SearchEpisode } from '../libs/discovery'
 import { executeLocalSearchAction } from '../libs/localSearchActions'
 import { toast } from '../libs/toast'
 import { useExploreStore } from '../store/exploreStore'
@@ -66,13 +66,13 @@ export default function SearchPage() {
     // Only lookup if it's missing (e.g. from a hypothetical source that lacks it)
     let podcastFeedUrl = episode.feedUrl
     if (!podcastFeedUrl) {
-      const fullPodcast = await lookupPodcastFull(episode.collectionId.toString())
+      const fullPodcast = await discovery.getPodcast(episode.providerPodcastId.toString())
       podcastFeedUrl = fullPodcast?.feedUrl
     }
 
     if (!podcastFeedUrl) {
       toast.error(t('errorPodcastFeedNotFound'))
-      navigate({ to: '/podcast/$id', params: { id: episode.collectionId.toString() } })
+      navigate({ to: '/podcast/$id', params: { id: episode.providerPodcastId.toString() } })
       return
     }
 
@@ -90,7 +90,7 @@ export default function SearchPage() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="w-full max-w-5xl mx-auto px-[var(--page-gutter-x)] pt-4 pb-8">
+      <div className="w-full max-w-content mx-auto px-[var(--page-margin-x)] pt-[var(--page-margin-x)] pb-8">
         <header className="mb-12">
           <h1 className="text-4xl font-bold text-foreground tracking-tight mb-3">
             {query ? `"${query}"` : t('searchPlaceholderGlobal')}
@@ -170,15 +170,15 @@ export default function SearchPage() {
                     const subscribed = podcast.feedUrl ? isSubscribed(podcast.feedUrl) : false
                     return (
                       <PodcastCard
-                        key={podcast.collectionId}
-                        id={String(podcast.collectionId)}
+                        key={podcast.providerPodcastId}
+                        id={String(podcast.providerPodcastId)}
                         title={podcast.collectionName}
                         subtitle={podcast.artistName}
                         artworkUrl={podcast.artworkUrl600 || podcast.artworkUrl100 || ''}
                         onClick={() =>
                           navigate({
                             to: '/podcast/$id',
-                            params: { id: String(podcast.collectionId) },
+                            params: { id: String(podcast.providerPodcastId) },
                           })
                         }
                         menuItems={[
@@ -212,7 +212,7 @@ export default function SearchPage() {
                 <div className="space-y-0">
                   {episodes.map((episode) => (
                     <SearchEpisodeItem
-                      key={episode.trackId}
+                      key={episode.providerEpisodeId}
                       episode={episode}
                       onPlay={() => handlePlaySearchEpisode(episode)}
                     />

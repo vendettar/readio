@@ -7,7 +7,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { EpisodeRow } from '../../components/EpisodeRow/EpisodeRow'
 import { useEpisodePlayback } from '../../hooks/useEpisodePlayback'
 import { useI18n } from '../../hooks/useI18n'
-import { type Episode, fetchPodcastFeed, lookupPodcastFull } from '../../libs/discoveryProvider'
+import discovery, { type Episode } from '../../libs/discovery'
 import { useExploreStore } from '../../store/exploreStore'
 
 // Constants matching Apple Podcasts behavior
@@ -36,7 +36,7 @@ export default function PodcastEpisodesPage() {
     error: podcastError,
   } = useQuery({
     queryKey: ['podcast', 'lookup', id],
-    queryFn: () => lookupPodcastFull(id),
+    queryFn: () => discovery.getPodcast(id),
     staleTime: 1000 * 60 * 60, // 1 hour
     gcTime: 1000 * 60 * 60 * 24, // 24 hours
   })
@@ -45,7 +45,20 @@ export default function PodcastEpisodesPage() {
   const feedUrl = podcast?.feedUrl
   const { data: feed, isLoading: isLoadingFeed } = useQuery({
     queryKey: ['podcast', 'feed', podcast?.feedUrl],
-    queryFn: () => fetchPodcastFeed(feedUrl ?? ''),
+    queryFn: async () => {
+      try {
+        return await discovery.fetchPodcastFeed(feedUrl ?? '')
+      } catch (err) {
+        console.error('[PodcastEpisodesPage] RSS feed failed, falling back to iTunes API:', err)
+        const episodes = await discovery.getPodcastEpisodes(id)
+        return {
+          title: podcast?.collectionName || '',
+          description: '',
+          artworkUrl: podcast?.artworkUrl600,
+          episodes,
+        }
+      }
+    },
     enabled: !!podcast?.feedUrl,
     staleTime: 1000 * 60 * 30, // 30 minutes
     gcTime: 1000 * 60 * 60 * 6, // 6 hours
@@ -151,7 +164,7 @@ export default function PodcastEpisodesPage() {
 
   return (
     <div className="h-full overflow-y-auto bg-background text-foreground custom-scrollbar">
-      <div className="w-full max-w-5xl mx-auto px-[var(--page-gutter-x)] pt-4 pb-32">
+      <div className="w-full max-w-content mx-auto px-[var(--page-margin-x)] pt-[var(--page-margin-x)] pb-32">
         {/* Episodes List Grouped by Year */}
         <div className="flex flex-col">
           {groupedEpisodes.map(({ year, episodes: yearEpisodes }) => (

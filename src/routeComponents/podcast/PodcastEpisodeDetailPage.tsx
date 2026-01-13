@@ -2,48 +2,26 @@
 // Single episode detail page - Maximum information extraction
 
 import { useQuery } from '@tanstack/react-query'
-import { Link, useParams } from '@tanstack/react-router'
-import {
-  AlertTriangle,
-  Calendar,
-  Clock,
-  ExternalLink,
-  FileText,
-  HardDrive,
-  List,
-  Play,
-  Star,
-} from 'lucide-react'
+import { useParams } from '@tanstack/react-router'
+import { AlertTriangle, ExternalLink, FileText, List, Play, Star } from 'lucide-react'
 import React, { useState } from 'react'
+import { InteractiveTitle } from '@/components/interactive/InteractiveTitle'
 import { Button } from '@/components/ui/button'
 import { useI18n } from '@/hooks/useI18n'
 import { cn } from '@/lib/utils'
 import { formatDuration, formatRelativeTime } from '@/libs/dateUtils'
-import {
-  fetchPodcastFeed,
-  lookupPodcastEpisodes,
-  lookupPodcastFull,
-} from '@/libs/discoveryProvider'
+import discovery from '@/libs/discovery'
 import { stripHtml } from '@/libs/htmlUtils'
 import { getDiscoveryArtworkUrl } from '@/libs/imageUtils'
 import { openExternal } from '@/libs/openExternal'
 import { useExploreStore } from '@/store/exploreStore'
 import { usePlayerStore } from '@/store/playerStore'
 
-// Helper to format file size
-function formatFileSize(bytes?: number): string | null {
-  if (!bytes || bytes <= 0) return null
-  const mb = bytes / (1024 * 1024)
-  if (mb >= 1000) {
-    return `${(mb / 1024).toFixed(1)} GB`
-  }
-  return `${mb.toFixed(1)} MB`
-}
-
 export default function PodcastEpisodeDetailPage() {
   const { t } = useI18n()
   const { id, episodeId } = useParams({ from: '/podcast/$id/episode/$episodeId' })
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false)
+  const [imageError, setImageError] = useState(false)
 
   // Load favorites on mount
   const loadFavorites = useExploreStore((state) => state.loadFavorites)
@@ -61,20 +39,28 @@ export default function PodcastEpisodeDetailPage() {
     error: podcastError,
   } = useQuery({
     queryKey: ['podcast', 'lookup', id],
-    queryFn: () => lookupPodcastFull(id),
+    queryFn: () => discovery.getPodcast(id),
     staleTime: 1000 * 60 * 60, // 1 hour
     gcTime: 1000 * 60 * 60 * 24, // 24 hours
   })
 
   // Fetch episodes via RSS feed (only when we have feedUrl)
   const feedUrl = podcast?.feedUrl
-  const {
-    data: feed,
-    isLoading: isLoadingFeed,
-    error: feedError,
-  } = useQuery({
+  const { data: feed, isLoading: isLoadingFeed } = useQuery({
     queryKey: ['podcast', 'feed', podcast?.feedUrl],
-    queryFn: () => fetchPodcastFeed(feedUrl ?? ''),
+    queryFn: async () => {
+      try {
+        return await discovery.fetchPodcastFeed(feedUrl ?? '')
+      } catch (err) {
+        console.error('[PodcastEpisodeDetailPage] RSS feed failed, returning basic info:', err)
+        return {
+          title: podcast?.collectionName || '',
+          description: '',
+          artworkUrl: podcast?.artworkUrl600,
+          episodes: [], // Episodes will be recovered from providerEpisodes query
+        }
+      }
+    },
     enabled: !!podcast?.feedUrl,
     staleTime: 1000 * 60 * 30, // 30 minutes
     gcTime: 1000 * 60 * 60 * 6, // 6 hours
@@ -93,46 +79,34 @@ export default function PodcastEpisodeDetailPage() {
 
   // STEP 2: Match Recovery Strategy (If direct GUID match fails)
   // Sometimes iTunes API GUID vs RSS GUID have subtle differences or iTunes GUID is missing
-  const { data: itunesEpisodes, isLoading: isLoadingItunes } = useQuery({
-    queryKey: ['podcast', 'itunes-episodes', id],
-    queryFn: () => lookupPodcastEpisodes(id, 'us', 50),
+  const { data: providerEpisodes, isLoading: isLoadingItunes } = useQuery({
+    queryKey: ['podcast', 'provider-episodes', id],
+    queryFn: () => discovery.getPodcastEpisodes(id, 'us', 50),
     enabled: !!feed && !episode, // Only run if feed is loaded but episode not found
     staleTime: 1000 * 60 * 60,
   })
 
-  if (!episode && feed && itunesEpisodes) {
-    // Try to find the metadata in iTunes results using the GUID or trackId
-    const itunesMeta = itunesEpisodes.find(
-      (ep) => ep.episodeGuid === decodedEpisodeId || String(ep.trackId) === decodedEpisodeId
+  if (!episode && feed && providerEpisodes) {
+    // Recovery Strategy: Find in provider results using current ID or iTunes trackId
+    const providerMeta = providerEpisodes.find(
+      (ep) => ep.id === decodedEpisodeId || ep.itunesTrackId === decodedEpisodeId
     )
 
-    if (itunesMeta) {
-      // 1. Try to find in RSS feed using iTunes metadata (Title or URL match)
+    if (providerMeta) {
+      // 1. Double-hop: Try to find in RSS feed using provider metadata (Title or URL match)
       episode = feed.episodes.find((ep) => {
         const titleMatch =
-          ep.title.trim().toLowerCase() === itunesMeta.trackName.trim().toLowerCase()
+          providerMeta.title &&
+          ep.title.trim().toLowerCase() === providerMeta.title.trim().toLowerCase()
         const urlMatch =
-          itunesMeta.episodeUrl && ep.audioUrl.includes(itunesMeta.episodeUrl.split('?')[0])
+          providerMeta.audioUrl && ep.audioUrl.includes(providerMeta.audioUrl.split('?')[0])
         return titleMatch || urlMatch
       })
 
-      // 2. If STILL not in RSS (e.g. older episode dropped from RSS list), create a Virtual Episode from iTunes data
+      // 2. Critical Fallback: Use provider metadata to create a "Virtual Episode"
+      // This happens if the episode dropped off the RSS feed (very common for "This American Life")
       if (!episode) {
-        episode = {
-          id: itunesMeta.episodeGuid || String(itunesMeta.trackId),
-          title: itunesMeta.trackName,
-          description: itunesMeta.description || itunesMeta.shortDescription || '',
-          audioUrl: itunesMeta.episodeUrl,
-          pubDate: itunesMeta.releaseDate,
-          artworkUrl: itunesMeta.artworkUrl600 || itunesMeta.artworkUrl100,
-          duration: itunesMeta.trackTimeMillis ? itunesMeta.trackTimeMillis / 1000 : undefined,
-          // Missing in iTunes API
-          descriptionHtml: undefined,
-          link: undefined,
-          fileSize: undefined,
-          transcriptUrl: undefined,
-          chaptersUrl: undefined,
-        }
+        episode = providerMeta
       }
     }
   }
@@ -173,7 +147,7 @@ export default function PodcastEpisodeDetailPage() {
     }
   }
 
-  // Loading state: Include iTunes recovery phase to prevent "Flash of Empty State"
+  // Loading state: Include recovery phase to prevent "Flash of Empty State"
   const isLoading = isLoadingPodcast || isLoadingFeed || (isLoadingItunes && !episode)
   if (isLoading) {
     return (
@@ -216,19 +190,6 @@ export default function PodcastEpisodeDetailPage() {
     )
   }
 
-  // Error state - feed error
-  if (feedError) {
-    return (
-      <div className="h-full overflow-y-auto bg-background text-foreground">
-        <div className="px-6 sm:px-12 py-10 sm:py-14 max-w-screen-2xl mx-auto">
-          <div className="text-center py-20">
-            <p className="text-lg text-muted-foreground">{t('errorFeedLoadFailed')}</p>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   // Error state - episode not found
   if (!episode) {
     return (
@@ -243,10 +204,10 @@ export default function PodcastEpisodeDetailPage() {
   }
 
   // Get artwork URL (episode-specific or podcast fallback)
-  const artworkUrl = getDiscoveryArtworkUrl(
-    episode.artworkUrl || podcast.artworkUrl600 || podcast.artworkUrl100,
-    600
-  )
+  const primaryArtwork = episode.artworkUrl || podcast.artworkUrl600 || podcast.artworkUrl100
+  const fallbackArtwork = podcast.artworkUrl600 || podcast.artworkUrl100
+
+  const artworkUrl = getDiscoveryArtworkUrl(!imageError ? primaryArtwork : fallbackArtwork, 600)
 
   // Description handling - prioritize rich content then strip for safety
   const contentSource = episode.descriptionHtml || episode.description || ''
@@ -256,7 +217,6 @@ export default function PodcastEpisodeDetailPage() {
   // Format metadata
   const relativeTime = formatRelativeTime(episode.pubDate, t)
   const duration = formatDuration(episode.duration, t)
-  const fileSize = formatFileSize(episode.fileSize)
 
   // Build season/episode label
   let episodeLabel = ''
@@ -270,7 +230,7 @@ export default function PodcastEpisodeDetailPage() {
 
   return (
     <div className="h-full overflow-y-auto bg-background text-foreground custom-scrollbar">
-      <div className="w-full max-w-4xl mx-auto px-[var(--page-gutter-x)] pt-2 pb-32">
+      <div className="w-full max-w-content mx-auto px-[var(--page-margin-x)] pt-[var(--page-margin-x)] pb-32">
         {/* Hero Section */}
         <div className="flex flex-col md:flex-row gap-8 mb-10">
           {/* Artwork */}
@@ -280,80 +240,74 @@ export default function PodcastEpisodeDetailPage() {
               alt=""
               className="w-full aspect-square rounded-2xl object-cover shadow-lg bg-muted"
               referrerPolicy="no-referrer"
+              onError={() => setImageError(true)}
             />
           </div>
 
-          {/* Metadata */}
-          <div className="flex-1 space-y-3">
-            {/* Episode Title */}
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">{episode.title}</h1>
+          {/* Metadata Container */}
+          <div className="flex-1 flex flex-col justify-between min-h-64 py-1">
+            {/* 1. Top Balance Spacer - Matches height of buttons at bottom (pt-6 + h-8 ≈ 56px) */}
+            <div className="hidden md:block h-14" aria-hidden="true" />
 
-            {/* Badges Row: Season/Episode, Type, Explicit */}
-            <div className="flex flex-wrap items-center gap-2">
-              {episodeLabel && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-primary/10 text-primary">
-                  {episodeLabel}
-                </span>
-              )}
-              {episode.episodeType === 'trailer' && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400">
-                  {t('episodeTypeTrailer')}
-                </span>
-              )}
-              {episode.episodeType === 'bonus' && (
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-purple-500/10 text-purple-600 dark:text-purple-400">
-                  {t('episodeTypeBonus')}
-                </span>
-              )}
-              {episode.explicit && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-semibold bg-red-500/10 text-red-600 dark:text-red-400">
-                  <AlertTriangle size={10} />
-                  {t('episodeExplicit')}
-                </span>
-              )}
+            {/* 2. Center Group: Perfectly centered relative to image on desktop */}
+            <div className="flex flex-col justify-center text-left">
+              {/* Line 1: Small Caps Metadata */}
+              <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-bold tracking-widest text-muted-foreground uppercase mb-1.5">
+                {relativeTime && <span>{relativeTime}</span>}
+                {relativeTime && (episodeLabel || duration) && <span>·</span>}
+                {episodeLabel && <span>{episodeLabel.replace(' · ', ' ')}</span>}
+                {episodeLabel && duration && <span>·</span>}
+                {duration && <span>{duration}</span>}
+                {episode.explicit && (
+                  <>
+                    <span>·</span>
+                    <span className="text-red-500 flex items-center gap-0.5">
+                      <AlertTriangle size={10} strokeWidth={3} />
+                      {t('episodeExplicit')}
+                    </span>
+                  </>
+                )}
+              </div>
+
+              {/* Line 2: Big Episode Title */}
+              <h1 className="text-2xl sm:text-4xl font-medium tracking-tight mb-2 leading-[1.15]">
+                {episode.title}
+              </h1>
+
+              {/* Line 3: Podcast Show Name */}
+              <div className="flex items-center gap-2">
+                <InteractiveTitle
+                  title={podcast.collectionName}
+                  to="/podcast/$id"
+                  params={{ id }}
+                  className="text-base font-bold text-primary hover:opacity-80 transition-opacity"
+                  maxLines={1}
+                />
+                {(episode.episodeType === 'trailer' || episode.episodeType === 'bonus') && (
+                  <span
+                    className={cn(
+                      'text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider',
+                      episode.episodeType === 'trailer'
+                        ? 'bg-amber-500/10 text-amber-600'
+                        : 'bg-purple-500/10 text-purple-600'
+                    )}
+                  >
+                    {episode.episodeType === 'trailer'
+                      ? t('episodeTypeTrailer')
+                      : t('episodeTypeBonus')}
+                  </span>
+                )}
+              </div>
             </div>
 
-            {/* Podcast Name - Link to Show Page */}
-            <Button asChild variant="ghost" className="p-0 h-auto hover:bg-transparent">
-              <Link
-                to="/podcast/$id"
-                params={{ id }}
-                className="inline-block text-base font-bold text-primary hover:underline"
-              >
-                {podcast.collectionName}
-              </Link>
-            </Button>
-
-            {/* Meta info row */}
-            <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-              {relativeTime && (
-                <div className="flex items-center gap-1.5">
-                  <Calendar size={14} />
-                  <span>{relativeTime}</span>
-                </div>
-              )}
-              {duration && (
-                <div className="flex items-center gap-1.5">
-                  <Clock size={14} />
-                  <span>{duration}</span>
-                </div>
-              )}
-              {fileSize && (
-                <div className="flex items-center gap-1.5">
-                  <HardDrive size={14} />
-                  <span>{fileSize}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex flex-wrap items-center gap-3 pt-2">
+            {/* 3. Bottom Actions - Anchored to bottom of image */}
+            <div className="flex flex-wrap items-center gap-3 pt-6 h-14">
               <Button
                 onClick={handlePlayEpisode}
-                className="rounded-md bg-primary hover:opacity-90 text-primary-foreground px-6 h-10 font-bold text-sm flex items-center gap-2 shadow-none transition-all active:scale-95"
+                className="rounded-md bg-primary hover:opacity-90 text-primary-foreground px-4 h-8 font-bold text-xs flex items-center gap-1.5 shadow-none transition-all active:scale-95"
               >
-                <Play className="w-4 h-4 fill-current" />
-                {t('playEpisode')}
+                <Play className="w-3 h-3 fill-current" />
+                {t('btnPlayOnly')}
               </Button>
 
               <Button
@@ -361,24 +315,24 @@ export default function PodcastEpisodeDetailPage() {
                 size="icon"
                 onClick={handleToggleFavorite}
                 className={cn(
-                  'w-10 h-10 rounded-md border-border hover:bg-muted transition-colors',
+                  'w-8 h-8 rounded-md border-border hover:bg-muted transition-colors',
                   favorited && 'text-primary'
                 )}
                 aria-label={favorited ? t('ariaRemoveFavorite') : t('ariaAddFavorite')}
               >
-                <Star size={18} className={cn('stroke-2', favorited && 'fill-current')} />
+                <Star size={14} className={cn('stroke-2', favorited && 'fill-current')} />
               </Button>
 
               {episode.link && (
                 <Button
                   variant="outline"
                   size="sm"
-                  className="rounded-md h-10 px-4 text-sm"
+                  className="rounded-md h-8 px-3 text-xs font-semibold"
                   onClick={() => {
                     if (episode.link) openExternal(episode.link)
                   }}
                 >
-                  <ExternalLink size={14} className="mr-1.5" />
+                  <ExternalLink size={12} className="mr-1.5" />
                   {t('viewOriginal')}
                 </Button>
               )}
@@ -421,7 +375,7 @@ export default function PodcastEpisodeDetailPage() {
         {/* Description Section */}
         {cleanDescription && (
           <section className="max-w-3xl">
-            <h2 className="text-lg font-bold mb-3">{t('descriptionTitle')}</h2>
+            <div className="h-px bg-border mb-6" />
             <div className="relative">
               <div
                 className={cn(
@@ -435,12 +389,27 @@ export default function PodcastEpisodeDetailPage() {
                 <Button
                   variant="link"
                   onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
-                  className="text-sm text-primary h-auto p-0 mt-2"
+                  className="text-sm text-primary h-auto p-0 mt-2 font-bold"
                 >
                   {isDescriptionExpanded ? t('showLess') : t('showMore')}
                 </Button>
               )}
             </div>
+          </section>
+        )}
+
+        {/* Episode Webpage Link Section */}
+        {episode.link && (
+          <section className="max-w-3xl mt-8">
+            <div className="h-px bg-border mb-6" />
+            <Button
+              variant="link"
+              className="text-primary p-0 h-auto font-bold flex items-center gap-1.5 hover:no-underline hover:opacity-80 transition-opacity"
+              onClick={() => episode.link && openExternal(episode.link)}
+            >
+              <span className="text-sm">{t('episodeWebpage')}</span>
+              <ExternalLink size={14} className="opacity-70" />
+            </Button>
           </section>
         )}
       </div>

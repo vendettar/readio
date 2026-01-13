@@ -4,7 +4,7 @@ import { useEpisodePlayback } from '../../hooks/useEpisodePlayback'
 import { useI18n } from '../../hooks/useI18n'
 import { cn } from '../../lib/utils'
 import { formatDuration, formatRelativeTime } from '../../libs/dateUtils'
-import type { Episode, Podcast } from '../../libs/discoveryProvider'
+import type { Episode, Podcast } from '../../libs/discovery'
 import { stripHtml } from '../../libs/htmlUtils'
 import { getDiscoveryArtworkUrl } from '../../libs/imageUtils'
 import { useExploreStore } from '../../store/exploreStore'
@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu'
 import { BaseEpisodeRow } from './BaseEpisodeRow'
+import { GutterPlayButton } from './GutterPlayButton'
 
 export interface EpisodeRowProps {
   episode: Episode
@@ -65,44 +66,14 @@ export function EpisodeRow({
   const duration = formatDuration(episode.duration, t)
   const cleanDescription = showDescription ? stripHtml(episode.description || '') : undefined
 
-  // Ensure consistent artwork URL
-  const artworkUrl = getDiscoveryArtworkUrl(episode.artworkUrl, 100)
+  // Podcast artwork for fallback
+  const podcastArtwork = podcast.artworkUrl600 || podcast.artworkUrl100
 
   // Construct subtitle (Rank + Date)
   // If rank is present, it might go before title or in subtitle.
   // The user requirement said: "If ranked styles are needed, a new RankedEpisodeRow should be created".
   // But for now we just standardizing generic rows.
   // Let's use relativeTime as the subtitle to match EpisodeCard's layout.
-
-  const artwork = (
-    <InteractiveArtwork
-      src={artworkUrl}
-      to="/podcast/$id/episode/$episodeId"
-      params={{
-        id: podcast.collectionId.toString(),
-        episodeId: encodedEpisodeId,
-      }}
-      onPlay={handlePlay}
-      playButtonSize="sm"
-      playIconSize={16}
-      hoverGroup="episode"
-      size="xl"
-      playLabel={t('ariaPlayEpisode')}
-    />
-  )
-
-  const titleNode = (
-    <InteractiveTitle
-      title={episode.title}
-      to="/podcast/$id/episode/$episodeId"
-      params={{
-        id: podcast.collectionId.toString(),
-        episodeId: encodedEpisodeId,
-      }}
-      className="text-sm leading-tight"
-      maxLines={titleMaxLines as 1 | 2}
-    />
-  )
 
   const actions = (
     <>
@@ -158,10 +129,46 @@ export function EpisodeRow({
     </>
   )
 
+  // Use episode artwork if available; otherwise show nothing (BaseEpisodeRow handles no-artwork layout)
+  const effectiveArtwork = episode.artworkUrl
+  const hasArtwork = !!effectiveArtwork
+
   return (
     <BaseEpisodeRow
-      artwork={artwork}
-      title={titleNode}
+      artwork={
+        hasArtwork ? (
+          <InteractiveArtwork
+            src={getDiscoveryArtworkUrl(effectiveArtwork, 200)}
+            fallbackSrc={podcastArtwork}
+            to="/podcast/$id/episode/$episodeId"
+            params={{
+              id: podcast.providerPodcastId.toString(),
+              episodeId: encodedEpisodeId,
+            }}
+            onPlay={handlePlay}
+            playButtonSize="sm"
+            playIconSize={16}
+            hoverGroup="episode"
+            size="xl"
+            playLabel={t('ariaPlayEpisode')}
+          />
+        ) : undefined
+      }
+      title={
+        <>
+          {!hasArtwork && <GutterPlayButton onPlay={handlePlay} ariaLabel={t('ariaPlayEpisode')} />}
+          <InteractiveTitle
+            title={episode.title}
+            to="/podcast/$id/episode/$episodeId"
+            params={{
+              id: podcast.providerPodcastId.toString(),
+              episodeId: encodedEpisodeId,
+            }}
+            className="text-sm leading-tight flex-1"
+            maxLines={titleMaxLines as 1 | 2}
+          />
+        </>
+      }
       subtitle={relativeTime} // Using relativeTime as subtitle (top-aligned date)
       description={cleanDescription}
       meta={duration}
@@ -169,8 +176,6 @@ export function EpisodeRow({
       descriptionLines={descriptionLines}
       showDivider={showDivider}
       isLast={isLast}
-      // No onClick for row itself as artwork/title handle nav, but we could add one if needed.
-      // EpisodeCard didn't have a row-level onClick.
     />
   )
 }

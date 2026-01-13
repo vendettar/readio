@@ -23,16 +23,17 @@ window.__READIO_ENV__ = window.__READIO_ENV__ || {
   // --- Proxy & Network ---
   READIO_CORS_PROXY_URL: '',
   READIO_CORS_PROXY_PRIMARY: false,
-  READIO_DEFAULT_CORS_PROXY: 'https://api.allorigins.win',
   READIO_DEFAULT_TIMEOUT_MS: 15000,
   READIO_MAX_CONCURRENT_REQUESTS: 6,
   READIO_DB_NAME: 'readio-v2',
 
-  // --- External APIs ---
-  READIO_DICT_API_URL: 'https://api.dictionaryapi.dev/api/v2/entries/en/',
-  READIO_ITUNES_LOOKUP_URL: 'https://itunes.apple.com/lookup',
-  READIO_ITUNES_SEARCH_URL: 'https://itunes.apple.com/search',
+  // API Endpoints
+
+  READIO_DEFAULT_CORS_PROXY: 'https://api.allorigins.win',
+  READIO_DISCOVERY_SEARCH_URL: 'https://itunes.apple.com/search',
+  READIO_DISCOVERY_LOOKUP_URL: 'https://itunes.apple.com/lookup',
   READIO_RSS_FEED_BASE_URL: 'https://rss.applemarketingtools.com/api/v2',
+  READIO_DICTIONARY_API_URL: 'https://api.dictionaryapi.dev/api/v2/entries/en',
 
   // --- Limits & Quotas ---
   READIO_MAX_AUDIO_SIZE_MB: 300,

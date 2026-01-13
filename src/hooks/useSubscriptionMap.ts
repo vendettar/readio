@@ -11,8 +11,8 @@ export function useSubscriptionMap() {
   const subscriptionMap = React.useMemo(() => {
     const map = new Map<string, string>()
     subscriptions.forEach((sub) => {
-      if (sub.collectionId) {
-        map.set(sub.feedUrl, sub.collectionId)
+      if (sub.providerPodcastId) {
+        map.set(sub.feedUrl, sub.providerPodcastId)
       }
     })
     return map

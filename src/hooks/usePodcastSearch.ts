@@ -2,7 +2,7 @@
 // TanStack Query hook for podcast search
 
 import { useQuery } from '@tanstack/react-query'
-import { type Podcast, searchPodcasts } from '../libs/discoveryProvider'
+import discovery, { type Podcast } from '../libs/discovery'
 
 export interface UsePodcastSearchOptions {
   enabled?: boolean
@@ -34,7 +34,7 @@ export function usePodcastSearch(
   return useQuery<Podcast[], Error>({
     queryKey: ['podcastSearch', normalizedQuery, normalizedCountry],
     queryFn: async ({ signal }) => {
-      return searchPodcasts(normalizedQuery, normalizedCountry, 20, signal)
+      return discovery.searchPodcasts(normalizedQuery, normalizedCountry, 20, signal)
     },
     enabled: enabled && normalizedQuery.length > 0,
     staleTime: 5 * 60 * 1000, // 5 minutes

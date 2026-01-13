@@ -6,20 +6,11 @@ import {
   useEditorPicks,
   useTopEpisodes,
   useTopPodcasts,
-  useTopSubscriberPodcasts,
 } from '../hooks/useDiscoveryPodcasts'
 import { useI18n } from '../hooks/useI18n'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import type { Subscription } from '../libs/dexieDb'
-import {
-  type Episode,
-  fetchPodcastFeed,
-  lookupEpisode,
-  lookupPodcastEpisodes,
-  lookupPodcastFull,
-  type Podcast,
-  type SearchEpisode,
-} from '../libs/discoveryProvider'
+import discovery, { type Episode, type Podcast } from '../libs/discovery'
 import { getDiscoveryArtworkUrl } from '../libs/imageUtils'
 import { openExternal } from '../libs/openExternal'
 import { useExploreStore } from '../store/exploreStore'
@@ -44,10 +35,6 @@ export default function ExplorePage() {
   // Data fetching
   const { data: editorPicks, isLoading: isLoadingPicks } = useEditorPicks('us')
   const { data: topShows, isLoading: isLoadingShows } = useTopPodcasts('us', 30)
-  const { data: topSubscriberShows, isLoading: isLoadingSubscribers } = useTopSubscriberPodcasts(
-    'us',
-    30
-  )
   const { data: topEpisodes, isLoading: isLoadingEpisodes } = useTopEpisodes('us', 30)
 
   // Keyboard shortcuts (no modal open now)
@@ -77,27 +64,26 @@ export default function ExplorePage() {
 
     try {
       // STEP 1: Precision Lookup by trackId (Highest Efficiency)
-      let matchedEpisode: SearchEpisode | null = await lookupEpisode(episode.id)
+      let matchedEpisode: Episode | null = await discovery.lookupEpisode(episode.id)
 
       // STEP 2: Fallback to Podcast-level lookup if track-level fails or lacks URL
-      if (!matchedEpisode?.episodeUrl) {
-        const results = await lookupPodcastEpisodes(podcastId, 'us', 20)
+      if (!matchedEpisode?.audioUrl) {
+        const results = await discovery.getPodcastEpisodes(podcastId, 'us', 20)
         matchedEpisode =
           results.find(
             (ep) =>
-              String(ep.trackId) === episode.id ||
-              ep.trackName.toLowerCase().includes(episode.name.toLowerCase())
+              ep.id === episode.id || ep.title.toLowerCase().includes(episode.name.toLowerCase())
           ) || null
       }
 
-      if (matchedEpisode?.episodeUrl) {
+      if (matchedEpisode?.audioUrl) {
         // Optimization: feedUrl is available directly in the Precision Episode result!
         let podcastFeedUrl = matchedEpisode.feedUrl
 
         if (!podcastFeedUrl) {
           // Safety Fallback (should be rare)
-          const fullPodcast = await lookupPodcastFull(podcastId)
-          podcastFeedUrl = fullPodcast?.feedUrl
+          const podcast = await discovery.getPodcast(podcastId, 'us')
+          podcastFeedUrl = podcast?.feedUrl
         }
 
         if (!podcastFeedUrl) {
@@ -107,21 +93,19 @@ export default function ExplorePage() {
         }
 
         const coverArt = getDiscoveryArtworkUrl(
-          matchedEpisode.artworkUrl600 || matchedEpisode.artworkUrl100,
+          matchedEpisode.artworkUrl || episode.artworkUrl100,
           600
         )
 
-        setAudioUrl(matchedEpisode.episodeUrl, matchedEpisode.trackName, coverArt, {
+        setAudioUrl(matchedEpisode.audioUrl, matchedEpisode.title, coverArt, {
           description: matchedEpisode.description,
-          podcastTitle: matchedEpisode.collectionName,
+          podcastTitle: matchedEpisode.collectionName || episode.artistName,
           podcastFeedUrl,
           artworkUrl: coverArt,
-          publishedAt: matchedEpisode.releaseDate
-            ? new Date(matchedEpisode.releaseDate).getTime()
+          publishedAt: matchedEpisode.pubDate
+            ? new Date(matchedEpisode.pubDate).getTime()
             : undefined,
-          duration: matchedEpisode.trackTimeMillis
-            ? Math.round(matchedEpisode.trackTimeMillis / 1000)
-            : undefined,
+          duration: matchedEpisode.duration,
         })
         play()
         if (episode.url) openExternal(episode.url)
@@ -139,7 +123,7 @@ export default function ExplorePage() {
       // construct a partial Podcast object and subscribe immediately.
       if (podcast.feedUrl) {
         const partialPodcast: Podcast = {
-          collectionId: Number(podcast.id),
+          providerPodcastId: Number(podcast.id),
           collectionName: podcast.name,
           artistName: podcast.artistName,
           artworkUrl100: podcast.artworkUrl100,
@@ -161,7 +145,7 @@ export default function ExplorePage() {
       }
 
       // Fallback for RSS Chart podcasts (no feedUrl in initial response)
-      const fullPodcast = await lookupPodcastFull(podcast.id)
+      const fullPodcast = await discovery.getPodcast(podcast.id, 'us')
       if (fullPodcast) {
         const subscriptions = useExploreStore.getState().subscriptions
         const isSubscribed = subscriptions.some(
@@ -185,10 +169,10 @@ export default function ExplorePage() {
   const handlePlayLatestEpisode = async (podcast: DiscoveryPodcast) => {
     try {
       // Optimization: Use pre-existing feedUrl if available (Editor's Picks)
-      const feedUrl = podcast.feedUrl || (await lookupPodcastFull(podcast.id))?.feedUrl
+      const feedUrl = podcast.feedUrl || (await discovery.getPodcast(podcast.id, 'us'))?.feedUrl
 
       if (feedUrl) {
-        const feed = await fetchPodcastFeed(feedUrl)
+        const feed = await discovery.fetchPodcastFeed(feedUrl)
         if (feed.episodes?.[0]) {
           const latest = feed.episodes[0]
           const podcastTitle = podcast.name || feed.title
@@ -231,26 +215,25 @@ export default function ExplorePage() {
       }
 
       // STEP 1: Try Precision Lookup by trackId (fastest)
-      let fullEpisode: SearchEpisode | null = await lookupEpisode(episode.id)
+      let fullEpisode: Episode | null = await discovery.lookupEpisode(episode.id)
 
       // STEP 2: Try iTunes Podcast Lookup if track-level fails
       if (!fullEpisode) {
-        const itunesEpisodes = await lookupPodcastEpisodes(podcastId, 'us', 50)
+        const providerEpisodes = await discovery.getPodcastEpisodes(podcastId, 'us', 50)
         fullEpisode =
-          itunesEpisodes.find(
+          providerEpisodes.find(
             (ep) =>
-              String(ep.trackId) === episode.id ||
-              ep.trackName.toLowerCase().includes(episode.name.toLowerCase())
+              ep.id === episode.id || ep.title.toLowerCase().includes(episode.name.toLowerCase())
           ) || null
       }
 
-      // Optimization: feedUrl is available directly in the Precision Episode result!
+      // Optimization: feedUrl is available directly in the Episode result!
       let podcastFeedUrl = fullEpisode?.feedUrl
       let podcastTitle = fullEpisode?.collectionName
       let fullPodcast: Podcast | null = null
 
       if (!podcastFeedUrl) {
-        fullPodcast = await lookupPodcastFull(podcastId)
+        fullPodcast = await discovery.getPodcast(podcastId, 'us')
         podcastFeedUrl = fullPodcast?.feedUrl
         podcastTitle = fullPodcast?.collectionName || podcastTitle
       }
@@ -258,11 +241,11 @@ export default function ExplorePage() {
       if (!podcastFeedUrl) {
         // Last ditch effort: Fallback to RSS Feed matching if not found in iTunes results
         // Use cached fullPodcast if available, otherwise (rare case) try lookup but we probably already did
-        const podcastToUse = fullPodcast || (await lookupPodcastFull(podcastId))
+        const podcastToUse = fullPodcast || (await discovery.getPodcast(podcastId, 'us'))
 
         if (podcastToUse?.feedUrl) {
           try {
-            const feed = await fetchPodcastFeed(podcastToUse.feedUrl)
+            const feed = await discovery.fetchPodcastFeed(podcastToUse.feedUrl)
             const rssEpisode = feed.episodes.find((ep) => {
               const epTitle = ep.title.trim().toLowerCase()
               const apiTitle = episode.name.trim().toLowerCase()
@@ -297,24 +280,24 @@ export default function ExplorePage() {
 
       // Construct full podcast object for potential store subscription requirements
       const podcastObj: Podcast = {
-        collectionId: Number(podcastId),
-        collectionName: podcastTitle || '',
-        artistName: fullEpisode.artistName,
+        providerPodcastId: Number(podcastId),
+        collectionName: fullEpisode.collectionName || podcastTitle || '',
+        artistName: fullEpisode.artistName || episode.artistName,
         feedUrl: podcastFeedUrl,
-        artworkUrl600: fullEpisode.artworkUrl600,
-        artworkUrl100: fullEpisode.artworkUrl100,
+        artworkUrl600: fullEpisode.artworkUrl || '',
+        artworkUrl100: fullEpisode.artworkUrl || '',
         collectionViewUrl: '', // Dummy for required field
         genres: [], // Dummy for required field
       }
 
       const epObj: Episode = {
-        id: String(fullEpisode.trackId),
-        title: fullEpisode.trackName,
+        id: fullEpisode.id,
+        title: fullEpisode.title,
         description: fullEpisode.description || '',
-        audioUrl: fullEpisode.episodeUrl,
-        pubDate: fullEpisode.releaseDate || '',
-        artworkUrl: fullEpisode.artworkUrl100,
-        duration: (fullEpisode.trackTimeMillis || 0) / 1000,
+        audioUrl: fullEpisode.audioUrl,
+        pubDate: fullEpisode.pubDate || '',
+        artworkUrl: fullEpisode.artworkUrl,
+        duration: fullEpisode.duration,
       }
       await store.addFavorite(podcastObj, epObj)
     } catch (error) {
@@ -324,7 +307,7 @@ export default function ExplorePage() {
 
   return (
     <div className="h-full overflow-y-auto bg-background text-foreground custom-scrollbar">
-      <div className="w-full max-w-5xl mx-auto px-[var(--page-gutter-x)] pt-10 sm:pt-14 pb-14 min-h-full">
+      <div className="w-full max-w-content mx-auto px-[var(--page-margin-x)] pt-[var(--page-margin-x)] pb-14 min-h-full">
         {/* Header */}
         <header className="mb-10">
           <h1 className="text-3xl sm:text-4xl font-bold tracking-tight mb-2">
@@ -356,19 +339,6 @@ export default function ExplorePage() {
             <PodcastShowsCarousel
               podcasts={topShows || []}
               isLoading={isLoadingShows}
-              onPlayLatest={handlePlayLatestEpisode}
-              onSubscribe={handleSubscribePodcast}
-            />
-          </section>
-
-          {/* Top Subscriber Shows */}
-          <section>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold">{t('topSubscriberShowsTitle')}</h2>
-            </div>
-            <PodcastShowsCarousel
-              podcasts={topSubscriberShows || []}
-              isLoading={isLoadingSubscribers}
               onPlayLatest={handlePlayLatestEpisode}
               onSubscribe={handleSubscribePodcast}
             />

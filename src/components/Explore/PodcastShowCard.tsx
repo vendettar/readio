@@ -3,7 +3,7 @@
 import { CircleMinus, CirclePlus } from 'lucide-react'
 import React from 'react'
 import { useI18n } from '../../hooks/useI18n'
-import type { DiscoveryPodcast } from '../../libs/discoveryProvider'
+import type { DiscoveryPodcast } from '../../libs/discovery'
 import { useExploreStore } from '../../store/exploreStore'
 import { PodcastCard } from '../PodcastCard/PodcastCard'
 
@@ -25,7 +25,7 @@ export const PodcastShowCard = React.memo(
     // Check by collectionId or feedUrl
     const subscribed = subscriptions.some(
       (s) =>
-        (podcast.id && s.collectionId === podcast.id) ||
+        (podcast.id && s.providerPodcastId === podcast.id) ||
         (podcast.feedUrl && s.feedUrl === podcast.feedUrl)
     )
 

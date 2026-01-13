@@ -37,7 +37,7 @@ interface PodcastCardProps {
   params?: Record<string, string>
   /** Class name for the outer container */
   className?: string
-  /** Artwork size for iTunes URL formatting. Defaults to 400. */
+  /** Artwork size for Provider URL formatting (Apple). Defaults to 400. */
   imageSize?: number
   /** Whether the artwork should be rounded-full (as in TopChannelCard) */
   variant?: 'standard' | 'circular'

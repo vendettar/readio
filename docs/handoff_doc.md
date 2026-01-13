@@ -17,8 +17,8 @@
 ## 1. 项目做什么（产品/功能概述）
 
 Readio 是一个浏览器内播客播放器，支持：
-- **本地文件**：拖放 MP3 + SRT 字幕文件进行播放和阅读
-- **Discover (发现)**: 全局搜索、播客搜索、订阅播客，收藏节目
+- **Files (文件)**: 拖放 MP3 + SRT 字幕文件进行播放和阅读，支持文件夹管理
+- **Explore (探索)**: 全局搜索、播客搜索、订阅播客，收藏节目
 - **字幕跟随**：播放时字幕自动滚动高亮
 - **选词查词**：选中字幕文本可查询词典/网页搜索
 - **全局搜索**：顶部侧边栏搜索，支持二级模式（历史、发现、本地）以及播放状态标识（StatusBadge）
@@ -26,7 +26,7 @@ Readio 是一个浏览器内播客播放器，支持：
 主要入口（路由）：
 - `/` - 主播放器页面（字幕阅读）
 - `/search` - 全局搜索结果页
-- `/explore` - 发现播客（搜索）
+- `/explore` - 探索页面（寻找播客）
 - `/subscriptions` - 订阅列表
 - `/favorites` - 收藏节目
 - `/history` - 播放历史
@@ -48,6 +48,12 @@ UI 交互控件采用 `shadcn/ui` primitives（`Button/Input/Select/DropdownMenu
 
 焦点由 React `autoFocus` 与 Radix `onCloseAutoFocus` 管理；滚动状态判断使用 Virtuoso 的 `isScrolling` 等原生钩子，不依赖定时器。
 
+### 数据变更记录 (Data Changes)
+
+- **Source Enum**: `source`字段已更新为 `'local' | 'explore'` (原 `'gallery'` 已废弃)。
+- **Provider IDs**: `collectionId` 重命名为 `providerPodcastId`，`trackId` 重命名为 `providerEpisodeId`。保留 Podcast 与 Episode ID 的区分，移除 iTunes 特定命名。
+- **Routes**: 全面使用 `/explore` 作为发现页路由，`/files` 作为文件页路由。
+
 ### Icon Policy (Lucide-First)
 
 UI 操作图标来自 `lucide-react`；SVG 仅用于 logo 与交互绑定资源。
@@ -60,7 +66,11 @@ UI 操作图标来自 `lucide-react`；SVG 仅用于 logo 与交互绑定资源�
 
 ### Global CSS（当前范围）
 
-`src/index.css` 包含主题 token、交互类样式（reading/selection/拖拽）、Smart List Divider、以及局部滚动条样式；布局尺寸使用 Tailwind 令牌与扩展 token（`w-panel` 25rem、`w-panel-sm` 20rem、`max-w-content` 105rem、`max-w-content-wide` 112.5rem）。
+`src/index.css` 包含主题 token、交互类样式（reading/selection/拖拽）、Smart List Divider、以及局部滚动条样式；布局尺寸使用 Tailwind 令牌与扩展 token（`w-panel` 25rem、`w-panel-sm` 20rem、`max-w-content` 105rem/1680px、`max-w-content-wide` 112.5rem）。
+
+**布局一致性准则**：
+- **最大宽度**：核心内容页面（Explore, History, Favorites, Search, Subscriptions, Settings, Show/Episode Detail）统一使用 `max-w-content` (1680px)。
+- **水平间距**：页面级容器必须使用 `px-[var(--page-margin-x)]`，以确保内容与侧边栏的 48px (3rem) 安全距离，并为单集列表的 Gutter 动效预留空间。
 
 ### Standardized Helpers & Hooks（共享基础能力）
 
@@ -122,6 +132,7 @@ UI 操作图标来自 `lucide-react`；SVG 仅用于 logo 与交互绑定资源�
    - **合规性**：通过绝对定位（Sibling）确保 `Play` 按钮不是 `Link` 的子元素，解决 A11y 嵌套元素警告。
    - **隐私/安全**：默认应用 `referrerPolicy="no-referrer"`，防止引用第三方图片资源时因 Referrer Check 导致的 403 错误（如部分 RSS 托管图源）。
    - **适用**：`PodcastCard`, `EpisodeCard`, `SearchEpisodeItem`, `PodcastEpisodesGrid` 以及收藏/历史列表。
+   - **无封面兜底**：当 `artworkUrl` 为 null/undefined 时，调用方应**隐式移除**封面占位（不传 `artwork` prop 给 `BaseEpisodeRow`），并转而使用 **Gutter Play Button** 方案（见下文）。
    - **尺寸**：支持 `sm/md/lg/xl` 四种标准尺寸。
    - **交互默认**：不启用 hover 放大；如需放大需显式传 `hoverScale`。
    - **位置规则**：默认 `center`；播客卡片使用 `bottom-left`；Top Episodes 网格保持 `center`。
@@ -132,9 +143,18 @@ UI 操作图标来自 `lucide-react`；SVG 仅用于 logo 与交互绑定资源�
 
 5. **EpisodeRow & BaseEpisodeRow** (`src/components/EpisodeRow/`)
    - **BaseEpisodeRow**: 纯展示组件 (Presentational Component)。
-     - 职责：负责单集列表行的布局、样式、悬浮效果、分割线逻辑。
-     - Props: 接收 `artwork`, `title`, `subtitle`, `description`, `meta` (duration), `actions` (buttons/menu) 作为 ReactNode 插槽。
-     - 样式：内置 `smart-divider` 和 hover 背景逻辑。
+     - **视觉规范**：
+       - **Hover 背景层**：必须使用绝对定位层 (`absolute inset-y-0`)，且左侧偏移固定为 `-left-[var(--page-gutter-x)]`。这确保了所有列表项（无论有无封面）的选中高亮区域在垂直方向上完美对齐成一个矩形柱。
+       - **全高覆盖**：使用 `inset-y-0` 确保背景层完全覆盖单集行的高度，使其顶边和底边能严丝合缝地贴合分割线。
+       - **分割线逻辑**：结合 `smart-divider-group` 手法。分割线组件应具备 `group-hover/episode:opacity-0`，使得当前 hover 行及其相邻行的分割线自动消失，营造流畅感。
+     - **无封面单集方案 (No-Artwork Gutter Play)**：
+       - **触发条件**：当单集无封面图时生效。
+       - **组件表现**：不渲染封面占位符。使用 `GutterPlayButton` 原子组件在左侧 Gutter 区域渲染播放按钮。
+       - **可见性**：仅在整行 `group-hover/episode` 时可见。背景层宽度会自动覆盖此按钮，确保交互区域完整且美观。
+   - **GutterPlayButton**: 原子组件 (`src/components/EpisodeRow/GutterPlayButton.tsx`)。
+     - **职责**：封装 Gutter 区域的播放按钮逻辑，减少跨组件重复代码。
+     - **Props**：`onPlay` (点击回调), `ariaLabel` (无障碍标签)。
+     - **使用位置**：`EpisodeRow`, `SearchEpisodeItem`, `HistoryPage`, `FavoritesPage`。
    - **EpisodeRow**: 业务逻辑容器 (Container Component)。
      - 职责：连接 Store 和 Hooks (`useEpisodePlayback`, `useExploreStore`)，处理播放、收藏、数据格式化。
      - 使用：在 `PodcastShowPage`, `PodcastEpisodesPage`, `SearchPage` 等场景直接使用。
@@ -846,9 +866,9 @@ PostCSS 管线使用 `@tailwindcss/postcss`（Tailwind v4）。
 | 模块 | 组件 | 数据来源 |
 |------|------|----------|
 | Header | 标题 "Explore" + 副标题 | i18n |
-| Module D: Editor's Picks | 小卡片网格 | iTunes Lookup API (固定 collectionId[]) |
-| Module A: Top Shows | Horizontal Carousel | Discovery RSS Top Charts |
-| Module B: Top Subscriber Shows | Horizontal Carousel | Discovery RSS Top Subscriber Podcasts |
+| Module D: Editor's Picks | 小卡片网格 | Discovery Provider Lookup API (固定 collectionId[]) |
+| Module A: Top Shows | Horizontal Carousel | Discovery Provider (Top Charts) |
+
 | Module C: Top Episodes | Horizontal Grid | Discovery RSS Top Episodes (TrackId matching) |
 
 ### 组件位置
@@ -859,11 +879,15 @@ PostCSS 管线使用 `@tailwindcss/postcss`（Tailwind v4）。
 - `src/components/Explore/TopChannelsCarousel.tsx`
 
 ### 数据获取
-
-- `src/libs/discoveryProvider.ts` — Unified discovery service
-  - `fetchTopPodcasts()`, `fetchTopEpisodes()`, `fetchTopChannels()`, `fetchTopSubscriberPodcasts()` — Discovery RSS v2 API
-  - `searchPodcasts()`, `lookupPodcastsByIds()` — Provider Search API
-  - `fetchPodcastFeed()`, `parseRssXml()` — RSS Feed handling
+- **Modules**: Editor's Picks、Top Shows 等模块使用 Discovery Provider (RSS/Search) 数据。
+- **架构 (Provider Agnostic)**: 
+  - **Facade**: `src/libs/discovery/index.ts` 是单一入口，对外屏蔽具体 Provider 实现。
+  - **Interface**: `src/libs/discovery/providers/types.ts` 定义了标准 `DiscoveryProvider` 接口。
+  - **Implementations**: 目前实现为 Apple Provider (`src/libs/discovery/providers/apple.ts`)，支持扩展其他 Provider (e.g., PodcastIndex)。
+- **配置与数据源**: `src/constants/app.ts` (`EDITOR_PICKS_BY_REGION`) 和 `src/libs/discovery/`。
+  - `fetchTopPodcasts()`, `fetchTopEpisodes()` — 调用 Provider 的榜单接口
+  - `searchPodcasts()`, `getPodcast()` — 调用 Provider 的搜索/详情接口
+  - `fetchPodcastFeed()` — 统一 RSS 解析
 - `src/hooks/useDiscoveryPodcasts.ts` — TanStack Query hooks for Explore
 - `src/hooks/usePodcastSearch.ts` — TanStack Query hook for Search
 
@@ -877,7 +901,7 @@ PostCSS 管线使用 `@tailwindcss/postcss`（Tailwind v4）。
 
 ### 导航行为（已更新）
 
-- 点击 Top Shows / Editor's Picks / Top Subscriber Shows 卡片 → 导航到 `/podcast/:id` Show Page
+- 点击 Top Shows / Editor's Picks 卡片 → 导航到 `/podcast/:id` Show Page
 - Top Episodes / Top Channels → 尝试解析播客 ID，成功则导航，否则打开外部播客平台链接
 
 ### i18n Keys
@@ -912,7 +936,7 @@ PostCSS 管线使用 `@tailwindcss/postcss`（Tailwind v4）。
 
 ### 导航行为
 
-- **Show Cards**（Editor's Picks / Top Shows / Top Subscriber Shows）: 使用 `Link` 组件直接导航到 `/podcast/:id`
+- **Show Cards**（Editor's Picks / Top Shows）: 使用 `Link` 组件直接导航到 `/podcast/:id`
 - **Top Episodes / Top Channels**: 尝试从 URL 提取播客 ID（正则 `/id(\d+)/`），成功则导航，否则打开外部链接
 - **返回导航**: 使用 TanStack Router `Link` 返回 `/explore`，浏览器前进后退正常工作
 

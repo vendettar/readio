@@ -3,16 +3,11 @@ import React from 'react'
 import { useI18n } from '../../hooks/useI18n'
 import { cn } from '../../lib/utils'
 import { formatDuration, formatRelativeTime } from '../../libs/dateUtils'
-import {
-  type Episode,
-  lookupPodcastFull,
-  type Podcast,
-  type SearchEpisode,
-} from '../../libs/discoveryProvider'
+import discovery, { type Episode, type Podcast, type SearchEpisode } from '../../libs/discovery'
 import { stripHtml } from '../../libs/htmlUtils'
 import { toast } from '../../libs/toast'
 import { useExploreStore } from '../../store/exploreStore'
-import { BaseEpisodeRow } from '../EpisodeRow/BaseEpisodeRow'
+import { BaseEpisodeRow, GutterPlayButton } from '../EpisodeRow'
 import { InteractiveArtwork } from '../interactive/InteractiveArtwork'
 import { InteractiveTitle } from '../interactive/InteractiveTitle'
 import { Button } from '../ui/button'
@@ -34,9 +29,9 @@ export function SearchEpisodeItem({ episode, onPlay }: SearchEpisodeItemProps) {
 
   const [isSaving, setIsSaving] = React.useState(false)
   const [isMenuOpen, setIsMenuOpen] = React.useState(false)
-  const rawEpisodeId = episode.episodeGuid || episode.trackId.toString()
+  const rawEpisodeId = episode.episodeGuid || episode.providerEpisodeId.toString()
   const encodedEpisodeId = encodeURIComponent(rawEpisodeId)
-  const podcastId = episode.collectionId?.toString()
+  const podcastId = episode.providerPodcastId?.toString()
 
   // SearchEpisode might not have feedUrl, so we check favorites by audioUrl
   const favoritedItem = favorites.find((f) => f.audioUrl === episode.episodeUrl)
@@ -53,7 +48,7 @@ export function SearchEpisodeItem({ episode, onPlay }: SearchEpisodeItemProps) {
         let podcast: Podcast | null = null
         if (episode.feedUrl) {
           podcast = {
-            collectionId: episode.collectionId,
+            providerPodcastId: episode.providerPodcastId,
             collectionName: episode.collectionName,
             artistName: episode.artistName,
             artworkUrl100: episode.artworkUrl100,
@@ -63,18 +58,19 @@ export function SearchEpisodeItem({ episode, onPlay }: SearchEpisodeItemProps) {
             genres: [],
           }
         } else {
-          podcast = await lookupPodcastFull(episode.collectionId.toString())
+          const fullPodcast = await discovery.getPodcast(episode.providerPodcastId.toString())
+          podcast = fullPodcast
         }
 
         if (!podcast) throw new Error('Podcast not found')
 
         // Construct Episode object from SearchEpisode metadata
         const episodeObj: Episode = {
-          id: episode.episodeGuid ?? episode.trackId.toString(),
+          id: episode.episodeGuid ?? episode.providerEpisodeId.toString(),
           title: episode.trackName,
           description: episode.description || '',
-          audioUrl: episode.episodeUrl,
-          pubDate: episode.releaseDate,
+          audioUrl: episode.episodeUrl || '',
+          pubDate: episode.releaseDate || '',
           artworkUrl: episode.artworkUrl600 || episode.artworkUrl100,
           duration: (episode.trackTimeMillis || 0) / 1000,
         }
@@ -89,46 +85,57 @@ export function SearchEpisodeItem({ episode, onPlay }: SearchEpisodeItemProps) {
     }
   }
 
-  const relativeTime = formatRelativeTime(episode.releaseDate, t)
+  const relativeTime = formatRelativeTime(episode.releaseDate || '', t)
   const duration = formatDuration((episode.trackTimeMillis || 0) / 1000, t)
   const cleanDescription = stripHtml(episode.description || '')
   const artworkUrl = episode.artworkUrl600 || episode.artworkUrl100
+  // Since SearchEpisode metadata often blends podcast/episode info, we use the same as fallback
+  // if it's already the primary, InteractiveArtwork handles it.
+  const podcastArtwork = episode.artworkUrl600 || episode.artworkUrl100
+
+  const hasArtwork = !!(episode.artworkUrl600 || episode.artworkUrl100)
 
   return (
     <BaseEpisodeRow
       artwork={
-        <InteractiveArtwork
-          src={artworkUrl}
-          to={podcastId ? '/podcast/$id/episode/$episodeId' : undefined}
-          params={
-            podcastId
-              ? {
+        hasArtwork ? (
+          <InteractiveArtwork
+            src={artworkUrl}
+            fallbackSrc={podcastArtwork}
+            to={podcastId ? '/podcast/$id/episode/$episodeId' : undefined}
+            params={
+              podcastId
+                ? {
                   id: podcastId,
                   episodeId: encodedEpisodeId,
                 }
-              : undefined
-          }
-          onPlay={onPlay}
-          playButtonSize="md"
-          playIconSize={20}
-          hoverGroup="episode"
-          size="xl"
-        />
+                : undefined
+            }
+            onPlay={onPlay}
+            playButtonSize="md"
+            playIconSize={20}
+            hoverGroup="episode"
+            size="xl"
+          />
+        ) : undefined
       }
       title={
-        <InteractiveTitle
-          title={episode.trackName}
-          to={podcastId ? '/podcast/$id/episode/$episodeId' : undefined}
-          params={
-            podcastId
-              ? {
+        <>
+          {!hasArtwork && <GutterPlayButton onPlay={onPlay} ariaLabel={t('ariaPlayEpisode')} />}
+          <InteractiveTitle
+            title={episode.trackName}
+            to={podcastId ? '/podcast/$id/episode/$episodeId' : undefined}
+            params={
+              podcastId
+                ? {
                   id: podcastId,
                   episodeId: encodedEpisodeId,
                 }
-              : undefined
-          }
-          className="text-sm leading-tight"
-        />
+                : undefined
+            }
+            className="text-sm leading-tight flex-1"
+          />
+        </>
       }
       subtitle={
         <div className="flex items-center gap-1">

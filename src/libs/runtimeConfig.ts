@@ -13,15 +13,15 @@ declare global {
       READIO_USE_MOCK?: boolean | string
 
       // System Defaults
-      READIO_DEFAULT_CORS_PROXY?: string
       READIO_DEFAULT_TIMEOUT_MS?: number | string
       READIO_MAX_CONCURRENT_REQUESTS?: number | string
       READIO_DB_NAME?: string
 
       // External APIs
+      READIO_DEFAULT_CORS_PROXY?: string
       READIO_DICT_API_URL?: string
-      READIO_ITUNES_LOOKUP_URL?: string
-      READIO_ITUNES_SEARCH_URL?: string
+      READIO_DISCOVERY_LOOKUP_URL?: string
+      READIO_DISCOVERY_SEARCH_URL?: string
       READIO_RSS_FEED_BASE_URL?: string
 
       // Limits
@@ -54,15 +54,16 @@ declare global {
 const AppConfigSchema = z.object({
   APP_NAME: z.string().default('Readio'),
   APP_VERSION: z.string().default('1.0.0'),
-  READIO_CORS_PROXY_URL: z.string().default(''),
-  READIO_CORS_PROXY_PRIMARY: z.boolean().default(false),
+  CORS_PROXY_URL: z.string().default(''),
+  CORS_PROXY_PRIMARY: z.boolean().default(false),
   DEFAULT_CORS_PROXY: z.string().url().default('https://api.allorigins.win'),
-  DEFAULT_TIMEOUT_MS: z.number().positive().default(15000),
+  TIMEOUT_MS: z.number().positive().default(15000),
   MAX_CONCURRENT_REQUESTS: z.number().positive().default(6),
   DB_NAME: z.string().default('readio-v2'),
   DICT_API_URL: z.string().url().default('https://api.dictionaryapi.dev/api/v2/entries/en/'),
-  ITUNES_LOOKUP_URL: z.string().url().default('https://itunes.apple.com/lookup'),
-  ITUNES_SEARCH_URL: z.string().url().default('https://itunes.apple.com/search'),
+  // Discovery Provider (Apple/iTunes)
+  DISCOVERY_LOOKUP_URL: z.string().url().default('https://itunes.apple.com/lookup'),
+  DISCOVERY_SEARCH_URL: z.string().url().default('https://itunes.apple.com/search'),
   RSS_FEED_BASE_URL: z.string().url().default('https://rss.applemarketingtools.com/api/v2'),
   MAX_AUDIO_SIZE_MB: z.number().positive().default(300),
   DICT_CACHE_MAX_ENTRIES: z.number().positive().default(500),
@@ -99,17 +100,17 @@ export function getAppConfig(): AppConfig {
     APP_VERSION: env.READIO_APP_VERSION,
 
     // Proxy & Network
-    READIO_CORS_PROXY_URL: env.READIO_CORS_PROXY_URL,
-    READIO_CORS_PROXY_PRIMARY: String(env.READIO_CORS_PROXY_PRIMARY) === 'true',
-    DEFAULT_CORS_PROXY: env.READIO_DEFAULT_CORS_PROXY,
-    DEFAULT_TIMEOUT_MS: num(env.READIO_DEFAULT_TIMEOUT_MS, 15000),
+    CORS_PROXY_URL: env.READIO_CORS_PROXY_URL,
+    CORS_PROXY_PRIMARY: String(env.READIO_CORS_PROXY_PRIMARY) === 'true',
+    TIMEOUT_MS: num(env.READIO_DEFAULT_TIMEOUT_MS, 15000),
     MAX_CONCURRENT_REQUESTS: num(env.READIO_MAX_CONCURRENT_REQUESTS, 6),
     DB_NAME: env.READIO_DB_NAME,
 
     // External APIs
+    DEFAULT_CORS_PROXY: env.READIO_DEFAULT_CORS_PROXY,
     DICT_API_URL: env.READIO_DICT_API_URL,
-    ITUNES_LOOKUP_URL: env.READIO_ITUNES_LOOKUP_URL,
-    ITUNES_SEARCH_URL: env.READIO_ITUNES_SEARCH_URL,
+    DISCOVERY_LOOKUP_URL: env.READIO_DISCOVERY_LOOKUP_URL,
+    DISCOVERY_SEARCH_URL: env.READIO_DISCOVERY_SEARCH_URL,
     RSS_FEED_BASE_URL: env.READIO_RSS_FEED_BASE_URL,
 
     // Limits

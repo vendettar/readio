@@ -25,7 +25,7 @@ export const DISCOVERY_CATEGORIES = {
  * These are featured podcasts shown in the "Editor's Picks" section of the Explore page.
  * Update quarterly or when featured podcasts change.
  *
- * Format: Array of iTunes/Apple Podcasts collection IDs
+ * Format: Array of Apple provider collection IDs
  * How to find IDs: Search on https://podcasts.apple.com/ and extract ID from URL
  * Example: https://podcasts.apple.com/us/podcast/the-daily/id1200361736 → ID is '1200361736'
  */

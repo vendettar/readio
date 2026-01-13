@@ -25,8 +25,8 @@ function normalizeCustomProxyUrl(url: string): string {
 export function getCorsProxyConfig(): { proxyUrl: string; proxyPrimary: boolean } {
   const config = getAppConfig()
 
-  const customUrl = normalizeCustomProxyUrl(config.READIO_CORS_PROXY_URL || '')
-  const customPrimary = parseBoolean(config.READIO_CORS_PROXY_PRIMARY, false)
+  const customUrl = normalizeCustomProxyUrl(config.CORS_PROXY_URL || '')
+  const customPrimary = parseBoolean(config.CORS_PROXY_PRIMARY, false)
 
   return {
     proxyUrl: customUrl || config.DEFAULT_CORS_PROXY,
@@ -38,7 +38,7 @@ export type ProxyHealthResult =
   | {
       ok: true
       proxyUrl: string
-      proxyType: 'allorigins' | 'custom'
+      proxyType: 'default' | 'custom'
       targetUrl: string
       elapsedMs: number
       at: number
@@ -46,7 +46,7 @@ export type ProxyHealthResult =
   | {
       ok: false
       proxyUrl: string
-      proxyType: 'allorigins' | 'custom'
+      proxyType: 'default' | 'custom'
       targetUrl: string
       elapsedMs: number
       at: number
@@ -83,15 +83,15 @@ function buildProxyUrl(proxyBase: string, targetUrl: string): string {
   return `${base}?url=${encoded}`
 }
 
-// For allorigins specifically, we use /get?url= format
-function buildAlloriginsUrl(proxyBase: string, targetUrl: string): string {
+// For JSON-wrapped proxies (like AllOrigins) specifically, we use /get?url= format
+function buildJsonWrappedProxyUrl(proxyBase: string, targetUrl: string): string {
   const encoded = encodeURIComponent(String(targetUrl || ''))
   // Ensure we don't double /get?url=
   const base = proxyBase.replace(/\/get\?url=$/i, '').replace(/\/+$/, '')
   return `${base}/get?url=${encoded}`
 }
 
-function isAllOriginsUrl(url: string): boolean {
+function isJsonWrappedProxyUrl(url: string): boolean {
   return String(url || '')
     .toLowerCase()
     .includes('allorigins.win')
@@ -101,23 +101,23 @@ async function fetchViaProxy(
   proxyBase: string,
   targetUrl: string,
   signal: AbortSignal
-): Promise<{ proxyType: 'allorigins' | 'custom'; status?: number }> {
-  const isAllorigins = isAllOriginsUrl(proxyBase)
-  const finalUrl = isAllorigins
-    ? buildAlloriginsUrl(proxyBase, targetUrl)
+): Promise<{ proxyType: 'default' | 'custom'; status?: number }> {
+  const isJsonWrapped = isJsonWrappedProxyUrl(proxyBase)
+  const finalUrl = isJsonWrapped
+    ? buildJsonWrappedProxyUrl(proxyBase, targetUrl)
     : buildProxyUrl(proxyBase, targetUrl)
 
   const response = await fetch(finalUrl, { signal, credentials: 'omit' })
   if (!response.ok) {
-    return { proxyType: isAllorigins ? 'allorigins' : 'custom', status: response.status }
+    return { proxyType: isJsonWrapped ? 'default' : 'custom', status: response.status }
   }
 
-  // Allorigins /get returns JSON { contents } and we must ensure it's parseable.
-  if (isAllorigins) {
+  // JSON-wrapped proxies (e.g. AllOrigins) return JSON { contents } and we must ensure it's parseable.
+  if (isJsonWrapped) {
     const data = await response.json()
     const contents = data?.contents
     if (typeof contents !== 'string' || contents.length === 0) {
-      throw new Error('Invalid allorigins response')
+      throw new Error('Invalid proxy response (empty contents)')
     }
   } else {
     // Custom proxy: assume raw content; only check non-empty body.
@@ -125,7 +125,7 @@ async function fetchViaProxy(
     if (!text) throw new Error('Empty proxy response')
   }
 
-  return { proxyType: isAllorigins ? 'allorigins' : 'custom' }
+  return { proxyType: isJsonWrapped ? 'default' : 'custom' }
 }
 
 export async function checkCorsProxyHealth(options?: {
@@ -182,11 +182,11 @@ export async function checkCorsProxyHealth(options?: {
     const message =
       err instanceof Error ? (err.name === 'AbortError' ? 'Timeout' : err.message) : 'Unknown error'
 
-    const isAllorigins = isAllOriginsUrl(proxyUrl)
+    const isJsonWrapped = isJsonWrappedProxyUrl(proxyUrl)
     return {
       ok: false,
       proxyUrl,
-      proxyType: isAllorigins ? 'allorigins' : 'custom',
+      proxyType: isJsonWrapped ? 'default' : 'custom',
       targetUrl,
       elapsedMs,
       at,
@@ -216,7 +216,7 @@ export async function fetchWithFallback<T = string>(
   options: FetchWithFallbackOptions = {}
 ): Promise<T> {
   const config = getAppConfig()
-  const { signal, timeoutMs = config.DEFAULT_TIMEOUT_MS, json = false } = options
+  const { signal, timeoutMs = config.TIMEOUT_MS, json = false } = options
   const { proxyUrl, proxyPrimary } = getCorsProxyConfig()
 
   const controller = new AbortController()
@@ -246,11 +246,11 @@ export async function fetchWithFallback<T = string>(
 
   // 2. Proxy Fetch Generic
   const fetchViaProxy = async (baseProxyUrl: string): Promise<T> => {
-    // More robust check for AllOrigins (supporting variations in URL)
-    const isAllorigins = isAllOriginsUrl(baseProxyUrl)
+    // More robust check for JSON-wrapped proxies (supporting variations in URL)
+    const isJsonWrapped = isJsonWrappedProxyUrl(baseProxyUrl)
 
-    const finalProxyUrl = isAllorigins
-      ? buildAlloriginsUrl(baseProxyUrl, url)
+    const finalProxyUrl = isJsonWrapped
+      ? buildJsonWrappedProxyUrl(baseProxyUrl, url)
       : buildProxyUrl(baseProxyUrl, url)
 
     const response = await fetch(finalProxyUrl, {
@@ -259,12 +259,16 @@ export async function fetchWithFallback<T = string>(
     })
     if (!response.ok) throw new Error(`Proxy (${baseProxyUrl}) failed: ${response.status}`)
 
-    // Allorigins returns JSON with contents field
-    if (isAllorigins) {
+    // JSON-wrapped proxies return JSON with contents field
+    if (isJsonWrapped) {
       const data = await response.json()
       let contents = data?.contents
 
-      // Base64 decoding for AllOrigins
+      if (contents === null || contents === undefined) {
+        throw new Error('Proxy returned empty contents (target might be blocked or too large)')
+      }
+
+      // Base64 decoding (used for some encodings)
       if (typeof contents === 'string' && contents.startsWith('data:')) {
         try {
           const decodedResponse = await fetch(contents)
@@ -276,7 +280,7 @@ export async function fetchWithFallback<T = string>(
 
       if (json) {
         try {
-          return JSON.parse(contents) as T
+          return (typeof contents === 'string' ? JSON.parse(contents) : contents) as T
         } catch {
           if (!contents) throw new Error('Empty response from proxy')
           return contents as T
@@ -286,47 +290,104 @@ export async function fetchWithFallback<T = string>(
     }
 
     // Custom proxy: assume it returns raw content
-    return json ? response.json() : (response.text() as unknown as T)
+    if (json) {
+      return response.json()
+    }
+
+    const textResult = await response.text()
+    if (!textResult) throw new Error(`Custom proxy (${baseProxyUrl}) returned empty response`)
+
+    // Heuristic: If we expect text (XML) but get something starting with { it might be a JSON error from proxy
+    if (!json && textResult.trim().startsWith('{')) {
+      try {
+        const parsed = JSON.parse(textResult)
+        if (parsed && (parsed.error || parsed.message)) {
+          throw new Error(`Proxy error: ${parsed.error || parsed.message}`)
+        }
+      } catch {
+        // Not valid JSON, continue
+      }
+    }
+
+    return textResult as unknown as T
   }
 
   try {
-    // Detect if the provided proxy is actually AllOrigins
-    const isProvidedAllOrigins = proxyUrl.toLowerCase().includes('allorigins.win')
-    const customProxy = proxyUrl && !isProvidedAllOrigins ? proxyUrl : null
+    // Detect if the provided proxy is actually the default/JSON-wrapped one
+    const isProvidedDefault = isJsonWrappedProxyUrl(proxyUrl)
+    const customProxy = proxyUrl && !isProvidedDefault ? proxyUrl : null
 
     /**
      * The Fetch Chain Strategy:
-     * 1. Direct Fetch (Always first)
-     * 2. Proxy A (Based on proxyPrimary setting)
-     * 3. Proxy B (The remaining proxy)
+     * 1. Direct Fetch (Always try first)
+     * 2. Then toggle order of Custom vs Default based on proxyPrimary flag.
+     *    - If proxyPrimary=true: Custom -> Default
+     *    - If proxyPrimary=false: Default -> Custom
      */
-    const attempts: (() => Promise<T>)[] = [fetchDirect]
+    type Attempt = { name: string; fn: () => Promise<T> }
+    const attempts: Attempt[] = []
 
-    if (proxyPrimary && customProxy) {
-      // Priority: Direct -> Custom -> AllOrigins
-      attempts.push(() => fetchViaProxy(customProxy))
-      attempts.push(() => fetchViaProxy(config.DEFAULT_CORS_PROXY))
-    } else {
-      // Priority: Direct -> AllOrigins -> Custom (if exists)
-      attempts.push(() => fetchViaProxy(config.DEFAULT_CORS_PROXY))
+    // 1. Direct
+    attempts.push({ name: 'Direct', fn: fetchDirect })
+
+    const addCustomProxyAttempt = () => {
       if (customProxy) {
-        attempts.push(() => fetchViaProxy(customProxy))
+        attempts.push({ name: 'CustomProxy', fn: () => fetchViaProxy(customProxy) })
       }
+    }
+
+    const addDefaultProxyAttempt = () => {
+      attempts.push({ name: 'DefaultProxy', fn: () => fetchViaProxy(config.DEFAULT_CORS_PROXY) })
+    }
+
+    if (proxyPrimary) {
+      // Priority: Custom -> Default
+      addCustomProxyAttempt()
+      addDefaultProxyAttempt()
+    } else {
+      // Priority: Default -> Custom
+      addDefaultProxyAttempt()
+      addCustomProxyAttempt()
     }
 
     let lastError: unknown
     for (let i = 0; i < attempts.length; i++) {
       try {
-        const stepName = i === 0 ? 'Direct' : i === 1 ? 'Primary Proxy' : 'Secondary Proxy'
-        log(`[fetchWithFallback] [${stepName}] Attempt ${i + 1}/${attempts.length} for: ${url}`)
-        return await attempts[i]()
+        const { name, fn } = attempts[i]
+        log(`[fetchWithFallback] [${name}] Attempt ${i + 1}/${attempts.length} for: ${url}`)
+        const result = await fn()
+
+        // Validation: If we expect text (not JSON) but it's not XML-like, it might be an error page
+        if (!json && typeof result === 'string') {
+          const trimmed = result.trim()
+          if (
+            trimmed.length > 0 &&
+            trimmed.startsWith('<') &&
+            !trimmed.toLowerCase().startsWith('<!doctype html')
+          ) {
+            // Looks like valid XML/RSS
+            return result as T
+          }
+          if (trimmed.length > 0) {
+            // If it looks like HTML but we wanted RSS, this is likely a proxy error page
+            log(
+              `[fetchWithFallback] [${name}] Success but invalid content (HTML instead of XML). Snippet: ${trimmed.slice(0, 100)}`
+            )
+            throw new Error('Received HTML instead of expected XML content')
+          }
+        }
+
+        return result
       } catch (error) {
         lastError = error
         // If it's a manual abort, don't try next steps
         if (error instanceof Error && error.name === 'AbortError' && !didTimeout) {
           throw error
         }
-        log(`[fetchWithFallback] [${i + 1}] failed, trying next... error:`, error)
+        log(
+          `[fetchWithFallback] [Attempt ${i + 1}] failed:`,
+          error instanceof Error ? error.message : error
+        )
       }
     }
 

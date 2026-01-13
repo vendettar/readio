@@ -1,8 +1,8 @@
 // src/routes/history.tsx
 import { useNavigate } from '@tanstack/react-router'
-import { Clock, MoreHorizontal, Play, Star, Trash2 } from 'lucide-react'
+import { Clock, MoreHorizontal, Star, Trash2 } from 'lucide-react'
 import React, { useEffect, useState } from 'react'
-import { BaseEpisodeRow } from '../components/EpisodeRow/BaseEpisodeRow'
+import { BaseEpisodeRow, GutterPlayButton } from '../components/EpisodeRow'
 import { InteractiveArtwork } from '../components/interactive/InteractiveArtwork'
 import { InteractiveTitle } from '../components/interactive/InteractiveTitle'
 import { Button } from '../components/ui/button'
@@ -13,7 +13,7 @@ import { useSubscriptionMap } from '../hooks/useSubscriptionMap'
 import { cn } from '../lib/utils'
 import { formatDateStandard, formatDuration, formatTimeSmart } from '../libs/dateUtils'
 import { DB, type PlaybackSession } from '../libs/dexieDb'
-import type { Episode, Podcast } from '../libs/discoveryProvider'
+import type { Episode, Podcast } from '../libs/discovery'
 import { stripHtml } from '../libs/htmlUtils'
 import { useExploreStore } from '../store/exploreStore'
 import { usePlayerStore } from '../store/playerStore'
@@ -22,7 +22,7 @@ export default function HistoryPage() {
   const { t, language } = useI18n()
   const navigate = useNavigate()
   const setAudioUrl = usePlayerStore((s) => s.setAudioUrl)
-  const play = usePlayerStore((s) => s.play)
+  const startPlayback = usePlayerStore((s) => s.play)
   const setSessionId = usePlayerStore((s) => s.setSessionId)
   const setFileTrackId = usePlayerStore((s) => s.setFileTrackId)
   const loadSubscriptions = useExploreStore((s) => s.loadSubscriptions)
@@ -68,7 +68,7 @@ export default function HistoryPage() {
   }, [favoritesLoaded, loadFavorites, subscriptionsLoaded, loadSubscriptions])
 
   const handlePlaySession = async (session: PlaybackSession) => {
-    // For gallery/podcast sessions with audioUrl
+    // For explore/podcast sessions with audioUrl
     if (session.audioUrl) {
       setAudioUrl(session.audioUrl, session.title, session.artworkUrl || '', {
         description: session.description,
@@ -82,7 +82,7 @@ export default function HistoryPage() {
 
       setFileTrackId(session.localTrackId ?? null)
       setSessionId(session.id)
-      play()
+      startPlayback()
       return
     }
 
@@ -94,7 +94,7 @@ export default function HistoryPage() {
         setAudioUrl(url, session.title, session.artworkUrl || '')
         setFileTrackId(session.localTrackId ?? null)
         setSessionId(session.id)
-        play()
+        startPlayback()
       }
     } else {
       // Navigate to continue or show info
@@ -149,7 +149,7 @@ export default function HistoryPage() {
 
   return (
     <div className="h-full overflow-y-auto custom-scrollbar">
-      <div className="w-full max-w-5xl mx-auto px-[var(--page-gutter-x)] pt-4 pb-32">
+      <div className="w-full max-w-content mx-auto px-[var(--page-margin-x)] pt-[var(--page-margin-x)] pb-32">
         <header className="mb-12">
           <h1 className="text-4xl font-bold text-foreground tracking-tight">{t('historyTitle')}</h1>
         </header>
@@ -179,8 +179,16 @@ export default function HistoryPage() {
               const favorited = isFavorited(session)
               const durationText = session.duration ? formatDuration(session.duration, t) : null
               const cleanDescription = session.description ? stripHtml(session.description) : ''
-              const hasArtwork = !!session.artworkUrl
               const canFavorite = !!(session.podcastFeedUrl && session.audioUrl)
+
+              // Extract navigation params to avoid IIFEs in JSX
+              const providerPodcastId = subscriptionMap.get(session.podcastFeedUrl || '')
+              const episodeId = session.episodeId
+              const hasNavigation = !!(providerPodcastId && episodeId)
+              const navigationTo = hasNavigation ? '/podcast/$id/episode/$episodeId' : undefined
+              const navigationParams = hasNavigation
+                ? { id: providerPodcastId, episodeId: encodeURIComponent(episodeId) }
+                : undefined
 
               return (
                 <BaseEpisodeRow
@@ -188,79 +196,37 @@ export default function HistoryPage() {
                   isLast={index === sessions.length - 1}
                   descriptionLines={1}
                   artwork={
-                    hasArtwork ? (
+                    session.artworkUrl ? (
                       <div className="relative flex-shrink-0 z-20">
-                        {(() => {
-                          const collectionId = subscriptionMap.get(session.podcastFeedUrl || '')
-                          const episodeId = session.episodeId // Only GUID for navigation
-
-                          return (
-                            <InteractiveArtwork
-                              src={session.artworkUrl ?? ''}
-                              to={
-                                collectionId && episodeId
-                                  ? '/podcast/$id/episode/$episodeId'
-                                  : undefined
-                              }
-                              params={
-                                collectionId && episodeId
-                                  ? { id: collectionId, episodeId: encodeURIComponent(episodeId) }
-                                  : undefined
-                              }
-                              onPlay={() => handlePlaySession(session)}
-                              playButtonSize="sm"
-                              playIconSize={14}
-                              hoverGroup="episode"
-                              size="lg"
-                            />
-                          )
-                        })()}
+                        <InteractiveArtwork
+                          src={session.artworkUrl ?? ''}
+                          to={navigationTo}
+                          params={navigationParams}
+                          onPlay={() => handlePlaySession(session)}
+                          playButtonSize="sm"
+                          playIconSize={14}
+                          hoverGroup="episode"
+                          size="lg"
+                        />
                       </div>
                     ) : undefined
                   }
                   title={
-                    <div className="relative">
-                      {/* Play button if no artwork */}
-                      {!hasArtwork && (
-                        <div className="absolute left-0 top-0 bottom-0 -translate-x-full w-[var(--page-gutter-x)] flex items-center justify-center opacity-0 group-hover/episode:opacity-100 transition-opacity duration-200 z-20 pointer-events-none">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handlePlaySession(session)}
-                            aria-label={t('btnPlayOnly')}
-                            className="w-6 h-6 pointer-events-auto hover:bg-transparent"
-                          >
-                            <Play size={12} className="text-primary fill-current ml-0.5" />
-                          </Button>
-                        </div>
+                    <>
+                      {!session.artworkUrl && (
+                        <GutterPlayButton
+                          onPlay={() => handlePlaySession(session)}
+                          ariaLabel={t('btnPlayOnly')}
+                        />
                       )}
-                      {(() => {
-                        const collectionId = subscriptionMap.get(session.podcastFeedUrl || '')
-                        const episodeId = session.episodeId // Only GUID for navigation
-
-                        return (
-                          <InteractiveTitle
-                            title={session.title}
-                            to={
-                              collectionId && episodeId
-                                ? '/podcast/$id/episode/$episodeId'
-                                : undefined
-                            }
-                            params={
-                              collectionId && episodeId
-                                ? { id: collectionId, episodeId: encodeURIComponent(episodeId) }
-                                : undefined
-                            }
-                            onClick={
-                              !(collectionId && episodeId)
-                                ? () => handlePlaySession(session)
-                                : undefined
-                            }
-                            className="text-sm leading-tight"
-                          />
-                        )
-                      })()}
-                    </div>
+                      <InteractiveTitle
+                        title={session.title}
+                        to={navigationTo}
+                        params={navigationParams}
+                        onClick={!hasNavigation ? () => handlePlaySession(session) : undefined}
+                        className="text-sm leading-tight flex-1"
+                      />
+                    </>
                   }
                   subtitle={
                     (session.podcastTitle || session.publishedAt) && (
@@ -304,10 +270,7 @@ export default function HistoryPage() {
                           variant="ghost"
                           size="icon"
                           onClick={() => handleToggleFavorite(session)}
-                          className={cn(
-                            'w-8 h-8 text-primary hover:bg-transparent transition-opacity duration-200',
-                            favorited || openMenuId === session.id ? 'opacity-100' : 'opacity-100' // Always visible in internal wrapper, but controlled by BaseEpisodeRow
-                          )}
+                          className="w-8 h-8 text-primary hover:bg-transparent transition-opacity duration-200"
                           aria-label={favorited ? t('ariaRemoveFavorite') : t('ariaAddFavorite')}
                         >
                           <Star size={15} className={cn('stroke-2', favorited && 'fill-current')} />
@@ -350,7 +313,6 @@ export default function HistoryPage() {
                       </Popover>
                     </>
                   }
-                  // History items are clickable via title/artwork hooks
                 />
               )
             })}
