@@ -1,6 +1,7 @@
 import { Play } from 'lucide-react'
 import type React from 'react'
 import { cn } from '../../lib/utils'
+import { getDiscoveryArtworkUrl } from '../../libs/imageUtils'
 import { InteractiveTitle } from '../interactive/InteractiveTitle'
 import { Button } from '../ui/button'
 
@@ -9,7 +10,6 @@ interface SearchResultItemProps {
   subtitle?: React.ReactNode
   extraSubtitle?: React.ReactNode
   artworkUrl?: string
-  icon?: React.ElementType
   onClick: () => void
   onArtworkClick?: (e: React.MouseEvent) => void
   rightIcon?: React.ElementType
@@ -22,7 +22,6 @@ export function SearchResultItem({
   subtitle,
   extraSubtitle,
   artworkUrl,
-  icon: IconComponent,
   onClick,
   onArtworkClick,
   rightIcon: RightIcon,
@@ -50,13 +49,11 @@ export function SearchResultItem({
           className="relative w-12 h-12 flex-shrink-0 rounded-lg overflow-hidden bg-muted z-20 hover:opacity-90 transition-opacity cursor-pointer text-left p-0 hover:bg-transparent"
           aria-label={artworkAriaLabel ?? title}
         >
-          {artworkUrl ? (
-            <img src={artworkUrl} alt="" className="w-full h-full object-cover" />
-          ) : IconComponent ? (
-            <div className="w-full h-full flex items-center justify-center">
-              <IconComponent className="w-5 h-5 text-muted-foreground" />
-            </div>
-          ) : null}
+          <img
+            src={getDiscoveryArtworkUrl(artworkUrl, 100)}
+            alt=""
+            className="w-full h-full object-cover"
+          />
         </Button>
 
         <div className="flex-1 min-w-0 z-20">
@@ -110,15 +107,11 @@ export function SearchResultItem({
         }}
         aria-label={artworkAriaLabel ?? title}
       >
-        {artworkUrl ? (
-          <img
-            src={artworkUrl}
-            alt=""
-            className="w-full h-full object-cover transition-transform group-hover:scale-110"
-          />
-        ) : IconComponent ? (
-          <IconComponent className="w-5 h-5 text-muted-foreground" />
-        ) : null}
+        <img
+          src={getDiscoveryArtworkUrl(artworkUrl, 100)}
+          alt=""
+          className="w-full h-full object-cover transition-transform group-hover:scale-110"
+        />
 
         {/* Improved Play Overlay: Use foreground/20 and backdrop blur */}
         <div className="absolute inset-0 flex items-center justify-center bg-foreground/20 opacity-0 group-hover:opacity-100 transition-opacity">

@@ -1,10 +1,11 @@
-import { MoreHorizontal, Play, Star } from 'lucide-react'
+import { MoreHorizontal, Star } from 'lucide-react'
 import React from 'react'
 import { useI18n } from '../../hooks/useI18n'
 import { cn } from '../../lib/utils'
 import { formatDuration, formatRelativeTime } from '../../libs/dateUtils'
 import type { Episode, Podcast } from '../../libs/discoveryProvider'
 import { stripHtml } from '../../libs/htmlUtils'
+import { getDiscoveryArtworkUrl } from '../../libs/imageUtils'
 import { useExploreStore } from '../../store/exploreStore'
 import { InteractiveArtwork } from '../interactive/InteractiveArtwork'
 import { InteractiveTitle } from '../interactive/InteractiveTitle'
@@ -43,8 +44,7 @@ export function EpisodeCard({ episode, podcast, onPlay }: EpisodeCardProps) {
   const duration = formatDuration(episode.duration, t)
   const cleanDescription = stripHtml(episode.description || '')
 
-  const hasEpisodeArtwork = !!episode.artworkUrl
-  const artworkUrl = hasEpisodeArtwork ? episode.artworkUrl : undefined
+  const artworkUrl = getDiscoveryArtworkUrl(episode.artworkUrl, 100)
 
   return (
     <div className="group/episode relative smart-divider-group pr-4">
@@ -53,23 +53,21 @@ export function EpisodeCard({ episode, podcast, onPlay }: EpisodeCardProps) {
 
       <div className="relative flex items-center gap-4 py-3">
         {/* Artwork with Navigation & Play */}
-        {hasEpisodeArtwork && artworkUrl && (
-          <div className="relative flex-shrink-0 z-20">
-            <InteractiveArtwork
-              src={artworkUrl}
-              to="/podcast/$id/episode/$episodeId"
-              params={{
-                id: podcast.collectionId.toString(),
-                episodeId: encodedEpisodeId,
-              }}
-              onPlay={onPlay}
-              playButtonSize="sm"
-              playIconSize={16}
-              hoverGroup="episode"
-              size="xl"
-            />
-          </div>
-        )}
+        <div className="relative flex-shrink-0 z-20">
+          <InteractiveArtwork
+            src={artworkUrl}
+            to="/podcast/$id/episode/$episodeId"
+            params={{
+              id: podcast.collectionId.toString(),
+              episodeId: encodedEpisodeId,
+            }}
+            onPlay={onPlay}
+            playButtonSize="sm"
+            playIconSize={16}
+            hoverGroup="episode"
+            size="xl"
+          />
+        </div>
 
         <div className="flex-1 min-w-0 flex items-center justify-between">
           <div className="flex-1 min-w-0 pr-12 py-1">
@@ -81,21 +79,7 @@ export function EpisodeCard({ episode, podcast, onPlay }: EpisodeCardProps) {
             )}
 
             <div className="mb-0.5 z-20 relative">
-              {!hasEpisodeArtwork && (
-                <div className="absolute left-0 top-0 bottom-0 -translate-x-full w-[var(--page-gutter-x)] flex items-center justify-center opacity-0 group-hover/episode:opacity-100 transition-opacity duration-200 z-20 pointer-events-none">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      onPlay()
-                    }}
-                    className="w-6 h-6 pointer-events-auto hover:bg-transparent"
-                  >
-                    <Play size={14} className="text-primary fill-current ml-0.5" />
-                  </Button>
-                </div>
-              )}
+              {/* Play button overlay removed here as we now always show artwork with play overlay */}
               <InteractiveTitle
                 title={episode.title}
                 to="/podcast/$id/episode/$episodeId"

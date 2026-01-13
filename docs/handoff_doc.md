@@ -703,6 +703,30 @@ Provider 位于 `src/main.tsx`（`Tooltip.Provider`）。
 
 ---
 
+## 9.3 Zod 数据验证与边界保护
+
+应用使用 Zod 进行运行时数据验证，主要用于处理外部 API 响应、环境配置以及路由参数，确保数据进入应用核心逻辑前符合预期。
+
+### 核心范围
+1. **外部 API 响应** (`src/libs/discoveryProvider.ts`):
+   - 使用 `src/libs/schemas/discovery.ts` 中定义的模式（`PodcastSchema`, `EpisodeSchema` 等）对 iTunes API 和 RSS 解析结果进行强校验。
+   - **严格校验规则**: 对核心 ID（`id/collectionId/trackId`）和 URL 字段强制 `min(1)` 或 `url()` 约束。
+   - **错误处理**: 映射层（Mapping Layer）不再提供伪造的兜底值（如空字符串或 0）。验证失败时，列表接口会过滤掉无效项，单项接口返回 `null`。错误信息记录到 `console.warn`。
+2. **环境配置** (`src/libs/runtimeConfig.ts`):
+   - `getAppConfig` 对 `window.__READIO_ENV__` 和环境变量执行**逐字段校验**。
+   - **颗粒度降级**: 若某个配置项非法（校验失败），仅该项回退到 Schema 定义的默认值，其它有效的覆盖配置将继续生效。
+3. **路由参数** (TanStack Router):
+   - 在播客详情（`$id`）和单集详情（`$id/episode/$episodeId`）路由中使用 `beforeLoad` 验证路径参数。
+   - **重定向策略**: 若参数无效（如为空），统一重定向至 `/explore`。
+
+### 验证策略
+- **数据真实性**: 拒绝“凑数”对象，核心字段缺失即视为整条数据无效。
+- **颗粒度降级**: 在配置校验中实现“局部损坏、整体可用”，增强系统鲁棒性。
+- **非侵入性**: 不在 UI 组件内部或性能敏感的循环（如字幕渲染）中使用 Zod。
+- **类型同步**: 使用 `z.infer<T>` 自动导出 TypeScript 类型。
+
+---
+
 ## 10. Transcript（字幕渲染约束与虚拟列表）
 
 产品要求：

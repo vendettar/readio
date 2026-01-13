@@ -1,7 +1,7 @@
 // src/components/GlobalSearch/SearchOverlay.tsx
 
 import { useNavigate } from '@tanstack/react-router'
-import { ArrowRight, Clock, FileAudio, Loader2, Podcast, Search, Star } from 'lucide-react'
+import { ArrowRight, Loader2, Search } from 'lucide-react'
 import { useEffect } from 'react'
 import { type LocalSearchResult, useGlobalSearch } from '../../hooks/useGlobalSearch'
 import { useI18n } from '../../hooks/useI18n'
@@ -58,19 +58,11 @@ function EpisodeItem({ episode, onClick }: { episode: SearchEpisode; onClick: ()
 }
 
 function LocalItem({ item, onClick }: { item: LocalSearchResult; onClick: () => void }) {
-  const IconComponent = {
-    subscription: Podcast,
-    favorite: Star,
-    history: Clock,
-    file: FileAudio,
-  }[item.type]
-
   return (
     <SearchResultItem
       title={item.title}
       subtitle={item.subtitle}
       artworkUrl={item.artworkUrl}
-      icon={IconComponent}
       onClick={onClick}
     />
   )
@@ -119,10 +111,6 @@ export function SearchOverlay() {
 
   const handleEpisodeClick = async (episode: SearchEpisode) => {
     closeOverlay()
-    if (!episode.episodeUrl) {
-      navigate({ to: '/podcast/$id', params: { id: String(episode.collectionId) } })
-      return
-    }
 
     let feedUrl = episode.feedUrl
     if (!feedUrl) {

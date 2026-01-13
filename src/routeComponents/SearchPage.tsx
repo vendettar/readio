@@ -1,16 +1,5 @@
 import { useNavigate, useSearch } from '@tanstack/react-router'
-import {
-  CircleMinus,
-  CirclePlus,
-  FileAudio,
-  History,
-  Library,
-  Loader2,
-  Mic2,
-  Podcast,
-  Search,
-  Star,
-} from 'lucide-react'
+import { CircleMinus, CirclePlus, Library, Loader2, Mic2, Podcast, Search } from 'lucide-react'
 import React from 'react'
 import { SearchEpisodeItem } from '../components/GlobalSearch/SearchEpisodeItem'
 import { SearchResultItem } from '../components/GlobalSearch/SearchResultItem'
@@ -177,15 +166,6 @@ export default function SearchPage() {
                         subtitle={result.subtitle}
                         extraSubtitle={getStatusLabel()}
                         artworkUrl={result.artworkUrl}
-                        icon={
-                          result.type === 'subscription'
-                            ? Podcast
-                            : result.type === 'favorite'
-                              ? Star
-                              : result.type === 'history'
-                                ? History
-                                : FileAudio
-                        }
                         onClick={() => handleSelectLocalResult(result)}
                         className="py-3"
                       />

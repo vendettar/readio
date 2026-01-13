@@ -7,95 +7,29 @@
  * 3. RSS Feed Fetching & Parsing (XML feeds for audio playback)
  */
 
+import type { z } from 'zod'
 import { fetchJsonWithFallback, fetchTextWithFallback } from './fetchUtils'
 import { deduplicatedFetch, getRequestKey } from './requestManager'
-import { getJsonWithTtl, nsKey, setJsonWithTtl } from './storage'
-
-// ========== Types & Interfaces ==========
-
-/**
- * Common Podcast type used for Top Charts and internal references
- */
-export interface DiscoveryPodcast {
-  id: string
-  name: string
-  artistName: string
-  artworkUrl100: string
-  url: string // Original provider URL
-  genres: { genreId: string; name: string; url: string }[]
-  // Optional fields for Top Episodes
-  description?: string
-  releaseDate?: string // ISO date string
-  duration?: number // Duration in milliseconds (from API)
-  feedUrl?: string // Optional RSS feed URL (available for Editor's Picks/Lookup)
-}
-
-/**
- * Extended Podcast type returned by iTunes Search API
- */
-export interface Podcast {
-  collectionId: number
-  collectionName: string
-  artistName: string
-  artworkUrl100: string
-  artworkUrl600: string
-  feedUrl: string
-  collectionViewUrl: string
-  genres: string[]
-  artistId?: number
-  primaryGenreName?: string
-  trackCount?: number
-}
-
-/**
- * Episode result from iTunes Search API (entity=podcastEpisode)
- */
-export interface SearchEpisode {
-  trackId: number
-  trackName: string
-  collectionId: number
-  collectionName: string
-  artistName: string
-  artworkUrl100: string
-  artworkUrl600: string
-  episodeUrl: string // audio URL
-  episodeGuid?: string // RSS GUID discovered in the JSON!
-  releaseDate: string // ISO date
-  trackTimeMillis?: number // Duration in ms
-  description?: string
-  shortDescription?: string
-  feedUrl?: string // Podcast RSS Feed URL (returned by iTunes Episode API)
-}
-
-export interface Episode {
-  id: string
-  title: string
-  description: string // Plain text (stripped or from itunes:summary)
-  descriptionHtml?: string // Rich HTML from content:encoded
-  audioUrl: string
-  pubDate: string
-  artworkUrl?: string // Episode-specific artwork (fallback to show artwork)
-  duration?: number // Duration in seconds
-  // Extended metadata
-  seasonNumber?: number // itunes:season
-  episodeNumber?: number // itunes:episode
-  episodeType?: 'full' | 'trailer' | 'bonus' // itunes:episodeType
-  explicit?: boolean // itunes:explicit (yes/true = true)
-  link?: string // <link> to original page
-  fileSize?: number // enclosure length in bytes
-  // Podcasting 2.0
-  transcriptUrl?: string // podcast:transcript
-  chaptersUrl?: string // podcast:chapters
-}
-
-export interface ParsedFeed {
-  title: string
-  description: string
-  artworkUrl: string
-  episodes: Episode[]
-}
-
 import { getAppConfig } from './runtimeConfig'
+
+import type {
+  DiscoveryPodcast,
+  Episode,
+  ParsedFeed,
+  Podcast,
+  SearchEpisode,
+} from './schemas/discovery'
+
+export type { DiscoveryPodcast, Episode, ParsedFeed, Podcast, SearchEpisode }
+
+import {
+  DiscoveryPodcastSchema,
+  EpisodeSchema,
+  ParsedFeedSchema,
+  PodcastSchema,
+  SearchEpisodeSchema,
+} from './schemas/discovery'
+import { getJsonWithTtl, nsKey, setJsonWithTtl } from './storage'
 
 // ========== Constants & Config ==========
 
@@ -180,6 +114,27 @@ function setCache<T>(key: string, data: T): void {
   setJsonWithTtl(nsKey(EXPOSURE_API_PREFIX, key), data)
 }
 
+/**
+ * Validates data against a schema, logs a warning on failure, and returns the result or null.
+ */
+function parseOrNull<T>(
+  schema: z.ZodType<T>,
+  data: unknown,
+  tag: string,
+  rawItem?: unknown
+): T | null {
+  const result = schema.safeParse(data)
+  if (!result.success) {
+    console.warn(`[discoveryProvider] invalid ${tag}`, {
+      error: result.error,
+      data,
+      rawItem,
+    })
+    return null
+  }
+  return result.data
+}
+
 // ========== 1. Top Charts (RSS API) ==========
 
 export async function fetchTopPodcasts(
@@ -197,7 +152,8 @@ export async function fetchTopPodcasts(
     const data = await fetchJsonWithFallback<{ feed?: { results?: unknown[] } }>(url, {
       signal: signal || fetchSignal,
     })
-    const results = (data?.feed?.results || []).map((item) => mapRssResult(item as any))
+    const rawResults = (data?.feed?.results || []).map((item) => mapRssResult(item as any))
+    const results = rawResults.filter((r): r is DiscoveryPodcast => r !== null)
     setCache(cacheKey, results)
     return results
   })
@@ -218,7 +174,8 @@ export async function fetchTopEpisodes(
     const data = await fetchJsonWithFallback<{ feed?: { results?: unknown[] } }>(url, {
       signal: signal || fetchSignal,
     })
-    const results = (data?.feed?.results || []).map((item) => mapRssEpisodeResult(item as any))
+    const rawResults = (data?.feed?.results || []).map((item) => mapRssEpisodeResult(item as any))
+    const results = rawResults.filter((r): r is DiscoveryPodcast => r !== null)
     setCache(cacheKey, results)
     return results
   })
@@ -239,7 +196,8 @@ export async function fetchTopSubscriberPodcasts(
     const data = await fetchJsonWithFallback<{ feed?: { results?: unknown[] } }>(url, {
       signal: signal || fetchSignal,
     })
-    const results = (data?.feed?.results || []).map((item) => mapRssResult(item as any))
+    const rawResults = (data?.feed?.results || []).map((item) => mapRssResult(item as any))
+    const results = rawResults.filter((r): r is DiscoveryPodcast => r !== null)
     setCache(cacheKey, results)
     return results
   })
@@ -273,7 +231,8 @@ export async function searchPodcasts(
     const data = await fetchJsonWithFallback<{ results?: unknown[] }>(url, {
       signal: signal || fetchSignal,
     })
-    const results = (data?.results || []).map((item) => mapITunesResult(item as any))
+    const rawResults = (data?.results || []).map((item) => mapITunesResult(item as any))
+    const results = rawResults.filter((r): r is Podcast => r !== null)
     setCache(cacheKey, results)
     return results
   })
@@ -306,7 +265,8 @@ export async function searchEpisodes(
     const data = await fetchJsonWithFallback<{ results?: unknown[] }>(url, {
       signal: signal || fetchSignal,
     })
-    const results = (data?.results || []).map((item) => mapITunesEpisodeResult(item as any))
+    const rawResults = (data?.results || []).map((item) => mapITunesEpisodeResult(item as any))
+    const results = rawResults.filter((r): r is SearchEpisode => r !== null)
     setCache(cacheKey, results)
     return results
   })
@@ -328,7 +288,7 @@ export async function lookupPodcastsByIds(
     const data = await fetchJsonWithFallback<{ results?: unknown[] }>(url, {
       signal: signal || fetchSignal,
     })
-    const results = (data?.results || [])
+    const rawResults = (data?.results || [])
       .filter((r: unknown) => {
         const item = r as any
         return (
@@ -338,6 +298,7 @@ export async function lookupPodcastsByIds(
         )
       })
       .map((item) => mapLookupResult(item as any))
+    const results = rawResults.filter((r): r is DiscoveryPodcast => r !== null)
     setCache(cacheKey, results)
     return results
   })
@@ -347,7 +308,7 @@ export async function lookupPodcastFull(
   id: string,
   country = 'us',
   signal?: AbortSignal
-): Promise<Podcast> {
+): Promise<Podcast | null> {
   const cacheKey = `lookupFull:${country}:${id}`
   const cached = getCache<Podcast>(cacheKey)
   if (cached) return cached
@@ -365,7 +326,8 @@ export async function lookupPodcastFull(
         const item = r as any
         return item.kind === 'podcast' || item.wrapperType === 'collection'
       })
-      .map((item) => mapITunesResult(item as any))[0]
+      .map((item) => mapITunesResult(item as any))
+      .filter((r): r is Podcast => r !== null)[0]
     if (!result) {
       throw new Error('Podcast not found')
     }
@@ -379,16 +341,16 @@ export async function lookupPodcastFull(
  * This is 100% accurate for Top Episodes from RSS API
  */
 export async function lookupEpisode(
-  trackId: string,
+  episodeId: string,
   country = 'us',
   signal?: AbortSignal
 ): Promise<SearchEpisode | null> {
-  const cacheKey = `lookupEp:${country}:${trackId}`
+  const cacheKey = `lookupEp:${country}:${episodeId}`
   const cached = getCache<SearchEpisode>(cacheKey)
   if (cached) return cached
 
   const { BASE_URLS } = getConfig()
-  const params = new URLSearchParams({ id: trackId, country, entity: 'podcastEpisode' })
+  const params = new URLSearchParams({ id: episodeId, country, entity: 'podcastEpisode' })
   const url = `${BASE_URLS.LOOKUP}?${params}`
 
   return deduplicatedFetch(getRequestKey(url), async (fetchSignal) => {
@@ -399,6 +361,10 @@ export async function lookupEpisode(
     if (results.length === 0) return null
 
     const episode = mapITunesEpisodeResult(results[0] as any)
+    if (!episode) {
+      console.warn('[discoveryProvider] invalid episode found during lookup', results[0])
+      return null
+    }
     setCache(cacheKey, episode)
     return episode
   })
@@ -434,9 +400,11 @@ export async function lookupPodcastEpisodes(
     const results = data?.results || []
 
     // Filter out the podcast info (wrapperType='track' or 'collection') and keep episodes
-    const episodes = (results as Array<Record<string, unknown>>)
+    const rawEpisodes = (results as Array<Record<string, unknown>>)
       .filter((item) => item.wrapperType === 'podcastEpisode')
-      .map((item) => mapITunesEpisodeResult(item))
+      .map((item) => mapITunesEpisodeResult(item as any))
+
+    const episodes = rawEpisodes.filter((e): e is SearchEpisode => e !== null)
 
     setCache(cacheKey, episodes)
     return episodes
@@ -498,7 +466,7 @@ function parseRssXml(xmlText: string): ParsedFeed {
   // const isDefaultArtwork = normalizeUrl(episodeArtwork) === normalizeUrl(artworkUrl); // This line was part of the provided diff, but it's out of context here.
 
   const items = Array.from(doc.querySelectorAll('item'))
-  const episodes: Episode[] = items
+  const initialEpisodes = items
     .map((item): Episode | null => {
       const enclosure = item.querySelector('enclosure')
       const audioUrl = enclosure?.getAttribute('url') || ''
@@ -568,9 +536,9 @@ function parseRssXml(xmlText: string): ParsedFeed {
       const transcriptUrl = transcriptEl?.getAttribute('url') || undefined
       const chaptersUrl = chaptersEl?.getAttribute('url') || undefined
 
-      return {
-        id: (item.querySelector('guid')?.textContent || audioUrl).trim(),
-        title: item.querySelector('title')?.textContent || 'Untitled Episode',
+      const episodeData = {
+        id: (item.querySelector('guid')?.textContent || audioUrl || '').trim(),
+        title: item.querySelector('title')?.textContent?.trim(),
         description: (
           getITunesTag(item, 'summary')?.textContent ||
           item.querySelector('description')?.textContent ||
@@ -578,106 +546,131 @@ function parseRssXml(xmlText: string): ParsedFeed {
         ).trim(),
         descriptionHtml,
         audioUrl,
-        pubDate: item.querySelector('pubDate')?.textContent || '',
+        pubDate: item.querySelector('pubDate')?.textContent?.trim(),
         artworkUrl: episodeArtwork && !isDefaultArtwork ? episodeArtwork : undefined,
         duration,
-        seasonNumber: Number.isNaN(seasonNumber!) ? undefined : seasonNumber,
-        episodeNumber: Number.isNaN(episodeNumber!) ? undefined : episodeNumber,
+        seasonNumber:
+          seasonNumber === null || Number.isNaN(seasonNumber) ? undefined : seasonNumber,
+        episodeNumber:
+          episodeNumber === null || Number.isNaN(episodeNumber) ? undefined : episodeNumber,
         episodeType,
-        explicit: explicit || undefined, // Only set if true
+        explicit: explicit || undefined,
         link,
-        fileSize: Number.isNaN(fileSize!) ? undefined : fileSize,
+        fileSize: fileSize === null || Number.isNaN(fileSize) ? undefined : fileSize,
         transcriptUrl,
         chaptersUrl,
       }
+
+      return parseOrNull(EpisodeSchema, episodeData, 'episode in RSS', item)
     })
     .filter((e): e is Episode => e !== null)
 
-  return { title, description, artworkUrl, episodes }
+  const feedData = { title, description, artworkUrl, episodes: initialEpisodes }
+  const feed = parseOrNull(ParsedFeedSchema, feedData, 'feed schema')
+  if (!feed) {
+    throw new Error('Invalid feed schema')
+  }
+
+  return feed
 }
 
 // ========== Mapping Helpers ==========
 
-function mapRssResult(item: any): DiscoveryPodcast {
-  return {
-    id: String(item.id || ''),
-    name: item.name || '',
-    artistName: item.artistName || '',
-    artworkUrl100: item.artworkUrl100 || '',
-    url: item.url || '',
-    genres: Array.isArray(item.genres) ? item.genres : [],
+function mapRssResult(item: any): DiscoveryPodcast | null {
+  const data = {
+    id: item.id ? String(item.id) : undefined,
+    name: item.name,
+    artistName: item.artistName,
+    artworkUrl100: item.artworkUrl100,
+    url: item.url,
+    genres: Array.isArray(item.genres)
+      ? item.genres.map((g: any, i: number) => {
+          if (typeof g === 'string') {
+            return { genreId: String(i), name: g, url: undefined }
+          }
+          const genreId = String(g.genreId ?? i)
+          const rawName = typeof g.name === 'string' ? g.name.trim() : ''
+          return {
+            genreId,
+            name: rawName || genreId,
+            url: g.url,
+          }
+        })
+      : [],
   }
+  return parseOrNull(DiscoveryPodcastSchema, data, 'RSS podcast', item)
 }
 
-function mapRssEpisodeResult(item: any): DiscoveryPodcast {
-  return {
-    id: String(item.id || ''),
-    name: item.name || '',
-    artistName: item.artistName || '',
-    artworkUrl100: item.artworkUrl100 || '',
-    url: item.url || '',
+function mapRssEpisodeResult(item: any): DiscoveryPodcast | null {
+  const data = {
+    id: item.id ? String(item.id) : undefined,
+    name: item.name,
+    artistName: item.artistName,
+    artworkUrl100: item.artworkUrl100,
+    url: item.url,
     genres: [],
-    description: item.description || '',
-    releaseDate: item.releaseDate || '',
-    duration: item.duration || undefined, // Duration in milliseconds from API
+    description: item.description,
+    releaseDate: item.releaseDate,
+    duration: item.duration,
   }
+  return parseOrNull(DiscoveryPodcastSchema, data, 'RSS episode', item)
 }
 
-function mapITunesResult(item: any): Podcast {
-  return {
-    collectionId: item.collectionId || 0,
-    // Fallback: use trackName if collectionName is missing
-    collectionName: item.collectionName || item.trackName || '',
-    artistName: item.artistName || '',
-    artworkUrl100: item.artworkUrl100 || '',
-    artworkUrl600: item.artworkUrl600 || '',
-    feedUrl: item.feedUrl || '',
-    collectionViewUrl: item.collectionViewUrl || '',
-    genres: item.genres || [],
+function mapITunesResult(item: any): Podcast | null {
+  const data = {
+    collectionId: item.collectionId,
+    collectionName: item.collectionName || item.trackName,
+    artistName: item.artistName,
+    artworkUrl100: item.artworkUrl100,
+    artworkUrl600: item.artworkUrl600,
+    feedUrl: item.feedUrl,
+    collectionViewUrl: item.collectionViewUrl,
+    genres: item.genres,
     artistId: item.artistId,
     primaryGenreName: item.primaryGenreName,
     trackCount: item.trackCount,
   }
+  return parseOrNull(PodcastSchema, data, 'iTunes podcast', item)
 }
 
-function mapITunesEpisodeResult(item: any): SearchEpisode {
-  // iTunes Episode API returns: artworkUrl60, artworkUrl160, artworkUrl600 (NOT artworkUrl100)
-  // We use artworkUrl160 as the "100" equivalent for consistency with Podcast API
-  const artworkUrl100 = item.artworkUrl160 || item.artworkUrl60 || ''
+function mapITunesEpisodeResult(item: any): SearchEpisode | null {
+  const artworkUrl100 = item.artworkUrl160 || item.artworkUrl60
   const artworkUrl600 = item.artworkUrl600 || artworkUrl100
 
-  return {
-    trackId: item.trackId || 0,
-    // Fallback: use collectionName if trackName is missing (for episodes)
-    trackName: item.trackName || item.collectionName || '',
-    collectionId: item.collectionId || 0,
-    // Fallback: use trackName if collectionName is missing (for podcast name)
-    collectionName: item.collectionName || item.trackName || '',
-    artistName: item.artistName || '',
+  const data = {
+    trackId: item.trackId,
+    trackName: item.trackName || item.collectionName,
+    collectionId: item.collectionId,
+    collectionName: item.collectionName || item.trackName,
+    artistName: item.artistName,
     artworkUrl100,
     artworkUrl600,
-    episodeUrl: item.episodeUrl || '',
+    episodeUrl: item.episodeUrl,
     episodeGuid: item.episodeGuid,
-    releaseDate: item.releaseDate || '',
+    releaseDate: item.releaseDate,
     trackTimeMillis: item.trackTimeMillis,
-    description: item.description || item.shortDescription || '',
-    shortDescription: item.shortDescription || '',
+    description: item.description || item.shortDescription,
+    shortDescription: item.shortDescription,
     feedUrl: item.feedUrl,
   }
+  return parseOrNull(SearchEpisodeSchema, data, 'iTunes episode', item)
 }
 
-function mapLookupResult(item: any): DiscoveryPodcast {
-  return {
-    id: String(item.collectionId || ''),
-    name: item.collectionName || '',
-    artistName: item.artistName || '',
-    artworkUrl100: item.artworkUrl100 || '',
-    url: item.collectionViewUrl || '',
-    genres: (item.genres || []).map((name: string, i: number) => ({
-      genreId: String(i),
-      name,
-      url: '',
-    })),
+function mapLookupResult(item: any): DiscoveryPodcast | null {
+  const data = {
+    id: item.collectionId ? String(item.collectionId) : undefined,
+    name: item.collectionName,
+    artistName: item.artistName,
+    artworkUrl100: item.artworkUrl100,
+    url: item.collectionViewUrl,
+    genres: Array.isArray(item.genres)
+      ? item.genres.map((name: string, i: number) => ({
+          genreId: String(i),
+          name,
+          url: undefined, // Relaxed in schema
+        }))
+      : [], // Unified default to []
     feedUrl: item.feedUrl,
   }
+  return parseOrNull(DiscoveryPodcastSchema, data, 'lookup result', item)
 }

@@ -3,10 +3,11 @@ import { Play } from 'lucide-react'
 import type React from 'react'
 import { useI18n } from '../../hooks/useI18n'
 import { cn } from '../../lib/utils'
+import { getDiscoveryArtworkUrl } from '../../libs/imageUtils'
 import { Button } from '../ui/button'
 
 interface InteractiveArtworkProps {
-  src: string
+  src?: string
   alt?: string
   className?: string
   // Navigation props
@@ -98,6 +99,7 @@ export function InteractiveArtwork({
   )
 
   const resolvedPlayIconSize = playIconSize ?? playIconSizeMap[size]
+  const artworkUrl = getDiscoveryArtworkUrl(src)
 
   return (
     <div
@@ -116,7 +118,7 @@ export function InteractiveArtwork({
         >
           <Link to={to as any} params={params as any} className="block w-full h-full">
             <img
-              src={src}
+              src={artworkUrl}
               alt={alt}
               referrerPolicy={referrerPolicy}
               className={cn(
@@ -128,7 +130,7 @@ export function InteractiveArtwork({
         </Button>
       ) : (
         <img
-          src={src}
+          src={artworkUrl}
           alt={alt}
           referrerPolicy={referrerPolicy}
           className={cn(
