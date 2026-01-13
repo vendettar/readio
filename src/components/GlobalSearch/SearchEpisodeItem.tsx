@@ -12,6 +12,7 @@ import {
 import { stripHtml } from '../../libs/htmlUtils'
 import { toast } from '../../libs/toast'
 import { useExploreStore } from '../../store/exploreStore'
+import { BaseEpisodeRow } from '../EpisodeRow/BaseEpisodeRow'
 import { InteractiveArtwork } from '../interactive/InteractiveArtwork'
 import { InteractiveTitle } from '../interactive/InteractiveTitle'
 import { Button } from '../ui/button'
@@ -94,143 +95,113 @@ export function SearchEpisodeItem({ episode, onPlay }: SearchEpisodeItemProps) {
   const artworkUrl = episode.artworkUrl600 || episode.artworkUrl100
 
   return (
-    <div className="group/episode relative smart-divider-group pr-4">
-      {/* Hover Background - Full area visual only */}
-      <div className="absolute inset-y-0 -left-[var(--page-gutter-x)] right-0 rounded-lg bg-foreground/5 opacity-0 group-hover/episode:opacity-100 transition-opacity duration-300 pointer-events-none" />
-
-      <div className="relative flex items-center gap-4 py-3">
-        {/* Artwork with Navigation & Play */}
-        <div className="relative flex-shrink-0 z-20">
-          <InteractiveArtwork
-            src={artworkUrl}
-            to={podcastId ? '/podcast/$id/episode/$episodeId' : undefined}
-            params={
-              podcastId
-                ? {
-                    id: podcastId,
-                    episodeId: encodedEpisodeId,
-                  }
-                : undefined
-            }
-            onPlay={onPlay}
-            playButtonSize="md"
-            playIconSize={20}
-            hoverGroup="episode"
-            size="xl"
-          />
-        </div>
-
-        <div className="flex-1 min-w-0 flex items-center justify-between">
-          <div className="flex-1 min-w-0 pr-12 py-1">
-            {/* Date & Podcast Title */}
-            <div className="text-xxs text-muted-foreground font-medium mb-0.5 uppercase tracking-wider leading-tight line-clamp-1">
-              {relativeTime && <span>{relativeTime}</span>}
-              {relativeTime && episode.collectionName && <span className="mx-1">•</span>}
-              {episode.collectionName && <span>{episode.collectionName}</span>}
-            </div>
-
-            {/* Title */}
-            <div className="mb-0.5 z-20 relative">
-              <InteractiveTitle
-                title={episode.trackName}
-                to={podcastId ? '/podcast/$id/episode/$episodeId' : undefined}
-                params={
-                  podcastId
-                    ? {
-                        id: podcastId,
-                        episodeId: encodedEpisodeId,
-                      }
-                    : undefined
+    <BaseEpisodeRow
+      artwork={
+        <InteractiveArtwork
+          src={artworkUrl}
+          to={podcastId ? '/podcast/$id/episode/$episodeId' : undefined}
+          params={
+            podcastId
+              ? {
+                  id: podcastId,
+                  episodeId: encodedEpisodeId,
                 }
-                className="text-sm leading-tight"
-              />
-            </div>
-
-            {/* Description */}
-            {cleanDescription && (
-              <p className="text-xs text-muted-foreground leading-snug line-clamp-3 font-light">
-                {cleanDescription}
-              </p>
+              : undefined
+          }
+          onPlay={onPlay}
+          playButtonSize="md"
+          playIconSize={20}
+          hoverGroup="episode"
+          size="xl"
+        />
+      }
+      title={
+        <InteractiveTitle
+          title={episode.trackName}
+          to={podcastId ? '/podcast/$id/episode/$episodeId' : undefined}
+          params={
+            podcastId
+              ? {
+                  id: podcastId,
+                  episodeId: encodedEpisodeId,
+                }
+              : undefined
+          }
+          className="text-sm leading-tight"
+        />
+      }
+      subtitle={
+        <div className="flex items-center gap-1">
+          {relativeTime && <span>{relativeTime}</span>}
+          {relativeTime && episode.collectionName && <span>•</span>}
+          {episode.collectionName && <span className="line-clamp-1">{episode.collectionName}</span>}
+        </div>
+      }
+      description={cleanDescription}
+      meta={duration}
+      actions={
+        <>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={handleToggleFavorite}
+            className={cn(
+              'w-9 h-9 text-primary hover:bg-transparent hover:text-primary transition-opacity duration-200 relative z-20'
             )}
-          </div>
+            aria-label={favorited ? t('ariaRemoveFavorite') : t('ariaAddFavorite')}
+          >
+            <Star
+              size={16}
+              className={cn(
+                'stroke-2',
+                favorited && 'fill-current',
+                isSaving && 'animate-pulse opacity-50'
+              )}
+            />
+          </Button>
 
-          {/* Right Side Actions */}
-          <div className="flex items-center flex-shrink-0 gap-12">
-            {duration && (
-              <span className="text-xs text-muted-foreground font-medium whitespace-nowrap w-20 text-left">
-                {duration}
-              </span>
-            )}
-
-            <div className="flex items-center gap-1">
+          <DropdownMenu open={isMenuOpen} onOpenChange={setIsMenuOpen}>
+            <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={handleToggleFavorite}
                 className={cn(
-                  'w-9 h-9 text-primary hover:bg-transparent hover:text-primary transition-opacity duration-200 relative z-20',
-                  favorited || isMenuOpen
-                    ? 'opacity-100'
-                    : 'opacity-0 group-hover/episode:opacity-100'
+                  'w-9 h-9 text-primary hover:bg-transparent hover:opacity-80 transition-opacity duration-200 relative z-20',
+                  isMenuOpen && 'opacity-100'
                 )}
-                aria-label={favorited ? t('ariaRemoveFavorite') : t('ariaAddFavorite')}
+                aria-label={t('ariaMoreActions')}
+              >
+                <MoreHorizontal size={16} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              sideOffset={8}
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
+              className="rounded-xl shadow-2xl border border-border/50 bg-popover/95 backdrop-blur-xl p-0 overflow-hidden"
+            >
+              <DropdownMenuItem
+                onSelect={(e) => {
+                  handleToggleFavorite(e as unknown as React.MouseEvent)
+                }}
+                className="text-sm font-medium focus:bg-primary focus:text-primary-foreground"
               >
                 <Star
-                  size={16}
+                  size={14}
                   className={cn(
-                    'stroke-2',
+                    'mr-2',
                     favorited && 'fill-current',
                     isSaving && 'animate-pulse opacity-50'
                   )}
                 />
-              </Button>
-
-              <DropdownMenu open={isMenuOpen} onOpenChange={setIsMenuOpen}>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className={cn(
-                      'w-9 h-9 text-primary hover:bg-transparent hover:opacity-80 transition-opacity duration-200 relative z-20',
-                      isMenuOpen ? 'opacity-100' : 'opacity-0 group-hover/episode:opacity-100'
-                    )}
-                    aria-label={t('ariaMoreActions')}
-                  >
-                    <MoreHorizontal size={16} />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent
-                  align="end"
-                  sideOffset={8}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={(e) => e.stopPropagation()}
-                  className="rounded-xl shadow-2xl border border-border/50 bg-popover/95 backdrop-blur-xl p-0 overflow-hidden"
-                >
-                  <DropdownMenuItem
-                    onSelect={(e) => {
-                      handleToggleFavorite(e as unknown as React.MouseEvent)
-                    }}
-                    className="text-sm font-medium focus:bg-primary focus:text-primary-foreground"
-                  >
-                    <Star
-                      size={14}
-                      className={cn(
-                        'mr-2',
-                        favorited && 'fill-current',
-                        isSaving && 'animate-pulse opacity-50'
-                      )}
-                    />
-                    {favorited ? t('favoritesRemove') : t('favoritesAdd')}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Separator */}
-      <div className="absolute bottom-0 left-0 right-4 h-px bg-border group-hover/episode:opacity-0 transition-opacity smart-divider" />
-    </div>
+                {favorited ? t('favoritesRemove') : t('favoritesAdd')}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </>
+      }
+      descriptionLines={3}
+    />
   )
 }

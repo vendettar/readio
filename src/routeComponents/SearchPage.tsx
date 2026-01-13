@@ -90,10 +90,7 @@ export default function SearchPage() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div
-        className="py-14 max-w-screen-2xl mx-auto min-h-full"
-        style={{ paddingLeft: 'var(--page-margin-x)', paddingRight: 'var(--page-margin-x)' }}
-      >
+      <div className="w-full max-w-5xl mx-auto px-[var(--page-gutter-x)] pt-4 pb-8">
         <header className="mb-12">
           <h1 className="text-4xl font-bold text-foreground tracking-tight mb-3">
             {query ? `"${query}"` : t('searchPlaceholderGlobal')}
@@ -143,34 +140,20 @@ export default function SearchPage() {
               <section>
                 <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
                   <Library className="w-5 h-5" />
-                  {t('searchInLibrary') || 'In Your Library'}
+                  {t('searchInLibrary')}
                 </h2>
                 <div className="space-y-2">
-                  {local.map((result) => {
-                    const getStatusLabel = () => {
-                      switch (result.type) {
-                        case 'subscription':
-                          return t('badgeSubscribed')
-                        case 'favorite':
-                          return t('badgeFavorited')
-                        case 'history':
-                          return t('historyTitle')
-                        case 'file':
-                          return t('filesTitle')
-                      }
-                    }
-                    return (
-                      <SearchResultItem
-                        key={result.id}
-                        title={result.title}
-                        subtitle={result.subtitle}
-                        extraSubtitle={getStatusLabel()}
-                        artworkUrl={result.artworkUrl}
-                        onClick={() => handleSelectLocalResult(result)}
-                        className="py-3"
-                      />
-                    )
-                  })}
+                  {local.map((result) => (
+                    <SearchResultItem
+                      key={result.id}
+                      title={result.title}
+                      subtitle={result.subtitle}
+                      extraSubtitle={result.extraSubtitle}
+                      artworkUrl={result.artworkUrl}
+                      onClick={() => handleSelectLocalResult(result)}
+                      className="py-3"
+                    />
+                  ))}
                 </div>
               </section>
             )}
@@ -184,14 +167,14 @@ export default function SearchPage() {
                 </h2>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
                   {podcasts.map((podcast) => {
-                    const subscribed = isSubscribed(podcast.feedUrl)
+                    const subscribed = podcast.feedUrl ? isSubscribed(podcast.feedUrl) : false
                     return (
                       <PodcastCard
                         key={podcast.collectionId}
                         id={String(podcast.collectionId)}
                         title={podcast.collectionName}
                         subtitle={podcast.artistName}
-                        artworkUrl={podcast.artworkUrl600 || podcast.artworkUrl100}
+                        artworkUrl={podcast.artworkUrl600 || podcast.artworkUrl100 || ''}
                         onClick={() =>
                           navigate({
                             to: '/podcast/$id',
@@ -204,7 +187,7 @@ export default function SearchPage() {
                             icon: subscribed ? <CircleMinus size={14} /> : <CirclePlus size={14} />,
                             onClick: () => {
                               if (subscribed) {
-                                unsubscribe(podcast.feedUrl)
+                                if (podcast.feedUrl) unsubscribe(podcast.feedUrl)
                               } else {
                                 subscribe(podcast)
                               }

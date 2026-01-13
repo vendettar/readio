@@ -255,10 +255,10 @@ export const useExploreStore = create<ExploreState>((set, get) => ({
   },
   subscribe: async (podcast) => {
     const sub: Subscription = {
-      feedUrl: podcast.feedUrl,
-      title: podcast.collectionName,
-      author: podcast.artistName,
-      artworkUrl: podcast.artworkUrl600 || podcast.artworkUrl100,
+      feedUrl: podcast.feedUrl ?? '',
+      title: podcast.collectionName ?? '',
+      author: podcast.artistName ?? '',
+      artworkUrl: podcast.artworkUrl600 || podcast.artworkUrl100 || '',
       addedAt: Date.now(),
       collectionId: podcast.collectionId?.toString(),
     }
@@ -299,16 +299,16 @@ export const useExploreStore = create<ExploreState>((set, get) => ({
     const key = `${podcast.feedUrl}::${episode.audioUrl}`
     const fav: Favorite = {
       key,
-      feedUrl: podcast.feedUrl,
-      audioUrl: episode.audioUrl,
-      episodeTitle: episode.title,
-      podcastTitle: podcast.collectionName,
-      artworkUrl: podcast.artworkUrl600 || podcast.artworkUrl100,
+      feedUrl: podcast.feedUrl ?? '',
+      podcastTitle: podcast.collectionName ?? '',
+      episodeTitle: episode.title ?? '',
+      pubDate: episode.pubDate, // Date | undefined is allowed in Favorite
+      audioUrl: episode.audioUrl ?? '',
+      duration: episode.duration ?? 0,
+      artworkUrl: podcast.artworkUrl600 || podcast.artworkUrl100 || '',
       addedAt: Date.now(),
       // Episode metadata for display
       description: episode.description,
-      pubDate: episode.pubDate,
-      duration: episode.duration,
       episodeArtworkUrl: episode.artworkUrl,
       episodeId: episode.id,
     }

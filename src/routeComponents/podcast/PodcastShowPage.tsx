@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, useParams } from '@tanstack/react-router'
 import { Check, ChevronRight, Play, Plus } from 'lucide-react'
 import React, { useState } from 'react'
-import { EpisodeCard } from '../../components/Explore/EpisodeCard'
+import { EpisodeRow } from '../../components/EpisodeRow/EpisodeRow'
 import { Button } from '../../components/ui/button'
 import { useEpisodePlayback } from '../../hooks/useEpisodePlayback'
 import { useI18n } from '../../hooks/useI18n'
@@ -70,7 +70,9 @@ export default function PodcastShowPage() {
     if (!podcast) return
     try {
       if (isSubscribed) {
-        await unsubscribe(podcast.feedUrl)
+        if (podcast.feedUrl) {
+          await unsubscribe(podcast.feedUrl)
+        }
       } else {
         await subscribe(podcast)
       }
@@ -121,10 +123,7 @@ export default function PodcastShowPage() {
 
   return (
     <div className="h-full overflow-y-auto bg-background text-foreground custom-scrollbar">
-      <div
-        className="py-10 sm:py-14 max-w-screen-2xl mx-auto"
-        style={{ paddingLeft: 'var(--page-margin-x)', paddingRight: 'var(--page-margin-x)' }}
-      >
+      <div className="w-full max-w-5xl mx-auto px-[var(--page-gutter-x)] pt-8 pb-32">
         {/* Hero Section */}
         <div className="flex flex-col md:flex-row gap-8 mb-10">
           {/* Artwork */}
@@ -290,12 +289,13 @@ export default function PodcastShowPage() {
             <p className="text-muted-foreground py-8 text-center">{t('errorFeedLoadFailed')}</p>
           ) : feed?.episodes && feed.episodes.length > 0 ? (
             <div className="flex flex-col">
-              {feed.episodes.slice(0, 8).map((episode) => (
-                <EpisodeCard
+              {feed.episodes.slice(0, 8).map((episode, index) => (
+                <EpisodeRow
                   key={episode.id}
                   episode={episode}
                   podcast={podcast}
                   onPlay={() => playEpisode(episode, podcast)}
+                  isLast={index === 7} // Slice is 8, so index 7 is last visual item
                 />
               ))}
 

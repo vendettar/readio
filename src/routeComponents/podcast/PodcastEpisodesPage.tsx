@@ -4,7 +4,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useParams } from '@tanstack/react-router'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { EpisodeCard } from '../../components/Explore/EpisodeCard'
+import { EpisodeRow } from '../../components/EpisodeRow/EpisodeRow'
 import { useEpisodePlayback } from '../../hooks/useEpisodePlayback'
 import { useI18n } from '../../hooks/useI18n'
 import { type Episode, fetchPodcastFeed, lookupPodcastFull } from '../../libs/discoveryProvider'
@@ -151,10 +151,7 @@ export default function PodcastEpisodesPage() {
 
   return (
     <div className="h-full overflow-y-auto bg-background text-foreground custom-scrollbar">
-      <div
-        className="py-10 sm:py-14 max-w-screen-2xl mx-auto"
-        style={{ paddingLeft: 'var(--page-margin-x)', paddingRight: 'var(--page-margin-x)' }}
-      >
+      <div className="w-full max-w-5xl mx-auto px-[var(--page-gutter-x)] pt-4 pb-32">
         {/* Episodes List Grouped by Year */}
         <div className="flex flex-col">
           {groupedEpisodes.map(({ year, episodes: yearEpisodes }) => (
@@ -165,12 +162,13 @@ export default function PodcastEpisodesPage() {
               </div>
 
               {/* Episodes for this year */}
-              {yearEpisodes.map((episode) => (
-                <EpisodeCard
+              {yearEpisodes.map((episode, index) => (
+                <EpisodeRow
                   key={episode.id}
                   episode={episode}
                   podcast={podcast}
                   onPlay={() => playEpisode(episode, podcast)}
+                  isLast={index === yearEpisodes.length - 1}
                 />
               ))}
             </div>

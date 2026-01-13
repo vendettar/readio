@@ -169,7 +169,9 @@ export default function ExplorePage() {
         )
 
         if (isSubscribed) {
-          await useExploreStore.getState().unsubscribe(fullPodcast.feedUrl)
+          if (fullPodcast?.feedUrl) {
+            await useExploreStore.getState().unsubscribe(fullPodcast.feedUrl)
+          }
         } else {
           await useExploreStore.getState().subscribe(fullPodcast)
         }
@@ -322,10 +324,7 @@ export default function ExplorePage() {
 
   return (
     <div className="h-full overflow-y-auto bg-background text-foreground custom-scrollbar">
-      <div
-        className="py-10 sm:py-14 max-w-screen-2xl mx-auto min-h-full"
-        style={{ paddingLeft: 'var(--page-margin-x)', paddingRight: 'var(--page-margin-x)' }}
-      >
+      <div className="w-full max-w-5xl mx-auto px-[var(--page-gutter-x)] pt-10 sm:pt-14 pb-14 min-h-full">
         {/* Header */}
         <header className="mb-10">
           <h1 className="text-3xl sm:text-4xl font-bold tracking-tight mb-2">

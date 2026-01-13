@@ -34,7 +34,7 @@ export const PodcastShowCard = React.memo(
         id={podcast.id}
         title={podcast.name}
         subtitle={podcast.artistName}
-        artworkUrl={podcast.artworkUrl100}
+        artworkUrl={podcast.artworkUrl100 || ''}
         rank={index + 1}
         className="flex-shrink-0 w-[var(--item-width)] snap-start"
         onPlay={onPlayLatest ? () => onPlayLatest(podcast) : undefined}

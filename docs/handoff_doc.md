@@ -130,6 +130,16 @@ UI 操作图标来自 `lucide-react`；SVG 仅用于 logo 与交互绑定资源�
    - **播放按钮可见性**：仅当调用方传入 `onPlay` 时显示播放按钮；未提供播放能力的卡片不得显示播放按钮（避免误导）。
    - **Explore 例外**：Explore 的 Top Shows / Top Subscriber / Editor's Picks 可通过 `onPlayLatest` 拉取 RSS 并播放最新一集，因此允许显示播放按钮；Top Episodes 为单集榜单，播放入口走 `onPlay`。
 
+5. **EpisodeRow & BaseEpisodeRow** (`src/components/EpisodeRow/`)
+   - **BaseEpisodeRow**: 纯展示组件 (Presentational Component)。
+     - 职责：负责单集列表行的布局、样式、悬浮效果、分割线逻辑。
+     - Props: 接收 `artwork`, `title`, `subtitle`, `description`, `meta` (duration), `actions` (buttons/menu) 作为 ReactNode 插槽。
+     - 样式：内置 `smart-divider` 和 hover 背景逻辑。
+   - **EpisodeRow**: 业务逻辑容器 (Container Component)。
+     - 职责：连接 Store 和 Hooks (`useEpisodePlayback`, `useExploreStore`)，处理播放、收藏、数据格式化。
+     - 使用：在 `PodcastShowPage`, `PodcastEpisodesPage`, `SearchPage` 等场景直接使用。
+     - 扩展：对于 `FavoritesPage` 和 `HistoryPage` 等有特殊交互需求的页面，直接复用 `BaseEpisodeRow` 并通过插槽注入自定义逻辑。
+
 ### Theme Accent（强调色）
 
 - 强调色选项与 Settings UI 绑定为同一套 source of truth：`src/store/themeStore.ts`

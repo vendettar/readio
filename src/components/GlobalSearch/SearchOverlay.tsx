@@ -62,6 +62,7 @@ function LocalItem({ item, onClick }: { item: LocalSearchResult; onClick: () => 
     <SearchResultItem
       title={item.title}
       subtitle={item.subtitle}
+      extraSubtitle={item.extraSubtitle}
       artworkUrl={item.artworkUrl}
       onClick={onClick}
     />

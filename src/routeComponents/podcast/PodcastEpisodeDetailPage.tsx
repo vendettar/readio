@@ -139,7 +139,8 @@ export default function PodcastEpisodeDetailPage() {
 
   // Favorite state
   const { addFavorite, removeFavorite, isFavorited } = useExploreStore()
-  const favorited = podcast && episode ? isFavorited(podcast.feedUrl, episode.audioUrl) : false
+  const favorited =
+    podcast && episode ? isFavorited(podcast.feedUrl || '', episode.audioUrl || '') : false
 
   // Player actions
   const setAudioUrl = usePlayerStore((state) => state.setAudioUrl)
@@ -269,10 +270,7 @@ export default function PodcastEpisodeDetailPage() {
 
   return (
     <div className="h-full overflow-y-auto bg-background text-foreground custom-scrollbar">
-      <div
-        className="py-10 sm:py-14 max-w-screen-2xl mx-auto"
-        style={{ paddingLeft: 'var(--page-margin-x)', paddingRight: 'var(--page-margin-x)' }}
-      >
+      <div className="w-full max-w-4xl mx-auto px-[var(--page-gutter-x)] pt-2 pb-32">
         {/* Hero Section */}
         <div className="flex flex-col md:flex-row gap-8 mb-10">
           {/* Artwork */}

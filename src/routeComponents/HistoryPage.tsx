@@ -2,6 +2,7 @@
 import { useNavigate } from '@tanstack/react-router'
 import { Clock, MoreHorizontal, Play, Star, Trash2 } from 'lucide-react'
 import React, { useEffect, useState } from 'react'
+import { BaseEpisodeRow } from '../components/EpisodeRow/BaseEpisodeRow'
 import { InteractiveArtwork } from '../components/interactive/InteractiveArtwork'
 import { InteractiveTitle } from '../components/interactive/InteractiveTitle'
 import { Button } from '../components/ui/button'
@@ -148,7 +149,7 @@ export default function HistoryPage() {
 
   return (
     <div className="h-full overflow-y-auto custom-scrollbar">
-      <div className="px-12 py-14 max-w-screen-2xl mx-auto min-h-full">
+      <div className="w-full max-w-5xl mx-auto px-[var(--page-gutter-x)] pt-4 pb-32">
         <header className="mb-12">
           <h1 className="text-4xl font-bold text-foreground tracking-tight">{t('historyTitle')}</h1>
         </header>
@@ -174,7 +175,7 @@ export default function HistoryPage() {
         {/* Sessions list - EpisodeCard-like design */}
         {!isLoading && sessions.length > 0 && (
           <div className="space-y-0">
-            {sessions.map((session) => {
+            {sessions.map((session, index) => {
               const favorited = isFavorited(session)
               const durationText = session.duration ? formatDuration(session.duration, t) : null
               const cleanDescription = session.description ? stripHtml(session.description) : ''
@@ -182,13 +183,12 @@ export default function HistoryPage() {
               const canFavorite = !!(session.podcastFeedUrl && session.audioUrl)
 
               return (
-                <div key={session.id} className="group/session relative smart-divider-group pr-4">
-                  {/* Hover Background */}
-                  <div className="absolute inset-y-0 -left-[var(--page-gutter-x)] right-0 rounded-lg bg-foreground/5 opacity-0 group-hover/session:opacity-100 transition-opacity duration-300 pointer-events-none" />
-
-                  <div className="relative flex items-center gap-4 py-3 z-10">
-                    {/* Artwork with Navigation & Play */}
-                    {hasArtwork && (
+                <BaseEpisodeRow
+                  key={session.id}
+                  isLast={index === sessions.length - 1}
+                  descriptionLines={1}
+                  artwork={
+                    hasArtwork ? (
                       <div className="relative flex-shrink-0 z-20">
                         {(() => {
                           const collectionId = subscriptionMap.get(session.podcastFeedUrl || '')
@@ -210,170 +210,148 @@ export default function HistoryPage() {
                               onPlay={() => handlePlaySession(session)}
                               playButtonSize="sm"
                               playIconSize={14}
-                              hoverGroup="session"
+                              hoverGroup="episode"
                               size="lg"
                             />
                           )
                         })()}
                       </div>
-                    )}
-
-                    <div className="flex-1 min-w-0 flex items-center justify-between">
-                      <div className="flex-1 min-w-0 pr-12 py-1">
-                        {/* Title - Add play button if no artwork */}
-                        <div className="mb-0.5 z-20 relative">
-                          {!hasArtwork && (
-                            <div className="absolute left-0 top-0 bottom-0 -translate-x-full w-[var(--page-gutter-x)] flex items-center justify-center opacity-0 group-hover/session:opacity-100 transition-opacity duration-200 z-20 pointer-events-none">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={() => handlePlaySession(session)}
-                                aria-label={t('btnPlayOnly')}
-                                className="w-6 h-6 pointer-events-auto hover:bg-transparent"
-                              >
-                                <Play size={12} className="text-primary fill-current ml-0.5" />
-                              </Button>
-                            </div>
-                          )}
-                          {(() => {
-                            const collectionId = subscriptionMap.get(session.podcastFeedUrl || '')
-                            const episodeId = session.episodeId // Only GUID for navigation
-
-                            return (
-                              <InteractiveTitle
-                                title={session.title}
-                                to={
-                                  collectionId && episodeId
-                                    ? '/podcast/$id/episode/$episodeId'
-                                    : undefined
-                                }
-                                params={
-                                  collectionId && episodeId
-                                    ? { id: collectionId, episodeId: encodeURIComponent(episodeId) }
-                                    : undefined
-                                }
-                                onClick={
-                                  !(collectionId && episodeId)
-                                    ? () => handlePlaySession(session)
-                                    : undefined
-                                }
-                                className="text-sm leading-tight"
-                              />
-                            )
-                          })()}
-                        </div>
-
-                        {/* Podcast Title & Release Date */}
-                        {(session.podcastTitle || session.publishedAt) && (
-                          <div className="text-xs text-muted-foreground/80 mb-0.5 line-clamp-1">
-                            {session.podcastTitle}
-                            {session.podcastTitle && session.publishedAt && ' • '}
-                            {session.publishedAt && (
-                              <span>{formatDateStandard(session.publishedAt)}</span>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Description */}
-                        {cleanDescription && (
-                          <p className="text-xs text-muted-foreground leading-snug line-clamp-1 font-light mb-1">
-                            {cleanDescription}
-                          </p>
-                        )}
-
-                        {/* Played At and Progress - moved to bottom with smaller font */}
-                        <div className="text-xxs text-muted-foreground/60 font-medium leading-tight">
-                          {(() => {
-                            const d = new Date(session.lastPlayedAt)
-                            const isThisYear = d.getFullYear() === new Date().getFullYear()
-                            return d.toLocaleDateString(language, {
-                              month: 'short',
-                              day: 'numeric',
-                              year: isThisYear ? undefined : 'numeric',
-                            })
-                          })()}
-                          {' · '}
-                          {formatTimeSmart(session.lastPlayedAt, language)}
-                          {' · '}
-                          {formatProgress(session.progress, session.duration)}{' '}
-                          {t('historyProgressSuffix')}
-                        </div>
-                      </div>
-
-                      {/* Right Side Actions */}
-                      <div className="flex items-center flex-shrink-0 gap-12">
-                        {durationText && (
-                          <span className="text-xs text-muted-foreground font-medium whitespace-nowrap w-20 text-left">
-                            {durationText}
-                          </span>
-                        )}
-
-                        <div className="flex items-center gap-1">
-                          {/* Favorite Button */}
-                          {canFavorite && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleToggleFavorite(session)}
-                              className={cn(
-                                'w-8 h-8 text-primary hover:bg-transparent transition-opacity duration-200',
-                                favorited || openMenuId === session.id
-                                  ? 'opacity-100'
-                                  : 'opacity-0 group-hover/session:opacity-100'
-                              )}
-                              aria-label={
-                                favorited ? t('ariaRemoveFavorite') : t('ariaAddFavorite')
-                              }
-                            >
-                              <Star
-                                size={15}
-                                className={cn('stroke-2', favorited && 'fill-current')}
-                              />
-                            </Button>
-                          )}
-
-                          <Popover
-                            open={openMenuId === session.id}
-                            onOpenChange={(open) => setOpenMenuId(open ? session.id : null)}
+                    ) : undefined
+                  }
+                  title={
+                    <div className="relative">
+                      {/* Play button if no artwork */}
+                      {!hasArtwork && (
+                        <div className="absolute left-0 top-0 bottom-0 -translate-x-full w-[var(--page-gutter-x)] flex items-center justify-center opacity-0 group-hover/episode:opacity-100 transition-opacity duration-200 z-20 pointer-events-none">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handlePlaySession(session)}
+                            aria-label={t('btnPlayOnly')}
+                            className="w-6 h-6 pointer-events-auto hover:bg-transparent"
                           >
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className={cn(
-                                  'w-8 h-8 text-primary hover:bg-transparent hover:opacity-80 transition-all duration-200',
-                                  openMenuId === session.id && 'opacity-100'
-                                )}
-                                aria-label={t('ariaMoreActions')}
-                              >
-                                <MoreHorizontal size={15} />
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent
-                              align="end"
-                              sideOffset={8}
-                              onMouseDown={(e) => e.stopPropagation()}
-                              onClick={(e) => e.stopPropagation()}
-                              className="w-48 p-0 overflow-hidden border border-border/50 bg-popover/95 backdrop-blur-xl"
-                            >
-                              <Button
-                                variant="ghost"
-                                className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10 rounded-none h-10 px-3"
-                                onClick={() => handleDeleteSession(session.id)}
-                              >
-                                <Trash2 size={16} className="mr-2" />
-                                {t('commonDelete')}
-                              </Button>
-                            </PopoverContent>
-                          </Popover>
+                            <Play size={12} className="text-primary fill-current ml-0.5" />
+                          </Button>
                         </div>
-                      </div>
-                    </div>
-                  </div>
+                      )}
+                      {(() => {
+                        const collectionId = subscriptionMap.get(session.podcastFeedUrl || '')
+                        const episodeId = session.episodeId // Only GUID for navigation
 
-                  {/* Separator */}
-                  <div className="absolute bottom-0 left-0 right-4 h-px bg-border group-hover/session:opacity-0 transition-opacity smart-divider" />
-                </div>
+                        return (
+                          <InteractiveTitle
+                            title={session.title}
+                            to={
+                              collectionId && episodeId
+                                ? '/podcast/$id/episode/$episodeId'
+                                : undefined
+                            }
+                            params={
+                              collectionId && episodeId
+                                ? { id: collectionId, episodeId: encodeURIComponent(episodeId) }
+                                : undefined
+                            }
+                            onClick={
+                              !(collectionId && episodeId)
+                                ? () => handlePlaySession(session)
+                                : undefined
+                            }
+                            className="text-sm leading-tight"
+                          />
+                        )
+                      })()}
+                    </div>
+                  }
+                  subtitle={
+                    (session.podcastTitle || session.publishedAt) && (
+                      <div className="line-clamp-1">
+                        {session.podcastTitle}
+                        {session.podcastTitle && session.publishedAt && ' • '}
+                        {session.publishedAt && (
+                          <span>{formatDateStandard(session.publishedAt)}</span>
+                        )}
+                      </div>
+                    )
+                  }
+                  description={
+                    <>
+                      {cleanDescription && <span className="mb-1 block">{cleanDescription}</span>}
+                      {/* Played At and Progress - moved to bottom with smaller font */}
+                      <span className="text-xxs text-muted-foreground/60 font-medium leading-tight block">
+                        {(() => {
+                          const d = new Date(session.lastPlayedAt)
+                          const isThisYear = d.getFullYear() === new Date().getFullYear()
+                          return d.toLocaleDateString(language, {
+                            month: 'short',
+                            day: 'numeric',
+                            year: isThisYear ? undefined : 'numeric',
+                          })
+                        })()}
+                        {' · '}
+                        {formatTimeSmart(session.lastPlayedAt, language)}
+                        {' · '}
+                        {formatProgress(session.progress, session.duration)}{' '}
+                        {t('historyProgressSuffix')}
+                      </span>
+                    </>
+                  }
+                  meta={durationText}
+                  actions={
+                    <>
+                      {/* Favorite Button */}
+                      {canFavorite && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleToggleFavorite(session)}
+                          className={cn(
+                            'w-8 h-8 text-primary hover:bg-transparent transition-opacity duration-200',
+                            favorited || openMenuId === session.id ? 'opacity-100' : 'opacity-100' // Always visible in internal wrapper, but controlled by BaseEpisodeRow
+                          )}
+                          aria-label={favorited ? t('ariaRemoveFavorite') : t('ariaAddFavorite')}
+                        >
+                          <Star size={15} className={cn('stroke-2', favorited && 'fill-current')} />
+                        </Button>
+                      )}
+
+                      <Popover
+                        open={openMenuId === session.id}
+                        onOpenChange={(open) => setOpenMenuId(open ? session.id : null)}
+                      >
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className={cn(
+                              'w-8 h-8 text-primary hover:bg-transparent hover:opacity-80 transition-all duration-200',
+                              openMenuId === session.id && 'opacity-100'
+                            )}
+                            aria-label={t('ariaMoreActions')}
+                          >
+                            <MoreHorizontal size={15} />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent
+                          align="end"
+                          sideOffset={8}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-48 p-0 overflow-hidden border border-border/50 bg-popover/95 backdrop-blur-xl"
+                        >
+                          <Button
+                            variant="ghost"
+                            className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10 rounded-none h-10 px-3"
+                            onClick={() => handleDeleteSession(session.id)}
+                          >
+                            <Trash2 size={16} className="mr-2" />
+                            {t('commonDelete')}
+                          </Button>
+                        </PopoverContent>
+                      </Popover>
+                    </>
+                  }
+                  // History items are clickable via title/artwork hooks
+                />
               )
             })}
           </div>

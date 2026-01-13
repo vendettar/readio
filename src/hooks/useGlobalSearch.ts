@@ -30,6 +30,7 @@ export interface LocalSearchResult {
   title: string
   subtitle: string
   artworkUrl?: string
+  extraSubtitle?: string
   data: Subscription | Favorite | PlaybackSession | FileTrack
 }
 
@@ -145,6 +146,7 @@ export function useGlobalSearch(
           title: sub.title || t('unknownPodcast'),
           subtitle: sub.author || t('unknownArtist'),
           artworkUrl: sub.artworkUrl,
+          extraSubtitle: t('badgeSubscribed'),
           data: sub,
         })
         subscriptionCount++
@@ -162,7 +164,8 @@ export function useGlobalSearch(
           id: `fav-${fav.key}`,
           title: fav.episodeTitle || t('unknownEpisode'),
           subtitle: fav.podcastTitle || t('unknownPodcast'),
-          artworkUrl: fav.artworkUrl,
+          artworkUrl: fav.episodeArtworkUrl || fav.artworkUrl,
+          extraSubtitle: t('badgeFavorited'),
           data: fav,
         })
         favoriteCount++
@@ -210,7 +213,10 @@ export function useGlobalSearch(
             id: `history-${session.id}`,
             title: session.title || t('unknownTitle'),
             subtitle:
-              session.source === 'local' ? t('historySourceLocal') : t('historySourcePodcast'),
+              session.podcastTitle ||
+              (session.source === 'local' ? t('historySourceLocal') : t('historySourcePodcast')),
+            artworkUrl: session.artworkUrl,
+            extraSubtitle: t('historyTitle'),
             data: session,
           })
         )
@@ -226,6 +232,7 @@ export function useGlobalSearch(
             id: `file-${track.id}`,
             title: track.name || t('untitledFile'),
             subtitle,
+            extraSubtitle: t('filesTitle'),
             data: track,
           }
         })
@@ -252,10 +259,46 @@ export function useGlobalSearch(
 
   const isLoading = isLoadingPodcasts || isLoadingEpisodes || isLoadingDb
 
-  // Combine and Memoize Final Results
+  // Combine and Deduplicate Final Results
   const finalLocalResults = useMemo(() => {
     if (!shouldSearch) return []
-    return [...storeResults, ...dbResults]
+
+    const resultsMap = new Map<string, LocalSearchResult>()
+
+    // Helper to get unique key
+    const getUniqueKey = (item: LocalSearchResult): string => {
+      if (item.type === 'subscription') return (item.data as Subscription).feedUrl
+      if (item.type === 'favorite') return (item.data as Favorite).audioUrl
+      if (item.type === 'history') {
+        const session = item.data as PlaybackSession
+        return session.audioUrl || `history-${session.id}`
+      }
+      if (item.type === 'file') return `file-${(item.data as FileTrack).id}`
+      return item.id
+    }
+
+    // Process in order of priority: Subscriptions > Favorites > History > Files
+    // 1. Subscriptions & Favorites (Store Results)
+    for (const res of storeResults) {
+      const key = getUniqueKey(res)
+      // Store results already have unique keys or are intentionally separate
+      resultsMap.set(key, res)
+    }
+
+    // 2. History & Files (DB Results)
+    for (const res of dbResults) {
+      const key = getUniqueKey(res)
+      // Only add to map if not already present (favors store items)
+      if (!resultsMap.has(key)) {
+        resultsMap.set(key, res)
+      } else if (res.type === 'history') {
+        // OPTIONAL: If it's in History AND already in Map (as Favorite),
+        // we could potentially update the existing item's status,
+        // but keeping the Favorite title/UI is usually cleaner.
+      }
+    }
+
+    return Array.from(resultsMap.values())
   }, [shouldSearch, storeResults, dbResults])
 
   const isEmpty =
