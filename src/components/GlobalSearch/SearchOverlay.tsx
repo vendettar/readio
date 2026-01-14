@@ -2,7 +2,6 @@
 
 import { useNavigate } from '@tanstack/react-router'
 import { ArrowRight, Loader2, Search } from 'lucide-react'
-import { useEffect } from 'react'
 import { type LocalSearchResult, useGlobalSearch } from '../../hooks/useGlobalSearch'
 import { useI18n } from '../../hooks/useI18n'
 import { useOnClickOutside } from '../../hooks/useOnClickOutside'
@@ -10,7 +9,6 @@ import discovery, { type Podcast as PodcastType, type SearchEpisode } from '../.
 import { formatTimestamp } from '../../libs/formatters'
 import { getDiscoveryArtworkUrl } from '../../libs/imageUtils'
 import { executeLocalSearchAction } from '../../libs/localSearchActions'
-import { useExploreStore } from '../../store/exploreStore'
 import { usePlayerStore } from '../../store/playerStore'
 import { useSearchStore } from '../../store/searchStore'
 import { Button } from '../ui/button'
@@ -74,27 +72,12 @@ export function SearchOverlay() {
   const setAudioUrl = usePlayerStore((s) => s.setAudioUrl)
   const play = usePlayerStore((s) => s.play)
   const setEpisodeMetadata = usePlayerStore((s) => s.setEpisodeMetadata)
-  const loadSubscriptions = useExploreStore((s) => s.loadSubscriptions)
-  const subscriptionsLoaded = useExploreStore((s) => s.subscriptionsLoaded)
-  const loadFavorites = useExploreStore((s) => s.loadFavorites)
-  const favoritesLoaded = useExploreStore((s) => s.favoritesLoaded)
 
   // Close on click outside
   const overlayRef = useOnClickOutside<HTMLDivElement>(closeOverlay, isOverlayOpen)
 
   // Global search hook
   const { podcasts, episodes, local, isLoading, isEmpty } = useGlobalSearch(query, isOverlayOpen)
-
-  // Ensure subscriptions/favorites ready when overlay打开
-  useEffect(() => {
-    if (!isOverlayOpen) return
-    if (!subscriptionsLoaded) {
-      loadSubscriptions()
-    }
-    if (!favoritesLoaded) {
-      loadFavorites()
-    }
-  }, [isOverlayOpen, subscriptionsLoaded, favoritesLoaded, loadSubscriptions, loadFavorites])
 
   const handleViewAll = () => {
     closeOverlay()

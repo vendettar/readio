@@ -1,4 +1,3 @@
-import React from 'react'
 import { PodcastEpisodesGrid } from '../components/Explore/PodcastEpisodesGrid'
 import { PodcastShowsCarousel } from '../components/Explore/PodcastShowsCarousel'
 import {
@@ -40,21 +39,7 @@ export default function ExplorePage() {
   // Keyboard shortcuts (no modal open now)
   useKeyboardShortcuts({ isModalOpen: false })
 
-  // Load subscriptions/favorites on mount
-  const loadSubscriptions = useExploreStore((s) => s.loadSubscriptions)
-  const loadFavorites = useExploreStore((s) => s.loadFavorites)
-  const subscriptionsLoaded = useExploreStore((s) => s.subscriptionsLoaded)
-  const favoritesLoaded = useExploreStore((s) => s.favoritesLoaded)
-
-  React.useEffect(() => {
-    if (!subscriptionsLoaded) loadSubscriptions()
-  }, [subscriptionsLoaded, loadSubscriptions])
-
-  React.useEffect(() => {
-    if (!favoritesLoaded) loadFavorites()
-  }, [favoritesLoaded, loadFavorites])
-
-  // Handler for playing episode directly (Rapid & Accurate: iTunes API)
+  // Handler for playing episode directly (Optimized: single lookup call)
   const handlePlayEpisode = async (episode: DiscoveryPodcast) => {
     const podcastId = extractPodcastIdFromUrl(episode.url)
     if (!podcastId) {
@@ -63,29 +48,15 @@ export default function ExplorePage() {
     }
 
     try {
-      // STEP 1: Precision Lookup by trackId (Highest Efficiency)
-      let matchedEpisode: Episode | null = await discovery.lookupEpisode(episode.id)
-
-      // STEP 2: Fallback to Podcast-level lookup if track-level fails or lacks URL
-      if (!matchedEpisode?.audioUrl) {
-        const results = await discovery.getPodcastEpisodes(podcastId, 'us', 20)
-        matchedEpisode =
-          results.find(
-            (ep) =>
-              ep.id === episode.id || ep.title.toLowerCase().includes(episode.name.toLowerCase())
-          ) || null
-      }
+      // Single lookup call - feedUrl is included in response
+      const matchedEpisode: Episode | null = await discovery.lookupEpisode(episode.id)
 
       if (matchedEpisode?.audioUrl) {
-        // Optimization: feedUrl is available directly in the Precision Episode result!
         let podcastFeedUrl = matchedEpisode.feedUrl
-
         if (!podcastFeedUrl) {
-          // Safety Fallback (should be rare)
           const podcast = await discovery.getPodcast(podcastId, 'us')
           podcastFeedUrl = podcast?.feedUrl
         }
-
         if (!podcastFeedUrl) {
           console.warn('[handlePlayEpisode] Feed URL not found')
           if (episode.url) openExternal(episode.url)
@@ -108,10 +79,12 @@ export default function ExplorePage() {
           duration: matchedEpisode.duration,
         })
         play()
+      } else {
+        // Episode lookup failed - open in external browser
         if (episode.url) openExternal(episode.url)
       }
     } catch (error) {
-      console.error('[handlePlayEpisode] Precision lookup failed, falling back:', error)
+      console.error('[handlePlayEpisode] Lookup failed:', error)
       if (episode.url) openExternal(episode.url)
     }
   }

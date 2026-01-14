@@ -23,29 +23,19 @@ import { useExploreStore } from '../store/exploreStore'
 export default function FavoritesPage() {
   const { t } = useI18n()
 
-  const {
-    favorites,
-    loadFavorites,
-    favoritesLoaded,
-    removeFavorite,
-    loadSubscriptions,
-    subscriptionsLoaded,
-  } = useExploreStore()
+  const { favorites, favoritesLoaded, removeFavorite } = useExploreStore()
   const { playFavorite } = useEpisodePlayback()
   const [isInitialLoading, setIsInitialLoading] = useState(!favoritesLoaded)
 
   // Keyboard shortcuts
   useKeyboardShortcuts({ isModalOpen: false })
 
-  // Load favorites and subscriptions
+  // Loading state (favorites are loaded globally by useAppInitialization)
   useEffect(() => {
-    if (!favoritesLoaded || !subscriptionsLoaded) {
-      Promise.all([
-        !favoritesLoaded ? loadFavorites() : Promise.resolve(),
-        !subscriptionsLoaded ? loadSubscriptions() : Promise.resolve(),
-      ]).finally(() => setIsInitialLoading(false))
+    if (favoritesLoaded) {
+      setIsInitialLoading(false)
     }
-  }, [favoritesLoaded, loadFavorites, subscriptionsLoaded, loadSubscriptions])
+  }, [favoritesLoaded])
 
   const subscriptionMap = useSubscriptionMap()
 
@@ -120,7 +110,7 @@ export default function FavoritesPage() {
                     ) : undefined
                   }
                   title={
-                    <>
+                    <div className="flex items-center">
                       {!artworkUrl && (
                         <GutterPlayButton
                           onPlay={() => playFavorite(favorite)}
@@ -134,7 +124,7 @@ export default function FavoritesPage() {
                         onClick={!hasNavigation ? () => playFavorite(favorite) : undefined}
                         className="text-sm leading-tight"
                       />
-                    </>
+                    </div>
                   }
                   subtitle={
                     (favorite.podcastTitle || favorite.pubDate) && (

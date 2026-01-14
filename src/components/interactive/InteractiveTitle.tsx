@@ -46,10 +46,10 @@ export function InteractiveTitle({
   if (onClick) {
     return (
       <Button
-        variant="ghost"
+        variant="text"
         onClick={onClick}
         className={cn(
-          'p-0 h-auto text-left hover:bg-transparent font-semibold inline-flex items-start whitespace-normal justify-start self-start',
+          'p-0 h-auto text-left font-semibold inline-flex items-start whitespace-normal justify-start self-start',
           buttonClassName,
           className
         )}
@@ -67,9 +67,9 @@ export function InteractiveTitle({
     return (
       <Button
         asChild
-        variant="ghost"
+        variant="text"
         className={cn(
-          'p-0 h-auto text-left hover:bg-transparent font-semibold inline-flex items-start whitespace-normal justify-start self-start',
+          'p-0 h-auto text-left font-semibold inline-flex items-start whitespace-normal justify-start self-start',
           buttonClassName
         )}
       >

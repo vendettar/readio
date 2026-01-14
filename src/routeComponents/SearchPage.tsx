@@ -1,6 +1,5 @@
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { CircleMinus, CirclePlus, Library, Loader2, Mic2, Podcast, Search } from 'lucide-react'
-import React from 'react'
 import { SearchEpisodeItem } from '../components/GlobalSearch/SearchEpisodeItem'
 import { SearchResultItem } from '../components/GlobalSearch/SearchResultItem'
 import { PodcastCard } from '../components/PodcastCard/PodcastCard'
@@ -27,26 +26,6 @@ export default function SearchPage() {
 
   // Keyboard shortcuts
   useKeyboardShortcuts({ isModalOpen: false })
-
-  // Load subscriptions/favorites on mount to ensure UI state is correct
-  const loadSubscriptions = useExploreStore((s) => s.loadSubscriptions)
-  const loadFavorites = useExploreStore((s) => s.loadFavorites)
-  const subscriptionsLoaded = useExploreStore((s) => s.subscriptionsLoaded)
-
-  React.useEffect(() => {
-    if (!subscriptionsLoaded) {
-      loadSubscriptions()
-    }
-  }, [subscriptionsLoaded, loadSubscriptions])
-
-  React.useEffect(() => {
-    const checkFavorites = async () => {
-      // useExploreStore handles the 'loaded' flag internally,
-      // but it's safer to just call it if we need fresh data
-      await loadFavorites()
-    }
-    checkFavorites()
-  }, [loadFavorites])
 
   // Search results
   const { playSearchEpisode } = useEpisodePlayback()

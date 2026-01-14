@@ -271,7 +271,37 @@ function parseRssXml(xmlText: string): ParsedFeed {
       const fileSize = fileSizeStr ? parseInt(fileSizeStr, 10) : undefined
 
       const contentEncodedEl = getContentTag(item, 'encoded')
-      const descriptionHtml = contentEncodedEl?.textContent?.trim() || undefined
+      const encodedContent = contentEncodedEl?.textContent?.trim() || ''
+
+      const descriptionEl = item.querySelector('description')
+      const descriptionContent = descriptionEl?.textContent?.trim() || ''
+
+      const summaryEl = getITunesTag(item, 'summary')
+      const summaryContent = summaryEl?.textContent?.trim() || ''
+
+      // Heuristic for best description:
+      // 1. If encodedContent (content:encoded) exists, it's usually the best HTML source.
+      // 2. If not, check if regular description has HTML tags (like <p>, <br>, <a>).
+      // 3. Fallback to longest available text.
+
+      let descriptionHtml: string | undefined
+      let finalDescription = ''
+
+      if (encodedContent) {
+        descriptionHtml = encodedContent
+        finalDescription = encodedContent
+      } else if (
+        descriptionContent.includes('<p') ||
+        descriptionContent.includes('<br') ||
+        descriptionContent.includes('<a ')
+      ) {
+        descriptionHtml = descriptionContent
+        finalDescription = descriptionContent
+      } else {
+        // Plain text fallback - pick the longest one
+        finalDescription =
+          descriptionContent.length >= summaryContent.length ? descriptionContent : summaryContent
+      }
 
       const transcriptEl = getPodcastTag(item, 'transcript')
       const chaptersEl = getPodcastTag(item, 'chapters')
@@ -281,11 +311,7 @@ function parseRssXml(xmlText: string): ParsedFeed {
       const episodeData = {
         id: (item.querySelector('guid')?.textContent || audioUrl || '').trim(),
         title: item.querySelector('title')?.textContent?.trim(),
-        description: (
-          getITunesTag(item, 'summary')?.textContent ||
-          item.querySelector('description')?.textContent ||
-          ''
-        ).trim(),
+        description: finalDescription,
         descriptionHtml,
         audioUrl,
         pubDate: item.querySelector('pubDate')?.textContent?.trim(),

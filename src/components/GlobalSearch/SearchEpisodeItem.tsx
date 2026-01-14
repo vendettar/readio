@@ -106,9 +106,9 @@ export function SearchEpisodeItem({ episode, onPlay }: SearchEpisodeItemProps) {
             params={
               podcastId
                 ? {
-                  id: podcastId,
-                  episodeId: encodedEpisodeId,
-                }
+                    id: podcastId,
+                    episodeId: encodedEpisodeId,
+                  }
                 : undefined
             }
             onPlay={onPlay}
@@ -120,7 +120,7 @@ export function SearchEpisodeItem({ episode, onPlay }: SearchEpisodeItemProps) {
         ) : undefined
       }
       title={
-        <>
+        <div className="flex items-center">
           {!hasArtwork && <GutterPlayButton onPlay={onPlay} ariaLabel={t('ariaPlayEpisode')} />}
           <InteractiveTitle
             title={episode.trackName}
@@ -128,14 +128,14 @@ export function SearchEpisodeItem({ episode, onPlay }: SearchEpisodeItemProps) {
             params={
               podcastId
                 ? {
-                  id: podcastId,
-                  episodeId: encodedEpisodeId,
-                }
+                    id: podcastId,
+                    episodeId: encodedEpisodeId,
+                  }
                 : undefined
             }
             className="text-sm leading-tight flex-1"
           />
-        </>
+        </div>
       }
       subtitle={
         <div className="flex items-center gap-1">

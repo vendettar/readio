@@ -4,7 +4,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, useParams } from '@tanstack/react-router'
 import { Check, ChevronRight, Play, Plus } from 'lucide-react'
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { EpisodeRow } from '../../components/EpisodeRow/EpisodeRow'
 import { Button } from '../../components/ui/button'
 import { useEpisodePlayback } from '../../hooks/useEpisodePlayback'
@@ -21,15 +21,6 @@ export default function PodcastShowPage() {
   const { t } = useI18n()
   const { id } = useParams({ from: '/podcast/$id/' })
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false)
-
-  // Load subscriptions on mount
-  const loadSubscriptions = useExploreStore((state) => state.loadSubscriptions)
-  const subscriptionsLoaded = useExploreStore((state) => state.subscriptionsLoaded)
-  React.useEffect(() => {
-    if (!subscriptionsLoaded) {
-      loadSubscriptions()
-    }
-  }, [subscriptionsLoaded, loadSubscriptions])
 
   // Fetch podcast metadata via Lookup API
   const {
@@ -131,7 +122,7 @@ export default function PodcastShowPage() {
 
   // Description with HTML stripping (using line-clamp in CSS, not truncation)
   const rawDescription = feed?.description || ''
-  const cleanDescription = stripHtml(rawDescription)
+  const cleanDescription = stripHtml(rawDescription, { preserveLineBreaks: true })
   const shouldTruncateDescription = cleanDescription.length > 200 // Show MORE if long enough
 
   return (

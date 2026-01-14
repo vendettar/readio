@@ -126,6 +126,12 @@ UI 操作图标来自 `lucide-react`；SVG 仅用于 logo 与交互绑定资源�
    - **排他性**：描述区域（description/subtitle）禁止包含点击操作，不得链接到节目详情。
    - **非交互渲染**：若未提供 `onClick` 或 `to`/`params`（如 podcastId 缺失），组件会自动渲染为 `<span>` 结构以保持视觉一致性但禁止点击逻辑。
    - **表现**：统一使用 `Button asChild` 封装 `Link`。
+   - **标准交互文本规则 (Standardized Text Hover Rule)**：
+     - **核心原则**：所有基于纯文本的交互项（如节目名、单集名、网页链接等），在 Hover 时**不得改变颜色或透明度**。
+     - **视觉效果**：Hover 时仅添加**下划线**（`underline`）。
+     - **排除项**：明确的功能性按钮（如 Subscribe、Favorite、Play 按钮等）不适用此规则，它们应保留各自的背景色/透明度交互反馈。
+      - **统一实现**：全站下划线样式应保持一致。对于 `Button` 组件，已新增 `variant="text"`，该变体在 Hover 时不改变文字颜色/背景色，仅配合 `InteractiveTitle` 或 `Link` 实现下划线效果。
+    - **鼠标指针 (Cursor)**：所有按钮及 `InteractiveTitle` 必须在 Hover 时显示 `cursor: pointer`。此规则已集成在 `src/components/ui/button.tsx` 的基础变体中。
 
 4. **交互式封面 (InteractiveArtwork)** (`src/components/interactive/InteractiveArtwork.tsx`)
    - **逻辑**：将“封面点击导航”与“悬浮播放按钮”逻辑封装。
@@ -159,6 +165,36 @@ UI 操作图标来自 `lucide-react`；SVG 仅用于 logo 与交互绑定资源�
      - 职责：连接 Store 和 Hooks (`useEpisodePlayback`, `useExploreStore`)，处理播放、收藏、数据格式化。
      - 使用：在 `PodcastShowPage`, `PodcastEpisodesPage`, `SearchPage` 等场景直接使用。
      - 扩展：对于 `FavoritesPage` 和 `HistoryPage` 等有特殊交互需求的页面，直接复用 `BaseEpisodeRow` 并通过插槽注入自定义逻辑。
+
+### App Initialization（应用初始化）
+
+全局数据加载（收藏、订阅）已集中到根路由的 `useAppInitialization()` 钩子：
+
+- **实现位置**：`src/routes/__root.tsx` 调用 `src/hooks/useAppInitialization.ts`
+- **加载内容**：
+  - `loadSubscriptions()` - 加载订阅列表
+  - `loadFavorites()` - 加载收藏列表
+- **架构原则**：
+  - 页面组件**禁止**手动调用 `loadSubscriptions` 或 `loadFavorites`
+  - 所有数据在应用启动时一次性加载，通过 Zustand store 全局共享
+
+### 播客描述渲染 (RSS Description Rendering)
+
+**核心策略**：使用 `@tailwindcss/typography` 插件（`prose` 类）结合自定义配置来渲染外部 RSS HTML 内容。
+
+**Typography 配置**（`tailwind.config.js`）：
+- `fontSize`: 0.875rem (14px)
+- `fontWeight`: 300
+- `lineHeight`: 1.4
+- `paragraphMargin`: 10px (bottom), 0px (top)
+- `whiteSpace`: `whitespace-pre-line`（折叠冗余空白并保留换行）
+- **链接样式**：无 hover 颜色/透明度变化，仅保持下划线（符合标准交互文本规则）
+
+**HTML 安全净化**（`src/libs/htmlUtils.ts`）：
+- 使用 `DOMPurify` 进行 XSS 防护
+- **DOMPurify Hooks**：
+  - `afterSanitizeAttributes`: 自动为 `<a>` 标签添加 `target="_blank"` 和 `rel="noopener noreferrer"`
+  - `afterSanitizeElements`: 移除视觉上为空的 `<p>` 标签（包括 `&nbsp;` 和空白字符），解决 RSS 源中常见的巨大留白问题
 
 ### Theme Accent（强调色）
 

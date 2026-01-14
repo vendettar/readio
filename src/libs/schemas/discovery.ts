@@ -22,6 +22,7 @@ export const DiscoveryPodcastSchema = z.object({
   feedUrl: z.string().url().optional(),
   providerPodcastId: z.string().optional(),
   providerEpisodeId: z.string().optional(),
+  collectionId: z.number().int().positive().optional(),
 })
 
 /**
@@ -29,6 +30,7 @@ export const DiscoveryPodcastSchema = z.object({
  */
 export const PodcastSchema = z.object({
   providerPodcastId: z.number().int().positive(),
+  collectionId: z.number().int().positive().optional(),
   collectionName: z.string().min(1),
   artistName: z.string().optional(),
   artworkUrl100: z.string().url().optional(),

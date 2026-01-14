@@ -28,7 +28,6 @@ window.__READIO_ENV__ = window.__READIO_ENV__ || {
   READIO_DB_NAME: 'readio-v2',
 
   // API Endpoints
-
   READIO_DEFAULT_CORS_PROXY: 'https://api.allorigins.win',
   READIO_DISCOVERY_SEARCH_URL: 'https://itunes.apple.com/search',
   READIO_DISCOVERY_LOOKUP_URL: 'https://itunes.apple.com/lookup',

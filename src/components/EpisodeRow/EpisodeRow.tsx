@@ -133,6 +133,10 @@ export function EpisodeRow({
   const effectiveArtwork = episode.artworkUrl
   const hasArtwork = !!effectiveArtwork
 
+  // Validate podcast ID for navigation - only navigate if we have a valid ID
+  const podcastId = String(podcast.providerPodcastId ?? podcast.collectionId ?? '')
+  const hasValidNavigation = podcastId.length > 0
+
   return (
     <BaseEpisodeRow
       artwork={
@@ -140,11 +144,15 @@ export function EpisodeRow({
           <InteractiveArtwork
             src={getDiscoveryArtworkUrl(effectiveArtwork, 200)}
             fallbackSrc={podcastArtwork}
-            to="/podcast/$id/episode/$episodeId"
-            params={{
-              id: podcast.providerPodcastId.toString(),
-              episodeId: encodedEpisodeId,
-            }}
+            to={hasValidNavigation ? '/podcast/$id/episode/$episodeId' : undefined}
+            params={
+              hasValidNavigation
+                ? {
+                    id: podcastId,
+                    episodeId: encodedEpisodeId,
+                  }
+                : undefined
+            }
             onPlay={handlePlay}
             playButtonSize="sm"
             playIconSize={16}
@@ -155,19 +163,23 @@ export function EpisodeRow({
         ) : undefined
       }
       title={
-        <>
+        <div className="flex items-center">
           {!hasArtwork && <GutterPlayButton onPlay={handlePlay} ariaLabel={t('ariaPlayEpisode')} />}
           <InteractiveTitle
             title={episode.title}
-            to="/podcast/$id/episode/$episodeId"
-            params={{
-              id: podcast.providerPodcastId.toString(),
-              episodeId: encodedEpisodeId,
-            }}
+            to={hasValidNavigation ? '/podcast/$id/episode/$episodeId' : undefined}
+            params={
+              hasValidNavigation
+                ? {
+                    id: podcastId,
+                    episodeId: encodedEpisodeId,
+                  }
+                : undefined
+            }
             className="text-sm leading-tight flex-1"
             maxLines={titleMaxLines as 1 | 2}
           />
-        </>
+        </div>
       }
       subtitle={relativeTime} // Using relativeTime as subtitle (top-aligned date)
       description={cleanDescription}

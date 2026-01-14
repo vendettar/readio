@@ -3,12 +3,11 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { useParams } from '@tanstack/react-router'
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { EpisodeRow } from '../../components/EpisodeRow/EpisodeRow'
 import { useEpisodePlayback } from '../../hooks/useEpisodePlayback'
 import { useI18n } from '../../hooks/useI18n'
 import discovery, { type Episode } from '../../libs/discovery'
-import { useExploreStore } from '../../store/exploreStore'
 
 // Constants matching Apple Podcasts behavior
 const INITIAL_LOAD_COUNT = 25
@@ -19,15 +18,6 @@ export default function PodcastEpisodesPage() {
   const { id } = useParams({ from: '/podcast/$id/episodes' })
   const [visibleCount, setVisibleCount] = useState(INITIAL_LOAD_COUNT)
   const loaderRef = useRef<HTMLDivElement>(null)
-
-  // Load subscriptions on mount
-  const loadSubscriptions = useExploreStore((state) => state.loadSubscriptions)
-  const subscriptionsLoaded = useExploreStore((state) => state.subscriptionsLoaded)
-  React.useEffect(() => {
-    if (!subscriptionsLoaded) {
-      loadSubscriptions()
-    }
-  }, [subscriptionsLoaded, loadSubscriptions])
 
   // Fetch podcast metadata via Lookup API
   const {

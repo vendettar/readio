@@ -3,6 +3,7 @@ import { createRootRoute, Outlet } from '@tanstack/react-router'
 import { createContext, useCallback, useContext, useEffect, useRef } from 'react'
 import { AppShell } from '../components/AppShell'
 import { ToastContainer } from '../components/Toast'
+import { useAppInitialization } from '../hooks/useAppInitialization'
 import { useFileHandler } from '../hooks/useFileHandler'
 import { useSession } from '../hooks/useSession'
 import { usePlayerStore } from '../store/playerStore'
@@ -23,6 +24,9 @@ function RootLayout() {
   const audioRef = useRef<HTMLAudioElement>(null)
   const { handleFileChange } = useFileHandler()
   const { restoreProgress } = useSession()
+
+  // Initialize app-level data (subscriptions, favorites)
+  useAppInitialization()
 
   const {
     audioUrl,

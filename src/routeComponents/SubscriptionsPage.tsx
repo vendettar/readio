@@ -11,18 +11,18 @@ import { useExploreStore } from '../store/exploreStore'
 export default function SubscriptionsPage() {
   const { t } = useI18n()
   const navigate = useNavigate()
-  const { subscriptions, loadSubscriptions, subscriptionsLoaded, unsubscribe } = useExploreStore()
+  const { subscriptions, subscriptionsLoaded, unsubscribe } = useExploreStore()
   const [isInitialLoading, setIsInitialLoading] = useState(!subscriptionsLoaded)
 
   // Keyboard shortcuts
   useKeyboardShortcuts({ isModalOpen: false })
 
-  // Load subscriptions
+  // Loading state (subscriptions are loaded globally by useAppInitialization)
   useEffect(() => {
-    if (!subscriptionsLoaded) {
-      loadSubscriptions().finally(() => setIsInitialLoading(false))
+    if (subscriptionsLoaded) {
+      setIsInitialLoading(false)
     }
-  }, [subscriptionsLoaded, loadSubscriptions])
+  }, [subscriptionsLoaded])
 
   const handlePodcastClick = (subscription: Subscription) => {
     // Navigate to podcast detail page using providerPodcastId if available

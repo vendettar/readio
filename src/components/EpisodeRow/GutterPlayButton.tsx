@@ -8,21 +8,19 @@ interface GutterPlayButtonProps {
 }
 
 /**
- * GutterPlayButton: A play button positioned in the left gutter area.
- * Used when an episode row has no artwork - the play button appears
- * in the left margin on hover.
+ * GutterPlayButton: A play button that appears inline when an episode has no artwork.
+ * Uses flex layout instead of absolute positioning to ensure it's never clipped by overflow.
  *
- * Must be placed inside a container with `position: relative` and
- * within a `group/episode` hover group.
+ * Must be placed inside a `group/episode` hover group for visibility toggle.
  */
 export function GutterPlayButton({ onPlay, ariaLabel }: GutterPlayButtonProps) {
   return (
-    <div className="absolute left-0 top-0 bottom-0 -translate-x-full w-[var(--page-gutter-x)] flex items-center justify-center opacity-0 group-hover/episode:opacity-100 transition-opacity duration-200 z-20 pointer-events-none">
+    <div className="flex-shrink-0 w-6 h-6 flex items-center justify-center opacity-0 group-hover/episode:opacity-100 transition-opacity duration-200 mr-1">
       <Button
         variant="ghost"
         size="icon"
         onClick={onPlay}
-        className="w-6 h-6 pointer-events-auto hover:bg-transparent"
+        className="w-6 h-6 hover:bg-transparent"
         aria-label={ariaLabel}
       >
         <Play size={12} className="text-primary fill-current ml-0.5" />

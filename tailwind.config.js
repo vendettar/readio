@@ -62,7 +62,32 @@ export default {
       fontSize: {
         xxs: ['0.625rem', { lineHeight: '0.875rem' }], // 10px font, 14px line-height
       },
+      typography: {
+        DEFAULT: {
+          css: {
+            '--tw-prose-body': 'hsl(var(--foreground) / 0.9)',
+            '--tw-prose-headings': 'hsl(var(--foreground))',
+            '--tw-prose-links': 'hsl(var(--primary))',
+            '--tw-prose-bold': 'hsl(var(--foreground))',
+            '--tw-prose-bullets': 'hsl(var(--muted-foreground))',
+            '--tw-prose-counters': 'hsl(var(--muted-foreground))',
+            fontSize: '0.875rem',
+            lineHeight: '1.4',
+            fontWeight: '300',
+            p: { marginTop: '0', marginBottom: '10px' },
+            'ul, ol': { marginTop: '0', marginBottom: '10px', paddingLeft: '1.25em' },
+            li: { marginTop: '0', marginBottom: '4px' },
+            a: {
+              fontWeight: '600',
+              textDecoration: 'underline',
+              textUnderlineOffset: '3px',
+              // No hover color/opacity change - complies with text hover rule (underline only)
+            },
+            'b, strong': { fontWeight: '700' },
+          },
+        },
+      },
     },
   },
-  plugins: [require('tailwindcss-animate')],
+  plugins: [require('tailwindcss-animate'), require('@tailwindcss/typography')],
 }

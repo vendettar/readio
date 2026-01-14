@@ -25,8 +25,6 @@ export default function HistoryPage() {
   const startPlayback = usePlayerStore((s) => s.play)
   const setSessionId = usePlayerStore((s) => s.setSessionId)
   const setFileTrackId = usePlayerStore((s) => s.setFileTrackId)
-  const loadSubscriptions = useExploreStore((s) => s.loadSubscriptions)
-  const subscriptionsLoaded = useExploreStore((s) => s.subscriptionsLoaded)
 
   const subscriptionMap = useSubscriptionMap()
 
@@ -34,8 +32,6 @@ export default function HistoryPage() {
   const favorites = useExploreStore((s) => s.favorites)
   const addFavorite = useExploreStore((s) => s.addFavorite)
   const removeFavorite = useExploreStore((s) => s.removeFavorite)
-  const loadFavorites = useExploreStore((s) => s.loadFavorites)
-  const favoritesLoaded = useExploreStore((s) => s.favoritesLoaded)
 
   // Optimize favorite lookups with a Set of composite keys
   const favoriteKeysSet = React.useMemo(() => {
@@ -49,23 +45,13 @@ export default function HistoryPage() {
   // Keyboard shortcuts
   useKeyboardShortcuts({ isModalOpen: false })
 
-  // Load data: sessions, favorites, and subscriptions
+  // Load sessions on mount (favorites are loaded globally by useAppInitialization)
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        await Promise.all([
-          !favoritesLoaded ? loadFavorites() : Promise.resolve(),
-          !subscriptionsLoaded ? loadSubscriptions() : Promise.resolve(),
-          DB.getAllPlaybackSessions().then((s) => setSessions(s)),
-        ])
-      } catch (err) {
-        console.error('[HistoryPage] Failed to load data:', err)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-    loadData()
-  }, [favoritesLoaded, loadFavorites, subscriptionsLoaded, loadSubscriptions])
+    DB.getAllPlaybackSessions()
+      .then((s) => setSessions(s))
+      .catch((err) => console.error('[HistoryPage] Failed to load sessions:', err))
+      .finally(() => setIsLoading(false))
+  }, [])
 
   const handlePlaySession = async (session: PlaybackSession) => {
     // For explore/podcast sessions with audioUrl
@@ -212,7 +198,7 @@ export default function HistoryPage() {
                     ) : undefined
                   }
                   title={
-                    <>
+                    <div className="flex items-center">
                       {!session.artworkUrl && (
                         <GutterPlayButton
                           onPlay={() => handlePlaySession(session)}
@@ -226,7 +212,7 @@ export default function HistoryPage() {
                         onClick={!hasNavigation ? () => handlePlaySession(session) : undefined}
                         className="text-sm leading-tight flex-1"
                       />
-                    </>
+                    </div>
                   }
                   subtitle={
                     (session.podcastTitle || session.publishedAt) && (

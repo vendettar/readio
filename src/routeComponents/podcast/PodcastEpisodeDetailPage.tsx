@@ -3,15 +3,15 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { useParams } from '@tanstack/react-router'
-import { AlertTriangle, ExternalLink, FileText, List, Play, Star } from 'lucide-react'
-import React, { useState } from 'react'
+import { AlertTriangle, FileText, List, Play, SquareArrowUpRight, Star } from 'lucide-react'
+import { useState } from 'react'
 import { InteractiveTitle } from '@/components/interactive/InteractiveTitle'
 import { Button } from '@/components/ui/button'
 import { useI18n } from '@/hooks/useI18n'
 import { cn } from '@/lib/utils'
 import { formatDuration, formatRelativeTime } from '@/libs/dateUtils'
 import discovery from '@/libs/discovery'
-import { stripHtml } from '@/libs/htmlUtils'
+import { sanitizeHtml } from '@/libs/htmlUtils'
 import { getDiscoveryArtworkUrl } from '@/libs/imageUtils'
 import { openExternal } from '@/libs/openExternal'
 import { useExploreStore } from '@/store/exploreStore'
@@ -20,17 +20,7 @@ import { usePlayerStore } from '@/store/playerStore'
 export default function PodcastEpisodeDetailPage() {
   const { t } = useI18n()
   const { id, episodeId } = useParams({ from: '/podcast/$id/episode/$episodeId' })
-  const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false)
   const [imageError, setImageError] = useState(false)
-
-  // Load favorites on mount
-  const loadFavorites = useExploreStore((state) => state.loadFavorites)
-  const favoritesLoaded = useExploreStore((state) => state.favoritesLoaded)
-  React.useEffect(() => {
-    if (!favoritesLoaded) {
-      loadFavorites()
-    }
-  }, [favoritesLoaded, loadFavorites])
 
   // Fetch podcast metadata via Lookup API
   const {
@@ -211,8 +201,7 @@ export default function PodcastEpisodeDetailPage() {
 
   // Description handling - prioritize rich content then strip for safety
   const contentSource = episode.descriptionHtml || episode.description || ''
-  const cleanDescription = stripHtml(contentSource)
-  const shouldTruncateDescription = cleanDescription.length > 500
+  const sanitizedDescription = sanitizeHtml(contentSource)
 
   // Format metadata
   const relativeTime = formatRelativeTime(episode.pubDate, t)
@@ -280,7 +269,7 @@ export default function PodcastEpisodeDetailPage() {
                   title={podcast.collectionName}
                   to="/podcast/$id"
                   params={{ id }}
-                  className="text-base font-bold text-primary hover:opacity-80 transition-opacity"
+                  className="text-base font-bold text-primary"
                   maxLines={1}
                 />
                 {(episode.episodeType === 'trailer' || episode.episodeType === 'bonus') && (
@@ -301,41 +290,54 @@ export default function PodcastEpisodeDetailPage() {
             </div>
 
             {/* 3. Bottom Actions - Anchored to bottom of image */}
-            <div className="flex flex-wrap items-center gap-3 pt-6 h-14">
+            <div className="flex items-end gap-3 pt-6 pr-4 h-14">
               <Button
                 onClick={handlePlayEpisode}
-                className="rounded-md bg-primary hover:opacity-90 text-primary-foreground px-4 h-8 font-bold text-xs flex items-center gap-1.5 shadow-none transition-all active:scale-95"
+                className="rounded-md bg-primary hover:opacity-90 text-primary-foreground px-5 h-8 font-bold text-xs flex items-center gap-1.5 shadow-none transition-all active:scale-95"
               >
-                <Play className="w-3 h-3 fill-current" />
+                <Play className="w-3.5 h-3.5 fill-current" />
                 {t('btnPlayOnly')}
               </Button>
 
               <Button
-                variant="outline"
-                size="icon"
+                variant="ghost"
                 onClick={handleToggleFavorite}
                 className={cn(
-                  'w-8 h-8 rounded-md border-border hover:bg-muted transition-colors',
-                  favorited && 'text-primary'
+                  'h-8 rounded-full text-primary font-bold text-xs active:scale-95 bg-muted/70 hover:bg-muted transition-all duration-300 ease-out overflow-hidden ml-auto',
+                  favorited ? 'w-8 p-0' : 'px-3'
                 )}
                 aria-label={favorited ? t('ariaRemoveFavorite') : t('ariaAddFavorite')}
               >
-                <Star size={14} className={cn('stroke-2', favorited && 'fill-current')} />
-              </Button>
-
-              {episode.link && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="rounded-md h-8 px-3 text-xs font-semibold"
-                  onClick={() => {
-                    if (episode.link) openExternal(episode.link)
-                  }}
+                <div
+                  className={cn(
+                    'flex items-center justify-center',
+                    favorited ? 'w-full h-full' : 'gap-1.5'
+                  )}
                 >
-                  <ExternalLink size={12} className="mr-1.5" />
-                  {t('viewOriginal')}
-                </Button>
-              )}
+                  <div
+                    className={cn(
+                      'relative flex items-center justify-center flex-shrink-0',
+                      favorited ? 'w-5 h-5' : 'w-4 h-4'
+                    )}
+                  >
+                    <Star
+                      className={cn(
+                        'w-4 h-4 stroke-2 absolute inset-0 m-auto transition-all duration-300',
+                        favorited ? 'opacity-0 rotate-90 scale-0' : 'opacity-100 rotate-0 scale-100'
+                      )}
+                    />
+                    <Star
+                      className={cn(
+                        'w-5 h-5 stroke-2 fill-current absolute inset-0 m-auto transition-all duration-300',
+                        favorited
+                          ? 'opacity-100 rotate-0 scale-100'
+                          : 'opacity-0 -rotate-90 scale-0'
+                      )}
+                    />
+                  </div>
+                  {!favorited && <span className="whitespace-nowrap">{t('favoritesAdd')}</span>}
+                </div>
+              </Button>
             </div>
           </div>
         </div>
@@ -373,43 +375,33 @@ export default function PodcastEpisodeDetailPage() {
         )}
 
         {/* Description Section */}
-        {cleanDescription && (
-          <section className="max-w-3xl">
-            <div className="h-px bg-border mb-6" />
-            <div className="relative">
+        {sanitizedDescription && (
+          <section className="w-full">
+            <div className="h-px bg-border mb-6 mr-4" />
+            <div className="relative max-w-xl">
               <div
-                className={cn(
-                  'text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap',
-                  !isDescriptionExpanded && shouldTruncateDescription && 'line-clamp-6'
-                )}
-              >
-                {cleanDescription}
-              </div>
-              {shouldTruncateDescription && (
-                <Button
-                  variant="link"
-                  onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
-                  className="text-sm text-primary h-auto p-0 mt-2 font-bold"
-                >
-                  {isDescriptionExpanded ? t('showLess') : t('showMore')}
-                </Button>
-              )}
+                className="prose dark:prose-invert max-w-none whitespace-pre-line"
+                // biome-ignore lint/security/noDangerouslySetInnerHtml: Sanitized HTML is required for formatting and safe links
+                dangerouslySetInnerHTML={{ __html: sanitizedDescription }}
+              />
             </div>
           </section>
         )}
 
         {/* Episode Webpage Link Section */}
         {episode.link && (
-          <section className="max-w-3xl mt-8">
-            <div className="h-px bg-border mb-6" />
-            <Button
-              variant="link"
-              className="text-primary p-0 h-auto font-bold flex items-center gap-1.5 hover:no-underline hover:opacity-80 transition-opacity"
-              onClick={() => episode.link && openExternal(episode.link)}
-            >
-              <span className="text-sm">{t('episodeWebpage')}</span>
-              <ExternalLink size={14} className="opacity-70" />
-            </Button>
+          <section className="w-full mt-8">
+            <div className="h-px bg-border mb-6 mr-4" />
+            <div className="max-w-xl group/link">
+              <Button
+                variant="link"
+                className="text-primary p-0 h-auto font-bold flex items-center gap-2 hover:no-underline"
+                onClick={() => episode.link && openExternal(episode.link)}
+              >
+                <span className="text-sm group-hover/link:underline">{t('episodeWebpage')}</span>
+                <SquareArrowUpRight size={18} className="text-primary" />
+              </Button>
+            </div>
           </section>
         )}
       </div>
