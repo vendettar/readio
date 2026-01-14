@@ -51,7 +51,7 @@ export function setJson(key: string, value: unknown, storage: Storage = localSto
 
 // ============ TTL Helpers ============
 
-interface StoredWithTimestamp<T> {
+export interface StoredWithTimestamp<T> {
   data: T
   at: number
 }

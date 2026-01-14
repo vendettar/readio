@@ -104,7 +104,7 @@ export function SearchOverlay() {
     }
 
     const artwork = getDiscoveryArtworkUrl(episode.artworkUrl600 || episode.artworkUrl100, 600)
-    setAudioUrl(episode.episodeUrl || '', episode.trackName, artwork, {
+    setAudioUrl(episode.episodeUrl, episode.trackName, artwork, {
       description: episode.description,
       podcastTitle: episode.collectionName,
       podcastFeedUrl: feedUrl,

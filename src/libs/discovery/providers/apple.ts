@@ -461,7 +461,7 @@ export function mapSearchToEpisode(search: SearchEpisode): Episode | null {
     pubDate: search.releaseDate,
     artworkUrl: search.artworkUrl600 || search.artworkUrl100,
     duration: search.trackTimeMillis ? search.trackTimeMillis / 1000 : undefined,
-    itunesTrackId: String(search.providerEpisodeId),
+    providerEpisodeId: String(search.providerEpisodeId),
     collectionName: search.collectionName,
     artistName: search.artistName,
     feedUrl: search.feedUrl,

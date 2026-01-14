@@ -36,7 +36,7 @@ export function useEpisodePlayback() {
     const artwork = getDiscoveryArtworkUrl(episode.artworkUrl600 || episode.artworkUrl100, 600)
     const episodeId = episode.episodeGuid || episode.providerEpisodeId.toString()
 
-    setAudioUrl(episode.episodeUrl || '', episode.trackName, artwork, {
+    setAudioUrl(episode.episodeUrl, episode.trackName, artwork, {
       description: episode.description,
       podcastTitle: episode.collectionName,
       podcastFeedUrl: feedUrl || episode.feedUrl,

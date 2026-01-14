@@ -106,7 +106,8 @@ export function BaseEpisodeRow({
             {description && (
               <div
                 className={cn(
-                  'text-xs text-muted-foreground/80 leading-snug font-light line-clamp-1 mb-1',
+                  'text-xs text-muted-foreground/80 leading-snug font-light mb-1',
+                  descriptionLines === 1 && 'line-clamp-1',
                   descriptionLines === 2 && 'line-clamp-2',
                   descriptionLines === 3 && 'line-clamp-3'
                 )}

@@ -39,8 +39,6 @@ export default function SearchPage() {
 
   // Handler for direct playback from artwork (Fast)
   const handlePlaySearchEpisode = async (episode: SearchEpisode) => {
-    if (!episode.episodeUrl) return
-
     // Optimization: Feed URL is now available in SearchEpisode (entity=podcastEpisode)!
     // Only lookup if it's missing (e.g. from a hypothetical source that lacks it)
     let podcastFeedUrl = episode.feedUrl

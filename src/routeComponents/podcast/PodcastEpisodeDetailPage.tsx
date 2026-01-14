@@ -79,7 +79,7 @@ export default function PodcastEpisodeDetailPage() {
   if (!episode && feed && providerEpisodes) {
     // Recovery Strategy: Find in provider results using current ID or iTunes trackId
     const providerMeta = providerEpisodes.find(
-      (ep) => ep.id === decodedEpisodeId || ep.itunesTrackId === decodedEpisodeId
+      (ep) => ep.id === decodedEpisodeId || ep.providerEpisodeId === decodedEpisodeId
     )
 
     if (providerMeta) {

@@ -69,7 +69,7 @@ export function SearchEpisodeItem({ episode, onPlay }: SearchEpisodeItemProps) {
           id: episode.episodeGuid ?? episode.providerEpisodeId.toString(),
           title: episode.trackName,
           description: episode.description || '',
-          audioUrl: episode.episodeUrl || '',
+          audioUrl: episode.episodeUrl,
           pubDate: episode.releaseDate || '',
           artworkUrl: episode.artworkUrl600 || episode.artworkUrl100,
           duration: (episode.trackTimeMillis || 0) / 1000,

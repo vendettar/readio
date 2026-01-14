@@ -1,5 +1,11 @@
 import { getAppConfig } from '../runtimeConfig'
-import { getJson, getJsonWithTtl, nsKey, setJsonWithTtl } from '../storage'
+import {
+  getJson,
+  getJsonWithTtl,
+  nsKey,
+  type StoredWithTimestamp,
+  setJsonWithTtl,
+} from '../storage'
 import type { CacheResult, CacheStatus, RecommendedGroup, RecommendedPodcast } from './types'
 
 const RECOMMENDED_CACHE_PREFIX = 'readioExploreRecommendedV2'
@@ -17,11 +23,6 @@ function getConstants() {
     CHART_CACHE_TTL_MS: config.RECOMMENDED_TTL_MS,
     CHART_CACHE_PURGE_MS: config.RECOMMENDED_TTL_MS * 3,
   }
-}
-
-interface StoredWithTimestamp<T> {
-  data: T
-  at: number
 }
 
 // ============ Chart Cache ============

@@ -774,9 +774,9 @@ Provider 位于 `src/main.tsx`（`Tooltip.Provider`）。
 应用使用 Zod 进行运行时数据验证，主要用于处理外部 API 响应、环境配置以及路由参数，确保数据进入应用核心逻辑前符合预期。
 
 ### 核心范围
-1. **外部 API 响应** (`src/libs/discoveryProvider.ts`):
-   - 使用 `src/libs/schemas/discovery.ts` 中定义的模式（`PodcastSchema`, `EpisodeSchema` 等）对 iTunes API 和 RSS 解析结果进行强校验。
-   - **严格校验规则**: 对核心 ID（`id/collectionId/trackId`）和 URL 字段强制 `min(1)` 或 `url()` 约束。
+1. **外部 API 响应** (`src/libs/discovery/providers/apple.ts`):
+   - 使用 `src/libs/schemas/discovery.ts` 中定义的模式（`PodcastSchema`, `EpisodeSchema` 等）对 Provider API 和 RSS 解析结果进行强校验。
+   - **严格校验规则**: 对核心 ID（`providerPodcastId/providerEpisodeId`）和 URL 字段强制 `min(1)` 或 `url()` 约束。
    - **错误处理**: 映射层（Mapping Layer）不再提供伪造的兜底值（如空字符串或 0）。验证失败时，列表接口会过滤掉无效项，单项接口返回 `null`。错误信息记录到 `console.warn`。
 2. **环境配置** (`src/libs/runtimeConfig.ts`):
    - `getAppConfig` 对 `window.__READIO_ENV__` 和环境变量执行**逐字段校验**。
@@ -790,6 +790,23 @@ Provider 位于 `src/main.tsx`（`Tooltip.Provider`）。
 - **颗粒度降级**: 在配置校验中实现“局部损坏、整体可用”，增强系统鲁棒性。
 - **非侵入性**: 不在 UI 组件内部或性能敏感的循环（如字幕渲染）中使用 Zod。
 - **类型同步**: 使用 `z.infer<T>` 自动导出 TypeScript 类型。
+
+### Architecture Hardening (架构加固状态)
+
+以下是 `docs/best_practice.md` 第 6 节定义的五项架构一致性原则的当前落地状态：
+
+| 原则 | 状态 | 说明 |
+|------|------|------|
+| **A. 边界校验** | ✅ 已实现 | Discovery 模块通过 `src/libs/schemas/*` 实现 Zod 校验 |
+| **B. 请求生命周期** | ⚠️ 部分实现 | 基础设施就绪（`requestManager`, `fetchUtils`）；Explore/Search 尚需统一 AbortSignal policy |
+| **C. 缓存一致性** | ⚠️ 部分实现 | `discovery` 使用 `storage` util；`recommended` 模块仍有独立 TTL 逻辑待统一 |
+| **D. 错误处理分级** | ✅ 已实现 | User Error → Toast (i18n)；System Error → `console.warn/error` |
+| **E. 类型领域分离** | ⚠️ 待完善 | `DiscoveryPodcast` (API) 与 `Podcast` (Domain) 共存，部分字段混用，需明确命名后缀 |
+
+**下一步改进方向**：
+1. 为所有异步请求统一挂载 `AbortSignal`
+2. 合并 `recommended` 模块的缓存逻辑到 `storage.ts`
+3. 明确 API DTO 与 Domain Model 的命名约定（如 `Api*Response` / `*`）
 
 ---
 
@@ -835,6 +852,22 @@ Provider 位于 `src/main.tsx`（`Tooltip.Provider`）。
 ### 播放不中断
 
 `<audio>` 元素挂载在 `__root.tsx`，路由切换不影响播放
+
+### Architecture Consistency Status (架构一致性落地)
+
+以下是 `docs/best_practice.md` 中定义的五项架构一致性原则的当前落地状态：
+
+| 原则 | 状态 | 说明 |
+|------|------|------|
+| **A. 边界校验** | ✅ 已实现 | Discovery 模块通过 `src/libs/schemas/*` 实现 Zod 校验；`runtimeConfig` 实现配置校验。 |
+| **B. 请求生命周期** | ⚠️ 部分实现 | 基础设施就绪（`requestManager`, `fetchUtils`）；Explore/Search 尚需统一 AbortSignal policy。 |
+| **C. 缓存一致性** | ✅ 已实现 | `discovery` 与 `recommended` 均已统一使用 `storage.ts` 工具。 |
+| **D. 错误处理分级** | ✅ 已实现 | User Error → Toast (i18n)；System Error → `console.warn/error`。 |
+| **E. 类型领域分离** | ⚠️ 待完善 | `DiscoveryPodcast` (API) 与 `Podcast` (Domain) 共存，部分字段混用，需明确命名后缀。 |
+
+**下一步改进方向**：
+1. 为所有异步请求统一挂载 `AbortSignal`。
+2. 明确 API DTO 与 Domain Model 的命名约定（如 `Api*Response` / `*`）。
 
 ---
 
@@ -902,10 +935,10 @@ PostCSS 管线使用 `@tailwindcss/postcss`（Tailwind v4）。
 | 模块 | 组件 | 数据来源 |
 |------|------|----------|
 | Header | 标题 "Explore" + 副标题 | i18n |
-| Module D: Editor's Picks | 小卡片网格 | Discovery Provider Lookup API (固定 collectionId[]) |
+| Module D: Editor's Picks | 小卡片网格 | Discovery Provider Lookup API (固定 providerPodcastId[]) |
 | Module A: Top Shows | Horizontal Carousel | Discovery Provider (Top Charts) |
 
-| Module C: Top Episodes | Horizontal Grid | Discovery RSS Top Episodes (TrackId matching) |
+| Module C: Top Episodes | Horizontal Grid | Discovery RSS Top Episodes (providerEpisodeId matching) |
 
 ### 组件位置
 
@@ -1025,13 +1058,13 @@ PostCSS 管线使用 `@tailwindcss/postcss`（Tailwind v4）。
 **步骤**:
 
 1. **STEP 1 - Direct GUID Match (最快)**: 在 RSS feed 中直接匹配 `episode.id === episodeId`
-2. **STEP 2 - iTunes Lookup Fallback**: 如果 STEP 1 失败，使用 `lookupPodcastEpisodes(id, 'us', 50)` 获取 iTunes 数据
-3. **STEP 3 - iTunes Metadata Match**: 在 iTunes 结果中通过 `episodeGuid` 或 `trackId` 匹配
-4. **STEP 4 - Cross-Reference Match**: 用 iTunes 元数据（标题或音频 URL）在 RSS feed 中匹配
-5. **STEP 5 - Virtual Episode Creation**: 如果仍找不到（旧 episode 可能已从 RSS 删除），直接用 iTunes 数据创建 "Virtual Episode"
+2. **STEP 2 - Provider Lookup Fallback**: 如果 STEP 1 失败，使用 `lookupPodcastEpisodes(id, 'us', 50)` 获取 Provider 数据
+3. **STEP 3 - Provider Metadata Match**: 在 Provider 结果中通过 `episodeGuid` 或 `providerEpisodeId` 匹配
+4. **STEP 4 - Cross-Reference Match**: 用 Provider 元数据（标题或音频 URL）在 RSS feed 中匹配
+5. **STEP 5 - Virtual Episode Creation**: 如果仍找不到（旧 episode 可能已从 RSS 删除），直接用 Provider 数据创建 "Virtual Episode"
 
 **设计原因**:
-- iTunes API 的 `episodeGuid` 与 RSS feed 的 `<guid>` 可能有细微差异
+- Provider API 的 `episodeGuid` 与 RSS feed 的 `<guid>` 可能有细微差异
 - 部分旧 episode 可能已从 RSS feed 中移除，但 iTunes 仍有记录
 - 保证用户分享的链接即使指向旧 episode 也能正常访问
 
@@ -1041,12 +1074,12 @@ PostCSS 管线使用 `@tailwindcss/postcss`（Tailwind v4）。
 
 **问题**:
 - RSS Charts API 返回的 `DiscoveryPodcast` 对象只有基础信息，没有 `audioUrl`
-- iTunes Lookup API 不支持直接用 episode `trackId` 查找单个 episode（`id` 参数只接受 podcast collectionId）
+- Provider Lookup API 不支持直接用 episode `providerEpisodeId` 查找单个 episode（`id` 参数只接受 podcast `providerPodcastId`）
 
 **解决方案 - 两步 fallback**:
 
 1. **STEP 1 - iTunes Podcast Episodes**: 使用 `lookupPodcastEpisodes(podcastId, 'us', 50)` 获取 podcast 的 episode 列表
-   - 通过 `trackId` 或标题模糊匹配找到目标 episode
+   - 通过 `providerEpisodeId` 或标题模糊匹配找到目标 episode
    - 获取完整 episode 数据（包括 `episodeUrl`）
 
 2. **STEP 2 - RSS Feed Fallback**: 如果 iTunes 找不到（episode 可能超出 limit 范围），尝试从 RSS Feed 匹配
@@ -1055,10 +1088,10 @@ PostCSS 管线使用 `@tailwindcss/postcss`（Tailwind v4）。
 
 **代码示例**:
 ```typescript
-// STEP 1: iTunes Lookup (fast, limit=50)
-const itunesEpisodes = await lookupPodcastEpisodes(podcastId, 'us', 50);
-let fullEpisode = itunesEpisodes.find(ep =>
-    String(ep.trackId) === episode.id ||
+// STEP 1: Provider Lookup (fast, limit=50)
+const providerEpisodes = await lookupPodcastEpisodes(podcastId, 'us', 50);
+let fullEpisode = providerEpisodes.find(ep =>
+    String(ep.providerEpisodeId) === episode.id ||
     ep.trackName.toLowerCase().includes(episode.name.toLowerCase())
 );
 

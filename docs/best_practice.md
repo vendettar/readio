@@ -93,7 +93,35 @@ This document is a concise index of coding standards, architectural patterns, an
 -   **Component-Scoped**: If custom CSS is needed, use Tailwind `@layer components` or CSS modules.
 -   **Z-Index**: Manage z-indices explicitly to ensure interactive elements (`z-20`) sit above hover layers.
 
-## 6. Project-Specific Guidelines
+## 6. Architecture & Consistency Standards
+
+### A. External Input Validation (边界校验一致性)
+-   **Rule**: All external inputs (RSS/Search/Drag&Drop) must pass through Zod schema (`safeParse` / `parseOrNull`) before entering UI/Store. Never allow raw external data directly into the application.
+-   **Implementation**: Use `src/libs/schemas/*` for Discovery module validation.
+
+### B. Request Lifecycle Policy (请求生命周期策略)
+-   **Rule**: All async requests must attach an `AbortSignal`. View transitions (modal close, page leave) must trigger abort. Use `requestManager` for deduplication and race condition handling.
+-   **Pattern**: Always clean up in-flight requests when views unmount.
+
+### C. Shared Cache Policy (缓存一致性)
+-   **Rule**: Cache read/write must use unified `storage` utilities (`getJsonWithTtl`). TTL constants should be centralized (e.g., `runtimeConfig` or `constants.ts`). No hardcoded magic numbers.
+-   **Rationale**: Prevents cache inconsistencies and makes TTL tuning easier.
+
+### D. Error Handling Tiers (错误处理分级)
+| Tier | Trigger | Action |
+|------|---------|--------|
+| **User Error** | Operation failure, network disconnect | Toast / Empty State (i18n) |
+| **System Error** | Parse failure, bad params | `console.warn/error` (silent) |
+| **Forbidden** | Never expose stack traces to users or silently swallow user operation failures |
+
+### E. Domain vs API Models (类型领域分离)
+-   **Rule**: Strictly separate API response types (DTO) from internal business types (Domain Model).
+-   **Naming Convention**:
+    -   API types: Match Zod schema (e.g., `ApiPodcastResponse`)
+    -   Domain types: Clean business models (e.g., `Podcast`)
+-   **Rationale**: Prevents coupling UI components to external API structures.
+
+## 7. Project-Specific Guidelines
 
 -   **Global Search**: Implemented as a mode, not a filter. Two stages: Preview Overlay → Results Page.
 -   **Transcript**: **Every word must be visible**. No truncation (`text-overflow: ellipsis`) is allowed for subtitle text.
@@ -101,7 +129,7 @@ This document is a concise index of coding standards, architectural patterns, an
 -   **Audio Player**: The audio element is persistent in `__root.tsx`. Event listeners must be managed carefully to avoid memory leaks or "stuck" states.
 -   **Episode Session Integrity**: If an episode lacks `podcastFeedUrl`, do not create a playback session. Route to the show page or display a friendly error instead.
 
-## 7. Refactoring & Maintenance
+## 8. Refactoring & Maintenance
 
 -   **Standardize**: When touching legacy code, refactor `localStorage` calls to use `src/libs/storage.ts` and ID generation to `src/libs/id.ts`.
 -   **Helpers**: Prefer creating/using shared hooks (`useOnClickOutside`, `useEventListener`) over repeating boilerplate.
