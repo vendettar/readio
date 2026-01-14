@@ -2,7 +2,7 @@ import React from 'react'
 import { useExploreStore } from '../store/exploreStore'
 
 /**
- * A hook that provides a memoized Map of feedUrl -> collectionId
+ * A hook that provides a memoized Map of feedUrl -> providerPodcastId
  * for efficient O(1) subscription lookups.
  */
 export function useSubscriptionMap() {

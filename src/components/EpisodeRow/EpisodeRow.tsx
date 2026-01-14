@@ -134,7 +134,7 @@ export function EpisodeRow({
   const hasArtwork = !!effectiveArtwork
 
   // Validate podcast ID for navigation - only navigate if we have a valid ID
-  const podcastId = String(podcast.providerPodcastId ?? podcast.collectionId ?? '')
+  const podcastId = String(podcast.providerPodcastId ?? '')
   const hasValidNavigation = podcastId.length > 0
 
   return (

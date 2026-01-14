@@ -22,7 +22,7 @@ export const PodcastShowCard = React.memo(
     const { t } = useI18n()
     const subscriptions = useExploreStore((state) => state.subscriptions)
 
-    // Check by collectionId or feedUrl
+    // Check by providerPodcastId or feedUrl
     const subscribed = subscriptions.some(
       (s) =>
         (podcast.id && s.providerPodcastId === podcast.id) ||
