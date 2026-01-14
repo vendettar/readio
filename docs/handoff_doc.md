@@ -791,6 +791,51 @@ Provider 位于 `src/main.tsx`（`Tooltip.Provider`）。
 - **非侵入性**: 不在 UI 组件内部或性能敏感的循环（如字幕渲染）中使用 Zod。
 - **类型同步**: 使用 `z.infer<T>` 自动导出 TypeScript 类型。
 
+---
+
+## 10. Transcript（字幕渲染约束与虚拟列表）
+
+产品要求：
+- **字幕每个单词都可见**（多行显示，不做省略号截断）。
+
+当前实现：
+- 使用 `react-virtuoso` 实现动态高度虚拟列表。
+- 移除了固定行高约束和文本截断。
+- CSS 改为 `word-wrap: break-word; overflow-wrap: break-word; line-height: 1.5`，支持多行显示。
+- **Zoom 支持**：通过 `useEffect` 监听 `zoomScale` 变化并触发 Virtuoso 重新测量。
+
+实现细节：
+- 组件：`src/components/Transcript/TranscriptView.tsx`
+- FullPlayer 中也使用相同的 TranscriptView
+- Following 模式：使用 `virtuosoRef.scrollToIndex()` 自动滚动到当前字幕行，居中对齐
+
+---
+
+## 10.1 Selection（选词/查词）
+
+- UI 组件：`src/components/Selection/SelectionUI.tsx`（ContextMenu / LookupPopover / hover overlay）
+- 用户可见错误信息使用 i18n：查词失败等通过 `TranslationKey`（如 `lookupNotFound`）映射为 `t(key)` 文案
+- 动态定位：仅使用 `left/top` 或 CSS 变量注入来表达动态布局，避免在 `style={{...}}` 中直接写 `width/height/transform`
+
+---
+
+## 11. 架构加固 (Architecture Hardening)
+
+### 代码分割
+
+- **Vendor 分块**：`vite.config.ts` 使用 `manualChunks` 将大型依赖拆分
+
+### 错误隔离
+
+| 边界 | 覆盖范围 | 回退 UI |
+|------|----------|---------|
+| `RootErrorBoundary` | 整个应用 | 全屏错误页面 + 刷新按钮 |
+| TranscriptView ErrorBoundary | 字幕视图 | 友好错误提示 + 复制诊断信息按钮 |
+
+### 播放不中断
+
+`<audio>` 元素挂载在 `__root.tsx`，路由切换不影响播放
+
 ### Architecture Consistency Status (架构一致性落地)
 
 以下是 `docs/best_practice.md` 第 6 节定义的五项架构一致性原则的当前落地状态：
