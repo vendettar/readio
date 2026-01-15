@@ -1,0 +1,125 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.3.11/schema.json",
+  "extends": [
+    "../../biome.json"
+  ],
+  "vcs": {
+    "enabled": false
+  },
+  "files": {
+    "ignoreUnknown": true,
+    "includes": [
+      "!node_modules",
+      "!.next",
+      "!dist",
+      "!build",
+      "!.source"
+    ]
+  },
+  "overrides": [
+    {
+      "includes": [
+        "src/components/Files/TrackOverflowMenu.tsx",
+        "src/hooks/selection/__tests__/useSelectionActions.test.ts",
+        "src/hooks/useFilePlayback.ts",
+        "src/main.tsx"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noNonNullAssertion": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/components/Explore/**",
+        "src/components/PodcastCard/**",
+        "src/components/Selection/**"
+      ],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noArrayIndexKey": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/components/Files/**",
+        "src/components/Selection/**",
+        "src/components/Transcript/**",
+        "src/routes/__root.tsx",
+        "src/components/ZoomControl/**"
+      ],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "noStaticElementInteractions": "off",
+            "useKeyWithClickEvents": "off",
+            "noSvgWithoutTitle": "off",
+            "useMediaCaption": "off"
+          },
+          "style": {
+            "noNonNullAssertion": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/components/GlobalSearch/SearchOverlay.tsx"
+      ],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noImplicitAnyLet": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/components/interactive/**"
+      ],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noExplicitAny": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/routeTree.gen.ts"
+      ],
+      "formatter": {
+        "enabled": false
+      },
+      "linter": {
+        "enabled": false
+      },
+      "assist": {
+        "actions": {
+          "source": {
+            "organizeImports": "off"
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "src/index.css"
+      ],
+      "linter": {
+        "enabled": false
+      },
+      "formatter": {
+        "enabled": false
+      }
+    }
+  ]
+}

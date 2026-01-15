@@ -10,6 +10,10 @@ build/
 out/
 stats.html
 *.tsbuildinfo
+.next/
+.source/
+.turbo/
+.biome/
 
 # Logs and coverage
 *.log
@@ -19,7 +23,8 @@ coverage/
 # Env/config
 .env
 .env.local
-public/env.local.js
+**/public/env.local.js
+
 
 # Editors and OS
 .DS_Store

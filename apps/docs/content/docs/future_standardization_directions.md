@@ -1,0 +1,175 @@
+---
+title: Future Standardization
+---
+
+# Future Standardization Directions (Maintainability “Regularization” Backlog)
+
+This document lists higher-ROI refactors that standardize repeated patterns into shared primitives, helpers, and hooks.
+
+These items are not necessarily required immediately, but are strong candidates once the codebase grows and multiple features start repeating the same interaction and infrastructure patterns.
+
+Project-wide constraints still apply:
+- Tailwind + shadcn/ui only
+- No ad-hoc raw HTML controls except approved exceptions in `docs/design_system.md`
+- Prefer shared primitives over per-feature implementations
+
+---
+
+## 1) Confirmation Dialog Standardization
+
+**Problem**
+- Confirmations tend to be re-implemented per page with bespoke state + wiring.
+- Over time, copy, accessibility, and close/escape behavior diverge.
+
+**Direction**
+- Introduce a reusable shadcn/Radix-based confirmation primitive:
+  - `ConfirmAlertDialog` component (wrapper around shadcn `AlertDialog`)
+  - Optional local hook: `useConfirmDialog()` for page-level state
+
+**Scope**
+- Destructive confirmations (delete/wipe/clear)
+- Must remain local (avoid global modal systems unless explicitly needed)
+
+---
+
+## 2) Overflow Menu Standardization (Card Menus)
+
+**Problem**
+- Folder/track and future card menus duplicate:
+  - trigger button styling
+  - menu placement defaults (side/align/offset)
+  - close/toggle semantics
+  - stopPropagation patterns
+
+**Direction**
+- Add a shared `OverflowMenu` wrapper over shadcn `DropdownMenu`:
+  - standard trigger (ghost icon button)
+  - standard content defaults (`side="bottom"`, `align="end"`, `sideOffset`)
+  - keep menu items owned by each feature
+
+**Scope**
+- Folder/track menus now; reusable for future entities
+
+---
+
+## 3) Density System Standardization (Variants Live in Components)
+
+**Problem**
+- View preferences (e.g. Compact/Comfortable) can lead to class branching in routes/pages.
+- This increases page complexity and makes future controls (Sort/Group/Filter) harder to add cleanly.
+
+**Direction**
+- Keep density styling inside presentational components via variants (`cva`/`cn`):
+  - `TrackCard` (and its subtitle rows)
+- Route/page only owns:
+  - reading/persisting density
+  - passing a single `density` prop (or a single `data-density` attribute)
+
+---
+
+## 4) Storage & Cache Standardization (Keys, TTL, Namespace Clearing)
+
+**Problem**
+- Direct `localStorage` use tends to spread:
+  - inconsistent key naming/prefixing
+  - inconsistent JSON parsing failure behavior
+  - inconsistent TTL semantics and cleanup
+
+**Direction**
+- Centralize storage helpers in `src/libs/storage.ts`:
+  - key builders / prefix conventions
+  - safe JSON read/write utilities
+  - TTL helpers where needed
+  - namespace clearing utilities (useful for dev tools and troubleshooting)
+
+**Note**
+- First release policy allows resets; do not over-engineer migration/compat layers.
+
+---
+
+## 5) ID Generation Standardization (Semantic IDs)
+
+**Problem**
+- IDs end up being created ad-hoc (format drift; accidental `Math.random()` usage).
+
+**Direction**
+- Centralize ID generation in `src/libs/id.ts`:
+  - `createId()` (UUID where available)
+  - semantic helpers: `createToastId()`, `createSessionId()`, etc.
+- Avoid direct `Math.random()` outside `id.ts` fallback path.
+
+---
+
+## 6) Settings Page Decomposition (Hooks Own Logic, Route Owns Layout)
+
+**Problem**
+- Settings pages naturally grow into “everything” pages and become maintenance hotspots.
+- Mixing data fetching, mutations, and UI composition increases cognitive load.
+
+**Direction**
+- Extract logic to hooks:
+  - `useSettingsData()` (reads + reload)
+  - `useStorageMaintenance()` (mutations: delete/clear/wipe)
+- Keep `src/routes/settings.tsx` orchestration-only:
+  - composition
+  - wiring to confirmation dialog primitive
+
+---
+
+## When to Prioritize These
+
+Prioritize these refactors when:
+- the same interaction pattern appears in 2+ places
+- you see repeated boilerplate increasing per feature
+- a new feature would require copying existing code with “small tweaks”
+
+Defer when:
+- the change would be a large cross-cutting refactor with low immediate product value
+- behavior is still rapidly evolving and APIs are not stable yet
+
+---
+
+## Current Focus Additions (Files / Explore Iteration)
+
+If the near-term roadmap is primarily polishing **Files** and **Explore**, prioritize these two standardizations before adding new libraries/frameworks:
+
+### A) Inline Edit Pattern (Renames & Small Edits)
+
+**Why now**
+- Files already has (or will soon have) multiple inline edits (collection rename, track rename, subtitle rename).
+- Without a shared pattern, keyboard behavior and validation drift quickly.
+
+**Direction**
+- Introduce a small reusable component or hook for inline edits:
+  - Component option: `InlineRenameInput` (built on shadcn `Input`)
+  - Hook option: `useInlineEdit()` (manages editing/value/commit/cancel)
+- Standardize rules:
+  - `Enter` confirms, `Escape` cancels
+  - validate non-empty (trim)
+  - blur behavior is consistent (cancel or commit; pick one)
+  - accessible labeling (`aria-label`, `aria-invalid` where relevant)
+
+### B) Explore Data Loading Conventions (TanStack Query)
+
+**Why now**
+- Explore will evolve into lists + filters + pagination / load-more.
+- Consistent query keys and UI states (loading/empty/error) prevent fragmentation.
+
+**Direction**
+- Standardize `queryKey` naming:
+  - `['explore', featureName, normalizedParams...]`
+- Standardize UI states:
+  - shared empty state, error state, and skeleton/loading pattern (small reusable components)
+- Concurrency/cancellation:
+  - rely on Query `signal` in fetch functions
+  - avoid per-feature ad-hoc AbortController usage unless strictly necessary
+
+---
+
+## View Density Scope (Project Decision)
+
+The **view density** setting (`comfortable` / `compact`) applies to the entire **Files** page:
+- File/track cards (and subtitle rows)
+- Collection/folder cards (and folder grid)
+
+This is an intentional UX choice: compact mode increases information density across the whole Files surface, not only the track list.
