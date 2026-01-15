@@ -112,8 +112,8 @@ Quick Regression Points:
 
 ## 8) Build & Bundle (Advisory)
 
-- [ ] `npm run build` passes.
-- [ ] `ANALYZE=1 npm run build` generates `stats.html` (Local analysis only; do not commit).
+- [ ] `pnpm build` passes.
+- [ ] `ANALYZE=1 pnpm build` generates `stats.html` (Local analysis only; do not commit).
 
 ---
 
@@ -127,8 +127,8 @@ Quick Regression Points:
 
 ## 10) Smoke Test (Required after every major change)
 
-- [ ] `npm run test:run`
-- [ ] `npm run build`
+- [ ] `pnpm --filter @readio/lite test:run`
+- [ ] `pnpm build`
 - [ ] Manual test:
   - [ ] 5 main Sidebar routes open correctly: `/explore`, `/subscriptions`, `/favorites`, `/history`, `/files`.
   - [ ] Player: Playback is uninterrupted by route/immersion changes.

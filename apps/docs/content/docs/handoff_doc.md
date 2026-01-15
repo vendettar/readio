@@ -41,8 +41,8 @@ Readio 是一个浏览器内播客播放器，支持：
 
 ## 2. 本地开发 / 构建 / 测试
 
-构建与测试脚本：`npm install`、`npm run dev`、`npm run build`、`npm run test:run`、`npm run test:e2e`。
-代码质量工具：已迁移至 Biome（`npm run lint`、`npm run format`、`npm run check`），不再使用 ESLint/Prettier。
+构建与测试脚本（根目录下执行）：`pnpm build`、`pnpm test`、`pnpm --filter @readio/lite test:run`、`pnpm --filter @readio/lite test:e2e`。
+代码质量工具：已迁移至 Biome（`pnpm lint`、`pnpm format`），不再使用 ESLint/Prettier。
 
 ### UI Primitives（统一交互组件）
 
@@ -722,11 +722,11 @@ Readio 的确认交互基于 shadcn/Radix primitives：
 - 测试文件：`src/__tests__/*.test.ts`
 - 使用 `fake-indexeddb` 模拟 IndexedDB
 - 共 119 个测试用例
-- 脚本：`npm run test:run`
+- 脚本：`pnpm --filter @readio/lite test:run` (从根目录执行)
 
 ### E2E 测试（Playwright）
 
-- 脚本：`npm run test:e2e`
+- 脚本：`pnpm --filter @readio/lite test:e2e` (从根目录执行)
 
 ---
 

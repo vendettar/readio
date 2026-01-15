@@ -179,8 +179,8 @@ The audit result must be returned using the following structure:
 - Only include if it reduces future maintenance cost
 
 ## Verification Checklist
-- `npm run test:run`
-- `npm run build`
+- `pnpm --filter @readio/lite test:run`
+- `pnpm build`
 - (If routing touched) manual: back/forward, open/close `/explore` and `/files`, playback not interrupted
 
 ### 5.0 Project-Specific Review Checklist (Readio)
