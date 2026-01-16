@@ -9,10 +9,10 @@ import {
   useSensors,
 } from '@dnd-kit/core'
 import { useCallback, useState } from 'react'
-import { DB, type FileTrack } from '../libs/dexieDb'
-import { resolveDuplicateName } from '../libs/files/ingest'
-import { logError } from '../libs/logger'
-import { toast } from '../libs/toast'
+import { DB, type FileTrack } from '../lib/dexieDb'
+import { resolveDuplicateName } from '../lib/files/ingest'
+import { logError } from '../lib/logger'
+import { toast } from '../lib/toast'
 import { useI18n } from './useI18n'
 
 interface UseFileDragDropOptions {

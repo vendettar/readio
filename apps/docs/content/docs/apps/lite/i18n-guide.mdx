@@ -1,0 +1,49 @@
+---
+title: I18n Guide
+---
+
+# Internationalization (I18n) Guide
+
+Readio uses **react-i18next**, the industry standard for React localization.
+This ensures support for plurals, namespaces, and deep integration with the React ecosystem.
+
+## 1. Setup & Configuration
+
+The configuration lives in `src/lib/i18n.ts`.
+It uses `i18next-browser-languagedetector` to remember user preference.
+
+## 2. Usage in Components
+
+Use the `useTranslation` hook to access the `t` function.
+
+```tsx
+import { useTranslation } from 'react-i18next'
+
+function MyComponent() {
+  const { t } = useTranslation()
+  
+  return <span>{t('settings.title')}</span>
+}
+```
+
+## 3. Type Safety (Mandatory)
+
+We enforce strict type checking for translation keys.
+The `t` function will only accept keys that exist in the English (`en`) locale.
+
+- **Definition**: `src/lib/translations.ts` exports the `TranslationKey` type.
+- **Rule**: Never cast keys to `any`. Fix the translation file if a key is missing.
+
+## 4. Plurals
+
+Do NOT use ternary operators for plurals. Use i18next's built-in support.
+
+- **JSON**: `{ "episode_count": "{count} Episode", "episode_count_plural": "{count} Episodes" }`
+- **Code**: `t('episode_count', { count: 5 })`
+
+## 5. Adding New Keys
+
+1.  Open `src/lib/translations.ts`.
+2.  Add the key to the `en` object.
+3.  Add the key to `zh` or other supported languages.
+4.  The `TranslationKey` type will automatically update.

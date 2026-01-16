@@ -3,17 +3,17 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
-import { formatDuration } from '../libs/dateUtils'
+import { formatDuration } from '../lib/dateUtils'
 import {
   DB,
   type Favorite,
   type FileTrack,
   type PlaybackSession,
   type Subscription,
-} from '../libs/dexieDb'
-import discovery, { type Podcast, type SearchEpisode } from '../libs/discovery'
-import { formatFileSize } from '../libs/formatters'
-import { getAppConfig } from '../libs/runtimeConfig'
+} from '../lib/dexieDb'
+import discovery, { type Podcast, type SearchEpisode } from '../lib/discovery'
+import { formatFileSize } from '../lib/formatters'
+import { getAppConfig } from '../lib/runtimeConfig'
 import { useExploreStore } from '../store/exploreStore'
 import { useI18n } from './useI18n'
 

@@ -1,11 +1,11 @@
 // src/hooks/useI18n.ts
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from 'react'
-import { getJson, setJson } from '../libs/storage'
-import { type Language, languageNativeNames, translations } from '../libs/translations'
+import { getJson, setJson } from '../lib/storage'
+import { type Language, languageNativeNames, translations } from '../lib/translations'
 
-export type { Language } from '../libs/translations'
+export type { Language } from '../lib/translations'
 
-import { getAppConfig } from '../libs/runtimeConfig'
+import { getAppConfig } from '../lib/runtimeConfig'
 
 interface I18nContextType {
   language: Language

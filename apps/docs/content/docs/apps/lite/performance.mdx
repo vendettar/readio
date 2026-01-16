@@ -1,0 +1,79 @@
+---
+title: Performance
+---
+
+# Performance Guidelines
+
+Readio is an audio application. 
+**Goal**: Audio playback must NEVER stutter, and CPU usage must be minimal to save battery.
+
+---
+
+## 1. Battery Conservation (The "Hidden" Rule)
+
+**Rule**: Pause non-essential work when the tab is not visible.
+- **Mechanism**: Use `document.hidden` or `Page Visibility API`.
+- **Optimization**:
+  - Stop updating the Transcript active line highlighting if the tab is hidden.
+  - Slow down UI polling/refresh intervals.
+  - Resume immediately when `visibilitychange` fires.
+
+## 2. Memory Management (The Revoke Rule)
+
+**Rule**: Every `URL.createObjectURL()` MUST have a corresponding `URL.revokeObjectURL()`.
+
+- **Audio Blobs**: Do NOT create object URLs in components. Use `playerStore.loadAudioSource(blob)` which handles the URL creation and automatic revocation of the previous source.
+- **Verification**: If memory usage increases after every song change, you have a leaked Object URL.
+
+## 3. List Virtualization
+
+**Rule**: Any list that can potentially grow > 50 items MUST be virtualized.
+- **Tool**: `react-virtuoso`.
+- **Scenarios**:
+  - Podcast Episode Lists.
+  - File Explorer (Folders/Tracks).
+  - Transcript View (Every line is a virtual item).
+
+**Anti-Pattern**: Rendering `array.map()` on a large array. This blocks the main thread and freezes audio UI.
+
+## 4. Image Optimization
+
+**Rule**: Lazy load all images that are not in the viewport.
+- **Component**: Use standard `img` with `loading="lazy"`.
+- **Decoding**: Use `decoding="async"` to prevent image decoding from blocking the main thread.
+
+## 5. Re-render Hygiene
+
+**Rule**: Audio Player components (Progress Bar, Timer) update every second.
+- **Isolation**: Isolate fast-changing state into small leaf components (`ProgressBar`, `CurrentTime`).
+- **Avoid**: Do not let high-frequency updates trigger a re-render of the entire `Player` or `Page`.
+- **Technique**: Use Zustand atomic selectors (`usePlayerStore(s => s.progress)`).
+
+## 6. Root Layout Hygiene
+
+**Rule**: The Root Layout (`__root.tsx`) must NEVER subscribe to high-frequency state changes.
+- **Why**: If Root re-renders, the entire React tree re-renders.
+- **Fix**: Move event listeners and high-frequency logic into an isolated, memoized component (e.g., `<GlobalAudioController />`).
+
+## 7. Event Listener Cleanup
+
+**Rule**: All global event listeners (`window.*`, `document.*`) must be cleaned up in the `useEffect` return block.
+- **Standard**: Prefer `react-hotkeys-hook` and `@use-gesture` which handle cleanup internally.
+
+## 8. Heavy Computation (Web Workers)
+
+**Rule**: Parsing large files (e.g., 50MB RSS XML, large SRT subtitles) must happen in a Web Worker.
+- **Blocking**: Any function taking > 50ms is too slow for the main thread and will cause audio glitches.
+
+## 9. Interaction Latency (Async Handlers)
+
+**Rule**: Never perform an `await` in a click handler without immediate UI feedback.
+- **Scenario**: Clicking a search result that needs to fetch data before playing.
+- **Bad**: User clicks -> Nothing happens for 2s -> Audio plays.
+- **Good**: User clicks -> **Immediate Spinner/Disable state** -> Fetch -> Audio plays.
+
+## 10. Database Indexing (Dexie)
+
+**Rule**: Never use `.filter()` for searching large tables.
+- **Why**: This triggers a Table Scan (O(N)), reading all records into memory.
+- **Fix**: Use IndexedDB indexes and `.startsWithIgnoreCase()` or `.equals()` on indexed fields.

@@ -1,7 +1,7 @@
 import { MoreHorizontal } from 'lucide-react'
 import React from 'react'
 import { cn } from '@/lib/utils'
-import { getDiscoveryArtworkUrl } from '@/libs/imageUtils'
+import { getDiscoveryArtworkUrl } from '@/lib/imageUtils'
 import { InteractiveArtwork } from '../interactive/InteractiveArtwork'
 import { InteractiveTitle } from '../interactive/InteractiveTitle'
 import { Button } from '../ui/button'

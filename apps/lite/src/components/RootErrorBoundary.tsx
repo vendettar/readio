@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { useI18n } from '../hooks/useI18n'
-import { reportError } from '../libs/errorReporter'
+import { reportError } from '../lib/errorReporter'
 import { ErrorBoundary } from './ErrorBoundary'
 
 const IS_DEV = import.meta.env.DEV

@@ -1,12 +1,12 @@
 // src/store/exploreStore.ts
 import { create } from 'zustand'
-import type { Favorite, Subscription } from '../libs/dexieDb'
-import { DB } from '../libs/dexieDb'
-import discovery, { type Episode, type ParsedFeed, type Podcast } from '../libs/discovery'
-import { abortRequestsWithPrefix } from '../libs/requestManager'
-import { getAppConfig } from '../libs/runtimeConfig'
-import { toast } from '../libs/toast'
-import type { TranslationKey } from '../libs/translations'
+import type { Favorite, Subscription } from '../lib/dexieDb'
+import { DB } from '../lib/dexieDb'
+import discovery, { type Episode, type ParsedFeed, type Podcast } from '../lib/discovery'
+import { abortRequestsWithPrefix } from '../lib/requestManager'
+import { getAppConfig } from '../lib/runtimeConfig'
+import { toast } from '../lib/toast'
+import type { TranslationKey } from '../lib/translations'
 
 // Abort controller management for explore requests
 let searchAbortController: AbortController | null = null

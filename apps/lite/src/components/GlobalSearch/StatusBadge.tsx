@@ -1,7 +1,7 @@
 // src/components/GlobalSearch/StatusBadge.tsx
 import { Bell, Clock, FolderOpen, Heart } from 'lucide-react'
 import { useI18n } from '../../hooks/useI18n'
-import type { TranslationKey } from '../../libs/translations'
+import type { TranslationKey } from '../../lib/translations'
 
 export type BadgeType = 'favorited' | 'played' | 'subscribed' | 'local'
 

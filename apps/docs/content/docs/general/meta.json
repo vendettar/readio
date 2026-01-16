@@ -1,0 +1,15 @@
+{
+  "title": "General Principles",
+  "pages": [
+    "charter",
+    "design-system",
+    "monorepo-strategy",
+    "technical-roadmap",
+    "feature-backlog",
+    "security",
+    "accessibility",
+    "audit-system",
+    "improvement-process",
+    "future-standards"
+  ]
+}

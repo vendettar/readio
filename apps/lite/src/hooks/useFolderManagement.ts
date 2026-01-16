@@ -1,8 +1,8 @@
 // src/hooks/useFolderManagement.ts
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { DB, type FileFolder } from '../libs/dexieDb'
-import { logError } from '../libs/logger'
-import { toast } from '../libs/toast'
+import { DB, type FileFolder } from '../lib/dexieDb'
+import { logError } from '../lib/logger'
+import { toast } from '../lib/toast'
 import { useOnClickOutside } from './useOnClickOutside'
 
 interface UseFolderManagementOptions {

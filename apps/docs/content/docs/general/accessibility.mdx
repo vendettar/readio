@@ -1,0 +1,54 @@
+---
+title: Accessibility
+---
+
+# Accessibility (A11y) Standards
+
+Readio must be usable by everyone.
+As a "Vibe Coding" project, we rely on **Headless UI** libraries (Radix/Shadcn) to handle the heavy lifting, but we must use them correctly.
+
+## 1. The "No Mouse" Rule
+
+**Rule**: Every feature MUST be usable with **Keyboard Only**.
+- **Tab**: Move focus between interactive elements.
+- **Enter/Space**: Activate buttons/links.
+- **Esc**: Close modals/menus.
+
+**Self-Check**: Before finishing a task, put your mouse away and try to use the feature.
+
+## 2. Interactive Elements
+
+### Buttons vs Divs
+- ❌ **Wrong**: `<div onClick={...}>` (Invisible to keyboard/screen readers)
+- ✅ **Right**: `<Button>` or `<div role="button" tabIndex={0} onKeyDown={...}>`
+- **Vibe Rule**: Just use `shadcn/ui` components (`Button`, `Card` as button). They handle this for you.
+
+### Icon Buttons
+Every icon-only button MUST have a label.
+
+```tsx
+// ❌ Bad
+<Button><PlayIcon /></Button>
+
+// ✅ Good (Visually hidden label)
+<Button size="icon" aria-label="Play Episode">
+  <PlayIcon />
+</Button>
+```
+
+## 3. Focus Management
+
+- **Focus Ring**: Never remove the default focus ring (`outline-none`) unless you replace it with a custom `ring-*` utility. Users must know where they are.
+- **Modals**: When opening a Dialog, focus must move inside. When closing, focus must return to the trigger. (Radix handles this, don't break it).
+
+## 4. Semantic HTML
+
+Don't just use `<div>` for everything.
+- Lists: `<ul>` / `<ol>`
+- Headings: `<h1>` -> `<h2>` -> `<h3>` (Hierarchy matters)
+- Articles: `<article>` for podcast cards.
+
+## 5. Color Contrast
+
+- Ensure text is readable against backgrounds.
+- Use Tailwind's `text-muted-foreground` carefully—ensure it's not too faint.

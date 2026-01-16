@@ -2,9 +2,9 @@
 // Event handlers for text selection (mouse events)
 // Optimized to minimize effect re-binding
 import { useCallback, useEffect, useRef } from 'react'
-import { getAppConfig } from '../../libs/runtimeConfig'
-import type { SelectionState } from '../../libs/selection'
-import { findWordAtPoint, isLookupEligible, loadDictCache } from '../../libs/selection'
+import { getAppConfig } from '../../lib/runtimeConfig'
+import type { SelectionState } from '../../lib/selection'
+import { findWordAtPoint, isLookupEligible, loadDictCache } from '../../lib/selection'
 
 export function useSelectionEvents(
   containerRef: React.RefObject<HTMLElement | null>,

@@ -1,4 +1,4 @@
-import { getAppConfig } from '../libs/runtimeConfig'
+import { getAppConfig } from '../lib/runtimeConfig'
 
 /**
  * Static constants that don't change between environments

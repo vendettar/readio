@@ -1,0 +1,9 @@
+{
+    "title": "文档",
+    "root": true,
+    "pages": [
+        "index",
+        "general",
+        "apps"
+    ]
+}

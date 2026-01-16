@@ -4,7 +4,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { RootErrorBoundary } from './components/RootErrorBoundary'
 import { I18nProvider } from './hooks/useI18n'
-import { DB } from './libs/dexieDb'
+import { DB } from './lib/dexieDb'
 import { router } from './router'
 import './index.css'
 // Note: legacy interactions.css and theme-tokens.css are being consolidated/removed

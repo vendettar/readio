@@ -1,0 +1,44 @@
+---
+title: Routing Strategy
+---
+
+# Routing Strategy
+
+Readio Lite uses **TanStack Router** for file-based routing.
+This document defines the URL structure, navigation patterns, and Slug strategy.
+
+## 1. URL Structure
+
+| Route | Pattern | Description |
+|---|---|---|
+| Home | `/` | Redirects to `/explore` or `/files` based on state. |
+| Podcast | `/podcast/$id` | Podcast Show page. `$id` is the Provider ID (e.g. iTunes ID). |
+| Episode | `/podcast/$id/episode/$episodeId` | Episode Detail. See "Slug Strategy" below. |
+| Files | `/files/*` | Local file browser. Uses wildcard for folder paths. |
+
+## 2. Slug Strategy (Hybrid ID)
+
+Since Readio Lite is a client-side app without a database lookup for slugs, we use a **Hybrid ID** pattern for Episode URLs.
+
+**Format**: `readable-title-{shortId}`
+- **readable-title**: Generated from the episode title (for Humans/SEO).
+- **shortId**: The first 8 characters of the Episode GUID (for Router).
+
+**Example**:
+`/podcast/123/episode/how-i-built-this-a1b2c3d4`
+
+**Resolution Logic**:
+1. Router extracts the `episodeId` param (`how-i-built-this-a1b2c3d4`).
+2. `extractIdFromSlug()` splits by `-` and takes the last part (`a1b2c3d4`).
+3. The app searches the RSS feed for an episode where `id.startsWith('a1b2c3d4')`.
+
+**Why?**
+- **Stateless**: No backend lookup table required.
+- **Resilient**: Title changes won't break the link (as long as ID persists).
+- **Readable**: Users can read the content topic from the URL.
+
+## 3. Navigation Rules
+
+- **Pre-loading**: Use `loader` in route definitions to fetch Podcast Feed data *before* rendering the component.
+- **Redirects**: Do NOT use `return <Navigate />` in the render body. Use `throw redirect()` inside `beforeLoad` or `loader`.
+- **Preservation**: The Audio Player component lives in `__root.tsx` and persists across all route changes.

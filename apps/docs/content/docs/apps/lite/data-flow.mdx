@@ -1,0 +1,115 @@
+---
+title: Data Flow & State
+---
+
+# Data Flow & State Management
+
+Readio uses a **Dual-Layer State Architecture**:
+1. **Zustand**: Synchronous, in-memory state for UI rendering (Fast).
+2. **Dexie (IndexedDB)**: Asynchronous, persistent storage for user data (Reliable).
+
+---
+
+## 1. Database Standards (Dexie)
+
+### A. Primary Keys (The UUID Rule)
+**Rule**: All primary keys MUST be `string` types using `crypto.randomUUID()`.
+❌ **Forbidden**: Auto-incrementing numbers (`++id`).
+**Why?**: Sequential IDs cause collisions during Cloud Sync. UUIDs are globally unique and platform-independent.
+
+### B. Indexing
+**Rule**: Any field used in a `.where()` clause or `.filter()` must be indexed in the store schema.
+**Search**: For text search, use `.startsWithIgnoreCase()` on an indexed field. Never use `.filter()` for substring matching on large datasets.
+
+### C. Cleanup Responsibility
+**Rule**: Deleting a parent entity (e.g., a Folder) MUST trigger the deletion of all child entities and their associated Blobs (Audio/Subtitles). IndexedDB does not have Cascading Deletes.
+
+---
+
+## 2. Store Pattern (Zustand)
+
+Stores are located in `src/store/`.
+
+### The Golden Rule
+> **UI reads from Zustand. Actions write to both.**
+
+Never read directly from Dexie during a render cycle. This causes layout thrashing and poor performance.
+
+### Writing Actions (Store-First Persistence)
+**Rule**: All Data Persistence logic MUST live inside the Store Action.
+Components and Hooks should NEVER call `DB.add...` directly. They should call `store.addFile(file)`.
+
+**Why?**
+- Prevents "Dual-Write" bugs (where two components try to save the same thing).
+- Centralizes logic for easier debugging.
+- Ensures Store and DB stay in sync.
+
+```tsx
+// ✅ Correct Pattern
+// src/store/playerStore.ts
+loadFile: async (file) => {
+  // 1. Update UI (Optimistic)
+  set({ isLoading: true });
+  
+  // 2. Persist
+  const id = await DB.addFile(file);
+  
+  // 3. Finalize
+  set({ fileId: id, isLoading: false });
+}
+```
+
+### Reading State
+Use atomic selectors to prevent unnecessary re-renders.
+
+```tsx
+// ✅ Good
+const isPlaying = usePlayerStore(s => s.isPlaying);
+
+// ❌ Bad (Renders on every store change)
+const { isPlaying } = usePlayerStore();
+```
+
+---
+
+## 3. Persistence & Hydration
+
+Since Zustand is in-memory, it resets on reload. We need a **Hydration Strategy**.
+
+### A. Simple Preferences (LocalStorage)
+For small configs (Volume, Dark Mode), use `src/lib/storage.ts` (synchronous wrapper around `localStorage`).
+- **Load**: In `initialState` or `create()` callback.
+- **Save**: Inside the specific action setter.
+
+### B. Complex Data (Dexie)
+For Sessions, Files, and Library:
+- **Do NOT** block app render waiting for DB.
+- **Pattern**: `useAppInitialization` hook.
+  1. App mounts with empty/loading state.
+  2. Hook calls `store.loadFromDb()`.
+  3. UI updates to show content.
+
+---
+
+## 4. Querying Data (TanStack Query)
+
+For read-heavy operations (e.g., Listing files, Discovery), use **TanStack Query**.
+
+- **Why**: It handles caching, loading states, and deduplication.
+- **Source**: The `queryFn` can be an API call OR a Dexie query.
+
+```tsx
+// Example: Fetching Local Files
+const { data } = useQuery({
+  queryKey: ['files', folderId],
+  queryFn: () => DB.files.where({ folderId }).toArray()
+});
+```
+
+---
+
+## 5. Anti-Patterns
+
+- ❌ **Effect Sync**: Don't use `useEffect` to listen to Store changes and write to DB. This is hard to trace. Write to DB explicitly inside the Action.
+- ❌ **Direct DB Render**: Don't use `useLiveQuery` (Dexie-React) unless absolutely necessary for a real-time list. Prefer `useQuery` for better control.
+- ❌ **Split Logic**: Don't have `useFileHandler` saving to DB while `playerStore` also saves to DB. Consolidate into the Store.

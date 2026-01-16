@@ -2,10 +2,10 @@
 // Hook for storage maintenance actions (delete session, clear cache, wipe all)
 
 import { useCallback, useState } from 'react'
-import { DB } from '../libs/dexieDb'
-import { logError } from '../libs/logger'
-import { toast } from '../libs/toast'
-import type { TranslationKey } from '../libs/translations'
+import { DB } from '../lib/dexieDb'
+import { logError } from '../lib/logger'
+import { toast } from '../lib/toast'
+import type { TranslationKey } from '../lib/translations'
 
 interface UseStorageMaintenanceOptions {
   reload: () => Promise<void>

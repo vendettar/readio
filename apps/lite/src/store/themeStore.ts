@@ -1,7 +1,7 @@
 // src/store/themeStore.ts
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { getJson } from '../libs/storage'
+import { getJson } from '../lib/storage'
 
 export type Theme = 'light' | 'dark'
 export const ACCENT_OPTIONS = [

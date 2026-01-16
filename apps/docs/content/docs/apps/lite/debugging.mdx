@@ -1,0 +1,83 @@
+---
+title: Debugging & Errors
+---
+
+# Debugging & Error Handling
+
+This document defines the standard strategy for handling errors, logging, and debugging in Readio.
+
+## 1. Error Handling Philosophy
+
+We distinguish between three types of errors:
+
+### A. Operational Errors (User-Facing)
+Expected failures during normal operation (e.g., "Network Offline", "File not found").
+- **Action**: Show a UI feedback (Toast or Empty State).
+- **Log**: `console.warn` (optional).
+- **Crash**: **NEVER**.
+
+### B. Programmer Errors (Bugs)
+Unexpected states caused by bad code (e.g., `undefined is not a function`, `zod parse failed`).
+- **Action**: Caught by `ErrorBoundary`.
+- **Log**: `console.error` + Report to Error Monitoring Service.
+- **UI**: Show "Something went wrong" fallback component.
+
+### C. Critical System Errors
+Failures that corrupt the app state (e.g., Dexie DB corruption).
+- **Action**: Attempt automated recovery (e.g., wipe cache) or prompt user for "Hard Reset".
+
+## 2. Logging Standard (`src/lib/logger.ts`)
+
+Do NOT use raw `console.log` in production code. Use the logger wrapper.
+
+```tsx
+import { log, warn, error } from '@/lib/logger'
+
+// ✅ Good
+log('Player', 'Audio loaded', { url })
+warn('Discovery', 'Feed parsing incomplete', { feedUrl })
+error('Files', 'Ingestion failed', err)
+
+// ❌ Bad
+console.log('test', data) // Remove before commit
+```
+
+**Why?** Wrappers allow us to strip logs in production or redirect them to a service (Sentry/LogRocket) later without changing feature code.
+
+## 3. Error Boundaries
+
+We use a tiered Error Boundary strategy:
+
+1.  **Root Boundary** (`RootErrorBoundary.tsx`): Catches crash-level errors. Renders a full-page "Oops" screen with a "Reset App" button.
+2.  **Feature Boundary** (Optional): Wrap complex widgets (e.g., `PodcastPlayer`) so that if the player crashes, the rest of the app (Library) still works.
+
+## 4. Debugging Tools
+
+### Zod Schema Validation
+When API data looks wrong, don't guess.
+- **Strategy**: Use `schema.safeParse(data)`.
+- **Debug**: If `!result.success`, log `result.error.format()`.
+
+### Zustand DevTools
+- The store middleware is enabled in development.
+- Use Redux DevTools extension to time-travel debug state changes.
+
+### Dexie Inspector
+- Use the browser's "Application -> IndexedDB" tab.
+- **Tip**: If schema changes cause issues, clear the DB manually here.
+
+---
+
+## 5. Disaster Recovery (Chaos Engineering)
+
+### A. The "Nuclear Option" (?reset-db=1)
+**Problem**: If IndexedDB becomes corrupted, the app may fail to load entirely.
+**Solution**: The app MUST listen for a `reset-db` query parameter in the URL during the earliest boot stage (`main.tsx`).
+- **Action**: If `?reset-db=1` is present, bypass all store initialization and call `DB.clearAllData()`.
+- **User Instruction**: Tell users to visit `readio.app/?reset-db=1` if the app is stuck on a white screen.
+
+### B. Handling Quota Exceeded
+**Problem**: Disk full.
+**Rule**: All file ingestion actions MUST catch `QuotaExceededError`.
+- **Action**: Show a specific toast: "Storage full! Please delete some files in Settings to continue."
+- **Check**: Use `navigator.storage.estimate()` to warn the user before they even start a large upload.

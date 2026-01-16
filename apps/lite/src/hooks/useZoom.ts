@@ -1,7 +1,7 @@
 // src/hooks/useZoom.ts
 import { useCallback, useEffect, useRef, useState } from 'react'
 
-import { getAppConfig } from '../libs/runtimeConfig'
+import { getAppConfig } from '../lib/runtimeConfig'
 
 export function useZoom() {
   const config = getAppConfig()

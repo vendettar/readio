@@ -1,0 +1,31 @@
+---
+title: Fumadocs 速查表
+description: 在 Fumadocs 中显示代码片段的最佳实践。
+---
+
+## 推荐方式：服务端读取源码
+
+- 使用 Server Component 或构建期脚本读取文件内容。
+- 把文本传给 `CodeBlock` 渲染。
+- 确保读取逻辑只在服务端运行。
+
+示例（Server Component）：
+
+```tsx
+import { CodeBlock } from 'fumadocs-ui/components/codeblock'
+import { readFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
+
+export default async function ApiSnippet() {
+  const filePath = resolve(process.cwd(), '../packages/core/src/schemas/discovery.ts')
+  const code = await readFile(filePath, 'utf8')
+
+  return <CodeBlock code={code} lang="ts" />
+}
+```
+
+## 注意事项
+
+- Next/Fumadocs 默认不支持 raw-loader 或 Vite 的 `?raw` 写法，需要自行配置，维护成本更高。
+- 必须保证是构建时/服务端读取，不进入客户端 bundle，避免把源码打包进前端。
+- 只在需要“API/Schema 自动同步”的文档中使用；纯流程/规范文档继续手写更轻量。

@@ -2,9 +2,9 @@
 // Thin wrapper hook for file input handling - delegates to pure ingest module
 
 import { useCallback } from 'react'
-import { attachSubtitleToTrack, ingestFiles } from '../libs/files/ingest'
-import { logError } from '../libs/logger'
-import { toast } from '../libs/toast'
+import { attachSubtitleToTrack, ingestFiles } from '../lib/files/ingest'
+import { logError } from '../lib/logger'
+import { toast } from '../lib/toast'
 
 interface UseFileProcessingOptions {
   currentFolderId: number | null

@@ -1,9 +1,9 @@
 // src/hooks/useFileHandler.ts
 import { useCallback, useRef } from 'react'
-import { DB } from '../libs/dexieDb'
-import { log, error as logError } from '../libs/logger'
-import { generateSessionId } from '../libs/session'
-import { toast } from '../libs/toast'
+import { DB } from '../lib/dexieDb'
+import { log, error as logError } from '../lib/logger'
+import { generateSessionId } from '../lib/session'
+import { toast } from '../lib/toast'
 import { usePlayerStore } from '../store/playerStore'
 
 export function useFileHandler() {

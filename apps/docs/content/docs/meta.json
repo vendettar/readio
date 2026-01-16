@@ -1,0 +1,9 @@
+{
+  "title": "Documentation",
+  "root": true,
+  "pages": [
+    "index",
+    "general",
+    "apps"
+  ]
+}

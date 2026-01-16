@@ -1,5 +1,6 @@
 // src/__tests__/setup.ts
 import 'fake-indexeddb/auto'
+import { vi } from 'vitest'
 
 // Mock matchMedia for theme tests
 Object.defineProperty(window, 'matchMedia', {
@@ -14,6 +15,29 @@ Object.defineProperty(window, 'matchMedia', {
     removeEventListener: () => {},
     dispatchEvent: () => false,
   }),
+})
+
+// Mock HTMLMediaElement (Audio/Video)
+// JSDOM doesn't implement these, so we mock them globally to prevent errors
+Object.defineProperty(HTMLMediaElement.prototype, 'play', {
+  configurable: true,
+  value: vi.fn().mockResolvedValue(undefined),
+})
+Object.defineProperty(HTMLMediaElement.prototype, 'pause', {
+  configurable: true,
+  value: vi.fn(),
+})
+Object.defineProperty(HTMLMediaElement.prototype, 'load', {
+  configurable: true,
+  value: vi.fn(),
+})
+
+// Mock URL.createObjectURL/revokeObjectURL
+Object.defineProperty(window.URL, 'createObjectURL', {
+  value: vi.fn(() => 'blob:mock-url'),
+})
+Object.defineProperty(window.URL, 'revokeObjectURL', {
+  value: vi.fn(),
 })
 
 // Mock localStorage

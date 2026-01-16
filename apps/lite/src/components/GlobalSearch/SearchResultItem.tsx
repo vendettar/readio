@@ -1,7 +1,7 @@
 import { Play } from 'lucide-react'
 import type React from 'react'
 import { cn } from '../../lib/utils'
-import { getDiscoveryArtworkUrl } from '../../libs/imageUtils'
+import { getDiscoveryArtworkUrl } from '../../lib/imageUtils'
 import { InteractiveTitle } from '../interactive/InteractiveTitle'
 import { Button } from '../ui/button'
 

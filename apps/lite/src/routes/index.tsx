@@ -9,8 +9,8 @@ import { ZoomControl } from '../components/ZoomControl'
 import { useI18n } from '../hooks/useI18n'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import { useZoom } from '../hooks/useZoom'
-import { reportError } from '../libs/errorReporter'
-import { findSubtitleIndex } from '../libs/subtitles'
+import { reportError } from '../lib/errorReporter'
+import { findSubtitleIndex } from '../lib/subtitles'
 import { usePlayerStore } from '../store/playerStore'
 
 const LazyTranscriptView = lazy(() =>

@@ -1,7 +1,7 @@
 import { Book, Copy, Search, X } from 'lucide-react'
 import type { CSSProperties } from 'react'
 import { useI18n } from '../../hooks/useI18n'
-import type { DictEntry, SelectionState } from '../../libs/selection'
+import type { DictEntry, SelectionState } from '../../lib/selection'
 import { Button } from '../ui/button'
 
 interface ContextMenuProps {

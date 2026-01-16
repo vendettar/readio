@@ -4,7 +4,7 @@
 import type React from 'react'
 import { CAROUSEL_DEFAULTS } from '../../constants/layout'
 import { useCarouselLayout } from '../../hooks/useCarouselLayout'
-import type { DiscoveryPodcast } from '../../libs/discovery'
+import type { DiscoveryPodcast } from '../../lib/discovery'
 import { CarouselNavigation } from './CarouselNavigation'
 import { PodcastShowCard } from './PodcastShowCard'
 

@@ -1,0 +1,49 @@
+---
+title: I18n 指南
+---
+
+# 国际化 (I18n) 指南
+
+Readio 使用 **react-i18next**，这是 React 本地化的行业标准。
+这确保了对复数、命名空间以及与 React 生态系统深度集成的支持。
+
+## 1. 设置与配置
+
+配置位于 `src/lib/i18n.ts`。
+它使用 `i18next-browser-languagedetector` 来记住用户偏好。
+
+## 2. 在组件中使用
+
+使用 `useTranslation` hook 访问 `t` 函数。
+
+```tsx
+import { useTranslation } from 'react-i18next'
+
+function MyComponent() {
+  const { t } = useTranslation()
+  
+  return <span>{t('settings.title')}</span>
+}
+```
+
+## 3. 类型安全 (强制)
+
+我们强制对翻译键进行严格类型检查。
+`t` 函数将仅接受存在于英语 (`en`) 语言环境中的键。
+
+- **定义**: `src/lib/translations.ts` 导出 `TranslationKey` 类型。
+- **规则**: 永远不要将键转换为 `any`。如果缺少键，请修复翻译文件。
+
+## 4. 复数
+
+**不要** 对复数使用三元运算符。使用 i18next 的内置支持。
+
+- **JSON**: `{ "episode_count": "{count} Episode", "episode_count_plural": "{count} Episodes" }`
+- **Code**: `t('episode_count', { count: 5 })`
+
+## 5. 添加新键
+
+1.  打开 `src/lib/translations.ts`。
+2.  将键添加到 `en` 对象。
+3.  将键添加到 `zh` 或其他支持的语言。
+4.  `TranslationKey` 类型将自动更新。

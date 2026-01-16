@@ -1,0 +1,41 @@
+---
+title: Security & Privacy
+---
+
+# Security & Privacy Standards
+
+Readio is committed to user data sovereignty and absolute security.
+
+---
+
+## 1. HTML Sanitization (Anti-XSS)
+
+**Rule**: NEVER use `dangerouslySetInnerHTML` directly with raw data from RSS feeds or files.
+- **Strictly Required**: All HTML content must be sanitized before rendering.
+- **Tool**: Use `DOMPurify` (via the wrapper `src/lib/htmlUtils.ts`).
+- **Policy**: Only safe tags (formatting, links) are allowed. Scripts, frames, and tracking pixels are stripped.
+
+## 2. Privacy & Data Sovereignty
+
+### A. Proxy Privacy (Critical)
+**Problem**: Third-party CORS proxies (like AllOrigins) see every URL you request.
+**Rules**: 
+- **User Choice**: Provide a toggle in Settings to disable public proxies.
+- **Disclosure**: Warn users in the UI when a request is routed through a public proxy.
+- **Sensitive Data**: Never pass authentication headers, API keys, or cookies through public proxies.
+
+### B. Error Reporting Privacy
+**Rule**: Do NOT collect Personally Identifiable Information (PII).
+- **Forbidden**: Do not log filenames, local file paths, podcast titles, or user queries.
+- **Allowed**: Generic error codes, browser version, and anonymized stack traces (paths must be stripped of local usernames).
+
+## 3. External Links
+**Rule**: Use `src/lib/openExternal.ts` for all external navigation.
+- **Requirements**: Must include `rel="noopener noreferrer"`.
+
+## 4. Local File Security
+**Rule**: The app must never attempt to upload the content of local media files to any server.
+- **Processing**: All metadata extraction (ID3 tags) must happen client-side (via Web Workers).
+
+## 5. Dependencies
+**Rule**: No new NPM packages without an audit of their security history and license.

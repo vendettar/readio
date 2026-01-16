@@ -1,0 +1,100 @@
+---
+title: Technical Roadmap
+---
+
+# Technical Roadmap & Architecture Evolution
+
+This document tracks the **technical evolution** of the codebase.
+Each step corresponds to a specific Instruction file in `local/instructions/lite/`.
+
+---
+
+## 1. Phase 1: Environment & Infra (The Foundation)
+**Goal**: Ensure a stable, consistent, and standardized development environment.
+
+- [ ] **001**: Setup Dependencies (Enforce `date-fns`, ban `lodash`).
+- [x] **002**: Standardize `src/libs` to `src/lib` (Completed).
+- [ ] **003**: Harden DevOps (Node engines, strict scripts).
+- [ ] **004**: Tailwind Config (Register layout tokens).
+- [ ] **005**: Prepare Standard Libs (Batch install i18next, dropzone, sonner, etc.).
+
+---
+
+## 2. Phase 2: Core Architecture Refactor (The Surgery)
+**Goal**: Fix critical architectural flaws (Data consistency, Perf) before building features.
+
+- [ ] **006**: Standardize DB IDs (Migrate `++id` to `UUID`).
+- [ ] **007**: Refactor Persistence (Fix "Dual-Write" bug).
+- [ ] **008**: Fix Root Performance (Isolate Audio rendering).
+- [ ] **009**: Refactor Routing (Fix redirect logic).
+- [ ] **010**: Optimize Search Data (Add Dexie Indexes).
+- [ ] **011**: Type-Safe I18n Transition (Prepare for i18next).
+- [ ] **012**: Extract Common Components (DRY).
+
+---
+
+## 3. Phase 3: Standardization (The Industrialization)
+**Goal**: Replace "hand-rolled" logic with industry-standard libraries.
+
+- [ ] **013**: Standardize I18n (Migrate to `react-i18next`).
+- [ ] **014**: Standardize Forms (`react-hook-form` + `zod`).
+- [ ] **015**: Standardize File Drop (`react-dropzone`).
+
+---
+
+## 4. Phase 4: UX & Aesthetic Upgrade (The Vibe)
+**Goal**: Elevate the look and feel to "Premium/Apple-like".
+
+- [ ] **016**: Upgrade UI Design (Glassmorphism, Semantic Colors).
+- [ ] **017**: Install Sonner (Replace Radix Toast).
+- [ ] **018**: Refactor Search UI (Migrate to `cmdk`).
+- [ ] **019**: Enhance Interactions (Hotkeys & Gestures).
+- [ ] **020**: Cleanup Magic Values (Remove `z-[999]`, hardcoded colors).
+- [ ] **021**: Integrate React Bits (Animations).
+- [ ] **022**: Optimize Typography (1.6 line-height, Fluid Zoom).
+- [ ] **023**: Shared Element Transitions (Mini -> Full Player).
+- [ ] **024**: App Boot Sequence (Logo animation).
+
+---
+
+## 5. Phase 5: Resilience & Features (The Product)
+**Goal**: Robustness in the real world (Offline, Battery, Privacy).
+
+- [ ] **025**: Implement Offline Mode.
+- [ ] **026**: Harden Player State Machine.
+- [ ] **027**: Harden Resource Management (Revoke Object URLs).
+- [ ] **028**: Integrate Media Session API (OS Sync).
+- [ ] **029**: Tab Synchronization (Singleton Playback).
+- [ ] **030**: Background Performance (Battery Saver).
+- [ ] **031**: Logical Properties (RTL Support).
+- [ ] **032**: Harden Audio Unit Tests.
+- [ ] **033**: Feature: Sleep Timer (P0).
+- [ ] **034**: Feature: OPML Import/Export (P0).
+- [ ] **035**: Feature: Personal Vault (Full Data Export).
+- [ ] **036**: Harden PWA Metadata (iOS Icons).
+- [ ] **037**: Implement URL Slugs (Pretty Links).
+
+---
+
+## 6. Future Phase: "Hybrid Backend" (v2.0)
+**Goal**: Optional cloud sync for power users.
+
+### Architectural Change
+```mermaid
+graph TD
+    A[Vite Client] -->|REST| B[Spring Boot API]
+    A -->|Direct| C[IndexedDB (Offline Cache)]
+    B --> D[PostgreSQL]
+```
+
+### Key Modules
+1. **Auth**: JWT-based stateless auth.
+2. **Sync Engine**: "Last Write Wins" sync strategy.
+3. **CORS Proxy**: Self-hosted proxy.
+
+---
+
+## 7. SSR Strategy (Decision Log)
+
+**Verdict**: **No SSR needed for App.**
+- The core app is an authenticated/local dashboard. SEO is irrelevant.

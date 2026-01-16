@@ -1,0 +1,83 @@
+---
+title: 调试与错误
+---
+
+# 调试与错误处理
+
+本文档定义了 Readio 中处理错误、日志记录和调试的标准策略。
+
+## 1. 错误处理理念
+
+我们将错误分为三类：
+
+### A. 操作错误 (面向用户)
+正常运行期间的预期故障 (例如，“网络离线”，“文件未找到”)。
+- **动作**: 显示 UI 反馈 (Toast 或空状态)。
+- **日志**: `console.warn` (可选)。
+- **崩溃**: **绝不**。
+
+### B. 程序员错误 (Bug)
+由糟糕的代码引起的意外状态 (例如，`undefined is not a function`, `zod parse failed`)。
+- **动作**: 由 `ErrorBoundary` 捕获。
+- **日志**: `console.error` + 报告给错误监控服务。
+- **UI**: 显示“出错了”回退组件。
+
+### C. 关键系统错误
+破坏应用状态的故障 (例如，Dexie DB 损坏)。
+- **动作**: 尝试自动恢复 (例如，擦除缓存) 或提示用户进行“硬重置”。
+
+## 2. 日志标准 (`src/lib/logger.ts`)
+
+不要在生产代码中使用原始的 `console.log`。使用日志包装器。
+
+```tsx
+import { log, warn, error } from '@/lib/logger'
+
+// ✅ Good
+log('Player', 'Audio loaded', { url })
+warn('Discovery', 'Feed parsing incomplete', { feedUrl })
+error('Files', 'Ingestion failed', err)
+
+// ❌ Bad
+console.log('test', data) // 提交前移除
+```
+
+**为什么？** 包装器允许我们在生产中剥离日志或稍后将其重定向到服务 (Sentry/LogRocket)，而无需更改功能代码。
+
+## 3. 错误边界
+
+我们使用分层错误边界策略：
+
+1.  **根边界** (`RootErrorBoundary.tsx`): 捕获崩溃级错误。渲染带有“重置应用”按钮的全页“Oops”屏幕。
+2.  **功能边界** (可选): 包装复杂的小部件 (例如，`PodcastPlayer`)，以便如果播放器崩溃，应用的其余部分 (Library) 仍然可以工作。
+
+## 4. 调试工具
+
+### Zod Schema 验证
+当 API 数据看起来不对劲时，不要猜。
+- **策略**: 使用 `schema.safeParse(data)`。
+- **调试**: 如果 `!result.success`，记录 `result.error.format()`。
+
+### Zustand DevTools
+- 开发中启用了 store 中间件。
+- 使用 Redux DevTools 扩展来进行时间旅行调试状态更改。
+
+### Dexie Inspector
+- 使用浏览器的 "Application -> IndexedDB" 标签。
+- **提示**: 如果模式更改导致问题，请在此处手动清除 DB。
+
+---
+
+## 5. 灾难恢复 (混沌工程)
+
+### A. “核选项” (?reset-db=1)
+**问题**: 如果 IndexedDB 损坏，应用可能会完全无法加载。
+**解决方案**: 应用必须在最早的启动阶段 (`main.tsx`) 监听 URL 中的 `reset-db` 查询参数。
+- **动作**: 如果存在 `?reset-db=1`，绕过所有 store 初始化并调用 `DB.clearAllData()`。
+- **用户指令**: 如果应用卡在白屏上，告诉用户访问 `readio.app/?reset-db=1`。
+
+### B. 处理配额超限
+**问题**: 磁盘已满。
+**规则**: 所有文件摄取操作必须捕获 `QuotaExceededError`。
+- **动作**: 显示特定的 toast：“存储已满！请在设置中删除一些文件以继续。”
+- **检查**: 在用户开始大文件上传之前，使用 `navigator.storage.estimate()` 警告用户。

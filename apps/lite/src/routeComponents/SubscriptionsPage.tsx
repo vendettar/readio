@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react'
 import { PodcastCard } from '../components/PodcastCard/PodcastCard'
 import { useI18n } from '../hooks/useI18n'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
-import type { Subscription } from '../libs/dexieDb'
+import type { Subscription } from '../lib/dexieDb'
 import { useExploreStore } from '../store/exploreStore'
 
 export default function SubscriptionsPage() {

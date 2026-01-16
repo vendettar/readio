@@ -1,0 +1,115 @@
+---
+title: 数据流与状态
+---
+
+# 数据流与状态管理
+
+Readio 使用 **双层状态架构**:
+1. **Zustand**: 用于 UI 渲染的同步内存状态 (快)。
+2. **Dexie (IndexedDB)**: 用于用户数据的异步持久存储 (可靠)。
+
+---
+
+## 1. 数据库标准 (Dexie)
+
+### A. 主键 (UUID 规则)
+**规则**: 所有主键必须是使用 `crypto.randomUUID()` 的 `string` 类型。
+❌ **禁止**: 自增数字 (`++id`)。
+**为什么?**: 顺序 ID 在云同步期间会导致冲突。UUID 是全局唯一且平台无关的。
+
+### B. 索引
+**规则**: 任何在 `.where()` 子句或 `.filter()` 中使用的字段必须在 store schema 中建立索引。
+**搜索**: 对于文本搜索，在索引字段上使用 `.startsWithIgnoreCase()`。永远不要在大型数据集上使用 `.filter()` 进行子字符串匹配。
+
+### C. 清理责任
+**规则**: 删除父实体 (例如，文件夹) 必须触发删除所有子实体及其关联的 Blobs (音频/字幕)。IndexedDB 没有级联删除。
+
+---
+
+## 2. Store 模式 (Zustand)
+
+Stores 位于 `src/store/`。
+
+### 黄金法则
+> **UI 从 Zustand 读取。动作写入两者。**
+
+永远不要在渲染周期中直接从 Dexie 读取。这会导致布局抖动和性能差。
+
+### 写入动作 (Store 优先持久化)
+**规则**: 所有数据持久化逻辑必须存在于 Store Action 内部。
+组件和 Hooks 绝不能直接调用 `DB.add...`。它们应该调用 `store.addFile(file)`。
+
+**为什么?**
+- 防止“双重写入”错误 (两个组件尝试保存同一个东西)。
+- 集中逻辑以便于调试。
+- 确保 Store 和 DB 保持同步。
+
+```tsx
+// ✅ 正确模式
+// src/store/playerStore.ts
+loadFile: async (file) => {
+  // 1. 更新 UI (乐观)
+  set({ isLoading: true });
+  
+  // 2. 持久化
+  const id = await DB.addFile(file);
+  
+  // 3. 完成
+  set({ fileId: id, isLoading: false });
+}
+```
+
+### 读取状态
+使用原子选择器防止不必要的重新渲染。
+
+```tsx
+// ✅ Good
+const isPlaying = usePlayerStore(s => s.isPlaying);
+
+// ❌ Bad (每次 store 更改都会渲染)
+const { isPlaying } = usePlayerStore();
+```
+
+---
+
+## 3. 持久化与恢复
+
+由于 Zustand 是内存中的，它会在重新加载时重置。我们需要一个 **恢复策略 (Hydration Strategy)**。
+
+### A. 简单首选项 (LocalStorage)
+对于小配置 (音量, 深色模式)，使用 `src/lib/storage.ts` (围绕 `localStorage` 的同步包装器)。
+- **加载**: 在 `initialState` 或 `create()` 回调中。
+- **保存**: 在特定的动作 setter 内部。
+
+### B. 复杂数据 (Dexie)
+对于会话, 文件和库：
+- **不要** 阻塞应用渲染等待 DB。
+- **模式**: `useAppInitialization` hook。
+  1. 应用挂载空/加载状态。
+  2. Hook 调用 `store.loadFromDb()`。
+  3. UI 更新显示内容。
+
+---
+
+## 4. 查询数据 (TanStack Query)
+
+对于读密集型操作 (例如，列出文件, 发现)，使用 **TanStack Query**。
+
+- **为什么**: 它处理缓存, 加载状态, 和去重。
+- **源**: `queryFn` 可以是 API 调用 或 Dexie 查询。
+
+```tsx
+// 示例: 获取本地文件
+const { data } = useQuery({
+  queryKey: ['files', folderId],
+  queryFn: () => DB.files.where({ folderId }).toArray()
+});
+```
+
+---
+
+## 5. 反模式
+
+- ❌ **Effect 同步**: 不要使用 `useEffect` 监听 Store 更改并写入 DB。这很难追踪。在 Action 内部显式写入 DB。
+- ❌ **直接 DB 渲染**: 不要使用 `useLiveQuery` (Dexie-React)，除非对于实时列表绝对必要。优先使用 `useQuery` 以获得更好的控制。
+- ❌ **拆分逻辑**: 不要让 `useFileHandler` 保存到 DB 而 `playerStore` 也保存到 DB。合并到 Store 中。

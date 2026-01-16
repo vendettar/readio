@@ -2,11 +2,11 @@
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useFileHandler } from '../hooks/useFileHandler'
-import { DB } from '../libs/dexieDb'
+import { DB } from '../lib/dexieDb'
 import { usePlayerStore } from '../store/playerStore'
 
 // Mock DB
-vi.mock('../libs/dexieDb', () => ({
+vi.mock('../lib/dexieDb', () => ({
   DB: {
     addAudioBlob: vi.fn().mockResolvedValue('audio-id'),
     addSubtitle: vi.fn().mockResolvedValue('subtitle-id'),
@@ -15,13 +15,13 @@ vi.mock('../libs/dexieDb', () => ({
 }))
 
 // Mock logger
-vi.mock('../libs/logger', () => ({
+vi.mock('../lib/logger', () => ({
   log: vi.fn(),
   error: vi.fn(),
 }))
 
 // Mock sessionId generator
-vi.mock('../libs/session', () => ({
+vi.mock('../lib/session', () => ({
   generateSessionId: vi.fn(() => 'mock-session-id'),
 }))
 

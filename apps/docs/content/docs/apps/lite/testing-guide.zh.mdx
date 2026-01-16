@@ -1,0 +1,66 @@
+---
+title: 测试指南
+---
+
+# 测试指南
+
+我们使用 **Vitest** 进行单元和集成测试。
+
+## 1. Mocking Dexie (IndexedDB)
+
+由于 Vitest 在 Node.js (JSDOM) 中运行，IndexedDB 可通过 `fake-indexeddb` 使用 (在 `vitest.setup.ts` 中设置)。
+
+但是，对于单元测试 (例如，测试 Hook)，通常最好完全 **Mock DB 模块** 以避免状态泄漏。
+
+```tsx
+// 示例: 在测试中 Mock DB
+vi.mock('@/lib/dexieDb', () => ({
+  DB: {
+    files: {
+      add: vi.fn(),
+      toArray: vi.fn().mockResolvedValue([])
+    }
+  }
+}))
+```
+
+## 2. 测试 Stores (Zustand)
+
+Zustand stores 在测试之间持久保存状态。你必须重置它们。
+
+```tsx
+import { usePlayerStore } from '@/store/playerStore'
+
+const initialState = usePlayerStore.getState()
+
+beforeEach(() => {
+  usePlayerStore.setState(initialState, true) // true = replace
+})
+```
+
+## 3. 音频与硬件测试 (Mock 规则)
+
+**问题**: JSDOM 不实现 `HTMLAudioElement.play()` 或 `pause()`。它们会抛出错误。
+
+**规则**: 始终使用 `setup.ts` 中定义的全局音频 mock。
+- **Spying**: 使用 `vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue()` 验证动作是否触发硬件调用。
+- **事件**: 手动触发事件以测试 store 反馈循环：
+  ```ts
+  const audio = document.querySelector('audio')!;
+  audio.currentTime = 10;
+  audio.dispatchEvent(new Event('timeupdate'));
+  // Verify store.progress is now 10.
+  ```
+
+## 4. 基于时间的测试
+
+**规则**: 永远不要在测试中使用 `setTimeout` 或实际延迟。
+- **动作**: 使用 `vi.useFakeTimers()`。
+- **场景**: 测试睡眠定时器。
+  - `vi.advanceTimersByTime(60000)` 模拟 1 分钟过去。
+
+## 5. 测试什么？
+
+- **Hooks**: 测试逻辑。例如，`useFileHandler` 应该在文件被放置时调用 `DB.add`。
+- **Utils**: 测试边缘情况。例如，`formatDuration(0)` -> "00:00"。
+- **Components**: **不要测试** 视觉渲染，除非它具有复杂的条件逻辑。

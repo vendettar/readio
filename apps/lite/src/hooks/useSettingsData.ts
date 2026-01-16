@@ -2,8 +2,8 @@
 // Hook for loading Settings page data
 
 import { useCallback, useEffect, useState } from 'react'
-import { DB, type PlaybackSession } from '../libs/dexieDb'
-import { logError } from '../libs/logger'
+import { DB, type PlaybackSession } from '../lib/dexieDb'
+import { logError } from '../lib/logger'
 
 type StorageInfo = Awaited<ReturnType<typeof DB.getStorageInfo>>
 

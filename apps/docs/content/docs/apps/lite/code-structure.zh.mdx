@@ -1,0 +1,101 @@
+---
+title: 代码结构
+---
+
+# 代码库结构 (apps/lite)
+
+本文档映射了主前端应用程序 (`apps/lite`) 的文件夹结构。
+它是文件应存放位置的权威指南。
+
+## 高级布局
+
+```text
+apps/lite/src/
+├── components/       # React 组件 (原子组织)
+├── lib/              # 共享工具 & 业务逻辑 (统一)
+├── hooks/            # 自定义 React hooks (逻辑/视图分离)
+├── routes/           # TanStack Router 路由定义 (基于文件)
+├── routeComponents/  # 页面级组件 (由路由延迟加载)
+├── store/            # 全局状态 (Zustand stores)
+└── assets/           # 静态资源 (Images, SVGs)
+```
+
+---
+
+## 1. 组件 (`src/components/`)
+
+我们遵循务实的原子设计方法。
+
+### `ui/` (原子)
+- **内容**: 纯 shadcn/ui 原语。
+- **规则**: 
+  - 哑组件 (无业务逻辑)。
+  - 通过 `class-variance-authority` (cva) 设置样式。
+  - **不要编辑这些**，除非升级 shadcn。
+
+### `interactive/` (智能原子)
+- **内容**: Readio 特定的交互原语。
+- **示例**: `InteractiveArtwork.tsx`, `InteractiveTitle.tsx`。
+- **规则**:
+  - 封装复杂的交互逻辑 (悬停播放, 导航优先级)。
+  - 跨多个功能重用。
+
+### 功能文件夹 (分子/有机体)
+- **内容**: 按领域分组的业务特定组件。
+- **示例**:
+  - `PodcastCard/`: 播客展示卡片。
+  - `EpisodeRow/`: 剧集列表项。
+  - `GlobalSearch/`: 搜索覆盖层和结果。
+  - `Transcript/`: 复杂的逐字稿视图逻辑。
+- **规则**:
+  - 如果一个组件属于特定功能，放这里。
+  - 保持相关的子组件共存 (例如，`PodcastCardImage.tsx` 在 `PodcastCard/` 内)。
+
+---
+
+## 2. 工具 (`src/lib/`)
+
+**状态**: 统一。
+遗留的 `src/libs` 已合并到 `src/lib`。
+
+- **`utils.ts`**: 标准 shadcn Tailwind 辅助函数 (`cn`)。
+- **`dexieDb.ts`**: 数据库模式和实例。
+- **`discovery/`**: 外部 API 客户端 (iTunes/Apple)。
+- **`files/`**: 本地文件摄取逻辑。
+- **`formatters.ts`**, **`dateUtils.ts`**: 纯辅助函数。
+
+**规则**: 如果它是纯逻辑或辅助函数，放这里。不要把 React 组件放在 `lib` 中。
+
+---
+
+## 3. Hooks (`src/hooks/`)
+
+**规则**: 将复杂逻辑从组件中提取到 hooks。
+
+- **`use[Feature].ts`**: 业务逻辑 (例如，`useDiscoveryPodcasts`)。
+- **`use[Utility].ts`**: 通用 UI 逻辑 (例如，`useOnClickOutside`)。
+
+---
+
+## 4. Routes vs RouteComponents
+
+我们使用 TanStack Router 的延迟加载模式。
+
+- **`src/routes/`**: 
+  - **仅**包含路由定义和加载器/元数据。
+  - 从 `routeComponents` 导入实际页面组件。
+  - **为什么**: 保持主包小；页面是拆分的块。
+
+- **`src/routeComponents/`**:
+  - 包含实际的 Page 组件 (例如，`PodcastShowPage.tsx`)。
+  - 这些是连接 store/hooks 到视图的“控制器”。
+
+---
+
+## 5. Store (`src/store/`)
+
+用于全局客户端状态的 Zustand stores。
+
+- `playerStore.ts`: 播放状态, 队列, 音量。
+- `themeStore.ts`: 深色模式, 强调色。
+- **持久化**: 我们更喜欢通过 `dexieDb` 手动持久化复杂数据 (Library, Files)。`persist` 中间件仅用于简单的 UI 首选项。

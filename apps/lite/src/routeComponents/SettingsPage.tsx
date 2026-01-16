@@ -12,7 +12,7 @@ import { type Language, useI18n } from '../hooks/useI18n'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import { useSettingsData } from '../hooks/useSettingsData'
 import { useStorageMaintenance } from '../hooks/useStorageMaintenance'
-import { formatBytes, formatTimestamp } from '../libs/formatters'
+import { formatBytes, formatTimestamp } from '../lib/formatters'
 import { ACCENT_OPTIONS, useThemeStore } from '../store/themeStore'
 
 export default function SettingsPage() {

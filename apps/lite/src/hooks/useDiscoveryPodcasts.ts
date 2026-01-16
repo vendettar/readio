@@ -3,8 +3,8 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { getEditorPicksForRegion } from '../constants/app'
-import discovery, { type DiscoveryPodcast } from '../libs/discovery'
-import { getAppConfig } from '../libs/runtimeConfig'
+import discovery, { type DiscoveryPodcast } from '../lib/discovery'
+import { getAppConfig } from '../lib/runtimeConfig'
 
 // ========== CONFIGURATION ==========
 const config = getAppConfig()

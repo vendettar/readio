@@ -4,9 +4,9 @@
 import * as Toast from '@radix-ui/react-toast'
 import { useCallback, useEffect, useState } from 'react'
 import { useI18n } from '../../hooks/useI18n'
-import { createToastId } from '../../libs/id'
-import { toast } from '../../libs/toast'
-import type { TranslationKey } from '../../libs/translations'
+import { createToastId } from '../../lib/id'
+import { toast } from '../../lib/toast'
+import type { TranslationKey } from '../../lib/translations'
 
 interface ToastItem {
   id: string

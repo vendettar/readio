@@ -1,0 +1,46 @@
+---
+title: Domain Rules
+---
+
+# Project-Specific Domain Rules
+
+These rules apply specifically to the Readio business logic.
+
+## 1. Global Search Architecture
+
+- **Search is a Mode, Not a Local Filter**:
+  - Decoupled from the current page content.
+  - Triggered from Sidebar.
+
+- **Two-Stage Experience**:
+  1. **Preview Overlay**: Floating dropdown (limit 3-5 items).
+  2. **Results Page**: Full-page route at `/search?q=query`.
+
+- **Grouping**:
+  - Group strictly by **Content Type** (Episodes, Podcasts).
+  - Status (Played, Subscribed) are badges, not groups.
+
+## 2. Audio & Playback
+
+- **Readio Identity**:
+  - Readio is a **reading tool that plays audio**, not just a music player.
+
+- **Transcript Rules**:
+  - **Every word must be visible**. No `text-overflow: ellipsis` on transcripts.
+  - Active line must remain centered.
+
+- **Audio Player Lifecycle**:
+  - The `<audio>` element is persistent in `__root.tsx`.
+  - Event listeners must be carefully managed to avoid memory leaks.
+
+- **Episode Session Integrity**:
+  - If an episode lacks `podcastFeedUrl`, do not create a playback session.
+
+## 3. File System & Discovery
+
+- **File Density**:
+  - View density settings (`comfortable` / `compact`) apply to the entire Files page.
+
+- **Canonicalization**:
+  - Episode ID: Use GUID if available; fallback to `trackId`.
+  - Always `encodeURIComponent` when placing `episodeId` in routes.

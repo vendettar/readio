@@ -1,0 +1,101 @@
+---
+title: Code Structure
+---
+
+# Codebase Structure (apps/lite)
+
+This document maps the folder structure of the main frontend application (`apps/lite`).
+It serves as the definitive guide for where files should live.
+
+## High-Level Layout
+
+```text
+apps/lite/src/
+├── components/       # React components (Atomic organization)
+├── lib/              # Shared utilities & business logic (Unified)
+├── hooks/            # Custom React hooks (Logic/View separation)
+├── routes/           # TanStack Router route definitions (File-based)
+├── routeComponents/  # Page-level components (Lazy loaded by routes)
+├── store/            # Global state (Zustand stores)
+└── assets/           # Static assets (Images, SVGs)
+```
+
+---
+
+## 1. Components (`src/components/`)
+
+We follow a pragmatic Atomic Design approach.
+
+### `ui/` (The Atoms)
+- **Content**: Pure shadcn/ui primitives.
+- **Rules**: 
+  - Dumb components (no business logic).
+  - Styled via `class-variance-authority` (cva).
+  - **Do not edit these** unless upgrading shadcn.
+
+### `interactive/` (The Smart Atoms)
+- **Content**: Readio-specific interaction primitives.
+- **Examples**: `InteractiveArtwork.tsx`, `InteractiveTitle.tsx`.
+- **Rules**:
+  - Encapsulate complex interaction logic (hover play, navigation priority).
+  - Reused across multiple features.
+
+### Feature Folders (The Molecules/Organisms)
+- **Content**: Business-specific components grouped by domain.
+- **Examples**:
+  - `PodcastCard/`: Podcast display cards.
+  - `EpisodeRow/`: List items for episodes.
+  - `GlobalSearch/`: Search overlay and results.
+  - `Transcript/`: Complex transcript view logic.
+- **Rules**:
+  - If a component belongs to a specific feature, put it here.
+  - Keep related sub-components co-located (e.g., `PodcastCardImage.tsx` inside `PodcastCard/`).
+
+---
+
+## 2. Utilities (`src/lib/`)
+
+**Status**: Unified.
+Legacy `src/libs` has been merged into `src/lib`.
+
+- **`utils.ts`**: Standard shadcn Tailwind helper (`cn`).
+- **`dexieDb.ts`**: Database schema and instance.
+- **`discovery/`**: External API clients (iTunes/Apple).
+- **`files/`**: Local file ingestion logic.
+- **`formatters.ts`**, **`dateUtils.ts`**: Pure helper functions.
+
+**Rule**: If it's pure logic or a helper function, it goes here. Do not put React components in `lib`.
+
+---
+
+## 3. Hooks (`src/hooks/`)
+
+**Rule**: Extract complex logic from components into hooks.
+
+- **`use[Feature].ts`**: Business logic (e.g., `useDiscoveryPodcasts`).
+- **`use[Utility].ts`**: General UI logic (e.g., `useOnClickOutside`).
+
+---
+
+## 4. Routes vs RouteComponents
+
+We use TanStack Router's lazy loading pattern.
+
+- **`src/routes/`**: 
+  - Contains **only** the route definition and loader/metadata.
+  - Imports the actual page component from `routeComponents`.
+  - **Why**: Keeps the main bundle small; pages are split-chunked.
+
+- **`src/routeComponents/`**:
+  - Contains the actual Page components (e.g., `PodcastShowPage.tsx`).
+  - These are the "Controllers" that wire up stores/hooks to the view.
+
+---
+
+## 5. Store (`src/store/`)
+
+Zustand stores for global client state.
+
+- `playerStore.ts`: Playback state, queue, volume.
+- `themeStore.ts`: Dark mode, accent color.
+- **Persistence**: We prefer manual persistence via `dexieDb` for complex data (Library, Files). `persist` middleware is used only for simple UI preferences.

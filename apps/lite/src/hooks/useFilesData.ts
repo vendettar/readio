@@ -2,8 +2,8 @@
 // Event-driven data loading hook with status tracking and request guard
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { DB, type FileFolder, type FileSubtitle, type FileTrack } from '../libs/dexieDb'
-import { logError } from '../libs/logger'
+import { DB, type FileFolder, type FileSubtitle, type FileTrack } from '../lib/dexieDb'
+import { logError } from '../lib/logger'
 
 export type LoadStatus = 'idle' | 'loading' | 'success' | 'error'
 

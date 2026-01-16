@@ -1,0 +1,96 @@
+---
+title: UI/UX Patterns
+---
+
+# UI & Interaction Patterns
+
+This document defines the standard interaction models for Readio Lite.
+Follow these patterns to ensure a consistent user experience.
+
+---
+
+## 1. Navigation & Interactivity
+
+- **Declarative Navigation**: Prefer `<Link>` over `useNavigate` + `onClick` handlers for better accessibility and clearer intent.
+- **Interactive Wrappers**:
+  - **`InteractiveArtwork`**: For images that need both navigation (click) and playback (hover button).
+    - **Implementation**: The play button must be an absolute sibling of the navigation Link, not a child.
+    - **Layering**: Hover overlays should be `pointer-events: none`; action buttons must be `pointer-events: auto` and above the visual layer (`z-20+`).
+  - **`InteractiveTitle`**: For titles that link to content.
+    - **Priority**: If it has both `onClick` and `to/params`, `onClick` takes priority.
+    - **Fallback**: If no interaction is defined, render as non-interactive inline element (no Button).
+- **Safe Link Guard**: Do not render a `Link` if required route params are missing; render non-interactive text instead.
+- **Playable Card Rule**: Render Play buttons **only** when a valid `onPlay` handler exists. Never show a non-functional Play button.
+- **Event Propagation**: Explicitly handle `e.stopPropagation()` in dropdown triggers and interactive children to prevent parent card clicks.
+
+## 2. Overlays & Menus
+
+- **Dropdowns**: Use the "Premium Overlay" style (`glassmorphism`, `sideOffset={8}`, `rounded-xl`, `backdrop-blur-xl`, `backdrop-saturate-150`).
+- **Inline Actions**: Use `modal={false}` on `DropdownMenu` when the action triggers inline editing (e.g., Rename) to prevent focus locking issues.
+- **Multi-Step Menus**: Implement confirmation steps **inside** the menu content (Panel-Grid pattern) rather than opening a new Dialog on top.
+
+### 2.1 Surface Decision Tree (Which Component?)
+- **Is it a critical confirmation?** (Delete, Wipe) -> **`AlertDialog`** (Must require explicit action).
+- **Is it a complex form/content?** (Settings, Edit Details) -> **`Dialog`** (Modal, centers screen).
+- **Is it contextual?** (Action menu, Filters) -> **`DropdownMenu`** or **`Popover`** (Anchored to trigger).
+- **Is it transient info?** (Hover info) -> **`Tooltip`**.
+
+## 3. Z-Index System (Stratification)
+
+Do NOT use magic numbers (`z-[999]`). Use this scale:
+- **`z-0`**: Default content.
+- **`z-10`**: Hover effects / Active states inside cards.
+- **`z-20`**: Action buttons floating above cards (Play button).
+- **`z-30`**: Sticky Headers / Bottom Player Bar.
+- **`z-40`**: (Reserved)
+- **`z-50`**: Dropdowns / Popovers / Drawers.
+- **`z-100`**: Modals / Dialogs.
+- **`z-[9999]`**: Toasts (Must be on top of everything).
+
+## 4. Feedback & Notifications (Toast)
+
+- **Standard**: Use **Sonner** via the centralized helper `src/lib/toast.ts`.
+  - **Why**: Sonner provides better stacking, promises, and visuals than Radix Toast.
+- **Forbidden**: Do NOT create custom `fixed` overlay divs for notifications.
+- **Async Pattern**: Use `toast.promise` for async actions (like file processing) to give immediate feedback.
+- **Usage**:
+  ```tsx
+  import { toast } from '@/lib/toast'
+  // ✅ Correct
+  toast.success(t('saved'))
+  toast.error(t('failed'))
+  ```
+
+## 5. Tooltips
+
+- **Rule**: All icon-only buttons MUST have a Tooltip.
+- **Implementation**: Use shadcn `Tooltip` primitives.
+- **Forbidden**: Do NOT use the native HTML `title="..."` attribute (it looks ugly and is not accessible).
+- **Delay**: Use standard delay (default) to avoid UI flickering.
+
+## 6. Feedback & Loading (States)
+
+- **Skeletons**: Use the "Shimmer" effect (`.animate-shimmer`), never solid gray blocks.
+- **Loading Spinner**: Use the shared `<LoadingSpinner />` component for consistency.
+- **Empty States**: Use the shared `<EmptyState />` component. Must contain a centered layout with a muted icon, a clear title, and a **Call to Action (CTA)** button.
+
+## 7. Resilience & Network Feedback
+
+- **Offline State**: When `isOnline` is false, hide all "Discovery" elements (Search API, Top Charts). Provide a clear "Offline" badge in the sidebar or header.
+- **Network Error Empty State**: If a query fails due to network (not code bug), show an Empty State with:
+  - **Icon**: `WifiOff` or `CloudAlert`.
+  - **Message**: "Connection Failed".
+  - **Action**: A "Retry" button that calls `refetch()`.
+- **Proxy Health Indicator**: If the Custom Proxy fails but the Default Proxy works, notify the user in Settings.
+
+## 8. Motion & Spatial Metaphors
+
+- **Shared Element Transitions**: When a persistent element (like Podcast Artwork) moves from one view to another (e.g. Mini Player to Full Player), it MUST use a shared layout transition (`layoutId` in Framer Motion) to maintain spatial orientation.
+- **Entrance Animations**: Lists (Files, Episodes) should not appear instantly. Use a staggered fade-in + slide-up effect for items (Duration: 300ms total).
+- **App Boot**: Do not show half-loaded UI. Use a centered App Logo with a breathing animation while stores are hydrating from Dexie. Use `AnimatePresence` to fade out the loader.
+
+## 9. Sharing & Deep Linking
+
+- **Web Share API**: Use `navigator.share` for native sharing capabilities.
+- **Time-Seek Deep Linking**: Support `?t=seconds` in the URL to resume playback at specific timestamps.
+- **PWA Metadata**: Ensure `apple-touch-icon.png` and `manifest.json` are properly configured for PWA users.

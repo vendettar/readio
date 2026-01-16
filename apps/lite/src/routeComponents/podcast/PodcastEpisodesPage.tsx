@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { EpisodeRow } from '../../components/EpisodeRow/EpisodeRow'
 import { useEpisodePlayback } from '../../hooks/useEpisodePlayback'
 import { useI18n } from '../../hooks/useI18n'
-import discovery, { type Episode } from '../../libs/discovery'
+import discovery, { type Episode } from '../../lib/discovery'
 
 // Constants matching Apple Podcasts behavior
 const INITIAL_LOAD_COUNT = 25

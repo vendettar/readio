@@ -1,0 +1,39 @@
+---
+title: Typography
+---
+
+# Typography & Readability Standards
+
+Readio is a reading tool. The quality of the reading experience is our primary competitive advantage.
+
+## 1. The Golden Ratios
+
+- **Line Height**: Default must be **1.6** for the transcript area.
+  - Why? Prevents "line skipping" while reading.
+- **Paragraph Spacing**: Use **1.2em** to **1.5em**.
+  - Why? Provides a clear visual break between dialogue turns.
+- **Line Length**: Ideal reading width is **60-80 characters** (approx 600px - 800px).
+  - Why? Longer lines cause eye fatigue.
+
+## 2. Dynamic Zoom Strategy
+
+**Rule**: Scaling must be "Fluid" (re-flowing text), not just a visual zoom.
+- **Mechanism**: Adjust the `font-size` of the container. 
+- **Constraint**: Do NOT use `transform: scale()` for the main reading area, as it creates blurry text and broken scrollbars.
+
+## 3. Reading Themes (Contrast)
+
+Every theme must meet **WCAG AA** (4.5:1) standards.
+
+| Theme | Background | Foreground | Intent |
+|---|---|---|---|
+| **Default** | `var(--background)` | `var(--foreground)` | System standard |
+| **Sepia** | `#f4ecd8` | `#5b4636` | Warm, reduces blue light |
+| **Paper** | `#f5f5f5` | `#333333` | Print-like clarity |
+| **Slate** | `#0f172a` | `#f1f5f9` | High contrast dark |
+
+## 4. Fonts
+
+- **Primary**: System UI stack (`-apple-system`, `SF Pro`, `Inter`).
+- **Serif (Optional)**: Provide a Serif option (`Georgia`, `Charter`) for long-form reading.
+- **Dyslexic-friendly**: Support `OpenDyslexic` as a future-proof option.

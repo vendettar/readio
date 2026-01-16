@@ -3,11 +3,11 @@
 
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { DictEntry, SelectionState } from '../../../libs/selection'
-import * as selection from '../../../libs/selection'
+import type { DictEntry, SelectionState } from '../../../lib/selection'
+import * as selection from '../../../lib/selection'
 import { useSelectionActions } from '../useSelectionActions'
 
-vi.mock('../../../libs/selection', () => ({
+vi.mock('../../../lib/selection', () => ({
   isLookupEligible: vi.fn(() => true),
   fetchDefinition: vi.fn(),
 }))

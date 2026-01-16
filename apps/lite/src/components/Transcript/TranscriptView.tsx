@@ -2,8 +2,8 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso'
 import { useSelection } from '../../hooks/useSelection'
-import { refreshHighlights } from '../../libs/selection'
-import type { subtitle } from '../../libs/subtitles'
+import { refreshHighlights } from '../../lib/selection'
+import type { subtitle } from '../../lib/subtitles'
 import { ContextMenu, LookupPopover, WordHoverOverlay } from '../Selection'
 import { SubtitleLine } from './SubtitleLine'
 

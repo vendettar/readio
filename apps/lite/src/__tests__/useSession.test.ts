@@ -2,12 +2,12 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useSession } from '../hooks/useSession'
-import { DB } from '../libs/dexieDb'
-import { generateSessionId } from '../libs/session'
+import { DB } from '../lib/dexieDb'
+import { generateSessionId } from '../lib/session'
 import { usePlayerStore } from '../store/playerStore'
 
 // Mock DB
-vi.mock('../libs/dexieDb', () => ({
+vi.mock('../lib/dexieDb', () => ({
   DB: {
     getLastPlaybackSession: vi.fn().mockResolvedValue(null),
     createPlaybackSession: vi.fn().mockResolvedValue('mock-session-id'),
@@ -17,15 +17,15 @@ vi.mock('../libs/dexieDb', () => ({
 }))
 
 // Mock logger to keep output clean
-vi.mock('../libs/logger', () => ({
+vi.mock('../lib/logger', () => ({
   log: vi.fn(),
   warn: vi.fn(),
   error: vi.fn(),
 }))
 
 // Mock sessionId generator
-vi.mock('../libs/session', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../libs/session')>()
+vi.mock('../lib/session', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../lib/session')>()
   return {
     ...actual,
     generateSessionId: vi.fn(() => 'mock-session-id'),

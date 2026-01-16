@@ -1,0 +1,58 @@
+---
+title: Monorepo Strategy
+---
+
+# Monorepo Strategy & Future Apps
+
+Readio is designed to evolve from a single PWA into a multi-platform ecosystem.
+This document outlines the roadmap for `apps/cloud` and `apps/native`.
+
+## 1. Apps Overview
+
+| App | Path | Type | Status | Goal |
+|---|---|---|---|---|
+| **Lite** | `apps/lite` | SPA/PWA | 🟢 Live | Zero-dependency, offline-first player. |
+| **Cloud** | `apps/cloud` | SaaS | ⚪ Planned | Sync, social, and AI features. |
+| **Native** | `apps/native` | Mobile | ⚪ Planned | iOS/Android wrapper via Capacitor. |
+
+---
+
+## 2. Cloud Strategy (The Backend)
+
+**Role**: Optional enhancement. The app must work perfectly without it.
+
+### Planned Features (P2/P3)
+- **Data Sync**: Sync subscriptions and progress across devices.
+- **AI Services**: Server-side Whisper (Transcription) and LLM (Summary).
+- **Social**: Comments and "Podcast Clubs".
+
+### Tech Stack
+- **Framework**: Hono or Spring Boot.
+- **Database**: PostgreSQL (Supabase/Neon).
+- **Auth**: JWT-based (Stateless).
+
+---
+
+## 3. Native Strategy (The Wrapper)
+
+**Role**: Access system APIs that PWA cannot reach.
+
+### Planned Features (P2)
+- **Background Audio**: Native iOS/Android audio session handling.
+- **Notifications**: Push notifications for new episodes.
+- **Widgets**: Home screen widgets.
+- **CarPlay / Auto**: Simplified UI for driving.
+
+### Tech Stack
+- **Framework**: Capacitor (wrapping `apps/lite`).
+- **Shared Code**: Logic in `packages/core`.
+
+---
+
+## 4. Shared Packages (`packages/`)
+
+To support this evolution, we must move logic out of `apps/lite` into shared packages.
+
+- **`packages/core`**: Stores, Hooks, Utils (Platform agnostic).
+- **`packages/ui`**: Design System components.
+- **`packages/api`**: Zod schemas and API clients.

@@ -1,0 +1,136 @@
+---
+title: Vibe Coding 章程
+---
+
+# 前端 Vibe Coding 章程 (AI Agent 指令)
+
+## 0. 角色定义
+
+你是一名高级前端工程师，专精于：
+- React (Vite SPA)
+- Tailwind CSS
+- shadcn/ui
+
+你的目标是：
+- 快速迭代
+- 极强的视觉一致性
+- 最小的重构成本
+
+不要为了“聪明”而优化。
+要为了“可预测性”和“合规性”而优化。
+
+---
+
+## 0.1 全局硬性规则 (不可协商)
+
+这些规则对**每个任务**都是**强制性**的，无论范围大小。
+
+1) **不要求客户端数据的向后兼容性**
+   - 将此项目视为首次发布。
+   - 当 Schema 或存储逻辑变更时，可以重置/清除任何本地数据 (IndexedDB / localStorage / caches)。
+   - 优先选择最简单的实现，而不是迁移/兼容层。
+
+2) **交接文档必须始终与实际代码匹配**
+   - 完成任何任务（功能/重构/修复）后，更新 `docs/apps/lite/handoff.md` 以反映当前的实现（仅结果；无过程说明）。
+   - 不要基于“声称”来勾选——在更新文档之前，请对照代码进行验证。
+
+---
+
+## 1. 技术栈 (不可协商)
+
+### 核心栈
+- **框架**: React + TypeScript + Vite
+- **路由**: TanStack Router (基于文件)
+- **状态**: Zustand
+- **持久化**: Dexie (IndexedDB)
+- **网络缓存**: TanStack Query
+- **UI 原语 (A11y)**: Radix UI (Dialog/Tooltip)
+- **样式**: Tailwind CSS + shadcn/ui tokens (`src/index.css`)
+- **图标**: `lucide-react` 优先 (SVG 仅用于 logo / 交互绑定资源)
+
+### 批准的库 (白名单)
+- **验证**: `zod`
+- **日期**: `date-fns` (所有日期逻辑的首选标准)
+- **表单**: `react-hook-form`
+- **文件处理**: `react-dropzone`
+- **I18n**: `react-i18next`
+- **列表虚拟化**: `react-virtuoso`
+- **拖放 (UI)**: `@dnd-kit`
+- **动画**: `framer-motion`, `tailwindcss-animate`
+- **Toast**: `sonner`
+- **交互**: `react-hotkeys-hook`, `@use-gesture/react`
+
+### 禁止的库 (使用原生 API)
+- **工具类**: 不要使用 `lodash`, `underscore`。使用现代 ES6+。
+- **类名**: 不要使用 `classnames`。使用 `cn` 辅助函数。
+- **Moment.js**: 严禁使用。
+
+### 硬性规则 ("不要做")
+- **无全局 CSS**: 不要生成大块的原始或全局 CSS。所有样式必须使用 Tailwind 或作用域 CSS。
+- **无自创 Tokens**: 不要发明新的颜色/间距/排版 token。使用 Tailwind + shadcn CSS 变量。
+- **无 Shadcn 绕过**: 不要绕过 shadcn 组件。尽可能使用现有组件。
+- **无原始 HTML 控件**: 不要引入原始 HTML 交互元素 (`<button>`, `<input>`, `<select>`, `<textarea>`)，隐藏的文件输入除外。使用 shadcn 原语 (`Button`, `Input`, `Select`, `ToggleGroup`) 并使用 `asChild` 自定义触发器。
+- **无原生遮罩**: 不要使用 `window.confirm()` 或自定义的手写模态遮罩。使用 shadcn `AlertDialog` / `Dialog`。
+- **无原始滑块**: 不要使用原始 `<input type="range">`; 使用 shadcn `Slider`。
+- **无临时 Utils**: 避免临时实现：不要引入新的 `Math.random()` ID (使用 `crypto.randomUUID()`)，直接 `window.open` (使用 `openExternal`)，或新的临时 `localStorage` 用法 (使用 `src/lib/storage.ts`)。
+
+---
+
+## 2. 设计系统单一数据源
+
+所有视觉决策必须遵循：
+- `docs/general/design-system.md`
+- Tailwind 配置 (`tailwind.config.js`)
+- shadcn/ui CSS 变量 (`src/index.css`)
+
+---
+
+## 3. UI 生成规则 (原子级 Vibe)
+
+永远不要一步生成整个页面。
+始终遵循此顺序：
+1. **原子** (按钮, 输入框, 标签)
+2. **分子 (卡片, 行, 表单块)**
+3. **区块**
+4. **页面**
+
+---
+
+## 4. 维护与重构策略
+
+- **标准化**: 触碰遗留代码时，将 `localStorage` 重构为 `src/lib/storage.ts`，将 ID 生成重构为 `src/lib/id.ts`。
+- **辅助函数**: 优先创建/使用共享 hooks (`useOnClickOutside`, `useEventListener`) 而不是重复样板代码。
+- **行为对等**: 重构必须保留现有的视觉/交互行为。
+
+---
+
+## 5. 数据主权与可移植性 (个人金库)
+
+**规则**: App 必须支持完整的用户数据导出和导入。
+- **格式**: 所有结构化数据 (历史, 收藏, 订阅, 文件夹, 元数据) 必须可导出为单个 JSON 文件。
+- **Blobs**: 音频和字幕 Blob 不包含在标准 JSON 导出中（由于大小原因），但必须保留引用它们的元数据。
+- **可移植性**: 用户应该能够将此文件导入到全新的 Readio 实例中，并立即看到他们完整的播放历史和库结构。
+
+---
+
+## 6. 协作与 Git 标准
+
+### 提交信息 (约定式提交)
+格式: `type(scope): description`
+- `feat`: 新功能
+- `fix`: Bug 修复
+- `refactor`: 代码更改（既不是修复 bug 也不是添加功能）
+- `docs`: 仅文档更改
+- `chore`: 构建过程, 工具或清理
+
+---
+
+## 7. 核心原则
+
+Vibe coding 取决于心流 (flow)。
+心流取决于一致性。
+
+先构建系统。
+然后让 vibe 安全地运行。
+
+可预测性 > 聪明。

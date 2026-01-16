@@ -1,6 +1,6 @@
-import type { Favorite } from '../libs/dexieDb'
-import type { Episode, Podcast, SearchEpisode } from '../libs/discovery'
-import { getDiscoveryArtworkUrl } from '../libs/imageUtils'
+import type { Favorite } from '../lib/dexieDb'
+import type { Episode, Podcast, SearchEpisode } from '../lib/discovery'
+import { getDiscoveryArtworkUrl } from '../lib/imageUtils'
 import { usePlayerStore } from '../store/playerStore'
 
 export function useEpisodePlayback() {

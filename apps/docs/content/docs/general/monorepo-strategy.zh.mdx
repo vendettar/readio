@@ -1,0 +1,58 @@
+---
+title: Monorepo 策略
+---
+
+# Monorepo 策略与未来应用
+
+Readio 旨在从单一 PWA 演变为多平台生态系统。
+本文档概述了 `apps/cloud` 和 `apps/native` 的路线图。
+
+## 1. 应用概览
+
+| 应用 | 路径 | 类型 | 状态 | 目标 |
+|---|---|---|---|---|
+| **Lite** | `apps/lite` | SPA/PWA | 🟢 Live | 零依赖、离线优先的播放器。 |
+| **Cloud** | `apps/cloud` | SaaS | ⚪ 计划中 | 同步、社交和 AI 功能。 |
+| **Native** | `apps/native` | Mobile | ⚪ 计划中 | 通过 Capacitor 的 iOS/Android 包装器。 |
+
+---
+
+## 2. Cloud 策略 (后端)
+
+**角色**: 可选增强。App 必须在没有它的情况下完美运行。
+
+### 计划功能 (P2/P3)
+- **数据同步**: 跨设备同步订阅和进度。
+- **AI 服务**: 服务端 Whisper (转录) 和 LLM (摘要)。
+- **社交**: 评论和“播客俱乐部”。
+
+### 技术栈
+- **框架**: Hono 或 Spring Boot。
+- **数据库**: PostgreSQL (Supabase/Neon)。
+- **认证**: 基于 JWT (无状态)。
+
+---
+
+## 3. Native 策略 (包装器)
+
+**角色**: 访问 PWA 无法触及的系统 API。
+
+### 计划功能 (P2)
+- **后台音频**: 原生 iOS/Android 音频会话处理。
+- **通知**: 新剧集的推送通知。
+- **小组件**: 主屏幕小组件。
+- **CarPlay / Auto**: 驾驶时的简化 UI。
+
+### 技术栈
+- **框架**: Capacitor (包装 `apps/lite`)。
+- **共享代码**: `packages/core` 中的逻辑。
+
+---
+
+## 4. 共享包 (`packages/`)
+
+为了支持这种演变，我们必须将逻辑从 `apps/lite` 移出到共享包中。
+
+- **`packages/core`**: Stores, Hooks, Utils (平台无关)。
+- **`packages/ui`**: 设计系统组件。
+- **`packages/api`**: Zod schemas 和 API 客户端。

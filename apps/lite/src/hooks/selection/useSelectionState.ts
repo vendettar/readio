@@ -1,7 +1,7 @@
 // src/hooks/selection/useSelectionState.ts
 // State management for text selection
 import { useState } from 'react'
-import type { SelectionState } from '../../libs/selection'
+import type { SelectionState } from '../../lib/selection'
 
 const initialState: SelectionState = {
   showMenu: false,

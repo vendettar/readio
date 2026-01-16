@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
-import { DB, type FileSubtitle, type FileTrack } from '../libs/dexieDb'
-import { logError, warn as logWarn } from '../libs/logger'
-import { parseSrt, type subtitle } from '../libs/subtitles'
+import { DB, type FileSubtitle, type FileTrack } from '../lib/dexieDb'
+import { logError, warn as logWarn } from '../lib/logger'
+import { parseSrt, type subtitle } from '../lib/subtitles'
 import { usePlayerStore } from '../store/playerStore'
 
 interface UseFilePlaybackProps {

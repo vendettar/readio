@@ -1,6 +1,6 @@
 // src/__tests__/subtitles.test.ts
 import { describe, expect, it } from 'vitest'
-import { findSubtitleIndex, formatTimeLabel, parseSrt } from '../libs/subtitles'
+import { findSubtitleIndex, formatTimeLabel, parseSrt } from '../lib/subtitles'
 
 describe('Subtitle Module', () => {
   describe('parseSrt', () => {

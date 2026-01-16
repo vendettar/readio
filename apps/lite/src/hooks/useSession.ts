@@ -1,9 +1,9 @@
 // src/hooks/useSession.ts
 import { useCallback, useEffect, useRef } from 'react'
-import { DB, type PlaybackSession } from '../libs/dexieDb'
-import { log, error as logError } from '../libs/logger'
-import { getAppConfig } from '../libs/runtimeConfig'
-import { generateSessionId } from '../libs/session'
+import { DB, type PlaybackSession } from '../lib/dexieDb'
+import { log, error as logError } from '../lib/logger'
+import { getAppConfig } from '../lib/runtimeConfig'
+import { generateSessionId } from '../lib/session'
 import { usePlayerStore } from '../store/playerStore'
 
 export function useSession() {

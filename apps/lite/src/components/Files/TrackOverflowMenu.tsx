@@ -4,7 +4,7 @@ import { ChevronLeft, Folder, Home, Inbox, MoreHorizontal, Pencil, Trash2 } from
 import { useLayoutEffect, useRef, useState } from 'react'
 import { useI18n } from '../../hooks/useI18n'
 import { cn } from '../../lib/utils'
-import type { FileFolder } from '../../libs/dexieDb'
+import type { FileFolder } from '../../lib/dexieDb'
 import { Button } from '../ui/button'
 import {
   DropdownMenu,

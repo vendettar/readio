@@ -1,0 +1,71 @@
+---
+title: Feature Backlog
+---
+
+# Product Feature Backlog & Ideas
+
+This document serves as a holding area for future feature ideas, user requests, and non-critical enhancements.
+Items here are **not yet scheduled** for development.
+
+---
+
+## 🎧 Audio & Playback
+
+### 1. Sleep Timer (P0)
+- **Goal**: Stop playback after X minutes or end of episode.
+- **Complexity**: Low.
+- **Implementation**: `useSleepTimer` hook + Store state.
+
+### 2. Smart Speed / Silence Skipping (P1)
+- **Context**: Podcast players often skip silence to save time.
+- **Goal**: Implement client-side silence detection or use metadata to skip gaps.
+- **Complexity**: High (Audio processing).
+
+### 3. Podcast Chapters (P0)
+- **Description**: Support `<podcast:chapters>` JSON/PSC.
+- **Goal**: Show chapter markers on progress bar and list.
+- **Complexity**: Medium (Parsing + UI).
+
+### 4. Playlist Persistence (P1)
+- **Context**: Currently, the "Up Next" queue is in-memory (Zustand).
+- **Goal**: Persist the current queue to Dexie.
+- **Complexity**: Medium.
+
+---
+
+## 📚 Library & Organization
+
+### 1. OPML Import/Export (P0)
+- **Goal**: Allow users to migrate from other apps.
+- **Format**: Standard OPML XML.
+- **Complexity**: Low (XML Parsing).
+
+### 2. Custom Playlists / Collections (P1)
+- **Context**: Currently we only have "Favorites" and "Subscriptions".
+- **Goal**: Allow users to create custom folders or lists (e.g., "Coding Podcasts", "Sleep Mix").
+- **Complexity**: Medium (New DB tables).
+
+### 3. Listening Stats (P1)
+- **Goal**: Dashboard showing hours listened, top podcasts.
+- **Source**: Local IndexedDB history.
+- **UI**: Recharts.
+
+---
+
+## 🔍 Discovery & Search
+
+### 1. Advanced Filters
+- **Goal**: Filter by Duration, Date, Language.
+- **Complexity**: Low (Frontend filtering).
+
+---
+
+## 🚀 Performance & PWA
+
+### 1. Offline Mode (P0)
+- **Goal**: Cache audio files and allow playback without network.
+- **Tech**: Service Worker + Cache Storage API.
+
+### 2. Web Worker Offloading (P1)
+- **Goal**: Move RSS parsing and File ID3 reading to a Worker.
+- **Benefit**: Unblock main thread during heavy imports.

@@ -1,0 +1,20 @@
+{
+    "title": "Lite App (PWA)",
+    "pages": [
+        "code-structure",
+        "routing",
+        "coding-standards",
+        "typography",
+        "ui-patterns",
+        "data-flow",
+        "performance",
+        "debugging",
+        "testing-guide",
+        "i18n-guide",
+        "handoff",
+        "cheatsheet",
+        "apple-api",
+        "regression-checklist",
+        "integration-pitfalls"
+    ]
+}

@@ -1,0 +1,138 @@
+---
+title: Apple Discovery API
+---
+
+# Apple Discovery API (iTunes 实现)
+
+本文档提供 Readio 项目中使用的 Apple/iTunes API 参考，作为 Discovery Provider 的实现。每部分包括描述、API URL 和用于测试的 `curl` 命令。
+
+## 1. 热门榜单 (Apple Podcasts RSS API)
+
+这些 API 用于获取不同地区的最受欢迎内容。
+
+### 🔝 热门播客
+获取特定国家当前的顶级播客。
+- **URL**: `https://rss.marketingtools.apple.com/api/v2/{country}/podcasts/top/{limit}/podcasts.json`
+- **示例**: 美国 Top 1 播客。
+```bash
+curl "https://rss.marketingtools.apple.com/api/v2/us/podcasts/top/1/podcasts.json"
+```
+
+### 🎧 热门剧集
+获取当前最热门的播客剧集。
+- **URL**: `https://rss.marketingtools.apple.com/api/v2/{country}/podcasts/top/{limit}/podcast-episodes.json`
+- **示例**: 美国 Top 1 剧集。
+```bash
+curl "https://rss.marketingtools.apple.com/api/v2/us/podcasts/top/1/podcast-episodes.json"
+```
+
+---
+
+## 2. 搜索与发现 (Provider Search API)
+
+用于基于关键字的搜索。
+
+### 🔍 搜索播客
+按名称或作者搜索播客节目。
+- **URL 前缀**: `https://itunes.apple.com/search`
+- **参数**: `term`, `country`, `media=podcast`, `limit`
+```bash
+curl "https://itunes.apple.com/search?term=daily&country=us&media=podcast&limit=1"
+```
+
+### 📜 搜索剧集
+按标题搜索单个剧集。
+- **URL 前缀**: `https://itunes.apple.com/search`
+- **参数**: `term`, `country`, `media=podcast`, `entity=podcastEpisode`, `limit`
+```bash
+curl "https://itunes.apple.com/search?term=The+Daily&country=us&media=podcast&entity=podcastEpisode&limit=1"
+```
+
+---
+
+## 3. 元数据查找 (Provider Lookup API)
+
+用于使用特定 ID (Track ID 或 Collection ID) 检索可靠数据。
+
+### 📖 查找完整播客
+通过其 collectionId 检索播客的完整元数据。
+- **URL 前缀**: `https://itunes.apple.com/lookup`
+- **参数**: `id`, `country`, `entity=podcast`
+```bash
+# 示例: 查找 'Serial' (917918570)
+curl "https://itunes.apple.com/lookup?id=917918570&country=us&entity=podcast"
+```
+
+### 🎯 查找剧集 ("Podcast + Episode" 方法)
+**注意**: iTunes Lookup API 经常无法直接通过单个 `trackId` 检索特定剧集。最可靠的方法是查找 **Podcast ID** 并包含剧集。
+
+> ⚠️ **关键限制 (2026-01-09 测试)**: 对于大多数播客，`limit` 参数是**无效的**。即使 `limit=300`，Provider API 也只返回约 25 集 (匹配播客提供者在其 RSS 提要中放置的内容)。**你无法通过此 API 检索播客的完整剧集归档。**
+
+- **URL 前缀**: `https://itunes.apple.com/lookup`
+- **参数**: `id={PODCAST_ID}`, `entity=podcastEpisode`, `limit=1`
+```bash
+# 示例: 查找 'The Daily' (1200361736) 及其最新一集
+curl "https://itunes.apple.com/lookup?id=1200361736&country=us&entity=podcastEpisode&limit=1"
+```
+
+### 📦 批量查找播客
+使用逗号分隔的 ID 列表一次查找多个播客。
+- **URL 前缀**: `https://itunes.apple.com/lookup`
+- **参数**: `id` (逗号分隔), `country`, `entity=podcast`
+```bash
+# 示例: 查找 'The Daily' 和 'Serial'
+curl "https://itunes.apple.com/lookup?id=1200361736,917918570&country=us&entity=podcast"
+```
+
+---
+
+## 参数摘要
+
+| 参数 | 描述 | 常见值 |
+| :--- | :--- | :--- |
+| `country` | 双字母 ISO 国家代码 | `us`, `cn`, `jp`, `kr`, `gb` |
+| `limit` | 返回结果数 | `10`, `30`, `50` |
+| `term` | URL 编码的搜索字符串 | `search+query` |
+| `media` | 要搜索的媒体类型 | `podcast` |
+| `entity` | 特定对象类型 | `podcast`, `podcastEpisode` |
+| `id` | iTunes ID (数字) | 例如 `1200361736` |
+
+---
+
+## 4. 额外 API (目前未使用)
+
+以下 API 可用但目前未在 Readio 中使用。在此记录以供将来参考。
+
+### 🎤 艺术家/出版商查找
+检索特定出版商/艺术家的所有播客。
+- **URL 前缀**: `https://itunes.apple.com/lookup`
+- **参数**: `id={ARTIST_ID}`, `entity=podcast`
+- **用例**: "更多来自 The New York Times 的内容" - 显示同一出版商的所有播客
+
+### 🏷️ 带类型过滤的搜索
+在特定类型内搜索播客。
+- **URL 前缀**: `https://itunes.apple.com/search`
+- **参数**: `term`, `media=podcast`, `genreId={GENRE_ID}`
+
+### 📊 按类型查看热门榜单
+获取特定类型内的热门播客。
+- **URL**: `https://rss.marketingtools.apple.com/api/v2/{country}/podcasts/top/{limit}/podcasts.json?genre={GENRE_ID}`
+
+---
+
+## 5. 不可用 / 内部 Apple API
+
+以下功能**无法**通过公共 API 获得：
+
+| 功能 | 状态 | 说明 |
+|---|---|---|
+| **完整剧集归档** | ❌ 不可用 | 即使 `limit=300`，API 也只返回约 25 集。无法访问完整的播客历史记录。 |
+| **播放计数 / 统计** | ❌ 不可用 | Apple 不公开收听统计数据 |
+| **用户评论** | ❌ 不可用 | 无法通过 API 访问播客评论 |
+| **订阅者计数** | ❌ 不可用 | 只有 "Top Subscriber" 排名是公开的，没有实际数字 |
+| **Apple Podcasts Connect** | 🔐 需要授权 | 仅限播客发布者，需要 Apple Developer 帐户 |
+| **私人 RSS 源** | 🔐 需要授权 | 付费/私人播客需要身份验证 |
+
+**变通方法**:
+- 对于完整剧集历史记录：一些播客在其 RSS 源中提供完整的存档，或通过其自己的网站提供
+- 对于评论：像 Chartable 或 Podtrac 这样的第三方服务可能会提供一些分析

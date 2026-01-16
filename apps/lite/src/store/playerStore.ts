@@ -1,13 +1,13 @@
 // src/store/playerStore.ts
 import { create } from 'zustand'
-import { DB } from '../libs/dexieDb'
-import { translate } from '../libs/i18nUtils'
-import { logError } from '../libs/logger'
-import { getAppConfig } from '../libs/runtimeConfig'
-import { getJson, setJson } from '../libs/storage'
-import type { subtitle } from '../libs/subtitles'
-import { parseSrt } from '../libs/subtitles'
-import { toast } from '../libs/toast'
+import { DB } from '../lib/dexieDb'
+import { translate } from '../lib/i18nUtils'
+import { logError } from '../lib/logger'
+import { getAppConfig } from '../lib/runtimeConfig'
+import { getJson, setJson } from '../lib/storage'
+import type { subtitle } from '../lib/subtitles'
+import { parseSrt } from '../lib/subtitles'
+import { toast } from '../lib/toast'
 
 // Episode metadata for session persistence
 export interface EpisodeMetadata {

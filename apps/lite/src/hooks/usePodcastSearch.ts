@@ -2,7 +2,7 @@
 // TanStack Query hook for podcast search
 
 import { useQuery } from '@tanstack/react-query'
-import discovery, { type Podcast } from '../libs/discovery'
+import discovery, { type Podcast } from '../lib/discovery'
 
 export interface UsePodcastSearchOptions {
   enabled?: boolean

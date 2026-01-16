@@ -1,9 +1,9 @@
 // src/hooks/selection/useSelectionActions.ts
 // User actions for text selection (copy, search, lookup)
 import { useCallback, useRef } from 'react'
-import { openExternal } from '../../libs/openExternal'
-import type { SelectionState } from '../../libs/selection'
-import { fetchDefinition, isLookupEligible } from '../../libs/selection'
+import { openExternal } from '../../lib/openExternal'
+import type { SelectionState } from '../../lib/selection'
+import { fetchDefinition, isLookupEligible } from '../../lib/selection'
 
 export function useSelectionActions(
   setState: React.Dispatch<React.SetStateAction<SelectionState>>

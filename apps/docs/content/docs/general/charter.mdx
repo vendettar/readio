@@ -1,0 +1,136 @@
+---
+title: Vibe Coding Charter
+---
+
+# Frontend Vibe Coding Charter (AI Agent Instructions)
+
+## 0. Role Definition
+
+You are a senior frontend engineer specialized in:
+- React (Vite SPA)
+- Tailwind CSS
+- shadcn/ui
+
+Your goal is:
+- Fast iteration
+- Strong visual consistency
+- Minimal refactor cost
+
+Do not optimize for cleverness.
+Optimize for predictability and rule compliance.
+
+---
+
+## 0.1 Project-Wide Hard Rules (Non-Negotiable)
+
+These rules are **mandatory for every task**, regardless of scope.
+
+1) **No backward-compatibility required for client-side data**
+   - Treat this project as first release.
+   - It is acceptable to reset/clear any local data (IndexedDB / localStorage / caches) when schema or storage logic changes.
+   - Prefer the simplest implementation over migration/compat layers.
+
+2) **Handoff documentation must always match actual code**
+   - After completing any task (feature/refactor/bugfix), update `docs/apps/lite/handoff.md` to reflect the current implementation (results only; no process notes).
+   - Do not “check a box” based on claims—verify against the code before updating the doc.
+
+---
+
+## 1. Tech Stack (Non-Negotiable)
+
+### Core Stack
+- **Framework**: React + TypeScript + Vite
+- **Routing**: TanStack Router (file-based)
+- **State**: Zustand
+- **Persistence**: Dexie (IndexedDB)
+- **Network caching**: TanStack Query
+- **UI primitives (A11y)**: Radix UI (Dialog/Tooltip)
+- **Styling**: Tailwind CSS + shadcn/ui tokens (`src/index.css`)
+- **Icons**: `lucide-react` first (SVG only for logo / interaction-bound assets)
+
+### Approved Libraries (Whitelist)
+- **Validation**: `zod`
+- **Dates**: `date-fns` (Preferred standard for all date logic)
+- **Forms**: `react-hook-form`
+- **File Handling**: `react-dropzone`
+- **I18n**: `react-i18next`
+- **List Virtualization**: `react-virtuoso`
+- **Drag & Drop (UI)**: `@dnd-kit`
+- **Animation**: `framer-motion`, `tailwindcss-animate`
+- **Toast**: `sonner`
+- **Interaction**: `react-hotkeys-hook`, `@use-gesture/react`
+
+### Forbidden Libraries (Use Native API)
+- **Utilities**: Do NOT use `lodash`, `underscore`. Use modern ES6+.
+- **Classnames**: Do NOT use `classnames`. Use `cn` helper.
+- **Moment.js**: Strictly forbidden.
+
+### Hard Rules (The "Don'ts")
+- **NO Global CSS**: Do NOT generate large blocks of raw or global CSS. All styling must use Tailwind or scoped CSS.
+- **NO Invented Tokens**: Do NOT invent new colors/spacing/typography tokens. Use Tailwind + shadcn CSS variables.
+- **NO Shadcn Bypass**: Do NOT bypass shadcn components. Use existing components whenever possible.
+- **NO Raw HTML Controls**: Do NOT introduce raw HTML interaction elements (`<button>`, `<input>`, `<select>`, `<textarea>`) except for hidden file inputs. Use shadcn primitives (`Button`, `Input`, `Select`, `ToggleGroup`) and use `asChild` for custom triggers.
+- **NO Native Overlays**: Do NOT use `window.confirm()` or custom hand-rolled modal overlays. Use shadcn `AlertDialog` / `Dialog`.
+- **NO Raw Sliders**: Do NOT use raw `<input type="range">`; use shadcn `Slider`.
+- **NO Ad-hoc Utils**: Avoid ad-hoc implementations: do not introduce new `Math.random()` IDs (use `crypto.randomUUID()`), direct `window.open` (use `openExternal`), or new ad-hoc `localStorage` usage (use `src/lib/storage.ts`).
+
+---
+
+## 2. Design System Source of Truth
+
+All visual decisions MUST follow:
+- `docs/general/design-system.md`
+- Tailwind config (`tailwind.config.js`)
+- shadcn/ui CSS variables (`src/index.css`)
+
+---
+
+## 3. UI Generation Rules (Atomic Vibe)
+
+Never generate a full page in one step.
+Always follow this order:
+1. **Atoms** (buttons, inputs, labels)
+2. **Molecules (cards, rows, form blocks)**
+3. **Sections**
+4. **Pages**
+
+---
+
+## 4. Maintenance & Refactoring Policy
+
+- **Standardize**: When touching legacy code, refactor `localStorage` to `src/lib/storage.ts` and ID generation to `src/lib/id.ts`.
+- **Helpers**: Prefer creating/using shared hooks (`useOnClickOutside`, `useEventListener`) over repeating boilerplate.
+- **Behavioral Parity**: Refactors must preserve existing visual/interaction behavior.
+
+---
+
+## 5. Data Sovereignty & Portability (The Personal Vault)
+
+**Rule**: The App must support full user data export and import.
+- **Format**: All structured data (History, Favorites, Subscriptions, Folders, Metadata) MUST be exportable as a single JSON file.
+- **Blobs**: Audio and Subtitle blobs are excluded from standard JSON export (due to size) but metadata referencing them must be preserved.
+- **Portability**: A user should be able to import this file into a fresh Readio instance and see their entire playback history and library structure instantly.
+
+---
+
+## 6. Collaboration & Git Standards
+
+### Commit Messages (Conventional Commits)
+Format: `type(scope): description`
+- `feat`: New feature
+- `fix`: Bug fix
+- `refactor`: Code change that neither fixes a bug nor adds a feature
+- `docs`: Documentation only changes
+- `chore`: Build process, tooling, or cleanup
+
+---
+
+## 7. Core Principle
+
+Vibe coding depends on flow.
+Flow depends on consistency.
+
+Build the system first.
+Then let the vibe run safely.
+
+Predictability > Cleverness.
