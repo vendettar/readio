@@ -50,6 +50,10 @@ Items here are **not yet scheduled** for development.
 - **Source**: Local IndexedDB history.
 - **UI**: Recharts.
 
+### 4. Robust Metadata Parser (P1)
+- **Goal**: Use a stable ID3 parser for local files.
+- **Scope**: Cover art, album/title, accurate duration.
+
 ---
 
 ## 🔍 Discovery & Search
@@ -69,3 +73,191 @@ Items here are **not yet scheduled** for development.
 ### 2. Web Worker Offloading (P1)
 - **Goal**: Move RSS parsing and File ID3 reading to a Worker.
 - **Benefit**: Unblock main thread during heavy imports.
+
+### 3. Media Cache Eviction Policy (P1)
+- **Goal**: Auto-trim audio blobs with LRU strategy.
+- **Benefit**: Prevent storage exhaustion.
+
+---
+
+## 🧭 Release & Compliance
+
+### 1. Deployment Pipeline (P0)
+- **Goal**: Document and automate production deployment (Vercel primary, Docker optional).
+- **Complexity**: Low.
+
+### 2. Legal Pages (P0)
+- **Goal**: Add Privacy Policy and Terms of Service routes.
+- **Complexity**: Low.
+
+### 3. Smoke E2E Tests (P0)
+- **Goal**: Add Playwright smoke tests for 3 core user journeys.
+- **Complexity**: Medium.
+
+### 4. Strict CSP (P0)
+- **Goal**: Enforce Content Security Policy for RSS rendering and external resources.
+- **Complexity**: Medium.
+
+### 5. Data Retention Policy (P1)
+- **Goal**: Auto-prune playback history to keep IndexedDB small.
+- **Complexity**: Medium.
+
+### 6. PWA Update Lifecycle (P1)
+- **Goal**: Notify users when a new version is available and trigger refresh.
+- **Complexity**: Medium.
+
+### 7. CI Pipeline (P0)
+- **Goal**: Enforce lint/typecheck/tests in GitHub Actions on PRs.
+- **Complexity**: Low.
+
+---
+
+## ✨ UX & Clarity
+
+### 1. Onboarding & Empty States (P1)
+- **Goal**: Replace blank screens with first-run guidance.
+- **Complexity**: Low.
+
+### 2. Image Fallback Strategy (P1)
+- **Goal**: Show loading skeletons and fallback icons for failed artwork.
+- **Complexity**: Low.
+
+### 3. Offline Content Visibility (P1)
+- **Goal**: Show offline badges and allow cache cleanup.
+- **Complexity**: Medium.
+
+### 4. Episode Sorting & Filtering (P1)
+- **Goal**: Sort/filter episodes by date, duration, and status.
+- **Complexity**: Medium.
+
+### 5. Skeleton UI System (P1)
+- **Goal**: Replace loading text with shimmer skeletons.
+- **Complexity**: Low.
+
+### 6. Overlay Layering Standardization (P1)
+- **Goal**: Standardize Portal usage and z-index tokens.
+- **Complexity**: Low.
+
+### 7. Storage Quota Monitoring (P1)
+- **Goal**: Show quota usage and warnings in Settings.
+- **Complexity**: Low.
+
+---
+
+## 🛡️ Security & Integrity
+
+### 1. Import Integrity Checks (P0)
+- **Goal**: Validate IDs and references on Vault/OPML import.
+- **Complexity**: Medium.
+
+### 2. Iframe Sandbox Policy (P1)
+- **Goal**: Isolate untrusted HTML rendering in sandboxed iframes.
+- **Complexity**: Medium.
+
+### 3. Content Attribution & Disclaimer (P0)
+- **Goal**: Display attribution and complaint link for RSS content.
+- **Complexity**: Low.
+
+### 4. PWA Audio Range Cache (P0)
+- **Goal**: Support Range Requests in SW for offline seeking.
+- **Complexity**: High.
+
+### 5. Network Backoff & Circuit Breaker (P1)
+- **Goal**: Avoid retry storms and improve proxy resilience.
+- **Complexity**: Medium.
+
+### 6. Dependency Audit & License Policy (P0)
+- **Goal**: Enforce vulnerability + license allowlist checks in CI.
+- **Complexity**: Low.
+
+### 7. RSS Content CSS Isolation (P1)
+- **Goal**: Prevent show-notes HTML from affecting app styles.
+- **Complexity**: Low.
+
+---
+
+## ⚙️ Performance & Quality
+
+### 1. Bundle Size Budget (P0)
+- **Goal**: Enforce bundle budgets in CI.
+- **Complexity**: Medium.
+
+### 2. MSW for Network Tests (P1)
+- **Goal**: Mock external APIs in tests using MSW.
+- **Complexity**: Medium.
+
+### 3. Memory Stress Test (P1)
+- **Goal**: Long-session memory profiling and heap comparison.
+- **Complexity**: Medium.
+
+### 4. Async Race Condition Audit (P0)
+- **Goal**: Guard against last-action-wins failures in async flows.
+- **Complexity**: Medium.
+
+### 5. Granular Error Boundaries (P1)
+- **Goal**: Isolate component failures to avoid whole-page crashes.
+- **Complexity**: Low.
+
+### 6. Lighthouse CI Budget (P1)
+- **Goal**: Enforce Lighthouse budgets in CI for A11y/Perf.
+- **Complexity**: Low.
+
+### 7. Floating Promise Audit (P1)
+- **Goal**: Enforce explicit error handling for async store actions.
+- **Complexity**: Low.
+
+### 8. Event Listener Leak Audit (P1)
+- **Goal**: Standardize global listener cleanup via a shared hook.
+- **Complexity**: Low.
+
+### 9. Zustand Selector Optimization (P1)
+- **Goal**: Enforce atomic selectors and `useShallow`.
+- **Complexity**: Low.
+
+---
+
+## 🌍 Typography & Localization
+
+### 1. Multilingual Typography (P1)
+- **Goal**: Language-specific font stacks for consistent rendering.
+- **Complexity**: Low.
+
+### 2. I18n Coverage Audit (P0)
+- **Goal**: Enforce key parity across languages at build time.
+- **Complexity**: Low.
+
+### 3. Intl API Upgrade (P1)
+- **Goal**: Move date/number/relative time formatting to Intl APIs.
+- **Complexity**: Low.
+
+---
+
+## 🧭 Governance & Workflow
+
+### 1. DB Access Guard (P1)
+- **Goal**: Prevent components from importing DB directly.
+- **Complexity**: Low.
+
+### 2. Contributing & Architecture Manifesto (P1)
+- **Goal**: Document instruction-driven workflow and architecture guardrails.
+- **Complexity**: Low.
+
+### 3. Proxy Failover (P0)
+- **Goal**: Automatically rotate CORS proxies on 429/5xx.
+- **Complexity**: Medium.
+
+### 4. IndexedDB Migrations (P0)
+- **Goal**: Replace wipe-only policy with versioned migrations.
+- **Complexity**: High.
+
+### 5. Browser Support Matrix (P1)
+- **Goal**: Define browserslist + legacy polyfill strategy.
+- **Complexity**: Medium.
+
+### 6. Turborepo Cache Hardening (P1)
+- **Goal**: Explicit Turbo inputs/outputs for reliable caching.
+- **Complexity**: Low.
+
+### 7. Atomic Write Safeguards (P0)
+- **Goal**: Transactional DB writes and boot-time repair.
+- **Complexity**: Medium.

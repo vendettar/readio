@@ -1,0 +1,108 @@
+---
+title: Project Overview
+---
+
+# Readio Development Overview / Handoff Documentation
+
+For the incoming development team: Introduction to code functional boundaries, key modules, algorithms & caching strategies, persistence & testing methods, and common troubleshooting entry points.
+
+> React 19 + TS + Vite SPA
+
+---
+
+## 0. Documentation Map
+
+When updating the handoff documentation after completing a task, please choose the most appropriate file to update based on the task type:
+
+- **Environment/Build/Dependencies/PWA**: `handoff/environment.mdx`
+- **UI Components/Interaction Standards/CSS/Tokens**: `handoff/standards.mdx`
+- **Global State/Routing Architecture/Performance Strategies**: `handoff/architecture.mdx`
+- **Database Schema/Persistence/Dexie Logic**: `handoff/database.mdx`
+- **Internationalization (I18n)**: `handoff/i18n.mdx`
+- **Specific Feature Modules**:
+  - Audio Engine/Transcript/Selection: `handoff/features/audio-engine.mdx`
+  - File Processing/Folders: `handoff/features/files-management.mdx`
+  - Search Logic/Two-Stage Workflow: `handoff/features/search.mdx`
+  - Podcast Discovery/Provider Architecture: `handoff/features/discovery.mdx`
+- **Global Principles**:
+  - Design System: `apps/docs/content/docs/general/design-system/index.mdx`
+  - Decision Log: `apps/docs/content/docs/general/decision-log.mdx`
+  - Glossary: `apps/docs/content/docs/general/glossary.mdx`
+
+**Single Source Rule**: `handoff/index.mdx` is the only entry point. Other handoff files are extensions and must not duplicate global rules.
+
+---
+
+## 1. Delivery Agreement
+
+Release Strategy: No migration compatibility layer for IndexedDB / localStorage. Changes to storage structure or caching logic should handle via clearing/rebuilding the database.
+Audit Scope Rules: By default, review only recent changes; perform a full repository audit only if explicitly requested.
+DB Reset Rule: Do NOT change the default DB name in source. Use `READIO_DB_NAME` override or `clearAllData()` for resets.
+
+### Planned (Pending Execution)
+- Deployment pipeline (Instruction 038).
+- Legal pages (Instruction 039).
+- Smoke E2E tests (Instruction 040).
+- Strict CSP (Instruction 041).
+- Data retention policy (Instruction 042).
+- PWA update lifecycle (Instruction 043).
+- CI pipeline (Instruction 044).
+- Onboarding empty states (Instruction 045).
+- Image fallback strategy (Instruction 046).
+- Local error logger (Instruction 047).
+- Accessibility audit (Instruction 048).
+- Import integrity checks (Instruction 049).
+- Bundle size budget (Instruction 050).
+- Iframe sandbox policy (Instruction 051).
+- User feedback loop (Instruction 052).
+- Offline content visualization (Instruction 053).
+- Episode sorting & filtering (Instruction 054).
+- Content attribution & disclaimer (Instruction 055).
+- Multilingual typography (Instruction 056).
+- DB access guard (Instruction 057).
+- MSW for network tests (Instruction 058).
+- Contributing & manifesto (Instruction 059).
+- PWA audio range cache (Instruction 060).
+- Memory stress test (Instruction 061).
+- Proxy failover mechanism (Instruction 062).
+- I18n coverage audit (Instruction 063).
+- IndexedDB migrations (Instruction 064).
+- Browser support matrix (Instruction 065).
+- Turborepo cache hardening (Instruction 066).
+- Atomic write safeguards (Instruction 067).
+- Async race condition audit (Instruction 068).
+- Robust metadata parser (Instruction 069).
+- Skeleton UI system (Instruction 070).
+- Overlay layering standardization (Instruction 071).
+- Media cache eviction policy (Instruction 072).
+- Network backoff & circuit breaker (Instruction 073).
+- Storage quota monitoring (Instruction 074).
+- Intl API upgrade (Instruction 075).
+- Granular error boundaries (Instruction 076).
+- Lighthouse CI budget (Instruction 077).
+- Dependency audit & license policy (Instruction 078).
+- Floating promise audit (Instruction 079).
+- Event listener leak audit (Instruction 080).
+- Zustand selector optimization (Instruction 081).
+- RSS HTML CSS isolation (Instruction 082).
+
+---
+
+## 2. What the Project Does (Product/Functional Overview)
+
+Readio is an in-browser podcast player supporting:
+- **Files**: Drag and drop MP3 + SRT subtitle files for playback and reading, with folder management support.
+- **Explore**: Global search, podcast search, podcast subscription, and episode favoriting.
+- **Subtitle Following**: Subtitles automatically scroll and highlight during playback.
+- **Selection & Lookup**: Select subtitle text to query dictionaries/web search.
+- **Global Search**: Top sidebar search, supporting secondary modes (History, Discover, Local) and playback status badges (StatusBadge).
+
+Main Entry Points (Routes):
+- `/` - Main Player Page (Subtitle Reading)
+- `/search` - Global Search Results Page
+- `/explore` - Explore Page (Find Podcasts)
+- `/subscriptions` - Subscriptions List
+- `/favorites` - Favorite Episodes
+- `/history` - Playback History
+- `/files` - Files Page (Audio/Subtitle management, Folder support, Drag & Drop)
+- `/settings` - Settings Page

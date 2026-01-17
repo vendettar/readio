@@ -5,7 +5,7 @@ title: Technical Roadmap
 # Technical Roadmap & Architecture Evolution
 
 This document tracks the **technical evolution** of the codebase.
-Each step corresponds to a specific Instruction file in `local/instructions/lite/`.
+Each step corresponds to a specific Instruction file in `agent/instructions/lite/`.
 
 ---
 
@@ -76,7 +76,89 @@ Each step corresponds to a specific Instruction file in `local/instructions/lite
 
 ---
 
-## 6. Future Phase: "Hybrid Backend" (v2.0)
+## 6. Phase 6: Production Readiness (The Launch)
+**Goal**: Polish the app for public release and compliance.
+
+- [ ] **038**: Setup Deployment Pipeline (Vercel/Docker).
+- [ ] **039**: Implement Legal Pages (Privacy/Terms).
+- [ ] **040**: Implement Smoke E2E Tests (Playwright).
+- [ ] **041**: Implement Strict CSP (Security).
+- [ ] **045**: Onboarding & Empty States (UX).
+- [ ] **046**: Image Fallback Strategy (Aesthetics).
+- [ ] **052**: User Feedback Loop (Retention).
+- [ ] **055**: Content Disclaimer & Attribution (Legal).
+- [ ] **060**: PWA Audio Range Cache (Offline Seek).
+- [ ] **062**: Proxy Failover Mechanism (Resilience).
+- [ ] **063**: I18n Coverage Audit (Quality).
+- [ ] **065**: Browser Support Matrix (Compatibility).
+
+---
+
+## 7. Phase 7: Engineering Excellence (The Future)
+**Goal**: Harden the architecture for multi-developer collaboration.
+
+- [ ] **042**: Data Retention Policy (Performance).
+- [ ] **043**: PWA Update Lifecycle (UX).
+- [ ] **044**: Setup CI Pipeline (Automation).
+- [ ] **047**: Local Error Logger (Supportability).
+- [ ] **048**: Accessibility Standards (Compliance).
+- [ ] **049**: Data Integrity on Import (Reliability).
+- [ ] **050**: Bundle Size & Perf Budget (Monitoring).
+- [ ] **051**: Iframe & HTML Sandbox (Security).
+- [ ] **053**: Offline Content Management (Utility).
+- [ ] **054**: Advanced Sorting & Filtering (Utility).
+- [ ] **056**: Multilingual Typography (Quality).
+- [ ] **057**: Direct DB Access Guard (Anti-corruption).
+- [ ] **058**: MSW for Testing (Robustness).
+- [ ] **059**: Architecture Manifesto (Culture).
+- [ ] **061**: Memory Stress Test (Stability).
+- [ ] **064**: IndexedDB Migration Engine (Reliability).
+- [ ] **066**: Turborepo Cache Hardening (Build Integrity).
+- [ ] **067**: Atomic Write Safeguards (Reliability).
+- [ ] **068**: Async Race Condition Audit (Correctness).
+
+---
+
+## 8. Phase 8: Industrial Hardening (The Fortress)
+**Goal**: Absolute reliability under extreme conditions.
+
+- [ ] **060**: PWA Audio Streaming Cache (Range Requests).
+- [ ] **061**: Memory Stress Test (Long Sessions).
+- [ ] **062**: Proxy Failover Mechanism (Resilience).
+- [ ] **063**: I18n Coverage Audit (Automation).
+- [ ] **064**: IndexedDB Migration Engine (Versioning).
+- [ ] **065**: Browser Support Matrix (Polyfills).
+- [ ] **066**: Harden Turborepo Cache Config (CI Sync).
+- [ ] **067**: Atomic Write Safeguards (Reliability).
+- [ ] **068**: Audit & Fix Async Race Conditions (UI Integrity).
+
+---
+
+## 9. Phase 9: Enterprise Grade (The Pinnacle)
+**Goal**: Elite-tier performance, security, and compliance.
+
+- [ ] **069**: Robust Metadata Parser (Functionality).
+- [ ] **070**: Skeleton UI System (UX).
+- [ ] **071**: Overlay Layering Standardization (Architecture).
+- [ ] **072**: Media Cache Eviction Policy (Maintenance).
+- [ ] **073**: Network Backoff & Circuit Breaker (Resilience).
+- [ ] **074**: Storage Quota Monitoring (UX).
+- [ ] **075**: Intl API Upgrade (Quality).
+- [ ] **076**: Granular Error Boundaries (Fault Tolerance).
+- [ ] **077**: Lighthouse CI Budget (Automated QA).
+- [ ] **078**: Dependency Audit & License Policy (Compliance).
+- [ ] **079**: Floating Promise Audit (Reliability).
+- [ ] **080**: Event Listener Leak Audit (Performance).
+- [ ] **081**: Zustand Selector Optimization (Performance).
+- [ ] **082**: RSS Content CSS Isolation (Security).
+- [ ] **079**: Audit & Fix Floating Promises (Integrity).
+- [ ] **080**: Audit & Fix Event Listener Leaks (Memory).
+- [ ] **081**: Optimize Zustand Selectors (Performance).
+- [ ] **082**: Enforce CSS Isolation (Security).
+
+---
+
+## 10. Future Phase: "Hybrid Backend" (v2.0)
 **Goal**: Optional cloud sync for power users.
 
 ### Architectural Change

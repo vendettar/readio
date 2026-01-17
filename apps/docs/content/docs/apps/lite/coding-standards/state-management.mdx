@@ -1,0 +1,47 @@
+---
+title: State Management
+---
+
+## React & Hooks
+
+- **Focus Management**:
+  - Use `autoFocus` prop and library callbacks (`onCloseAutoFocus`).
+  - Do not use `setTimeout` hacks.
+
+- **Effect Dependencies**:
+  - Be exhaustive with `useEffect` dependencies.
+  - Handle "late binding" for refs (e.g., Audio element) correctly.
+
+- **Zustand & Persistence**:
+  - Keep store logic pure and typed.
+  - Use explicit selectors to prevent unnecessary re-renders.
+  - **Persistence**: Prefer explicit `loadFromDB()` / `saveToDB()` actions (using `src/lib/dexieDb.ts`) over `zustand/persist`.
+  - **Dexie Versioning**: Use a single schema version only. If schema changes, reset local data.
+
+## Form Handling (Standard)
+- **Rule**: Do NOT use manual `useState` for complex forms or settings.
+- **Library**: **`react-hook-form`** + **`zod`**.
+- **Usage**: Use Shadcn's `<Form>` components to wrap the logic. Ensure all inputs are registered.
+
+## Shared Cache Policy
+- **Rule**: Cache read/write must use unified `storage` utilities (`getJsonWithTtl`).
+
+## Anti-Patterns (Right vs Wrong)
+
+### Form State
+❌ **Wrong**: Manual state
+```tsx
+const [name, setName] = useState('')
+<input value={name} onChange={e => setName(e.target.value)} />
+```
+✅ **Right**: React Hook Form
+```tsx
+const form = useForm({ defaultValues: { name: '' } })
+<FormField control={form.control} name="name" render={({ field }) => <Input {...field} />} />
+```
+
+---
+
+## Planned (Pending Execution)
+
+- **Zustand Selector Optimization**: Enforce atomic selectors and `useShallow` for multi-select (Instruction 081).

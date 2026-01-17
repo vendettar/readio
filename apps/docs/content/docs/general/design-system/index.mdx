@@ -1,0 +1,63 @@
+---
+title: Philosophy & Overview
+---
+
+# Design System
+
+You are a senior frontend engineer.
+
+You MUST strictly follow the project design system and UI rules defined in the provided design system document (e.g. design_system.md or equivalent). These rules have higher priority than user preferences or creative interpretation.
+
+**Hard constraints:**
+- Use Tailwind CSS and shadcn/ui only.
+- Do NOT generate large blocks of raw or global CSS.
+- Do NOT invent new colors, spacing, typography, or visual styles.
+- Always prefer existing shadcn/ui components (Button, Input, Card, etc.).
+- Visual consistency is more important than novelty.
+- **Zero Arbitrary Values**: Avoid Tailwind's arbitrary value syntax `-[...]` for static properties (colors, spacing, z-index). Register them in `tailwind.config.js` or use standard tokens.
+
+**CSS policy:**
+- CSS is allowed only when absolutely necessary.
+- CSS must be component-scoped, simple, and use existing tokens only.
+- Never use deep selectors or !important.
+- If CSS is required, explicitly state why before writing it.
+
+**UI generation rules:**
+- Never generate a full page in one step.
+- Follow atomic order internally: atoms → components → sections → pages.
+- Reuse previously defined components whenever possible.
+
+## Documentation Map
+
+- **Tokens & Layout**: `design-system/tokens.mdx` - Colors, spacing, and layout constants.
+- **Components**: `design-system/components.mdx` - Standardized UI components and primitives.
+- **Visuals**: `design-system/visuals.mdx` - Glassmorphism, animations, and aesthetic rules.
+
+---
+
+## Source of Truth (Tokens)
+
+All colors/spacing/typography/radius MUST come from:
+- Tailwind theme (`tailwind.config.js`)
+- shadcn/ui theme tokens (CSS variables in the project’s global styles, e.g. `src/index.css`)
+
+Do not invent new tokens or “one-off” values in components.
+
+---
+
+## UI Primitives Policy (No Raw Controls)
+
+**Default rule**: Do not use raw HTML form/interaction primitives directly in the app UI (`<button>`, `<input>`, `<select>`, `<textarea>`).
+
+Use shadcn/ui primitives instead:
+- `Button` for all click actions (including icon-only buttons)
+- `Input` / `Textarea` for text entry
+- shadcn `Select` / `DropdownMenu` / `Popover` / `ToggleGroup` for selection controls
+
+**If you need a non-`button` element** (e.g. router links, custom trigger elements), use the shadcn component with `asChild` so styling + accessibility behavior remain consistent.
+
+**Allowed exceptions** (must be minimal and justified in the task summary, not user-facing UI):
+1. File inputs: `<input type="file" className="hidden" />` is allowed; the visible trigger must be a `Button`.
+2. Truly non-standard interactions that cannot be expressed with shadcn primitives without breaking behavior (rare). If needed, keep the element accessible (keyboard + `aria-*`) and visually consistent.
+
+**Rationale**: Raw controls drift in styling, focus/disabled states, and accessibility over time. Using a shared primitive set prevents UI fragmentation.

@@ -1,0 +1,55 @@
+---
+title: Audio Engine
+---
+
+## 1. Playback Capability & Session Restoration
+
+### Session Restoration Mechanism
+
+**Strategy**: Playback progress is persisted via `playback_sessions` table, automatically restored after page refresh.
+
+- **Podcast Session**: Find previous session by `audioUrl` index
+- **Local File Session**: Exact match by `localTrackId` (local_tracks.id), avoiding same-name file conflicts across folders
+- **Dexie Schema**: Single version (v1) defines current full table structure and indexes, no historical version maintenance.
+
+**Implementation Details**:
+- **Local File Playback**: `useLocalPlayback` sets `sessionId` (format: `local-track-{trackId}`) before playing, then creates session containing full info (including audioId for Last Played)
+- **Podcast Playback**: `setAudioUrl(..., metadata)` writes episode metadata to store, `useSession` writes to `playback_sessions` when creating session
+- **Session Restoration**: `useSession` checks if sessionId exists, skips if yes; otherwise:
+  1. **Deterministic Guard**: For local files, first directly check if `local-track-{trackId}` exists, reuse if yes
+  2. Otherwise find by `localTrackId` or `audioUrl` index
+  3. Create new session only if not found
+- **Race Condition Prevention**: Set sessionId + deterministic ID query first, completely eliminating duplicate creation risk
+
+### Player Basic Capabilities
+
+- **Audio Playback**: HTML5 `<audio>` element mounted in `__root.tsx`, persisted across routes
+- **Playback Rate Control**: 0.8x ~ 2.0x, managed by `playerStore.playbackRate`, persisted to localStorage via `storage.ts`'s `setJson`. FullPlayer reads store state and provides rate switch button.
+- **Volume Control**: 0-1 range, persisted to localStorage via `storage.ts` (`usePlayerStore`)
+- **Progress Control**: Slider directly calls `seekTo()` interface, unified seek after user drag ends
+- **Local File Playback**: Blob URL locally mounted, `< 300MB` audio cached to IndexedDB supporting offline restoration
+- **Podcast Metadata**: `setAudioUrl` accepts EpisodeMetadata (description/podcastTitle/feedUrl/artworkUrl/publishedAt), and writes to `playerStore.episodeMetadata` for History/Favorites display
+
+---
+
+## 2. Transcript (Subtitle Rendering Constraints & Virtual List)
+
+Product Requirements:
+- **Each word in subtitle visible** (Multi-line display, no ellipsis truncation).
+
+Current Implementation:
+- Uses `react-virtuoso` to implement dynamic height virtual list.
+- Removed fixed line height constraint and text truncation.
+- CSS changed to `word-wrap: break-word; overflow-wrap: break-word; line-height: 1.5`, supporting multi-line display.
+- **Zoom Support**: Monitors `zoomScale` change via `useEffect` and triggers Virtuoso re-measurement.
+
+Implementation Details:
+- Component: `src/components/Transcript/TranscriptView.tsx`
+- TranscriptView is also used in FullPlayer
+- Following Mode: Uses `virtuosoRef.scrollToIndex()` to automatically scroll to current subtitle line, centered alignment
+
+### Selection (Select/Lookup)
+
+- UI Component: `src/components/Selection/SelectionUI.tsx` (ContextMenu / LookupPopover / hover overlay)
+- User visible error info uses i18n: Lookup failure etc. mapped to `t(key)` text via `TranslationKey` (e.g., `lookupNotFound`)
+- Dynamic Positioning: Only use `left/top` or CSS variable injection to express dynamic layout, avoid writing `width/height/transform` directly in `style={{...}}`

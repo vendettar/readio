@@ -1,0 +1,68 @@
+---
+title: Internationalization
+---
+
+## i18n 架构
+
+直接使用 **react-i18next**，组件内使用 `useTranslation()`。
+
+### 实现
+
+- **翻译文件**：`src/lib/translations.ts`（6 种语言：zh/en/ja/ko/de/es）
+- **Hook**：使用 `react-i18next` 的 `useTranslation()`。
+- **初始化**：`src/lib/i18n.ts` 完成 i18next 初始化，`main.tsx` 引入以生效
+
+### 核心原则
+
+所有用户可见文案必须通过 t(key) 体系处理：
+- **React 组件内**: 使用 `useTranslation()` 并调用 `t(key, options)`
+- **Store 和工具函数**: 使用 `src/lib/i18nUtils.ts` 的 `translate(key, options)` 函数（内部调用 `i18next.t`）
+  - 支持插值（如 `{size}`, `{count}`）
+  - 内置 fallback 到英文
+  - 防止 undefined key 崩溃
+  - **仅在开发环境输出 console.warn**，生产环境静默
+
+**示例**：
+```typescript
+// In React component
+const { t } = useTranslation();
+toast.info(t('largeFileNotCached', { size: fileSize }));
+
+// In store or non-React context
+import { translate } from '../lib/i18nUtils';
+toast.info(translate('largeFileNotCached', { size: fileSize }));
+```
+
+### i18n 增强 (interpolation)
+
+- **支持变量替换**: `t(key, options)` 支持 `{count}` 等模板语法。
+- **类型安全**：`t()` 仅接受有效 key（通过 i18next module augmentation 实现）。
+- **规则**：禁止将 key 强制转换为 `string`/`any`/`TranslationKey` 来绕过类型检查。
+
+---
+
+## 计划中（待执行）
+
+- **I18n 覆盖审计**：构建期检查多语言 key 对齐（指令 063）。
+- **Intl 格式化升级**：日期/数字格式化迁移到 Intl API（指令 075）。
+
+### 搜索/历史/收藏相关 i18n Keys
+
+| Key | 用途 | 示例值 (EN) |
+|-----|------|-------------|
+| `searchEmptyHint` | 搜索无结果时的提示 | "Try a different search term" |
+| `searchEmptyTitle` | 搜索页无查询时标题 | "Search for podcasts and episodes" |
+| `searchEmptyBody` | 搜索页无查询时描述 | "Use the search bar above to find content" |
+| `searchResultsCount` | 搜索结果计数（支持插值） | `"{count} results"` |
+| `historyProgressSuffix` | 历史页进度后缀 | "played" |
+| `historyPlayedAt` | 历史页播放时间标签 | "Played at" |
+| `historySourceLocal` | 历史来源：本地文件 | "Files" |
+| `historySourcePodcast` | 历史来源：播客 | "Podcast" |
+| `favoritesAddedLabel` | 收藏添加时间（支持插值） | ` "Added {date}" ` |
+| `readingBgTitle` | 阅读背景设置标题 | "Reading Background" |
+| `readingBgHint` | 阅读背景设置提示 | "Applied to the transcript..." |
+| `ariaRemoveDownloadedAudio` | 移除已下载音频的 aria label | "Remove downloaded audio" |
+| `sourceLocal` | 来源：本地 | "Local" |
+| `sourcePodcast` | 来源：播客 | "Podcast" |
+
+插值通过 `t(key, { ... })` 完成，翻译结果不做二次字符串处理，以保持多语言正确性。

@@ -1,0 +1,108 @@
+---
+title: Project Overview
+---
+
+# Readio开发介绍 / 交接文档
+
+面向接手开发团队：介绍当前代码的功能边界、关键模块、算法与缓存策略、持久化与测试方式，以及常见排障入口。
+
+> React 19 + TS + Vite SPA
+
+---
+
+## 0. 文档地图 (Documentation Map)
+
+当执行完任务需要更新交接文档时，请根据任务类型选择最合适的文件进行更新：
+
+- **环境/构建/依赖/PWA**: `handoff/environment.zh.mdx`
+- **UI 组件/交互规范/CSS/Tokens**: `handoff/standards.zh.mdx`
+- **全局状态/路由架构/性能策略**: `handoff/architecture.zh.mdx`
+- **数据库 Schema/持久化/Dexie 逻辑**: `handoff/database.zh.mdx`
+- **国际化 (I18n)**: `handoff/i18n.zh.mdx`
+- **具体功能模块**:
+  - 音频引擎/字幕/选词: `handoff/features/audio-engine.zh.mdx`
+  - 文件处理/文件夹: `handoff/features/files-management.zh.mdx`
+  - 搜索逻辑/两阶段工作流: `handoff/features/search.zh.mdx`
+  - 播客发现/Provider 架构: `handoff/features/discovery.zh.mdx`
+- **全局原则**:
+  - 设计系统: `apps/docs/content/docs/general/design-system/index.mdx`
+  - 决策日志: `apps/docs/content/docs/general/decision-log.zh.mdx`
+  - 术语表: `apps/docs/content/docs/general/glossary.zh.mdx`
+
+**唯一入口规则**：`handoff/index.zh.mdx` 为唯一入口，其它文件仅作为扩展，不应重复全局规则。
+
+---
+
+## 1. 交付约定
+
+发布策略：没有 IndexedDB / localStorage 的迁移兼容层，存储结构或缓存逻辑变化时以清库/重建处理。
+审计范围规则：默认只审查最近变更；如明确要求可执行全量仓库审计。
+DB 重置规则：禁止在源码中修改默认数据库名；重置请使用 `READIO_DB_NAME` 覆盖或 `clearAllData()`。
+
+### 计划中（待执行）
+- 部署流水线（指令 038）。
+- 法律页面（指令 039）。
+- Smoke E2E 测试（指令 040）。
+- 严格 CSP（指令 041）。
+- 数据保留策略（指令 042）。
+- PWA 更新生命周期（指令 043）。
+- CI 流水线（指令 044）。
+- 新手引导空状态（指令 045）。
+- 图片兜底策略（指令 046）。
+- 本地错误日志（指令 047）。
+- 无障碍审计（指令 048）。
+- 导入完整性校验（指令 049）。
+- 包体积预算（指令 050）。
+- Iframe 沙箱策略（指令 051）。
+- 用户反馈入口（指令 052）。
+- 离线内容可视化（指令 053）。
+- 单集排序与筛选（指令 054）。
+- 内容归属声明（指令 055）。
+- 多语言排版（指令 056）。
+- DB 访问防护（指令 057）。
+- MSW 网络测试（指令 058）。
+- 贡献指南与宣言（指令 059）。
+- PWA 音频 Range 缓存（指令 060）。
+- 内存压测（指令 061）。
+- 代理故障转移（指令 062）。
+- I18n 覆盖审计（指令 063）。
+- IndexedDB 迁移（指令 064）。
+- 浏览器支持矩阵（指令 065）。
+- Turborepo 缓存加固（指令 066）。
+- 原子写入防护（指令 067）。
+- 异步竞态审计（指令 068）。
+- 元数据解析器升级（指令 069）。
+- 骨架屏系统（指令 070）。
+- 覆盖层分层标准化（指令 071）。
+- 媒体缓存淘汰策略（指令 072）。
+- 网络退避与断路器（指令 073）。
+- 存储配额监控（指令 074）。
+- Intl API 格式化升级（指令 075）。
+- 细粒度错误边界（指令 076）。
+- Lighthouse CI 预算（指令 077）。
+- 依赖审计与许可证策略（指令 078）。
+- 浮动 Promise 审计（指令 079）。
+- 事件监听泄漏审计（指令 080）。
+- Zustand 选择器优化（指令 081）。
+- RSS HTML CSS 隔离（指令 082）。
+
+---
+
+## 2. 项目做什么（产品/功能概述）
+
+Readio 是一个浏览器内播客播放器，支持：
+- **Files (文件)**: 拖放 MP3 + SRT 字幕文件进行播放和阅读，支持文件夹管理
+- **Explore (探索)**: 全局搜索、播客搜索、订阅播客，收藏节目
+- **字幕跟随**：播放时字幕自动滚动高亮
+- **选词查词**：选中字幕文本可查询词典/网页搜索
+- **全局搜索**：顶部侧边栏搜索，支持二级模式（历史、发现、本地）以及播放状态标识（StatusBadge）
+
+主要入口（路由）：
+- `/` - 主播放器页面（字幕阅读）
+- `/search` - 全局搜索结果页
+- `/explore` - 探索页面（寻找播客）
+- `/subscriptions` - 订阅列表
+- `/favorites` - 收藏节目
+- `/history` - 播放历史
+- `/files` - Files 页面（音频、字幕管理，支持文件夹、拖放）
+- `/settings` - 设置页面

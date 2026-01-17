@@ -5,16 +5,16 @@ title: 回归清单
 # Readio (React 重写) 回归检查清单 (可复用)
 
 > 目的：在进行重大更改 (UI/IA 重设计, 旧代码清理, 路由调整, 字幕/选择重构, 缓存/DB 修改) 时，使用此清单进行“全量回归自查”，以避免遗漏细节。
-> 原则：基于 **实际当前代码** 和 `docs/technology_roadmap.md`；过时的项目应及时更新/删除。
+> 原则：基于 **实际当前代码** 和 `apps/docs/content/docs/general/technical-roadmap.mdx`；过时的项目应及时更新/删除。
 
 ---
 
 ## 0) 项目核心约束 (每次对齐)
 
 - [ ] **首发心态: 无向后兼容旧数据** (IndexedDB / localStorage / 缓存可以清除并重建；不要引入迁移层)。
-- [ ] **每次更改后更新 `docs/handoff_doc.md`** (仅描述实际当前状态；无过程说明)。
+- [ ] **每次更改后更新 `apps/docs/content/docs/apps/lite/handoff/index.mdx`** (仅描述实际当前状态；无过程说明)。
 - [ ] **用户消息不得暴露技术术语** (CORS, HTTP 状态码, 堆栈跟踪去控制台/日志；UI 仅使用自然语言)。
-- [ ] UI: 使用 Tailwind + shadcn/ui tokens；不要发明新 token (见 `docs/design_system.md`)。
+- [ ] UI: 使用 Tailwind + shadcn/ui tokens；不要发明新 token (见 `apps/docs/content/docs/general/design-system/index.mdx`)。
 - [ ] 逐字稿: **每个单词必须保持可见** (必须多行换行；无 `ellipsis/nowrap` 截断)。
 
 ---
@@ -47,6 +47,7 @@ title: 回归清单
   - `onSeek` → `store.seekTo()` → `store.pendingSeek` → `__root.tsx` effect 更新 `audio.currentTime`。
   - 禁止：`document.querySelector(...)` 或将 `audioRef` 传递给深层组件以直接修改 `currentTime`。
 - [ ] 后退/前进：浏览器导航在不同路由之间正常工作 (例如，在 Sidebar 链接之间跳转)。
+- [ ] Media Session 处理器：`src/hooks/useMediaSession.ts`、`src/components/AppShell/GlobalAudioController.tsx`。
 
 ---
 
@@ -73,10 +74,10 @@ title: 回归清单
 
 背景：发生过删除 DB 导致实例失效或跨测试污染的问题。
 
-- [ ] 使用 Dexie 标准化 DB：`src/lib/dexieDb.ts` (DB 名：`readio-v2`)。
+- [ ] 使用 Dexie 标准化 DB：`src/lib/dexieDb.ts` (默认 DB 名：`readio`，清库时可通过 `READIO_DB_NAME` 覆盖)。
 - [ ] `DB.clearAllData()` 必须是表级清理 (事务 + `table.clear()`)；不要使用 `db.delete()`。
 - [ ] 测试隔离：`fake-indexeddb` + 每个测试套件前清除 DB。
-- [ ] `src/lib/__tests__/dbMigration.test.ts` 专注于“可清除数据”阶段的初始化和 CRUD 断言 (无数据持久性断言)。
+- [ ] `src/lib/__tests__/dbOperations.test.ts` 专注于“可清除数据”阶段的初始化和 CRUD 断言 (无数据持久性断言)。
 
 快速回归点：
 - [ ] 页面刷新后播放进度恢复 (会话恢复)。
@@ -86,7 +87,7 @@ title: 回归清单
 
 ## 5) i18n (轻量级 t(key) 模式)
 
-- [ ] 新/修改的 UI 文本必须使用 `t(key)`（`useI18n` 适配层，基于 react-i18next）。
+- [ ] 新/修改的 UI 文本必须使用 `t(key)`（使用 `useTranslation()`，基于 react-i18next）。
 - [ ] 新键必须添加到 `src/lib/translations.ts` 中的所有支持语言。
 - [ ] UI 不包含技术术语。
 
@@ -99,6 +100,7 @@ title: 回归清单
 - [ ] 支持 `window.__READIO_ENV__`：
   - `READIO_CORS_PROXY_URL`
   - `READIO_CORS_PROXY_PRIMARY`
+- [ ] 离线状态：`src/hooks/useNetworkStatus.ts`、`src/routeComponents/ExplorePage.tsx`、`src/components/GlobalSearch/CommandPalette.tsx`、`src/components/AppShell/Sidebar.tsx`。
 
 ---
 

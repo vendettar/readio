@@ -22,8 +22,9 @@ Readio 是一个音频应用程序。
 
 **规则**: 每个 `URL.createObjectURL()` 必须有对应的 `URL.revokeObjectURL()`。
 
-- **Audio Blobs**: 不要在组件中创建对象 URL。使用 `playerStore.loadAudioSource(blob)`，它处理 URL 创建和前一个源的自动撤销。
-- **验证**: 如果每次切歌后内存使用量增加，则说明您泄露了 Object URL。
+- **音频 Blob**: Object URL 必须由 Store 统一创建与回收（如 `playerStore.loadAudioSource(blob)`）；组件不得为音频调用 `URL.createObjectURL`。
+- **图片 Blob**: 组件必须为封面创建 Object URL，并在卸载时回收（例如 `useImageObjectUrl`）。
+- **验证**: 如果每次切歌后内存使用量增加，则说明发生了 Object URL 泄漏。
 
 ## 3. 列表虚拟化
 
@@ -77,3 +78,14 @@ Readio 是一个音频应用程序。
 **规则**: 永远不要使用 `.filter()` 搜索大表。
 - **为什么**: 这会触发全表扫描 (O(N))，将所有记录读入内存。
 - **修复**: 使用 IndexedDB 索引和索引字段上的 `.startsWithIgnoreCase()` 或 `.equals()`。
+
+---
+
+## 计划中（待执行）
+
+- **包体积预算**：在 CI 中强制 gzip 体积上限（指令 050）。
+- **PWA 音频 Range 缓存**：离线 seek 支持 206（指令 060）。
+- **内存压测**：长会话 profiling 与堆快照检查（指令 061）。
+- **异步竞态审计**：保证最后一次点击生效（指令 068）。
+- **媒体缓存淘汰**：音频 blob LRU 淘汰策略（指令 072）。
+- **事件监听泄漏审计**：统一全局监听清理（指令 080）。

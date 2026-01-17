@@ -1,0 +1,68 @@
+---
+title: Development Environment
+---
+
+## 1. 本地开发 / 构建 / 测试
+
+构建与测试脚本（根目录下执行）：`pnpm build`、`pnpm test`、`pnpm --filter @readio/lite test:run`、`pnpm --filter @readio/lite test:e2e`。
+代码质量工具：Biome（`pnpm lint`、`pnpm format`）。
+
+### 计划中（待执行）
+- 部署流水线（Vercel/Docker，指令 038）。
+- CI 流水线（GitHub Actions，指令 044）。
+- PWA 更新生命周期（指令 043）。
+- PWA 音频 Range 缓存（指令 060）。
+- 代理故障转移（指令 062）。
+- 浏览器支持矩阵（指令 065）。
+- Turborepo 缓存加固（指令 066）。
+- Lighthouse CI 预算（指令 077）。
+- 依赖审计与许可证策略（指令 078）。
+
+### 测试策略
+
+#### 单元测试（Vitest）
+
+- 测试文件：`src/__tests__/*.test.ts`
+- 使用 `fake-indexeddb` 模拟 IndexedDB
+- 共 119 个测试用例
+- 脚本：`pnpm --filter @readio/lite test:run` (从根目录执行)
+
+#### E2E 测试（Playwright）
+
+- 脚本：`pnpm --filter @readio/lite test:e2e` (从根目录执行)
+
+---
+
+## 2. Runtime Configuration (运行配置)
+
+### 集中化配置 (`public/env.js`)
+
+应用采用动态运行配置，而非仅依赖编译时环境变量：
+- **文件**: `public/env.js` (由 `index.html` 直接引入)
+- **职责**: 管理 API 地址 (iTunes, Dictionary)、存储限制 (Audio Max Size, Cache Limit)、UI 参数 (Zoom, Click Delay)。
+- **默认值**: 包含生产环境默认值，可在部署环境注入覆盖值。
+
+**存储缓存键**：
+- `READIO_AUDIO_CACHE_MAX_MB`（默认 1024）
+- `READIO_AUDIO_CACHE_TRIM_TARGET_MB`（默认 800）
+
+### 配置访问 (`src/lib/runtimeConfig.ts`)
+
+- `getAppConfig()` 提供类型安全的配置访问，支持 string-to-number 转换。
+- `Window.__READIO_ENV__` 定义运行时配置结构。
+
+---
+
+## 3. 常见排障
+
+### 路由不生效
+
+`src/routeTree.gen.ts` 由 Vite 插件在开发启动时生成。
+
+### 数据库错误
+
+默认数据库名为 `readio`（清库时可通过 `READIO_DB_NAME` 覆盖），可在浏览器 IndexedDB 面板中查看与清理。
+
+### Tailwind 样式不生效
+
+PostCSS 管线使用 `@tailwindcss/postcss`（Tailwind v4）。

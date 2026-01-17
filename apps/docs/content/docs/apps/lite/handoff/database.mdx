@@ -1,0 +1,48 @@
+---
+title: Database & Persistence
+---
+
+## Persistence & Caching (Dexie IndexedDB)
+
+Uses Dexie.js to encapsulate IndexedDB. Default DB name is `readio` and can be overridden via `READIO_DB_NAME` (e.g., temporary reset names during wipe).
+
+### Identity vs Deduplication (Hard Rule)
+- **Identity**: All persisted entities use UUID primary keys.
+- **Deduplication**: `feedUrl` and composite `key` fields are **dedupe-only**. They must never be used as entity identity or UI keys.
+
+### Database Schema
+
+| Store | Primary Key | Unique Indexes | Purpose |
+|-------|-------------|---------|------|
+| sessions | id (UUID) | &trackId | Playback sessions (progress, audio/subtitle ID) |
+| audioBlobs | id (UUID) | — | Local audio file Blob |
+| subtitles | id (UUID) | — | Local subtitle file content |
+| folders | id (UUID) | createdAt | Local folders |
+| local_tracks | id (UUID) | folderId, createdAt | Local library audio tracks (links to audioBlobs) |
+| local_subtitles | id (UUID) | trackId | Local library subtitles (links to subtitles) |
+| subscriptions | id (UUID) | &feedUrl | Subscribed podcasts. feedUrl used for deduplication check. |
+| favorites | id (UUID) | &key | Favorite episodes. key used for deduplication check. |
+| settings | key | — | User settings (e.g., country) |
+
+### Reset Strategy
+
+Reset strategy allows db clearing/rebuilding, does not include migration compatibility layer.
+- **Default DB Name**: Do NOT change the default DB name in source. Use `READIO_DB_NAME` override for temporary resets.
+- **Reset Method**: `clearAllData()` uses table-level clearing instead of deleting the database, keeping the DB instance available.
+**Dexie Version Policy**: Only retains single version (v1) definition, no history version or upgrade path maintenance. Future schema changes directly clear and rebuild; do not increment version number.
+
+### Personal Vault (Metadata Export)
+- **Format**: Single JSON object with `version` and `exportedAt` at the top level.
+- **Scope**: Metadata tables only (no blobs).
+- **Import Rule**: Reject unknown versions.
+
+---
+
+## Planned (Pending Execution)
+
+- **Import Integrity Checks**: Validate IDs and references post-parse (Instruction 049).
+- **Offline Cache Cleanup**: Remove unreferenced blobs safely (Instruction 053).
+- **Media Cache Eviction**: LRU trim policy for audio blobs (Instruction 072).
+- **Storage Quota Monitoring**: Surface browser quota usage in Settings (Instruction 074).
+- **IndexedDB Migrations**: Versioned upgrades (Instruction 064).
+- **Atomic Write Safeguards**: Transactions + boot repair (Instruction 067).

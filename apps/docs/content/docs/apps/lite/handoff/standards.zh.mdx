@@ -1,0 +1,253 @@
+---
+title: Design & Code Standards
+---
+
+## 1. UI Standards
+
+### UI Primitives（统一交互组件）
+
+UI 交互控件采用 `shadcn/ui` primitives（`Button/Input/Select/DropdownMenu/Dialog/AlertDialog/Slider` 等），文件选择使用隐藏 `<input type="file" className="hidden" />` 搭配可见 `Button` 触发。
+
+### 交互与焦点管理
+
+焦点由 React `autoFocus` 与 Radix `onCloseAutoFocus` 管理；滚动状态判断使用 Virtuoso 的 `isScrolling` 等原生钩子，不依赖定时器。
+
+### Icon Policy (Lucide-First)
+
+UI 操作图标来自 `lucide-react`；SVG 仅用于 logo 与交互绑定资源。
+
+SVG 资源：
+- `src/assets/readio.svg`, `src/assets/readio.png` — App 标识
+- `src/assets/selection-pin.svg` — SelectionUI pin（CSS mask，交互绑定）
+
+图标来源统一且风格一致，UI 操作类 SVG 文件不在 `src/assets/` 中扩展。
+
+### Global CSS
+
+`src/index.css` 包含主题 token、交互类样式（reading/selection/拖拽）、Smart List Divider、以及局部滚动条样式；布局尺寸使用 Tailwind 令牌与扩展 token（`w-panel` 25rem、`w-panel-sm` 20rem、`max-w-content` 105rem/1680px、`max-w-content-wide` 112.5rem）。
+
+**布局一致性准则**：
+- **最大宽度**：核心内容页面（Explore, History, Favorites, Search, Subscriptions, Settings, Show/Episode Detail）统一使用 `max-w-content` (1680px)。
+- **水平间距**：页面级容器必须使用 `px-[var(--page-margin-x)]`，以确保内容与侧边栏的 48px (3rem) 安全距离，并为单集列表的 Gutter 动效预留空间。
+
+### Theme Accent（强调色）
+
+- 强调色选项与 Settings UI 绑定为同一套 source of truth：`src/store/themeStore.ts`
+  - `ACCENT_OPTIONS`（10 个）：`zinc/red/orange/amber/green/teal/blue/indigo/purple/pink`
+  - 运行时会将未知 accent 归一化到 `DEFAULT_ACCENT`
+- `src/index.css` 的 `:root[data-accent="…"]` / `.dark[data-accent="…"]` 仅保留上述 10 个选项对应的 token 覆盖
+
+### Toast & Tooltip
+
+#### Toast (Sonner)
+
+Provider 位于 `src/routes/__root.tsx`（`<Toaster />`），配合 `src/lib/toast.ts` 命令式 API。
+**关键规则**：保留 `toast.*Key` 辅助方法，key → 文案转换在 `src/lib/toast.ts` 内完成，不允许在调用点翻译。
+
+#### Tooltip
+
+Provider 位于 `src/main.tsx`（`Tooltip.Provider`）。
+
+---
+
+## 计划中（待执行）
+
+- **新手引导空状态**（指令 045）。
+- **图片兜底策略**（指令 046）。
+- **无障碍审计**（指令 048）。
+- **Iframe 沙箱策略**（指令 051）。
+- **反馈入口**（指令 052）。
+- **MSW 测试标准**（指令 058）。
+
+---
+
+## 2. Code Standards
+
+### Data Conventions
+
+- **Source Enum**: `source` 字段取值 `'local' | 'explore'`。
+- **Provider IDs**: 使用 `providerPodcastId` 与 `providerEpisodeId` 区分 Podcast 与 Episode。
+- **Routes**: 发现页使用 `/explore`，文件页使用 `/files`。
+
+### Standardized Helpers & Hooks（共享基础能力）
+
+1. **ID 生成** (`src/lib/id.ts`)
+   - `createId()` - 使用 `crypto.randomUUID()` 生成唯一 ID（带降级方案）
+   - `createShortId()` - 生成短 ID
+   - `createSessionId()` - 生成会话 ID
+   - `createToastId()` - Toast 通知 ID（语义别名）
+
+2. **存储访问** (`src/lib/storage.ts`)
+   - 基础: `getJson<T>(key)`, `setJson(key, value)`, `removeItem(key)`, `clearStorage()`
+   - 命名空间: `nsKey(namespace, key)` - 构建命名空间键
+   - TTL: `getJsonWithTtl<T>(key, ttlMs)`, `setJsonWithTtl(key, value)`
+   - 清理: `clearNamespace(prefix)` - 按前缀清理存储
+
+3. **事件监听** (`src/hooks/useEventListener.ts`)
+   - `useEventListener(eventName, handler, element, options)` - 稳定的事件监听器，自动清理
+
+4. **点击外部检测** (`src/hooks/useOnClickOutside.ts`)
+   - `useOnClickOutside(handler, enabled)` - 检测元素外部点击
+
+5. **外部导航** (`src/lib/openExternal.ts`)
+   - `openExternal(url, target)` - 安全的外部 URL 打开（带 `noopener,noreferrer`）
+
+6. **格式化工具** (`src/lib/formatters.ts`)
+   - `formatTimestamp(timestamp, locale?)` - 统一的日期时间格式化（替代 `toLocaleDateString`）
+   - `formatDuration(seconds)` - 格式化时长（MM:SS）
+   - `formatTimeLabel(seconds)` - 播放时间显示（M:SS）
+   - `formatBytes(bytes)` - 文件大小格式化
+   - `formatCompactNumber(num)` - 大数字缩略（如 1.5K）
+
+这套 helpers 作为基础能力被广泛复用：ID 生成、存储访问、事件监听、外链打开与时间/文件大小格式化统一由上述模块提供。
+
+### Zod 数据验证与边界保护
+
+应用使用 Zod 进行运行时数据验证，主要用于处理外部 API 响应、环境配置以及路由参数，确保数据进入应用核心逻辑前符合预期。
+
+**核心范围**
+1. **外部 API 响应** (`src/lib/discovery/providers/apple.ts`):
+   - 使用 `src/lib/schemas/discovery.ts` 中定义的模式（`PodcastSchema`, `EpisodeSchema` 等）对 Provider API 和 RSS 解析结果进行强校验。
+   - **严格校验规则**: 对核心 ID（`providerPodcastId/providerEpisodeId`）和 URL 字段强制 `min(1)` 或 `url()` 约束。
+   - **错误处理**: 映射层（Mapping Layer）不提供伪造的兜底值（如空字符串或 0）。验证失败时，列表接口会过滤掉无效项，单项接口返回 `null`。错误信息记录到 `console.warn`。
+2. **环境配置** (`src/lib/runtimeConfig.ts`):
+   - `getAppConfig` 对 `window.__READIO_ENV__` 和环境变量执行**逐字段校验**。
+   - **颗粒度降级**: 若某个配置项非法（校验失败），仅该项回退到 Schema 定义的默认值，其它有效的覆盖配置将继续生效。
+3. **路由参数** (TanStack Router):
+   - 在播客详情（`$id`）和单集详情（`$id/episode/$episodeId`）路由中使用 `beforeLoad` 验证路径参数。
+   - **重定向策略**: 若参数无效（如为空），统一重定向至 `/explore`。
+
+**验证策略**
+- **数据真实性**: 拒绝“凑数”对象，核心字段缺失即视为整条数据无效。
+- **颗粒度降级**: 在配置校验中实现“局部损坏、整体可用”，增强系统鲁棒性。
+- **非侵入性**: 不在 UI 组件内部或性能敏感的循环（如字幕渲染）中使用 Zod。
+- **类型同步**: 使用 `z.infer<T>` 自动导出 TypeScript 类型。
+
+### Architecture Consistency (架构一致性)
+
+遵循 `apps/docs/content/docs/general/improvement-process.mdx` 第 6 节定义的五项架构一致性原则：
+
+| 原则 | 说明 |
+|------|------|
+| **A. 边界校验** | Discovery 模块通过 `src/lib/schemas/*` 实现 Zod 校验；`runtimeConfig` 实现配置校验。 |
+| **B. 请求生命周期** | 通过 `requestManager` / `fetchUtils` 约束请求生命周期。 |
+| **C. 缓存一致性** | `discovery` 与 `recommended` 使用 `storage.ts` 统一缓存。 |
+| **D. 错误处理分级** | User Error → Toast (i18n)；System Error → `console.warn/error`。 |
+| **E. 类型领域分离** | `DiscoveryPodcast` (API) 与 `Podcast` (Domain) 语义区分。 |
+
+---
+
+## 3. Standardized UI Components (可复用组件)
+
+1. **确认对话框** (`src/components/ui/confirm-alert-dialog.tsx`)
+   - `ConfirmAlertDialog` - shadcn AlertDialog 的封装
+   - Props: `open`, `title`, `description`, `confirmLabel`, `cancelLabel`, `variant`, `isLoading`, `onConfirm`, `onCancel`
+   - 配套 Hook: `useConfirmDialog()` (`src/hooks/useConfirmDialog.ts`)
+     - 返回 `{ state, openConfirm, closeConfirm }`
+   - 使用位置: `settings.tsx`
+
+2. **溢出菜单** (`src/components/ui/overflow-menu.tsx`)
+   - `OverflowMenu` - 标准化的下拉菜单触发器和内容
+   - 提供一致的 Button 触发器（ghost, icon）和 DropdownMenuContent 默认值
+   - 支持 `disabled`（用于拖拽/重命名等状态下禁用菜单触发）
+   - 使用位置: `TrackOverflowMenu.tsx`, `FolderOverflowMenu.tsx`
+
+3. **交互式标题 (InteractiveTitle)** (`src/components/interactive/InteractiveTitle.tsx`)
+   - **规则**：所有列表中的节目卡片/单集卡片，仅标题（title）部分支持点击导航（hover 时显示下划线）。
+   - **优先级**：如果同时传入 `onClick` 和 `to`/`params`，`onClick` 优先执行。这确保了在单集列表中点击标题可以触发播放（如果未提供详情页跳转）。
+   - **动态截断 (Line Clamping)**：支持 `maxLines` 属性（1-6 或 'none'），默认为 2 行。在列表页（如单集列表）建议保持 2 行，而在网格页（如播客卡片）应显式传入 `maxLines={1}`。
+   - **排他性**：描述区域（description/subtitle）禁止包含点击操作，不得链接到节目详情。
+   - **非交互渲染**：若未提供 `onClick` 或 `to`/`params`（如 podcastId 缺失），组件会自动渲染为 `<span>` 结构以保持视觉一致性但禁止点击逻辑。
+   - **表现**：统一使用 `Button asChild` 封装 `Link`。
+   - **标准交互文本规则 (Standardized Text Hover Rule)**：
+     - **核心原则**：所有基于纯文本的交互项（如节目名、单集名、网页链接等），在 Hover 时**不得改变颜色或透明度**。
+     - **视觉效果**：Hover 时仅添加**下划线**（`underline`）。
+     - **排除项**：明确的功能性按钮（如 Subscribe、Favorite、Play 按钮等）不适用此规则，它们应保留各自的背景色/透明度交互反馈。
+      - **统一实现**：全站下划线样式应保持一致。`Button` 组件提供 `variant="text"`，Hover 时不改变文字颜色/背景色，仅配合 `InteractiveTitle` 或 `Link` 实现下划线效果。
+    - **鼠标指针 (Cursor)**：所有按钮及 `InteractiveTitle` 在 Hover 时显示 `cursor: pointer`，规则由 `src/components/ui/button.tsx` 的基础变体提供。
+
+4. **交互式封面 (InteractiveArtwork)** (`src/components/interactive/InteractiveArtwork.tsx`)
+   - **逻辑**：将“封面点击导航”与“悬浮播放按钮”逻辑封装。
+   - **合规性**：通过绝对定位（Sibling）确保 `Play` 按钮不是 `Link` 的子元素，解决 A11y 嵌套元素警告。
+   - **隐私/安全**：默认应用 `referrerPolicy="no-referrer"`，防止引用第三方图片资源时因 Referrer Check 导致的 403 错误（如部分 RSS 托管图源）。
+   - **适用**：`PodcastCard`, `EpisodeCard`, `SearchEpisodeItem`, `PodcastEpisodesGrid` 以及收藏/历史列表。
+   - **无封面兜底**：当 `artworkUrl` 为 null/undefined 时，调用方应**隐式移除**封面占位（不传 `artwork` prop 给 `BaseEpisodeRow`），并转而使用 **Gutter Play Button** 方案（见下文）。
+   - **尺寸**：支持 `sm/md/lg/xl` 四种标准尺寸。
+   - **交互默认**：不启用 hover 放大；如需放大需显式传 `hoverScale`。
+   - **位置规则**：默认 `center`；播客卡片使用 `bottom-left`；Top Episodes 网格保持 `center`。
+   - **触发规则**：在单集列表中，播放按钮应随整行 hover 显示（不是仅 hover 到封面时出现）。
+   - **触发绑定**：通过 `hoverGroup` 将 hover 触发绑定到父级列表行/卡片（如 `episode`/`item`/`session`/`card`）。
+   - **播放按钮可见性**：仅当调用方传入 `onPlay` 时显示播放按钮；未提供播放能力的卡片不得显示播放按钮（避免误导）。
+   - **Explore 例外**：Explore 的 Top Shows / Top Subscriber / Editor's Picks 可通过 `onPlayLatest` 拉取 RSS 并播放最新一集，因此允许显示播放按钮；Top Episodes 为单集榜单，播放入口走 `onPlay`。
+
+5. **EpisodeRow & BaseEpisodeRow** (`src/components/EpisodeRow/`)
+   - **BaseEpisodeRow**: 纯展示组件 (Presentational Component)。
+     - **视觉规范**：
+       - **Hover 背景层**：必须使用绝对定位层 (`absolute inset-y-0`)，且左侧偏移固定为 `-left-[var(--page-gutter-x)]`。这确保了所有列表项（无论有无封面）的选中高亮区域在垂直方向上完美对齐成一个矩形柱。
+       - **全高覆盖**：使用 `inset-y-0` 确保背景层完全覆盖单集行的高度，使其顶边和底边能严丝合缝地贴合分割线。
+       - **分割线逻辑**：结合 `smart-divider-group` 手法。分割线组件应具备 `group-hover/episode:opacity-0`，使得当前 hover 行及其相邻行的分割线自动消失，营造流畅感。
+     - **无封面单集方案 (No-Artwork Gutter Play)**：
+       - **触发条件**：当单集无封面图时生效。
+       - **组件表现**：不渲染封面占位符。使用 `GutterPlayButton` 原子组件在左侧 Gutter 区域渲染播放按钮。
+       - **可见性**：仅在整行 `group-hover/episode` 时可见。背景层宽度会自动覆盖此按钮，确保交互区域完整且美观。
+   - **GutterPlayButton**: 原子组件 (`src/components/EpisodeRow/GutterPlayButton.tsx`)。
+     - **职责**：封装 Gutter 区域的播放按钮逻辑，减少跨组件重复代码。
+     - **Props**：`onPlay` (点击回调), `ariaLabel` (无障碍标签)。
+     - **使用位置**：`EpisodeRow`, `SearchEpisodeItem`, `HistoryPage`, `FavoritesPage`。
+   - **EpisodeRow**: 业务逻辑容器 (Container Component)。
+     - 职责：连接 Store 和 Hooks (`useEpisodePlayback`, `useExploreStore`)，处理播放、收藏、数据格式化。
+     - 使用：在 `PodcastShowPage`, `PodcastEpisodesPage`, `SearchPage` 等场景直接使用。
+     - 扩展：对于 `FavoritesPage` 和 `HistoryPage` 等有特殊交互需求的页面，直接复用 `BaseEpisodeRow` 并通过插槽注入自定义逻辑。
+
+### App Initialization（应用初始化）
+
+全局数据加载（收藏、订阅）集中到根路由的 `useAppInitialization()` 钩子：
+
+- **实现位置**：`src/routes/__root.tsx` 调用 `src/hooks/useAppInitialization.ts`
+- **加载内容**：
+  - `loadSubscriptions()` - 加载订阅列表
+  - `loadFavorites()` - 加载收藏列表
+- **架构原则**：
+  - 页面组件**禁止**手动调用 `loadSubscriptions` 或 `loadFavorites`
+  - 所有数据在应用启动时一次性加载，通过 Zustand store 全局共享
+
+### 播客描述渲染 (RSS Description Rendering)
+
+**核心策略**：使用 `@tailwindcss/typography` 插件（`prose` 类）结合自定义配置来渲染外部 RSS HTML 内容。
+
+**Typography 配置**（`tailwind.config.js`）：
+- `fontSize`: 0.875rem (14px)
+- `fontWeight`: 300
+- `lineHeight`: 1.4
+- `paragraphMargin`: 10px (bottom), 0px (top)
+- `whiteSpace`: `whitespace-pre-line`（折叠冗余空白并保留换行）
+- **链接样式**：无 hover 颜色/透明度变化，仅保持下划线（符合标准交互文本规则）
+
+**HTML 安全净化**（`src/lib/htmlUtils.ts`）：
+- 使用 `DOMPurify` 进行 XSS 防护
+- **DOMPurify Hooks**：
+  - `afterSanitizeAttributes`: 自动为 `<a>` 标签添加 `target="_blank"` 和 `rel="noopener noreferrer"`
+  - `afterSanitizeElements`: 移除视觉上为空的 `<p>` 标签（包括 `&nbsp;` 和空白字符），解决 RSS 源中常见的巨大留白问题
+
+### Density Variants (密度变体)
+
+- `ViewDensity` 类型定义: `src/components/LocalFiles/types.ts`
+- `TrackCard.tsx` 使用 `cva` 定义所有密度变体:
+  - `trackCardContentVariants`
+  - `trackCardIconVariants`
+  - `subtitleSectionVariants`
+  - `subtitleRowVariants`
+  - `subtitleIconContainerVariants`
+- 路由层 (`files.tsx`) 仅传递 `density` prop，无内联类名分支
+
+### Settings Page Hooks (Settings 页面逻辑分离)
+
+Settings 页面作为“编排层”，数据加载和操作逻辑提取到独立 hooks:
+
+1. **useSettingsData** (`src/hooks/useSettingsData.ts`)
+   - 加载存储信息和播放会话
+   - 返回 `{ storageInfo, sessions, isLoading, reload }`
+
+2. **useStorageMaintenance** (`src/hooks/useStorageMaintenance.ts`)
+   - 存储维护操作（删除会话、清理缓存、清空全部）
+   - 返回 `{ deleteSession, clearSessionCache, wipeAll, isClearing }`

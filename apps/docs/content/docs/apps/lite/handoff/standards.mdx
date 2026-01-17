@@ -1,0 +1,253 @@
+---
+title: Design & Code Standards
+---
+
+## 1. UI Standards
+
+### UI Primitives (Unified Interaction Components)
+
+UI interaction controls use `shadcn/ui` primitives (`Button/Input/Select/DropdownMenu/Dialog/AlertDialog/Slider`, etc.). File selection uses a hidden `<input type="file" className="hidden" />` combined with a visible `Button` trigger.
+
+### Interaction & Focus Management
+
+Focus is managed by React `autoFocus` and Radix `onCloseAutoFocus`. Scroll status judgment uses native hooks like Virtuoso's `isScrolling`, avoiding dependency on timers.
+
+### Icon Policy (Lucide-First)
+
+UI operation icons come from `lucide-react`; SVGs are used only for logos and interactive binding resources.
+
+SVG Resources:
+- `src/assets/readio.svg`, `src/assets/readio.png` — App Identity
+- `src/assets/selection-pin.svg` — SelectionUI pin (CSS mask, interaction binding)
+
+Icon sources are unified and consistent in style; UI operation SVG files should not be extended in `src/assets/`.
+
+### Global CSS
+
+`src/index.css` contains theme tokens, interaction class styles (reading/selection/drag-and-drop), Smart List Dividers, and local scrollbar styles. Layout dimensions use Tailwind tokens and extended tokens (`w-panel` 25rem, `w-panel-sm` 20rem, `max-w-content` 105rem/1680px, `max-w-content-wide` 112.5rem).
+
+**Layout Consistency Guidelines**:
+- **Max Width**: Core content pages (Explore, History, Favorites, Search, Subscriptions, Settings, Show/Episode Detail) uniformly use `max-w-content` (1680px).
+- **Horizontal Spacing**: Page-level containers must use `px-[var(--page-margin-x)]` to ensure a 48px (3rem) safe distance from the sidebar and reserve space for the episode list Gutter animation.
+
+### Theme Accent
+
+- Accent color options are bound to Settings UI as the same source of truth: `src/store/themeStore.ts`
+  - `ACCENT_OPTIONS` (10 types): `zinc/red/orange/amber/green/teal/blue/indigo/purple/pink`
+  - Runtime normalizes unknown accents to `DEFAULT_ACCENT`
+- `src/index.css`'s `:root[data-accent="…"]` / `.dark[data-accent="…"]` only retains token overrides corresponding to the above 10 options.
+
+### Toast & Tooltip
+
+#### Toast (Sonner)
+
+Provider is located at `src/routes/__root.tsx` (`<Toaster />`), working with `src/lib/toast.ts` imperative API.
+**Key Rule**: Keep `toast.*Key` helpers. Key → text translation happens inside `src/lib/toast.ts` via `i18next.t` (or `translate()`), not at call sites.
+
+#### Tooltip
+
+Provider is located at `src/main.tsx` (`Tooltip.Provider`).
+
+---
+
+## Planned (Pending Execution)
+
+- **Onboarding Empty States** (Instruction 045).
+- **Image Fallback Policy** (Instruction 046).
+- **Accessibility Audit** (Instruction 048).
+- **Iframe Sandbox Policy** (Instruction 051).
+- **Feedback Entry Points** (Instruction 052).
+- **MSW Testing Standards** (Instruction 058).
+
+---
+
+## 2. Code Standards
+
+### Data Conventions
+
+- **Source Enum**: `source` field values `'local' | 'explore'`.
+- **Provider IDs**: Use `providerPodcastId` and `providerEpisodeId` to distinguish Podcast and Episode.
+- **Routes**: Discovery page uses `/explore`, files page uses `/files`.
+
+### Standardized Helpers & Hooks (Shared Basic Capabilities)
+
+1. **ID Generation** (`src/lib/id.ts`)
+   - `createId()` - Generates unique ID using `crypto.randomUUID()` (with fallback)
+   - `createShortId()` - Generates short ID
+   - `createSessionId()` - Generates session ID
+   - `createToastId()` - Toast notification ID (semantic alias)
+
+2. **Storage Access** (`src/lib/storage.ts`)
+   - Basics: `getJson<T>(key)`, `setJson(key, value)`, `removeItem(key)`, `clearStorage()`
+   - Namespace: `nsKey(namespace, key)` - Constructs namespaced key
+   - TTL: `getJsonWithTtl<T>(key, ttlMs)`, `setJsonWithTtl(key, value)`
+   - Cleanup: `clearNamespace(prefix)` - Cleans storage by prefix
+
+3. **Event Listening** (`src/hooks/useEventListener.ts`)
+   - `useEventListener(eventName, handler, element, options)` - Stable event listener with auto cleanup
+
+4. **Click Outside Detection** (`src/hooks/useOnClickOutside.ts`)
+   - `useOnClickOutside(handler, enabled)` - Detects clicks outside an element
+
+5. **External Navigation** (`src/lib/openExternal.ts`)
+   - `openExternal(url, target)` - Safe external URL opening (with `noopener,noreferrer`)
+
+6. **Formatters** (`src/lib/formatters.ts`)
+   - `formatTimestamp(timestamp, locale?)` - Unified date/time formatting (replaces `toLocaleDateString`)
+   - `formatDuration(seconds)` - Format duration (MM:SS)
+   - `formatTimeLabel(seconds)` - Playback time display (M:SS)
+   - `formatBytes(bytes)` - File size formatting
+   - `formatCompactNumber(num)` - Large number abbreviation (e.g., 1.5K)
+
+These helpers are widely reused as basic capabilities: ID generation, storage access, event listening, external link opening, and time/size formatting are uniformly provided by the above modules.
+
+### Zod Data Validation & Boundary Protection
+
+The application uses Zod for runtime data validation, primarily for handling external API responses, environment configuration, and route parameters, ensuring data conforms to expectations before entering core application logic.
+
+**Core Scope**
+1. **External API Responses** (`src/lib/discovery/providers/apple.ts`):
+   - Uses schemas defined in `src/lib/schemas/discovery.ts` (`PodcastSchema`, `EpisodeSchema`, etc.) to strictly validate Provider API and RSS parsing results.
+   - **Strict Validation Rules**: Enforces `min(1)` or `url()` constraints on core IDs (`providerPodcastId/providerEpisodeId`) and URL fields.
+   - **Error Handling**: The Mapping Layer does not provide fake fallback values (e.g., empty strings or 0). When validation fails, list interfaces filter out invalid items, and single-item interfaces return `null`. Error information is logged to `console.warn`.
+2. **Environment Configuration** (`src/lib/runtimeConfig.ts`):
+   - `getAppConfig` performs **field-by-field validation** on `window.__READIO_ENV__` and environment variables.
+   - **Granular Fallback**: If a configuration item is invalid (validation fails), only that item falls back to the default value defined in the Schema; other valid overrides continue to take effect.
+3. **Route Parameters** (TanStack Router):
+   - Uses `beforeLoad` to validate path parameters in podcast detail (`$id`) and episode detail (`$id/episode/$episodeId`) routes.
+   - **Redirect Strategy**: If parameters are invalid (e.g., empty), uniformly redirect to `/explore`.
+
+**Validation Strategy**
+- **Data Authenticity**: Refuse "filler" objects; missing core fields render the entire data entry invalid.
+- **Granular Fallback**: Implement "partial corruption, overall availability" in configuration validation to enhance system robustness.
+- **Non-intrusive**: Do not use Zod inside UI components or performance-sensitive loops (such as transcript rendering).
+- **Type Sync**: Use `z.infer<T>` to automatically export TypeScript types.
+
+### Architecture Consistency
+
+Follows the five architecture consistency principles defined in `apps/docs/content/docs/general/improvement-process.mdx` Section 6:
+
+| Principle | Description |
+|-----------|-------------|
+| **A. Boundary Validation** | Discovery module uses `src/lib/schemas/*` for Zod validation; `runtimeConfig` implements config validation. |
+| **B. Request Lifecycle** | Constrain request lifecycle via `requestManager` / `fetchUtils`. |
+| **C. Cache Consistency** | `discovery` and `recommended` use `storage.ts` for unified caching. |
+| **D. Error Handling Grading** | User Error → Toast (i18n); System Error → `console.warn/error`. |
+| **E. Type Domain Separation** | Semantic distinction between `DiscoveryPodcast` (API) and `Podcast` (Domain). |
+
+---
+
+## 3. Standardized UI Components (Reusable Components)
+
+1. **Confirm Alert Dialog** (`src/components/ui/confirm-alert-dialog.tsx`)
+   - `ConfirmAlertDialog` - Wrapper for shadcn AlertDialog
+   - Props: `open`, `title`, `description`, `confirmLabel`, `cancelLabel`, `variant`, `isLoading`, `onConfirm`, `onCancel`
+   - Matching Hook: `useConfirmDialog()` (`src/hooks/useConfirmDialog.ts`)
+     - Returns `{ state, openConfirm, closeConfirm }`
+   - Usage: `settings.tsx`
+
+2. **Overflow Menu** (`src/components/ui/overflow-menu.tsx`)
+   - `OverflowMenu` - Standardized dropdown menu trigger and content
+   - Provides consistent Button trigger (ghost, icon) and DropdownMenuContent defaults
+   - Supports `disabled` (for disabling menu trigger in drag/rename states)
+   - Usage: `TrackOverflowMenu.tsx`, `FolderOverflowMenu.tsx`
+
+3. **Interactive Title** (`src/components/interactive/InteractiveTitle.tsx`)
+   - **Rule**: Only the title part of show cards/episode cards in all lists supports click navigation (underline on hover).
+   - **Priority**: If both `onClick` and `to`/`params` are passed, `onClick` executes first. This ensures clicking the title in episode lists can trigger playback (if detail page jump is not provided).
+   - **Dynamic Clamping (Line Clamping)**: Supports `maxLines` prop (1-6 or 'none'), defaulting to 2 lines. Recommended 2 lines in list pages (e.g., episode list), and explicitly pass `maxLines={1}` in grid pages (e.g., podcast cards).
+   - **Exclusivity**: Description areas (description/subtitle) are prohibited from containing click actions and must not link to show details.
+   - **Non-interactive Rendering**: If `onClick` or `to`/`params` (e.g., missing podcastId) is not provided, the component automatically renders as a `<span>` structure to maintain visual consistency but disable click logic.
+   - **Behavior**: Uniformly uses `Button asChild` wrapping `Link`.
+   - **Standardized Text Hover Rule**:
+     - **Core Principle**: All pure text-based interactive items (e.g., show names, episode names, web links) **must not change color or opacity** on Hover.
+     - **Visual Effect**: Hover only adds **underline** (`underline`).
+     - **Exclusions**: Explicit functional buttons (e.g., Subscribe, Favorite, Play buttons) do not apply to this rule; they should retain their respective background color/opacity interaction feedback.
+     - **Unified Implementation**: Underline styles should be consistent site-wide. `Button` component provides `variant="text"`, not changing text color/background on Hover, implementing underline effect only with `InteractiveTitle` or `Link`.
+   - **Cursor**: All buttons and `InteractiveTitle` show `cursor: pointer` on Hover, rule provided by `src/components/ui/button.tsx` base variants.
+
+4. **Interactive Artwork** (`src/components/interactive/InteractiveArtwork.tsx`)
+   - **Logic**: Encapsulates "cover click navigation" and "hover play button" logic.
+   - **Compliance**: Uses absolute positioning (Sibling) to ensure `Play` button is not a child of `Link`, resolving A11y nested element warnings.
+   - **Privacy/Security**: Defaults to applying `referrerPolicy="no-referrer"` to prevent 403 errors (e.g., some RSS hosted images) caused by Referrer Check when referencing third-party image resources.
+   - **Application**: `PodcastCard`, `EpisodeCard`, `SearchEpisodeItem`, `PodcastEpisodesGrid`, and Favorites/History lists.
+   - **No-Artwork Fallback**: When `artworkUrl` is null/undefined, the caller should **implicitly remove** the cover placeholder (do not pass `artwork` prop to `BaseEpisodeRow`), and switch to the **Gutter Play Button** scheme (see below).
+   - **Sizes**: Supports `sm/md/lg/xl` four standard sizes.
+   - **Interaction Default**: Does not enable hover zoom; explicitly pass `hoverScale` if zoom is needed.
+   - **Position Rules**: Default `center`; Podcast cards use `bottom-left`; Top Episodes grid keeps `center`.
+   - **Trigger Rules**: In episode lists, the play button should appear with the row hover (not just when hovering the cover).
+   - **Trigger Binding**: Bind hover trigger to parent list row/card (e.g., `episode`/`item`/`session`/`card`) via `hoverGroup`.
+   - **Play Button Visibility**: Only show play button when caller passes `onPlay`; cards without playback capability must not show play button (to avoid misleading).
+   - **Explore Exception**: Explore's Top Shows / Top Subscriber / Editor's Picks can pull RSS and play the latest episode via `onPlayLatest`, so play buttons are allowed; Top Episodes is a single episode list, playback entry goes through `onPlay`.
+
+5. **EpisodeRow & BaseEpisodeRow** (`src/components/EpisodeRow/`)
+   - **BaseEpisodeRow**: Pure Presentation Component.
+     - **Visual Specs**:
+       - **Hover Background Layer**: Must use absolute positioning (`absolute inset-y-0`) with fixed left offset (`-left-[var(--page-gutter-x)]`). This ensures the selection highlight area for all list items (with or without cover) aligns perfectly as a rectangular column vertically.
+       - **Full Height Coverage**: Use `inset-y-0` to ensure the background layer completely covers the episode row height, fitting tightly with the dividers top and bottom.
+       - **Divider Logic**: Combined with `smart-divider-group` technique. Divider component should have `group-hover/episode:opacity-0`, making dividers for the current hover row and its adjacent rows disappear automatically, creating a fluid feel.
+     - **No-Artwork Gutter Play Scheme**:
+       - **Trigger Condition**: Takes effect when the episode has no cover art.
+       - **Component Behavior**: Does not render cover placeholder. Uses `GutterPlayButton` atomic component to render a play button in the left Gutter area.
+       - **Visibility**: Only visible when the entire row is `group-hover/episode`. The background layer width automatically covers this button, ensuring the interaction area is complete and aesthetic.
+   - **GutterPlayButton**: Atomic component (`src/components/EpisodeRow/GutterPlayButton.tsx`).
+     - **Responsibility**: Encapsulates play button logic in the Gutter area, reducing duplicate code across components.
+     - **Props**: `onPlay` (click callback), `ariaLabel` (accessibility label).
+     - **Usage**: `EpisodeRow`, `SearchEpisodeItem`, `HistoryPage`, `FavoritesPage`.
+   - **EpisodeRow**: Business Logic Container (Container Component).
+     - Responsibility: Connects Store and Hooks (`useEpisodePlayback`, `useExploreStore`), handles playback, favorites, data formatting.
+     - Usage: Directly used in `PodcastShowPage`, `PodcastEpisodesPage`, `SearchPage`, etc.
+     - Extension: For pages with special interaction needs like `FavoritesPage` and `HistoryPage`, reuse `BaseEpisodeRow` directly and inject custom logic via slots.
+
+### App Initialization
+
+Global data loading (Favorites, Subscriptions) is centralized in the `useAppInitialization()` hook at the root route:
+
+- **Implementation**: `src/routes/__root.tsx` calls `src/hooks/useAppInitialization.ts`
+- **Loading Content**:
+  - `loadSubscriptions()` - Loads subscription list
+  - `loadFavorites()` - Loads favorites list
+- **Architecture Principles**:
+  - Page components **MUST NOT** manually call `loadSubscriptions` or `loadFavorites`
+  - All data is loaded once at app startup and shared globally via Zustand store
+
+### Podcast Description Rendering (RSS Description Rendering)
+
+**Core Strategy**: Use `@tailwindcss/typography` plugin (`prose` class) combined with custom configuration to render external RSS HTML content.
+
+**Typography Configuration** (`tailwind.config.js`):
+- `fontSize`: 0.875rem (14px)
+- `fontWeight`: 300
+- `lineHeight`: 1.4
+- `paragraphMargin`: 10px (bottom), 0px (top)
+- `whiteSpace`: `whitespace-pre-line` (Collapse redundant whitespace and preserve line breaks)
+- **Link Style**: No hover color/opacity change, only keeps underline (complies with standard interactive text rules)
+
+**HTML Stewardship** (`src/lib/htmlUtils.ts`):
+- Uses `DOMPurify` for XSS protection
+- **DOMPurify Hooks**:
+  - `afterSanitizeAttributes`: Automatically adds `target="_blank"` and `rel="noopener noreferrer"` to `<a>` tags
+  - `afterSanitizeElements`: Removes visually empty `<p>` tags (including `&nbsp;` and whitespace characters), solving the common huge whitespace issue in RSS feeds
+
+### Density Variants
+
+- `ViewDensity` Type Definition: `src/components/LocalFiles/types.ts`
+- `TrackCard.tsx` uses `cva` to define all density variants:
+  - `trackCardContentVariants`
+  - `trackCardIconVariants`
+  - `subtitleSectionVariants`
+  - `subtitleRowVariants`
+  - `subtitleIconContainerVariants`
+- Route layer (`files.tsx`) only passes `density` prop, no inline class name branching
+
+### Settings Page Hooks (Settings Page Logic Separation)
+
+Settings page acts as an "orchestration layer", data loading and operation logic are extracted to independent hooks:
+
+1. **useSettingsData** (`src/hooks/useSettingsData.ts`)
+   - Loads storage info and playback sessions
+   - Returns `{ storageInfo, sessions, isLoading, reload }`
+
+2. **useStorageMaintenance** (`src/hooks/useStorageMaintenance.ts`)
+   - Storage maintenance operations (delete session, clear cache, wipe all)
+   - Returns `{ deleteSession, clearSessionCache, wipeAll, isClearing }`

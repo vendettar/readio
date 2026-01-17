@@ -1,0 +1,251 @@
+---
+title: Files Management
+---
+
+## 1. LocalFiles Ingestion API
+
+- 入口：`useLocalFileProcessing` hook 的 `handleAudioInputChange` 和 `handleSubtitleInputChange`
+- `processFiles` 为内部实现细节，不对外暴露
+- 纯模块：`src/lib/localFiles/ingest.ts`（无 React 依赖）
+- **自动去重 (Auto-Rename)**：导入时若检测到同一文件夹下存在同名（不区分大小写）音频或字幕文件，会自动追加递增后缀。
+    - 行为：简单追加 `(N)`，如果存在 `Audio (2).mp3` 则生成 `Audio (2) (2).mp3`（不解析已有后缀）。
+    - 音频：在目标文件夹范围内查重。
+    - 字幕：在目标 Track 范围内查重。
+- **字幕匹配去重（单次消耗）**：批量导入时，每个字幕文件在一次操作中仅被使用一次，防止多对一错误绑定。
+    - **场景**：用户同时从不同来源（如 Folder A 和 Folder B）拖入重名文件 `Song.mp3`，并附带一个 `Song.srt`。
+    - **行为**：Subtitle 只会绑定给第一个被处理的 `Song.mp3`，后续的同名 MP3 不会绑定该字幕。
+    - **目的**：确保字幕匹配的一对一关系，符合直觉。
+
+---
+
+## 2. Files UX
+
+**文件夹卡片**：
+- 显示项目计数（"X items"）
+- 视觉权重低于音频卡片（更简洁的背景/边框）
+- 无播放按钮、时长、字幕信息
+
+**空状态**：
+- 标题：`localFilesEmptyHeadline`
+- 说明：`localFilesEmptyBody`
+
+**文件夹辅助说明**：
+- New Folder 按钮下方显示 `localFilesFolderHelperText`
+
+**音频卡片元数据**：
+- "Last played · X ago"（如有 `lastPlayedAt` 数据）
+- 多字幕时首个显示 "Default" 标识
+
+**辅助工具**：
+- `src/lib/relativeTime.ts`：格式化相对时间（无外部依赖）
+
+**数据模型**：FileTrack 现存储原始大小/时长数值（`sizeBytes`、`durationSeconds`），UI 层统一格式化显示。
+
+**加载骨架**：
+- Files 加载时显示简易骨架占位（合集网格 + 轨道列表），避免空白跳闪。
+
+### View Controls Bar
+
+Files 页面采用专用的 View Controls Bar 组件来托管所有浏览相关控件。
+
+**页面结构**：
+```
+Header Row (创建操作)
+  左侧: 面包屑 + 标题
+  右侧: [+ 新建文件夹] [+ 添加音频]
+
+View Controls Bar (浏览控件)
+  左侧: (预留给未来 Sort/Group/Filter)
+  右侧: 密度切换
+
+Content
+  文件夹区域 (仅根目录)
+  音频列表
+```
+
+**组件**：`src/components/LocalFiles/ViewControlsBar.tsx`
+- Props: `density`, `onDensityChange`, `leftSlot?` (未来扩展用)
+- 使用 shadcn Button + Radix Tooltip
+- 图标按钮模式，带 tooltip 提示
+
+### View Density System
+
+**设置 Key**：`localFiles.viewDensity`
+- 存储：`DB.getSetting()` / `DB.setSetting()`
+- 值：`"comfortable"` | `"compact"`
+- 默认：`comfortable`
+
+**类型定义**：`src/components/LocalFiles/types.ts`
+- 导出 `ViewDensity` 类型供所有 Files 相关组件使用
+
+**状态管理**：
+- 本地状态于 `src/routes/files/index.tsx`（Folder view 复用同一 setting key）
+- 挂载时从 settings 表读取
+- 切换时立即更新 UI 并异步持久化
+
+**Variant 架构**（cva 模式）：
+- `TrackCard.tsx` 使用 `class-variance-authority` 定义密度变体
+- 变体函数：`trackCardContentVariants`, `subtitleRowVariants`, `subtitleIconContainerVariants` 等
+- 路由文件仅负责传递 `density` prop，不包含密度相关的类名逻辑
+- **信息排列调整**：文件名 / 文件大小 / 时长 同行显示。文件大小与时长均采用 `Icon + Text` 风格（大小使用 `Package` 图标，时长使用 `Clock` 图标）。文件大小位于时长左侧，即使时长在 MD 以下屏幕隐藏，文件大小仍保留在右侧信息区以维持单行结构。
+- **密度调整**：由于信息移至单行，Comfortable 模式下的 `TrackCard` 高度适度压缩（Padding 从 `p-5` 减至 `py-4`，Icon 从 `w-14` 减至 `w-12`），视觉上更清爽。
+
+**i18n Keys**：
+- `navFiles` — 侧边栏标签
+- `filesTitle` — 页面标题 (H1)
+- `filesSubtitle` — 页面副标题
+- `localFilesDensityComfortable`
+- `localFilesDensityCompact`
+- `ariaViewDensity`
+- `ariaMoreActions`
+- `tooltipComfortableView`
+- `tooltipCompactView`
+
+> **命名说明**：UI 和路由均为 "Files"（`/files`），文件 `src/routes/files.tsx`。
+
+---
+
+## 3. Menus & Validation
+
+### Overflow Menus (Track & Folder)
+
+**组件位置**：`src/components/LocalFiles/TrackOverflowMenu.tsx`, `src/components/LocalFiles/FolderOverflowMenu.tsx`
+
+**行为规范**：
+- 仅点击打开（hover 仅显示微弱背景）
+- 点击外部或再次点击触发器关闭
+- 支持键盘导航（Esc 关闭、方向键导航）
+- Track 菜单使用标准化 `OverflowMenu`（shadcn `DropdownMenu` 封装）
+- Folder 菜单使用 `DropdownMenu`，删除确认采用 **同一个 menu surface 内的二步确认**（`step: menu → confirm`，内容在同一 `DropdownMenuContent` 内滑动切换）。隐藏面板使用 `inert` 以避免 `aria-hidden` focus warning，同时保持靠近触发点的 UX。
+- FolderOverflowMenu 的 `DropdownMenuContent` 位置固定为 `side="bottom"`、`align="start"`（避免被改偏）。
+- TrackOverflowMenu 的 `DropdownMenuContent` 位置固定为 `side="bottom"`、`align="end"`（避免被改偏）。
+
+- **Move to…**: 内推面板式选择。支持“移动到文件夹”和“所有文件”（根目录）。
+1. Move to… (`localFilesMoveToFolder`)
+2. 分隔线
+
+### Track Rename
+
+**入口**：TrackOverflowMenu 中的 "Rename" 菜单项
+
+**交互行为**：
+- 内联编辑（在卡片内直接显示 Input）
+- Enter 确认，Esc 取消
+- 失焦时自动确认或取消
+- 输入框自动选中
+
+**重名冲突处理**（与 Folder Rename 一致）：
+- 比较方式：`trim()` + 不区分大小写 + 仅同一文件夹范围内查重
+- 异常行为：如果名称冲突，显示提示并保持编辑状态 (Redio Policy)
+- 冲突时：输入框上方显示错误气泡（`trackNameConflict`），输入框红框，保持编辑模式
+- 如果 trimmed === 原名：直接退出编辑，不提示
+
+### Subtitle Management
+
+**位置**：`TrackCard.tsx` 下方的字幕列表区域
+
+**数量限制**：
+- 每个音频文件最多允许添加 **5 个字幕** (`MAX_SUBTITLES = 5`)。
+
+**达到上限后的行为**：
+- **按钮状态**：`Add Subtitle` 按钮变为 `disabled`。
+- **视觉变化**：按钮图标从 `Plus` 变为 `Lock` (Lucide)，文案直接显示为限制提示（如 "最多只能添加 5 个字幕文件"）。
+- **交互逻辑**：达到上限后，不显示额外的提示段落，点击按钮不触发选择器。
+
+**i18n Keys**：
+- `trackRename` — 菜单项文字
+- `trackNameConflict` — 冲突错误提示
+- `toastRenameFailed` — 重命名失败时的全局 Toast 提示文案
+
+### Folder Management
+
+**Folder Structure (Strict)**: 
+- **Single-Level**: Folders cannot be nested. Folders sit at root. Files can be in Root or Folder.
+- **Drag & Drop**: Folders cannot be dragged into folders. Files drag-and-drop into folders.
+- **Breadcrumbs**: No breadcrumbs. Navigation relies on "Back to All Files".
+
+**组件位置**：`src/components/LocalFiles/FolderCard.tsx`、`src/components/LocalFiles/FolderOverflowMenu.tsx`
+
+**功能**：
+- **Rename**: 内联重命名（Enter 确认，Esc 取消）。
+    - **重名冲突 (Redio Policy)**：重命名为现有文件夹名称（忽略大小写）时，输入框上方将显示**内联错误气泡** (`folderNameConflict`)，输入框显示红框并保持编辑状态供修正。
+    - **自身更名**：允许在不冲突的情况下进行大小写更名（例如 "Work" -> "work"）。
+- **Create Folder (Root Only)**:
+    - **自动去重**：新建文件夹如果名称存在，会自动增加后缀（例如 "New Folder (2)"）。
+- **Pin/Unpin**: 置顶合集，通过 `pinnedAt` 字段持久化
+- **Delete**: 删除合集（移除容器）。
+  - **删除文件夹**：会级联删除其中的所有文件，删除为二次确认交互。
+- **移动文件**：
+    - 支持将文件拖拽到文件夹中。
+    - 支持通过 TrackOverflowMenu -> "移动到..." 菜单移动。
+    - **同名处理**：若目标文件夹存在同名文件（不区分大小写），会自动重命名（追加 `(N)`），并显示 Toast 提示用户。
+        - 行为与导入一致：保留原扩展名，后缀插在扩展名前。
+    - **移动到根目录**：支持从文件夹移动回根目录。
+- **Two-step Confirmation (same menu surface)**: 点击 Delete 进入 confirm view（菜单内容滑动切换；进入 confirm 后聚焦 Cancel；取消/点击外部/Esc 安全退出，不会误删）。
+
+**合集排序逻辑**（`src/lib/files/sortFolders.ts`）：
+1. 置顶合集优先（按 `pinnedAt` 降序）
+2. 未置顶合集按名称 A→Z 排序
+
+**数据字段**：
+- `LocalFolder.pinnedAt?: number` — 置顶时间戳
+
+**i18n Keys** (Values Updated to Folder):
+- `folderPinToTop`
+- `folderUnpin`
+- `folderRename`
+- `folderDelete`
+- `folderDeleteTitle` (New)
+- `folderDeleteDesc` (New)
+- `folderDeleteFailed` (New)
+
+### Confirm Dialog
+
+Readio 的确认交互基于 shadcn/Radix primitives：
+
+- Settings 场景：`ConfirmAlertDialog` + `useConfirmDialog`
+  - 组件：`src/components/ui/confirm-alert-dialog.tsx`
+  - Hook：`src/hooks/useConfirmDialog.ts`
+  - 使用：`src/routes/settings.tsx`
+- Files 场景（删除 Track）：3-dot 菜单内二步确认（同一 `DropdownMenuContent` + `inert` 隔离隐藏面板）
+- Folder 删除：3-dot 菜单内二步确认（同一 `DropdownMenuContent` + `inert`，避免嵌套 overlay 的 ARIA 冲突）
+- **单步删除例外**：对于“移除收藏”（Favorites）和“删除播放历史”（History）这种非核心、低风险且频繁的操作，直接在 3-dot 菜单中执行单步删除，不强制二步确认。
+
+
+### Folder View Route
+
+**路由**：`/files/folder/:folderId`
+
+**文件位置**：`src/routes/files/folder/$folderId.tsx`
+
+**导航行为**：
+- 点击 FolderCard → 导航到 `/files/folder/{folderId}`
+- "← Back to All Files" 按钮 → 导航回 `/files`
+- **无层级**: 不使用面包屑导航
+
+**布局**：
+- Header: 返回按钮 + 文件夹名称 H1 + `{count} items` 副标题 + Add Audio 按钮
+- Content: 复用 `TrackCard` 组件（与 root view 完全相同）
+- Empty State: 使用 `folderEmptyTitle` + `folderEmptyHint` i18n keys
+
+**Drag & Drop**：
+- 文件夹视图内容区域是 drop target
+- 拖放 track 到此视图会将其移入当前文件夹
+- 拖放时显示轻微高亮轮廓
+- **移动失败反馈**：使用 `toastMoveFailed` 提供自然语言提示
+
+**组件复用**：
+- `TrackCard` — 完全相同的 props 和行为
+- `ViewControlsBar` — 密度切换
+- Track 删除确认：3-dot 菜单内二步确认（同 root view）
+
+**i18n Keys（新增）**：
+- `folderEmptyTitle` — 空文件夹标题
+- `folderEmptyHint` — 空文件夹提示
+
+---
+
+## 计划中（待执行）
+
+- **元数据解析器升级**：使用 `music-metadata-browser` + Worker 解析 ID3（指令 069）。
+- **离线内容可视化**：离线标识与缓存清理工具（指令 053）。

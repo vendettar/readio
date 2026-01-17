@@ -1,0 +1,26 @@
+---
+title: 数据获取
+---
+
+## 数据获取策略
+
+- **代理回退**:
+  - 使用 `src/lib/fetchUtils.ts` 中的 `fetchWithFallback`。
+  - 实现: 直接 → 主代理 → 次代理。
+
+- **去重**:
+  - 对只读 GET 请求使用 `src/lib/requestManager.ts` 中的 `deduplicatedFetch`。
+
+- **取消**:
+  - 始终传递 `AbortSignal`。
+  - 切换视图时使用 `abortRequestsWithPrefix` 清理请求。
+
+## 外部输入验证
+- **规则**: 所有外部输入 (RSS/搜索/拖放) 必须通过 Zod schema (`safeParse`)。
+- **实现**: 使用 `src/lib/schemas/*`。
+
+---
+
+## 计划中（待执行）
+
+- **网络退避与断路器**：指数重试 + 代理断路器（指令 073）。

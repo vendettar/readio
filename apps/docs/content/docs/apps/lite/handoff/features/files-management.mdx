@@ -1,0 +1,250 @@
+---
+title: Files Management
+---
+
+## 1. LocalFiles Ingestion API
+
+- Entry: `handleAudioInputChange` and `handleSubtitleInputChange` in `useLocalFileProcessing` hook
+- `processFiles` is an internal implementation detail, not exposed
+- Pure Module: `src/lib/localFiles/ingest.ts` (No React dependency)
+- **Auto-Rename**: During import, if a same-named (case-insensitive) audio or subtitle file is detected in the same folder, an incremental suffix is automatically appended.
+    - Behavior: Simple append `(N)`. If `Audio (2).mp3` exists, generates `Audio (2) (2).mp3` (does not parse existing suffix).
+    - Audio: Duplicate check within target folder scope.
+    - Subtitle: Duplicate check within target Track scope.
+- **Subtitle Match Deduplication (Single Consumption)**: During batch import, each subtitle file is used only once in a single operation to prevent many-to-one binding errors.
+    - **Scenario**: User drags duplicate file `Song.mp3` from different sources (e.g., Folder A and Folder B) simultaneously, along with one `Song.srt`.
+    - **Behavior**: Subtitle binds only to the first processed `Song.mp3`, subsequent same-named MP3s will not bind this subtitle.
+    - **Purpose**: Ensure one-to-one relationship for subtitle matching, aligning with intuition.
+
+---
+
+## 2. Files UX
+
+**Folder Card**:
+- Shows item count ("X items")
+- Visual weight lower than audio card (Cleaner background/border)
+- No play button, duration, subtitle info
+
+**Empty State**:
+- Title: `localFilesEmptyHeadline`
+- Body: `localFilesEmptyBody`
+
+**Folder Helper Text**:
+- `localFilesFolderHelperText` displayed below New Folder button
+
+**Audio Card Metadata**:
+- "Last played · X ago" (if `lastPlayedAt` data exists)
+- Multiple subtitles show "Default" indicator for the first one
+
+**Helper Tools**:
+- `src/lib/relativeTime.ts`: Format relative time (No external dependency)
+
+**Data Model**: FileTrack now stores raw size/duration values (`sizeBytes`, `durationSeconds`), UI layer formats uniformly.
+
+**Loading Skeleton**:
+- Files display simple skeleton placeholders (Collection grid + Track list) during load, avoiding white flashes.
+
+### View Controls Bar
+
+Files page uses a dedicated View Controls Bar component to host all browse-related controls.
+
+**Page Structure**:
+```
+Header Row (Create Actions)
+  Left: Breadcrumbs + Title
+  Right: [+ New Folder] [+ Add Audio]
+
+View Controls Bar (Browse Controls)
+  Left: (Reserved for future Sort/Group/Filter)
+  Right: Density Switch
+
+Content
+  Folder Area (Root only)
+  Audio List
+```
+
+**Component**: `src/components/LocalFiles/ViewControlsBar.tsx`
+- Props: `density`, `onDensityChange`, `leftSlot?` (For future extension)
+- Uses shadcn Button + Radix Tooltip
+- Icon button mode, with tooltip hint
+
+### View Density System
+
+**Setting Key**: `localFiles.viewDensity`
+- Storage: `DB.getSetting()` / `DB.setSetting()`
+- Values: `"comfortable"` | `"compact"`
+- Default: `comfortable`
+
+**Type Definition**: `src/components/LocalFiles/types.ts`
+- Exports `ViewDensity` type for all Files related components usage
+
+**State Management**:
+- Local state in `src/routes/files/index.tsx` (Folder view reuses same setting key)
+- Read from settings on mount
+- Update UI immediately on switch, persist asynchronously
+
+**Variant Architecture** (cva mode):
+- `TrackCard.tsx` uses `class-variance-authority` to define density variants
+- Variant functions: `trackCardContentVariants`, `subtitleRowVariants`, `subtitleIconContainerVariants`, etc.
+- Route file only triggers `density` prop, contains no density-related class name logic
+- **Info Arrangement**: Filename / File Size / Duration displayed on same line. File size and duration both use `Icon + Text` style (Size uses `Package` icon, Duration uses `Clock` icon). File size is to the left of duration; even if duration hides on MD screens and below, file size remains in the right info area to maintain single-line structure.
+- **Density Adjustment**: Since info moved to single line, `TrackCard` height in Comfortable mode is moderately compressed (Padding reduced from `p-5` to `py-4`, Icon from `w-14` to `w-12`), visually cleaner.
+
+**i18n Keys**:
+- `navFiles` — Sidebar label
+- `filesTitle` — Page Title (H1)
+- `filesSubtitle` — Page Subtitle
+- `localFilesDensityComfortable`
+- `localFilesDensityCompact`
+- `ariaViewDensity`
+- `ariaMoreActions`
+- `tooltipComfortableView`
+- `tooltipCompactView`
+
+> **Naming Note**: UI and Route are both "Files" (`/files`), file `src/routes/files.tsx`.
+
+---
+
+## 3. Menus & Validation
+
+### Overflow Menus (Track & Folder)
+
+**Component Location**: `src/components/LocalFiles/TrackOverflowMenu.tsx`, `src/components/LocalFiles/FolderOverflowMenu.tsx`
+
+**Behavior Config**:
+- Open on click only (hover only shows faint background)
+- Close on clicking outside or clicking trigger again
+- Support keyboard navigation (Esc close, Arrow keys navigate)
+- Track menu uses standardized `OverflowMenu` (shadcn `DropdownMenu` wrapper)
+- Folder menu uses `DropdownMenu`. Delete confirmation adopts **two-step confirmation within same menu surface** (`step: menu → confirm`, content slides within same `DropdownMenuContent`). Hidden panel uses `inert` to avoid `aria-hidden` focus warning while keeping UX close to trigger point.
+- FolderOverflowMenu `DropdownMenuContent` position fixed to `side="bottom"`, `align="start"` (Prevent misalignment).
+- TrackOverflowMenu `DropdownMenuContent` position fixed to `side="bottom"`, `align="end"` (Prevent misalignment).
+
+- **Move to…**: Push-panel selection. Support "Move to Folder" and "All Files" (Root).
+1. Move to… (`localFilesMoveToFolder`)
+2. Divider
+
+### Track Rename
+
+**Entry**: "Rename" menu item in TrackOverflowMenu
+
+**Interaction Behavior**:
+- Inline edit (Input displayed directly within card)
+- Enter confirm, Esc cancel
+- Auto confirm or cancel on blur
+- Input auto selected
+
+**Naming Conflict Handling** (Consistent with Folder Rename):
+- Comparison: `trim()` + Case-insensitive + Duplicate check within same folder only
+- Exception Behavior: If name conflicts, show hint and keep edit state (Redio Policy)
+- Conflict: Error bubble (`trackNameConflict`) displays above input, input red border, keep edit mode
+- If trimmed === original name: Exit edit directly, no hint
+
+### Subtitle Management
+
+**Location**: Subtitle list area below `TrackCard.tsx`
+
+**Quantity Limit**:
+- Maximum **5 subtitles** per audio file (`MAX_SUBTITLES = 5`).
+
+**Behavior at Limit**:
+- **Button State**: `Add Subtitle` button becomes `disabled`.
+- **Visual Change**: Button icon changes from `Plus` to `Lock` (Lucide), text explicitly shows limit hint (e.g., "Max 5 subtitle files").
+- **Interaction Logic**: After reaching limit, clicking button does not trigger selector, no extra paragraph hint shown.
+
+**i18n Keys**:
+- `trackRename` — Menu item text
+- `trackNameConflict` — Conflict error hint
+- `toastRenameFailed` — Global Toast hint text on rename failure
+
+### Folder Management
+
+**Folder Structure (Strict)**: 
+- **Single-Level**: Folders cannot be nested. Folders sit at root. Files can be in Root or Folder.
+- **Drag & Drop**: Folders cannot be dragged into folders. Files drag-and-drop into folders.
+- **Breadcrumbs**: No breadcrumbs. Navigation relies on "Back to All Files".
+
+**Component Location**: `src/components/LocalFiles/FolderCard.tsx`, `src/components/LocalFiles/FolderOverflowMenu.tsx`
+
+**Features**:
+- **Rename**: Inline rename (Enter confirm, Esc cancel).
+    - **Name Conflict (Redio Policy)**: When renaming to an existing folder name (ignoring case), an **inline error bubble** (`folderNameConflict`) will appear above the input, input shows red border and stays in edit mode for correction.
+    - **Self Rename**: Allow case change rename if no conflict (e.g., "Work" -> "work").
+- **Create Folder (Root Only)**:
+    - **Auto Deduplication**: New folder adds suffix if name exists (e.g., "New Folder (2)").
+- **Pin/Unpin**: Pin collection, persisted via `pinnedAt` field
+- **Delete**: Delete collection (Remove container).
+  - **Delete Folder**: Cascadingly deletes all files within. Deletion is a double-confirmation interaction.
+- **Move Files**:
+    - Support dragging files into folders.
+    - Support moving via TrackOverflowMenu -> "Move to..." menu.
+    - **Same Name Handling**: If target folder has same-named file (case-insensitive), auto-rename (append `(N)`), and show Toast hint to user.
+        - Behavior consistent with import: Preserve original extension, suffix inserts before extension.
+    - **Move to Root**: Support moving from folder back to root.
+- **Two-step Confirmation (same menu surface)**: Click Delete enters confirm view (menu content slides; focus Cancel after entering confirm; Cancel/Click Outside/Esc safely exits, preventing accidental deletion).
+
+**Collection Sort Logic** (`src/lib/files/sortFolders.ts`):
+1. Pinned collections first (Desc by `pinnedAt`)
+2. Unpinned collections sorted A→Z by name
+
+**Data Fields**:
+- `LocalFolder.pinnedAt?: number` — Pin timestamp
+
+**i18n Keys** (Values Updated to Folder):
+- `folderPinToTop`
+- `folderUnpin`
+- `folderRename`
+- `folderDelete`
+- `folderDeleteTitle` (New)
+- `folderDeleteDesc` (New)
+- `folderDeleteFailed` (New)
+
+---
+
+## Planned (Pending Execution)
+
+- **Robust Metadata Parser**: Use `music-metadata-browser` in a Worker for ID3 parsing (Instruction 069).
+- **Offline Content Visibility**: Offline badges + cache cleanup tools (Instruction 053).
+
+### Confirm Dialog
+
+Readio confirmation interactions based on shadcn/Radix primitives:
+
+- Settings Scenario: `ConfirmAlertDialog` + `useConfirmDialog`
+  - Component: `src/components/ui/confirm-alert-dialog.tsx`
+  - Hook: `src/hooks/useConfirmDialog.ts`
+  - Usage: `src/routes/settings.tsx`
+- Files Scenario (Delete Track): Two-step confirmation inside 3-dot menu (Same `DropdownMenuContent` + `inert` isolation hidden panel)
+- Folder Delete: Two-step confirmation inside 3-dot menu (Same `DropdownMenuContent` + `inert`, avoiding nested overlay ARIA conflicts)
+- **Single Step Delete Exception**: For non-core, low-risk, frequent operations like "Remove Favorite" (Favorites) and "Delete History" (History), single-step delete is performed directly in 3-dot menu, no forced two-step confirmation.
+
+### Folder View Route
+
+**Route**: `/files/folder/:folderId`
+
+**File Location**: `src/routes/files/folder/$folderId.tsx`
+
+**Navigation Behavior**:
+- Click FolderCard → Navigate to `/files/folder/{folderId}`
+- "← Back to All Files" Button → Navigate back to `/files`
+- **No Hierarchy**: No breadcrumb navigation
+
+**Layout**:
+- Header: Back Button + Folder Name H1 + `{count} items` Subtitle + Add Audio Button
+- Content: Reuse `TrackCard` component (Identical to root view)
+- Empty State: Use `folderEmptyTitle` + `folderEmptyHint` i18n keys
+
+**Drag & Drop**:
+- Folder view content area is drop target
+- Dropping track into this view moves it to current folder
+- Show slight outline highlight when dragging
+- **Move Failure Feedback**: Use `toastMoveFailed` for natural language hint
+
+**Component Reuse**:
+- `TrackCard` — Completely identical props and behavior
+- `ViewControlsBar` — Density switch
+- Track Delete Confirmation: Two-step confirmation inside 3-dot menu (Same as root view)
+
+**i18n Keys (New)**:
+- `folderEmptyTitle` — Empty folder title
+- `folderEmptyHint` — Empty folder hint

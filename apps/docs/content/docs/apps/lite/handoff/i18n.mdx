@@ -1,0 +1,68 @@
+---
+title: Internationalization
+---
+
+## i18n Architecture
+
+Uses **react-i18next** directly. Components call `useTranslation()` without an adapter.
+
+### Implementation
+
+- **Translation Files**: `src/lib/translations.ts` (6 languages: zh/en/ja/ko/de/es)
+- **Hook**: Use `useTranslation()` from `react-i18next`.
+- **Initialization**: `src/lib/i18n.ts` completes i18next initialization, `main.tsx` imports it to take effect
+
+### Core Principles
+
+All user-visible text must be handled through the t(key) system:
+- **In React Components**: Use `useTranslation()` and call `t(key, options)`
+- **Store and Utility Functions**: Use `src/lib/i18nUtils.ts`'s `translate(key, options)` function (calls `i18next.t` internally)
+  - Supports interpolation (e.g., `{size}`, `{count}`)
+  - Built-in fallback to English
+  - Prevents crash on undefined key
+  - **Only outputs console.warn in dev environment**, silent in production
+
+**Example**:
+```typescript
+// In React component
+const { t } = useTranslation();
+toast.info(t('largeFileNotCached', { size: fileSize }));
+
+// In store or non-React context
+import { translate } from '../lib/i18nUtils';
+toast.info(translate('largeFileNotCached', { size: fileSize }));
+```
+
+### i18n Enhancements (Interpolation)
+
+- **Variable Substitution**: `t(key, options)` supports template syntax like `{count}`.
+- **Type Safety**: `t()` only accepts valid keys via i18next module augmentation. Dynamic keys are forbidden.
+- **Rule**: Do NOT cast keys to `string`, `any`, or `TranslationKey` to bypass typing; add missing keys instead.
+
+---
+
+## Planned (Pending Execution)
+
+- **I18n Coverage Audit**: Build-time key parity checks (Instruction 063).
+- **Intl Formatter Upgrade**: Move date/number formatting to Intl APIs (Instruction 075).
+
+### Search/History/Favorites Related i18n Keys
+
+| Key | Usage | Example Value (EN) |
+|-----|------|-------------|
+| `searchEmptyHint` | Hint when search yields no results | "Try a different search term" |
+| `searchEmptyTitle` | Title when search page has no query | "Search for podcasts and episodes" |
+| `searchEmptyBody` | Description when search page has no query | "Use the search bar above to find content" |
+| `searchResultsCount` | Search results count (supports interpolation) | `"{count} results"` |
+| `historyProgressSuffix` | History page progress suffix | "played" |
+| `historyPlayedAt` | History page played time label | "Played at" |
+| `historySourceLocal` | History source: Local File | "Files" |
+| `historySourcePodcast` | History source: Podcast | "Podcast" |
+| `favoritesAddedLabel` | Favorites added time (supports interpolation) | ` "Added {date}" ` |
+| `readingBgTitle` | Reading background setting title | "Reading Background" |
+| `readingBgHint` | Reading background setting hint | "Applied to the transcript..." |
+| `ariaRemoveDownloadedAudio` | Aria label for removing downloaded audio | "Remove downloaded audio" |
+| `sourceLocal` | Source: Local | "Local" |
+| `sourcePodcast` | Source: Podcast | "Podcast" |
+
+Interpolation is done via `t(key, { ... })`, translation results undergo no secondary string processing to preserve multi-language correctness.

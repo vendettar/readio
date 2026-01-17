@@ -31,8 +31,10 @@ function MyComponent() {
 我们强制对翻译键进行严格类型检查。
 `t` 函数将仅接受存在于英语 (`en`) 语言环境中的键。
 
-- **定义**: `src/lib/translations.ts` 导出 `TranslationKey` 类型。
-- **规则**: 永远不要将键转换为 `any`。如果缺少键，请修复翻译文件。
+### 必须实现
+- **Module Augmentation**：使用 i18next module augmentation，使 `t()` 只接受有效 key。
+- **唯一来源**：`src/lib/translations.ts` 为唯一 key 列表。
+- **规则**：禁止将 key 强转为 `any`/`string`/`TranslationKey`，缺失就补 key。
 
 ## 4. 复数
 
@@ -47,3 +49,9 @@ function MyComponent() {
 2.  将键添加到 `en` 对象。
 3.  将键添加到 `zh` 或其他支持的语言。
 4.  `TranslationKey` 类型将自动更新。
+
+---
+
+## 计划中（待执行）
+
+- **覆盖审计**：构建期校验多语言 key 对齐（指令 063）。

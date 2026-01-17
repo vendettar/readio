@@ -1,0 +1,12 @@
+{
+    "title": "项目交接文档",
+    "pages": [
+        "index",
+        "environment",
+        "standards",
+        "architecture",
+        "database",
+        "features",
+        "i18n"
+    ]
+}

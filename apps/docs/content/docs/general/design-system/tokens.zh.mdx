@@ -1,0 +1,60 @@
+---
+title: Tokens 与布局
+---
+
+## 语义颜色系统 (无原始十六进制/调色板)
+
+为了确保主题（浅色/深色/强调色）完美工作，你必须使用语义 Tokens。
+
+**❌ 禁止**:
+- `bg-white`, `bg-gray-100`, `text-black`
+- `text-red-500` (除非实现特定品牌颜色，但首选 `destructive`)
+- `border-gray-200`
+- `data-accent="..."` (不要手动设置强调属性；使用 Theme Store)。
+
+**✅ 要求**:
+- **背景**: `bg-background`, `bg-card`, `bg-popover`, `bg-muted`, `bg-accent`。
+- **文本**: `text-foreground`, `text-muted-foreground`, `text-accent-foreground`。
+- **边框**: `border-border`, `border-input`。
+- **状态**: `text-destructive`, `bg-destructive`。
+- **主要**: `bg-primary`, `text-primary`。
+
+---
+
+## 布局常量 (单一数据源)
+
+不要为结构元素硬编码像素。使用扩展的 Tailwind 主题配置。
+
+- **侧边栏宽度**: 使用 `w-sidebar` (映射到 `var(--sidebar-width)`)。
+- **播放器高度**: 使用 `h-mini-player` (映射到 `var(--mini-player-height)`)。
+- **页面边距**: 使用 `px-page` or `mx-page` (映射到 `var(--page-margin-x)`)。
+
+**为什么？** 如果我们以后决定加宽侧边栏，我们在一个地方（CSS 变量）更改它，整个应用都会适应。
+
+---
+
+## 图标策略 (Lucide 优先)
+
+**默认规则**：Readio UI 图标必须使用 `lucide-react`。
+
+### 1. 尺寸标准
+- **默认**: `size-4` (16px) - 用于标准按钮和紧凑列表。
+- **中等**: `size-5` (20px) - 用于导航项或卡片标题。
+- **大**: `size-6` (24px) - 用于主要操作（例如大播放按钮）。
+- **规则**: 统一使用 Tailwind `size-*` 工具类（而不是 `w-4 h-4`）或组件属性 `size={16}`。
+
+### 2. 样式
+- **颜色**: 使用语义颜色 (`text-muted-foreground`)，绝不要使用原始颜色 (`text-gray-500`)。
+- **描边**: 默认描边宽度为 `2`。对于大图标 (`size-8+`)，使用 `1.5` 以保持视觉权重平衡。
+- **SVG 填充规则**: 所有项目特定的 SVG（Logo，交互绑定资源）必须使用 `fill="currentColor"` 或 `stroke="currentColor"`，以允许通过 CSS `text-*` 类自动设置主题。
+
+### 允许的 SVG 例外 (非常有限)
+SVG 文件仅允许用于：
+1. **Logo/App 标识** 资源（例如 `readio.svg`, `readio.png`）。
+2. **交互绑定资源**，其中现有实现依赖于 SVG+CSS 技术（例如遮罩图标、选择图钉、遗留的重交互样式）。除非明确要求，否则不要替换这些。
+
+---
+
+## 计划中（待执行）
+
+- **多语言排版**：按语言设置字体栈（指令 056）。

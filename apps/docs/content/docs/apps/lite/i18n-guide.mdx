@@ -31,8 +31,10 @@ function MyComponent() {
 We enforce strict type checking for translation keys.
 The `t` function will only accept keys that exist in the English (`en`) locale.
 
-- **Definition**: `src/lib/translations.ts` exports the `TranslationKey` type.
-- **Rule**: Never cast keys to `any`. Fix the translation file if a key is missing.
+### Required Implementation
+- **Module Augmentation**: Use i18next module augmentation so `t()` only accepts valid keys.
+- **Single Source**: `src/lib/translations.ts` is the canonical list; do not create ad-hoc key unions.
+- **Rule**: Never cast keys to `any`, `string`, or `TranslationKey`. Fix the translation file if a key is missing.
 
 ## 4. Plurals
 
@@ -47,3 +49,9 @@ Do NOT use ternary operators for plurals. Use i18next's built-in support.
 2.  Add the key to the `en` object.
 3.  Add the key to `zh` or other supported languages.
 4.  The `TranslationKey` type will automatically update.
+
+---
+
+## Planned (Pending Execution)
+
+- **Coverage Audit**: Build-time script to validate key parity across languages (Instruction 063).

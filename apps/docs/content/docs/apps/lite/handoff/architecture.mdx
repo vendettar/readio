@@ -1,0 +1,192 @@
+---
+title: Core Architecture
+---
+
+## 1. Directory Structure
+
+```
+src/
+├── routes/              # TanStack Router route files
+│   ├── __root.tsx       # Root layout (AppShell, Audio element, Toast)
+│   ├── index.tsx        # Home/Player (Subtitle Reading)
+│   ├── explore.tsx      # Discover Podcasts
+│   ├── subscriptions.tsx # Subscriptions List
+│   ├── favorites.tsx    # Favorite Episodes
+│   ├── history.tsx      # Playback History
+│   ├── files.tsx        # Files Route Layout (Outlet)
+│   └── files/           # Files Sub-routes
+│       ├── index.tsx    # Files List/Folder Grid
+│       └── folder/
+│           └── $folderId.tsx # Folder view
+├── routeComponents/     # Route page components (Route-level lazy loading)
+│   ├── ExplorePage.tsx
+│   ├── SearchPage.tsx
+│   ├── FavoritesPage.tsx
+│   ├── HistoryPage.tsx
+│   ├── SubscriptionsPage.tsx
+│   ├── SettingsPage.tsx
+│   ├── podcast/
+│   │   ├── PodcastShowPage.tsx
+│   │   ├── PodcastEpisodesPage.tsx
+│   │   └── PodcastEpisodeDetailPage.tsx
+│   └── files/
+│       ├── FilesIndexPage.tsx
+│       └── FilesFolderPage.tsx
+├── components/
+│   ├── AppShell/        # App Shell Components
+│   ├── GlobalSearch/    # Global Search Components (Input, Overlay, StatusBadge)
+│   ├── Transcript/      # Transcript Components
+│   ├── Selection/       # Selection/Lookup Components
+│   ├── FollowButton/    # Follow Button
+│   ├── ZoomControl/     # Zoom Control
+│   ├── PlayerControls/  # Player Controls
+│   ├── interactive/     # Custom interaction primitives (InteractiveTitle, InteractiveArtwork)
+│   ├── Explore/         # Explore page business components (Carousels, Grid)
+│   └── Toast/           # Toast Notifications
+├── hooks/               # Custom Hooks
+│   ├── useLocalFilesData.ts      # Local files data loading
+│   ├── useLocalFileProcessing.ts # File processing (handlers only)
+│   ├── useLocalFileDragDrop.ts   # Drag & Drop logic
+│   └── useLocalFolderManagement.ts # Folder management
+├── libs/                # Utilities
+│   ├── dexieDb.ts       # Dexie Database Wrapper
+│   ├── exploreApi.ts    # Podcast Search/RSS Parse API
+│   ├── translations.ts  # i18n Translations
+│   └── recommended/
+│       └── cache.ts     # Recommendation Cache (Prefix: readioExplore*)
+├── store/               # Zustand stores
+│   ├── playerStore.ts   # Player State
+│   ├── searchStore.ts   # Search State Management
+│   ├── exploreStore.ts  # Explore State
+│   └── immersionStore.ts # Immersion Mode State
+├── router.tsx           # Router Instance
+└── routeTree.gen.ts     # Auto-generated Route Tree
+```
+
+## 2. App Shell Architecture
+
+The application adopts the App Shell pattern, provided by `src/components/AppShell/` components:
+
+### Layout Structure
+
+```
+│ - Search (Global)  │  Main Content (flex-1)          │
+│                  │                                 │
+│ - Discover        │  <Outlet /> (Route Content)     │
+│   - Explore       │                                 │
+│ - Library        │                                 │
+│   - Subscriptions│                                 │
+│   - Favorites    │                                 │
+│   - History      │                                 │
+│   - Files        │                                 │
+│ - Settings       │                                 │
+├──────────────────┴─────────────────────────────────┤
+│               MiniPlayer (bottom, fixed)           │
+└────────────────────────────────────────────────────┘
+```
+
+### Key Components
+
+|Component | File | Responsibility |
+|------|------|------|
+| AppShell | `src/components/AppShell/AppShell.tsx` | Coordinates layout, determines content display based on immersion state |
+| Sidebar | `src/components/AppShell/Sidebar.tsx` | Left navigation bar (integrates GlobalSearchInput and SearchOverlay) |
+| GlobalSearchInput | `src/components/GlobalSearch/GlobalSearchInput.tsx` | Global search box at the top of the sidebar, supports ⌘K shortcut |
+| SearchOverlay | `src/components/GlobalSearch/SearchOverlay.tsx` | Search preview overlay (Stage 1 result preview) |
+| MiniPlayer | `src/components/AppShell/MiniPlayer.tsx` | Bottom playback controls (Height 73px), using industry-leading capsule design: external cover art, drag-and-drop progress bar, dynamic volume level icon |
+| FullPlayer | `src/components/AppShell/FullPlayer.tsx` | Full-screen immersive reading mode |
+
+### Immersion Mode
+
+- **State Management**: `src/store/immersionStore.ts` (Zustand)
+- **Entry Method**: Click MiniPlayer area or Expand button
+- **Exit Method**: Click Minimize button in top right of FullPlayer
+- **Behavior**:
+  - On Entry: Hide Sidebar, display FullPlayer full screen
+  - On Exit: Restore normal layout
+  - Uninterrupted Playback: `<audio>` element persists in `__root.tsx`
+
+---
+
+## 3. Routing (TanStack Router + File-Based Routing)
+
+Uses TanStack Router for routing, with the route tree automatically generated by the Vite plugin.
+
+### Route Structure
+
+| Path | File | Description |
+|------|------|------|
+| `/` | `src/routes/index.tsx` | Main Player Page (Subtitle Reading) |
+| `/search` | `src/routes/search.tsx` | Global Search Results Page (Accepts `?q=` param) |
+| `/explore` | `src/routes/explore.tsx` | Discover Podcasts (Search) |
+| `/podcast/:id` | `src/routes/podcast/$id.tsx` | Podcast Show Page (Episode List) |
+| `/podcast/:id/episode/:episodeId` | `src/routes/podcast/$id/episode/$episodeId.tsx` | Episode Detail Page |
+| `/subscriptions` | `src/routes/subscriptions.tsx` | Subscriptions List |
+| `/favorites` | `src/routes/favorites.tsx` | Favorite Episodes |
+| `/history` | `src/routes/history.tsx` | Playback History |
+| `/files` | `src/routes/files.tsx` | Files Page (Audio/Subtitle management, Folder support, Drag & Drop) |
+| `/settings` | `src/routes/settings.tsx` | Settings Page |
+
+### Page Navigation Conventions
+
+- Pages do not provide "Back to Previous/Up" buttons; users navigate via Sidebar or browser native back button.
+
+### Key Designs
+
+- **Persistent Player**: `<audio>` element and playback state mount in `__root.tsx`, playback is not interrupted by route changes
+- **Route Generation**: `src/routeTree.gen.ts` is automatically generated by Vite plugin
+- **Route-level Lazy Loading**: `/explore`, `/search`, Podcast Detail/Episode/History/Favorites/Files pages use `lazyRouteComponent` to split chunks, reducing initial bundle size
+- **Heavy Module Lazy Loading**: `TranscriptView` in Main Player and `FullPlayer` in Immersion Mode use `React.lazy` for deferred loading
+- **Global Styles**: CSS imported in `main.tsx` entry, ensuring availability across all routes
+- **Playback Control**: Progress bar drag via `onSeek` → `store.seekTo` → `store.pendingSeek` → `__root.tsx` audio element, avoiding direct DOM manipulation
+
+---
+
+## 4. Architecture Hardening
+
+### Code Splitting
+
+- **Vendor Chunks**: `vite.config.ts` uses `manualChunks` to split large dependencies
+
+### Error Isolation
+
+| Boundary | Scope | Fallback UI |
+|------|----------|---------|
+| `RootErrorBoundary` | Entire App | Full screen error page + Refresh button |
+| TranscriptView ErrorBoundary | Transcript View | Friendly error message + Copy diagnostic info button |
+
+### Uninterrupted Playback
+
+`<audio>` element mounted in `__root.tsx`, route switching does not affect playback
+
+### Tab Synchronization (Singleton Playback)
+
+- Use `BroadcastChannel('readio_sync')` with `senderId` and `timestamp`.
+- Ignore events from the current tab and any event older than 2 seconds.
+- Provide a `localStorage` event fallback when BroadcastChannel is unavailable.
+
+---
+
+## Planned (Pending Execution)
+
+- **Local Error Logger**: Downloadable diagnostics logs (Instruction 047).
+- **DB Access Guard**: Prevent direct DB imports from UI (Instruction 057).
+- **Atomic Write Safeguards**: Boot-time repair and transactional writes (Instruction 067).
+- **Async Race Audit**: RequestId/AbortController safeguards (Instruction 068).
+
+---
+
+## 5. Technology Stack
+
+| Category | Tech |
+|------|------|
+| Framework | React 19 + TypeScript + Vite |
+| Routing | TanStack Router (file-based) |
+| State | Zustand |
+| Persistence | Dexie (IndexedDB) |
+| Network Cache | TanStack Query |
+| Overlay/Tooltip | Radix UI |
+| Toast | Sonner |
+| Styling | Tailwind CSS + shadcn/ui |
+| Testing | Vitest + Playwright |
+| i18n | react-i18next (useTranslation) |

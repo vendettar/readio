@@ -1,0 +1,49 @@
+---
+title: Overlays & Shell
+---
+
+## Overlays & Menus
+
+- **Dropdowns**: Use the "Premium Overlay" style (`glassmorphism`, `sideOffset={8}`, `rounded-xl`, `backdrop-blur-xl`, `backdrop-saturate-150`).
+- **Inline Actions**: Use `modal={false}` on `DropdownMenu` when the action triggers inline editing (e.g., Rename) to prevent focus locking issues.
+- **Multi-Step Menus**: Implement confirmation steps **inside** the menu content (Panel-Grid pattern) rather than opening a new Dialog on top.
+- **No Global Overlay Store**: Keep `isOpen` state local to the component; standardize layering with shared z-index tokens instead of global modal state.
+
+### Surface Decision Tree (Which Component?)
+- **Is it a critical confirmation?** (Delete, Wipe) -> **`AlertDialog`** (Must require explicit action).
+- **Is it a complex form/content?** (Settings, Edit Details) -> **`Dialog`** (Modal, centers screen).
+- **Is it contextual?** (Action menu, Filters) -> **`DropdownMenu`** or **`Popover`** (Anchored to trigger).
+- **Is it transient info?** (Hover info) -> **`Tooltip`**.
+
+---
+
+## Feedback & Notifications (Toast)
+
+- **Standard**: Use **Sonner** via the centralized helper `src/lib/toast.ts`.
+  - **Why**: Sonner provides better stacking, promises, and visuals than Radix Toast.
+- **Forbidden**: Do NOT create custom `fixed` overlay divs for notifications.
+- **Async Pattern**: Use `toast.promise` for async actions (like file processing) to give immediate feedback.
+- **Key Rule**: Prefer `toast.*Key` helpers. Key → text translation must happen inside `src/lib/toast.ts`, not at call sites.
+- **Usage**:
+  ```tsx
+  import { toast } from '@/lib/toast'
+  // ✅ Correct
+  toast.successKey('saved')
+  toast.errorKey('failed')
+  ```
+
+---
+
+## Tooltips
+
+- **Rule**: All icon-only buttons MUST have a Tooltip.
+- **Implementation**: Use shadcn `Tooltip` primitives.
+- **Forbidden**: Do NOT use the native HTML `title="..."` attribute (it looks ugly and is not accessible).
+- **Delay**: Use standard delay (default) to avoid UI flickering.
+
+---
+
+## Planned (Pending Execution)
+
+- **Feedback Links**: Settings section for GitHub Issues and support email (Instruction 052).
+- **Overlay Layering Standardization**: Portal + z-index tokens audit (Instruction 071).

@@ -1,0 +1,146 @@
+---
+title: 组件与模式
+---
+
+## 交互组件策略 (无嵌套交互)
+
+**默认规则**：永远不要嵌套交互元素（链接、按钮或任何带有 `onClick` 的元素）。这是严重的可访问性违规，会导致 React 中的行为异常。
+
+### 1. `InteractiveArtwork` 标准 (`src/components/interactive/InteractiveArtwork.tsx`)
+对于任何需要同时导航（点击）和播放（悬停按钮点击）的封面/图像，使用标准化的 `InteractiveArtwork` 组件。
+- **实现**: 播放按钮必须是导航链接的绝对同级元素，而不是子元素。
+- **层级**: 悬停覆盖层应为 `pointer-events: none`；操作按钮必须为 `pointer-events: auto` 并位于视觉层上方 (`z-20+`)。
+- **Props**: 支持 `to`, `params` 用于导航，以及 `onPlay` 用于播放操作。
+- **悬停缩放**: 默认禁用。仅在明确要求时使用 `hoverScale` 启用缩放。
+- **播放位置**: 默认为 `center`。对于播客卡片或列表项，使用 `bottom-left`，其中播放操作锚定到角落。
+- **悬停触发范围**: 对于剧集列表行，悬停整行区域（不仅仅是封面）时必须出现播放按钮。确保悬停状态由父行组驱动。
+- **悬停组**: 使用 `hoverGroup` 将悬停触发绑定到父行/卡片组（例如 `episode`, `item`, `session`, `card`）。
+
+### 2. `InteractiveTitle` 标准 (`src/components/interactive/InteractiveTitle.tsx`)
+对于导向链接的标题，使用 `InteractiveTitle`。
+- **优先级**: 如果同时提供了 `onClick` 和 `to`/`params`，则 `onClick` 优先，以确保内联使用时操作处理程序（如“播放”）按预期工作。
+- **合规性**: 当交互时（`onClick` 或 `to`/`params`），将内部元素包装在 `Button asChild` 中，以确保整个应用的焦点和悬停样式一致。
+- **非交互式**: 如果未提供 `onClick` 或 `to`/`params`，则渲染具有相同视觉样式的非交互式内联元素（例如 `<span>`）。
+- **截断**: 对于基于列表的布局，标题应默认为最多 2 行，以保持垂直节奏。使用 `maxLines` prop 配置此项（例如 `1` 用于单行卡片，`3` 用于详细视图，或 `'none'` 禁用截断）。
+
+---
+
+## 交互原语策略 (无一次性确认/范围/模态)
+
+此仓库将交互模式视为标准化的原语：可预测、可访问且可重用。
+
+### 确认 (破坏性/不可逆)
+- **不要在 App UI 中使用** `window.confirm()`。
+- 使用 shadcn/Radix 原语代替：
+  - **默认**: 使用 `AlertDialog` 进行破坏性确认（删除/擦除/清除）。
+  - **溢出菜单例外 (a11y 要求)**: 如果破坏性操作是从 `DropdownMenu` / `Popover` 菜单内部触发的，**不要**从该菜单内部打开 `AlertDialog`/`Dialog`。相反，在**同一菜单表面内**实现两步确认（单个 `DropdownMenuContent`/`PopoverContent` 具有本地 `step: 'menu' | 'confirm'` 状态）。这避免了嵌套覆盖/焦点锁定冲突（例如 `aria-hidden` + 保留焦点警告）。
+  - **单步破坏性操作例外**: 对于已经“隐藏”在二级 3 点溢出菜单中的非关键破坏性操作（例如收藏列表中的“移除收藏”，历史记录中的“删除记录”），首选单步操作以减少摩擦。这些是可逆的或低影响的，而且菜单本身就充当了足够的意图屏障。
+  - 保持确认状态在组件本地；不要创建全局模态系统。
+
+### 对话框 / 模态
+- 除非明确批准，否则不要手写模态覆盖层（自定义背景 + 点击外部逻辑）。
+- 首选 shadcn `Dialog` / `AlertDialog` 用于模态表面。
+- 如果指定了内联确认模式（例如在下拉菜单内），请在菜单组件内实现它；不要引入页面级覆盖层。
+
+### `inert` 用法 (有限, 显式)
+`inert` 仅可用于**单个覆盖表面**内的隐藏面板上禁用交互（例如 `DropdownMenuContent` 两步确认内的非活动面板）。
+
+**允许**:
+- 在菜单 → 确认视图切换期间，同一菜单表面 (`DropdownMenuContent`) 内的非活动面板。
+
+**不允许**:
+- 页面级部分
+- App shell 或全局容器
+- 任何要在没有明确批准的情况下需要跨浏览器 polyfill 的东西
+
+**规则**: 如果使用 `inert`，它必须作用于尽可能小的子树，并且仅用于防止隐藏 UI 上的交互。
+
+### 滑块 / 范围输入
+- **不要使用** 原始 `<input type="range">` 用于播放器搜索/进度 UI。
+- **使用 shadcn `Slider`** (Radix Slider) 来标准化键盘行为和样式。
+
+### 文件输入 (例外提醒)
+- 原始 `<input type="file">` 仍然仅允许作为隐藏输入；可见触发器必须是 shadcn `Button`。
+
+---
+
+## 下拉菜单标准 (高级覆盖)
+
+为了确高质量感，所有 `DropdownMenu` 和 `Popover` 表面必须避免默认的“扁平”样式。
+
+### 1. 样式 Token
+- **内容**: `rounded-xl shadow-2xl border border-border/50 bg-popover/95 backdrop-blur-xl backdrop-saturate-150 p-0 overflow-hidden` (确保 `p-0` 以实现全宽悬停)。
+- **项**: `px-3 py-2 transition-colors focus:bg-accent focus:text-accent-foreground outline-none cursor-default select-none flex items-center gap-2`.
+- **由于文本**: `text-sm font-medium`.
+- **过渡**: 首选 `sideOffset={8}` 以获得浮动效果。
+
+### 2. 菜单项 (`DropdownMenuItem`)
+- **反馈**:
+  - **焦点/悬停**: `focus:bg-primary focus:text-primary-foreground transition-colors`.
+  - **破坏性**: `text-destructive focus:text-destructive focus:bg-destructive/10`.
+- **图标**: 使用 Lucide 图标，`size={14}` 或 `size={16}` 且 `className="mr-2 opacity-80"`.
+
+### 3. 多步逻辑
+- 使用 **Panel-Grid** 模式用于子菜单（重命名、删除确认）以避免嵌套覆盖（参见“交互原语策略”部分）。
+
+### 4. 交互规则
+- **立即关闭**: 对于“简单”或“原子”操作（例如订阅、收藏、置顶），触发操作后菜单必须立即关闭以提供清晰的反馈。
+- **持久菜单**: 对于“多步”或“复杂”操作（例如删除确认、“移动到文件夹”），菜单应保持打开状态并过渡到下一个内部步骤/面板。
+- **实现**: 确保简单操作不要在 `onSelect` 事件上调用 `e.preventDefault()`，允许默认的 Radix 关闭行为。
+
+---
+
+## 骨架加载器标准
+
+避免“纯灰色”块。使用 **Shimmer** 系统获得更精美的加载体验。
+
+### 1. 样式 Tokens
+- **容器**: 在 `bg-muted/30` 基础上使用 `.animate-shimmer`。
+- **子块**: 使用 `bg-muted` 加上适当的圆角（图片用 `rounded-lg`，文本行用 `rounded`）。
+
+### 2. 实现说明
+- **计划中**：Lite 端标准 Skeleton 组件与页面骨架（指令 070）。
+
+---
+
+## 空状态标准
+
+“无数据”、“无结果”或“空列表”视图的标准化模式。
+
+### 1. 结构 (居中 Flex)
+- **图标容器**: `w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-6`.
+- **图标**: `text-2xl grayscale opacity-50` (emoji) 或 Lucide 图标。
+- **标题**: `text-xl font-bold tracking-tight text-foreground mb-2`.
+- **描述**: `text-sm text-muted-foreground max-w-sm mx-auto`.
+
+---
+
+## 输入 & 表单标准
+
+确保交互元素感觉像是 cohesive UI 的一部分：
+
+### 1. 样式 Token
+- **默认状态**: `bg-muted/50 border-border/50`.
+- **聚焦状态**: `focus:bg-background focus-visible:ring-2 focus-visible:ring-primary transition-colors`.
+
+---
+
+## 页面布局 & 排版标准
+
+### 1. 标题
+- **页面 H1**: `text-3xl sm:text-4xl font-bold tracking-tight mb-2`.
+- **章节 H2**: `text-xl font-bold mb-4`.
+- **副标题**: `text-lg text-muted-foreground`.
+
+### 2. 间距
+- **垂直间隙**: 主要页面部分之间 `space-y-12`。
+
+---
+
+## 封面 & 播放覆盖标准
+
+- 使用 `InteractiveArtwork` 处理复杂的“图像链接 + 播放按钮”交互。
+- 避免手动实现悬停覆盖以防止 A11y 回退。
+- 视觉: `rounded-lg` (标准) 或 `rounded-full` (圆形)。
+- 悬停: 微妙的深色覆盖 (`bg-foreground/20`) + `Play` 按钮 (由 `playPosition` 定位)。
+- 默认行为: 除非明确启用 `hoverScale`，否则无悬停缩放。

@@ -15,6 +15,14 @@ Readio is committed to user data sovereignty and absolute security.
 - **Tool**: Use `DOMPurify` (via the wrapper `src/lib/htmlUtils.ts`).
 - **Policy**: Only safe tags (formatting, links) are allowed. Scripts, frames, and tracking pixels are stripped.
 
+## 1.1 Planned: Content Security Policy (CSP)
+- **Status**: Planned via Instruction 041.
+- **Goal**: Enforce strict CSP headers to limit script, media, and image sources.
+
+## 1.2 Planned: Iframe Sandbox
+- **Status**: Planned via Instruction 051.
+- **Goal**: Isolate untrusted rich HTML in a sandboxed iframe when required.
+
 ## 2. Privacy & Data Sovereignty
 
 ### A. Proxy Privacy (Critical)
@@ -39,3 +47,11 @@ Readio is committed to user data sovereignty and absolute security.
 
 ## 5. Dependencies
 **Rule**: No new NPM packages without an audit of their security history and license.
+
+---
+
+## Planned (Pending Execution)
+
+- **Content Attribution**: Add attribution and complaint entry point for RSS content (Instruction 055).
+- **Dependency Audit & License Policy**: CI enforcement for vulnerability and license checks (Instruction 078).
+- **RSS Content CSS Isolation**: Scoped reset or Shadow DOM for show-notes (Instruction 082).

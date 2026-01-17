@@ -1,0 +1,98 @@
+---
+title: Logic Flow & Engineering
+---
+
+## Multi-Media & OS Integration
+
+### Media Session API (The OS Sync Rule)
+**Rule**: The App's playback state MUST sync with the Operating System's media center.
+- **Sync**: Title, Artist, and Artwork must be updated via `navigator.mediaSession.metadata`.
+- **Control**: Play, Pause, Seek, and Skip actions must be mapped to `navigator.mediaSession.setActionHandler`.
+- **Result**: Users should be able to control Readio from their Lock Screen, Keyboard keys, and Menu bar.
+
+### Player State Machine Rule
+**Rule**: The UI state MUST strictly follow the hardware `<audio>` state.
+- **Enums**: Prefer a `status` enum (`idle`, `loading`, `playing`, `paused`, `error`) over multiple booleans.
+- **Reverse Sync**: The UI `isPlaying` state must be updated by the audio element's `onPlay` and `onPause` events, not just the user's click.
+- **Error Handling**: If `audio.play()` fails (Autoplay block), the UI must revert to `paused`.
+
+---
+
+## Internationalization & RTL
+
+### Logical Properties (RTL Rule)
+**Rule**: NEVER use physical direction classes (`ml-`, `mr-`, `pl-`, `pr-`, `left-`, `right-`).
+**Requirement**: Use Logical Properties to ensure UI correctly mirrors for Right-to-Left (RTL) languages (Arabic, Hebrew).
+- `ml-*` -> **`ms-*`** (Margin Start)
+- `mr-*` -> **`me-*`** (Margin End)
+- `pl-*` -> **`ps-*`** (Padding Start)
+- `pr-*` -> **`pe-*`** (Padding End)
+- `text-left` -> **`text-start`**
+- `border-l` -> **`border-s`**
+
+### Date & Number Formatting
+**Rule**: Use `Intl` API or `date-fns` with locale objects for all user-facing dates and numbers. Never manually split date strings.
+
+---
+
+## File Handling (Standard)
+- **Rule**: Do NOT use manual drag/drop event listeners for file ingestion.
+- **Library**: **`react-dropzone`**.
+- **Implementation**: Use the `useDropzone` hook to manage states (`isDragActive`, `acceptedFiles`).
+
+## Error Handling Tiers
+| Tier | Trigger | Action |
+|------|---------|--------|
+| **User Error** | Operation failure | Toast / Empty State (i18n) |
+| **System Error** | Parse failure | `console.warn/error` (silent) |
+
+## Type-Safe I18n
+- **Rule**: All translations must use **`react-i18next`**.
+- **Typing**: `t()` function must be type-checked against English keys (see `i18n-guide.md`).
+
+## Testing Standards (The Pyramid)
+- **Framework**: Vitest.
+- **Store Testing**: Reset store state in `beforeEach`.
+
+## Files & Structure
+- **`src/lib`**: Centralize business logic (`storage.ts`, `dateUtils.ts`).
+- **`src/components/ui`**: Reserved for shadcn primitives.
+- **`src/components/interactive`**: Custom interaction primitives.
+
+## Defensive Engineering
+
+### Layout Robustness (The Long-Text Rule)
+**Rule**: NEVER assume text will be short.
+- **Titles**: Always use `truncate` or `line-clamp-X`.
+- **Containers**: Use `min-w-0` on flex items to ensure they don't push past parent boundaries.
+- **Scroll**: Ensure overflow is handled (`overflow-hidden` or `overflow-y-auto`).
+
+### Multi-Tab Singleton
+**Rule**: Audio apps must be Singletons per browser.
+- **Implementation**: Use a `BroadcastChannel` named `readio_playback`.
+- **Action**: When tab A starts playing, send a "PLAY" message. All other tabs (B, C) MUST pause immediately.
+
+### Graceful Degradation
+- **Rule**: If a local file is missing from DB (e.g., deleted by browser cleanup), show an "File Missing" state instead of crashing.
+
+---
+
+## Anti-Patterns: File Drop
+❌ **Wrong**: Native listeners
+```tsx
+<div onDrop={e => handleFiles(e.dataTransfer.files)} />
+```
+✅ **Right**: React Dropzone
+```tsx
+const { getRootProps } = useDropzone({ onDrop })
+<div {...getRootProps()} />
+```
+
+---
+
+## Planned (Pending Execution)
+
+- **DB Access Guard**: Prevent components from importing `dexieDb` directly (Instruction 057).
+- **Async Race Guard**: requestId/AbortController patterns for last-action-wins (Instruction 068).
+- **Granular Error Boundaries**: Component-level isolation for rendering failures (Instruction 076).
+- **Floating Promise Audit**: Enforce explicit error handling for async actions (Instruction 079).

@@ -42,3 +42,10 @@ Readio Lite 使用 **TanStack Router** 进行基于文件的路由。
 - **预加载**: 在路由定义中使用 `loader` 在渲染组件组件 *之前* 获取 Podcast Feed 数据。
 - **重定向**: **不要** 在渲染体中使用 `return <Navigate />`。在 `beforeLoad` 或 `loader` 内部使用 `throw redirect()`。
 - **持久化**: Audio Player 组件位于 `__root.tsx` 中，在所有路由更改中持久存在。
+
+---
+
+## 计划中（待执行）
+
+- **法律页面路由**：`/legal/privacy` 与 `/legal/terms`（指令 039）。
+- **单集排序/筛选参数**：使用查询参数驱动状态（指令 054）。

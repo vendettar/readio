@@ -1,0 +1,49 @@
+---
+title: Shell 与覆盖层
+---
+
+## 覆盖层与菜单
+
+- **下拉菜单**: 使用“高级覆盖层”风格 (`glassmorphism`, `sideOffset={8}`, `rounded-xl`, `backdrop-blur-xl`, `backdrop-saturate-150`)。
+- **内联操作**: 当操作触发内联编辑 (例如，重命名) 时，在 `DropdownMenu` 上使用 `modal={false}` 以防止焦点锁定问题。
+- **多步菜单**: 在菜单内容 **内部** 实现确认步骤 (面板-网格模式)，而不是在顶部打开新的 Dialog。
+- **禁止全局覆盖层 Store**：`isOpen` 状态保持在组件内部，通过共享 z-index tokens 统一分层，不建立全局模态状态。
+
+### 表面决策树 (哪个组件?)
+- **它是关键确认吗?** (删除, 擦除) -> **`AlertDialog`** (必须要求显式操作)。
+- **它是复杂的表单/内容吗?** (设置, 编辑详情) -> **`Dialog`** (模态, 屏幕居中)。
+- **它是上下文相关的吗?** (操作菜单, 过滤器) -> **`DropdownMenu`** 或 **`Popover`** (锚定到触发器)。
+- **它是瞬时信息吗?** (悬停信息) -> **`Tooltip`**。
+
+---
+
+## 反馈与通知 (Toast)
+
+- **标准**: 通过集中式辅助函数 `src/lib/toast.ts` 使用 **Sonner**。
+  - **为什么**: Sonner 比 Radix Toast 提供更好的堆叠、Promise 和视觉效果。
+- **禁止**: **不要** 为通知创建自定义 `fixed` 覆盖层 div。
+- **异步模式**: 对异步操作 (如文件处理) 使用 `toast.promise` 以给予即时反馈。
+- **关键规则**：优先使用 `toast.*Key`，key → 文案转换必须在 `src/lib/toast.ts` 内完成。
+- **用法**:
+  ```tsx
+  import { toast } from '@/lib/toast'
+  // ✅ Correct
+  toast.successKey('saved')
+  toast.errorKey('failed')
+  ```
+
+---
+
+## 工具提示 (Tooltips)
+
+- **规则**: 所有仅图标按钮必须具有 Tooltip。
+- **实现**: 使用 shadcn `Tooltip` 原语。
+- **禁止**: **不要** 使用原生 HTML `title="..."` 属性 (它很难看且不可访问)。
+- **延迟**: 使用标准延迟 (默认) 以避免 UI 闪烁。
+
+---
+
+## 计划中（待执行）
+
+- **反馈入口**：Settings 内的 Issue/邮件反馈入口（指令 052）。
+- **覆盖层分层标准化**：Portal + z-index tokens 审计（指令 071）。

@@ -1,4 +1,7 @@
 *.iml
+.agent/
+.claude/
+.gemini/
 
 # Dependency directories
 node_modules/

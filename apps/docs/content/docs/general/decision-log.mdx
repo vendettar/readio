@@ -1,0 +1,187 @@
+---
+title: Decision Log
+description: Architecture decisions and rationale.
+---
+
+# Architecture Decision Log
+
+## D001 — UUID Primary Keys (All Tables)
+- **Decision**: All tables use UUID primary keys; natural keys (e.g., `feedUrl`, `key`) are unique indexes only.
+- **Rationale**: Global uniqueness, sync readiness, stable identity.
+- **Implication**: Schema changes require DB reset (first‑release policy).
+
+## D002 — I18n Direct Usage
+- **Decision**: Components use `useTranslation()` from `react-i18next` directly; no `useI18n` adapter.
+- **Rationale**: Standard API, fewer layers, clearer onboarding.
+
+## D003 — Offline Strategy A
+- **Decision**: When offline, hide remote Discovery and remote search results; keep local content available and show an Offline badge.
+- **Rationale**: Predictable UX, no failing network calls.
+
+## D004 — ObjectURL Ownership
+- **Decision**: Audio Object URLs are store‑owned; image Object URLs are component‑owned with cleanup on unmount.
+- **Rationale**: Prevent audio memory leaks while keeping UI flexibility for artwork.
+
+## D005 — Deployment Target
+- **Decision**: Primary deployment is Vercel; Docker is supported for self‑hosting.
+- **Rationale**: Fast web deployment with a portable fallback.
+
+## D006 — Legal Pages Required
+- **Decision**: Privacy Policy and Terms of Service are mandatory for production.
+- **Rationale**: Store compliance and user trust.
+
+## D007 — Smoke E2E Tests
+- **Decision**: Maintain Playwright smoke tests for core user journeys before release.
+- **Rationale**: Prevent end‑to‑end regressions that unit tests miss.
+
+## D008 — Strict CSP
+- **Decision**: Enforce a strict Content Security Policy for all web deployments.
+- **Rationale**: Reduce XSS and untrusted resource loading risk.
+
+## D009 — Data Retention Policy
+- **Decision**: Prune playback history to a bounded window (time + count).
+- **Rationale**: Prevent long‑term IndexedDB bloat and performance degradation.
+
+## D010 — PWA Update Lifecycle
+- **Decision**: Notify users when a new PWA version is available and allow refresh.
+- **Rationale**: Avoid stale clients and ensure users receive fixes.
+
+## D011 — CI Pipeline
+- **Decision**: Enforce lint/typecheck/tests on every PR via CI.
+- **Rationale**: Prevent regressions from bypassing local checks.
+
+## D012 — Import Integrity Checks
+- **Decision**: Validate imports for ID collisions and broken references before writing to DB.
+- **Rationale**: Prevent silent corruption during Vault/OPML import.
+
+## D013 — Bundle Size Budget
+- **Decision**: Enforce bundle size budgets in CI.
+- **Rationale**: Prevent performance regressions from dependency bloat.
+
+## D014 — Iframe Sandbox Policy
+- **Decision**: Use strict iframe sandboxing for untrusted rich HTML when required.
+- **Rationale**: Isolate untrusted content beyond DOMPurify.
+
+## D015 — Feedback Loop
+- **Decision**: Provide in-app links for bug reporting and support contact.
+- **Rationale**: Close product feedback loop.
+
+## D016 — Offline Content Visibility
+- **Decision**: Show offline availability badges and provide cache cleanup tools.
+- **Rationale**: Make offline behavior transparent and manageable.
+
+## D017 — Episode Sorting & Filtering
+- **Decision**: Provide sort/filter controls for episode lists.
+- **Rationale**: Improve discoverability at scale.
+
+## D018 — Content Attribution
+- **Decision**: Show attribution and copyright complaint entry points.
+- **Rationale**: Reduce legal exposure and clarify content ownership.
+
+## D019 — Multilingual Typography
+- **Decision**: Use language-specific font stacks.
+- **Rationale**: Ensure consistent rendering across scripts.
+
+## D020 — DB Access Guard
+- **Decision**: Prevent direct DB access from UI components.
+- **Rationale**: Enforce architecture boundaries.
+
+## D021 — MSW for Network Tests
+- **Decision**: Use MSW to mock external APIs in tests.
+- **Rationale**: Stable and deterministic test runs.
+
+## D022 — Contributing & Manifesto
+- **Decision**: Document instruction-driven workflow and architecture manifesto.
+- **Rationale**: Reduce onboarding friction and keep rules consistent.
+
+## D023 — PWA Audio Range Cache
+- **Decision**: Support Range Requests (206) in SW media cache for offline seeking.
+- **Rationale**: Enable offline seek in large audio files.
+
+## D024 — Memory Stress Test
+- **Decision**: Maintain a long-session memory stress test for leak detection.
+- **Rationale**: Prevent mobile crashes after hours of playback.
+
+## D025 — Proxy Failover
+- **Decision**: Support proxy list with automatic failover on 429/5xx.
+- **Rationale**: Keep discovery resilient when a proxy fails.
+
+## D026 — I18n Coverage Audit
+- **Decision**: Enforce translation key parity across all languages at build time.
+- **Rationale**: Prevent missing-key regressions in non-English locales.
+
+## D027 — IndexedDB Migrations
+- **Decision**: Move from reset-only policy to versioned migrations.
+- **Rationale**: Preserve user data in production.
+
+## D028 — Browser Support Matrix
+- **Decision**: Define browserslist and legacy polyfill strategy.
+- **Rationale**: Avoid white screens on older devices/WebViews.
+
+## D029 — Turborepo Cache Hardening
+- **Decision**: Explicit inputs/outputs for Turbo pipelines.
+- **Rationale**: Ensure cache correctness and fast CI.
+
+## D030 — Atomic Writes & Self-Heal
+- **Decision**: Enforce transactional DB writes and boot-time integrity repair.
+- **Rationale**: Prevent partial corruption on crashes/power loss.
+
+## D031 — Async Race Condition Guard
+- **Decision**: Use requestId/AbortController to ensure last-action-wins.
+- **Rationale**: Avoid playback/UI desync under rapid interactions.
+
+## D032 — Robust Metadata Parser
+- **Decision**: Use `music-metadata-browser` for ID3 parsing in a Worker.
+- **Rationale**: Reduce parsing errors and keep the main thread responsive.
+
+## D033 — Skeleton UI System
+- **Decision**: Standardize shimmer-based skeletons for key surfaces.
+- **Rationale**: Reduce layout shift and improve perceived performance.
+
+## D034 — Overlay Layering Standardization
+- **Decision**: Standardize Portal usage and z-index tokens without a global modal store.
+- **Rationale**: Prevent stacking bugs while keeping local state intact.
+
+## D035 — Media Cache Eviction
+- **Decision**: Enforce LRU-based audio blob trimming with configurable limits.
+- **Rationale**: Prevent uncontrolled storage growth.
+
+## D036 — Network Backoff & Circuit Breaker
+- **Decision**: Add exponential backoff and per-proxy circuit breaker.
+- **Rationale**: Avoid retry storms and improve proxy resilience.
+
+## D037 — Storage Quota Monitoring
+- **Decision**: Surface quota usage and warnings in Settings.
+- **Rationale**: Give users visibility before storage exhaustion.
+
+## D038 — Intl API Upgrade
+- **Decision**: Use Intl APIs for dates, numbers, and relative time.
+- **Rationale**: Improve localization correctness and reduce manual formatting bugs.
+
+## D039 — Granular Error Boundaries
+- **Decision**: Add component-level error boundaries for critical UI nodes.
+- **Rationale**: Prevent single-component crashes from taking down pages.
+
+## D040 — Lighthouse CI Budget
+- **Decision**: Enforce Lighthouse score budgets in CI.
+- **Rationale**: Prevent regressions in performance and accessibility.
+
+## D041 — Dependency Audit & License Policy
+- **Decision**: Enforce vulnerability and license checks in CI.
+- **Rationale**: Reduce supply-chain and compliance risk.
+
+## D042 — Floating Promise Audit
+- **Decision**: Require explicit error handling for async store actions.
+- **Rationale**: Prevent silent failures and inconsistent state.
+
+## D043 — Event Listener Leak Audit
+- **Decision**: Standardize global listener management via a shared hook.
+- **Rationale**: Avoid memory leaks under long sessions.
+
+## D044 — Zustand Selector Optimization
+- **Decision**: Enforce atomic selectors and `useShallow` for multi-select.
+- **Rationale**: Reduce unnecessary re-renders.
+
+## D045 — RSS Content CSS Isolation
+- **Decision**: Isolate show-notes CSS via scoped reset (Shadow DOM fallback).
+- **Rationale**: Prevent untrusted HTML from polluting UI.

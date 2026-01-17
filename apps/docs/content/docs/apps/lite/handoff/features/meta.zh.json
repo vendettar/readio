@@ -1,0 +1,9 @@
+{
+    "title": "核心功能模块",
+    "pages": [
+        "audio-engine",
+        "files-management",
+        "search",
+        "discovery"
+    ]
+}

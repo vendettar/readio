@@ -1,0 +1,55 @@
+---
+title: Audio Engine
+---
+
+## 1. 播放能力与会话恢复
+
+### 会话恢复机制
+
+**策略**：播放进度通过 `playback_sessions` 表持久化，刷新页面后自动恢复。
+
+- **Podcast 会话**：通过 `audioUrl` 索引查找上次的 session
+- **本地文件会话**：通过 `localTrackId`（local_tracks.id）精确查找，避免同名文件跨文件夹冲突
+- **Dexie Schema**: 单一版本（v1）定义当前全部表结构与索引，不维护历史版本。
+
+**实现细节**：
+- **本地文件播放**: `useLocalPlayback` 在播放时先设置 `sessionId`（格式：`local-track-{trackId}`），然后创建包含完整信息的 session（包括 audioId 用于 Last Played）
+- **播客播放**: `setAudioUrl(..., metadata)` 将 episode metadata 写入 store，`useSession` 创建 session 时持久化到 `playback_sessions`
+- **Session 恢复**: `useSession` 检查是否存在 sessionId，有则跳过；无则：
+  1. **确定性守卫**：对于本地文件，先直接查询 `local-track-{trackId}` 是否存在，存在则直接复用
+  2. 否则通过 `localTrackId` 或 `audioUrl` 索引查找
+  3. 都未找到才创建新 session
+- **防止竞态**: 先设置 sessionId + 确定性 ID 查询，完全消除重复创建风险
+
+### 播放器基础能力
+
+- **音频播放**：HTML5 `<audio>` 元素在 `__root.tsx` 中挂载，跨路由持久化
+- **播放速率控制**: 0.8x ~ 2.0x，通过 `playerStore.playbackRate` 管理，持久化通过 `storage.ts` 的 `setJson` 写入 localStorage。FullPlayer 读取 store 状态并提供速率切换按钮。
+- **音量控制**：0-1 范围，通过 `storage.ts` 持久化到 localStorage（`usePlayerStore`）
+- **进度控制**：Slider 直接调用 `seekTo()` 接口，用户拖拽结束后统一 seek
+- **本地文件播放**：Blob URL 临时挂载，`< 300MB` 的音频缓存到 IndexedDB 支持离线恢复
+- **播客元数据**：`setAudioUrl` 可接收 EpisodeMetadata（description/podcastTitle/feedUrl/artworkUrl/publishedAt），并写入 `playerStore.episodeMetadata` 供 History/Favorites 展示
+
+---
+
+## 2. Transcript（字幕渲染约束与虚拟列表）
+
+产品要求：
+- **字幕每个单词都可见**（多行显示，不做省略号截断）。
+
+当前实现：
+- 使用 `react-virtuoso` 实现动态高度虚拟列表。
+- 移除了固定行高约束和文本截断。
+- CSS 改为 `word-wrap: break-word; overflow-wrap: break-word; line-height: 1.5`，支持多行显示。
+- **Zoom 支持**：通过 `useEffect` 监听 `zoomScale` 变化并触发 Virtuoso 重新测量。
+
+实现细节：
+- 组件：`src/components/Transcript/TranscriptView.tsx`
+- FullPlayer 中也使用相同的 TranscriptView
+- Following 模式：使用 `virtuosoRef.scrollToIndex()` 自动滚动到当前字幕行，居中对齐
+
+### Selection（选词/查词）
+
+- UI 组件：`src/components/Selection/SelectionUI.tsx`（ContextMenu / LookupPopover / hover overlay）
+- 用户可见错误信息使用 i18n：查词失败等通过 `TranslationKey`（如 `lookupNotFound`）映射为 `t(key)` 文案
+- 动态定位：仅使用 `left/top` 或 CSS 变量注入来表达动态布局，避免在 `style={{...}}` 中直接写 `width/height/transform`

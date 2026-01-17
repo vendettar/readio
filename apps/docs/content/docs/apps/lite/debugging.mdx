@@ -81,3 +81,9 @@ When API data looks wrong, don't guess.
 **Rule**: All file ingestion actions MUST catch `QuotaExceededError`.
 - **Action**: Show a specific toast: "Storage full! Please delete some files in Settings to continue."
 - **Check**: Use `navigator.storage.estimate()` to warn the user before they even start a large upload.
+
+---
+
+## Planned (Pending Execution)
+
+- **Local Error Logger**: Downloadable diagnostics log with PII redaction (Instruction 047).

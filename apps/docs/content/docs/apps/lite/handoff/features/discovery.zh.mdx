@@ -1,0 +1,231 @@
+---
+title: Discovery & Explore
+---
+
+## 1. Explore 页面 (播客发现)
+
+### 定位与原则
+- Explore 是播客发现/推荐页（搜索在侧边栏）
+- 以 Podcasts 为核心，包含 Top Episodes 模块
+- 页面风格：安静、克制、阅读优先
+- 页面文案不包含 “Trending / Hot / Popular Now / 热门”
+
+### 页面结构
+
+| 模块 | 组件 | 数据来源 |
+|------|------|----------|
+| Header | 标题 "Explore" + 副标题 | i18n |
+| Module D: Editor's Picks | 小卡片网格 | Discovery Provider Lookup API (固定 providerPodcastId[]) |
+| Module A: Top Shows | Horizontal Carousel | Discovery Provider (Top Charts) |
+| Module C: Top Episodes | Horizontal Grid | Discovery RSS Top Episodes (providerEpisodeId matching) |
+
+### 组件位置
+
+- `src/routes/explore.tsx` — 页面主体
+- `src/components/Explore/TopShowsCarousel.tsx`
+- `src/components/Explore/TopEpisodesGrid.tsx`
+- `src/components/Explore/TopChannelsCarousel.tsx`
+
+### 数据获取
+- **Modules**: Editor's Picks、Top Shows 等模块使用 Discovery Provider (RSS/Search) 数据。
+- **架构 (Provider Agnostic)**: 
+  - **Facade**: `src/lib/discovery/index.ts` 是单一入口，对外屏蔽具体 Provider 实现。
+  - **Interface**: `src/lib/discovery/providers/types.ts` 定义了标准 `DiscoveryProvider` 接口。
+  - **Implementations**: 目前实现为 Apple Provider (`src/lib/discovery/providers/apple.ts`)，支持扩展其他 Provider (e.g., PodcastIndex)。
+- **配置与数据源**: `src/constants/app.ts` (`EDITOR_PICKS_BY_REGION`) 和 `src/lib/discovery/`。
+  - `fetchTopPodcasts()`, `fetchTopEpisodes()` — 调用 Provider 的榜单接口
+  - `searchPodcasts()`, `getPodcast()` — 调用 Provider 的搜索/详情接口
+  - `fetchPodcastFeed()` — 统一 RSS 解析
+- `src/hooks/useDiscoveryPodcasts.ts` — TanStack Query hooks for Explore
+- `src/hooks/usePodcastSearch.ts` — TanStack Query hook for Search
+
+### 离线行为（强制）
+- 当 `isOnline` 为 false 时，**隐藏所有远程 Discovery 模块**（Top Charts、Editor's Picks、Top Shows、Top Episodes）。
+- 在侧边栏/标题处提供清晰的离线徽章。
+- **本地入口**：必须保留清晰的“本地库入口”（Subscriptions/Favorites/History/Files），确保离线可操作。
+
+### 缓存策略（TanStack Query）
+
+| 层级 | TTL | 用途 |
+|------|-----|------|
+| Memory | 1 小时 | 当前会话复用 |
+| localStorage | 12 小时 | 跨会话持久化 |
+| TanStack Query | staleTime 6h, gcTime 24h | 请求去重与刷新 |
+
+**QueryClient** 位于 `src/main.tsx`，配置：
+- `staleTime`: 5 分钟
+- `gcTime`: 30 分钟
+- `retry`: 1
+- `refetchOnWindowFocus`: false
+
+### 导航行为
+
+- 点击 Top Shows / Editor's Picks 卡片 → 导航到 `/podcast/:id` Show Page
+- Top Episodes / Top Channels → 尝试解析播客 ID，成功则导航，否则打开外部播客平台链接
+
+### i18n Keys
+- `exploreTitle`, `exploreSubtitle`, `editorPicksTitle`
+- `topShowsTitle`, `topSubscriberShowsTitle`, `topEpisodesTitle`, `topChannelsTitle`
+- `subscribe`, `subscribed`, `unsubscribe`
+
+---
+
+## 2. Podcast Show Page (播客详情页)
+
+### 路由
+
+| 路径 | 文件 | 说明 |
+|------|------|------|
+| `/podcast/:id` | `src/routes/podcast/$id.tsx` | 播客详情页（精致列表风格） |
+
+### 数据流
+
+1. **Lookup API**: 使用 `lookupPodcastFull(id)` 获取播客元数据（`collectionName`, `artistName`, `feedUrl`, `artworkUrl600`）
+2. **RSS Feed**: 使用 `fetchPodcastFeed(feedUrl)` 解析 RSS 获取节目列表
+3. **TanStack Query**: 两层查询实现缓存与去重
+
+数据流：Show Page 先通过 Lookup API 获取元数据，再用 feedUrl 拉取 RSS 并渲染 Episodes。
+
+### 页面布局（精致风格）
+
+| 区域 | 内容 |
+|------|------|
+| Hero（桌面双栏/移动堆叠） | 大封面 + 标题 + Publisher + Subscribe 按钮 + 描述（可展开）+ Genres 标签 |
+| Episodes List | 节目标题 + 摘要 + 发布日期 + 播放按钮 |
+
+### 导航行为
+
+- **Show Cards**（Editor's Picks / Top Shows）: 使用 `Link` 组件直接导航到 `/podcast/:id`
+- **Top Episodes / Top Channels**: 尝试从 URL 提取播客 ID（正则 `/id(\d+)/`），成功则导航，否则打开外部链接
+- **返回导航**: 使用 TanStack Router `Link` 返回 `/explore`，浏览器前进后退正常工作
+
+### 订阅逻辑
+
+- 使用 `exploreStore.subscribe()` / `unsubscribe()` 管理订阅状态
+- 订阅按钮状态通过 `feedUrl` 去重索引判断（`subscriptions.some(s => s.feedUrl === podcast.feedUrl)`），不作为实体身份
+
+### OPML 导入/导出
+
+- **解析规则**：OPML 可嵌套 `<outline>`，必须递归解析并收集所有 `xmlUrl`。
+- **去重**：导入前通过唯一索引检查 `feedUrl`，已存在则跳过。
+
+---
+
+## 计划中（待执行）
+
+- **导入完整性校验**：导入后校验 ID 与引用（指令 049）。
+- **离线可用标识**：为缓存内容显示标识（指令 053）。
+- **内容归属声明**：展示归属与申诉入口（指令 055）。
+- **代理故障转移**：429/5xx 自动切换代理（指令 062）。
+
+### 播放逻辑
+
+- 点击节目调用 `playerStore.setAudioUrl(episode.audioUrl, episode.title, coverArt, metadata)` + `play()`
+- 复用现有 MiniPlayer / FullPlayer，不创建新播放器
+
+### UI 细节 (Pixel Perfect)
+
+- **Smart Divider**: 列表项 Hover 时通过 `:has()` 选择器隐藏上方分割线，提供精致交互感。
+- **EpisodeCard**: 使用 `group/episode` 配合 `relative` 布局实现深度定制的 Hover 区域和固定宽度的右侧 Action 区。
+- **Tokens Over Pixels**: 布局类使用 Tailwind tokens（如 `max-w-md`, `ml-24`），不使用 `max-w-[450px]` 等任意值类名。
+- **MiniPlayer**: 胶囊高度 48px，高度变量 `--mini-player-height` 设为 73px（含 Padding），封面图 48x48 带阴影并支持 Hover 展开。
+
+### i18n Keys
+
+- `episodesTitle`, `latestEpisodes`, `errorFeedLoadFailed`, `loadingPodcast`, `podcastLabel`
+- 复用: `subscribe`, `subscribed`, `unsubscribe`, `showMore`, `showLess`, `commonBack`, `noEpisodes`
+
+---
+
+## 3. Episode Detail Page (单集详情页)
+
+### 路由
+
+| 路径 | 文件 | 说明 |
+|------|------|------|
+| `/podcast/:id/episode/:episodeId` | `src/routes/podcast/$id/episode/$episodeId.tsx` | 单集详情页 |
+
+### 数据流
+
+1. **Lookup API**: 使用 `lookupPodcastFull(id)` 获取播客元数据
+2. **RSS Feed**: 使用 `fetchPodcastFeed(feedUrl)` 获取节目列表
+3. **Episode Matching**: 通过多步骤匹配机制找到目标单集（见下方详细说明）
+
+### Episode Lookup & Matching 机制（核心业务逻辑）
+
+由于 iTunes API 和 RSS Feed 的数据格式差异，episode 匹配需要多层 fallback 策略：
+
+#### 场景一：Episode Detail Page 恢复匹配
+
+**文件**: `src/routes/podcast/$id/episode/$episodeId.tsx`
+
+**步骤**:
+
+1. **STEP 1 - Direct GUID Match (最快)**: 在 RSS feed 中直接匹配 `episode.id === episodeId`
+2. **STEP 2 - Provider Lookup Fallback**: 如果 STEP 1 失败，使用 `lookupPodcastEpisodes(id, 'us', 50)` 获取 Provider 数据
+3. **STEP 3 - Provider Metadata Match**: 在 Provider 结果中通过 `episodeGuid` 或 `providerEpisodeId` 匹配
+4. **STEP 4 - Cross-Reference Match**: 用 Provider 元数据（标题或音频 URL）在 RSS feed 中匹配
+5. **STEP 5 - Virtual Episode Creation**: 如果仍找不到（旧 episode 可能已从 RSS 删除），直接用 Provider 数据创建 "Virtual Episode"
+
+**设计原因**:
+- Provider API 的 `episodeGuid` 与 RSS feed 的 `<guid>` 可能有细微差异
+- 部分旧 episode 可能已从 RSS feed 中移除，但 iTunes 仍有记录
+- 保证用户分享的链接即使指向旧 episode 也能正常访问
+
+#### 场景二：Top Episodes 收藏
+
+**文件**: `src/routes/explore.tsx` - `handleToggleFavoriteEpisode()`
+
+**问题**:
+- RSS Charts API 返回的 `DiscoveryPodcast` 对象只有基础信息，没有 `audioUrl`
+- Provider Lookup API 不支持直接用 episode `providerEpisodeId` 查找单个 episode（`id` 参数只接受 podcast `providerPodcastId`）
+
+**解决方案 - 两步 fallback**:
+
+1. **STEP 1 - iTunes Podcast Episodes**: 使用 `lookupPodcastEpisodes(podcastId, 'us', 50)` 获取 podcast 的 episode 列表
+   - 通过 `providerEpisodeId` 或标题模糊匹配找到目标 episode
+   - 获取完整 episode 数据（包括 `episodeUrl`）
+
+2. **STEP 2 - RSS Feed Fallback**: 如果 iTunes 找不到（episode 可能超出 limit 范围），尝试从 RSS Feed 匹配
+   - 通过标题模糊匹配（支持子串匹配）
+   - 从 RSS 获取 `audioUrl` 和其他元数据
+
+#### ⚠️ API Episode 数量限制（重要发现）
+
+**实测结果**（2026-01-09）：
+
+| 数据源 | The Daily (id: 1200361736) | 说明 |
+|--------|---------------------------|------|
+| `trackCount` | 2475 | Apple 知道的总 episode 数 |
+| iTunes Lookup API (limit=300) | **23 episodes** | 实际返回数量 |
+| RSS Feed | **28 episodes** | 节目方提供 |
+
+**关键结论**：
+- **iTunes Lookup API 并不比 RSS Feed 返回更多 episodes** - 对于大多数 podcast，两者返回数量相近（~25 条）
+- `limit` 参数设置多大都无效，API 只返回节目方在 RSS 中提供的最近 episodes
+- Apple 可能只是从 RSS feed 中提取并缓存最近的 episodes
+- **无法通过公开 API 获取节目的完整历史档案**
+
+**对 Readio 的影响**：
+- `limit=50` 作为默认上限，覆盖大多数场景
+- 两步 fallback（iTunes → RSS）策略仍然必要，因为两个数据源的 episode 列表可能略有差异
+- 如果用户想收藏/播放一个很旧的 episode，两个方案都可能无法找到
+
+### 页面布局
+
+| 区域 | 内容 |
+|------|------|
+| Hero（桌面双栏/移动堆叠） | 封面图 + 单集标题 + 播客名称（链接到节目页）+ 发布日期 + 时长 |
+| 操作区 | 播放按钮 + 收藏按钮 |
+| 描述区 | 完整单集描述（可展开） |
+
+### 导航行为
+
+- **入口**: `EpisodeCard` 组件的标题是指向单集详情页的 `Link`
+- **返回**: "Back to Show" 链接返回 `/podcast/:id`
+- **播客名称**: 链接到节目页 `/podcast/:id`
+
+### i18n Keys
+
+- `backToShow`, `episodeNotFound`, `descriptionTitle`
+- 复用: `playEpisode`, `showMore`, `showLess`, `ariaAddFavorite`, `ariaRemoveFavorite`

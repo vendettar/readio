@@ -22,7 +22,8 @@ Readio is an audio application.
 
 **Rule**: Every `URL.createObjectURL()` MUST have a corresponding `URL.revokeObjectURL()`.
 
-- **Audio Blobs**: Do NOT create object URLs in components. Use `playerStore.loadAudioSource(blob)` which handles the URL creation and automatic revocation of the previous source.
+- **Audio Blobs**: Object URLs MUST be created and revoked inside the store only (e.g. `playerStore.loadAudioSource(blob)`). Components must not call `URL.createObjectURL` for audio.
+- **Image Blobs**: Components MUST create Object URLs for artwork using a hook that revokes on unmount (e.g. `useImageObjectUrl`).
 - **Verification**: If memory usage increases after every song change, you have a leaked Object URL.
 
 ## 3. List Virtualization
@@ -77,3 +78,14 @@ Readio is an audio application.
 **Rule**: Never use `.filter()` for searching large tables.
 - **Why**: This triggers a Table Scan (O(N)), reading all records into memory.
 - **Fix**: Use IndexedDB indexes and `.startsWithIgnoreCase()` or `.equals()` on indexed fields.
+
+---
+
+## Planned (Pending Execution)
+
+- **Bundle Size Budget**: Enforce gzipped size budgets in CI (Instruction 050).
+- **PWA Audio Range Cache**: Offline seek with 206 support (Instruction 060).
+- **Memory Stress Test**: Long-session profiling and heap checks (Instruction 061).
+- **Async Race Audit**: Last-action-wins enforcement (Instruction 068).
+- **Media Cache Eviction**: LRU trim policy for audio blobs (Instruction 072).
+- **Event Listener Leak Audit**: Standardize global listener cleanup (Instruction 080).

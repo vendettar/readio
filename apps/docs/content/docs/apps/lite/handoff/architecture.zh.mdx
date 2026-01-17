@@ -1,0 +1,192 @@
+---
+title: Core Architecture
+---
+
+## 1. 目录结构
+
+```
+src/
+├── routes/              # TanStack Router 路由文件
+│   ├── __root.tsx       # 根布局（AppShell、Audio 元素、Toast）
+│   ├── index.tsx        # 主页/播放器（字幕阅读）
+│   ├── explore.tsx      # 发现播客
+│   ├── subscriptions.tsx # 订阅列表
+│   ├── favorites.tsx    # 收藏节目
+│   ├── history.tsx      # 播放历史
+│   ├── files.tsx        # Files 路由布局（Outlet）
+│   └── files/           # Files 子路由
+│       ├── index.tsx    # Files 列表/文件夹网格
+│       └── folder/
+│           └── $folderId.tsx # Folder view
+├── routeComponents/     # 路由页面组件（路由级 lazy 加载）
+│   ├── ExplorePage.tsx
+│   ├── SearchPage.tsx
+│   ├── FavoritesPage.tsx
+│   ├── HistoryPage.tsx
+│   ├── SubscriptionsPage.tsx
+│   ├── SettingsPage.tsx
+│   ├── podcast/
+│   │   ├── PodcastShowPage.tsx
+│   │   ├── PodcastEpisodesPage.tsx
+│   │   └── PodcastEpisodeDetailPage.tsx
+│   └── files/
+│       ├── FilesIndexPage.tsx
+│       └── FilesFolderPage.tsx
+├── components/
+│   ├── AppShell/        # App Shell 组件
+│   ├── GlobalSearch/    # 全局搜索组件 (Input, Overlay, StatusBadge)
+│   ├── Transcript/      # 字幕相关组件
+│   ├── Selection/       # 选词/查词组件
+│   ├── FollowButton/    # 跟随按钮
+│   ├── ZoomControl/     # 缩放控制
+│   ├── PlayerControls/  # 播放器控件
+│   ├── interactive/     # Custom interaction primitives (InteractiveTitle, InteractiveArtwork)
+│   ├── Explore/         # Explore page business components (Carousels, Grid)
+│   └── Toast/           # Toast 通知
+├── hooks/               # 自定义 Hooks
+│   ├── useLocalFilesData.ts      # 本地文件数据加载
+│   ├── useLocalFileProcessing.ts # 文件处理（仅暴露 handlers）
+│   ├── useLocalFileDragDrop.ts   # 拖放逻辑
+│   └── useLocalFolderManagement.ts # 文件夹管理
+├── libs/                # 工具库
+│   ├── dexieDb.ts       # Dexie 数据库封装
+│   ├── exploreApi.ts    # 播客搜索/RSS 解析 API
+│   ├── translations.ts  # i18n 翻译
+│   └── recommended/
+│       └── cache.ts     # 推荐缓存（前缀：readioExplore*）
+├── store/               # Zustand stores
+│   ├── playerStore.ts   # 播放器状态
+│   ├── searchStore.ts   # 搜索状态管理
+│   ├── exploreStore.ts  # Explore 状态
+│   └── immersionStore.ts # 沉浸模式状态
+├── router.tsx           # Router 实例
+└── routeTree.gen.ts     # 自动生成的路由树
+```
+
+## 2. App Shell 架构
+
+应用采用 App Shell 模式，由 `src/components/AppShell/` 组件提供：
+
+### 布局结构
+
+```
+│ - Search (Global)  │  Main Content (flex-1)          │
+│                  │                                 │
+│ - Discover        │  <Outlet /> (路由内容)          │
+│   - Explore       │                                 │
+│ - Library        │                                 │
+│   - Subscriptions│                                 │
+│   - Favorites    │                                 │
+│   - History      │                                 │
+│   - Files        │                                 │
+│ - Settings       │                                 │
+├──────────────────┴─────────────────────────────────┤
+│               MiniPlayer (bottom, fixed)           │
+└────────────────────────────────────────────────────┘
+```
+
+### 关键组件
+
+|组件 | 文件 | 职责 |
+|------|------|------|
+| AppShell | `src/components/AppShell/AppShell.tsx` | 协调布局，根据 immersion 状态决定显示内容 |
+| Sidebar | `src/components/AppShell/Sidebar.tsx` | 左侧导航栏（集成了 GlobalSearchInput 和 SearchOverlay） |
+| GlobalSearchInput | `src/components/GlobalSearch/GlobalSearchInput.tsx` | 侧边栏顶部的全局搜索框，支持 ⌘K 快捷键 |
+| SearchOverlay | `src/components/GlobalSearch/SearchOverlay.tsx` | 搜索预览弹层（一阶段结果预览） |
+| MiniPlayer | `src/components/AppShell/MiniPlayer.tsx` | 底部播控（高度 73px），采用业界领先的胶囊设计：封面图外置、拖拽进度条、动态音量等级图标 |
+| FullPlayer | `src/components/AppShell/FullPlayer.tsx` | 全屏沉浸阅读模式 |
+
+### Immersion Mode（沉浸模式）
+
+- **状态管理**：`src/store/immersionStore.ts`（Zustand）
+- **进入方式**：点击 MiniPlayer 区域或展开按钮
+- **退出方式**：点击 FullPlayer 右上角 Minimize 按钮
+- **行为**：
+  - 进入时：隐藏 Sidebar，全屏显示 FullPlayer
+  - 退出时：恢复正常布局
+  - 播放不中断：`<audio>` 元素在 `__root.tsx` 中持久存在
+
+---
+
+## 2. 路由（TanStack Router + File-Based Routing）
+
+使用 TanStack Router 实现路由，通过 Vite 插件自动生成路由树。
+
+### 路由结构
+
+| 路径 | 文件 | 说明 |
+|------|------|------|
+| `/` | `src/routes/index.tsx` | 主播放器页面（字幕阅读） |
+| `/search` | `src/routes/search.tsx` | 全局搜索结果页（接受 `?q=` 参数） |
+| `/explore` | `src/routes/explore.tsx` | 发现播客（搜索） |
+| `/podcast/:id` | `src/routes/podcast/$id.tsx` | 播客详情页（节目列表） |
+| `/podcast/:id/episode/:episodeId` | `src/routes/podcast/$id/episode/$episodeId.tsx` | 单集详情页 |
+| `/subscriptions` | `src/routes/subscriptions.tsx` | 订阅列表 |
+| `/favorites` | `src/routes/favorites.tsx` | 收藏节目 |
+| `/history` | `src/routes/history.tsx` | 播放历史 |
+| `/files` | `src/routes/files.tsx` | Files 页面（音频、字幕管理，支持文件夹、拖放） |
+| `/settings` | `src/routes/settings.tsx` | 设置页面 |
+
+### 页面导航约定
+
+- 页面内不提供“返回上一页/返回上级”按钮；用户通过 Sidebar 导航或浏览器原生返回进行页面切换。
+
+### 关键设计
+
+- **播放器常驻**：`<audio>` 元素和播放状态在 `__root.tsx` 中挂载，路由切换不中断播放
+- **路由生成**：`src/routeTree.gen.ts` 由 Vite 插件自动生成
+- **路由级按需加载**：`/explore`、`/search`、播客详情/单集/历史/收藏/Files 等页面使用 `lazyRouteComponent` 拆分，减少首包体积
+- **重模块按需加载**：主播放页的 `TranscriptView` 与沉浸模式 `FullPlayer` 使用 `React.lazy` 延迟加载
+- **全局样式**：CSS 在 `main.tsx` 入口引入，确保所有路由可用
+- **播放控制**：进度条拖动通过 `onSeek` → `store.seekTo` → `store.pendingSeek` → `__root.tsx` 的 audio element，避免直接 DOM 操作
+
+---
+
+## 3. 架构加固 (Architecture Hardening)
+
+### 代码分割
+
+- **Vendor 分块**：`vite.config.ts` 使用 `manualChunks` 将大型依赖拆分
+
+### 错误隔离
+
+| 边界 | 覆盖范围 | 回退 UI |
+|------|----------|---------|
+| `RootErrorBoundary` | 整个应用 | 全屏错误页面 + 刷新按钮 |
+| TranscriptView ErrorBoundary | 字幕视图 | 友好错误提示 + 复制诊断信息按钮 |
+
+### 播放不中断
+
+`<audio>` 元素挂载在 `__root.tsx`，路由切换不影响播放
+
+### 标签页同步（单例播放）
+
+- 使用 `BroadcastChannel('readio_sync')`，消息包含 `senderId` 与 `timestamp`。
+- 忽略当前标签发送的消息，忽略超过 2 秒的旧消息。
+- 当 `BroadcastChannel` 不可用时，使用 `localStorage` 的 `storage` 事件作为回退。
+
+---
+
+## 计划中（待执行）
+
+- **本地错误日志**：可下载诊断日志（指令 047）。
+- **DB 访问防护**：禁止 UI 直接导入 DB（指令 057）。
+- **原子写入防护**：事务化写入与启动修复（指令 067）。
+- **异步竞态审计**：requestId/AbortController 防护（指令 068）。
+
+---
+
+## 4. 技术栈
+
+| 类别 | 技术 |
+|------|------|
+| 框架 | React 19 + TypeScript + Vite |
+| 路由 | TanStack Router (file-based) |
+| 状态 | Zustand |
+| 持久化 | Dexie (IndexedDB) |
+| 网络缓存 | TanStack Query |
+| 弹层/Tooltip | Radix UI |
+| Toast | Sonner |
+| 样式 | Tailwind CSS + shadcn/ui |
+| 测试 | Vitest + Playwright |
+| i18n | react-i18next（useTranslation） |

@@ -1,0 +1,20 @@
+---
+title: Forms & Feedback
+---
+
+## Feedback & Loading (States)
+
+- **Skeletons**: Use the "Shimmer" effect (`.animate-shimmer`), never solid gray blocks.
+- **Loading Spinner**: Use the shared `<LoadingSpinner />` component for consistency.
+- **Empty States**: Use the shared `<EmptyState />` component. Must contain a centered layout with a muted icon, a clear title, and a **Call to Action (CTA)** button.
+
+---
+
+## Resilience & Network Feedback
+
+- **Offline State**: When `isOnline` is false, hide all "Discovery" elements (Search API, Top Charts). Provide a clear "Offline" badge in the sidebar or header.
+- **Network Error Empty State**: If a query fails due to network (not code bug), show an Empty State with:
+  - **Icon**: `WifiOff` or `CloudAlert`.
+  - **Message**: "Connection Failed".
+  - **Action**: A "Retry" button that calls `refetch()`.
+- **Proxy Health Indicator**: If the Custom Proxy fails but the Default Proxy works, notify the user in Settings.

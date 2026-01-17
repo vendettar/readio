@@ -1,0 +1,48 @@
+---
+title: Database & Persistence
+---
+
+## 持久化与缓存（Dexie IndexedDB）
+
+使用 Dexie.js 封装 IndexedDB，默认数据库名为 `readio`，可通过 `READIO_DB_NAME` 覆盖（如清库时使用临时名称）。
+
+### 身份 vs 去重（硬规则）
+- **身份**：所有持久化实体使用 UUID 作为主键。
+- **去重**：`feedUrl` 与复合 `key` 仅用于去重/查询，不得作为实体身份或 UI key。
+
+### 数据库 Schema
+
+| Store | Primary Key | Unique Indexes | 用途 |
+|-------|-------------|---------|------|
+| sessions | id (UUID) | &trackId | 播放会话（进度、音频/字幕 ID） |
+| audioBlobs | id (UUID) | — | 本地音频文件 Blob |
+| subtitles | id (UUID) | — | 本地字幕文件内容 |
+| folders | id (UUID) | createdAt | 本地文件夹 |
+| local_tracks | id (UUID) | folderId, createdAt | 本地音乐库音轨（链接 audioBlobs） |
+| local_subtitles | id (UUID) | trackId | 本地音乐库字幕（链接 subtitles） |
+| subscriptions | id (UUID) | &feedUrl | 订阅的播客。feedUrl 用于去重检查。 |
+| favorites | id (UUID) | &key | 收藏的节目。key 用于去重检查。 |
+| settings | key | — | 用户设置（如 country） |
+
+### 重置策略
+
+重置策略允许清库重建，不包含迁移兼容层。
+- **默认 DB 名**：禁止在源码中修改默认数据库名；清库请用 `READIO_DB_NAME` 覆盖或 `clearAllData()`。
+- **清理方式**：`clearAllData()` 使用表级清空而非删除数据库，保持 DB 实例可用。
+**Dexie 版本策略**：仅保留单一版本（v1）定义，不维护历史版本或升级路径。未来 schema 变更直接清库重建；不要递增 version 号。
+
+### Personal Vault（元数据导出）
+- **格式**：顶层包含 `version` 与 `exportedAt`。
+- **范围**：仅导出元数据表（不包含 blob）。
+- **导入规则**：拒绝未知版本。
+
+---
+
+## 计划中（待执行）
+
+- **导入完整性校验**：解析后校验 ID 与引用关系（指令 049）。
+- **离线缓存清理**：安全移除未引用的 blob（指令 053）。
+- **媒体缓存淘汰**：音频 blob LRU 淘汰策略（指令 072）。
+- **存储配额监控**：在 Settings 显示配额使用情况（指令 074）。
+- **IndexedDB 迁移**：版本化升级（指令 064）。
+- **原子写入防护**：事务化写入与启动修复（指令 067）。

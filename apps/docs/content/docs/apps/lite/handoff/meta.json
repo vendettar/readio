@@ -1,0 +1,12 @@
+{
+    "title": "Handoff Documentation",
+    "pages": [
+        "index",
+        "environment",
+        "standards",
+        "architecture",
+        "database",
+        "features",
+        "i18n"
+    ]
+}

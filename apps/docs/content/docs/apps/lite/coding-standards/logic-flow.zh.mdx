@@ -1,0 +1,98 @@
+---
+title: 逻辑流与工程
+---
+
+## 多媒体与 OS 集成
+
+### 媒体会话 API (系统同步规则)
+**规则**: App 的播放状态必须与操作系统的媒体中心同步。
+- **同步**: 标题、艺术家和封面必须通过 `navigator.mediaSession.metadata` 更新。
+- **控制**: 播放、暂停、搜索和跳过操作必须映射到 `navigator.mediaSession.setActionHandler`。
+- **结果**: 用户应该能够从他们的锁屏、键盘按键和菜单栏控制 Readio。
+
+### 播放器状态机规则
+**规则**: UI 状态必须严格遵循硬件 `<audio>` 状态。
+- **枚举**: 优先使用 `status` 枚举 (`idle`, `loading`, `playing`, `paused`, `error`) 而不是多个布尔值。
+- **反向同步**: UI 的 `isPlaying` 状态必须由音频元素的 `onPlay` 和 `onPause` 事件更新，而不仅仅是用户的点击。
+- **错误处理**: 如果 `audio.play()` 失败 (自动播放阻止)，UI 必须恢复为 `paused`。
+
+---
+
+## 国际化与 RTL
+
+### 逻辑属性 (RTL 规则)
+**规则**: 绝不要使用物理方向类 (`ml-`, `mr-`, `pl-`, `pr-`, `left-`, `right-`)。
+**要求**: 使用逻辑属性以确保 UI 对于从右到左 (RTL) 语言 (阿拉伯语, 希伯来语) 正确镜像。
+- `ml-*` -> **`ms-*`** (Margin Start)
+- `mr-*` -> **`me-*`** (Margin End)
+- `pl-*` -> **`ps-*`** (Padding Start)
+- `pr-*` -> **`pe-*`** (Padding End)
+- `text-left` -> **`text-start`**
+- `border-l` -> **`border-s`**
+
+### 日期与数字格式化
+**规则**: 对所有面向用户的日期和数字使用 `Intl` API 或带有区域设置对象的 `date-fns`。永远不要手动拆分日期字符串。
+
+---
+
+## 文件处理 (标准)
+- **规则**: 不要使用手动拖/放事件监听器进行文件摄取。
+- **库**: **`react-dropzone`**。
+- **实现**: 使用 `useDropzone` hook 管理状态 (`isDragActive`, `acceptedFiles`)。
+
+## 错误处理层级
+| 层级 | 触发 | 动作 |
+|---|---|---|
+| **用户错误** | 操作失败 | Toast / 空状态 (i18n) |
+| **系统错误** | 解析失败 | `console.warn/error` (静默) |
+
+## 类型安全 I18n
+- **规则**: 所有翻译必须使用 **`react-i18next`**。
+- **类型**: `t()` 函数必须针对英语键进行类型检查 (参见 `i18n-guide.md`)。
+
+## 测试标准 (金字塔)
+- **框架**: Vitest。
+- **Store 测试**: 在 `beforeEach` 中重置 store 状态。
+
+## 文件与结构
+- **`src/lib`**: 集中业务逻辑 (`storage.ts`, `dateUtils.ts`)。
+- **`src/components/ui`**: 保留用于 shadcn 原语。
+- **`src/components/interactive`**: 自定义交互原语。
+
+## 防御性工程
+
+### 布局稳健性 (长文本规则)
+**规则**: 永远不要假设文本会很短。
+- **标题**: 始终使用 `truncate` 或 `line-clamp-X`。
+- **容器**: 在 flex 项目上使用 `min-w-0` 以确保它们不会超出父边界。
+- **滚动**: 确保处理溢出 (`overflow-hidden` 或 `overflow-y-auto`)。
+
+### 多标签单例
+**规则**: 音频应用必须是每个浏览器单例。
+- **实现**: 使用名为 `readio_playback` 的 `BroadcastChannel`。
+- **动作**: 当标签 A 开始播放时，发送 "PLAY" 消息。所有其他标签 (B, C) 必须立即暂停。
+
+### 优雅降级
+- **规则**: 如果本地文件从 DB 中丢失 (例如，被浏览器清理删除)，显示“文件丢失”状态而不是崩溃。
+
+---
+
+## 反模式: 文件放置
+❌ **错**: 原生监听器
+```tsx
+<div onDrop={e => handleFiles(e.dataTransfer.files)} />
+```
+✅ **对**: React Dropzone
+```tsx
+const { getRootProps } = useDropzone({ onDrop })
+<div {...getRootProps()} />
+```
+
+---
+
+## 计划中（待执行）
+
+- **DB 访问防护**：禁止组件直接导入 `dexieDb`（指令 057）。
+- **异步竞态防护**：requestId/AbortController 保障最后一次生效（指令 068）。
+- **细粒度错误边界**：组件级渲染隔离（指令 076）。
+- **浮动 Promise 审计**：强制异步错误显式处理（指令 079）。

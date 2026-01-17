@@ -8,8 +8,10 @@
         "feature-backlog",
         "security",
         "accessibility",
-        "audit-system",
-        "improvement-process",
-        "future-standards"
-    ]
+    "audit-system",
+    "improvement-process",
+    "future-standards",
+    "decision-log",
+    "glossary"
+  ]
 }

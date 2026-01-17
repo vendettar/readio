@@ -1,0 +1,146 @@
+---
+title: Components & Patterns
+---
+
+## Interactive Components Policy (No Nested Interactives)
+
+**Default rule**: Never nest interactive elements (Links, Buttons, or any element with `onClick`). This is a critical A11y violation and causes erratic behavior in React.
+
+### 1. `InteractiveArtwork` Standard (`src/components/interactive/InteractiveArtwork.tsx`)
+For any artwork/image that needs to both navigate (on click) and play (on hover button click), use the standardized `InteractiveArtwork` component.
+- **Implementation**: The play button must be an absolute sibling of the navigation Link, not a child.
+- **Layering**: Hover overlays should be `pointer-events: none`; action buttons must be `pointer-events: auto` and above the visual layer (`z-20+`).
+- **Props**: Supports `to`, `params` for navigation, and `onPlay` for the play action.
+- **Hover Scale**: Disabled by default. Only enable zoom with `hoverScale` when explicitly required.
+- **Play Position**: Default is `center`. Use `bottom-left` for podcast cards or list items where the play action is anchored to the corner.
+- **Hover Trigger Scope**: For episode list rows, the play button must appear when hovering the entire row area (not only the artwork). Ensure the hover state is driven by the parent row group.
+- **Hover Group**: Use `hoverGroup` to bind the hover trigger to the parent row/card group (e.g., `episode`, `item`, `session`, `card`).
+
+### 2. `InteractiveTitle` Standard (`src/components/interactive/InteractiveTitle.tsx`)
+For titles that navigate, use `InteractiveTitle`.
+- **Priority**: If both `onClick` and `to`/`params` are provided, `onClick` takes priority to ensure action handlers (like "Play") work as expected when used inline.
+- **Compliance**: When interactive (`onClick` or `to`/`params`), wraps internal elements in `Button asChild` to ensure consistent focus and hover styling across the app.
+- **Non-interactive**: If neither `onClick` nor `to`/`params` is provided, render a non-interactive inline element (e.g., `<span>`) with the same visual styling.
+- **Truncation**: Titles SHOULD default to a maximum of 2 lines for list-based layouts to maintain vertical rhythm. Use the `maxLines` prop to configure this (e.g., `1` for single-line cards, `3` for detailed views, or `'none'` to disable truncation).
+
+---
+
+## Interaction Primitives Policy (No One-Off Confirm/Range/Modal)
+
+This repo treats interaction patterns as standardized primitives: predictable, accessible, and reusable.
+
+### Confirmations (Destructive/Irreversible)
+- **Do NOT use** `window.confirm()` in app UI.
+- Use shadcn/Radix primitives instead:
+  - **Default**: use `AlertDialog` for destructive confirmations (Delete/Wipe/Clear).
+  - **Overflow menu exception (required for a11y)**: if the destructive action is triggered from inside a `DropdownMenu` / `Popover` menu, do **not** open an `AlertDialog`/`Dialog` from within that menu. Instead, implement a two-step confirmation **inside the same menu surface** (single `DropdownMenuContent`/`PopoverContent` with local `step: 'menu' | 'confirm'` state). This avoids nested overlay/focus-lock conflicts (e.g. `aria-hidden` + retained focus warnings).
+  - **Single-step destructive action exception**: For non-critical destructive actions that are already "tucked away" inside a secondary 3-dot overflow menu (e.g., "Remove Favorite" in Favorites list, "Delete Record" in History), a single-step action is preferred to reduce friction. These are reversible or low-impact and the menu itself acts as a sufficient intentional barrier.
+  - Keep confirmation state local to the component; do not create global modal systems.
+
+### Dialogs / Modals
+- Do NOT hand-roll modal overlays (custom backdrops + click-outside logic) unless explicitly approved.
+- Prefer shadcn `Dialog` / `AlertDialog` for modal surfaces.
+- If an inline confirmation pattern is specified (e.g. inside a dropdown menu), implement it inside the menu component; do not introduce page-level overlays.
+
+### `inert` Usage (Limited, Explicit)
+`inert` may be used **only** to disable interaction on hidden panels within a **single overlay surface** (e.g. the inactive panel inside a `DropdownMenuContent` two-step confirmation).
+
+**Allowed**:
+- Inactive panel inside the same menu surface (`DropdownMenuContent`) during a menu → confirm view switch.
+
+**Not allowed**:
+- Page-level sections
+- App shell or global containers
+- Anything that requires cross-browser polyfills without explicit approval
+
+**Rule**: If `inert` is used, it must be scoped to the smallest possible subtree and only for preventing interaction on hidden UI.
+
+### Sliders / Range Inputs
+- **Do NOT use** raw `<input type="range">` for player seek/progress UI.
+- **Use shadcn `Slider`** (Radix Slider) to standardize keyboard behavior and styling.
+
+### File Inputs (exception reminder)
+- Raw `<input type="file">` is still allowed only as a hidden input; the visible trigger must be a shadcn `Button`.
+
+---
+
+## Dropdown Menu Standard (Premium Overlays)
+
+To ensure a high-end feel, all `DropdownMenu` and `Popover` surfaces must avoid default "flat" styling.
+
+### 1. Style Token
+- **Content**: `rounded-xl shadow-2xl border border-border/50 bg-popover/95 backdrop-blur-xl backdrop-saturate-150 p-0 overflow-hidden` (Ensure `p-0` for full-width hover).
+- **Item**: `px-3 py-2 transition-colors focus:bg-accent focus:text-accent-foreground outline-none cursor-default select-none flex items-center gap-2`.
+- **Text**: `text-sm font-medium`.
+- **Transitions**: Prefer `sideOffset={8}` for a floating effect.
+
+### 2. Menu Items (`DropdownMenuItem`)
+- **Feedback**:
+  - **Focus/Hover**: `focus:bg-primary focus:text-primary-foreground transition-colors`.
+  - **Destructive**: `text-destructive focus:text-destructive focus:bg-destructive/10`.
+- **Icons**: Use Lucide icons with `size={14}` or `size={16}` and `className="mr-2 opacity-80"`.
+
+### 3. Multi-Step Logic
+- Use the **Panel-Grid** pattern for sub-menus (Rename, Delete Confirm) to avoid nested overlays (see "Interaction Primitives Policy" section).
+
+### 4. Interaction Rule
+- **Immediate Closure**: For "simple" or "atomic" actions (e.g., Subscribe, Favorite, Pin), the menu must close immediately after the action is triggered to provide clean feedback.
+- **Persistent Menu**: For "multi-step" or "complex" actions (e.g., Delete Confirmation, "Move to Folder"), the menu should remain open and transition to the next internal step/panel.
+- **Implementation**: Ensure simple actions do not call `e.preventDefault()` on the `onSelect` event, allowing the default Radix dismissal behavior.
+
+---
+
+## Skeleton Loader Standard
+
+Avoid "solid gray" blocks. Use the **Shimmer** system for a more polished loading experience.
+
+### 1. Style Tokens
+- **Container**: Use `.animate-shimmer` on a `bg-muted/30` base.
+- **Sub-blocks**: Use `bg-muted` with appropriate radius (`rounded-lg` for images, `rounded` for text lines).
+
+### 2. Implementation Note
+- **Planned**: Standard `Skeleton` component and page skeletons in Lite (Instruction 070).
+
+---
+
+## Empty State Standard
+
+Standardized pattern for "No Data", "No Results", or "Empty List" views.
+
+### 1. Structure (Centered Flex)
+- **Icon Container**: `w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-6`.
+- **Icon**: `text-2xl grayscale opacity-50` (emoji) or Lucide icon.
+- **Title**: `text-xl font-bold tracking-tight text-foreground mb-2`.
+- **Description**: `text-sm text-muted-foreground max-w-sm mx-auto`.
+
+---
+
+## Input & Form Standard
+
+To ensure interactive elements feel part of the cohesive UI:
+
+### 1. Style Token
+- **Default State**: `bg-muted/50 border-border/50`.
+- **Focused State**: `focus:bg-background focus-visible:ring-2 focus-visible:ring-primary transition-colors`.
+
+---
+
+## Page Layout & Typography Standards
+
+### 1. Headers
+- **Page H1**: `text-3xl sm:text-4xl font-bold tracking-tight mb-2`.
+- **Section H2**: `text-xl font-bold mb-4`.
+- **Subtitle**: `text-lg text-muted-foreground`.
+
+### 2. Spacing
+- **Vertical Gap**: `space-y-12` between major page sections.
+
+---
+
+## Artwork & Play Overlay Standard
+
+- Use `InteractiveArtwork` to handle complex "Image Link + Play Button" interactions.
+- Avoid manual implementation of hover overlays to prevent A11y regression.
+- Visual: `rounded-lg` (Standard) or `rounded-full` (Circular).
+- Hover: Subtle dark overlay (`bg-foreground/20`) + `Play` button (positioned by `playPosition`).
+- Default behavior: No hover zoom unless `hoverScale` is explicitly enabled.

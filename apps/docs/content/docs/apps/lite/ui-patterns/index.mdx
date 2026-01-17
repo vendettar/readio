@@ -1,0 +1,52 @@
+---
+title: Overview
+---
+
+# UI & Interaction Patterns
+
+This document defines the standard interaction models for Readio Lite.
+Follow these patterns to ensure a consistent user experience.
+
+## Documentation Map
+
+- **Shell & Layout**: `ui-patterns/shell.mdx` - App Shell, Sidebar, and Player Bar.
+- **Forms & Inputs**: `ui-patterns/forms.mdx` - Validation, tooltips, and input behavior.
+- **Features**: `ui-patterns/features.mdx` - Transcript, Discovery, and Search specifics.
+
+---
+
+## Navigation & Interactivity
+
+- **Declarative Navigation**: Prefer `<Link>` over `useNavigate` + `onClick` handlers for better accessibility and clearer intent.
+- **Interactive Wrappers**:
+  - **`InteractiveArtwork`**: For images that need both navigation (click) and playback (hover button).
+    - **Implementation**: The play button must be an absolute sibling of the navigation Link, not a child.
+    - **Layering**: Hover overlays should be `pointer-events: none`; action buttons must be `pointer-events: auto` and above the visual layer (`z-20+`).
+  - **`InteractiveTitle`**: For titles that link to content.
+    - **Priority**: If it has both `onClick` and `to/params`, `onClick` takes priority.
+    - **Fallback**: If no interaction is defined, render as non-interactive inline element (no Button).
+- **Safe Link Guard**: Do not render a `Link` if required route params are missing; render non-interactive text instead.
+- **Playable Card Rule**: Render Play buttons **only** when a valid `onPlay` handler exists. Never show a non-functional Play button.
+- **Event Propagation**: Explicitly handle `e.stopPropagation()` in dropdown triggers and interactive children to prevent parent card clicks.
+
+---
+
+## Z-Index System (Stratification)
+
+Do NOT use magic numbers (`z-[999]`). Use this scale:
+- **`z-0`**: Default content.
+- **`z-10`**: Hover effects / Active states inside cards.
+- **`z-20`**: Action buttons floating above cards (Play button).
+- **`z-30`**: Sticky Headers / Bottom Player Bar.
+- **`z-40`**: (Reserved)
+- **`z-50`**: Dropdowns / Popovers / Drawers.
+- **`z-100`**: Modals / Dialogs.
+- **`z-[9999]`**: Toasts (Must be on top of everything).
+
+---
+
+## Sharing & Deep Linking
+
+- **Web Share API**: Use `navigator.share` for native sharing capabilities.
+- **Time-Seek Deep Linking**: Support `?t=seconds` in the URL to resume playback at specific timestamps.
+- **PWA Metadata**: Ensure `apple-touch-icon.png` and `manifest.json` are properly configured for PWA users.

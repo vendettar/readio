@@ -1,0 +1,231 @@
+---
+title: Discovery & Explore
+---
+
+## 1. Explore Page (Podcast Discovery)
+
+### Positioning & Principles
+- Explore is a Podcast Discovery/Recommendation page (Search is in sidebar side).
+- Centered on Podcasts, containing Top Episodes module.
+- Page style: Quiet, restrained, reading-first.
+- Page copy does not contain "Trending / Hot / Popular Now".
+
+### Page Structure
+
+| Module | Component | Data Source |
+|------|------|----------|
+| Header | Title "Explore" + Subtitle | i18n |
+| Module D: Editor's Picks | Small Card Grid | Discovery Provider Lookup API (Fixed providerPodcastId[]) |
+| Module A: Top Shows | Horizontal Carousel | Discovery Provider (Top Charts) |
+| Module C: Top Episodes | Horizontal Grid | Discovery RSS Top Episodes (providerEpisodeId matching) |
+
+### Component Location
+
+- `src/routes/explore.tsx` — Page Body
+- `src/components/Explore/TopShowsCarousel.tsx`
+- `src/components/Explore/TopEpisodesGrid.tsx`
+- `src/components/Explore/TopChannelsCarousel.tsx`
+
+### Data Fetching
+- **Modules**: Editor's Picks, Top Shows etc. use Discovery Provider (RSS/Search) data.
+- **Architecture (Provider Agnostic)**: 
+  - **Facade**: `src/lib/discovery/index.ts` is single entry point, shields specific Provider implementation.
+  - **Interface**: `src/lib/discovery/providers/types.ts` defines standard `DiscoveryProvider` interface.
+  - **Implementations**: Currently implemented as Apple Provider (`src/lib/discovery/providers/apple.ts`), supports extending other Providers (e.g., PodcastIndex).
+- **Config & Data Source**: `src/constants/app.ts` (`EDITOR_PICKS_BY_REGION`) and `src/lib/discovery/`.
+  - `fetchTopPodcasts()`, `fetchTopEpisodes()` — Call Provider charts API
+  - `searchPodcasts()`, `getPodcast()` — Call Provider search/detail API
+  - `fetchPodcastFeed()` — Unified RSS parsing
+- `src/hooks/useDiscoveryPodcasts.ts` — TanStack Query hooks for Explore
+- `src/hooks/usePodcastSearch.ts` — TanStack Query hook for Search
+
+### Offline Behavior (Required)
+- When `isOnline` is false, **hide all remote Discovery modules** (Top Charts, Editor's Picks, Top Shows, Top Episodes).
+- Provide a clear Offline badge in the sidebar/header.
+- **Local Entry**: Keep a visible "Local Library" entry point (Subscriptions/Favorites/History/Files) so users have actionable offline content.
+
+### Caching Strategy (TanStack Query)
+
+| Level | TTL | Usage |
+|------|-----|------|
+| Memory | 1 Hour | Reuse in current session |
+| localStorage | 12 Hours | Persist across sessions |
+| TanStack Query | staleTime 6h, gcTime 24h | Request deduplication and refresh |
+
+**QueryClient** located in `src/main.tsx`, Config:
+- `staleTime`: 5 mins
+- `gcTime`: 30 mins
+- `retry`: 1
+- `refetchOnWindowFocus`: false
+
+### Navigation Behavior
+
+- Click Top Shows / Editor's Picks Card → Navigate to `/podcast/:id` Show Page
+- Top Episodes / Top Channels → Try parsing podcast ID, if success navigate, otherwise open external podcast platform link
+
+### i18n Keys
+- `exploreTitle`, `exploreSubtitle`, `editorPicksTitle`
+- `topShowsTitle`, `topSubscriberShowsTitle`, `topEpisodesTitle`, `topChannelsTitle`
+- `subscribe`, `subscribed`, `unsubscribe`
+
+---
+
+## 2. Podcast Show Page
+
+### Route
+
+| Path | File | Description |
+|------|------|------|
+| `/podcast/:id` | `src/routes/podcast/$id.tsx` | Podcast Show Page (Refined list style) |
+
+### Data Flow
+
+1. **Lookup API**: Use `lookupPodcastFull(id)` to get podcast metadata (`collectionName`, `artistName`, `feedUrl`, `artworkUrl600`)
+2. **RSS Feed**: Use `fetchPodcastFeed(feedUrl)` to parse RSS and get episode list
+3. **TanStack Query**: Two-layer query implements caching and deduplication
+
+Data Flow: Show Page first uses Lookup API to get metadata, then uses feedUrl to pull RSS and render Episodes.
+
+### Page Layout (Refined Style)
+
+| Area | Content |
+|------|------|
+| Hero (Desktop Dual-col/Mobile Stacked) | Large Art + Title + Publisher + Subscribe Button + Description (Expandable) + Genres Tags |
+| Episodes List | Episode Title + Summary + PubDate + Play Button |
+
+### Navigation Behavior
+
+- **Show Cards** (Editor's Picks / Top Shows): Use `Link` component directly navigate to `/podcast/:id`
+- **Top Episodes / Top Channels**: Try extracting podcast ID from URL (Regex `/id(\d+)/`), if success navigate, otherwise open external link
+- **Back Navigation**: Use TanStack Router `Link` return to `/explore`, browser back/forward works normally
+
+### Subscription Logic
+
+- Use `exploreStore.subscribe()` / `unsubscribe()` manage subscription state
+- Subscribe button state judged by `feedUrl` deduplication index (`subscriptions.some(s => s.feedUrl === podcast.feedUrl)`), not using entity identity
+
+### OPML Import/Export
+
+- **Parsing Rule**: OPML can contain nested `<outline>` nodes. Parsing must be recursive and collect all `xmlUrl` entries.
+- **Dedupe**: Import must skip existing `feedUrl` entries via unique index before insert.
+
+---
+
+## Planned (Pending Execution)
+
+- **Import Integrity Checks**: Validate IDs and references after import (Instruction 049).
+- **Offline Availability Badges**: Mark cached episodes/shows (Instruction 053).
+- **Content Attribution**: Show ownership disclaimer and complaint link (Instruction 055).
+- **Proxy Failover**: Automatic proxy rotation on 429/5xx (Instruction 062).
+
+### Playback Logic
+
+- Click episode calls `playerStore.setAudioUrl(episode.audioUrl, episode.title, coverArt, metadata)` + `play()`
+- Reuse existing MiniPlayer / FullPlayer, do not create new player
+
+### UI Details (Pixel Perfect)
+
+- **Smart Divider**: List item Hover uses `:has()` selector to hide divider above, providing refined interaction feel.
+- **EpisodeCard**: Use `group/episode` with `relative` layout to implement deeply customized Hover area and fixed-width right Action area.
+- **Tokens Over Pixels**: Layout classes use Tailwind tokens (e.g., `max-w-md`, `ml-24`), do not use arbitrary value classes like `max-w-[450px]`.
+- **MiniPlayer**: Capsule height 48px, height variable `--mini-player-height` set to 73px (Including Padding), cover art 48x48 with shadow and supports Hover expand.
+
+### i18n Keys
+
+- `episodesTitle`, `latestEpisodes`, `errorFeedLoadFailed`, `loadingPodcast`, `podcastLabel`
+- Reuse: `subscribe`, `subscribed`, `unsubscribe`, `showMore`, `showLess`, `commonBack`, `noEpisodes`
+
+---
+
+## 3. Episode Detail Page
+
+### Route
+
+| Path | File | Description |
+|------|------|------|
+| `/podcast/:id/episode/:episodeId` | `src/routes/podcast/$id/episode/$episodeId.tsx` | Episode Detail Page |
+
+### Data Flow
+
+1. **Lookup API**: Use `lookupPodcastFull(id)` to get podcast metadata
+2. **RSS Feed**: Use `fetchPodcastFeed(feedUrl)` to get episode list
+3. **Episode Matching**: Find target episode via multi-step matching mechanism (see below)
+
+### Episode Lookup & Matching Mechanism (Core Business Logic)
+
+Due to data format differences between iTunes API and RSS Feed, episode matching requires multi-layer fallback strategy:
+
+#### Scenario 1: Episode Detail Page Recovery Matching
+
+**File**: `src/routes/podcast/$id/episode/$episodeId.tsx`
+
+**Steps**:
+
+1. **STEP 1 - Direct GUID Match (Fastest)**: Directly match `episode.id === episodeId` in RSS feed
+2. **STEP 2 - Provider Lookup Fallback**: If STEP 1 fails, use `lookupPodcastEpisodes(id, 'us', 50)` to get Provider data
+3. **STEP 3 - Provider Metadata Match**: Match in Provider results via `episodeGuid` or `providerEpisodeId`
+4. **STEP 4 - Cross-Reference Match**: Match in RSS feed using Provider metadata (Title or Audio URL)
+5. **STEP 5 - Virtual Episode Creation**: If still not found (old episode might be removed from RSS), directly create "Virtual Episode" using Provider data
+
+**Design Reason**:
+- `episodeGuid` from Provider API and `<guid>` from RSS feed might have subtle differences
+- Some old episodes might be removed from RSS feed, but iTunes still has record
+- Ensure links shared by users are accessible even pointing to old episodes
+
+#### Scenario 2: Top Episodes Favorite
+
+**File**: `src/routes/explore.tsx` - `handleToggleFavoriteEpisode()`
+
+**Problem**:
+- `DiscoveryPodcast` object returned by RSS Charts API has only basic info, no `audioUrl`
+- Provider Lookup API does not support looking up single episode directly by `providerEpisodeId` (`id` param only accepts podcast `providerPodcastId`)
+
+**Solution - Two-step fallback**:
+
+1. **STEP 1 - iTunes Podcast Episodes**: Use `lookupPodcastEpisodes(podcastId, 'us', 50)` to get podcast's episode list
+   - Find target episode via `providerEpisodeId` or title fuzzy match
+   - Get full episode data (including `episodeUrl`)
+
+2. **STEP 2 - RSS Feed Fallback**: If iTunes doesn't find (episode might be out of limit range), try matching from RSS Feed
+   - Via title fuzzy match (supports substring match)
+   - Get `audioUrl` and other metadata from RSS
+
+#### ⚠️ API Episode Quantity Limit (Important Findings)
+
+**Test Results** (2026-01-09):
+
+| Source | The Daily (id: 1200361736) | Description |
+|--------|---------------------------|------|
+| `trackCount` | 2475 | Total episodes Apple knows |
+| iTunes Lookup API (limit=300) | **23 episodes** | Actual returned count |
+| RSS Feed | **28 episodes** | Provided by publisher |
+
+**Key Conclusion**:
+- **iTunes Lookup API does not return more episodes than RSS Feed** - For most podcasts, both return similar counts (~25)
+- `limit` parameter setting is ineffective, API only returns recent episodes provided by publisher in RSS
+- Apple likely just extracts and caches recent episodes from RSS feed
+- **Cannot obtain full history archive via public API**
+
+**Impact on Readio**:
+- `limit=50` as default upper limit covers most scenarios
+- Two-step fallback (iTunes → RSS) strategy still necessary, as episode lists from two sources might differ slightly
+- If user wants to favorite/play a very old episode, both schemes might fail to find it
+
+### Page Layout
+
+| Area | Content |
+|------|------|
+| Hero (Desktop Dual-col/Mobile Stacked) | Cover Art + Episode Title + Podcast Name (Links to Show Page) + PubDate + Duration |
+| Action Area | Play Button + Favorite Button |
+| Description Area | Full Episode Description (Expandable) |
+
+### Navigation Behavior
+
+- **Entry**: Title in `EpisodeCard` component is `Link` to Episode Detail Page
+- **Return**: "Back to Show" link returns to `/podcast/:id`
+- **Podcast Name**: Links to Show Page `/podcast/:id`
+
+### i18n Keys
+
+- `backToShow`, `episodeNotFound`, `descriptionTitle`
+- Reuse: `playEpisode`, `showMore`, `showLess`, `ariaAddFavorite`, `ariaRemoveFavorite`

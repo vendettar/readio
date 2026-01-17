@@ -5,16 +5,16 @@ title: Regression Checklist
 # Readio (React Rewrite) Regression Checklist (Reusable)
 
 > Purpose: Use this checklist for "full regression self-checks" when making major changes (UI/IA redesigns, old code cleanup, routing adjustments, caption/selection refactors, cache/DB modifications) to avoid missing details.
-> Principle: Based on the **actual current code** and `docs/technology_roadmap.md`; outdated items should be updated/deleted promptly.
+> Principle: Based on the **actual current code** and `apps/docs/content/docs/general/technical-roadmap.mdx`; outdated items should be updated/deleted promptly.
 
 ---
 
 ## 0) Project Hard Constraints (Align Every Time)
 
 - [ ] **First-release Mindset: No backward-compatibility for old data** (IndexedDB / localStorage / caches can be cleared and rebuilt; do not introduce migration layers).
-- [ ] **Update `docs/handoff_doc.md` after every change** (Describe actual current state only; no process notes).
+- [ ] **Update `apps/docs/content/docs/apps/lite/handoff/index.mdx` after every change** (Describe actual current state only; no process notes).
 - [ ] **User messages must not expose technical terms** (CORS, HTTP status codes, stack traces go to console/log; UI uses natural language only).
-- [ ] UI: Use Tailwind + shadcn/ui tokens; do not invent new tokens (see `docs/design_system.md`).
+- [ ] UI: Use Tailwind + shadcn/ui tokens; do not invent new tokens (see `apps/docs/content/docs/general/design-system/index.mdx`).
 - [ ] Transcript: **Every word must remain visible** (Multi-line wrapping required; no `ellipsis/nowrap` truncation).
 
 ---
@@ -47,6 +47,7 @@ Background: Routing/UI shell changes are the most common cause of `<audio>` unmo
   - `onSeek` → `store.seekTo()` → `store.pendingSeek` → `__root.tsx` effect updates `audio.currentTime`.
   - Forbidden: `document.querySelector(...)` or passing `audioRef` to deep components to directly modify `currentTime`.
 - [ ] Back/Forward: Browser navigation works correctly across different routes (e.g., jumping between Sidebar links).
+- [ ] Media Session handlers: `src/hooks/useMediaSession.ts`, `src/components/AppShell/GlobalAudioController.tsx`.
 
 ---
 
@@ -73,10 +74,10 @@ Quick Regression Points:
 
 Background: Issues have occurred where deleting the DB invalidated instances or caused cross-test contamination.
 
-- [ ] Standardized DB using Dexie: `src/lib/dexieDb.ts` (DB name: `readio-v2`).
+- [ ] Standardized DB using Dexie: `src/lib/dexieDb.ts` (default DB name: `readio`, override via `READIO_DB_NAME` for reset).
 - [ ] `DB.clearAllData()` must be table-level clearing (transaction + `table.clear()`); do not use `db.delete()`.
 - [ ] Test isolation: `fake-indexeddb` + clear DB before every test suite.
-- [ ] `src/lib/__tests__/dbMigration.test.ts` focuses on initialization and CRUD assertions during the "clearable data" phase (No data persistence assertions).
+- [ ] `src/lib/__tests__/dbOperations.test.ts` focuses on initialization and CRUD assertions during the "clearable data" phase (No data persistence assertions).
 
 Quick Regression Points:
 - [ ] Playback progress restores after page refresh (session restore).
@@ -86,7 +87,7 @@ Quick Regression Points:
 
 ## 5) i18n (Lightweight t(key) Pattern)
 
-- [ ] New/Modified UI text must use `t(key)` via `useI18n` (react-i18next adapter).
+- [ ] New/Modified UI text must use `t(key)` via `useTranslation()` (react-i18next).
 - [ ] New keys must be added to all supported languages in `src/lib/translations.ts`.
 - [ ] UI contains no technical jargon.
 
@@ -99,6 +100,7 @@ Quick Regression Points:
 - [ ] Support for `window.__READIO_ENV__`:
   - `READIO_CORS_PROXY_URL`
   - `READIO_CORS_PROXY_PRIMARY`
+- [ ] Offline state: `src/hooks/useNetworkStatus.ts`, `src/routeComponents/ExplorePage.tsx`, `src/components/GlobalSearch/CommandPalette.tsx`, `src/components/AppShell/Sidebar.tsx`.
 
 ---
 
