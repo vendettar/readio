@@ -82,9 +82,9 @@ You can run applications individually or all at once using [Turborepo](https://t
 
 The new documentation is available at `apps/docs`. You can run it locally with `pnpm --filter docs dev`.
 
-- [**Best Practices**](apps/docs/content/apps/docs/content/docs/general/improvement-process.mdx)
-- [**Design System**](apps/docs/content/apps/docs/content/docs/general/design-system/index.mdx)
-- [**Technology Roadmap**](apps/docs/content/apps/docs/content/docs/general/technical-roadmap.mdx)
+- [**Best Practices**](apps/docs/content/docs/general/improvement-process.mdx)
+- [**Design System**](apps/docs/content/docs/general/design-system/index.mdx)
+- [**Technology Roadmap**](apps/docs/content/docs/general/technical-roadmap.mdx)
 
 ## 🤝 Contributing
 
