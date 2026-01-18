@@ -1,4 +1,4 @@
-// src/libs/recommended/batch.ts
+// src/lib/recommended/batch.ts
 // Batch loading logic for recommended podcasts
 // Uses pure algorithm functions for easy testing
 

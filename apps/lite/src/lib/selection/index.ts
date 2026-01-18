@@ -1,4 +1,4 @@
-// src/libs/selection/index.ts
+// src/lib/selection/index.ts
 
 export * from './api'
 export * from './constants'

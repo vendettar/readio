@@ -1,4 +1,4 @@
-// src/libs/selection/domUtils.ts
+// src/lib/selection/domUtils.ts
 import { STOP_WORDS, WORD_PATTERN } from './constants'
 
 export function isLookupEligible(text: string): boolean {

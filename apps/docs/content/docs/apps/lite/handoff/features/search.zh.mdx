@@ -27,6 +27,8 @@ title: Search System
 - 当 `isOnline` 为 false 时，**隐藏远程结果**，仅保留本地结果。
 - 远程搜索不执行；本地匹配应立即返回。
 - **本地入口**：展示清晰的“仅本地”分组（Subscriptions/Favorites/History/Files），避免空白。
+- **网络抖动**：对在线状态做去抖，避免快速切换导致重复提示。
+- **缓存未命中**：离线时不重试远程请求，保持本地模式。
 
 ### 性能与数据一致性规范
 - **加载顺序**：任何依赖 `useExploreStore` 中 `subscriptions` / `favorites` 的搜索场景（Search Overlay、Full Search Page、自定义 hooks）都必须在访问前调用 `loadSubscriptions()` / `loadFavorites()`。若在 store 中未加载成功，需要回退到 Dexie 查询，而不是直接假设列表已就绪。

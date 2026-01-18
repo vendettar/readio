@@ -1,4 +1,4 @@
-// src/libs/files/__tests__/sortFolders.test.ts
+// src/lib/files/__tests__/sortFolders.test.ts
 import { describe, expect, it } from 'vitest'
 import type { FileFolder } from '../../dexieDb'
 import { sortFolders } from '../sortFolders'

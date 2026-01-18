@@ -29,6 +29,7 @@ title: Audio Engine
 - **Progress Control**: Slider directly calls `seekTo()` interface, unified seek after user drag ends
 - **Local File Playback**: Blob URL locally mounted, `< 300MB` audio cached to IndexedDB supporting offline restoration
 - **Podcast Metadata**: `setAudioUrl` accepts EpisodeMetadata (description/podcastTitle/feedUrl/artworkUrl/publishedAt), and writes to `playerStore.episodeMetadata` for History/Favorites display
+- **Rapid Toggle Resilience**: Rapid Play/Pause or multi-track switching must converge to last action without stuck `loading` states.
 
 ---
 

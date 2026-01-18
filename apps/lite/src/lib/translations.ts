@@ -1,4 +1,4 @@
-// src/libs/translations.ts
+// src/lib/translations.ts
 
 export type Language = 'zh' | 'en' | 'ja' | 'ko' | 'de' | 'es'
 

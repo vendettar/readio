@@ -1,4 +1,4 @@
-// src/libs/recommended/algorithm.ts
+// src/lib/recommended/algorithm.ts
 // Pure functions for recommendation algorithm logic
 // Fully testable without network/cache/React dependencies
 

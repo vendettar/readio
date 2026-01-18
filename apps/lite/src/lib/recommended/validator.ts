@@ -1,4 +1,4 @@
-// src/libs/recommended/validator.ts
+// src/lib/recommended/validator.ts
 import { fetchTextWithFallback } from '../fetchUtils'
 import { deduplicatedFetch, getRequestKey } from '../requestManager'
 import { readFetchabilityCache, writeFetchabilityCache } from './cache'

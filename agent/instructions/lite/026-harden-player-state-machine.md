@@ -6,6 +6,12 @@
 ## Objective
 The current player logic is scattered. We need to strictly define the player states to handle transitions reliably, preventing race conditions like "playing while loading".
 
+## Decision Log
+- **Required / Waived**: Waived (no rule-doc changes).
+
+## Bilingual Sync
+- **Required / Not applicable**: Required.
+
 ## 1. Define States (`apps/lite/src/store/playerStore.ts`)
 - **Action**: Define a strict union type for `PlayerStatus`.
   ```ts
@@ -29,6 +35,7 @@ The current player logic is scattered. We need to strictly define the player sta
 ## 4. Verification
 - **Test**: Click Play rapidly on different tracks. The player should eventually play the last clicked track.
 - **Test**: Simulate a load error. UI should show Error state.
+- **Test**: Rapidly toggle Play/Pause on the same track and across two tracks (5–10 clicks within 2s). Ensure no stuck `loading` state.
 
 ### Quality Check
 - **Type Check**: Run `pnpm --filter @readio/lite typecheck`.

@@ -1,4 +1,4 @@
-// src/libs/recommended/index.ts
+// src/lib/recommended/index.ts
 // Clean barrel export for recommended podcasts module
 
 export * from './algorithm'

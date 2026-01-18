@@ -6,6 +6,12 @@
 ## Objective
 Replace "hand-rolled" filename parsing with a professional binary stream parser to extract high-quality metadata (Cover, Album, Duration) from local files.
 
+## Decision Log
+- **Required / Waived**: Waived (no rule-doc changes).
+
+## Bilingual Sync
+- **Required / Not applicable**: Required.
+
 ## 1. Install Library
 - **Action**: `pnpm --filter @readio/lite add music-metadata-browser`.
 - **Reason**: This is the industry standard for browser-based audio metadata extraction.
@@ -18,6 +24,7 @@ Replace "hand-rolled" filename parsing with a professional binary stream parser 
   - Prefer `common.picture` for artwork (convert to `Blob`/`ObjectURL` only when needed in UI).
   - Prefer `format.duration` if provided; fall back to `getAudioDuration` only when metadata lacks duration.
   - Fallback to filename ONLY if `common.title` is missing.
+  - **Best-Effort Mode**: If metadata parsing fails, log a warning and continue ingest using filename + duration fallback. Do not block the import or show a fatal error toast.
   - Do not change the database schema version for this task.
 
 ## 3. Tests

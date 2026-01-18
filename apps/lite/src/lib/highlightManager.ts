@@ -1,4 +1,4 @@
-// src/libs/highlightManager.ts
+// src/lib/highlightManager.ts
 // CSS Highlights API for looked-up word highlighting
 // Avoids DOM manipulation and React re-renders
 

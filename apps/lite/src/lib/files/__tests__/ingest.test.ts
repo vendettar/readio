@@ -1,4 +1,4 @@
-// src/libs/files/__tests__/ingest.test.ts
+// src/lib/files/__tests__/ingest.test.ts
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DB } from '../../dexieDb'
 

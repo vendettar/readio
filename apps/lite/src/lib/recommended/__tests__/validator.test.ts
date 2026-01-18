@@ -1,4 +1,4 @@
-// src/libs/recommended/__tests__/validator.test.ts
+// src/lib/recommended/__tests__/validator.test.ts
 import { describe, expect, it } from 'vitest'
 import { matchesGenreTokens } from '../validator'
 

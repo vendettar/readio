@@ -1,4 +1,4 @@
-// src/libs/relativeTime.ts
+// src/lib/relativeTime.ts
 // Tiny helper for formatting relative time strings
 
 /**

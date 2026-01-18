@@ -1,4 +1,4 @@
-// src/libs/toast.ts
+// src/lib/toast.ts
 
 import type { TranslationKey } from './translations'
 

@@ -1,4 +1,4 @@
-// src/libs/recommended/__tests__/batch.test.ts
+// src/lib/recommended/__tests__/batch.test.ts
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fetchRecommendedCandidates, loadRecommendedBatch } from '../batch'
 import * as sources from '../sources'

@@ -1,4 +1,4 @@
-// src/libs/files/ingest.ts
+// src/lib/files/ingest.ts
 // Pure ingestion module for files - no React, no UI side effects
 
 import { DB } from '../dexieDb'

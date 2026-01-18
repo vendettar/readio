@@ -1,4 +1,4 @@
-// src/libs/__tests__/formatters.test.ts
+// src/lib/__tests__/formatters.test.ts
 import { describe, expect, it } from 'vitest'
 import { formatFileSize, formatNumber, formatTimeLabel, formatTimestamp } from '../formatters'
 

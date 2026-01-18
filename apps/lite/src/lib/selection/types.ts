@@ -1,4 +1,4 @@
-// src/libs/selection/types.ts
+// src/lib/selection/types.ts
 
 import type { TranslationKey } from '../translations'
 

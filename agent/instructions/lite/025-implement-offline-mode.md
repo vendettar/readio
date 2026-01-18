@@ -6,6 +6,12 @@
 ## Objective
 Detect network status and degrade gracefully. The app is "Offline First", so local files must work perfectly without net.
 
+## Decision Log
+- **Required / Waived**: Waived (no rule-doc changes).
+
+## Bilingual Sync
+- **Required / Not applicable**: Required.
+
 ## 1. Network Hook
 - **Action**: Create `apps/lite/src/hooks/useNetworkStatus.ts`.
 - **Implementation**: Listen to `window.addEventListener('online'/'offline')`.
@@ -26,6 +32,8 @@ Detect network status and degrade gracefully. The app is "Offline First", so loc
 - **Target**: `apps/lite/src/lib/fetchUtils.ts` (or query client).
 - **Action**: If a fetch fails due to network, ensure it throws a specific `NetworkError`.
 - **UI**: Catch this error and show `t('offline.error')` ("No internet connection") via toast.
+- **Network Jitter**: Debounce online/offline changes (e.g., 1–2s). Do not spam toasts on rapid flaps; show at most one error toast until state stabilizes.
+- **Cache Miss**: If remote data is unavailable while offline, do not retry; keep UI in local-only mode without empty-state errors.
 
 ## 5. Verification
 - **Test**: Go Offline (DevTools -> Network -> Offline).

@@ -1,11 +1,17 @@
 > **⚠️ CRITICAL**: You MUST preserve the current UI/UX layout and styling. Do NOT change visual appearance unless explicitly instructed.
-> **Prerequisites**: Read `apps/docs/content/docs/general/design-system/index.mdx` and `apps/docs/content/docs/apps/lite/ui-patterns/index.mdx` before starting.
+> **Prerequisites**: Read `apps/docs/content/docs/general/design-system/index.mdx`, `apps/docs/content/docs/apps/lite/ui-patterns/index.mdx`, and `agent/instructions/lite/006-standardize-db-ids.md` before starting.
 
 # Task: Refactor Persistence Logic (Single Source of Truth)
 
 ## Objective
 The current codebase suffers from "Dual-Write" issues where both `useFileHandler` and `playerStore` attempt to write to IndexedDB.
 We must consolidate all persistence logic into the Store Actions.
+
+## Decision Log
+- **Required / Waived**: Waived (no rule-doc changes).
+
+## Bilingual Sync
+- **Required / Not applicable**: Required.
 
 ## 1. Audit & Fix `apps/lite/src/hooks/useFileHandler.ts`
 - **Issue**: `useFileHandler` calls `DB.addAudioBlob` directly.

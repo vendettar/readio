@@ -1,4 +1,4 @@
-// src/libs/dexieDb.ts
+// src/lib/dexieDb.ts
 // IndexedDB via Dexie for session persistence and  file storage
 import Dexie, { type EntityTable } from 'dexie'
 import { log, error as logError } from './logger'

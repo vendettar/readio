@@ -1,4 +1,4 @@
-// src/libs/dateUtils.ts
+// src/lib/dateUtils.ts
 // Date formatting utilities
 
 /**

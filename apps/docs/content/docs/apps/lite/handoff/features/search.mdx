@@ -27,6 +27,8 @@ Search system as a global entry point, adopts a two-stage workflow:
 - When `isOnline` is false, **hide remote results** and keep local results only.
 - Remote search should not execute; surface local matches without delay.
 - **Local Entry**: Show a clear "Local Only" group (Subscriptions/Favorites/History/Files) to avoid empty UI.
+- **Network Jitter**: Debounce online/offline changes and avoid repeated error toasts during rapid flaps.
+- **Cache Miss**: If remote data is unavailable while offline, keep local-only mode without retry loops.
 
 ### Performance & Data Consistency Standards
 - **Load Order**: Any search scenario (Search Overlay, Full Search Page, custom hooks) dependent on `subscriptions` / `favorites` in `useExploreStore` must call `loadSubscriptions()` / `loadFavorites()` before access. If not loaded successfully in store, fallback to Dexie query instead of directly assuming list is ready.

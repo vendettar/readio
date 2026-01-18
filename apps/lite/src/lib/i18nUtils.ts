@@ -1,4 +1,4 @@
-// src/libs/i18nUtils.ts
+// src/lib/i18nUtils.ts
 /**
  * Standalone i18n utilities for use outside React context (e.g., in stores)
  * Falls back to English if language or key is missing

@@ -1,4 +1,4 @@
-// src/libs/files/sortFolders.ts
+// src/lib/files/sortFolders.ts
 import type { FileFolder } from '../dexieDb'
 
 /**

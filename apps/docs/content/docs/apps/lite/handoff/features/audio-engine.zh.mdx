@@ -29,6 +29,7 @@ title: Audio Engine
 - **进度控制**：Slider 直接调用 `seekTo()` 接口，用户拖拽结束后统一 seek
 - **本地文件播放**：Blob URL 临时挂载，`< 300MB` 的音频缓存到 IndexedDB 支持离线恢复
 - **播客元数据**：`setAudioUrl` 可接收 EpisodeMetadata（description/podcastTitle/feedUrl/artworkUrl/publishedAt），并写入 `playerStore.episodeMetadata` 供 History/Favorites 展示
+- **快速切换稳态**：快速 Play/Pause 或跨曲目切换时，最终必须收敛到最后一次操作，且不出现卡死 `loading`。
 
 ---
 

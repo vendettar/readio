@@ -1,4 +1,4 @@
-// src/libs/imageUtils.ts
+// src/lib/imageUtils.ts
 /**
  * Utility for handling image asset transformations
  */

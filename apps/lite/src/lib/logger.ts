@@ -1,4 +1,4 @@
-// src/libs/logger.ts
+// src/lib/logger.ts
 // Structured logging utility with context support
 // - debug/info/log/warn: Only log in development mode
 // - error: Always log (including production) for incident tracking

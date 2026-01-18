@@ -6,6 +6,12 @@
 ## Objective
 Ensure the app remains functional even if the primary CORS proxy fails or is rate-limited.
 
+## Decision Log
+- **Required / Waived**: Waived (no rule-doc changes).
+
+## Bilingual Sync
+- **Required / Not applicable**: Required.
+
 ## 1. Configure Proxy List
 - **Target**: `apps/lite/src/lib/runtimeConfig.ts`.
 - **Action**: Support an array of `CORS_PROXIES`.
@@ -20,7 +26,12 @@ Ensure the app remains functional even if the primary CORS proxy fails or is rat
   - If a request returns `5xx` or network error, attempt the next proxy (max 2 retries).
   - Persist the "last known working proxy" using `storage.ts` to avoid retrying dead proxies on next boot.
 
-## 3. Verification
+## 3. Proxy Privacy Warning
+- **Rule**: When a public proxy is active, display a clear disclosure in Settings and a non-blocking in-app notice (toast or banner).
+- **Toggle**: Provide a user-facing toggle to disable public proxies (fallback to direct-only).
+- **I18n**: Add keys for the disclosure and toggle label.
+
+## 4. Verification
 - **Test**: Simulate a 500 error on the primary proxy using MSW.
 - **Check**: The app should silently retry via the secondary proxy without user intervention.
 

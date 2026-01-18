@@ -1,4 +1,4 @@
-// src/libs/selection/constants.ts
+// src/lib/selection/constants.ts
 
 export const WORD_PATTERN = /^[A-Za-z][A-Za-z0-9]*(?:[''-][A-Za-z0-9]+)*$/
 

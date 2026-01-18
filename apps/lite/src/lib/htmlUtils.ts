@@ -1,4 +1,4 @@
-// src/libs/htmlUtils.ts
+// src/lib/htmlUtils.ts
 import DOMPurify from 'dompurify'
 
 const BR_REGEX = /<br\s*\/?>/gi

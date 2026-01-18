@@ -1,4 +1,4 @@
-// src/libs/recommended/utils.ts
+// src/lib/recommended/utils.ts
 import { CATEGORY_INFO, RECOMMENDED_CATEGORY_IDS, type RecommendedPodcast } from './types'
 
 /**

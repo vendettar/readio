@@ -1,4 +1,4 @@
-// src/libs/requestManager.ts
+// src/lib/requestManager.ts
 // Request deduplication and concurrency control
 
 type InflightRequest<T> = {

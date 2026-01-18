@@ -1,4 +1,4 @@
-// src/libs/errorReporter.ts
+// src/lib/errorReporter.ts
 // Optional error reporting infrastructure for production error tracking
 
 type ErrorReporter = (error: Error, info: { componentStack?: string }) => void

@@ -1,4 +1,4 @@
-// src/libs/subtitles.ts
+// src/lib/subtitles.ts
 
 export interface subtitle {
   start: number

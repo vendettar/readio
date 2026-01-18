@@ -1,4 +1,4 @@
-// src/libs/recommended/types.ts
+// src/lib/recommended/types.ts
 
 export interface RecommendedPodcast {
   id: string

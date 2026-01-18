@@ -43,6 +43,11 @@ title: Discovery & Explore
 - 当 `isOnline` 为 false 时，**隐藏所有远程 Discovery 模块**（Top Charts、Editor's Picks、Top Shows、Top Episodes）。
 - 在侧边栏/标题处提供清晰的离线徽章。
 - **本地入口**：必须保留清晰的“本地库入口”（Subscriptions/Favorites/History/Files），确保离线可操作。
+- **网络抖动**：对在线状态做去抖，避免快速切换导致重复提示。
+- **缓存未命中**：离线时不重试远程请求，保持本地模式。
+
+### 代理隐私提示
+- 使用公共代理时，在 Settings 显示明确披露，并提供非阻断提示。
 
 ### 缓存策略（TanStack Query）
 

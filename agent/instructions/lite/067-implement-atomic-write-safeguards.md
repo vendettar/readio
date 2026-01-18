@@ -6,6 +6,12 @@
 ## Objective
 Prevent IndexedDB corruption during power loss or crashes by ensuring all complex data operations are atomic.
 
+## Decision Log
+- **Required / Waived**: Waived (no rule-doc changes).
+
+## Bilingual Sync
+- **Required / Not applicable**: Required.
+
 ## 1. Transactional Integrity
 - **Rule**: Every multi-table update (e.g., Import, Ingesting Audio + Metadata) MUST be wrapped in a `db.transaction`.
 - **Action**: Audit `apps/lite/src/store/` and `apps/lite/src/lib/` for loose database calls.
@@ -19,6 +25,7 @@ Prevent IndexedDB corruption during power loss or crashes by ensuring all comple
 ## 3. Verification
 - **Test**: Deliberately stop the browser process during a large file import (simulated).
 - **Check**: On next boot, the app should remain functional and identify any partial data for cleanup.
+- **Method**: Use a controlled throw inside a Dexie transaction during import, then reload the app and verify self-heal flags corrupted items.
 
 ### Quality Check
 - **Type Check**: Run `pnpm --filter @readio/lite typecheck`.

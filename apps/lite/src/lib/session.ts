@@ -1,4 +1,4 @@
-// src/libs/session.ts
+// src/lib/session.ts
 // Session ID utilities - shared across hooks and handlers
 
 import { createSessionId } from './id'

@@ -43,6 +43,11 @@ title: Discovery & Explore
 - When `isOnline` is false, **hide all remote Discovery modules** (Top Charts, Editor's Picks, Top Shows, Top Episodes).
 - Provide a clear Offline badge in the sidebar/header.
 - **Local Entry**: Keep a visible "Local Library" entry point (Subscriptions/Favorites/History/Files) so users have actionable offline content.
+- **Network Jitter**: Debounce online/offline changes and avoid repeated error toasts during rapid flaps.
+- **Cache Miss**: If remote data is unavailable while offline, keep local-only mode without retry loops.
+
+### Proxy Privacy Warning
+- When a public proxy is active, show a clear disclosure in Settings and a non-blocking in-app notice.
 
 ### Caching Strategy (TanStack Query)
 

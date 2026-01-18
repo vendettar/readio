@@ -1,4 +1,4 @@
-// src/libs/formatters.ts
+// src/lib/formatters.ts
 // Pure formatting utilities - fully testable without dependencies
 
 /**
