@@ -46,6 +46,13 @@ export default {
           5: 'hsl(var(--chart-5))',
         },
       },
+      /* Layout tokens from src/index.css */
+      spacing: {
+        sidebar: 'var(--sidebar-width)',
+        'mini-player': 'var(--mini-player-height)',
+        'page-gutter': 'var(--page-gutter-x)',
+        'page-margin': 'var(--page-margin-x)',
+      },
       borderRadius: {
         lg: 'var(--radius)',
         md: 'calc(var(--radius) - 2px)',
@@ -54,10 +61,22 @@ export default {
       width: {
         panel: '25rem',
         'panel-sm': '20rem',
+        sidebar: 'var(--sidebar-width)',
+      },
+      height: {
+        'mini-player': 'var(--mini-player-height)',
       },
       maxWidth: {
         content: '105rem',
         'content-wide': '112.5rem',
+      },
+      padding: {
+        page: 'var(--page-margin-x)',
+        gutter: 'var(--page-gutter-x)',
+      },
+      margin: {
+        page: 'var(--page-margin-x)',
+        gutter: 'var(--page-gutter-x)',
       },
       fontSize: {
         xxs: ['0.625rem', { lineHeight: '0.875rem' }], // 10px font, 14px line-height

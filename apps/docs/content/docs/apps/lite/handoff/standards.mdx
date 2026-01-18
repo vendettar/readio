@@ -26,6 +26,13 @@ Icon sources are unified and consistent in style; UI operation SVG files should 
 
 `src/index.css` contains theme tokens, interaction class styles (reading/selection/drag-and-drop), Smart List Dividers, and local scrollbar styles. Layout dimensions use Tailwind tokens and extended tokens (`w-panel` 25rem, `w-panel-sm` 20rem, `max-w-content` 105rem/1680px, `max-w-content-wide` 112.5rem).
 
+**Tailwind Layout Tokens** (via `tailwind.config.js`):
+- **Spacing**: `sidebar`, `mini-player`, `page-gutter`, `page-margin` (all map to CSS variables).
+- **Width**: `w-sidebar`.
+- **Height**: `h-mini-player`.
+- **Padding/Margin**: `p-page`, `px-page`, `m-page`, `mx-page`, `p-gutter`, `px-gutter`, `m-gutter`, `mx-gutter`.
+
+
 **Layout Consistency Guidelines**:
 - **Max Width**: Core content pages (Explore, History, Favorites, Search, Subscriptions, Settings, Show/Episode Detail) uniformly use `max-w-content` (1680px).
 - **Horizontal Spacing**: Page-level containers must use `px-[var(--page-margin-x)]` to ensure a 48px (3rem) safe distance from the sidebar and reserve space for the episode list Gutter animation.
@@ -190,6 +197,7 @@ Follows the five architecture consistency principles defined in `apps/docs/conte
        - **Trigger Condition**: Takes effect when the episode has no cover art.
        - **Component Behavior**: Does not render cover placeholder. Uses `GutterPlayButton` atomic component to render a play button in the left Gutter area.
        - **Visibility**: Only visible when the entire row is `group-hover/episode`. The background layer width automatically covers this button, ensuring the interaction area is complete and aesthetic.
+     - **`bottomMeta` Slot**: An un-clamped metadata area located below the description. Used for persistent state information that must remain visible even if the description is long (e.g., playback progress in History, "Added At" date in Favorites). Not affected by `descriptionLines` clamping.
    - **GutterPlayButton**: Atomic component (`src/components/EpisodeRow/GutterPlayButton.tsx`).
      - **Responsibility**: Encapsulates play button logic in the Gutter area, reducing duplicate code across components.
      - **Props**: `onPlay` (click callback), `ariaLabel` (accessibility label).

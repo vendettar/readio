@@ -26,6 +26,13 @@ SVG 资源：
 
 `src/index.css` 包含主题 token、交互类样式（reading/selection/拖拽）、Smart List Divider、以及局部滚动条样式；布局尺寸使用 Tailwind 令牌与扩展 token（`w-panel` 25rem、`w-panel-sm` 20rem、`max-w-content` 105rem/1680px、`max-w-content-wide` 112.5rem）。
 
+**Tailwind 布局 Tokens**（通过 `tailwind.config.js`）：
+- **间距 (Spacing)**: `sidebar`, `mini-player`, `page-gutter`, `page-margin`（均映射到 CSS 变量）。
+- **宽度 (Width)**: `w-sidebar`。
+- **高度 (Height)**: `h-mini-player`。
+- **内边距/外边距 (Padding/Margin)**: `p-page`, `px-page`, `m-page`, `mx-page`, `p-gutter`, `px-gutter`, `m-gutter`, `mx-gutter`。
+
+
 **布局一致性准则**：
 - **最大宽度**：核心内容页面（Explore, History, Favorites, Search, Subscriptions, Settings, Show/Episode Detail）统一使用 `max-w-content` (1680px)。
 - **水平间距**：页面级容器必须使用 `px-[var(--page-margin-x)]`，以确保内容与侧边栏的 48px (3rem) 安全距离，并为单集列表的 Gutter 动效预留空间。
@@ -190,6 +197,7 @@ Provider 位于 `src/main.tsx`（`Tooltip.Provider`）。
        - **触发条件**：当单集无封面图时生效。
        - **组件表现**：不渲染封面占位符。使用 `GutterPlayButton` 原子组件在左侧 Gutter 区域渲染播放按钮。
        - **可见性**：仅在整行 `group-hover/episode` 时可见。背景层宽度会自动覆盖此按钮，确保交互区域完整且美观。
+     - **`bottomMeta` 插槽**：位于描述区域下方的非截断（un-clamped）元数据区域。用于放置必须保持可见的状态信息（如历史页面的播放进度、收藏页面的"添加于"日期等），不受 `descriptionLines` 截断限制。
    - **GutterPlayButton**: 原子组件 (`src/components/EpisodeRow/GutterPlayButton.tsx`)。
      - **职责**：封装 Gutter 区域的播放按钮逻辑，减少跨组件重复代码。
      - **Props**：`onPlay` (点击回调), `ariaLabel` (无障碍标签)。

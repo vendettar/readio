@@ -25,11 +25,20 @@ To ensure theming (Light/Dark/Accents) works perfectly, you MUST use Semantic To
 
 Do NOT hardcode pixels for structural elements. Use the extended Tailwind theme config.
 
-- **Sidebar Width**: Use `w-sidebar` (maps to `var(--sidebar-width)`).
-- **Player Height**: Use `h-mini-player` (maps to `var(--mini-player-height)`).
-- **Page Margins**: Use `px-page` or `mx-page` (maps to `var(--page-margin-x)`).
+**Spacing Tokens** (via `theme.extend.spacing` in `tailwind.config.js`):
+- `sidebar`: Maps to `var(--sidebar-width)` (260px). Use in `w-sidebar`, `pl-sidebar`, etc.
+- `mini-player`: Maps to `var(--mini-player-height)` (73px). Use in `h-mini-player`, `pb-mini-player`, etc.
+- `page-gutter`: Maps to `var(--page-gutter-x)` (24px desktop, 12px mobile). Use in `gap-page-gutter`, etc.
+- `page-margin`: Maps to `var(--page-margin-x)` (48px desktop, 24px mobile). Use as needed.
+
+**Explicit Shorthand Utilities**:
+- **Width**: `w-sidebar` (sidebar width).
+- **Height**: `h-mini-player` (mini-player height).
+- **Padding**: `p-page` / `px-page` / `p-gutter` / `px-gutter`.
+- **Margin**: `m-page` / `mx-page` / `m-gutter` / `mx-gutter`.
 
 **Why?** If we decide to widen the sidebar later, we change it in ONE place (CSS variable), and the whole app adapts.
+
 
 ---
 

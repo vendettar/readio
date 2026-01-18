@@ -25,11 +25,20 @@ title: Tokens 与布局
 
 不要为结构元素硬编码像素。使用扩展的 Tailwind 主题配置。
 
-- **侧边栏宽度**: 使用 `w-sidebar` (映射到 `var(--sidebar-width)`)。
-- **播放器高度**: 使用 `h-mini-player` (映射到 `var(--mini-player-height)`)。
-- **页面边距**: 使用 `px-page` or `mx-page` (映射到 `var(--page-margin-x)`)。
+**间距 Tokens** (通过 `tailwind.config.js` 中的 `theme.extend.spacing`):
+- `sidebar`: 映射到 `var(--sidebar-width)` (260px)。用于 `w-sidebar`, `pl-sidebar` 等。
+- `mini-player`: 映射到 `var(--mini-player-height)` (73px)。用于 `h-mini-player`, `pb-mini-player` 等。
+- `page-gutter`: 映射到 `var(--page-gutter-x)` (桌面 24px，移动 12px)。用于 `gap-page-gutter` 等。
+- `page-margin`: 映射到 `var(--page-margin-x)` (桌面 48px，移动 24px)。按需使用。
+
+**显式简写工具类**:
+- **宽度**: `w-sidebar` (侧边栏宽度)。
+- **高度**: `h-mini-player` (迷你播放器高度)。
+- **内边距**: `p-page` / `px-page` / `p-gutter` / `px-gutter`。
+- **外边距**: `m-page` / `mx-page` / `m-gutter` / `mx-gutter`。
 
 **为什么？** 如果我们以后决定加宽侧边栏，我们在一个地方（CSS 变量）更改它，整个应用都会适应。
+
 
 ---
 

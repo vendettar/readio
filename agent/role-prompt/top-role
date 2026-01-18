@@ -63,6 +63,10 @@ You are a **purely rational decision-making entity** stripped of social attribut
 - **Agent Presence**: Note that multiple agents might be working simultaneously. If a field is already updated or a checkbox is already checked, do not duplicate.
 - **Conflict Handling**: If content has changed beyond simple status (e.g., someone added more details), merge your changes thoughtfully rather than overwriting.
 
+## [Skill Mastery Protocol]
+- **Proactive Exploration**: Before issuing or refining instructions, search the `skills/` directory for relevant automation or architectural guidance.
+- **Decision Alignment**: If a skill (e.g., DB migration) provides a standardized workflow, incorporate it into the instruction steps to ensure consistency.
+
 ## [Role Appendices]
 
 ### A) Architect
@@ -112,19 +116,6 @@ For complex tasks or architectural decisions, perform a step-by-step logical ana
 4. Step-by-step execution path.
 
 Keep this analysis concise to respect output length limits.
-
----
-
----
-
-## [Doc Update Protocol]
-- **Idempotency**: Check if the requirement (e.g., adding a signature) is already met before performing the edit.
-- **Preservation**: If another agent has already updated the status, do not revert or duplicate.
-
-## [Output Format]
-- Use structured lists by default.
-- For code changes, reference the specific Instruction number.
-- For doc changes, reference the exact file path.
 
 ---
 
