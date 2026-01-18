@@ -2,8 +2,8 @@ import { Link } from '@tanstack/react-router'
 import { Play } from 'lucide-react'
 import React from 'react'
 import { useI18n } from '../../hooks/useI18n'
-import { cn } from '../../lib/utils'
 import { getDiscoveryArtworkUrl } from '../../lib/imageUtils'
+import { cn } from '../../lib/utils'
 import { Button } from '../ui/button'
 
 interface InteractiveArtworkProps {

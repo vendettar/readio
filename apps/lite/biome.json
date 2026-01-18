@@ -1,20 +1,12 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.3.11/schema.json",
-  "extends": [
-    "../../biome.json"
-  ],
+  "extends": ["../../biome.json"],
   "vcs": {
     "enabled": false
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": [
-      "!node_modules",
-      "!.next",
-      "!dist",
-      "!build",
-      "!.source"
-    ]
+    "includes": ["!node_modules", "!.next", "!dist", "!build", "!.source"]
   },
   "overrides": [
     {
@@ -69,9 +61,7 @@
       }
     },
     {
-      "includes": [
-        "src/components/GlobalSearch/SearchOverlay.tsx"
-      ],
+      "includes": ["src/components/GlobalSearch/SearchOverlay.tsx"],
       "linter": {
         "rules": {
           "suspicious": {
@@ -81,9 +71,7 @@
       }
     },
     {
-      "includes": [
-        "src/components/interactive/**"
-      ],
+      "includes": ["src/components/interactive/**"],
       "linter": {
         "rules": {
           "suspicious": {
@@ -93,9 +81,7 @@
       }
     },
     {
-      "includes": [
-        "src/routeTree.gen.ts"
-      ],
+      "includes": ["src/routeTree.gen.ts"],
       "formatter": {
         "enabled": false
       },
@@ -111,9 +97,7 @@
       }
     },
     {
-      "includes": [
-        "src/index.css"
-      ],
+      "includes": ["src/index.css"],
       "linter": {
         "enabled": false
       },

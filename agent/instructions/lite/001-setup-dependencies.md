@@ -1,10 +1,16 @@
 > **⚠️ CRITICAL**: You MUST preserve the current UI/UX layout and styling. Do NOT change visual appearance unless explicitly instructed.
 > **Prerequisites**: Read `apps/docs/content/docs/general/design-system/index.mdx` and `apps/docs/content/docs/apps/lite/ui-patterns/index.mdx` before starting.
 
-# Task: Setup Standard Dependencies
+# Task: Setup Standard Dependencies [COMPLETED]
 
 ## Objective
 Install approved utility libraries and ensure project configuration matches the Vibe Charter. This is the foundational step for Phase 1.
+
+## Decision Log
+- **Required / Waived**: Waived (no rule-doc changes).
+
+## Bilingual Sync
+- **Required / Not applicable**: Not applicable (no doc changes).
 
 ## 1. Install `date-fns`
 We have officially adopted `date-fns` for all date manipulation and formatting to replace brittle manual logic.
@@ -34,3 +40,13 @@ Since the `typecheck` script is not yet standardized (will be in Instruction 003
 ## Documentation
 - If you changed any architectural pattern, update the corresponding doc in `apps/docs/content/docs/`.
 - Update `apps/docs/content/docs/apps/lite/handoff/index.mdx` with the new status.
+
+## Completion
+- **Completed by**: Readio Worker (Coder)
+- **Reviewed by**: Readio Reviewer (QA)
+- **Commands**: 
+  - `pnpm --filter @readio/lite add date-fns`
+  - `pnpm --filter @readio/lite exec tsc --noEmit`
+  - `pnpm --filter @readio/lite exec biome check .`
+  - `pnpm --filter @readio/lite test:run`
+- **Date**: 2026-01-18

@@ -2,12 +2,8 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      "@/*": [
-        "./src/*"
-      ],
-      "@readio/core": [
-        "../../packages/core/src/index.ts"
-      ]
+      "@/*": ["./src/*"],
+      "@readio/core": ["../../packages/core/src/index.ts"]
     }
   },
   "files": [],

@@ -18,9 +18,9 @@ import {
 // src/components/AppShell/MiniPlayer.tsx
 import React, { useRef, useState } from 'react'
 import { useI18n } from '../../hooks/useI18n'
-import { cn } from '../../lib/utils'
 import { getDiscoveryArtworkUrl } from '../../lib/imageUtils'
 import { formatTimeLabel } from '../../lib/subtitles'
+import { cn } from '../../lib/utils'
 import { useImmersionStore } from '../../store/immersionStore'
 import { usePlayerStore } from '../../store/playerStore'
 import { ReadingBgControl } from '../ReadingBgControl'

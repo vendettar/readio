@@ -7,6 +7,9 @@ title: Development Environment
 Build and Test Scripts (Execute in root directory): `pnpm build`, `pnpm test`, `pnpm --filter @readio/lite test:run`, `pnpm --filter @readio/lite test:e2e`.
 Code Quality Tools: Biome (`pnpm lint`, `pnpm format`).
 
+### Standard Dependencies
+- **Date Manipulation**: `date-fns` is the officially adopted library for all date formatting and calculations. Manual parsing or alternative libraries (moment, lodash) are prohibited.
+
 ### Planned (Pending Execution)
 - Deployment pipeline for Vercel/Docker (Instruction 038).
 - CI pipeline via GitHub Actions (Instruction 044).

@@ -2,11 +2,11 @@ import { MoreHorizontal, Star } from 'lucide-react'
 import React from 'react'
 import { useEpisodePlayback } from '../../hooks/useEpisodePlayback'
 import { useI18n } from '../../hooks/useI18n'
-import { cn } from '../../lib/utils'
 import { formatDuration, formatRelativeTime } from '../../lib/dateUtils'
 import type { Episode, Podcast } from '../../lib/discovery'
 import { stripHtml } from '../../lib/htmlUtils'
 import { getDiscoveryArtworkUrl } from '../../lib/imageUtils'
+import { cn } from '../../lib/utils'
 import { useExploreStore } from '../../store/exploreStore'
 import { InteractiveArtwork } from '../interactive/InteractiveArtwork'
 import { InteractiveTitle } from '../interactive/InteractiveTitle'
@@ -148,9 +148,9 @@ export function EpisodeRow({
             params={
               hasValidNavigation
                 ? {
-                  id: podcastId,
-                  episodeId: encodedEpisodeId,
-                }
+                    id: podcastId,
+                    episodeId: encodedEpisodeId,
+                  }
                 : undefined
             }
             onPlay={handlePlay}
@@ -171,9 +171,9 @@ export function EpisodeRow({
             params={
               hasValidNavigation
                 ? {
-                  id: podcastId,
-                  episodeId: encodedEpisodeId,
-                }
+                    id: podcastId,
+                    episodeId: encodedEpisodeId,
+                  }
                 : undefined
             }
             className="text-sm leading-tight flex-1"

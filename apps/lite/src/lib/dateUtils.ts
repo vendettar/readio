@@ -1,5 +1,12 @@
 // src/lib/dateUtils.ts
 // Date formatting utilities
+import {
+  differenceInDays,
+  differenceInHours,
+  differenceInMinutes,
+  format,
+  startOfDay,
+} from 'date-fns'
 
 /**
  * Format a date as relative time (e.g., "3D AGO", "2H AGO")
@@ -13,31 +20,28 @@ export function formatRelativeTime(
 
   const date = new Date(dateStr)
   const now = new Date()
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const startOfDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
-  const dayDiff = Math.floor(
-    (startOfToday.getTime() - startOfDate.getTime()) / (1000 * 60 * 60 * 24)
-  )
+
+  const dayDiff = differenceInDays(startOfDay(now), startOfDay(date))
 
   // If 6 days or more, show as YYYY/MM/DD (Standard format)
   if (dayDiff >= 6) {
     return formatDateStandard(date.getTime())
   }
 
-  const diffMs = now.getTime() - date.getTime()
-  const diffSec = Math.floor(diffMs / 1000)
-  const diffMin = Math.floor(diffSec / 60)
-  const diffHour = Math.floor(diffMin / 60)
-
   if (dayDiff > 0) {
     return t('dateDaysAgo', { count: dayDiff }).toUpperCase()
   }
+
+  const diffHour = differenceInHours(now, date)
   if (diffHour > 0) {
     return t('dateHoursAgo', { count: diffHour }).toUpperCase()
   }
+
+  const diffMin = differenceInMinutes(now, date)
   if (diffMin > 0) {
     return t('dateMinutesAgo', { count: diffMin }).toUpperCase()
   }
+
   return t('dateJustNow').toUpperCase()
 }
 
@@ -71,10 +75,7 @@ export function formatDateStandard(timestamp: number | string | undefined): stri
   const date = new Date(timestamp)
   if (Number.isNaN(date.getTime())) return ''
 
-  const y = date.getFullYear()
-  const m = String(date.getMonth() + 1).padStart(2, '0')
-  const d = String(date.getDate()).padStart(2, '0')
-  return `${y}/${m}/${d}`
+  return format(date, 'yyyy/MM/dd')
 }
 
 /**

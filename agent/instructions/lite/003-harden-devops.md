@@ -6,6 +6,12 @@
 ## Objective
 Ensure the development environment is consistent across all machines (and Agents) by enforcing Node versions and standardizing scripts.
 
+## Decision Log
+- **Required / Waived**: Waived (no rule-doc changes).
+
+## Bilingual Sync
+- **Required / Not applicable**: Required.
+
 ## 1. Enforce Engines (`package.json`)
 - **Action**: Add `engines` field to the **root** `package.json`.
   ```json
@@ -21,7 +27,10 @@ Ensure the development environment is consistent across all machines (and Agents
 - **Why**: Makes `pnpm install` fail immediately if the Node version is wrong.
 
 ## 3. Standardize Scripts (`apps/lite/package.json`)
-- **Action**: Add `"typecheck": "tsc --noEmit"`.
+
+> **Note**: The `typecheck` script was already added during Instruction 001. Verify it exists; if so, skip this step.
+
+- **Action**: Add `"typecheck": "tsc --noEmit"` (if missing).
 - **Why**: Allows running type checking in CI without waiting for a full Vite build.
 - **Review**: Ensure `lint` (check) and `format` (write) scripts are consistent with the Biome configuration. Do not introduce a duplicate `fix` script if `format` already exists.
 

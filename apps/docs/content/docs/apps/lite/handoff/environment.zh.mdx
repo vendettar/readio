@@ -7,6 +7,9 @@ title: Development Environment
 构建与测试脚本（根目录下执行）：`pnpm build`、`pnpm test`、`pnpm --filter @readio/lite test:run`、`pnpm --filter @readio/lite test:e2e`。
 代码质量工具：Biome（`pnpm lint`、`pnpm format`）。
 
+### 标准依赖
+- **日期处理**：`date-fns` 为官方指定的日期格式化与计算库。禁止使用手动解析或其他库（如 moment、lodash）。
+
 ### 计划中（待执行）
 - 部署流水线（Vercel/Docker，指令 038）。
 - CI 流水线（GitHub Actions，指令 044）。

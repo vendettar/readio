@@ -10,7 +10,7 @@ interface GutterPlayButtonProps {
 /**
  * GutterPlayButton: A play button that appears in the gutter area when an episode has no artwork.
  * It uses absolute positioning to occupy the exact gutter width defined by --page-gutter-x.
- * 
+ *
  * It centers the icon within that gutter space both horizontally and vertically.
  */
 export function GutterPlayButton({ onPlay, ariaLabel }: GutterPlayButtonProps) {

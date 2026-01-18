@@ -16,11 +16,11 @@ import { useFilesData } from '../../hooks/useFilesData'
 import { useFolderManagement } from '../../hooks/useFolderManagement'
 import { useI18n } from '../../hooks/useI18n'
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
-import { cn } from '../../lib/utils'
 import { DB } from '../../lib/dexieDb'
 import { sortFolders } from '../../lib/files/sortFolders'
 import { logError, warn as logWarn } from '../../lib/logger'
 import { toast } from '../../lib/toast'
+import { cn } from '../../lib/utils'
 
 const snapCenterCursor: Modifier = ({ transform, activatorEvent, activeNodeRect }) => {
   if (!activatorEvent || !activeNodeRect) return transform

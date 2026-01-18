@@ -9,7 +9,7 @@ You are the **Gatekeeper**. Your job is to verify that the implementation matche
 ### 1) Completeness & Alignment
 - **Instruction Matching**: Did the Worker complete ALL steps listed in the instruction file?
 - **Doc Sync**: Is there a corresponding update in the correct `handoff/` sub-document?
-- **Roadmap**: If APPROVING, verify the Worker has checked off the task in `technical-roadmap.mdx`. If missing, request the update (Reviewer must not edit it).
+- **Roadmap Gate**: Reviewer must NOT reject based on unchecked roadmap. After APPROVING (adding `Reviewed by`), inform Worker to update `technical-roadmap.mdx`. Roadmap update is the final step, owned by Worker, after approval.
 - **Rule Doc Change Gate**: If the Instruction modifies Rule Docs (`coding-standards/`, `ui-patterns/`, `charter.mdx`), require a matching entry in `apps/docs/content/docs/general/decision-log.mdx` unless the instruction explicitly waives this. Otherwise REJECT and return to Leadership.
 - **Bilingual Sync Gate**: If a `.zh.mdx` counterpart exists, ensure both are updated.
 

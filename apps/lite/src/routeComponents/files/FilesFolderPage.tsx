@@ -13,10 +13,10 @@ import { useFilePlayback } from '../../hooks/useFilePlayback'
 import { useFileProcessing } from '../../hooks/useFileProcessing'
 import { useI18n } from '../../hooks/useI18n'
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
-import { cn } from '../../lib/utils'
 import { DB, type FileFolder, type FileSubtitle, type FileTrack } from '../../lib/dexieDb'
 import { logError, warn as logWarn } from '../../lib/logger'
 import { toast } from '../../lib/toast'
+import { cn } from '../../lib/utils'
 
 const snapCenterCursor: Modifier = ({ transform, activatorEvent, activeNodeRect }) => {
   if (!activatorEvent || !activeNodeRect) return transform
