@@ -2,6 +2,15 @@
 title: Development Environment
 ---
 
+## 0. 前置要求 (Engines)
+
+为确保环境一致性，我们通过 `package.json` 中的 `engines` 字段和 `.npmrc` 中的 `engine-strict=true` 强制执行工具版本：
+
+- **Node.js**: `>=20.0.0`
+- **pnpm**: `>=10.28.0`
+
+如果本地环境不符合要求，执行 `pnpm install` 将报错。
+
 ## 1. 本地开发 / 构建 / 测试
 
 构建与测试脚本（根目录下执行）：`pnpm build`、`pnpm test`、`pnpm --filter @readio/lite test:run`、`pnpm --filter @readio/lite test:e2e`。

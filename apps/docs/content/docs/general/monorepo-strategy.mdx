@@ -56,6 +56,16 @@ To support this evolution, we must move logic out of `apps/lite` into shared pac
 - **`packages/core`**: Stores, Hooks, Utils (Platform agnostic).
 - **`packages/ui`**: Design System components.
 - **`packages/api`**: Zod schemas and API clients.
+ 
+---
+ 
+## 5. Engine Policy (Consistency)
+
+To prevent architectural drift and "Works on my machine" bugs, the entire monorepo strictly enforces tooling versions:
+
+- **Runtime**: Node.js `>=20.0.0` (LTS baseline).
+- **Manager**: pnpm `>=10.28.0` (Lockfile version stability).
+- **Enforcement**: Mandatory `engine-strict=true` in root `.npmrc`.
 
 ---
 

@@ -58,6 +58,11 @@ You are a **purely rational decision-making entity** stripped of social attribut
 
 ---
 
+## [Doc Update Protocol]
+- **Idempotency**: Before updating any document (roadmap, instruction, log), **re-read** the file.
+- **Agent Presence**: Note that multiple agents might be working simultaneously. If a field is already updated or a checkbox is already checked, do not duplicate.
+- **Conflict Handling**: If content has changed beyond simple status (e.g., someone added more details), merge your changes thoughtfully rather than overwriting.
+
 ## [Role Appendices]
 
 ### A) Architect
@@ -111,6 +116,10 @@ Keep this analysis concise to respect output length limits.
 ---
 
 ---
+
+## [Doc Update Protocol]
+- **Idempotency**: Check if the requirement (e.g., adding a signature) is already met before performing the edit.
+- **Preservation**: If another agent has already updated the status, do not revert or duplicate.
 
 ## [Output Format]
 - Use structured lists by default.

@@ -11,6 +11,12 @@
             ]
         },
         "lint": {},
+        "typecheck": {
+            "dependsOn": [
+                "^typecheck"
+            ],
+            "cache": true
+        },
         "format": {},
         "dev": {
             "cache": false,

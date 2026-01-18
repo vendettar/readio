@@ -14,7 +14,7 @@ import { useEpisodePlayback } from '../hooks/useEpisodePlayback'
 import { useI18n } from '../hooks/useI18n'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import { useSubscriptionMap } from '../hooks/useSubscriptionMap'
-import { formatDateStandard, formatDuration } from '../lib/dateUtils'
+import { formatDateStandard, formatDuration, formatRelativeTime } from '../lib/dateUtils'
 import type { Favorite } from '../lib/dexieDb'
 import { stripHtml } from '../lib/htmlUtils'
 import { getDiscoveryArtworkUrl } from '../lib/imageUtils'
@@ -136,6 +136,15 @@ export default function FavoritesPage() {
                     )
                   }
                   description={cleanDescription}
+                  bottomMeta={
+                    favorite.addedAt && (
+                      <span className="text-xxs text-muted-foreground/60 font-medium leading-tight block">
+                        {t('favoritesAddedLabel', {
+                          date: formatRelativeTime(new Date(favorite.addedAt).toISOString(), t),
+                        })}
+                      </span>
+                    )
+                  }
                   meta={duration}
                   actions={
                     <>

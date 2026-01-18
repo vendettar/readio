@@ -33,6 +33,12 @@ export interface BaseEpisodeRowProps {
   actions?: React.ReactNode
 
   /**
+   * Optional bottom metadata slot (e.g. playback progress, categories).
+   * Unlike description, this is NOT clamped.
+   */
+  bottomMeta?: React.ReactNode
+
+  /**
    * Class name for the outer container.
    */
   className?: string
@@ -64,6 +70,7 @@ export function BaseEpisodeRow({
   description,
   meta,
   actions,
+  bottomMeta,
   className,
   descriptionLines = 2,
   showDivider = true,
@@ -117,6 +124,7 @@ export function BaseEpisodeRow({
             )}
 
             {/* Bottom Meta (if any, e.g. history playback progress) */}
+            {bottomMeta && <div className="mt-1">{bottomMeta}</div>}
           </div>
 
           {/* Right Side Actions & Post-Title Meta (e.g. Duration) */}

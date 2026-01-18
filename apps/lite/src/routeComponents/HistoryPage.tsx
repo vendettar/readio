@@ -225,27 +225,24 @@ export default function HistoryPage() {
                       </div>
                     )
                   }
-                  description={
-                    <>
-                      {cleanDescription && <span className="mb-1 block">{cleanDescription}</span>}
-                      {/* Played At and Progress - moved to bottom with smaller font */}
-                      <span className="text-xxs text-muted-foreground/60 font-medium leading-tight block">
-                        {(() => {
-                          const d = new Date(session.lastPlayedAt)
-                          const isThisYear = d.getFullYear() === new Date().getFullYear()
-                          return d.toLocaleDateString(language, {
-                            month: 'short',
-                            day: 'numeric',
-                            year: isThisYear ? undefined : 'numeric',
-                          })
-                        })()}
-                        {' · '}
-                        {formatTimeSmart(session.lastPlayedAt, language)}
-                        {' · '}
-                        {formatProgress(session.progress, session.duration)}{' '}
-                        {t('historyProgressSuffix')}
-                      </span>
-                    </>
+                  description={cleanDescription}
+                  bottomMeta={
+                    <span className="text-xxs text-muted-foreground/60 font-medium leading-tight block">
+                      {(() => {
+                        const d = new Date(session.lastPlayedAt)
+                        const isThisYear = d.getFullYear() === new Date().getFullYear()
+                        return d.toLocaleDateString(language, {
+                          month: 'short',
+                          day: 'numeric',
+                          year: isThisYear ? undefined : 'numeric',
+                        })
+                      })()}
+                      {' · '}
+                      {formatTimeSmart(session.lastPlayedAt, language)}
+                      {' · '}
+                      {formatProgress(session.progress, session.duration)}{' '}
+                      {t('historyProgressSuffix')}
+                    </span>
                   }
                   meta={durationText}
                   actions={

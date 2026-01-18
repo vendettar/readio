@@ -2,6 +2,15 @@
 title: Development Environment
 ---
 
+## 0. Prerequisites (Engines)
+
+To ensure consistency across environments, we enforce specific tool versions via `package.json` engines and `engine-strict=true` in `.npmrc`:
+
+- **Node.js**: `>=20.0.0`
+- **pnpm**: `>=10.28.0`
+
+If your local environment does not meet these requirements, `pnpm install` will fail.
+
 ## 1. Local Development / Build / Test
 
 Build and Test Scripts (Execute in root directory): `pnpm build`, `pnpm test`, `pnpm --filter @readio/lite test:run`, `pnpm --filter @readio/lite test:e2e`.

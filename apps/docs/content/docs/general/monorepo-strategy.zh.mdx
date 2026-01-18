@@ -56,6 +56,16 @@ Readio 旨在从单一 PWA 演变为多平台生态系统。
 - **`packages/core`**: Stores, Hooks, Utils (平台无关)。
 - **`packages/ui`**: 设计系统组件。
 - **`packages/api`**: Zod schemas 和 API 客户端。
+ 
+---
+ 
+## 5. 引擎策略 (Engine Policy)
+
+为了防止架构漂移和“在我的机器上能运行”这类 Bug，整个 monorepo 严格强制执行工具版本：
+
+- **运行时 (Runtime)**: Node.js `>=20.0.0` (LTS 基准)。
+- **包管理器 (Manager)**: pnpm `>=10.28.0` (Lockfile 版本稳定性)。
+- **强制措施**: 在根目录 `.npmrc` 中强制设置 `engine-strict=true`。
 
 ---
 
