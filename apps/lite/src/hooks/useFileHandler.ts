@@ -1,28 +1,9 @@
 // src/hooks/useFileHandler.ts
-// Thin file input handler - delegates all persistence to playerStore
 import { useCallback } from 'react'
-import { log } from '../lib/logger'
+import { log, error as logError } from '../lib/logger'
+import { audioFileSchema, subtitleFileSchema } from '../lib/schemas/fileSchema'
+import { toast } from '../lib/toast'
 import { usePlayerStore } from '../store/playerStore'
-
-// Allowed audio extensions
-const AUDIO_EXTENSIONS = ['.mp3', '.m4a', '.wav', '.ogg', '.flac', '.aac', '.webm']
-const SUBTITLE_EXTENSIONS = ['.srt', '.vtt']
-
-/**
- * Check if a file is an audio file
- */
-function isAudioFile(file: File): boolean {
-  const lowerName = file.name.toLowerCase()
-  return file.type.startsWith('audio/') || AUDIO_EXTENSIONS.some((ext) => lowerName.endsWith(ext))
-}
-
-/**
- * Check if a file is a subtitle file
- */
-function isSubtitleFile(file: File): boolean {
-  const lowerName = file.name.toLowerCase()
-  return SUBTITLE_EXTENSIONS.some((ext) => lowerName.endsWith(ext))
-}
 
 export function useFileHandler() {
   const audioLoaded = usePlayerStore((s) => s.audioLoaded)
@@ -31,20 +12,33 @@ export function useFileHandler() {
   const loadSubtitles = usePlayerStore((s) => s.loadSubtitles)
 
   /**
-   * Process dropped or selected files.
-   * All persistence is handled by the store actions - no direct DB calls here.
+   * Uses Zod schemas for validation (MIME type and extension).
    */
   const processFiles = useCallback(
     async (files: FileList | File[]) => {
       for (const file of Array.from(files)) {
-        if (isAudioFile(file)) {
-          log('[FileHandler] Processing audio file:', file.name)
-          // Store handles: blob URL creation, DB persistence, session creation
-          loadAudio(file)
-        } else if (isSubtitleFile(file)) {
-          log('[FileHandler] Processing subtitle file:', file.name)
-          // Store handles: parsing, DB persistence, session update
-          await loadSubtitles(file)
+        try {
+          // 1. Check if it's an audio file
+          const audioResult = audioFileSchema.safeParse(file)
+          if (audioResult.success) {
+            log('[FileHandler] Loading validated audio:', file.name)
+            loadAudio(file)
+            continue
+          }
+
+          // 2. Check if it's a subtitle file
+          const subResult = subtitleFileSchema.safeParse(file)
+          if (subResult.success) {
+            log('[FileHandler] Loading validated subtitle:', file.name)
+            await loadSubtitles(file)
+            continue
+          }
+
+          // 3. Fallback for unsupported files
+          log('[FileHandler] Unsupported file ignored:', file.name)
+        } catch (err) {
+          logError('[FileHandler] Error validating file:', file.name, err)
+          toast.errorKey('toastFileValidationError')
         }
       }
     },

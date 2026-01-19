@@ -1,5 +1,5 @@
 // src/hooks/useSession.ts
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect } from 'react'
 import { DB, type PlaybackSession } from '../lib/dexieDb'
 import { log, error as logError } from '../lib/logger'
 import { generateSessionId } from '../lib/session'
@@ -9,82 +9,29 @@ export function useSession() {
   const audioLoaded = usePlayerStore((s) => s.audioLoaded)
   const subtitlesLoaded = usePlayerStore((s) => s.subtitlesLoaded)
   const duration = usePlayerStore((s) => s.duration)
-  const progress = usePlayerStore((s) => s.progress)
   const storeSessionId = usePlayerStore((s) => s.sessionId)
   const localTrackId = usePlayerStore((s) => s.localTrackId)
   const setStoreSessionId = usePlayerStore((s) => s.setSessionId)
   const setProgress = usePlayerStore((s) => s.setProgress)
   const updateProgress = usePlayerStore((s) => s.updateProgress)
   const saveProgressNow = usePlayerStore((s) => s.saveProgressNow)
+  const restoreSession = usePlayerStore((s) => s.restoreSession)
+  const initializationStatus = usePlayerStore((s) => s.initializationStatus)
 
-  // Use a ref to ensure initialization only runs ONCE ever, even if sessionId flickers
-  const hasInitializedRef = useRef(false)
-
-  // Initialize session on mount (restore last session if no storeSessionId)
+  // 1. Initialize session on mount - now fully encapsulated in store
   useEffect(() => {
-    // If we've already tried to initialize or if we have an ID from FileHandler, stop.
-    if (hasInitializedRef.current || storeSessionId) return
-    hasInitializedRef.current = true
-
-    const initSession = async () => {
-      try {
-        // Try to restore last playback session
-        const lastSession = await DB.getLastPlaybackSession()
-        if (lastSession && lastSession.progress > 0) {
-          // 1. Set the Session ID in store FIRST
-          setStoreSessionId(lastSession.id)
-
-          if (lastSession.duration) {
-            usePlayerStore.getState().setDuration(lastSession.duration)
-          }
-
-          log(
-            '[Session] Restoring playback session:',
-            lastSession.id,
-            'progress:',
-            lastSession.progress
-          )
-
-          // 2. Restore audio file from IndexedDB
-          if (lastSession.audioId) {
-            const audioData = await DB.getAudioBlob(lastSession.audioId)
-            if (audioData) {
-              const file = new File([audioData.blob], audioData.filename, {
-                type: audioData.type,
-              })
-              const { loadAudio } = usePlayerStore.getState()
-              // CRITICAL: Call loadAudio with resetSession: false to preserve the sessionId we just set
-              await loadAudio(file, { resetSession: false })
-              log('[Session] Restored audio file:', audioData.filename)
-            }
-          }
-
-          // 3. Restore subtitle file from IndexedDB
-          if (lastSession.subtitleId) {
-            const subtitleData = await DB.getSubtitle(lastSession.subtitleId)
-            if (subtitleData) {
-              const file = new File([subtitleData.content], subtitleData.filename, {
-                type: 'application/x-subrip',
-              })
-              const { loadSubtitles } = usePlayerStore.getState()
-              await loadSubtitles(file)
-              log('[Session] Restored subtitle file:', subtitleData.filename)
-            }
-          }
-        }
-      } catch (err) {
-        logError('[Session] Failed to restore session:', err)
-      }
+    if (initializationStatus === 'idle') {
+      restoreSession()
     }
+  }, [initializationStatus, restoreSession])
 
-    initSession()
-  }, [storeSessionId, setStoreSessionId])
-
-  // Create new session OR restore existing session when NEW files are loaded manually
+  // 2. Create NEW session if files are loaded manually (not via restoration)
   useEffect(() => {
+    // We allow session creation if restoration is ready OR if it failed (so users can still upload)
+    if ((initializationStatus !== 'ready' && initializationStatus !== 'failed') || storeSessionId) {
+      return
+    }
     if (!audioLoaded && !subtitlesLoaded) return
-    // If we already have a sessionId (from files or restoration), don't disrupt it
-    if (storeSessionId) return
 
     const { audioUrl, audioTitle } = usePlayerStore.getState()
 
@@ -92,46 +39,33 @@ export function useSession() {
       try {
         let existingSession: PlaybackSession | undefined
 
-        // 1. Try to find existing session by localTrackId (for library tracks)
+        // Try to find existing session by localTrackId (library)
         if (localTrackId) {
           const expectedSessionId = `local-track-${localTrackId}`
           const directSession = await DB.getPlaybackSession(expectedSessionId)
           if (directSession) {
-            log('[Session] Found existing session by ID:', directSession.id)
             setStoreSessionId(directSession.id)
-            if (directSession.progress > 0) {
-              setProgress(directSession.progress)
-            }
+            if (directSession.progress > 0) setProgress(directSession.progress)
             return
           }
           existingSession = await DB.findLastSessionByTrackId(localTrackId)
         }
-        // 2. Try to find existing session by URL (for podcasts)
+        // Try to find existing session by URL (podcast)
         else if (audioUrl && !audioUrl.startsWith('blob:')) {
           existingSession = await DB.findLastSessionByUrl(audioUrl)
         }
 
         if (existingSession) {
-          log(
-            '[Session] Found previous matching session:',
-            existingSession.id,
-            'progress:',
-            existingSession.progress
-          )
           setStoreSessionId(existingSession.id)
-          if (existingSession.progress > 0) {
-            setProgress(existingSession.progress)
-          }
-          if (existingSession.duration) {
+          if (existingSession.progress > 0) setProgress(existingSession.progress)
+          if (existingSession.duration)
             usePlayerStore.getState().setDuration(existingSession.duration)
-          }
         } else {
-          // 3. No match, create brand new session
+          // Create brand new session
           const id = generateSessionId()
           setStoreSessionId(id)
 
           const { episodeMetadata, coverArtUrl } = usePlayerStore.getState()
-
           await DB.createPlaybackSession({
             id,
             progress: 0,
@@ -152,8 +86,6 @@ export function useSession() {
         }
       } catch (err) {
         logError('[Session] Failed to manage session:', err)
-        const id = generateSessionId()
-        setStoreSessionId(id)
       }
     }
 
@@ -164,18 +96,19 @@ export function useSession() {
     duration,
     storeSessionId,
     localTrackId,
+    initializationStatus,
     setStoreSessionId,
     setProgress,
   ])
 
-  // Save on unmount
+  // 3. Save on unmount
   useEffect(() => {
     return () => {
       saveProgressNow()
     }
   }, [saveProgressNow])
 
-  // Restore progress to audio element
+  // 4. Restore progress to physical audio element
   const restoreProgress = useCallback(
     async (audioElement: HTMLAudioElement) => {
       const currentSessionId = usePlayerStore.getState().sessionId
@@ -197,6 +130,7 @@ export function useSession() {
 
   return {
     sessionId: storeSessionId,
+    initializationStatus,
     updateProgress,
     restoreProgress,
   }

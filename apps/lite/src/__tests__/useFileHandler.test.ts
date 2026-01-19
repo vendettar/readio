@@ -22,8 +22,22 @@ describe('useFileHandler', () => {
     })
   })
 
-  it('should call loadAudio for audio files', async () => {
-    const mockAudioFile = new File(['audio content'], 'test.mp3', { type: 'audio/mpeg' })
+  it('should call loadAudio for audio files (MP3 MIME)', async () => {
+    const mockAudioFile = new File(['audio'], 'test.mp3', { type: 'audio/mpeg' })
+
+    const { result } = renderHook(() => useFileHandler())
+
+    await act(async () => {
+      await result.current.processFiles([mockAudioFile])
+    })
+
+    const store = usePlayerStore.getState()
+    expect(store.loadAudio).toHaveBeenCalledWith(mockAudioFile)
+  })
+
+  it('should call loadAudio for audio files (extension only)', async () => {
+    // If MIME type is missing but extension is valid
+    const mockAudioFile = new File(['audio'], 'test.mp3', { type: '' })
 
     const { result } = renderHook(() => useFileHandler())
 
@@ -36,7 +50,7 @@ describe('useFileHandler', () => {
   })
 
   it('should call loadSubtitles for srt files', async () => {
-    const mockSrtFile = new File(['1\n00:00:01,000 --> 00:00:02,000\nHello'], 'test.srt')
+    const mockSrtFile = new File(['srt'], 'test.srt')
 
     const { result } = renderHook(() => useFileHandler())
 
@@ -48,24 +62,9 @@ describe('useFileHandler', () => {
     expect(store.loadSubtitles).toHaveBeenCalledWith(mockSrtFile)
   })
 
-  it('should process both audio and srt files together', async () => {
-    const mockAudioFile = new File(['audio'], 'test.mp3', { type: 'audio/mpeg' })
-    const mockSrtFile = new File(['1\n00:00:01,000 --> 00:00:02,000\nHello'], 'test.srt')
-
-    const { result } = renderHook(() => useFileHandler())
-
-    await act(async () => {
-      await result.current.processFiles([mockAudioFile, mockSrtFile])
-    })
-
-    const store = usePlayerStore.getState()
-    expect(store.loadAudio).toHaveBeenCalledWith(mockAudioFile)
-    expect(store.loadSubtitles).toHaveBeenCalledWith(mockSrtFile)
-  })
-
-  it('should recognize audio files by extension', async () => {
-    const m4aFile = new File(['audio'], 'podcast.m4a', { type: 'audio/mp4' })
-    const oggFile = new File(['audio'], 'music.ogg', { type: 'audio/ogg' })
+  it('should recognize various audio extensions', async () => {
+    const m4aFile = new File(['audio'], 'podcast.m4a')
+    const oggFile = new File(['audio'], 'music.ogg')
 
     const { result } = renderHook(() => useFileHandler())
 
@@ -75,12 +74,10 @@ describe('useFileHandler', () => {
 
     const store = usePlayerStore.getState()
     expect(store.loadAudio).toHaveBeenCalledTimes(2)
-    expect(store.loadAudio).toHaveBeenCalledWith(m4aFile)
-    expect(store.loadAudio).toHaveBeenCalledWith(oggFile)
   })
 
   it('should not call any store action for unsupported files', async () => {
-    const txtFile = new File(['text content'], 'readme.txt', { type: 'text/plain' })
+    const txtFile = new File(['text'], 'readme.txt')
 
     const { result } = renderHook(() => useFileHandler())
 

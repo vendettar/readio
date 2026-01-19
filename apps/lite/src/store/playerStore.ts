@@ -2,7 +2,7 @@
 import { create } from 'zustand'
 import { DB } from '../lib/dexieDb'
 import { translate } from '../lib/i18nUtils'
-import { logError } from '../lib/logger'
+import { log, logError } from '../lib/logger'
 import { getAppConfig } from '../lib/runtimeConfig'
 import { getJson, setJson } from '../lib/storage'
 import type { subtitle } from '../lib/subtitles'
@@ -46,6 +46,9 @@ interface PlayerState {
   subtitlesLoaded: boolean
   currentIndex: number
 
+  // Lifecycle status
+  initializationStatus: 'idle' | 'restoring' | 'ready' | 'failed'
+
   // Actions
   setProgress: (progress: number) => void
   setDuration: (duration: number) => void
@@ -68,10 +71,11 @@ interface PlayerState {
   pause: () => void
   togglePlayPause: () => void
   reset: () => void
-  loadAudio: (file: File, options?: { resetSession?: boolean }) => void
+  loadAudio: (file: File) => void
   loadSubtitles: (file: File) => Promise<void>
   updateProgress: (time: number) => void // Throttled progress update with DB persistence
   saveProgressNow: () => Promise<void> // Force immediate save (for unmount)
+  restoreSession: () => Promise<void> // Encapsulated restoration logic
 }
 
 const initialState = {
@@ -92,6 +96,7 @@ const initialState = {
   subtitles: [] as subtitle[],
   subtitlesLoaded: false,
   currentIndex: -1,
+  initializationStatus: 'idle' as const,
 }
 
 // Persistence keys
@@ -190,7 +195,7 @@ export const usePlayerStore = create<PlayerState>((set) => ({
     })
   },
 
-  loadAudio: async (file, options = { resetSession: true }) => {
+  loadAudio: async (file) => {
     const config = getAppConfig()
     const MAX_AUDIO_SIZE = config.MAX_AUDIO_SIZE_MB * 1024 * 1024
     const shouldCache = file.size <= MAX_AUDIO_SIZE
@@ -241,16 +246,11 @@ export const usePlayerStore = create<PlayerState>((set) => ({
         audioTitle: file.name,
         coverArtUrl: '',
         currentBlobUrl: url,
-        // ONLY reset session if explicitly requested (e.g. manual file upload)
-        // during restoration, we want to KEEP the sessionId set by useSession
-        ...(options.resetSession
-          ? {
-            sessionId: null,
-            progress: 0,
-            localTrackId: null,
-          }
-          : {}),
-        // CRITICAL FIX: Always clear subtitles when changing track
+        // Reset session for NEW manual upload
+        sessionId: null,
+        progress: 0,
+        localTrackId: null,
+        // Always clear subtitles when changing track
         subtitles: [],
         subtitlesLoaded: false,
         currentIndex: -1,
@@ -336,6 +336,92 @@ export const usePlayerStore = create<PlayerState>((set) => ({
       })
     } catch (err) {
       logError('[PlayerStore] Failed to save progress on unmount:', err)
+    }
+  },
+
+  // Encapsulated restoration logic
+  restoreSession: async () => {
+    const { initializationStatus } = usePlayerStore.getState()
+    if (initializationStatus === 'restoring' || initializationStatus === 'ready') return
+
+    set({ initializationStatus: 'restoring' })
+
+    try {
+      const lastSession = await DB.getLastPlaybackSession()
+      if (!lastSession || lastSession.progress <= 0) {
+        set({ initializationStatus: 'ready' })
+        return
+      }
+
+      // 1. Prepare Metadata
+      if (lastSession.duration) {
+        set({ duration: lastSession.duration })
+      }
+
+      // 2. Restore audio file from IndexedDB
+      if (lastSession.audioId) {
+        const audioData = await DB.getAudioBlob(lastSession.audioId)
+        if (audioData) {
+          const file = new File([audioData.blob], audioData.filename, {
+            type: audioData.type,
+          })
+
+          // Create blob URL for restored file
+          const url = URL.createObjectURL(file)
+
+          // Update state ATOMICALLY with the restored sessionId
+          set((state) => {
+            if (state.currentBlobUrl) URL.revokeObjectURL(state.currentBlobUrl)
+            return {
+              sessionId: lastSession.id,
+              audioUrl: url,
+              audioLoaded: true,
+              audioTitle: file.name,
+              currentBlobUrl: url,
+              progress: lastSession.progress,
+            }
+          })
+        }
+      }
+      // 2b. Restore remote audio (Podcasts / Explore page)
+      else if (lastSession.audioUrl) {
+        log('[PlayerStore] Restoring remote podcast session:', lastSession.audioUrl)
+        set({
+          sessionId: lastSession.id,
+          audioUrl: lastSession.audioUrl,
+          audioLoaded: true,
+          audioTitle: lastSession.title || '',
+          progress: lastSession.progress,
+          coverArtUrl: lastSession.artworkUrl || '',
+          episodeMetadata: {
+            description: lastSession.description,
+            podcastTitle: lastSession.podcastTitle,
+            podcastFeedUrl: lastSession.podcastFeedUrl,
+            artworkUrl: lastSession.artworkUrl,
+            publishedAt: lastSession.publishedAt,
+            episodeId: lastSession.episodeId,
+          },
+        })
+      }
+
+      // 3. Restore subtitle file from IndexedDB
+      if (lastSession.subtitleId) {
+        const subtitleData = await DB.getSubtitle(lastSession.subtitleId)
+        if (subtitleData) {
+          const content = subtitleData.content
+          const subtitles = parseSrt(content)
+          set({
+            subtitles,
+            subtitlesLoaded: true,
+          })
+        }
+      }
+
+      set({ initializationStatus: 'ready' })
+    } catch (err) {
+      logError('[PlayerStore] Session restoration failed:', err)
+      set({ initializationStatus: 'failed' })
+      // Keep it as failed so we can potentially retry or show error UI
     }
   },
 }))

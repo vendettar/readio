@@ -106,3 +106,4 @@ We consolidated all persistence logic into the Store Actions.
   - `pnpm --filter @readio/lite exec biome check .`
   - `pnpm --filter @readio/lite test run`
 - **Date**: 2026-01-20
+- **Reviewed by**: Readio Reviewer (QA)

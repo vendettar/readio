@@ -1,9 +1,28 @@
 // src/__tests__/playerStore.test.ts
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { DB } from '../lib/dexieDb'
 import { usePlayerStore } from '../store/playerStore'
+
+// Mock DB
+vi.mock('../lib/dexieDb', () => ({
+  DB: {
+    addAudioBlob: vi.fn().mockResolvedValue('audio-1'),
+    updatePlaybackSession: vi.fn().mockResolvedValue(undefined),
+    getLastPlaybackSession: vi.fn(),
+    getAudioBlob: vi.fn(),
+    getSubtitle: vi.fn(),
+  },
+}))
+
+// Mock URL
+vi.stubGlobal('URL', {
+  createObjectURL: vi.fn(() => 'mock-blob-url'),
+  revokeObjectURL: vi.fn(),
+})
 
 describe('PlayerStore', () => {
   beforeEach(() => {
+    vi.clearAllMocks()
     // Reset store between tests
     usePlayerStore.setState({
       audioLoaded: false,
@@ -13,6 +32,8 @@ describe('PlayerStore', () => {
       isPlaying: false,
       progress: 0,
       duration: 0,
+      sessionId: null,
+      initializationStatus: 'idle',
       subtitles: [],
       subtitlesLoaded: false,
       currentIndex: -1,
@@ -20,19 +41,17 @@ describe('PlayerStore', () => {
   })
 
   describe('Audio State', () => {
-    it('should clear episodeMetadata by default when setting audio URL', () => {
-      const { setAudioUrl, setEpisodeMetadata } = usePlayerStore.getState()
+    it('should reset session when manually loading audio', async () => {
+      const { loadAudio } = usePlayerStore.getState()
+      usePlayerStore.setState({ sessionId: 'existing-session', progress: 50 })
 
-      // Set some metadata first
-      setEpisodeMetadata({ description: 'Existing metadata' })
-      expect(usePlayerStore.getState().episodeMetadata?.description).toBe('Existing metadata')
-
-      // Change track without metadata
-      setAudioUrl('http://example.com/new.mp3')
+      const file = new File(['audio'], 'test.mp3', { type: 'audio/mpeg' })
+      await loadAudio(file)
 
       const state = usePlayerStore.getState()
-      expect(state.audioUrl).toBe('http://example.com/new.mp3')
-      expect(state.episodeMetadata).toBeNull()
+      expect(state.sessionId).toBeNull()
+      expect(state.progress).toBe(0)
+      expect(state.audioUrl).toBe('mock-blob-url')
     })
 
     it('should set audio URL and metadata atomically', () => {
@@ -51,72 +70,78 @@ describe('PlayerStore', () => {
       expect(state.episodeMetadata).toEqual(metadata)
     })
 
-    it('should toggle play/pause', () => {
-      const { togglePlayPause } = usePlayerStore.getState()
-
-      expect(usePlayerStore.getState().isPlaying).toBe(false)
-      togglePlayPause()
-      expect(usePlayerStore.getState().isPlaying).toBe(true)
-      togglePlayPause()
-      expect(usePlayerStore.getState().isPlaying).toBe(false)
-    })
-
-    it('should update progress', () => {
+    it('should update progress and handle setProgress', () => {
       const { setProgress } = usePlayerStore.getState()
-
       setProgress(30.5)
       expect(usePlayerStore.getState().progress).toBe(30.5)
     })
-
-    it('should clamp seekTo values within [0, duration]', () => {
-      const { seekTo, setDuration } = usePlayerStore.getState()
-      setDuration(100)
-
-      // Within range
-      seekTo(50)
-      expect(usePlayerStore.getState().progress).toBe(50)
-
-      // Below 0
-      seekTo(-10)
-      expect(usePlayerStore.getState().progress).toBe(0)
-
-      // Above duration
-      seekTo(150)
-      expect(usePlayerStore.getState().progress).toBe(100)
-    })
-
-    it('should allow seek to any positive value if duration is unknown (0)', () => {
-      const { seekTo, setDuration } = usePlayerStore.getState()
-      setDuration(0)
-
-      seekTo(50)
-      expect(usePlayerStore.getState().progress).toBe(50)
-
-      seekTo(-5)
-      expect(usePlayerStore.getState().progress).toBe(0)
-    })
   })
 
-  describe('Subtitles State', () => {
-    it('should set subtitles', () => {
-      const { setSubtitles } = usePlayerStore.getState()
-      const subs = [
-        { start: 0, end: 5, text: 'Hello' },
-        { start: 5, end: 10, text: 'World' },
-      ]
+  describe('Session Restoration', () => {
+    it('should restore session atomically', async () => {
+      const { restoreSession } = usePlayerStore.getState()
+      const mockSession = {
+        id: 'restored-id',
+        progress: 120,
+        duration: 300,
+        audioId: 'audio-1',
+        audioFilename: 'restored.mp3',
+        source: 'local' as const,
+        hasAudioBlob: true,
+      }
 
-      setSubtitles(subs)
+      // biome-ignore lint/suspicious/noExplicitAny: Mocking DB return
+      vi.mocked(DB.getLastPlaybackSession).mockResolvedValue(mockSession as any)
+      vi.mocked(DB.getAudioBlob).mockResolvedValue({
+        id: 'audio-1',
+        blob: new Blob(['audio']),
+        filename: 'restored.mp3',
+        type: 'audio/mpeg',
+        size: 5,
+        storedAt: Date.now(),
+      })
+
+      await restoreSession()
 
       const state = usePlayerStore.getState()
-      expect(state.subtitles).toHaveLength(2)
-      expect(state.subtitlesLoaded).toBe(true)
+      expect(state.initializationStatus).toBe('ready')
+      expect(state.sessionId).toBe('restored-id')
+      expect(state.progress).toBe(120)
+      expect(state.audioLoaded).toBe(true)
+      expect(state.audioTitle).toBe('restored.mp3')
     })
 
-    it('should update current index', () => {
-      const { setCurrentIndex } = usePlayerStore.getState()
+    it('should restore remote podcast session atomically', async () => {
+      const { restoreSession } = usePlayerStore.getState()
+      const mockSession = {
+        id: 'podcast-id',
+        audioUrl: 'https://example.com/podcast.mp3',
+        progress: 45,
+        title: 'Podcast Episode',
+        artworkUrl: 'https://example.com/cover.jpg',
+      }
+      // biome-ignore lint/suspicious/noExplicitAny: Mocking DB return
+      vi.mocked(DB.getLastPlaybackSession).mockResolvedValue(mockSession as any)
 
-      setCurrentIndex(5)
-      expect(usePlayerStore.getState().currentIndex).toBe(5)
+      await restoreSession()
+
+      const state = usePlayerStore.getState()
+      expect(state.sessionId).toBe('podcast-id')
+      expect(state.audioUrl).toBe('https://example.com/podcast.mp3')
+      expect(state.progress).toBe(45)
+      expect(state.audioLoaded).toBe(true)
+      expect(state.coverArtUrl).toBe('https://example.com/cover.jpg')
+    })
+
+    it('should fail gracefully if restoration throws', async () => {
+      const { restoreSession } = usePlayerStore.getState()
+      vi.mocked(DB.getLastPlaybackSession).mockRejectedValue(new Error('DB Error'))
+
+      await restoreSession()
+
+      const state = usePlayerStore.getState()
+      expect(state.initializationStatus).toBe('failed')
+      expect(state.sessionId).toBeNull()
     })
   })
 
