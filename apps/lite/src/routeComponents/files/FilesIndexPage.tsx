@@ -233,7 +233,7 @@ export default function FilesIndexPage() {
       onDragEnd={handleDragEndWithPreview}
       onDragCancel={handleDragCancelWithPreview}
     >
-      <div className="px-[var(--page-margin-x)] pt-[var(--page-margin-x)] pb-32 max-w-content mx-auto min-h-full">
+      <div className="px-page pt-page pb-32 max-w-content mx-auto min-h-full">
         {/* Header */}
         <header className="mb-8 flex items-end justify-between">
           <div className="flex flex-col gap-2">

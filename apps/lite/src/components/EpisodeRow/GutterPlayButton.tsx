@@ -15,7 +15,7 @@ interface GutterPlayButtonProps {
  */
 export function GutterPlayButton({ onPlay, ariaLabel }: GutterPlayButtonProps) {
   return (
-    <div className="absolute -left-[var(--page-gutter-x)] top-0 bottom-0 w-[var(--page-gutter-x)] flex items-center justify-center opacity-0 group-hover/episode:opacity-100 group-focus-within/episode:opacity-100 transition-opacity duration-200 z-30">
+    <div className="absolute -left-page-gutter top-0 bottom-0 w-page-gutter flex items-center justify-center opacity-0 group-hover/episode:opacity-100 group-focus-within/episode:opacity-100 transition-opacity duration-200 z-30">
       <Button
         variant="ghost"
         size="icon"

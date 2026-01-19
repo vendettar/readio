@@ -89,7 +89,7 @@ export function BaseEpisodeRow({
       */}
       <div
         className={cn(
-          'absolute inset-y-0 -left-[var(--page-gutter-x)] right-0 rounded-lg bg-foreground/5 opacity-0 group-hover/episode:opacity-100 transition-opacity duration-300 pointer-events-none z-0'
+          'absolute inset-y-0 -left-page-gutter right-0 rounded-lg bg-foreground/5 opacity-0 group-hover/episode:opacity-100 transition-opacity duration-300 pointer-events-none z-0'
         )}
       />
 

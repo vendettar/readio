@@ -32,7 +32,7 @@ export function AppShell({ children }: AppShellProps) {
       <main className="flex-1 flex flex-col relative bg-background overflow-hidden">
         {/* Main content area */}
         <div className="flex-1 h-full overflow-hidden">
-          <div className="h-full overflow-y-auto pb-[var(--mini-player-height)]">{children}</div>
+          <div className="h-full overflow-y-auto pb-mini-player">{children}</div>
         </div>
       </main>
 

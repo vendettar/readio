@@ -111,7 +111,7 @@ export function MiniPlayer() {
       className={cn(
         'fixed bottom-0 right-0 bg-card border-t border-border z-30',
         'flex items-center justify-between px-6',
-        'w-[calc(100%-var(--sidebar-width))] h-[var(--mini-player-height)]',
+        'w-[calc(100%-var(--sidebar-width))] h-mini-player',
         isDisabled && 'opacity-50'
       )}
     >

@@ -280,7 +280,7 @@ export default function ExplorePage() {
 
   return (
     <div className="h-full overflow-y-auto bg-background text-foreground custom-scrollbar">
-      <div className="w-full max-w-content mx-auto px-[var(--page-margin-x)] pt-[var(--page-margin-x)] pb-14 min-h-full">
+      <div className="w-full max-w-content mx-auto px-page pt-page pb-14 min-h-full">
         {/* Header */}
         <header className="mb-10">
           <h1 className="text-3xl sm:text-4xl font-bold tracking-tight mb-2">

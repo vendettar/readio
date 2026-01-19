@@ -67,7 +67,7 @@ export default function SearchPage() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="w-full max-w-content mx-auto px-[var(--page-margin-x)] pt-[var(--page-margin-x)] pb-8">
+      <div className="w-full max-w-content mx-auto px-page pt-page pb-8">
         <header className="mb-12">
           <h1 className="text-4xl font-bold text-foreground tracking-tight mb-3">
             {query ? `"${query}"` : t('searchPlaceholderGlobal')}

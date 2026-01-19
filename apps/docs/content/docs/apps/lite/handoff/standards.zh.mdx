@@ -35,7 +35,11 @@ SVG 资源：
 
 **布局一致性准则**：
 - **最大宽度**：核心内容页面（Explore, History, Favorites, Search, Subscriptions, Settings, Show/Episode Detail）统一使用 `max-w-content` (1680px)。
-- **水平间距**：页面级容器必须使用 `px-[var(--page-margin-x)]`，以确保内容与侧边栏的 48px (3rem) 安全距离，并为单集列表的 Gutter 动效预留空间。
+- **水平间距**：页面级容器必须使用 `px-page`，以确保内容与侧边栏的 48px (3rem) 安全距离，并为单集列表的 Gutter 动效预留空间。
+
+**静态 vs 动态 CSS 变量**：
+- **静态布局 Token**（如 `--page-margin-x`, `--sidebar-width`）：在 `src/index.css` 中定义一次，并注册到 Tailwind 配置中。应使用语义化类名如 `px-page`, `w-sidebar`。
+- **动态运行时变量**（如播放进度 `--progress`）：由 JavaScript 在运行时设置。应使用任意值语法 `[var(--progress)]`，这是动态变化值的正确用法。
 
 ### Theme Accent（强调色）
 
@@ -190,7 +194,7 @@ Provider 位于 `src/main.tsx`（`Tooltip.Provider`）。
 5. **EpisodeRow & BaseEpisodeRow** (`src/components/EpisodeRow/`)
    - **BaseEpisodeRow**: 纯展示组件 (Presentational Component)。
      - **视觉规范**：
-       - **Hover 背景层**：必须使用绝对定位层 (`absolute inset-y-0`)，且左侧偏移固定为 `-left-[var(--page-gutter-x)]`。这确保了所有列表项（无论有无封面）的选中高亮区域在垂直方向上完美对齐成一个矩形柱。
+       - **Hover 背景层**：必须使用绝对定位层 (`absolute inset-y-0`)，且左侧偏移固定为 `-left-page-gutter`。这确保了所有列表项（无论有无封面）的选中高亮区域在垂直方向上完美对齐成一个矩形柱。
        - **全高覆盖**：使用 `inset-y-0` 确保背景层完全覆盖单集行的高度，使其顶边和底边能严丝合缝地贴合分割线。
        - **分割线逻辑**：结合 `smart-divider-group` 手法。分割线组件应具备 `group-hover/episode:opacity-0`，使得当前 hover 行及其相邻行的分割线自动消失，营造流畅感。
      - **无封面单集方案 (No-Artwork Gutter Play)**：

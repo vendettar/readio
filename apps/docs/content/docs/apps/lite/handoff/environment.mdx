@@ -78,3 +78,7 @@ The default database name is `readio` (override via `READIO_DB_NAME` for reset),
 ### Tailwind Styles Not Working
 
 The PostCSS pipeline uses `@tailwindcss/postcss` (Tailwind v4).
+
+### Known Build Warning (Lightning CSS)
+
+`pnpm --filter @readio/lite build` currently reports a warning for `::highlight(lookup-highlight)`. This is due to Lightning CSS lagging support for the Highlights API. Treat it as expected until the toolchain update; it is not a failure gate.

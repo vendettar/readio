@@ -127,7 +127,7 @@ export default function PodcastShowPage() {
 
   return (
     <div className="h-full overflow-y-auto bg-background text-foreground custom-scrollbar">
-      <div className="w-full max-w-content mx-auto px-[var(--page-margin-x)] pt-[var(--page-margin-x)] pb-32">
+      <div className="w-full max-w-content mx-auto px-page pt-page pb-32">
         {/* Hero Section */}
         <div className="flex flex-col md:flex-row gap-8 mb-10">
           {/* Artwork */}

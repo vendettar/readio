@@ -47,7 +47,7 @@ export function Sidebar({ className = '' }: SidebarProps) {
 
   return (
     <aside
-      className={`w-[var(--sidebar-width)] h-screen bg-card border-r border-border flex flex-col flex-shrink-0 ${className}`}
+      className={`w-sidebar h-screen bg-card border-r border-border flex flex-col flex-shrink-0 ${className}`}
     >
       {/* App Header */}
       <div className="px-6 py-8 pb-3">

@@ -78,3 +78,7 @@ title: Development Environment
 ### Tailwind 样式不生效
 
 PostCSS 管线使用 `@tailwindcss/postcss`（Tailwind v4）。
+
+### 已知构建警告（Lightning CSS）
+
+`pnpm --filter @readio/lite build` 目前会对 `::highlight(lookup-highlight)` 报告警告。这是 Lightning CSS 对 Highlights API 支持滞后导致的，等待工具链更新即可；不视为失败条件。

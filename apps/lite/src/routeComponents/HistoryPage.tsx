@@ -135,7 +135,7 @@ export default function HistoryPage() {
 
   return (
     <div className="h-full overflow-y-auto custom-scrollbar">
-      <div className="w-full max-w-content mx-auto px-[var(--page-margin-x)] pt-[var(--page-margin-x)] pb-32">
+      <div className="w-full max-w-content mx-auto px-page pt-page pb-32">
         <header className="mb-12">
           <h1 className="text-4xl font-bold text-foreground tracking-tight">{t('historyTitle')}</h1>
         </header>

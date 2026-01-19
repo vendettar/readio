@@ -40,7 +40,7 @@ export default function SubscriptionsPage() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="px-[var(--page-margin-x)] pt-[var(--page-margin-x)] pb-32 max-w-content mx-auto min-h-full">
+      <div className="px-page pt-page pb-32 max-w-content mx-auto min-h-full">
         <header className="mb-12">
           <h1 className="text-4xl font-bold text-foreground tracking-tight">
             {t('subscriptionsTitle')}

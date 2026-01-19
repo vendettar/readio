@@ -69,7 +69,7 @@ export default function SettingsPage() {
 
   return (
     <div className="h-full overflow-y-auto bg-background text-foreground">
-      <div className="px-[var(--page-margin-x)] pt-[var(--page-margin-x)] pb-32 max-w-content mx-auto min-h-full">
+      <div className="px-page pt-page pb-32 max-w-content mx-auto min-h-full">
         <header className="mb-12">
           <h1 className="text-4xl font-bold tracking-tight mb-3">{t('settings')}</h1>
           <p className="text-xl text-muted-foreground font-medium">{t('settingsSubtitle')}</p>

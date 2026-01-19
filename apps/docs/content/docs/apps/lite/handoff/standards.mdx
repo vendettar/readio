@@ -35,7 +35,11 @@ Icon sources are unified and consistent in style; UI operation SVG files should 
 
 **Layout Consistency Guidelines**:
 - **Max Width**: Core content pages (Explore, History, Favorites, Search, Subscriptions, Settings, Show/Episode Detail) uniformly use `max-w-content` (1680px).
-- **Horizontal Spacing**: Page-level containers must use `px-[var(--page-margin-x)]` to ensure a 48px (3rem) safe distance from the sidebar and reserve space for the episode list Gutter animation.
+- **Horizontal Spacing**: Page-level containers must use `px-page` to ensure a 48px (3rem) safe distance from the sidebar and reserve space for the episode list Gutter animation.
+
+**Static vs Dynamic CSS Variables**:
+- **Static Layout Tokens** (e.g., `--page-margin-x`, `--sidebar-width`): Defined once in `src/index.css`, registered in Tailwind config. Use semantic classes like `px-page`, `w-sidebar`.
+- **Dynamic Runtime Variables** (e.g., `--progress` for playback percentage): Set via JavaScript at runtime. Use arbitrary value syntax `[var(--progress)]` — this is the correct approach for values that change dynamically.
 
 ### Theme Accent
 
@@ -190,7 +194,7 @@ Follows the five architecture consistency principles defined in `apps/docs/conte
 5. **EpisodeRow & BaseEpisodeRow** (`src/components/EpisodeRow/`)
    - **BaseEpisodeRow**: Pure Presentation Component.
      - **Visual Specs**:
-       - **Hover Background Layer**: Must use absolute positioning (`absolute inset-y-0`) with fixed left offset (`-left-[var(--page-gutter-x)]`). This ensures the selection highlight area for all list items (with or without cover) aligns perfectly as a rectangular column vertically.
+       - **Hover Background Layer**: Must use absolute positioning (`absolute inset-y-0`) with fixed left offset (`-left-page-gutter`). This ensures the selection highlight area for all list items (with or without cover) aligns perfectly as a rectangular column vertically.
        - **Full Height Coverage**: Use `inset-y-0` to ensure the background layer completely covers the episode row height, fitting tightly with the dividers top and bottom.
        - **Divider Logic**: Combined with `smart-divider-group` technique. Divider component should have `group-hover/episode:opacity-0`, making dividers for the current hover row and its adjacent rows disappear automatically, creating a fluid feel.
      - **No-Artwork Gutter Play Scheme**:

@@ -254,7 +254,7 @@ export default function FilesFolderPage() {
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
-      <div className="px-[var(--page-margin-x)] pt-[var(--page-margin-x)] pb-32 max-w-content mx-auto min-h-full">
+      <div className="px-page pt-page pb-32 max-w-content mx-auto min-h-full">
         {/* Header */}
         <header className="mb-8">
           {/* Back button row */}
