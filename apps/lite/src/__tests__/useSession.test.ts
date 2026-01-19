@@ -21,6 +21,7 @@ vi.mock('../lib/logger', () => ({
   log: vi.fn(),
   warn: vi.fn(),
   error: vi.fn(),
+  logError: vi.fn(),
 }))
 
 // Mock sessionId generator
@@ -105,31 +106,45 @@ describe('useSession', () => {
     )
   })
 
-  it('should save progress every 5 seconds', async () => {
-    usePlayerStore.setState({ sessionId: 'active-session', progress: 10, duration: 100 })
+  it('should save progress through store updateProgress action', async () => {
+    // Set up initial state
+    usePlayerStore.setState({ sessionId: 'active-session', progress: 0, duration: 100 })
 
     renderHook(() => useSession())
 
-    // First save should happen immediately because lastSave is 0
+    // Call updateProgress directly (simulating audio timeupdate)
+    act(() => {
+      usePlayerStore.getState().updateProgress(10)
+    })
+
+    // First call should go through (lastProgressSaveTime is 0)
     await act(async () => {
       await vi.runAllTimersAsync()
     })
     expect(DB.updatePlaybackSession).toHaveBeenCalledTimes(1)
+    expect(DB.updatePlaybackSession).toHaveBeenCalledWith(
+      'active-session',
+      expect.objectContaining({
+        progress: 10,
+        duration: 100,
+      })
+    )
 
-    // Advance time by 6 seconds (total 6s)
+    // Advance time by 6 seconds (past the throttle interval)
     await act(async () => {
       vi.advanceTimersByTime(6000)
     })
 
-    // Update progress AFTER advancing time to trigger call where interval has passed
+    // Update progress again
     act(() => {
-      usePlayerStore.setState({ progress: 20 })
+      usePlayerStore.getState().updateProgress(20)
     })
 
     await act(async () => {
       await vi.runAllTimersAsync()
     })
 
+    // Should have been called a second time
     expect(DB.updatePlaybackSession).toHaveBeenCalledTimes(2)
     expect(DB.updatePlaybackSession).toHaveBeenLastCalledWith(
       'active-session',
@@ -140,21 +155,22 @@ describe('useSession', () => {
     )
   })
 
-  it('should save progress on unmount', async () => {
+  it('should save progress on unmount via saveProgressNow', async () => {
     usePlayerStore.setState({ sessionId: 'unmount-session', progress: 50, duration: 200 })
 
     const { unmount } = renderHook(() => useSession())
 
-    // Initial save
+    // Initial setup
     await act(async () => {
       await vi.runAllTimersAsync()
     })
 
-    // Mock updatePlaybackSession for unmount
+    // Clear mocks to only track unmount save
     vi.mocked(DB.updatePlaybackSession).mockClear()
 
     unmount()
 
+    // saveProgressNow is called on unmount
     expect(DB.updatePlaybackSession).toHaveBeenCalledWith(
       'unmount-session',
       expect.objectContaining({

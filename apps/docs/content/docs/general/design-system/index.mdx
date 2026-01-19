@@ -64,3 +64,13 @@ Use shadcn/ui primitives instead:
 2. Truly non-standard interactions that cannot be expressed with shadcn primitives without breaking behavior (rare). If needed, keep the element accessible (keyboard + `aria-*`) and visually consistent.
 
 **Rationale**: Raw controls drift in styling, focus/disabled states, and accessibility over time. Using a shared primitive set prevents UI fragmentation.
+
+---
+
+## Security: File Validation (Decision Note)
+
+To balance UX speed with safety across platforms, file validation follows a layered approach:
+
+- **Web (Lite)**: Validate with MIME type + file extension only.
+- **Backend**: Perform content-based validation (magic number or full parse).
+- **Native**: Rely on decoder-driven validation or a light header check during import.

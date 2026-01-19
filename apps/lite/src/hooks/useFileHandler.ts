@@ -1,93 +1,54 @@
 // src/hooks/useFileHandler.ts
-import { useCallback, useRef } from 'react'
-import { DB } from '../lib/dexieDb'
-import { log, error as logError } from '../lib/logger'
-import { generateSessionId } from '../lib/session'
-import { toast } from '../lib/toast'
+// Thin file input handler - delegates all persistence to playerStore
+import { useCallback } from 'react'
+import { log } from '../lib/logger'
 import { usePlayerStore } from '../store/playerStore'
 
-export function useFileHandler() {
-  const { audioLoaded, subtitlesLoaded, loadAudio, loadSubtitles, setSessionId } = usePlayerStore()
+// Allowed audio extensions
+const AUDIO_EXTENSIONS = ['.mp3', '.m4a', '.wav', '.ogg', '.flac', '.aac', '.webm']
+const SUBTITLE_EXTENSIONS = ['.srt', '.vtt']
 
-  // Track pending audio/subtitle IDs for session creation
-  const pendingAudioRef = useRef<{ id: string; filename: string } | null>(null)
-  const pendingSubtitleRef = useRef<{ id: string; filename: string } | null>(null)
+/**
+ * Check if a file is an audio file
+ */
+function isAudioFile(file: File): boolean {
+  const lowerName = file.name.toLowerCase()
+  return file.type.startsWith('audio/') || AUDIO_EXTENSIONS.some((ext) => lowerName.endsWith(ext))
+}
+
+/**
+ * Check if a file is a subtitle file
+ */
+function isSubtitleFile(file: File): boolean {
+  const lowerName = file.name.toLowerCase()
+  return SUBTITLE_EXTENSIONS.some((ext) => lowerName.endsWith(ext))
+}
+
+export function useFileHandler() {
+  const audioLoaded = usePlayerStore((s) => s.audioLoaded)
+  const subtitlesLoaded = usePlayerStore((s) => s.subtitlesLoaded)
+  const loadAudio = usePlayerStore((s) => s.loadAudio)
+  const loadSubtitles = usePlayerStore((s) => s.loadSubtitles)
 
   /**
-   * Create or update a session binding audioId and subtitleId
+   * Process dropped or selected files.
+   * All persistence is handled by the store actions - no direct DB calls here.
    */
-  const createOrUpdateSession = useCallback(async () => {
-    const audio = pendingAudioRef.current
-    const subtitle = pendingSubtitleRef.current
-
-    // At minimum require audio to create a session
-    if (!audio) return
-
-    const sessionId = generateSessionId()
-
-    try {
-      await DB.createPlaybackSession({
-        id: sessionId,
-        audioId: audio.id,
-        audioFilename: audio.filename,
-        subtitleId: subtitle?.id || null,
-        subtitleFilename: subtitle?.filename || '',
-        hasAudioBlob: true,
-        subtitleType: subtitle ? 'srt' : null,
-      })
-
-      setSessionId(sessionId)
-      log('[FileHandler] Created playback session:', sessionId)
-    } catch (err) {
-      logError('[FileHandler] Failed to create playback session:', err)
-    }
-  }, [setSessionId])
-
   const processFiles = useCallback(
     async (files: FileList | File[]) => {
-      // Reset pending refs
-      pendingAudioRef.current = null
-      pendingSubtitleRef.current = null
-
       for (const file of Array.from(files)) {
-        if (
-          file.name.endsWith('.mp3') ||
-          file.name.endsWith('.m4a') ||
-          file.name.endsWith('.wav') ||
-          file.name.endsWith('.ogg') ||
-          file.type.startsWith('audio/')
-        ) {
+        if (isAudioFile(file)) {
+          log('[FileHandler] Processing audio file:', file.name)
+          // Store handles: blob URL creation, DB persistence, session creation
           loadAudio(file)
-          // Save to DB for files visibility
-          try {
-            const audioId = await DB.addAudioBlob(file, file.name)
-            pendingAudioRef.current = { id: audioId, filename: file.name }
-            log('[FileHandler] Saved audio to DB:', file.name, audioId)
-          } catch (err) {
-            logError('[FileHandler] Failed to save audio to DB:', err)
-            toast.errorKey('toastSaveAudioFailed')
-          }
-        } else if (file.name.endsWith('.srt')) {
+        } else if (isSubtitleFile(file)) {
+          log('[FileHandler] Processing subtitle file:', file.name)
+          // Store handles: parsing, DB persistence, session update
           await loadSubtitles(file)
-          // Save to DB for files visibility
-          try {
-            const content = await file.text()
-            const subtitleId = await DB.addSubtitle(content, file.name)
-            pendingSubtitleRef.current = { id: subtitleId, filename: file.name }
-            log('[FileHandler] Saved subtitle to DB:', file.name, subtitleId)
-          } catch (err) {
-            logError('[FileHandler] Failed to save subtitle to DB:', err)
-            toast.errorKey('toastSaveSubtitleFailed')
-          }
         }
       }
-
-      // After processing all files, create session if we have audio
-      if (pendingAudioRef.current) {
-        await createOrUpdateSession()
-      }
     },
-    [loadAudio, loadSubtitles, createOrUpdateSession]
+    [loadAudio, loadSubtitles]
   )
 
   const handleDragOver = useCallback((e: React.DragEvent) => {

@@ -30,7 +30,7 @@ function RootLayout() {
 
   const {
     audioUrl,
-    setProgress,
+    updateProgress,
     setDuration,
     isPlaying,
     volume,
@@ -51,7 +51,8 @@ function RootLayout() {
     const audio = audioRef.current
     if (!audio) return
 
-    const onTimeUpdate = () => setProgress(audio.currentTime)
+    // Use updateProgress for throttled DB persistence
+    const onTimeUpdate = () => updateProgress(audio.currentTime)
     const onDurationChange = () => setDuration(audio.duration)
     const onPlay = () => usePlayerStore.getState().play()
     const onPause = () => usePlayerStore.getState().pause()
@@ -67,7 +68,7 @@ function RootLayout() {
       audio.removeEventListener('play', onPlay)
       audio.removeEventListener('pause', onPause)
     }
-  }, [setProgress, setDuration, audioUrl])
+  }, [updateProgress, setDuration, audioUrl])
 
   // Restore session progress when a new audio source is loaded
   useEffect(() => {

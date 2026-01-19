@@ -68,8 +68,10 @@ interface PlayerState {
   pause: () => void
   togglePlayPause: () => void
   reset: () => void
-  loadAudio: (file: File) => void
+  loadAudio: (file: File, options?: { resetSession?: boolean }) => void
   loadSubtitles: (file: File) => Promise<void>
+  updateProgress: (time: number) => void // Throttled progress update with DB persistence
+  saveProgressNow: () => Promise<void> // Force immediate save (for unmount)
 }
 
 const initialState = {
@@ -107,6 +109,9 @@ const getInitialRate = (): number => {
   const stored = getJson<number>(STORAGE_KEY_RATE)
   return stored ?? 1
 }
+
+// Throttling state for progress persistence (module-level to avoid closure issues)
+let lastProgressSaveTime = 0
 
 export const usePlayerStore = create<PlayerState>((set) => ({
   ...initialState,
@@ -185,7 +190,7 @@ export const usePlayerStore = create<PlayerState>((set) => ({
     })
   },
 
-  loadAudio: async (file) => {
+  loadAudio: async (file, options = { resetSession: true }) => {
     const config = getAppConfig()
     const MAX_AUDIO_SIZE = config.MAX_AUDIO_SIZE_MB * 1024 * 1024
     const shouldCache = file.size <= MAX_AUDIO_SIZE
@@ -236,11 +241,15 @@ export const usePlayerStore = create<PlayerState>((set) => ({
         audioTitle: file.name,
         coverArtUrl: '',
         currentBlobUrl: url,
-        // CRITICAL FIX: Reset session and progress for new file
-        // Otherwise it will inherit previous track's progress and overwrite previous session
-        sessionId: null,
-        progress: 0,
-        localTrackId: null,
+        // ONLY reset session if explicitly requested (e.g. manual file upload)
+        // during restoration, we want to KEEP the sessionId set by useSession
+        ...(options.resetSession
+          ? {
+            sessionId: null,
+            progress: 0,
+            localTrackId: null,
+          }
+          : {}),
         // CRITICAL FIX: Always clear subtitles when changing track
         subtitles: [],
         subtitlesLoaded: false,
@@ -279,5 +288,54 @@ export const usePlayerStore = create<PlayerState>((set) => ({
       subtitlesLoaded: true,
       currentIndex: -1, // Reset to avoid stale index from previous subtitles
     })
+  },
+
+  // Throttled progress update with DB persistence
+  updateProgress: (time) => {
+    const config = getAppConfig()
+
+    // Always update the store state
+    set({ progress: time })
+
+    // Throttle DB writes
+    const now = Date.now()
+    if (now - lastProgressSaveTime < config.SAVE_PROGRESS_INTERVAL_MS) {
+      return
+    }
+    lastProgressSaveTime = now
+
+    // Save to DB in background
+    const state = usePlayerStore.getState()
+    if (!state.sessionId || time <= 0) return
+
+    DB.updatePlaybackSession(state.sessionId, {
+      progress: time,
+      duration: state.duration || 0,
+      lastPlayedAt: now,
+    })
+      .then(() => {
+        if (import.meta.env.DEV) {
+          console.log(`[PlayerStore] Saved progress: ${time.toFixed(1)}s`)
+        }
+      })
+      .catch((err) => {
+        logError('[PlayerStore] Failed to save progress:', err)
+      })
+  },
+
+  // Force immediate save (for unmount)
+  saveProgressNow: async () => {
+    const state = usePlayerStore.getState()
+    if (!state.sessionId || state.progress <= 0) return
+
+    try {
+      await DB.updatePlaybackSession(state.sessionId, {
+        progress: state.progress,
+        duration: state.duration || 0,
+        lastPlayedAt: Date.now(),
+      })
+    } catch (err) {
+      logError('[PlayerStore] Failed to save progress on unmount:', err)
+    }
   },
 }))
