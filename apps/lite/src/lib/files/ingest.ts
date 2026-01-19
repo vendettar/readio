@@ -49,7 +49,7 @@ export function getAudioDuration(file: File): Promise<number | undefined> {
  * Result of ingesting files
  */
 export interface IngestResult {
-  createdTrackIds: number[]
+  createdTrackIds: string[]
   attachedSubtitleCount: number
 }
 
@@ -58,7 +58,7 @@ export interface IngestResult {
  */
 export interface IngestParams {
   files: File[]
-  folderId: number | null
+  folderId: string | null
 }
 
 /**
@@ -116,7 +116,7 @@ export async function ingestFiles(params: IngestParams): Promise<IngestResult> {
   const audioFiles = files.filter((f) => f.type.startsWith('audio/'))
   const subFiles = files.filter((f) => f.name.toLowerCase().endsWith('.srt'))
 
-  const createdTrackIds: number[] = []
+  const createdTrackIds: string[] = []
   let attachedSubtitleCount = 0
 
   // Fetch existing tracks in this folder to check for duplicates
@@ -152,44 +152,42 @@ export async function ingestFiles(params: IngestParams): Promise<IngestResult> {
       durationSeconds,
     })
 
-    if (typeof trackId === 'number') {
-      createdTrackIds.push(trackId)
+    createdTrackIds.push(trackId)
 
-      // Auto-match subtitles by base name (only unused subtitles)
-      const matchingSubs = subFiles.filter((s) => {
-        if (usedSubtitleFiles.has(s)) return false // Skip already used subtitles
-        const subBaseName = s.name.replace(/\.[^/.]+$/, '')
-        // Match original filename base
-        const originalFileBase = file.name.replace(/\.[^/.]+$/, '')
-        return subBaseName === originalFileBase || s.name.startsWith(originalFileBase)
+    // Auto-match subtitles by base name (only unused subtitles)
+    const matchingSubs = subFiles.filter((s) => {
+      if (usedSubtitleFiles.has(s)) return false // Skip already used subtitles
+      const subBaseName = s.name.replace(/\.[^/.]+$/, '')
+      // Match original filename base
+      const originalFileBase = file.name.replace(/\.[^/.]+$/, '')
+      return subBaseName === originalFileBase || s.name.startsWith(originalFileBase)
+    })
+
+    // Fetch existing subtitles for this new track (empty since it's new, but good practice)
+    const existingSubtitles = await DB.getFileSubtitlesForTrack(trackId)
+    const existingSubtitleNames = existingSubtitles.map((s) => s.name)
+
+    for (const sub of matchingSubs) {
+      const text = await readFileAsText(sub)
+
+      // Check for duplicate subtitle names (filename based)
+      let subName = sub.name
+      subName = resolveDuplicateName(subName, existingSubtitleNames)
+      existingSubtitleNames.push(subName)
+
+      const subtitleId = await DB.addSubtitle(text, subName)
+      await DB.addFileSubtitle({
+        trackId,
+        name: subName,
+        subtitleId,
       })
+      attachedSubtitleCount++
 
-      // Fetch existing subtitles for this new track (empty since it's new, but good practice)
-      const existingSubtitles = await DB.getFileSubtitlesForTrack(trackId)
-      const existingSubtitleNames = existingSubtitles.map((s) => s.name)
-
-      for (const sub of matchingSubs) {
-        const text = await readFileAsText(sub)
-
-        // Check for duplicate subtitle names (filename based)
-        let subName = sub.name
-        subName = resolveDuplicateName(subName, existingSubtitleNames)
-        existingSubtitleNames.push(subName)
-
-        const subtitleId = await DB.addSubtitle(text, subName)
-        await DB.addFileSubtitle({
-          trackId,
-          name: subName,
-          subtitleId,
-        })
-        attachedSubtitleCount++
-
-        // Mark this subtitle file as used
-        usedSubtitleFiles.add(sub)
-      }
-
-      log('[Files] Added track:', baseName)
+      // Mark this subtitle file as used
+      usedSubtitleFiles.add(sub)
     }
+
+    log('[Files] Added track:', baseName)
   }
 
   return { createdTrackIds, attachedSubtitleCount }
@@ -198,7 +196,7 @@ export async function ingestFiles(params: IngestParams): Promise<IngestResult> {
 /**
  * Attach a subtitle file to an existing track
  */
-export async function attachSubtitleToTrack(file: File, trackId: number): Promise<string> {
+export async function attachSubtitleToTrack(file: File, trackId: string): Promise<string> {
   const text = await readFileAsText(file)
 
   // Fetch existing subtitles to check duplicates

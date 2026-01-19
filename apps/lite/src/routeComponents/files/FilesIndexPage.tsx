@@ -184,7 +184,7 @@ export default function FilesIndexPage() {
   // File input refs
   const audioInputRef = useRef<HTMLInputElement>(null)
   const subtitleInputRef = useRef<HTMLInputElement>(null)
-  const [targetTrackId, setTargetTrackId] = useState<number | null>(null)
+  const [targetTrackId, setTargetTrackId] = useState<string | null>(null)
   // Note: track delete confirmation is handled by TrackOverflowMenu (secondary popover).
 
   // Playback logic refactored into hook
@@ -359,7 +359,7 @@ export default function FilesIndexPage() {
                     <FolderCard
                       key={folder.id}
                       folder={folder}
-                      itemCount={folder.id ? folderCounts[folder.id] || 0 : 0}
+                      itemCount={folderCounts[folder.id] || 0}
                       density={density}
                       isDragging={isDragging}
                       measureRef={index === 0 ? folderMeasureRef : undefined}

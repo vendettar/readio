@@ -6,7 +6,7 @@ import { toast } from '../lib/toast'
 import { useOnClickOutside } from './useOnClickOutside'
 
 interface UseFolderManagementOptions {
-  setCurrentFolderId: (id: number | null) => void
+  setCurrentFolderId: (id: string | null) => void
   onComplete: () => Promise<void>
   folders?: FileFolder[]
 }
@@ -65,7 +65,6 @@ export function useFolderManagement({
 
   const executeDeleteFolder = useCallback(
     async (folder: FileFolder): Promise<boolean> => {
-      if (!folder.id) return false
       try {
         await DB.deleteFolder(folder.id)
         await onComplete()

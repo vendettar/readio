@@ -36,7 +36,7 @@ interface PlayerState {
 
   // Session tracking for progress persistence
   sessionId: string | null
-  localTrackId: number | null // For  file session lookup
+  localTrackId: string | null // For  file session lookup (UUID)
 
   // Episode metadata for History display
   episodeMetadata: EpisodeMetadata | null
@@ -60,7 +60,7 @@ interface PlayerState {
   ) => void
   setSubtitles: (subtitles: subtitle[]) => void
   setSessionId: (id: string | null) => void
-  setFileTrackId: (id: number | null) => void
+  setFileTrackId: (id: string | null) => void
   setEpisodeMetadata: (metadata: EpisodeMetadata | null) => void
   seekTo: (time: number) => void // Unified seek entry point
   clearPendingSeek: () => void
@@ -84,7 +84,7 @@ const initialState = {
   playbackRate: 1, // Default rate
   pendingSeek: null as number | null,
   sessionId: null as string | null,
-  localTrackId: null as number | null,
+  localTrackId: null as string | null,
   episodeMetadata: null as EpisodeMetadata | null,
   currentBlobUrl: null as string | null,
   subtitles: [] as subtitle[],

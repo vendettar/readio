@@ -7,7 +7,7 @@ import { logError } from '../lib/logger'
 import { toast } from '../lib/toast'
 
 interface UseFileProcessingOptions {
-  currentFolderId: number | null
+  currentFolderId: string | null
   onComplete: () => Promise<void>
 }
 
@@ -37,7 +37,7 @@ export function useFileProcessing({ currentFolderId, onComplete }: UseFileProces
   const handleSubtitleInputChange = useCallback(
     async (
       e: React.ChangeEvent<HTMLInputElement>,
-      targetTrackId: number | null,
+      targetTrackId: string | null,
       inputRef: React.RefObject<HTMLInputElement | null>,
       clearTargetTrackId: () => void
     ) => {

@@ -18,8 +18,8 @@ type Step = 'menu' | 'move' | 'confirm'
 
 interface TrackOverflowMenuProps {
   folders: FileFolder[]
-  currentFolderId: number | null | undefined
-  onMove: (folderId: number | null) => void
+  currentFolderId: string | null | undefined
+  onMove: (folderId: string | null) => void
   onRename: () => void
   onDeleteTrack: () => Promise<boolean>
   disabled?: boolean
@@ -81,7 +81,7 @@ export function TrackOverflowMenu({
     }
   }, [isMenuOpen, step])
 
-  const handleMove = (folderId: number | null) => {
+  const handleMove = (folderId: string | null) => {
     onMove(folderId)
     setIsMenuOpen(false)
   }
@@ -224,7 +224,7 @@ export function TrackOverflowMenu({
                       className=""
                       onSelect={(e) => {
                         e.preventDefault()
-                        handleMove(folder.id!)
+                        handleMove(folder.id)
                       }}
                     >
                       <Folder className="mr-2 h-4 w-4" />

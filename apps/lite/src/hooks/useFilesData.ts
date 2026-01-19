@@ -15,19 +15,19 @@ interface FilesData {
   /** Map of audioId -> lastPlayedAt timestamp */
   lastPlayedMap: Record<string, number>
   /** Map of folderId -> track count */
-  folderCounts: Record<number, number>
+  folderCounts: Record<string, number>
 }
 
 export interface UseFilesDataReturn extends FilesData {
-  currentFolderId: number | null
-  setCurrentFolderId: (id: number | null) => void
+  currentFolderId: string | null
+  setCurrentFolderId: (id: string | null) => void
   status: LoadStatus
   error: Error | null
   loadData: () => Promise<void>
 }
 
 export function useFilesData(): UseFilesDataReturn {
-  const [currentFolderId, setCurrentFolderId] = useState<number | null>(null)
+  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null)
   const [data, setData] = useState<FilesData>({
     folders: [],
     tracks: [],
@@ -73,9 +73,7 @@ export function useFilesData(): UseFilesDataReturn {
       }
 
       // Load subtitles for current tracks
-      const allSubPromises = tracksData.map((t) =>
-        t.id ? DB.getFileSubtitlesForTrack(t.id) : Promise.resolve([])
-      )
+      const allSubPromises = tracksData.map((t) => DB.getFileSubtitlesForTrack(t.id))
       const subsArrays = await Promise.all(allSubPromises)
 
       if (thisRequestId !== requestIdRef.current) {
@@ -111,14 +109,12 @@ export function useFilesData(): UseFilesDataReturn {
       }
 
       // Load folder counts only if at root (where folders are displayed)
-      const folderCounts: Record<number, number> = {}
+      const folderCounts: Record<string, number> = {}
       if (folderId === null && foldersData.length > 0) {
-        const countPromises = foldersData.map((f) =>
-          f.id ? DB.getFileTracksCountInFolder(f.id) : Promise.resolve(0)
-        )
+        const countPromises = foldersData.map((f) => DB.getFileTracksCountInFolder(f.id))
         const counts = await Promise.all(countPromises)
         foldersData.forEach((f, i) => {
-          if (f.id) folderCounts[f.id] = counts[i]
+          folderCounts[f.id] = counts[i]
         })
       }
 
@@ -147,7 +143,7 @@ export function useFilesData(): UseFilesDataReturn {
   }, [])
 
   // Custom setCurrentFolderId that also triggers loadData
-  const handleSetCurrentFolderId = useCallback((id: number | null) => {
+  const handleSetCurrentFolderId = useCallback((id: string | null) => {
     setCurrentFolderId(id)
   }, [])
 

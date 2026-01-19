@@ -41,7 +41,7 @@ const snapCenterCursor: Modifier = ({ transform, activatorEvent, activeNodeRect 
 }
 
 // Drop target wrapper for the folder content area
-function FolderDropTarget({ folderId, children }: { folderId: number; children: React.ReactNode }) {
+function FolderDropTarget({ folderId, children }: { folderId: string; children: React.ReactNode }) {
   const { setNodeRef } = useDroppable({
     id: `folder-content-${folderId}`,
     data: { type: 'folder-content', folderId },
@@ -85,8 +85,8 @@ export default function FilesFolderPage() {
   const { t } = useI18n()
   useKeyboardShortcuts({ isModalOpen: false })
 
-  const numericFolderId = parseInt(folderId, 10)
-  const folderIdIsValid = Number.isFinite(numericFolderId)
+  // folderId is now a string UUID from the route
+  const folderIdIsValid = folderId && folderId.length > 0
 
   // Data state
   const [folder, setFolder] = useState<FileFolder | null>(null)
@@ -99,7 +99,7 @@ export default function FilesFolderPage() {
   const loadData = useCallback(async () => {
     try {
       const [folderData, allFolders, allTracks, sessions] = await Promise.all([
-        DB.getFolder(numericFolderId),
+        DB.getFolder(folderId),
         DB.getAllFolders(),
         DB.getAllFileTracks(),
         DB.getAllPlaybackSessions(),
@@ -114,13 +114,11 @@ export default function FilesFolderPage() {
       setFolders(allFolders)
 
       // Filter tracks to this folder
-      const folderTracks = allTracks.filter((t: FileTrack) => t.folderId === numericFolderId)
+      const folderTracks = allTracks.filter((t: FileTrack) => t.folderId === folderId)
       setTracks(folderTracks)
 
       // Load subtitles for filter tracks
-      const subsPromises = folderTracks.map((t: FileTrack) =>
-        t.id ? DB.getFileSubtitlesForTrack(t.id) : Promise.resolve([])
-      )
+      const subsPromises = folderTracks.map((t: FileTrack) => DB.getFileSubtitlesForTrack(t.id))
       const subsArrays = await Promise.all(subsPromises)
       setSubtitles(subsArrays.flat())
 
@@ -135,7 +133,7 @@ export default function FilesFolderPage() {
     } catch (error) {
       logError('[FolderView] Failed to load data', error)
     }
-  }, [navigate, numericFolderId])
+  }, [navigate, folderId])
 
   useEffect(() => {
     if (!folderIdIsValid) {
@@ -172,7 +170,7 @@ export default function FilesFolderPage() {
 
   // File processing - uploads go to this folder
   const { handleAudioInputChange, handleSubtitleInputChange } = useFileProcessing({
-    currentFolderId: numericFolderId,
+    currentFolderId: folderId,
     onComplete: loadData,
   })
 
@@ -193,7 +191,7 @@ export default function FilesFolderPage() {
       const { over, active } = event
 
       if (active?.data?.current?.type === 'track') {
-        const trackId = active.data.current.track.id
+        const trackId = active.data.current.track.id as string
 
         // Move back to root
         if (over?.data?.current?.type === 'back-target') {
@@ -210,7 +208,7 @@ export default function FilesFolderPage() {
         else if (over?.data?.current?.type === 'folder-content') {
           void (async () => {
             try {
-              await DB.updateFileTrack(trackId, { folderId: numericFolderId })
+              await DB.updateFileTrack(trackId, { folderId })
               await loadData()
             } catch (err) {
               logError('[FolderView] Failed to move track into folder', err)
@@ -222,13 +220,13 @@ export default function FilesFolderPage() {
       // Always use original handler to ensure state cleanup (activeDragItem, etc.)
       void originalHandleDragEnd(event)
     },
-    [originalHandleDragEnd, numericFolderId, loadData]
+    [originalHandleDragEnd, folderId, loadData]
   )
 
   // File input refs
   const audioInputRef = useRef<HTMLInputElement>(null)
   const subtitleInputRef = useRef<HTMLInputElement>(null)
-  const [targetTrackId, setTargetTrackId] = useState<number | null>(null)
+  const [targetTrackId, setTargetTrackId] = useState<string | null>(null)
   // Note: track delete confirmation is handled by TrackOverflowMenu (secondary popover).
 
   // Playback logic refactored into hook
@@ -315,7 +313,7 @@ export default function FilesFolderPage() {
         />
 
         {/* Folder Content as Drop Target */}
-        <FolderDropTarget folderId={numericFolderId}>
+        <FolderDropTarget folderId={folderId}>
           <div className="space-y-8 pb-20">
             {/* Tracks List */}
             {tracks.length > 0 ? (

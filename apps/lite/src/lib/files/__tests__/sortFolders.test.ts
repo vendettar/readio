@@ -6,9 +6,9 @@ import { sortFolders } from '../sortFolders'
 describe('sortFolders', () => {
   it('should sort pinned folders before unpinned folders', () => {
     const folders: FileFolder[] = [
-      { id: 1, name: 'Zebra', createdAt: 1000 },
-      { id: 2, name: 'Aardvark', createdAt: 2000, pinnedAt: 5000 },
-      { id: 3, name: 'Banana', createdAt: 3000 },
+      { id: 'uuid-1', name: 'Zebra', createdAt: 1000 },
+      { id: 'uuid-2', name: 'Aardvark', createdAt: 2000, pinnedAt: 5000 },
+      { id: 'uuid-3', name: 'Banana', createdAt: 3000 },
     ]
 
     const sorted = sortFolders(folders)
@@ -20,9 +20,9 @@ describe('sortFolders', () => {
 
   it('should sort multiple pinned folders by pinnedAt desc', () => {
     const folders: FileFolder[] = [
-      { id: 1, name: 'First Pinned', createdAt: 1000, pinnedAt: 1000 },
-      { id: 2, name: 'Second Pinned', createdAt: 2000, pinnedAt: 2000 },
-      { id: 3, name: 'Third Pinned', createdAt: 3000, pinnedAt: 3000 },
+      { id: 'uuid-1', name: 'First Pinned', createdAt: 1000, pinnedAt: 1000 },
+      { id: 'uuid-2', name: 'Second Pinned', createdAt: 2000, pinnedAt: 2000 },
+      { id: 'uuid-3', name: 'Third Pinned', createdAt: 3000, pinnedAt: 3000 },
     ]
 
     const sorted = sortFolders(folders)
@@ -34,9 +34,9 @@ describe('sortFolders', () => {
 
   it('should sort unpinned folders by name A→Z', () => {
     const folders: FileFolder[] = [
-      { id: 1, name: 'Zebra', createdAt: 1000 },
-      { id: 2, name: 'Aardvark', createdAt: 2000 },
-      { id: 3, name: 'Mango', createdAt: 3000 },
+      { id: 'uuid-1', name: 'Zebra', createdAt: 1000 },
+      { id: 'uuid-2', name: 'Aardvark', createdAt: 2000 },
+      { id: 'uuid-3', name: 'Mango', createdAt: 3000 },
     ]
 
     const sorted = sortFolders(folders)
@@ -53,8 +53,8 @@ describe('sortFolders', () => {
 
   it('should not mutate original array', () => {
     const folders: FileFolder[] = [
-      { id: 1, name: 'B', createdAt: 1000 },
-      { id: 2, name: 'A', createdAt: 2000 },
+      { id: 'uuid-1', name: 'B', createdAt: 1000 },
+      { id: 'uuid-2', name: 'A', createdAt: 2000 },
     ]
     const original = [...folders]
 

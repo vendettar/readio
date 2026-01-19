@@ -1,6 +1,7 @@
 // src/lib/dexieDb.ts
 // IndexedDB via Dexie for session persistence and  file storage
 import Dexie, { type EntityTable } from 'dexie'
+import { createId } from './id'
 import { log, error as logError } from './logger'
 import { getAppConfig } from './runtimeConfig'
 
@@ -36,7 +37,7 @@ export interface PlaybackSession {
   // Resume Playback (added in v3)
   audioUrl?: string
   //  file tracking (added in v4)
-  localTrackId?: number // FK to local_tracks.id
+  localTrackId?: string // FK to local_tracks.id (UUID)
 
   // Episode metadata for History display (v5)
   artworkUrl?: string // Cover art URL
@@ -66,7 +67,8 @@ export interface SubtitleText {
 }
 
 export interface Subscription {
-  feedUrl: string // Primary key
+  id: string // UUID Primary key
+  feedUrl: string // Unique index for deduplication
   title: string
   author: string
   artworkUrl: string
@@ -75,7 +77,8 @@ export interface Subscription {
 }
 
 export interface Favorite {
-  key: string // Primary key: feedUrl::audioUrl
+  id: string // UUID Primary key
+  key: string // Unique index: feedUrl::audioUrl (for deduplication)
   feedUrl: string
   audioUrl: string
   episodeTitle: string
@@ -98,26 +101,26 @@ export interface Setting {
 
 // File interfaces
 export interface FileFolder {
-  id?: number // Auto-increment primary key
+  id: string // UUID primary key
   name: string
   createdAt: number
   pinnedAt?: number // If set, folder is pinned; value is timestamp for stable ordering
 }
 
 export interface FileTrack {
-  id?: number // Auto-increment primary key
-  folderId: number | null | undefined // null = root folder
+  id: string // UUID primary key
+  folderId: string | null | undefined // null = root folder
   name: string
   audioId: string // FK to audioBlobs
   sizeBytes: number // Raw size in bytes
   durationSeconds?: number // Duration in seconds
   createdAt: number
-  activeSubtitleId?: number // FK to local_subtitles.id - which subtitle is active
+  activeSubtitleId?: string // FK to local_subtitles.id - which subtitle is active
 }
 
 export interface FileSubtitle {
-  id?: number // Auto-increment primary key
-  trackId: number // FK to local_tracks
+  id: string // UUID primary key
+  trackId: string // FK to local_tracks
   name: string
   subtitleId: string // FK to subtitles
 }
@@ -129,8 +132,8 @@ class ReadioDB extends Dexie {
   subtitles!: EntityTable<SubtitleText, 'id'>
 
   // Subscriptions/favorites
-  subscriptions!: EntityTable<Subscription, 'feedUrl'>
-  favorites!: EntityTable<Favorite, 'key'>
+  subscriptions!: EntityTable<Subscription, 'id'>
+  favorites!: EntityTable<Favorite, 'id'>
   settings!: EntityTable<Setting, 'key'>
 
   // files
@@ -142,25 +145,27 @@ class ReadioDB extends Dexie {
     super(getDbName())
 
     // Single-version schema: no historical migrations (first-release policy)
+    // UUID-based primary keys for cloud sync readiness
     this.version(1).stores({
       playback_sessions:
         'id, lastPlayedAt, source, createdAt, audioUrl, audioFilename, localTrackId, episodeId',
       audioBlobs: 'id, storedAt',
       subtitles: 'id, storedAt',
-      subscriptions: 'feedUrl, addedAt, providerPodcastId',
-      favorites: 'key, addedAt, episodeId',
+      subscriptions: 'id, &feedUrl, addedAt, providerPodcastId', // &feedUrl = unique index
+      favorites: 'id, &key, addedAt, episodeId', // &key = unique index
       settings: 'key',
-      folders: '++id, name, createdAt',
-      local_tracks: '++id, folderId, createdAt',
-      local_subtitles: '++id, trackId',
+      folders: 'id, name, createdAt', // UUID, no auto-increment
+      local_tracks: 'id, folderId, createdAt', // UUID, no auto-increment
+      local_subtitles: 'id, trackId', // UUID, no auto-increment
     })
   }
 }
 
 const db = new ReadioDB()
 
+// Use the centralized ID generator
 function generateId(): string {
-  return crypto.randomUUID()
+  return createId()
 }
 
 export const DB = {
@@ -223,7 +228,7 @@ export const DB = {
     return sessions.length > 0 ? sessions[sessions.length - 1] : undefined
   },
 
-  async findLastSessionByTrackId(trackId: number): Promise<PlaybackSession | undefined> {
+  async findLastSessionByTrackId(trackId: string): Promise<PlaybackSession | undefined> {
     // Find most recent session for this specific local track
     // CRITICAL: sortBy() ignores reverse(), so we sort then reverse the array
     const sessions = await db.playback_sessions
@@ -395,12 +400,24 @@ export const DB = {
   },
 
   // ========== Subscriptions CRUD ==========
-  async addSubscription(sub: Subscription): Promise<void> {
-    await db.subscriptions.put(sub)
+  async addSubscription(sub: Omit<Subscription, 'id'>): Promise<string> {
+    const newSub: Subscription = {
+      id: generateId(),
+      ...sub,
+    }
+    await db.subscriptions.put(newSub)
+    return newSub.id
   },
 
-  async removeSubscription(feedUrl: string): Promise<void> {
-    await db.subscriptions.delete(feedUrl)
+  async getSubscriptionByFeedUrl(feedUrl: string): Promise<Subscription | undefined> {
+    return db.subscriptions.where('feedUrl').equals(feedUrl).first()
+  },
+
+  async removeSubscriptionByFeedUrl(feedUrl: string): Promise<void> {
+    const sub = await this.getSubscriptionByFeedUrl(feedUrl)
+    if (sub) {
+      await db.subscriptions.delete(sub.id)
+    }
   },
 
   async getAllSubscriptions(): Promise<Subscription[]> {
@@ -408,12 +425,24 @@ export const DB = {
   },
 
   // ========== Favorites CRUD ==========
-  async addFavorite(fav: Favorite): Promise<void> {
-    await db.favorites.put(fav)
+  async addFavorite(fav: Omit<Favorite, 'id'>): Promise<string> {
+    const newFav: Favorite = {
+      id: generateId(),
+      ...fav,
+    }
+    await db.favorites.put(newFav)
+    return newFav.id
   },
 
-  async removeFavorite(key: string): Promise<void> {
-    await db.favorites.delete(key)
+  async getFavoriteByKey(key: string): Promise<Favorite | undefined> {
+    return db.favorites.where('key').equals(key).first()
+  },
+
+  async removeFavoriteByKey(key: string): Promise<void> {
+    const fav = await this.getFavoriteByKey(key)
+    if (fav) {
+      await db.favorites.delete(fav.id)
+    }
   },
 
   async getAllFavorites(): Promise<Favorite[]> {
@@ -438,15 +467,17 @@ export const DB = {
   // ========== files CRUD ==========
 
   // Folders
-  async addFolder(name: string): Promise<number> {
+  async addFolder(name: string): Promise<string> {
     const folder: FileFolder = {
+      id: generateId(),
       name,
       createdAt: Date.now(),
     }
-    return (await db.folders.add(folder)) as number
+    await db.folders.add(folder)
+    return folder.id
   },
 
-  async getFolder(id: number): Promise<FileFolder | undefined> {
+  async getFolder(id: string): Promise<FileFolder | undefined> {
     return db.folders.get(id)
   },
 
@@ -454,41 +485,43 @@ export const DB = {
     return db.folders.orderBy('createdAt').toArray()
   },
 
-  async deleteFolder(id: number): Promise<void> {
+  async deleteFolder(id: string): Promise<void> {
     // Delete all tracks in this folder
     const tracks = await db.local_tracks.where('folderId').equals(id).toArray()
     // Delete tracks sequentially to ensure blob cleanup
     for (const track of tracks) {
-      if (track.id) await this.deleteFileTrack(track.id)
+      await this.deleteFileTrack(track.id)
     }
     await db.folders.delete(id)
   },
 
   async updateFolder(
-    id: number,
+    id: string,
     data: Partial<Pick<FileFolder, 'name' | 'pinnedAt'>>
   ): Promise<void> {
     await db.folders.update(id, data)
   },
 
   // File Tracks
-  async addFileTrack(data: Omit<FileTrack, 'id' | 'createdAt'>): Promise<number> {
+  async addFileTrack(data: Omit<FileTrack, 'id' | 'createdAt'>): Promise<string> {
     const track: FileTrack = {
+      id: generateId(),
       ...data,
       createdAt: Date.now(),
     }
-    return (await db.local_tracks.add(track)) as number
+    await db.local_tracks.add(track)
+    return track.id
   },
 
-  async updateFileTrack(id: number, updates: Partial<FileTrack>): Promise<void> {
+  async updateFileTrack(id: string, updates: Partial<FileTrack>): Promise<void> {
     await db.local_tracks.update(id, updates)
   },
 
-  async getFileTrack(id: number): Promise<FileTrack | undefined> {
+  async getFileTrack(id: string): Promise<FileTrack | undefined> {
     return db.local_tracks.get(id)
   },
 
-  async getFileTracksInFolder(folderId: number | null): Promise<FileTrack[]> {
+  async getFileTracksInFolder(folderId: string | null): Promise<FileTrack[]> {
     if (folderId === null) {
       return db.local_tracks
         .filter((t) => t.folderId === null || t.folderId === undefined)
@@ -497,7 +530,7 @@ export const DB = {
     return db.local_tracks.where('folderId').equals(folderId).toArray()
   },
 
-  async getFileTracksCountInFolder(folderId: number): Promise<number> {
+  async getFileTracksCountInFolder(folderId: string): Promise<number> {
     return db.local_tracks.where('folderId').equals(folderId).count()
   },
 
@@ -505,15 +538,13 @@ export const DB = {
     return db.local_tracks.orderBy('createdAt').reverse().toArray()
   },
 
-  async deleteFileTrack(id: number): Promise<void> {
+  async deleteFileTrack(id: string): Promise<void> {
     const track = await db.local_tracks.get(id)
     if (track) {
       // Delete associated subtitles (and their stored subtitle blobs)
       const fileSubs = await db.local_subtitles.where('trackId').equals(id).toArray()
       for (const fileSub of fileSubs) {
-        if (fileSub.id) {
-          await this.deleteFileSubtitle(fileSub.id)
-        }
+        await this.deleteFileSubtitle(fileSub.id)
       }
       // Delete associated audio blob
       if (track.audioId) {
@@ -546,15 +577,20 @@ export const DB = {
   },
 
   // File subtitles
-  async addFileSubtitle(data: Omit<FileSubtitle, 'id'>): Promise<number> {
-    return (await db.local_subtitles.add(data)) as number
+  async addFileSubtitle(data: Omit<FileSubtitle, 'id'>): Promise<string> {
+    const fileSub: FileSubtitle = {
+      id: generateId(),
+      ...data,
+    }
+    await db.local_subtitles.add(fileSub)
+    return fileSub.id
   },
 
-  async getFileSubtitlesForTrack(trackId: number): Promise<FileSubtitle[]> {
+  async getFileSubtitlesForTrack(trackId: string): Promise<FileSubtitle[]> {
     return db.local_subtitles.where('trackId').equals(trackId).toArray()
   },
 
-  async deleteFileSubtitle(id: number): Promise<void> {
+  async deleteFileSubtitle(id: string): Promise<void> {
     const sub = await db.local_subtitles.get(id)
     if (sub) {
       // Delete associated subtitle blob

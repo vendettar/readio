@@ -78,13 +78,13 @@ describe('ingestFiles', () => {
 
       const result = await ingestFiles({
         files: [audioFile],
-        folderId: folderId as number,
+        folderId,
       })
 
       expect(result.createdTrackIds).toHaveLength(1)
 
       // Verify track is in folder
-      const tracksInFolder = await DB.getFileTracksInFolder(folderId as number)
+      const tracksInFolder = await DB.getFileTracksInFolder(folderId)
       expect(tracksInFolder).toHaveLength(1)
       expect(tracksInFolder[0].name).toBe('folder-song')
       expect(tracksInFolder[0].sizeBytes).toBe(audioFile.size)

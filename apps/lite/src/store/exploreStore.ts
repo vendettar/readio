@@ -254,7 +254,7 @@ export const useExploreStore = create<ExploreState>((set, get) => ({
     }
   },
   subscribe: async (podcast) => {
-    const sub: Subscription = {
+    const subData = {
       feedUrl: podcast.feedUrl ?? '',
       title: podcast.collectionName ?? '',
       author: podcast.artistName ?? '',
@@ -263,17 +263,23 @@ export const useExploreStore = create<ExploreState>((set, get) => ({
       providerPodcastId: podcast.providerPodcastId?.toString(),
     }
     try {
-      await DB.addSubscription(sub)
+      // Check if already subscribed (deduplication via feedUrl)
+      const existing = await DB.getSubscriptionByFeedUrl(subData.feedUrl)
+      if (existing) {
+        // Already subscribed, skip
+        return
+      }
+      const id = await DB.addSubscription(subData)
+      const newSub = { id, ...subData }
       // Prepend new subscription to maintain reverse-chronological order
-      const subs = [sub, ...get().subscriptions.filter((s) => s.feedUrl !== sub.feedUrl)]
-      set({ subscriptions: subs })
+      set({ subscriptions: [newSub, ...get().subscriptions] })
     } catch (error) {
       handleDbWriteError('subscribe', 'toastSubscribeFailed', error)
     }
   },
   unsubscribe: async (feedUrl) => {
     try {
-      await DB.removeSubscription(feedUrl)
+      await DB.removeSubscriptionByFeedUrl(feedUrl)
       const subs = get().subscriptions.filter((s) => s.feedUrl !== feedUrl)
       set({ subscriptions: subs })
     } catch (error) {
@@ -297,7 +303,7 @@ export const useExploreStore = create<ExploreState>((set, get) => ({
   },
   addFavorite: async (podcast, episode) => {
     const key = `${podcast.feedUrl}::${episode.audioUrl}`
-    const fav: Favorite = {
+    const favData = {
       key,
       feedUrl: podcast.feedUrl ?? '',
       podcastTitle: podcast.collectionName ?? '',
@@ -313,17 +319,23 @@ export const useExploreStore = create<ExploreState>((set, get) => ({
       episodeId: episode.id,
     }
     try {
-      await DB.addFavorite(fav)
+      // Check if already favorited (deduplication via key)
+      const existing = await DB.getFavoriteByKey(key)
+      if (existing) {
+        // Already favorited, skip
+        return
+      }
+      const id = await DB.addFavorite(favData)
+      const newFav = { id, ...favData }
       // Prepend new favorite to maintain reverse-chronological order
-      const favs = [fav, ...get().favorites.filter((f) => f.key !== key)]
-      set({ favorites: favs })
+      set({ favorites: [newFav, ...get().favorites] })
     } catch (error) {
       handleDbWriteError('add favorite', 'toastAddFavoriteFailed', error)
     }
   },
   removeFavorite: async (key) => {
     try {
-      await DB.removeFavorite(key)
+      await DB.removeFavoriteByKey(key)
       const favs = get().favorites.filter((f) => f.key !== key)
       set({ favorites: favs })
     } catch (error) {

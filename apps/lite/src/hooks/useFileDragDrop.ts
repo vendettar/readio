@@ -36,7 +36,7 @@ export function useFileDragDrop({ onComplete }: UseFileDragDropOptions) {
   }, [])
 
   const executeMoveTrack = useCallback(
-    async (trackId: number, targetFolderId: number | null, currentName: string) => {
+    async (trackId: string, targetFolderId: string | null, currentName: string) => {
       try {
         // Check for duplicates in target folder
         const existingTracks = await DB.getFileTracksInFolder(targetFolderId)
@@ -95,8 +95,7 @@ export function useFileDragDrop({ onComplete }: UseFileDragDropOptions) {
   }, [])
 
   const handleMoveTo = useCallback(
-    async (track: FileTrack, folderId: number | null) => {
-      if (!track.id) return
+    async (track: FileTrack, folderId: string | null) => {
       // Avoid moving to same folder
       if (track.folderId === folderId) return
 

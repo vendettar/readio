@@ -112,12 +112,12 @@ interface TrackCardProps {
   isGlobalDragging?: boolean
   existingTrackNames?: string[]
   onPlay: (track: FileTrack, subtitle?: FileSubtitle) => void
-  onSetActiveSubtitle: (trackId: number, subtitleId: number) => void
+  onSetActiveSubtitle: (trackId: string, subtitleId: string) => void
   onRename: (newName: string) => void
   onDeleteTrack: () => Promise<boolean>
-  onDeleteSub: (subtitleId: number) => void
+  onDeleteSub: (subtitleId: string) => void
   onAddSub: () => void
-  onMove: (folderId: number | null) => void
+  onMove: (folderId: string | null) => void
 }
 
 export function TrackCard({
@@ -422,9 +422,7 @@ export function TrackCard({
                         variant="ghost"
                         size="icon"
                         onClick={() => {
-                          if (track.id && sub.id) {
-                            onSetActiveSubtitle(track.id, sub.id)
-                          }
+                          onSetActiveSubtitle(track.id, sub.id)
                           onPlay(track, sub)
                         }}
                         className="h-7 w-7 text-primary hover:bg-primary/20 opacity-0 group-hover:opacity-100"
@@ -440,7 +438,7 @@ export function TrackCard({
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => sub.id && onDeleteSub(sub.id)}
+                        onClick={() => onDeleteSub(sub.id)}
                         className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100"
                         aria-label={t('commonDelete')}
                       >

@@ -54,7 +54,7 @@ export function useFilePlayback({ onComplete }: UseFilePlaybackProps = {}) {
         setPlayerSubtitles(parsedSubtitles)
 
         // Set localTrackId for session tracking
-        setFileTrackId(track.id!)
+        setFileTrackId(track.id)
 
         play()
 
@@ -87,7 +87,7 @@ export function useFilePlayback({ onComplete }: UseFilePlaybackProps = {}) {
    * Updates the active subtitle for a track and refreshes data
    */
   const handleSetActiveSubtitle = useCallback(
-    async (trackId: number, subtitleId: number) => {
+    async (trackId: string, subtitleId: string) => {
       try {
         await DB.updateFileTrack(trackId, { activeSubtitleId: subtitleId })
         onComplete?.()
