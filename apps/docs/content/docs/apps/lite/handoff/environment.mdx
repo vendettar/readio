@@ -17,7 +17,18 @@ Build and Test Scripts (Execute in root directory): `pnpm build`, `pnpm test`, `
 Code Quality Tools: Biome (`pnpm lint`, `pnpm format`).
 
 ### Standard Dependencies
-- **Date Manipulation**: `date-fns` is the officially adopted library for all date formatting and calculations. Manual parsing or alternative libraries (moment, lodash) are prohibited.
+
+The following libraries form the **Phase 1 Baseline** — they are pre-installed and ready for Phase 2+ refactors:
+
+| Category | Library | Purpose |
+|----------|---------|---------|
+| **Date** | `date-fns` | Date formatting and calculations. Manual parsing is prohibited. |
+| **I18n** | `i18next`, `react-i18next`, `i18next-browser-languagedetector` | Internationalization framework (pending full migration). |
+| **Forms** | `react-hook-form`, `@hookform/resolvers`, `zod` | Form state management with Zod validation. |
+| **File Drop** | `react-dropzone` | Standard file drop zone handling. |
+| **Toast** | `sonner` | Modern toast notifications (pending migration from Radix Toast). |
+| **Animation** | `framer-motion` | Production-grade animations. |
+| **Hotkeys** | `react-hotkeys-hook`, `@use-gesture/react` | Keyboard shortcuts and gesture handling. |
 
 ### Planned (Pending Execution)
 - Deployment pipeline for Vercel/Docker (Instruction 038).

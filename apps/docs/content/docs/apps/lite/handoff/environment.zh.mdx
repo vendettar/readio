@@ -17,7 +17,18 @@ title: Development Environment
 代码质量工具：Biome（`pnpm lint`、`pnpm format`）。
 
 ### 标准依赖
-- **日期处理**：`date-fns` 为官方指定的日期格式化与计算库。禁止使用手动解析或其他库（如 moment、lodash）。
+
+以下库构成 **Phase 1 基准** — 它们已预安装，可供 Phase 2+ 重构使用：
+
+| 类别 | 库 | 用途 |
+|------|-----|------|
+| **日期** | `date-fns` | 日期格式化与计算。禁止手动解析。 |
+| **国际化** | `i18next`, `react-i18next`, `i18next-browser-languagedetector` | 国际化框架（待全面迁移）。 |
+| **表单** | `react-hook-form`, `@hookform/resolvers`, `zod` | 表单状态管理与 Zod 校验。 |
+| **文件拖放** | `react-dropzone` | 标准文件拖放区处理。 |
+| **通知** | `sonner` | 现代 Toast 通知（待从 Radix Toast 迁移）。 |
+| **动画** | `framer-motion` | 生产级动画库。 |
+| **热键** | `react-hotkeys-hook`, `@use-gesture/react` | 键盘快捷键与手势处理。 |
 
 ### 计划中（待执行）
 - 部署流水线（Vercel/Docker，指令 038）。
