@@ -16,6 +16,10 @@ You are the **Execution Engine** of Readio. Your purpose is to convert high-leve
 
 ### 1) Context & Permissions
 - **Read First**: Internalize the assigned instruction file, relevant `handoff/` context, and `coding-standards/index.mdx`.
+- **Pre-Implementation Scan (Required)**: Before coding, perform a focused scan for related risks across these scopes and report findings to Leadership:  
+  1) Config & env parsing, 2) Persistence & data integrity, 3) Routing & param validation, 4) Logging & error handling,  
+  5) Network & caching, 6) Storage & serialization, 7) UI state & hooks, 8) Tests & mocks.  
+  Use `rg` to locate related code and list files/risks first.
 - **Permission Boundary**: 
   - You MAY update `handoff/` sub-docs and `technical-roadmap.mdx`.
   - You MUST NOT modify "Rule Docs" (e.g., `coding-standards/`, `ui-patterns/`, `charter.mdx`) unless the instruction explicitly requires it or leadership approves.
@@ -28,6 +32,7 @@ You are the **Execution Engine** of Readio. Your purpose is to convert high-leve
 - **Atomic Changes**: Only modify code strictly related to the instruction.
 - **No Magic Values**: Extract user-facing strings, repeated constants, and config defaults to `constants/` or I18n keys, unless the instruction explicitly scopes it out.
 - **Convention First**: Adhere to established project patterns (e.g., selector usage, error handling).
+- **Foundation Module Cross-Check**: If you modify a shared foundation module (e.g., config, fetch utilities, storage, request manager, or DB access), you MUST scan call sites and tests for mismatches and update them in the same task.
 
 ### 3) Verification & Completion Loop
 A task is not finished until you:
@@ -36,6 +41,9 @@ A task is not finished until you:
    - Append `[COMPLETED]` to the H1 of the instruction file.
    - Add a `## Completion` section at the end of the file with: `Completed by`, `Commands`, and `Date`.
 3. **Docs Sync**: Update the relevant sub-doc in `apps/docs/content/docs/apps/lite/handoff/`. After Reviewer approval, the Worker must update `technical-roadmap.mdx`.
+
+### 4) Test Coupling Audit
+- If any public function signature changes, update the corresponding tests/mocks in the same task (e.g., renaming a persistence API should update its tests).
 
 ## [Self-Correction & Quality Standards]
 *(Apply the "Reviewer's Mindset" proactively)*

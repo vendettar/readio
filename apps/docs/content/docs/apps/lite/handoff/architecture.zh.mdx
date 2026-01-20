@@ -7,7 +7,7 @@ title: Core Architecture
 ```
 src/
 ├── routes/              # TanStack Router 路由文件
-│   ├── __root.tsx       # 根布局（AppShell、Audio 元素、Toast）
+│   ├── __root.tsx       # 根布局（AppShell、GlobalAudioController、Toast）
 │   ├── index.tsx        # 主页/播放器（字幕阅读）
 │   ├── explore.tsx      # 发现播客
 │   ├── subscriptions.tsx # 订阅列表
@@ -104,7 +104,17 @@ src/
 - **行为**：
   - 进入时：隐藏 Sidebar，全屏显示 FullPlayer
   - 退出时：恢复正常布局
-  - 播放不中断：`<audio>` 元素在 `__root.tsx` 中持久存在
+  - 播放不中断：`<audio>` 元素由 `GlobalAudioController` 持久挂载在 `__root.tsx` 内
+
+### 性能隔离：GlobalAudioController
+
+为避免音频 `timeupdate` 导致根布局高频重渲染，音频处理被隔离到 `GlobalAudioController.tsx`：
+
+| 组件 | 文件 | 职责 |
+|------|------|------|
+| GlobalAudioController | `src/components/AppShell/GlobalAudioController.tsx` | 处理 `<audio>` 生命周期、事件监听（timeupdate、play/pause、seek）、音量/速率同步。使用精确 Zustand 选择器与 `getState()` 调用。 |
+
+该设计确保 `RootLayout` 在路由切换之外保持静态，播放过程中仅控制器与进度条组件更新。
 
 ---
 
@@ -133,7 +143,7 @@ src/
 
 ### 关键设计
 
-- **播放器常驻**：`<audio>` 元素和播放状态在 `__root.tsx` 中挂载，路由切换不中断播放
+- **播放器常驻**：`<audio>` 元素在 `GlobalAudioController` 中挂载（由 `__root.tsx` 常驻），路由切换不中断播放
 - **路由生成**：`src/routeTree.gen.ts` 由 Vite 插件自动生成
 - **路由级按需加载**：`/explore`、`/search`、播客详情/单集/历史/收藏/Files 等页面使用 `lazyRouteComponent` 拆分，减少首包体积
 - **重模块按需加载**：主播放页的 `TranscriptView` 与沉浸模式 `FullPlayer` 使用 `React.lazy` 延迟加载
@@ -157,7 +167,7 @@ src/
 
 ### 播放不中断
 
-`<audio>` 元素挂载在 `__root.tsx`，路由切换不影响播放
+`<audio>` 元素挂载在 `GlobalAudioController`（位于 `__root.tsx` 内），路由切换不影响播放
 
 ### 标签页同步（单例播放）
 

@@ -8,6 +8,7 @@ You are a **purely rational decision-making entity** stripped of social attribut
 ### 1) Documentation and Instruction Stewardship
 - **Docs First**: Read the docs index and only the task-relevant sub-docs before making architectural decisions.
 - **Instruction First**: Read the instruction map and only the task-relevant instruction files before issuing new instructions.
+- **Scope Scan Before Instruction**: Before drafting any new instruction, require a quick scan report covering the 8 scopes (config, persistence, routing, logging, network, storage, UI state, tests). If any scope has risks, include them in the instruction or create a follow-up.
 - **Roadmap as Compass**: Use `apps/docs/content/docs/general/technical-roadmap.mdx` as the source of truth for task progress. Do not issue instructions already marked as completed. Do not skip the current active sequence unless the user approves and the roadmap is updated.
 - **Single Active Instruction**: Leadership may activate only one instruction number at a time. Do not dispatch concurrent instructions within the same phase that share dependencies or touch the same handoff/roadmap docs.
 - **Targeted Handoff**: When updating project state, you MUST update the specific sub-document in `apps/docs/content/docs/apps/lite/handoff/`. Use `index.mdx` to update the status list (completed tasks); do not add implementation details there.
@@ -86,6 +87,7 @@ You are a **purely rational decision-making entity** stripped of social attribut
 - **Pattern Governance**: Standardize shared patterns in `apps/docs/content/docs/apps/lite/ui-patterns/` before refactors.
 - **Testing Policy**: Ensure test scope matches impact; insist on regression checks for high-risk areas.
 - **Context & Default Awareness**: Identify risks where "safe" defaults (e.g., config fallbacks) mask critical failures. Review logic not just for syntax, but for how it handles initialization and empty states.
+- **Foundational Module Escalation**: If a change touches shared foundation modules (e.g., config, fetch utilities, storage, request management, DB access), require explicit review notes and test impact assessment.
 
 ### C) CTO
 - **Strategic Alignment**: Ensure technical direction supports product roadmap and monetization paths.

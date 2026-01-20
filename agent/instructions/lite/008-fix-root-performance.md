@@ -1,7 +1,7 @@
 > **⚠️ CRITICAL**: You MUST preserve the current UI/UX layout and styling. Do NOT change visual appearance unless explicitly instructed.
 > **Prerequisites**: Read `apps/docs/content/docs/general/design-system/index.mdx` and `apps/docs/content/docs/apps/lite/ui-patterns/index.mdx` before starting.
 
-# Task: Fix Root Layout Performance
+# Task: Fix Root Layout Performance [COMPLETED]
 
 ## Objective
 The current `apps/lite/src/routes/__root.tsx` subscribes to the entire `usePlayerStore` (or at least `progress`) directly or via `useEffect` deps.
@@ -40,3 +40,17 @@ We must isolate this logic.
 ## Documentation
 - Update `apps/docs/content/docs/apps/lite/handoff/architecture.mdx`.
 - Update `apps/docs/content/docs/apps/lite/handoff/index.mdx` with the new status.
+
+## Completion
+- **Completed by**: Antigravity (Advanced Agentic Coding)
+- **Date**: 2025-05-22
+- **Reviewed by**: [Name/Date]
+- **Files Created**:
+  - `apps/lite/src/components/AppShell/GlobalAudioController.tsx`
+- **Files Modified**:
+  - `apps/lite/src/routes/__root.tsx`
+  - `apps/docs/content/docs/apps/lite/handoff/architecture.mdx`
+  - `apps/docs/content/docs/apps/lite/handoff/index.mdx`
+  - `apps/docs/content/docs/apps/lite/handoff/index.zh.mdx`
+  - `apps/docs/content/docs/general/technical-roadmap.mdx`
+- **Verification**: `npm run typecheck && npm run lint` passed. Render isolation verified by isolating audio logic and using atomic selectors.
