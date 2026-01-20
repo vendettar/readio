@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
+import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { FollowButton } from '../components/FollowButton'
@@ -18,7 +18,6 @@ const LazyTranscriptView = lazy(() =>
 )
 
 function HomePage() {
-  const router = useRouter()
   const { t } = useI18n()
   const { zoomScale, showZoomBar, zoomIn, zoomOut, zoomReset, setShowZoomBar, scheduleHide } =
     useZoom()
@@ -28,7 +27,6 @@ function HomePage() {
   useKeyboardShortcuts({ isModalOpen: false })
 
   const {
-    audioUrl,
     audioLoaded,
     subtitles,
     subtitlesLoaded,
@@ -37,7 +35,6 @@ function HomePage() {
     progress,
     isPlaying,
     seekTo,
-    initializationStatus,
   } = usePlayerStore()
 
   // Find current subtitle using optimized algorithm
@@ -64,20 +61,6 @@ function HomePage() {
   }, [])
 
   const showFollowButton = !isFollowing && subtitlesLoaded
-
-  // Check if we should redirect to files
-  // Only redirect if:
-  // 1. No audio/subtitles loaded AND
-  // 2. No session exists (meaning user hasn't started any playback yet)
-  useEffect(() => {
-    if (
-      !audioUrl &&
-      !subtitlesLoaded &&
-      (initializationStatus === 'ready' || initializationStatus === 'failed')
-    ) {
-      router.navigate({ to: '/files', replace: true })
-    }
-  }, [audioUrl, subtitlesLoaded, initializationStatus, router])
 
   // Content loaded - show transcript
   return (
@@ -158,5 +141,23 @@ function HomePage() {
 }
 
 export const Route = createFileRoute('/')({
+  beforeLoad: async () => {
+    const store = usePlayerStore.getState()
+
+    // Ensure session is restored before deciding to redirect
+    if (store.initializationStatus === 'idle' || store.initializationStatus === 'restoring') {
+      await store.restoreSession()
+    }
+
+    const state = usePlayerStore.getState()
+    // Redirect to files if no audio/subtitles and initialization is finished
+    if (
+      !state.audioUrl &&
+      !state.subtitlesLoaded &&
+      (state.initializationStatus === 'ready' || state.initializationStatus === 'failed')
+    ) {
+      throw redirect({ to: '/files', replace: true })
+    }
+  },
   component: HomePage,
 })

@@ -29,7 +29,7 @@ When updating the handoff documentation after completing a task, please choose t
   - Decision Log: `apps/docs/content/docs/general/decision-log.mdx`
   - Glossary: `apps/docs/content/docs/general/glossary.mdx`
 
-**Single Source Rule**: `handoff/index.mdx` is the only entry point. Other handoff files are extensions and must not duplicate global rules.
+- **Single Source Rule**: `handoff/index.mdx` is the only entry point. Other handoff files are extensions and must not duplicate global rules.
 
 ---
 
@@ -97,6 +97,7 @@ DB Reset Rule: Do NOT change the default DB name in source. Use `READIO_DB_NAME`
 - Refactor Persistence Logic (Single Source of Truth) (Instruction 007).
 - Session Hardening (Upsert logic) (Instruction 007b).
 - Fix Root Layout Performance (GlobalAudioController isolation) (Instruction 008).
+- Refactor Routing Logic (Enforce beforeLoad redirects) (Instruction 009).
 - Harden Operational Error Handling (Instruction 005e).
 - Align Network Fetching & Cache Controls (Instruction 005f).
 - Storage Serialization Hardening (Instruction 005g).

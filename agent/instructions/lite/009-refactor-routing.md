@@ -1,7 +1,7 @@
 > **⚠️ CRITICAL**: You MUST preserve the current UI/UX layout and styling. Do NOT change visual appearance unless explicitly instructed.
 > **Prerequisites**: Read `apps/docs/content/docs/general/design-system/index.mdx` and `apps/docs/content/docs/apps/lite/ui-patterns/index.mdx` before starting.
 
-# Task: Refactor Routing Logic
+# Task: Refactor Routing Logic [COMPLETED]
 
 ## Objective
 Clean up "Render-time Redirects" and enforce proper TanStack Router patterns.
@@ -11,7 +11,7 @@ Clean up "Render-time Redirects" and enforce proper TanStack Router patterns.
 - **Fix**: Move this logic to the `beforeLoad` hook in `src/routes/index.tsx` (or `createFileRoute` options).
 - **Code**:
   ```ts
-  beforeLoad: ({ context }) => {
+  beforeLoad: async ({ context }) => {
     // Access store/context to check if session exists
     // If not, throw redirect({ to: '/files' })
   }
@@ -35,3 +35,15 @@ Clean up "Render-time Redirects" and enforce proper TanStack Router patterns.
 - Update `apps/docs/content/docs/apps/lite/routing.mdx`.
 - Update `apps/docs/content/docs/apps/lite/handoff/architecture.mdx`.
 - Update `apps/docs/content/docs/apps/lite/handoff/index.mdx` with the new status.
+
+## Completion
+- **Completed by**: Antigravity (Advanced Agentic Coding)
+- **Date**: 2025-05-22
+- **Reviewed by**: Codex
+- **Files Modified**:
+  - `apps/lite/src/routes/index.tsx`
+  - `apps/docs/content/docs/apps/lite/routing.mdx`
+  - `apps/docs/content/docs/apps/lite/handoff/architecture.mdx`
+  - `apps/docs/content/docs/apps/lite/handoff/index.mdx`
+  - `apps/docs/content/docs/apps/lite/handoff/index.zh.mdx`
+- **Verification**: Moved redirect logic from `useEffect` to `beforeLoad` hook in index route. Verified with type check and lint.

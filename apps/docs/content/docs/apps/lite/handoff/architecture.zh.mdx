@@ -149,6 +149,7 @@ src/
 - **重模块按需加载**：主播放页的 `TranscriptView` 与沉浸模式 `FullPlayer` 使用 `React.lazy` 延迟加载
 - **全局样式**：CSS 在 `main.tsx` 入口引入，确保所有路由可用
 - **播放控制**：进度条拖动通过 `onSeek` → `store.seekTo` → `store.pendingSeek` → `__root.tsx` 的 audio element，避免直接 DOM 操作
+- **规范重定向**：强制在 `beforeLoad` 或 `loader` 钩子中执行 `throw redirect()`，而非在渲染过程中使用 `useEffect` 或 `<Navigate />` 组件，以防止布局闪烁并确保数据就绪。
 
 ---
 
