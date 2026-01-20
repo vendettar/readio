@@ -6,6 +6,7 @@ import { ToastContainer } from '../components/Toast'
 import { useAppInitialization } from '../hooks/useAppInitialization'
 import { useFileHandler } from '../hooks/useFileHandler'
 import { useSession } from '../hooks/useSession'
+import { warn } from '../lib/logger'
 import { usePlayerStore } from '../store/playerStore'
 
 // FilePickerContext to avoid document.getElementById
@@ -91,7 +92,10 @@ function RootLayout() {
     if (!audio || !audioUrl) return
 
     if (isPlaying) {
-      audio.play().catch(() => {})
+      audio.play().catch((err) => {
+        warn('[Player] play() failed', { error: err, audioUrl })
+        usePlayerStore.getState().pause()
+      })
     } else {
       audio.pause()
     }

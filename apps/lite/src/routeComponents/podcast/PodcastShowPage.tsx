@@ -73,6 +73,7 @@ export default function PodcastShowPage() {
 
   const handleSubscribe = async () => {
     if (!podcast) return
+    const action = isSubscribed ? 'unsubscribe' : 'subscribe'
     try {
       if (isSubscribed) {
         if (podcast.feedUrl) {
@@ -81,7 +82,12 @@ export default function PodcastShowPage() {
       } else {
         await subscribe(podcast)
       }
-    } catch {
+    } catch (err) {
+      logError(`[PodcastShowPage] Failed to ${action}`, {
+        podcastId: podcast.providerPodcastId,
+        feedUrl: podcast.feedUrl,
+        error: err,
+      })
       toast.errorKey(isSubscribed ? 'toastUnsubscribeFailed' : 'toastSubscribeFailed')
     }
   }

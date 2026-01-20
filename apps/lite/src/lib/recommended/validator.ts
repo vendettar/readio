@@ -1,5 +1,5 @@
-// src/lib/recommended/validator.ts
 import { fetchTextWithFallback } from '../fetchUtils'
+import { warn } from '../logger'
 import { deduplicatedFetch, getRequestKey } from '../requestManager'
 import { readFetchabilityCache, writeFetchabilityCache } from './cache'
 import type { RecommendedPodcast } from './types'
@@ -53,7 +53,8 @@ export async function validateFeedFetchable(
         fetchSignal.removeEventListener('abort', abort)
       }
     })
-  } catch {
+  } catch (err) {
+    warn(`[Recommended] Feed validation failed: ${feedUrl}`, { country, error: err })
     return false
   }
 }
