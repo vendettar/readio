@@ -104,20 +104,20 @@ export function useGlobalSearch(
     }
   }, [enabled, subscriptionsLoaded, favoritesLoaded, loadSubscriptions, loadFavorites])
 
-  // Discovery Provider: Podcast Search
+  // Discovery Provider: Podcast Search (Debounced)
   const { data: podcasts = [], isLoading: isLoadingPodcasts } = useQuery({
-    queryKey: ['globalSearch', 'podcasts', normalizedQuery, country],
-    queryFn: ({ signal }) => discovery.searchPodcasts(normalizedQuery, country, 20, signal),
-    enabled: shouldSearch,
+    queryKey: ['globalSearch', 'podcasts', debouncedQuery, country],
+    queryFn: ({ signal }) => discovery.searchPodcasts(debouncedQuery, country, 20, signal),
+    enabled: shouldSearchDb,
     staleTime: 5 * 60 * 1000,
     placeholderData: (prev) => prev,
   })
 
-  // Discovery Provider: Episode Search
+  // Discovery Provider: Episode Search (Debounced)
   const { data: episodes = [], isLoading: isLoadingEpisodes } = useQuery({
-    queryKey: ['globalSearch', 'episodes', normalizedQuery, country],
-    queryFn: ({ signal }) => discovery.searchEpisodes(normalizedQuery, country, 50, signal),
-    enabled: shouldSearch,
+    queryKey: ['globalSearch', 'episodes', debouncedQuery, country],
+    queryFn: ({ signal }) => discovery.searchEpisodes(debouncedQuery, country, 50, signal),
+    enabled: shouldSearchDb,
     staleTime: 5 * 60 * 1000,
     placeholderData: (prev) => prev,
   })

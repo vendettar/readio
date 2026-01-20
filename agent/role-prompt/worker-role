@@ -33,6 +33,7 @@ You are the **Execution Engine** of Readio. Your purpose is to convert high-leve
 - **No Magic Values**: Extract user-facing strings, repeated constants, and config defaults to `constants/` or I18n keys, unless the instruction explicitly scopes it out.
 - **Convention First**: Adhere to established project patterns (e.g., selector usage, error handling).
 - **Foundation Module Cross-Check**: If you modify a shared foundation module (e.g., config, fetch utilities, storage, request manager, or DB access), you MUST scan call sites and tests for mismatches and update them in the same task.
+- **Async Blocking Discipline**: When adding or updating async logic that gates navigation, rendering, or core flows, avoid blocking on redundant work. If an operation is already in progress, do not `await` duplicate work; only `await` when truly required.
 
 ### 3) Verification & Completion Loop
 A task is not finished until you:

@@ -1,5 +1,5 @@
 // src/hooks/useSession.ts
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { DB, type PlaybackSession } from '../lib/dexieDb'
 import { log, error as logError } from '../lib/logger'
 import { generateSessionId } from '../lib/session'
@@ -25,10 +25,17 @@ export function useSession() {
     }
   }, [initializationStatus, restoreSession])
 
+  const isManagingSessionRef = useRef(false)
+
   // 2. Create NEW session if files are loaded manually (not via restoration)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: isManagingSessionRef is a guard and shouldn't trigger re-runs
   useEffect(() => {
     // We allow session creation if restoration is ready OR if it failed (so users can still upload)
-    if ((initializationStatus !== 'ready' && initializationStatus !== 'failed') || storeSessionId) {
+    if (
+      (initializationStatus !== 'ready' && initializationStatus !== 'failed') ||
+      storeSessionId ||
+      isManagingSessionRef.current
+    ) {
       return
     }
     if (!audioLoaded && !subtitlesLoaded) return
@@ -36,6 +43,7 @@ export function useSession() {
     const { audioUrl, audioTitle } = usePlayerStore.getState()
 
     const findOrStartSession = async () => {
+      isManagingSessionRef.current = true
       try {
         let existingSession: PlaybackSession | undefined
 
@@ -86,6 +94,8 @@ export function useSession() {
         }
       } catch (err) {
         logError('[Session] Failed to manage session:', err)
+      } finally {
+        isManagingSessionRef.current = false
       }
     }
 

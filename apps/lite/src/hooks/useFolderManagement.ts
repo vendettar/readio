@@ -38,30 +38,36 @@ export function useFolderManagement({
     setIsNamingFolder(true)
   }, [setCurrentFolderId])
 
+  const [isLoading, setIsLoading] = useState(false)
+
   const handleConfirmNewFolder = useCallback(async () => {
     const trimmed = newFolderName.trim()
-    if (trimmed) {
-      try {
-        let finalName = trimmed
-        let counter = 2
-
-        // Case-insensitive check for existing names
-        while (folders.some((f) => f.name.trim().toLowerCase() === finalName.toLowerCase())) {
-          finalName = `${trimmed} (${counter})`
-          counter++
-        }
-
-        await DB.addFolder(finalName)
-        setNewFolderName('')
-        setIsNamingFolder(false)
-        await onComplete()
-      } catch (err) {
-        logError('[Files] Failed to create folder', err)
-      }
-    } else {
-      setIsNamingFolder(false)
+    if (!trimmed || isLoading) {
+      if (!trimmed) setIsNamingFolder(false)
+      return
     }
-  }, [newFolderName, folders, onComplete])
+
+    setIsLoading(true)
+    try {
+      let finalName = trimmed
+      let counter = 2
+
+      // Case-insensitive check for existing names
+      while (folders.some((f) => f.name.trim().toLowerCase() === finalName.toLowerCase())) {
+        finalName = `${trimmed} (${counter})`
+        counter++
+      }
+
+      await DB.addFolder(finalName)
+      setNewFolderName('')
+      setIsNamingFolder(false)
+      await onComplete()
+    } catch (err) {
+      logError('[Files] Failed to create folder', err)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [newFolderName, folders, onComplete, isLoading])
 
   const executeDeleteFolder = useCallback(
     async (folder: FileFolder): Promise<boolean> => {
@@ -88,5 +94,6 @@ export function useFolderManagement({
     handleCreateFolder,
     handleConfirmNewFolder,
     executeDeleteFolder,
+    isFolderLoading: isLoading,
   }
 }

@@ -95,8 +95,14 @@ export default function FilesFolderPage() {
   const [folders, setFolders] = useState<FileFolder[]>([])
   const [lastPlayedMap, setLastPlayedMap] = useState<Record<string, number>>({})
 
+  // Guard: request ID counter to prevent stale updates
+  const requestIdRef = useRef(0)
+
   // Load data
   const loadData = useCallback(async () => {
+    requestIdRef.current += 1
+    const thisRequestId = requestIdRef.current
+
     try {
       const [folderData, allFolders, allTracks, sessions] = await Promise.all([
         DB.getFolder(folderId),
@@ -104,6 +110,8 @@ export default function FilesFolderPage() {
         DB.getAllFileTracks(),
         DB.getAllPlaybackSessions(),
       ])
+
+      if (thisRequestId !== requestIdRef.current) return
 
       if (!folderData) {
         navigate({ to: '/files', replace: true })
@@ -120,6 +128,8 @@ export default function FilesFolderPage() {
       // Load subtitles for filter tracks
       const subsPromises = folderTracks.map((t: FileTrack) => DB.getFileSubtitlesForTrack(t.id))
       const subsArrays = await Promise.all(subsPromises)
+
+      if (thisRequestId !== requestIdRef.current) return
       setSubtitles(subsArrays.flat())
 
       // Build lastPlayedMap
@@ -140,9 +150,10 @@ export default function FilesFolderPage() {
       navigate({ to: '/files', replace: true })
       return
     }
-    window.requestAnimationFrame(() => {
+    const raf = window.requestAnimationFrame(() => {
       void loadData()
     })
+    return () => window.cancelAnimationFrame(raf)
   }, [loadData, folderIdIsValid, navigate])
 
   // Density state
@@ -154,9 +165,10 @@ export default function FilesFolderPage() {
   }, [])
 
   useEffect(() => {
-    window.requestAnimationFrame(() => {
+    const raf = window.requestAnimationFrame(() => {
       void loadDensity()
     })
+    return () => window.cancelAnimationFrame(raf)
   }, [loadDensity])
 
   const handleDensityChange = useCallback(async (value: ViewDensity) => {

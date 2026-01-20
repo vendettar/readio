@@ -247,9 +247,10 @@ export async function fetchWithFallback<T = string>(
     controller.abort()
   }, timeoutMs)
 
+  const onAbort = () => controller.abort()
   if (signal) {
     if (signal.aborted) controller.abort()
-    else signal.addEventListener('abort', () => controller.abort(), { once: true })
+    else signal.addEventListener('abort', onAbort, { once: true })
   }
 
   const internalSignal = controller.signal
@@ -454,6 +455,9 @@ export async function fetchWithFallback<T = string>(
     throw lastError || new Error('All fetch attempts failed')
   } finally {
     clearTimeout(timeoutId)
+    if (signal) {
+      signal.removeEventListener('abort', onAbort)
+    }
   }
 }
 

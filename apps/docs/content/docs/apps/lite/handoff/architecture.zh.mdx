@@ -185,6 +185,8 @@ src/
 - **节流持久化**：进度更新采用节流机制（默认 5s）以减轻 IndexedDB 写入压力。`saveProgressNow` Action 确保在组件卸载或关键事件时立即保存。
 - **原子化恢复**：`restoreSession` Action 封装了获取最后会话、恢复文件/URL 以及更新状态的完整逻辑，确保恢复过程的原子性。
 - **分层校验**：文件校验与注入逻辑解耦。Lite 应用执行 MIME/扩展名校验，深层内容校验推迟到后端或 Native 层（见决策 D046）。
+- **异步任务卫生 (Async Hygiene)**：所有异步任务都使用 `requestId` 或 `AbortSignal` 防止过期更新。显式追踪 `setTimeout` 和 `requestAnimationFrame` 并在组件卸载时取消，防止内存泄漏。
+- **异步序列门控 (Sequence Gating)**：关键流程（如会话创建、词典查询）使用 Ref 门控防止同一异步操作的并行重入。
 
 ---
 
@@ -193,7 +195,6 @@ src/
 - **本地错误日志**：可下载诊断日志（指令 047）。
 - **DB 访问防护**：禁止 UI 直接导入 DB（指令 057）。
 - **原子写入防护**：事务化写入与启动修复（指令 067）。
-- **异步竞态审计**：requestId/AbortController 防护（指令 068）。
 
 ---
 

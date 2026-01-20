@@ -185,6 +185,8 @@ The system uses a robust, store-driven lifecycle for maintaining playback progre
 - **Throttled Persistence**: Progress updates are throttled (default 5s) to reduce IndexedDB write pressure. A `saveProgressNow` action ensures data is saved immediately on unmount or critical events.
 - **Atomic Restoration**: The `restoreSession` action encapsulates the entire logic of fetching the last session, restoring files/URLs, and updating state in a single atomic operation.
 - **Validation Layers**: File validation is decoupled from ingestion. The `lite` app performs MIME/extension checks, while deep content validation is deferred to backend/native layers (see Decision D046).
+- **Async Task Hygiene**: All async tasks are gated against stale updates using `requestId` or `AbortSignal`. Timers and `requestAnimationFrame` calls are explicitly tracked and cancelled on unmount to prevent memory leaks and state updates on unmounted components.
+- **Async Sequence Gating**: Critical flows (e.g., session creation, dictionary lookup) use ref-based guards to prevent parallel re-entrancy of the same async operation.
 
 ---
 
@@ -193,7 +195,6 @@ The system uses a robust, store-driven lifecycle for maintaining playback progre
 - **Local Error Logger**: Downloadable diagnostics logs (Instruction 047).
 - **DB Access Guard**: Prevent direct DB imports from UI (Instruction 057).
 - **Atomic Write Safeguards**: Boot-time repair and transactional writes (Instruction 067).
-- **Async Race Audit**: RequestId/AbortController safeguards (Instruction 068).
 
 ---
 

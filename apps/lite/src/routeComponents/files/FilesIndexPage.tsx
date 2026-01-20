@@ -77,9 +77,10 @@ export default function FilesIndexPage() {
   }, [])
 
   useEffect(() => {
-    window.requestAnimationFrame(() => {
+    const raf = window.requestAnimationFrame(() => {
       void loadDensity()
     })
+    return () => window.cancelAnimationFrame(raf)
   }, [loadDensity])
 
   const handleDensityChange = useCallback(async (value: ViewDensity) => {
@@ -120,11 +121,13 @@ export default function FilesIndexPage() {
   useEffect(() => {
     if (!folderMeasureEl) return
 
-    window.requestAnimationFrame(() => {
+    const raf = window.requestAnimationFrame(() => {
       setFolderCardWidthPx(folderMeasureEl.offsetWidth || null)
     })
 
-    if (typeof ResizeObserver === 'undefined') return
+    if (typeof ResizeObserver === 'undefined') {
+      return () => window.cancelAnimationFrame(raf)
+    }
 
     const ro = new ResizeObserver((entries) => {
       const entry = entries[0]
@@ -134,7 +137,10 @@ export default function FilesIndexPage() {
     })
 
     ro.observe(folderMeasureEl)
-    return () => ro.disconnect()
+    return () => {
+      window.cancelAnimationFrame(raf)
+      ro.disconnect()
+    }
   }, [folderMeasureEl])
 
   const getDragPreviewWidthPx = useCallback(() => {

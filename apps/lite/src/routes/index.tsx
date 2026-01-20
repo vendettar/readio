@@ -145,7 +145,7 @@ export const Route = createFileRoute('/')({
     const store = usePlayerStore.getState()
 
     // Ensure session is restored before deciding to redirect
-    if (store.initializationStatus === 'idle' || store.initializationStatus === 'restoring') {
+    if (store.initializationStatus === 'idle' || store.initializationStatus === 'failed') {
       await store.restoreSession()
     }
 

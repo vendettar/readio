@@ -160,29 +160,39 @@ export function useCarouselLayout(
     [gap]
   )
 
+  const rafRef = useRef<number | null>(null)
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: scrollRef.current is needed to attach/detach observer
   useEffect(() => {
     const container = scrollRef.current
     if (!container) return
 
-    window.requestAnimationFrame(() => {
-      calculateItemWidth()
-      updateScrollButtons()
-    })
+    const scheduleUpdate = () => {
+      if (rafRef.current !== null) {
+        window.cancelAnimationFrame(rafRef.current)
+      }
+      rafRef.current = window.requestAnimationFrame(() => {
+        calculateItemWidth()
+        updateScrollButtons()
+        rafRef.current = null
+      })
+    }
+
+    scheduleUpdate()
 
     // Use scroll event for real-time button updates
     container.addEventListener('scroll', updateScrollButtons, { passive: true })
 
     const resizeObserver = new ResizeObserver(() => {
-      window.requestAnimationFrame(() => {
-        calculateItemWidth()
-        updateScrollButtons()
-      })
+      scheduleUpdate()
     })
 
     resizeObserver.observe(container)
 
     return () => {
+      if (rafRef.current !== null) {
+        window.cancelAnimationFrame(rafRef.current)
+      }
       container.removeEventListener('scroll', updateScrollButtons)
       resizeObserver.disconnect()
     }

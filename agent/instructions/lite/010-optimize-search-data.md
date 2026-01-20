@@ -1,7 +1,20 @@
 > **⚠️ CRITICAL**: You MUST preserve the current UI/UX layout and styling. Do NOT change visual appearance unless explicitly instructed.
 > **Prerequisites**: Read `apps/docs/content/docs/general/design-system/index.mdx` and `apps/docs/content/docs/apps/lite/ui-patterns/index.mdx` before starting.
 
-# Task: Optimize Search Algorithms (Data Layer)
+# Task: Optimize Search Algorithms (Data Layer) [COMPLETED]
+
+## Completion
+- **Completed by**: Antigravity (Advanced Agentic Coding)
+- **Date**: 2025-05-22
+- **Reviewed by**: nullius (2025-05-22)
+- **Files Modified**:
+  - `apps/lite/src/lib/dexieDb.ts`
+  - `apps/lite/src/hooks/useGlobalSearch.ts`
+  - `apps/docs/content/docs/apps/lite/handoff/features/search.mdx`
+  - `apps/docs/content/docs/apps/lite/handoff/database.mdx`
+  - `apps/docs/content/docs/apps/lite/handoff/index.mdx`
+  - `apps/docs/content/docs/apps/lite/handoff/index.zh.mdx`
+- **Verification**: Refactored Dexie search to use index-based `startsWithIgnoreCase`. Debounced remote searches in `useGlobalSearch` while keeping store-based searches immediate.
 
 ## Objective
 Ensure the underlying search queries (Dexie & API) are O(log N) and efficient.

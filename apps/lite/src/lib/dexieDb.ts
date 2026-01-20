@@ -148,14 +148,14 @@ class ReadioDB extends Dexie {
     // UUID-based primary keys for cloud sync readiness
     this.version(1).stores({
       playback_sessions:
-        'id, lastPlayedAt, source, createdAt, audioUrl, audioFilename, localTrackId, episodeId',
+        'id, title, lastPlayedAt, source, createdAt, audioUrl, audioFilename, localTrackId, episodeId',
       audioBlobs: 'id, storedAt',
       subtitles: 'id, storedAt',
       subscriptions: 'id, &feedUrl, addedAt, providerPodcastId', // &feedUrl = unique index
       favorites: 'id, &key, addedAt, episodeId', // &key = unique index
       settings: 'key',
       folders: 'id, name, createdAt', // UUID, no auto-increment
-      local_tracks: 'id, folderId, createdAt', // UUID, no auto-increment
+      local_tracks: 'id, name, folderId, createdAt', // UUID, no auto-increment
       local_subtitles: 'id, trackId', // UUID, no auto-increment
     })
   }
@@ -577,25 +577,15 @@ export const DB = {
   },
 
   async searchPlaybackSessionsByTitle(query: string, limit = 200): Promise<PlaybackSession[]> {
-    const normalized = query.toLowerCase()
-    if (!normalized) return []
-    return db.playback_sessions
-      .orderBy('lastPlayedAt')
-      .reverse()
-      .filter((session) => (session.title || '').toLowerCase().includes(normalized))
-      .limit(limit)
-      .toArray()
+    if (!query) return []
+    // Use index for O(log N) search
+    return db.playback_sessions.where('title').startsWithIgnoreCase(query).limit(limit).toArray()
   },
 
   async searchFileTracksByName(query: string, limit = 200): Promise<FileTrack[]> {
-    const normalized = query.toLowerCase()
-    if (!normalized) return []
-    return db.local_tracks
-      .orderBy('createdAt')
-      .reverse()
-      .filter((track) => (track.name || '').toLowerCase().includes(normalized))
-      .limit(limit)
-      .toArray()
+    if (!query) return []
+    // Use index for O(log N) search
+    return db.local_tracks.where('name').startsWithIgnoreCase(query).limit(limit).toArray()
   },
 
   // File subtitles
