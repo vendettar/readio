@@ -19,26 +19,24 @@ import { type Language, translations } from './translations'
 export function translate(key: string, options?: Record<string, string | number>): string {
   const config = getAppConfig()
   // Get stored language with namespacing and legacy fallback
-  const storedLang =
-    getJson<string>(STORAGE_KEY_LANGUAGE) ||
-    getJson<string>(STORAGE_KEY_LEGACY_LANGUAGE) ||
+  const rawLang =
+    getJson<unknown>(STORAGE_KEY_LANGUAGE) ||
+    getJson<unknown>(STORAGE_KEY_LEGACY_LANGUAGE) ||
     config.DEFAULT_LANG ||
     'en'
+  const storedLang = typeof rawLang === 'string' ? rawLang : 'en'
 
-  // Map language code to translation key with fallback
-  const langKey: Language = storedLang.startsWith('zh')
-    ? 'zh'
-    : storedLang.startsWith('en')
-      ? 'en'
-      : storedLang.startsWith('ja')
-        ? 'ja'
-        : storedLang.startsWith('ko')
-          ? 'ko'
-          : storedLang.startsWith('de')
-            ? 'de'
-            : storedLang.startsWith('es')
-              ? 'es'
-              : 'en'
+  const normalizedLang = storedLang.trim().toLowerCase()
+  const langPrefix = normalizedLang.split('-')[0]
+  const langMap: Record<string, Language> = {
+    zh: 'zh',
+    en: 'en',
+    ja: 'ja',
+    ko: 'ko',
+    de: 'de',
+    es: 'es',
+  }
+  const langKey: Language = langMap[langPrefix] ?? 'en'
 
   const t = translations[langKey]
 

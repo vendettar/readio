@@ -11,6 +11,7 @@ vi.mock('../lib/dexieDb', () => ({
   DB: {
     getLastPlaybackSession: vi.fn().mockResolvedValue(null),
     createPlaybackSession: vi.fn().mockResolvedValue('mock-session-id'),
+    upsertPlaybackSession: vi.fn().mockResolvedValue(undefined),
     updatePlaybackSession: vi.fn().mockResolvedValue(undefined),
     getPlaybackSession: vi.fn().mockResolvedValue(null),
     getAudioBlob: vi.fn().mockResolvedValue(null),
@@ -125,7 +126,7 @@ describe('useSession', () => {
 
     expect(generateSessionId).toHaveBeenCalled()
     expect(usePlayerStore.getState().sessionId).toBe('mock-session-id')
-    expect(DB.createPlaybackSession).toHaveBeenCalledWith(
+    expect(DB.upsertPlaybackSession).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'mock-session-id',
         duration: 300,

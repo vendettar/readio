@@ -1,6 +1,6 @@
 // src/hooks/selection/useSelectionActions.ts
 // User actions for text selection (copy, search, lookup)
-import { useCallback, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { warn } from '../../lib/logger'
 import { openExternal } from '../../lib/openExternal'
 import type { SelectionState } from '../../lib/selection'
@@ -11,6 +11,15 @@ export function useSelectionActions(
 ) {
   const abortRef = useRef<AbortController | null>(null)
   const sequenceRef = useRef(0) // Sequence counter to prevent old requests from overwriting new ones
+
+  useEffect(() => {
+    return () => {
+      if (abortRef.current) {
+        abortRef.current.abort()
+        abortRef.current = null
+      }
+    }
+  }, [])
 
   const copyText = useCallback(
     (text: string) => {

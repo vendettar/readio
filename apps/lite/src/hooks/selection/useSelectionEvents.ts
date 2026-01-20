@@ -206,6 +206,15 @@ export function useSelectionEvents(
     handleScroll,
   ])
 
+  useEffect(() => {
+    return () => {
+      if (clickTimerRef.current) {
+        clearTimeout(clickTimerRef.current)
+        clickTimerRef.current = null
+      }
+    }
+  }, [])
+
   return {
     // No return needed - all effects are managed internally
   }
