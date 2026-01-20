@@ -4,6 +4,7 @@
  * Falls back to English if language or key is missing
  */
 
+import { warn as logWarn } from './logger'
 import { getJson } from './storage'
 import { type Language, translations } from './translations'
 
@@ -45,7 +46,7 @@ export function translate(key: string, options?: Record<string, string | number>
   // Final fallback to key itself
   if (!text) {
     if (import.meta.env.DEV) {
-      console.warn(`[i18n] Missing translation key: ${key}`)
+      logWarn(`[i18n] Missing translation key: ${key}`)
     }
     return key
   }

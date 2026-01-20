@@ -1,6 +1,7 @@
 // src/hooks/selection/useSelectionActions.ts
 // User actions for text selection (copy, search, lookup)
 import { useCallback, useRef } from 'react'
+import { logError } from '../../lib/logger'
 import { openExternal } from '../../lib/openExternal'
 import type { SelectionState } from '../../lib/selection'
 import { fetchDefinition, isLookupEligible } from '../../lib/selection'
@@ -13,7 +14,7 @@ export function useSelectionActions(
 
   const copyText = useCallback(
     (text: string) => {
-      navigator.clipboard.writeText(text).catch(console.error)
+      navigator.clipboard.writeText(text).catch(logError)
       setState((s) => ({ ...s, showMenu: false, selectedText: '' }))
       window.getSelection()?.removeAllRanges()
     },

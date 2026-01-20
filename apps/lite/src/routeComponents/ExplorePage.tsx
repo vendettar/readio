@@ -11,6 +11,7 @@ import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import type { Subscription } from '../lib/dexieDb'
 import discovery, { type Episode, type Podcast } from '../lib/discovery'
 import { getDiscoveryArtworkUrl } from '../lib/imageUtils'
+import { logError, warn as logWarn } from '../lib/logger'
 import { openExternal } from '../lib/openExternal'
 import { useExploreStore } from '../store/exploreStore'
 import { usePlayerStore } from '../store/playerStore'
@@ -58,7 +59,7 @@ export default function ExplorePage() {
           podcastFeedUrl = podcast?.feedUrl
         }
         if (!podcastFeedUrl) {
-          console.warn('[handlePlayEpisode] Feed URL not found')
+          logWarn('[handlePlayEpisode] Feed URL not found')
           if (episode.url) openExternal(episode.url)
           return
         }
@@ -84,7 +85,7 @@ export default function ExplorePage() {
         if (episode.url) openExternal(episode.url)
       }
     } catch (error) {
-      console.error('[handlePlayEpisode] Lookup failed:', error)
+      logError('[handlePlayEpisode] Lookup failed:', error)
       if (episode.url) openExternal(episode.url)
     }
   }
@@ -134,7 +135,7 @@ export default function ExplorePage() {
         }
       }
     } catch (error) {
-      console.error('[handleSubscribePodcast] Failed:', error)
+      logError('[handleSubscribePodcast] Failed:', error)
     }
   }
 
@@ -163,7 +164,7 @@ export default function ExplorePage() {
         }
       }
     } catch (error) {
-      console.error('[handlePlayLatestEpisode] Failed:', error)
+      logError('[handlePlayLatestEpisode] Failed:', error)
     }
   }
 
@@ -241,13 +242,13 @@ export default function ExplorePage() {
               return
             }
           } catch (feedError) {
-            console.warn('[handleToggleFavoriteEpisode] RSS fallback failed:', feedError)
+            logWarn('[handleToggleFavoriteEpisode] RSS fallback failed:', feedError)
           }
         }
       }
 
       if (!fullEpisode || !podcastFeedUrl) {
-        console.error('[handleToggleFavoriteEpisode] Episode or podcast feed not found')
+        logError('[handleToggleFavoriteEpisode] Episode or podcast feed not found')
         return
       }
 
@@ -274,7 +275,7 @@ export default function ExplorePage() {
       }
       await store.addFavorite(podcastObj, epObj)
     } catch (error) {
-      console.error('[handleToggleFavoriteEpisode] Failed:', error)
+      logError('[handleToggleFavoriteEpisode] Failed:', error)
     }
   }
 

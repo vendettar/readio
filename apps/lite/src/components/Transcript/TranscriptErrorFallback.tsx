@@ -3,6 +3,7 @@
 
 import { useCallback, useState } from 'react'
 import { useI18n } from '../../hooks/useI18n'
+import { logError } from '../../lib/logger'
 import { Button } from '../ui/button'
 
 interface TranscriptErrorFallbackProps {
@@ -29,12 +30,12 @@ export function TranscriptErrorFallback({ error, reset }: TranscriptErrorFallbac
       setTimeout(() => setCopied(false), 2000)
     } catch {
       // Clipboard may be blocked
-      console.error('[TranscriptErrorFallback] Failed to copy debug info')
+      logError('[TranscriptErrorFallback] Failed to copy debug info', error)
     }
   }, [error])
 
   // Log technical details to console
-  console.error('[TranscriptView] Render error:', error)
+  logError('[TranscriptView] Render error:', error)
 
   return (
     <div className="flex flex-col items-center justify-center h-full p-6 text-center">

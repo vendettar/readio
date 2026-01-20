@@ -13,6 +13,7 @@ import discovery from '../../lib/discovery'
 import { formatCompactNumber } from '../../lib/formatters'
 import { stripHtml } from '../../lib/htmlUtils'
 import { getDiscoveryArtworkUrl } from '../../lib/imageUtils'
+import { logError } from '../../lib/logger'
 import { toast } from '../../lib/toast'
 import { cn } from '../../lib/utils'
 import { useExploreStore } from '../../store/exploreStore'
@@ -46,7 +47,7 @@ export default function PodcastShowPage() {
       try {
         return await discovery.fetchPodcastFeed(feedUrl ?? '')
       } catch (err) {
-        console.error('[PodcastShowPage] RSS feed failed, falling back to iTunes API:', err)
+        logError('[PodcastShowPage] RSS feed failed, falling back to iTunes API:', err)
         const episodes = await discovery.getPodcastEpisodes(id)
         return {
           title: podcast?.collectionName || '',

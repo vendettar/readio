@@ -4,6 +4,7 @@ import { useI18n } from '../../hooks/useI18n'
 import { formatDuration, formatRelativeTime } from '../../lib/dateUtils'
 import discovery, { type Episode, type Podcast, type SearchEpisode } from '../../lib/discovery'
 import { stripHtml } from '../../lib/htmlUtils'
+import { logError } from '../../lib/logger'
 import { toast } from '../../lib/toast'
 import { cn } from '../../lib/utils'
 import { useExploreStore } from '../../store/exploreStore'
@@ -77,7 +78,7 @@ export function SearchEpisodeItem({ episode, onPlay }: SearchEpisodeItemProps) {
 
         await addFavorite(podcast, episodeObj)
       } catch (err) {
-        console.error('[SearchEpisodeItem] Failed to favorite:', err)
+        logError('[SearchEpisodeItem] Failed to favorite:', err)
         toast.errorKey('toastAddFavoriteFailed')
       } finally {
         setIsSaving(false)

@@ -3,6 +3,7 @@ import { create } from 'zustand'
 import type { Favorite, Subscription } from '../lib/dexieDb'
 import { DB } from '../lib/dexieDb'
 import discovery, { type Episode, type ParsedFeed, type Podcast } from '../lib/discovery'
+import { logError } from '../lib/logger'
 import { abortRequestsWithPrefix } from '../lib/requestManager'
 import { getAppConfig } from '../lib/runtimeConfig'
 import { toast } from '../lib/toast'
@@ -17,7 +18,7 @@ let podcastAbortController: AbortController | null = null
  * Logs the error for debugging and shows a user-friendly toast.
  */
 function handleDbWriteError(operation: string, toastKey: TranslationKey, error: unknown): void {
-  console.error(`[ExploreStore] Failed to ${operation}:`, error)
+  logError(`[ExploreStore] Failed to ${operation}:`, error)
   toast.errorKey(toastKey)
 }
 
@@ -159,7 +160,7 @@ export const useExploreStore = create<ExploreState>((set, get) => ({
   setCountry: (country) => {
     set({ country })
     DB.setSetting(SETTING_KEY_COUNTRY, country).catch((err) => {
-      console.error('[ExploreStore] Failed to save setting:', err)
+      logError('[ExploreStore] Failed to save setting:', err)
     })
   },
 
@@ -186,7 +187,7 @@ export const useExploreStore = create<ExploreState>((set, get) => ({
         // Aborted, don't update state
         return
       }
-      console.error('[ExploreStore] Search failed:', error)
+      logError('[ExploreStore] Search failed:', error)
       set({
         searchErrorKey: 'errorSearchFailed',
         searchLoading: false,
@@ -223,7 +224,7 @@ export const useExploreStore = create<ExploreState>((set, get) => ({
         // Aborted, don't update state
         return
       }
-      console.error('[ExploreStore] Failed to load podcast feed:', error)
+      logError('[ExploreStore] Failed to load podcast feed:', error)
       set({
         podcastErrorKey: 'errorLoadEpisodesFailed',
         podcastLoading: false,
@@ -249,7 +250,7 @@ export const useExploreStore = create<ExploreState>((set, get) => ({
       const subs = await DB.getAllSubscriptions()
       set({ subscriptions: subs, subscriptionsLoaded: true })
     } catch (error) {
-      console.error('[ExploreStore] Failed to load subscriptions:', error)
+      logError('[ExploreStore] Failed to load subscriptions:', error)
       set({ subscriptionsLoaded: true })
     }
   },
@@ -297,7 +298,7 @@ export const useExploreStore = create<ExploreState>((set, get) => ({
       const favs = await DB.getAllFavorites()
       set({ favorites: favs, favoritesLoaded: true })
     } catch (error) {
-      console.error('[ExploreStore] Failed to load favorites:', error)
+      logError('[ExploreStore] Failed to load favorites:', error)
       set({ favoritesLoaded: true })
     }
   },

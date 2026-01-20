@@ -105,7 +105,7 @@ export function resolveDuplicateName(name: string, existingNames: string[]): str
  * Ingest files (audio + subtitles) into the database.
  *
  * - audio files create tracks
- * - SRT files with matching base names are auto-attached
+ * - SRT/VTT files with matching base names are auto-attached
  * - No React dependencies, no UI side effects
  *
  * @returns Track IDs created and count of subtitles attached

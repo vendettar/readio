@@ -281,7 +281,11 @@ export default function FilesFolderPage() {
               </p>
             </div>
 
-            <Button onClick={() => audioInputRef.current?.click()} className="gap-2">
+            <Button
+              data-testid="add-audio-btn"
+              onClick={() => audioInputRef.current?.click()}
+              className="gap-2"
+            >
               <Upload size={18} />
               <span>{t('filesAddAudio')}</span>
             </Button>
@@ -305,8 +309,9 @@ export default function FilesFolderPage() {
         />
         <input
           type="file"
-          accept="audio/*"
+          accept="audio/*,.srt,.vtt"
           multiple
+          data-testid="audio-file-input"
           ref={audioInputRef}
           onChange={(e) => handleAudioInputChange(e, audioInputRef)}
           className="hidden"

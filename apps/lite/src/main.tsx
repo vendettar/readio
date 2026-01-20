@@ -4,7 +4,6 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { RootErrorBoundary } from './components/RootErrorBoundary'
 import { I18nProvider } from './hooks/useI18n'
-import { DB } from './lib/dexieDb'
 import { router } from './router'
 import './index.css'
 // Note: legacy interactions.css and theme-tokens.css are being consolidated/removed
@@ -21,35 +20,11 @@ const queryClient = new QueryClient({
   },
 })
 
-declare global {
-  interface Window {
-    __READIO_TEST__?: {
-      router: typeof router
-      queryClient: typeof queryClient
-      clearAppData: () => Promise<void>
-    }
-  }
-}
-
-if (import.meta.env.DEV) {
-  window.__READIO_TEST__ = {
-    router,
-    queryClient,
-    clearAppData: async () => {
-      try {
-        localStorage.clear()
-        sessionStorage.clear()
-        queryClient.clear()
-      } catch {
-        /* ignore */
-      }
-      try {
-        await DB.clearAllData()
-      } catch {
-        // best-effort
-      }
-    },
-  }
+// Register E2E test harness (only in DEV or TEST)
+if (import.meta.env.DEV || import.meta.env.VITE_E2E === 'true' || import.meta.env.MODE === 'test') {
+  import('./testHarness').then(({ registerTestHarness }) => {
+    registerTestHarness(router, queryClient)
+  })
 }
 
 import { TooltipProvider } from './components/ui/tooltip'

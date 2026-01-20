@@ -7,6 +7,7 @@ import {
 } from '@readio/core'
 import type { z } from 'zod'
 import { fetchJsonWithFallback, fetchTextWithFallback } from '../../fetchUtils'
+import { logError, warn as logWarn } from '../../logger'
 import { deduplicatedFetch, getRequestKey } from '../../requestManager'
 import { getAppConfig } from '../../runtimeConfig'
 import { getJsonWithTtl, nsKey, setJsonWithTtl } from '../../storage'
@@ -145,7 +146,7 @@ function parseOrNull<T>(
 ): T | null {
   const result = schema.safeParse(data)
   if (!result.success) {
-    console.warn(`[appleProvider] invalid ${tag}`, {
+    logWarn(`[appleProvider] invalid ${tag}`, {
       error: result.error,
       data,
       rawItem,
@@ -178,7 +179,7 @@ function parseRssXml(xmlText: string): ParsedFeed {
 
   if (parserError) {
     const errorMsg = parserError.textContent || 'Unknown XML parse error'
-    console.error('[parseRssXml] RSS parse failed:', errorMsg)
+    logError('[parseRssXml] RSS parse failed:', errorMsg)
     throw new Error(`RSS parse failed: ${errorMsg.split('\n')[0]}`)
   }
 

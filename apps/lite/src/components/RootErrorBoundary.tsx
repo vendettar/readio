@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { useI18n } from '../hooks/useI18n'
 import { reportError } from '../lib/errorReporter'
+import { logError } from '../lib/logger'
 import { ErrorBoundary } from './ErrorBoundary'
 
 const IS_DEV = import.meta.env.DEV
@@ -79,7 +80,7 @@ export function RootErrorBoundary({ children }: { children: React.ReactNode }) {
           info.componentStack || '',
         ].join('\n')
         setLastErrorText(text)
-        console.error('[ErrorBoundary]', error, info)
+        logError('[ErrorBoundary]', error, info)
         // Call configured error reporter (no-op by default)
         reportError(error, info)
       }}

@@ -71,7 +71,9 @@ title: Development Environment
 
 ### 配置访问 (`src/lib/runtimeConfig.ts`)
 
-- `getAppConfig()` 提供类型安全的配置访问，支持 string-to-number 转换。
+- `getAppConfig()` 提供类型安全的配置访问。它使用 Zod 强制转换（coercion）和默认值作为单一事实来源 (SSOT)，自动处理类型转换：
+  - **String to Number**: `"123"` → `123`。
+  - **Boolean Coercion**: 将 `"false"`、`"0"` 及任意未知字符串（如 `"trash"`）处理为 `false`；仅明确的 `"true"`/`"1"` 视为 `true`。
 - `Window.__READIO_ENV__` 定义运行时配置结构。
 
 ---
@@ -84,7 +86,7 @@ title: Development Environment
 
 ### 数据库错误
 
-默认数据库名为 `readio`（清库时可通过 `READIO_DB_NAME` 覆盖），可在浏览器 IndexedDB 面板中查看与清理。
+默认数据库名为 `readio-lite`（清库时可通过 `READIO_DB_NAME` 覆盖），可在浏览器 IndexedDB 面板中查看与清理。
 
 ### Tailwind 样式不生效
 

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useI18n } from '../../hooks/useI18n'
 import { useZoom } from '../../hooks/useZoom'
 import { reportError } from '../../lib/errorReporter'
+import { logError } from '../../lib/logger'
 import { findSubtitleIndex, formatTimeLabel } from '../../lib/subtitles'
 import { useImmersionStore } from '../../store/immersionStore'
 import { usePlayerStore } from '../../store/playerStore'
@@ -163,7 +164,7 @@ export function FullPlayer() {
                 <TranscriptErrorFallback error={error} reset={reset} />
               )}
               onError={(error, info) => {
-                console.error('[FullPlayer TranscriptView]', error, info)
+                logError('[FullPlayer TranscriptView]', error, info)
                 reportError(error, info)
               }}
             >

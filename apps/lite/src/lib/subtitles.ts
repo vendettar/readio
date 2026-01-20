@@ -7,43 +7,60 @@ export interface subtitle {
 }
 
 /**
- * Parse SRT subtitle content
+ * Parse subtitle content (supports SRT and VTT)
  */
-export function parseSrt(content: string): subtitle[] {
-  const lines = content.trim().split(/\r?\n/)
+export function parseSubtitles(content: string): subtitle[] {
+  // Normalize line endings and remove byte-order mark
+  const normalized = content.replace(/\uFEFF/g, '').replace(/\r\n/g, '\n')
+  const lines = normalized.split('\n')
   const subtitles: subtitle[] = []
   let i = 0
 
+  // Optional: Skip WEBVTT header for VTT files
+  if (lines[0]?.trim().toUpperCase() === 'WEBVTT') {
+    i++
+  }
+
   while (i < lines.length) {
-    // Skip empty lines and subtitle index
+    // Skip empty lines and non-timestamp lines
     while (i < lines.length && !lines[i].includes('-->')) {
       i++
     }
     if (i >= lines.length) break
 
-    // Parse time
-    const timeLine = lines[i]
-    const timeMatch = timeLine.match(
-      /(\d{2}:\d{2}:\d{2}[,.]\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}[,.]\d{3})/
-    )
+    // Parse time line (some VTTs have settings after the time, we split by whitespace)
+    const timeLine = lines[i].trim()
+    // Match regex for: 00:00:00.000 --> 00:00:00.000 or 00:00.000 --> 00:00.000
+    // We are flexible with HH: part
+    const parts = timeLine.split(/\s+-->\s+/)
+    if (parts.length >= 2) {
+      const startTimeStr = parts[0]
+      // End time might be followed by settings like "align:start"
+      const endTimeStr = parts[1].split(/\s+/)[0]
 
-    if (timeMatch) {
-      const start = parseTime(timeMatch[1])
-      const end = parseTime(timeMatch[2])
+      const start = parseTime(startTimeStr)
+      const end = parseTime(endTimeStr)
       i++
 
-      // Collect text lines
+      // Collect text lines until next empty line
       const textLines: string[] = []
       while (i < lines.length && lines[i].trim() !== '') {
-        textLines.push(lines[i])
+        const text = lines[i].trim()
+        // Skip VTT style tags like <v Voice> or <b>
+        const cleanText = text.replace(/<[^>]+>/g, '')
+        if (cleanText) {
+          textLines.push(cleanText)
+        }
         i++
       }
 
-      subtitles.push({
-        start,
-        end,
-        text: textLines.join('\n'),
-      })
+      if (textLines.length > 0) {
+        subtitles.push({
+          start,
+          end,
+          text: textLines.join('\n'),
+        })
+      }
     } else {
       i++
     }
@@ -53,12 +70,32 @@ export function parseSrt(content: string): subtitle[] {
 }
 
 /**
+ * Backward compatibility alias
+ */
+export const parseSrt = parseSubtitles
+
+/**
  * Parse time string to seconds
+ * Handles:
+ * - 00:00:00,000 (SRT)
+ * - 00:00:00.000 (VTT)
+ * - 00:00.000 (VTT short)
  */
 function parseTime(timeStr: string): number {
-  const [time, ms] = timeStr.replace(',', '.').split('.')
-  const [h, m, s] = time.split(':').map(Number)
-  return h * 3600 + m * 60 + s + parseInt(ms, 10) / 1000
+  const normalized = timeStr.replace(',', '.')
+  const [time, msStr] = normalized.split('.')
+  const ms = parseInt(msStr || '0', 10) / 1000
+
+  const parts = time.split(':').map(Number)
+  if (parts.length === 3) {
+    const [h, m, s] = parts
+    return h * 3600 + m * 60 + (s || 0) + ms
+  }
+  if (parts.length === 2) {
+    const [m, s] = parts
+    return m * 60 + (s || 0) + ms
+  }
+  return (parts[0] || 0) + ms
 }
 
 // Re-export time label formatter from shared utilities

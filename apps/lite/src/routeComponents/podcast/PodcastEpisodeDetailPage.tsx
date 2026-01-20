@@ -12,6 +12,7 @@ import { formatDuration, formatRelativeTime } from '@/lib/dateUtils'
 import discovery from '@/lib/discovery'
 import { sanitizeHtml } from '@/lib/htmlUtils'
 import { getDiscoveryArtworkUrl } from '@/lib/imageUtils'
+import { logError } from '@/lib/logger'
 import { openExternal } from '@/lib/openExternal'
 import { cn } from '@/lib/utils'
 import { useExploreStore } from '@/store/exploreStore'
@@ -42,7 +43,7 @@ export default function PodcastEpisodeDetailPage() {
       try {
         return await discovery.fetchPodcastFeed(feedUrl ?? '')
       } catch (err) {
-        console.error('[PodcastEpisodeDetailPage] RSS feed failed, returning basic info:', err)
+        logError('[PodcastEpisodeDetailPage] RSS feed failed, returning basic info:', err)
         return {
           title: podcast?.collectionName || '',
           description: '',

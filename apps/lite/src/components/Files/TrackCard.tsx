@@ -370,7 +370,10 @@ export function TrackCard({
             </div>
           </div>
           <Button
+            data-testid="play-track-btn"
             onClick={() => onPlay(track)}
+            onPointerDown={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
             size={isCompact ? 'sm' : 'default'}
             className="gap-2"
             disabled={disableInteractions}

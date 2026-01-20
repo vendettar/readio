@@ -14,6 +14,7 @@ import { formatDateStandard, formatDuration, formatTimeSmart } from '../lib/date
 import { DB, type PlaybackSession } from '../lib/dexieDb'
 import type { Episode, Podcast } from '../lib/discovery'
 import { stripHtml } from '../lib/htmlUtils'
+import { logError } from '../lib/logger'
 import { cn } from '../lib/utils'
 import { useExploreStore } from '../store/exploreStore'
 import { usePlayerStore } from '../store/playerStore'
@@ -49,13 +50,14 @@ export default function HistoryPage() {
   useEffect(() => {
     DB.getAllPlaybackSessions()
       .then((s) => setSessions(s))
-      .catch((err) => console.error('[HistoryPage] Failed to load sessions:', err))
+      .catch((err) => logError('[HistoryPage] Failed to load sessions:', err))
       .finally(() => setIsLoading(false))
   }, [])
 
   const handlePlaySession = async (session: PlaybackSession) => {
     // For explore/podcast sessions with audioUrl
     if (session.audioUrl) {
+      // 1. Set URL first to start loading (UI optimistic)
       setAudioUrl(session.audioUrl, session.title, session.artworkUrl || '', {
         description: session.description,
         podcastTitle: session.podcastTitle,
@@ -67,6 +69,8 @@ export default function HistoryPage() {
       })
 
       setFileTrackId(session.localTrackId ?? null)
+
+      // 2. Resume DB session - Store update is sync but we treat session as authoritative
       setSessionId(session.id)
       startPlayback()
       return
@@ -79,6 +83,8 @@ export default function HistoryPage() {
         const url = URL.createObjectURL(audioBlob.blob)
         setAudioUrl(url, session.title, session.artworkUrl || '')
         setFileTrackId(session.localTrackId ?? null)
+
+        // Ensure session ID is set last
         setSessionId(session.id)
         startPlayback()
       }

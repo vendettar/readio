@@ -161,7 +161,7 @@ class ReadioDB extends Dexie {
   }
 }
 
-const db = new ReadioDB()
+export const db = new ReadioDB()
 
 // Use the centralized ID generator
 function generateId(): string {
@@ -300,7 +300,7 @@ export const DB = {
       content,
       size: new Blob([content]).size,
       filename,
-      type: filename.toLowerCase().endsWith('.vtt') ? 'vtt' : 'srt',
+      type: filename.split('.').pop()?.toLowerCase() === 'vtt' ? 'vtt' : 'srt',
       storedAt: Date.now(),
     }
     await db.subtitles.put(subtitle)

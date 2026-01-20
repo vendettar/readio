@@ -25,7 +25,7 @@ window.__READIO_ENV__ = window.__READIO_ENV__ || {
   READIO_CORS_PROXY_PRIMARY: false,
   READIO_DEFAULT_TIMEOUT_MS: 15000,
   READIO_MAX_CONCURRENT_REQUESTS: 6,
-  READIO_DB_NAME: 'readio-v2',
+  READIO_DB_NAME: 'readio-lite',
 
   // API Endpoints
   READIO_DEFAULT_CORS_PROXY: 'https://api.allorigins.win',

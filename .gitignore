@@ -53,7 +53,7 @@ issue*/
 .claude/
 
 # Playwright
-/tests/.output/
+**/tests/.output/
 
 .tanstack/
 # Local runtime config template is tracked, actual local overrides

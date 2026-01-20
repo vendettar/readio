@@ -137,8 +137,8 @@ export const usePlayerStore = create<PlayerState>((set) => ({
   },
   setAudioUrl: (url, title = '', coverArt = '', metadata = null) =>
     set((state) => {
-      // Revoke old blob URL if it's different
-      if (state.currentBlobUrl && state.currentBlobUrl !== url) {
+      // Revoke old blob URL
+      if (state.currentBlobUrl) {
         URL.revokeObjectURL(state.currentBlobUrl)
       }
 
@@ -314,9 +314,7 @@ export const usePlayerStore = create<PlayerState>((set) => ({
       lastPlayedAt: now,
     })
       .then(() => {
-        if (import.meta.env.DEV) {
-          console.log(`[PlayerStore] Saved progress: ${time.toFixed(1)}s`)
-        }
+        log(`[PlayerStore] Saved progress: ${time.toFixed(1)}s`)
       })
       .catch((err) => {
         logError('[PlayerStore] Failed to save progress:', err)

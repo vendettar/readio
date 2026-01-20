@@ -1,5 +1,4 @@
-// src/routes/index.tsx
-import { createFileRoute, Link, Navigate } from '@tanstack/react-router'
+import { createFileRoute, Link, useRouter } from '@tanstack/react-router'
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { FollowButton } from '../components/FollowButton'
@@ -10,6 +9,7 @@ import { useI18n } from '../hooks/useI18n'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import { useZoom } from '../hooks/useZoom'
 import { reportError } from '../lib/errorReporter'
+import { logError } from '../lib/logger'
 import { findSubtitleIndex } from '../lib/subtitles'
 import { usePlayerStore } from '../store/playerStore'
 
@@ -18,6 +18,7 @@ const LazyTranscriptView = lazy(() =>
 )
 
 function HomePage() {
+  const router = useRouter()
   const { t } = useI18n()
   const { zoomScale, showZoomBar, zoomIn, zoomOut, zoomReset, setShowZoomBar, scheduleHide } =
     useZoom()
@@ -27,6 +28,7 @@ function HomePage() {
   useKeyboardShortcuts({ isModalOpen: false })
 
   const {
+    audioUrl,
     audioLoaded,
     subtitles,
     subtitlesLoaded,
@@ -35,6 +37,7 @@ function HomePage() {
     progress,
     isPlaying,
     seekTo,
+    initializationStatus,
   } = usePlayerStore()
 
   // Find current subtitle using optimized algorithm
@@ -66,12 +69,15 @@ function HomePage() {
   // Only redirect if:
   // 1. No audio/subtitles loaded AND
   // 2. No session exists (meaning user hasn't started any playback yet)
-  const { sessionId } = usePlayerStore()
-  const shouldRedirect = !audioLoaded && !subtitlesLoaded && !sessionId
-
-  if (shouldRedirect) {
-    return <Navigate to="/files" />
-  }
+  useEffect(() => {
+    if (
+      !audioUrl &&
+      !subtitlesLoaded &&
+      (initializationStatus === 'ready' || initializationStatus === 'failed')
+    ) {
+      router.navigate({ to: '/files', replace: true })
+    }
+  }, [audioUrl, subtitlesLoaded, initializationStatus, router])
 
   // Content loaded - show transcript
   return (
@@ -91,7 +97,7 @@ function HomePage() {
       <ErrorBoundary
         fallback={({ error, reset }) => <TranscriptErrorFallback error={error} reset={reset} />}
         onError={(error, info) => {
-          console.error('[TranscriptView]', error, info)
+          logError('[TranscriptView]', error, info)
           reportError(error, info)
         }}
       >

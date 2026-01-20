@@ -7,20 +7,59 @@
 
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { expect, test } from '@playwright/test'
+import { expect, type Page, test } from '@playwright/test'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const FIXTURES_DIR = path.join(__dirname, 'fixtures')
 const TEST_AUDIO = path.join(FIXTURES_DIR, 'test-audio.mp3')
-const TEST_SUBTITLE = path.join(FIXTURES_DIR, 'test-subtitle.srt')
+const TEST_SUBTITLE = path.join(FIXTURES_DIR, 'test-audio.srt')
+const TEST_VTT = path.join(FIXTURES_DIR, 'test-audio.vtt')
+
+/**
+ * Helper to get counts from IndexedDB stores using the exposed app DB instance
+ */
+async function getIdbCounts(page: Page, storeNames: string[]): Promise<Record<string, number>> {
+  return page.evaluate(async (names: string[]) => {
+    // biome-ignore lint/suspicious/noExplicitAny: access app internal state
+    const rawDb = (window as any).__READIO_TEST__?.rawDb
+    if (!rawDb) {
+      console.error('[getIdbCounts] rawDb not found on window.__READIO_TEST__')
+      return {}
+    }
+
+    const results: Record<string, number> = {}
+    for (const name of names) {
+      try {
+        const table = rawDb[name]
+        if (!table) {
+          results[name] = 0
+          continue
+        }
+        results[name] = await table.count()
+      } catch (_err) {
+        results[name] = 0
+      }
+    }
+    return results
+  }, storeNames)
+}
 
 test.describe('Local File Playback Flow', () => {
   test.beforeEach(async ({ page }) => {
-    // Clear app state before each test (must close app's IDB connection first)
-    await page.goto('/')
-    await page.evaluate(async () => {
-      await window.__READIO_TEST__?.clearAppData()
+    // Capture browser logs
+    page.on('console', (msg) => {
+      console.log(`[BROWSER] ${msg.type()}: ${msg.text()}`)
     })
+
+    // Navigate to a blank page first to prevent app from accessing DB while clearing
+    await page.goto('about:blank')
+    await page.goto('/') // Go to / to get the exposed test helpers
+    await page.evaluate(async () => {
+      // biome-ignore lint/suspicious/noExplicitAny: access app internal state
+      await (window as any).__READIO_TEST__?.clearAppData()
+    })
+    // Go to home page to trigger redirect
+    await page.goto('/')
     // Reload to ensure fresh state
     await page.reload()
   })
@@ -28,35 +67,41 @@ test.describe('Local File Playback Flow', () => {
   test('should upload local files and play them', async ({ page }) => {
     await page.goto('/')
 
-    // 1. Open Local Files Modal
-    const localFilesBtn = page.locator('#openLocalFilesBtn')
-    await expect(localFilesBtn).toBeVisible()
-    await localFilesBtn.click()
+    // 1. Verify redirect to files page
+    await expect(page).toHaveURL(/\/files/)
 
-    // 2. Wait for modal to open
-    const modal = page.locator('.localfiles-modal')
-    await expect(modal).toBeVisible()
+    // 2. Click Add Audio button
+    const addAudioBtn = page.getByTestId('add-audio-btn')
+    await expect(addAudioBtn).toBeVisible()
+    await addAudioBtn.click()
 
-    // 3. Upload files via file input
-    const fileInput = page.locator('.localfiles-modal input[type="file"]')
+    // 3. Upload files via hidden file input
+    const fileInput = page.getByTestId('audio-file-input')
     await fileInput.setInputFiles([TEST_AUDIO, TEST_SUBTITLE])
 
-    // 4. Wait for file to appear in list
-    const fileItem = page.locator('.localfiles-item')
-    await expect(fileItem).toBeVisible({ timeout: 10000 })
+    // 4. Wait for track card to appear
+    const trackCard = page.locator('.track-card')
+    await expect(trackCard).toBeVisible({ timeout: 10000 })
 
-    // 5. Verify file name is shown
-    await expect(page.locator('.localfiles-item-title')).toContainText('test-audio.mp3')
+    // 5. Verify track name is shown
+    await expect(trackCard.locator('h3')).toContainText('test-audio')
 
     // 6. Click to play the file
-    await page.locator('.localfiles-item-main').click()
+    const playBtn = trackCard.getByTestId('play-track-btn').first()
+    await expect(playBtn).toBeVisible()
+    await playBtn.click()
 
-    // 7. Modal should close
-    await expect(modal).toBeHidden()
+    // 7. Verify navigation to home page
+    try {
+      await expect(page).toHaveURL(/\/$/)
+    } catch (err) {
+      await page.screenshot({ path: 'tests/.output/failure-play.png' })
+      throw err
+    }
 
     // 8. Verify audio element has src (blob URL)
     const audio = page.locator('audio')
-    await expect(audio).toHaveAttribute('src', /^blob:/)
+    await expect(audio).toHaveAttribute('src', /^blob:/, { timeout: 10000 })
 
     // 9. Verify subtitles are loaded (transcript container is visible)
     const transcript = page.locator('#transcript-container')
@@ -69,91 +114,45 @@ test.describe('Local File Playback Flow', () => {
   test('should persist uploaded files in IndexedDB across page refresh', async ({ page }) => {
     await page.goto('/')
 
-    // 1. Open Local Files Modal and upload
-    await page.locator('#openLocalFilesBtn').click()
-    const modal = page.locator('.localfiles-modal')
-    await expect(modal).toBeVisible()
-
-    const fileInput = page.locator('.localfiles-modal input[type="file"]')
+    // 1. Upload files
+    await expect(page).toHaveURL(/\/files/)
+    const fileInput = page.getByTestId('audio-file-input')
     await fileInput.setInputFiles([TEST_AUDIO, TEST_SUBTITLE])
 
     // 2. Wait for file to appear in list
-    await expect(page.locator('.localfiles-item')).toBeVisible({ timeout: 10000 })
-    await expect(page.locator('.localfiles-item-title')).toContainText('test-audio.mp3')
+    await expect(page.locator('.track-card')).toBeVisible({ timeout: 10000 })
+    await expect(page.locator('.track-card h3')).toContainText('test-audio')
 
-    // 3. Close modal
-    await page.locator('.localfiles-close').click()
-    await expect(modal).toBeHidden()
+    // 3. Verify track and audio are stored in IndexedDB (NOT session yet)
+    const idbData = await getIdbCounts(page, ['local_tracks', 'audioBlobs'])
+    expect(idbData.local_tracks).toBe(1)
+    expect(idbData.audioBlobs).toBe(1)
 
-    // 4. Verify session and audio are stored in IndexedDB
-    const idbData = await page.evaluate(async () => {
-      return new Promise<{ sessions: number; audios: number }>((resolve) => {
-        const request = indexedDB.open('readio-v2')
-        request.onsuccess = () => {
-          const db = request.result
-          let sessions = 0
-          let audios = 0
-
-          const tx1 = db.transaction(['sessions'], 'readonly')
-          tx1.objectStore('sessions').count().onsuccess = (e) => {
-            sessions = (e.target as IDBRequest).result
-
-            const tx2 = db.transaction(['audios'], 'readonly')
-            tx2.objectStore('audios').count().onsuccess = (e2) => {
-              audios = (e2.target as IDBRequest).result
-              db.close()
-              resolve({ sessions, audios })
-            }
-          }
-        }
-      })
-    })
-
-    expect(idbData.sessions).toBe(1)
-    expect(idbData.audios).toBe(1)
-
-    // 5. Refresh the page
+    // 4. Refresh the page
     await page.reload()
 
-    // 6. Verify data persisted after refresh
-    const idbDataAfterRefresh = await page.evaluate(async () => {
-      return new Promise<{ sessions: number; audios: number }>((resolve) => {
-        const request = indexedDB.open('readio-v2')
-        request.onsuccess = () => {
-          const db = request.result
-          let sessions = 0
-          let audios = 0
+    // 5. Verify data persisted after refresh
+    const idbDataAfterRefresh = await getIdbCounts(page, ['local_tracks', 'audioBlobs'])
+    expect(idbDataAfterRefresh.local_tracks).toBe(1)
+    expect(idbDataAfterRefresh.audioBlobs).toBe(1)
 
-          const tx1 = db.transaction(['sessions'], 'readonly')
-          tx1.objectStore('sessions').count().onsuccess = (e) => {
-            sessions = (e.target as IDBRequest).result
+    // 6. Verify file is still listed
+    await expect(page.locator('.track-card')).toBeVisible()
+    await expect(page.locator('.track-card h3')).toContainText('test-audio')
 
-            const tx2 = db.transaction(['audios'], 'readonly')
-            tx2.objectStore('audios').count().onsuccess = (e2) => {
-              audios = (e2.target as IDBRequest).result
-              db.close()
-              resolve({ sessions, audios })
-            }
-          }
-        }
-      })
-    })
+    // 7. Play the file to verify it's fully restorable
+    await page.locator('.track-card').getByTestId('play-track-btn').first().click()
 
-    expect(idbDataAfterRefresh.sessions).toBe(1)
-    expect(idbDataAfterRefresh.audios).toBe(1)
-
-    // 7. Open Local Files Modal and verify file is still listed
-    await page.locator('#openLocalFilesBtn').click()
-    await expect(page.locator('.localfiles-modal')).toBeVisible()
-    await expect(page.locator('.localfiles-item')).toBeVisible()
-    await expect(page.locator('.localfiles-item-title')).toContainText('test-audio.mp3')
-
-    // 8. Play the file to verify it's fully restorable
-    await page.locator('.localfiles-item-main').click()
-
+    // 8. Verify navigation and session creation
+    await expect(page).toHaveURL(/\/$/)
     // 9. Verify audio loads correctly
     const audio = page.locator('audio')
-    await expect(audio).toHaveAttribute('src', /^blob:/)
+    await expect(audio).toHaveAttribute('src', /^blob:/, { timeout: 15000 })
+
+    // 10. Verify session creation - wait a bit for DB transaction
+    await page.waitForTimeout(1000)
+    const idbDataFinal = await getIdbCounts(page, ['playback_sessions'])
+    expect(idbDataFinal.playback_sessions).toBe(1)
 
     // 10. Verify subtitles are restored
     await expect(page.locator('.subtitle-line')).toHaveCount(3)
@@ -163,20 +162,17 @@ test.describe('Local File Playback Flow', () => {
     await page.goto('/')
 
     // 1. Upload files and start playback
-    await page.locator('#openLocalFilesBtn').click()
-    const modal = page.locator('.localfiles-modal')
-    await expect(modal).toBeVisible()
-
-    const fileInput = page.locator('.localfiles-modal input[type="file"]')
+    await expect(page).toHaveURL(/\/files/)
+    const fileInput = page.getByTestId('audio-file-input')
     await fileInput.setInputFiles([TEST_AUDIO, TEST_SUBTITLE])
 
-    await expect(page.locator('.localfiles-item')).toBeVisible({ timeout: 10000 })
-    await page.locator('.localfiles-item-main').click()
-    await expect(modal).toBeHidden()
+    await expect(page.locator('.track-card')).toBeVisible({ timeout: 10000 })
+    await page.locator('.track-card').getByTestId('play-track-btn').first().click()
 
-    // 2. Wait for audio to be loaded
+    // 2. Wait for audio to be loaded (redirects to home /)
+    await expect(page).toHaveURL(/\/$/)
     const audio = page.locator('audio')
-    await expect(audio).toHaveAttribute('src', /^blob:/)
+    await expect(audio).toHaveAttribute('src', /^blob:/, { timeout: 10000 })
 
     // 3. Seek to a specific position (e.g., 2 seconds into the audio)
     const TARGET_TIME = 2.0
@@ -205,14 +201,11 @@ test.describe('Local File Playback Flow', () => {
     // 6. Refresh the page
     await page.reload()
 
-    // 7. Open Local Files and restore playback
-    await page.locator('#openLocalFilesBtn').click()
-    await expect(page.locator('.localfiles-modal')).toBeVisible()
-    await expect(page.locator('.localfiles-item')).toBeVisible()
-    await page.locator('.localfiles-item-main').click()
+    // 7. Verify we are on home page with restored session (Redirect should NOT happen if sessionId exists)
+    await expect(page).toHaveURL(/\/$/)
 
-    // 8. Wait for audio to load
-    await expect(page.locator('audio')).toHaveAttribute('src', /^blob:/)
+    // 8. Verify audio loads
+    await expect(page.locator('audio')).toHaveAttribute('src', /^blob:/, { timeout: 10000 })
 
     // 9. Wait for progress to be restored (give it time for async restore)
     await page.waitForTimeout(1000)
@@ -223,7 +216,30 @@ test.describe('Local File Playback Flow', () => {
       return audioEl ? audioEl.currentTime : 0
     })
 
-    expect(restoredTime).toBeGreaterThanOrEqual(TARGET_TIME - 1)
-    expect(restoredTime).toBeLessThanOrEqual(TARGET_TIME + 1)
+    const TOLERANCE = process.env.CI ? 2 : 1
+    expect(restoredTime).toBeCloseTo(TARGET_TIME, TOLERANCE)
+  })
+
+  test('should support VTT subtitles', async ({ page }) => {
+    await page.goto('/')
+
+    // 1. Upload audio + VTT
+    const fileInput = page.getByTestId('audio-file-input')
+    await fileInput.setInputFiles([TEST_AUDIO, TEST_VTT])
+
+    // 2. Play the file
+    const trackCard = page.locator('.track-card', { hasText: 'test-audio' })
+    await trackCard.getByTestId('play-track-btn').first().click()
+
+    // 3. Verify navigation and transcript
+    await expect(page).toHaveURL(/\/$/)
+    const transcript = page.locator('#transcript-container')
+    await expect(transcript).toBeVisible()
+
+    // 4. Verify VTT content (2 lines in test-vtt.vtt)
+    // One line has standard HH:MM:SS.ms, another has short MM:SS.ms
+    await expect(page.locator('.subtitle-line')).toHaveCount(2)
+    await expect(page.locator('.subtitle-line').first()).toContainText('First VTT line')
+    await expect(page.locator('.subtitle-line').last()).toContainText('Second VTT line')
   })
 })

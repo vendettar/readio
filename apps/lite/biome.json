@@ -6,7 +6,7 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["!node_modules", "!.next", "!dist", "!build", "!.source"]
+    "includes": ["!node_modules", "!.next", "!dist", "!build", "!.source", "!tests/.output"]
   },
   "overrides": [
     {

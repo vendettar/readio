@@ -8,6 +8,7 @@ import { EpisodeRow } from '../../components/EpisodeRow/EpisodeRow'
 import { useEpisodePlayback } from '../../hooks/useEpisodePlayback'
 import { useI18n } from '../../hooks/useI18n'
 import discovery, { type Episode } from '../../lib/discovery'
+import { logError } from '../../lib/logger'
 
 // Constants matching Apple Podcasts behavior
 const INITIAL_LOAD_COUNT = 25
@@ -39,7 +40,7 @@ export default function PodcastEpisodesPage() {
       try {
         return await discovery.fetchPodcastFeed(feedUrl ?? '')
       } catch (err) {
-        console.error('[PodcastEpisodesPage] RSS feed failed, falling back to iTunes API:', err)
+        logError('[PodcastEpisodesPage] RSS feed failed, falling back to iTunes API:', err)
         const episodes = await discovery.getPodcastEpisodes(id)
         return {
           title: podcast?.collectionName || '',

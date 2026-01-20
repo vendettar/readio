@@ -71,7 +71,9 @@ The application uses dynamic runtime configuration instead of relying solely on 
 
 ### Configuration Access (`src/lib/runtimeConfig.ts`)
 
-- `getAppConfig()` provides type-safe access to configuration, supporting string-to-number conversion.
+- `getAppConfig()` provides type-safe access to configuration. It uses Zod coercion and defaults as the single source of truth (SSOT), automatically handling type conversions:
+  - **String to Number**: `"123"` → `123`.
+  - **Boolean Coercion**: Handles `"false"`, `"0"`, and case-insensitive `"trash"` (any unknown string) as `false`; only explicit `"true"`/`"1"` (case-insensitive) are `true`.
 - `Window.__READIO_ENV__` defines the runtime configuration structure.
 
 ---
@@ -84,7 +86,7 @@ The application uses dynamic runtime configuration instead of relying solely on 
 
 ### Database Errors
 
-The default database name is `readio` (override via `READIO_DB_NAME` for reset), and it can be viewed and cleared in the browser's IndexedDB panel.
+The default database name is `readio-lite` (override via `READIO_DB_NAME` for reset), and it can be viewed and cleared in the browser's IndexedDB panel.
 
 ### Tailwind Styles Not Working
 

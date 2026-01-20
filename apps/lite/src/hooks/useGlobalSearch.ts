@@ -13,6 +13,7 @@ import {
 } from '../lib/dexieDb'
 import discovery, { type Podcast, type SearchEpisode } from '../lib/discovery'
 import { formatFileSize } from '../lib/formatters'
+import { logError } from '../lib/logger'
 import { getAppConfig } from '../lib/runtimeConfig'
 import { useExploreStore } from '../store/exploreStore'
 import { useI18n } from './useI18n'
@@ -234,7 +235,7 @@ export function useGlobalSearch(
 
         setDbResults([...historyResults, ...fileResults])
       } catch (err) {
-        console.error('[useGlobalSearch] DB search error:', err)
+        logError('[useGlobalSearch] DB search error:', err)
         if (!isCancelled) {
           setDbResults([])
         }

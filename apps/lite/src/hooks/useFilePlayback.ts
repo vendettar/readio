@@ -1,7 +1,8 @@
+import { useRouter } from '@tanstack/react-router'
 import { useCallback } from 'react'
 import { DB, type FileSubtitle, type FileTrack } from '../lib/dexieDb'
 import { logError, warn as logWarn } from '../lib/logger'
-import { parseSrt, type subtitle } from '../lib/subtitles'
+import { parseSubtitles, type subtitle } from '../lib/subtitles'
 import { usePlayerStore } from '../store/playerStore'
 
 interface UseFilePlaybackProps {
@@ -9,6 +10,8 @@ interface UseFilePlaybackProps {
 }
 
 export function useFilePlayback({ onComplete }: UseFilePlaybackProps = {}) {
+  const router = useRouter()
+
   /**
    * Handles playing a local track with optional specific subtitle
    */
@@ -45,7 +48,7 @@ export function useFilePlayback({ onComplete }: UseFilePlaybackProps = {}) {
         if (subToLoad) {
           const subText = await DB.getSubtitle(subToLoad.subtitleId)
           if (subText) {
-            parsedSubtitles = parseSrt(subText.content)
+            parsedSubtitles = parseSubtitles(subText.content)
           }
         }
 
@@ -61,7 +64,6 @@ export function useFilePlayback({ onComplete }: UseFilePlaybackProps = {}) {
         // Create/update session for Last Played tracking
         // Use fixed session ID to prevent duplicates with useSession
         const sessionId = `local-track-${track.id}`
-        setStoreSessionId(sessionId) // Set sessionId BEFORE creating to prevent useSession from creating duplicate
 
         await DB.createPlaybackSession({
           id: sessionId,
@@ -74,13 +76,18 @@ export function useFilePlayback({ onComplete }: UseFilePlaybackProps = {}) {
           localTrackId: track.id,
         })
 
+        setStoreSessionId(sessionId) // Set sessionId AFTER creating (safe)
+
+        // Navigate to home page (player)
+        router.navigate({ to: '/' })
+
         // Trigger refresh
         onComplete?.()
       } catch (error) {
         logError('[Files] Error loading track', error)
       }
     },
-    [onComplete]
+    [onComplete, router]
   )
 
   /**
