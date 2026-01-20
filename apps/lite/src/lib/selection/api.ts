@@ -7,7 +7,8 @@ export async function fetchDefinition(word: string, signal?: AbortSignal): Promi
   const cached = getCachedEntry(word)
   if (cached) return cached
 
-  const response = await fetch(`${config.DICT_API_URL}${encodeURIComponent(word.toLowerCase())}`, {
+  const lookupUrl = new URL(encodeURIComponent(word.toLowerCase()), config.DICT_API_URL).toString()
+  const response = await fetch(lookupUrl, {
     signal,
     headers: { Accept: 'application/json' },
   })

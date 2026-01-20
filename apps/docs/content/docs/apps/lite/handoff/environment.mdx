@@ -75,6 +75,7 @@ The application uses dynamic runtime configuration instead of relying solely on 
   - **String to Number**: `"123"` → `123`.
   - **Boolean Coercion**: Handles `"false"`, `"0"`, and case-insensitive `"trash"` (any unknown string) as `false`; only explicit `"true"`/`"1"` (case-insensitive) are `true`.
 - `Window.__READIO_ENV__` defines the runtime configuration structure.
+- **Dictionary API Base**: Use `READIO_DICTIONARY_API_URL`. Lookup URLs are constructed via `new URL(word, base)` so trailing `/` is optional.
 
 ---
 

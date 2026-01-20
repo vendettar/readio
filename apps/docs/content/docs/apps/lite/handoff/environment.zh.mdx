@@ -75,6 +75,7 @@ title: Development Environment
   - **String to Number**: `"123"` → `123`。
   - **Boolean Coercion**: 将 `"false"`、`"0"` 及任意未知字符串（如 `"trash"`）处理为 `false`；仅明确的 `"true"`/`"1"` 视为 `true`。
 - `Window.__READIO_ENV__` 定义运行时配置结构。
+- **词典 API 基地址**：使用 `READIO_DICTIONARY_API_URL`。查询 URL 通过 `new URL(word, base)` 构造，因此末尾 `/` 可选。
 
 ---
 
