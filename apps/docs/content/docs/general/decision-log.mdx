@@ -185,3 +185,10 @@ description: Architecture decisions and rationale.
 ## D045 — RSS Content CSS Isolation
 - **Decision**: Isolate show-notes CSS via scoped reset (Shadow DOM fallback).
 - **Rationale**: Prevent untrusted HTML from polluting UI.
+
+## D046 — File Validation Strategy
+- **Decision**: Layered approach for performance and security.
+  - **Web (Lite)**: MIME type and extension validation only (UX focused).
+  - **Backend**: Deep content validation (Magic numbers, full parsing).
+  - **Native**: Decoder-based validation or lightweight head sniffing.
+- **Rationale**: Keep client-side logic fast and lightweight while deferring intensive checks to secure environments.

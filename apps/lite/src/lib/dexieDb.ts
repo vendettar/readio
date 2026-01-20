@@ -300,7 +300,7 @@ export const DB = {
       content,
       size: new Blob([content]).size,
       filename,
-      type: 'srt',
+      type: filename.toLowerCase().endsWith('.vtt') ? 'vtt' : 'srt',
       storedAt: Date.now(),
     }
     await db.subtitles.put(subtitle)

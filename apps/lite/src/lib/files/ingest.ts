@@ -114,7 +114,10 @@ export async function ingestFiles(params: IngestParams): Promise<IngestResult> {
   const { files, folderId } = params
 
   const audioFiles = files.filter((f) => f.type.startsWith('audio/'))
-  const subFiles = files.filter((f) => f.name.toLowerCase().endsWith('.srt'))
+  const subFiles = files.filter((f) => {
+    const lowerName = f.name.toLowerCase()
+    return lowerName.endsWith('.srt') || lowerName.endsWith('.vtt')
+  })
 
   const createdTrackIds: string[] = []
   let attachedSubtitleCount = 0

@@ -124,9 +124,10 @@ Provider 位于 `src/main.tsx`（`Tooltip.Provider`）。
 2. **环境配置** (`src/lib/runtimeConfig.ts`):
    - `getAppConfig` 对 `window.__READIO_ENV__` 和环境变量执行**逐字段校验**。
    - **颗粒度降级**: 若某个配置项非法（校验失败），仅该项回退到 Schema 定义的默认值，其它有效的覆盖配置将继续生效。
-3. **路由参数** (TanStack Router):
-   - 在播客详情（`$id`）和单集详情（`$id/episode/$episodeId`）路由中使用 `beforeLoad` 验证路径参数。
-   - **重定向策略**: 若参数无效（如为空），统一重定向至 `/explore`。
+4. **文件验证** (`src/lib/schemas/fileSchema.ts`):
+   - 使用 `audioFileSchema` 和 `subtitleFileSchema` 对用户上传的文件进行校验。
+   - **分层策略**: 在 Lite (Web) 版本中，仅校验 **MIME 类型** 和 **文件扩展名**，以确保极致的响应速度。深层内容校验（如 Magic Numbers）由后端或 Native 环境负责。
+   - **错误处理**: 校验失败时，通过 `toastFileValidationError` 提示用户并忽略该文件。
 
 **验证策略**
 - **数据真实性**: 拒绝“凑数”对象，核心字段缺失即视为整条数据无效。

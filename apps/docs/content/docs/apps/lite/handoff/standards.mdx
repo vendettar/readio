@@ -127,6 +127,10 @@ The application uses Zod for runtime data validation, primarily for handling ext
 3. **Route Parameters** (TanStack Router):
    - Uses `beforeLoad` to validate path parameters in podcast detail (`$id`) and episode detail (`$id/episode/$episodeId`) routes.
    - **Redirect Strategy**: If parameters are invalid (e.g., empty), uniformly redirect to `/explore`.
+4. **File Validation** (`src/lib/schemas/fileSchema.ts`):
+   - Uses `audioFileSchema` and `subtitleFileSchema` to validate user-uploaded files.
+   - **Layered Strategy**: In the Lite (Web) version, only **MIME type** and **file extension** are validated to ensure maximum responsiveness. Deep content validation (e.g., Magic Numbers) is defered to backend or Native environments.
+   - **Error Handling**: When validation fails, the user is notified via `toastFileValidationError` and the file is ignored.
 
 **Validation Strategy**
 - **Data Authenticity**: Refuse "filler" objects; missing core fields render the entire data entry invalid.

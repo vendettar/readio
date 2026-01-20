@@ -133,7 +133,7 @@ function RootLayout() {
         type="file"
         id="fileInput"
         multiple
-        accept=".mp3,.srt"
+        accept="audio/*,.srt,.vtt"
         onChange={handleFileChange}
         className="hidden"
       />

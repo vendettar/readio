@@ -273,7 +273,7 @@ export const usePlayerStore = create<PlayerState>((set) => ({
           await DB.updatePlaybackSession(currentSessionId, {
             subtitleId,
             subtitleFilename: file.name,
-            subtitleType: 'srt',
+            subtitleType: file.name.toLowerCase().endsWith('.vtt') ? 'vtt' : 'srt',
           })
         }
       } catch (err) {

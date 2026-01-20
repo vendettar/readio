@@ -165,6 +165,16 @@ src/
 - 忽略当前标签发送的消息，忽略超过 2 秒的旧消息。
 - 当 `BroadcastChannel` 不可用时，使用 `localStorage` 的 `storage` 事件作为回退。
 
+### 持久化与恢复（播放器生命周期）
+
+系统采用健壮的、由 Store 驱动的生命周期来管理播放进度和状态：
+
+- **状态机**：`playerStore` 维护 `initializationStatus` (`idle | restoring | ready | failed`) 以防止启动时的竞态条件。
+- **单一数据源**：所有持久化操作集中在 `playerStore.ts` 中。`useSession` 和 `useFileHandler` 等 Hook 委托 Store Action 处理存储，不再直接操作数据库。
+- **节流持久化**：进度更新采用节流机制（默认 5s）以减轻 IndexedDB 写入压力。`saveProgressNow` Action 确保在组件卸载或关键事件时立即保存。
+- **原子化恢复**：`restoreSession` Action 封装了获取最后会话、恢复文件/URL 以及更新状态的完整逻辑，确保恢复过程的原子性。
+- **分层校验**：文件校验与注入逻辑解耦。Lite 应用执行 MIME/扩展名校验，深层内容校验推迟到后端或 Native 层（见决策 D046）。
+
 ---
 
 ## 计划中（待执行）
