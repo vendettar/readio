@@ -1,6 +1,7 @@
 // src/hooks/useI18n.ts
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from 'react'
-import { getJson, setJson } from '../lib/storage'
+import { STORAGE_KEY_LANGUAGE, STORAGE_KEY_LEGACY_LANGUAGE } from '../constants/storage'
+import { getJson, removeItem, setJson } from '../lib/storage'
 import { type Language, languageNativeNames, translations } from '../lib/translations'
 
 export type { Language } from '../lib/translations'
@@ -19,16 +20,20 @@ const I18nContext = createContext<I18nContextType | null>(null)
 function getInitialLanguage(): Language {
   if (typeof window === 'undefined') return 'en'
 
-  // 1. User manual preference
-  const stored = getJson<Language>('language')
+  // 1. User manual preference (Namespaced)
+  const stored = getJson<Language>(STORAGE_KEY_LANGUAGE)
   if (stored && translations[stored]) return stored
 
-  // 2. Global runtime config default
+  // 2. Legacy fallback
+  const legacy = getJson<Language>(STORAGE_KEY_LEGACY_LANGUAGE)
+  if (legacy && translations[legacy]) return legacy
+
+  // 3. Global runtime config default
   const config = getAppConfig()
   const configLang = config.DEFAULT_LANG as Language
   if (configLang && translations[configLang]) return configLang
 
-  // 3. Try browser language
+  // 4. Try browser language
   const browserLang = navigator.language.slice(0, 2) as Language
   if (translations[browserLang]) return browserLang
 
@@ -45,13 +50,20 @@ export function I18nProvider({ children }: I18nProviderProps) {
   const setLanguage = useCallback((lang: Language) => {
     if (translations[lang]) {
       setLanguageState(lang)
-      setJson('language', lang)
+      setJson(STORAGE_KEY_LANGUAGE, lang)
       document.documentElement.lang = lang
     }
   }, [])
 
   useEffect(() => {
     document.documentElement.lang = language
+
+    // Migrate legacy storage key if it exists
+    const legacy = getJson<Language>(STORAGE_KEY_LEGACY_LANGUAGE)
+    if (legacy && translations[legacy]) {
+      setJson(STORAGE_KEY_LANGUAGE, legacy)
+      removeItem(STORAGE_KEY_LEGACY_LANGUAGE)
+    }
   }, [language])
 
   const t = useCallback(

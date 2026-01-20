@@ -211,15 +211,19 @@ export interface FetchWithFallbackOptions {
   skipProxyOn4xx?: boolean
 }
 
+type FetchSource = 'direct' | 'customProxy' | 'defaultProxy'
+
 export class FetchError extends Error {
   status?: number
   url: string
+  source: FetchSource
 
-  constructor(message: string, url: string, status?: number) {
+  constructor(message: string, url: string, status: number | undefined, source: FetchSource) {
     super(message)
     this.name = 'FetchError'
     this.url = url
     this.status = status
+    this.source = source
   }
 }
 
@@ -258,13 +262,18 @@ export async function fetchWithFallback<T = string>(
       headers,
     })
     if (!response.ok) {
-      throw new FetchError(`Direct fetch failed: ${response.status}`, url, response.status)
+      throw new FetchError(
+        `Direct fetch failed: ${response.status}`,
+        url,
+        response.status,
+        'direct'
+      )
     }
     return json ? response.json() : (response.text() as unknown as T)
   }
 
   // 2. Proxy Fetch Generic
-  const fetchViaProxy = async (baseProxyUrl: string): Promise<T> => {
+  const fetchViaProxy = async (baseProxyUrl: string, source: FetchSource): Promise<T> => {
     // More robust check for JSON-wrapped proxies (supporting variations in URL)
     const isJsonWrapped = isJsonWrappedProxyUrl(baseProxyUrl)
 
@@ -283,7 +292,8 @@ export async function fetchWithFallback<T = string>(
       throw new FetchError(
         `Proxy (${baseProxyUrl}) failed: ${response.status}`,
         url,
-        response.status
+        response.status,
+        source
       )
     }
 
@@ -360,12 +370,15 @@ export async function fetchWithFallback<T = string>(
 
     const addCustomProxyAttempt = () => {
       if (customProxy) {
-        attempts.push({ name: 'CustomProxy', fn: () => fetchViaProxy(customProxy) })
+        attempts.push({ name: 'CustomProxy', fn: () => fetchViaProxy(customProxy, 'customProxy') })
       }
     }
 
     const addDefaultProxyAttempt = () => {
-      attempts.push({ name: 'DefaultProxy', fn: () => fetchViaProxy(config.DEFAULT_CORS_PROXY) })
+      attempts.push({
+        name: 'DefaultProxy',
+        fn: () => fetchViaProxy(config.DEFAULT_CORS_PROXY, 'defaultProxy'),
+      })
     }
 
     if (proxyPrimary) {

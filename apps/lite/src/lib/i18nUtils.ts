@@ -4,7 +4,9 @@
  * Falls back to English if language or key is missing
  */
 
+import { STORAGE_KEY_LANGUAGE, STORAGE_KEY_LEGACY_LANGUAGE } from '../constants/storage'
 import { warn as logWarn } from './logger'
+import { getAppConfig } from './runtimeConfig'
 import { getJson } from './storage'
 import { type Language, translations } from './translations'
 
@@ -15,8 +17,13 @@ import { type Language, translations } from './translations'
  * @returns Translated string with interpolations applied
  */
 export function translate(key: string, options?: Record<string, string | number>): string {
-  // Get stored language
-  const storedLang = getJson<string>('language') || 'zh-CN'
+  const config = getAppConfig()
+  // Get stored language with namespacing and legacy fallback
+  const storedLang =
+    getJson<string>(STORAGE_KEY_LANGUAGE) ||
+    getJson<string>(STORAGE_KEY_LEGACY_LANGUAGE) ||
+    config.DEFAULT_LANG ||
+    'en'
 
   // Map language code to translation key with fallback
   const langKey: Language = storedLang.startsWith('zh')

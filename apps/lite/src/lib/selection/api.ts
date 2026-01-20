@@ -52,8 +52,14 @@ export async function fetchDefinition(word: string, signal?: AbortSignal): Promi
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') throw err
 
-    // Only map 4xx errors to "Word not found"
-    if (err instanceof FetchError && err.status && err.status >= 400 && err.status < 500) {
+    // Only map 4xx errors from the direct attempt to "Word not found"
+    if (
+      err instanceof FetchError &&
+      err.source === 'direct' &&
+      err.status &&
+      err.status >= 400 &&
+      err.status < 500
+    ) {
       throw new Error('Word not found')
     }
 

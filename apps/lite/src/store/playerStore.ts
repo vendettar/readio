@@ -106,13 +106,15 @@ const STORAGE_KEY_RATE = 'readio_playback_rate'
 // Helper to get initial volume
 const getInitialVolume = (): number => {
   const stored = getJson<number>(STORAGE_KEY_VOLUME)
-  return stored ?? 0.8
+  if (typeof stored !== 'number' || Number.isNaN(stored)) return 0.8
+  return Math.max(0, Math.min(1, stored))
 }
 
 // Helper to get initial playback rate
 const getInitialRate = (): number => {
   const stored = getJson<number>(STORAGE_KEY_RATE)
-  return stored ?? 1
+  if (typeof stored !== 'number' || Number.isNaN(stored)) return 1
+  return Math.max(0.1, Math.min(4, stored))
 }
 
 // Throttling state for progress persistence (module-level to avoid closure issues)
@@ -132,8 +134,9 @@ export const usePlayerStore = create<PlayerState>((set) => ({
     set({ volume: newVolume })
   },
   setPlaybackRate: (rate) => {
-    setJson(STORAGE_KEY_RATE, rate)
-    set({ playbackRate: rate })
+    const newRate = Math.max(0.1, Math.min(4, rate))
+    setJson(STORAGE_KEY_RATE, newRate)
+    set({ playbackRate: newRate })
   },
   setAudioUrl: (url, title = '', coverArt = '', metadata = null) =>
     set((state) => {
