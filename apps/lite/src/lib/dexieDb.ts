@@ -193,6 +193,28 @@ export const DB = {
     return item.id
   },
 
+  async upsertPlaybackSession(data: Partial<PlaybackSession>): Promise<string> {
+    const id = data.id || generateId()
+    const existing = await db.playback_sessions.get(id)
+
+    if (existing) {
+      const updated: PlaybackSession = {
+        ...existing,
+        ...data,
+        id, // Ensure ID is correct
+        // Preserve these if not explicitly provided in data
+        progress: data.progress !== undefined ? data.progress : existing.progress,
+        duration: data.duration !== undefined ? data.duration : existing.duration,
+        lastPlayedAt: data.lastPlayedAt !== undefined ? data.lastPlayedAt : existing.lastPlayedAt,
+      }
+      await db.playback_sessions.put(updated)
+      return id
+    }
+
+    // Default to create behavior if not found
+    return this.createPlaybackSession({ ...data, id })
+  },
+
   async updatePlaybackSession(id: string, updates: Partial<PlaybackSession>): Promise<void> {
     const existing = await db.playback_sessions.get(id)
     if (!existing) {

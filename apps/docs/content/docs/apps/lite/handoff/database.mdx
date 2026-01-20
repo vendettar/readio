@@ -4,7 +4,7 @@ title: Database & Persistence
 
 ## Persistence & Caching (Dexie IndexedDB)
 
-Uses Dexie.js to encapsulate IndexedDB. Default DB name is `readio` and can be overridden via `READIO_DB_NAME` (e.g., temporary reset names during wipe).
+Uses Dexie.js to encapsulate IndexedDB. Default DB name is `readio-lite` and can be overridden via `READIO_DB_NAME` (e.g., temporary reset names during wipe).
 
 ### Identity vs Deduplication (Hard Rule)
 - **Identity**: All persisted entities use UUID primary keys.
@@ -23,6 +23,10 @@ Uses Dexie.js to encapsulate IndexedDB. Default DB name is `readio` and can be o
 | subscriptions | id (UUID) | &feedUrl | Subscribed podcasts. feedUrl used for deduplication check. |
 | favorites | id (UUID) | &key | Favorite episodes. key used for deduplication check. |
 | settings | key | — | User settings (e.g., country) |
+
+### Session Hardening (Prevent Progress Loss)
+
+To prevent accidental overwrites of existing playback sessions when re‑creating fixed session IDs (e.g., `local-track-${id}`), use `DB.upsertPlaybackSession(data)`. This helper merges fields and preserves existing `progress`, `duration`, and `lastPlayedAt` unless explicitly provided in `data`.
 
 ### Reset Strategy
 

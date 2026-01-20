@@ -66,7 +66,7 @@ export function useSession() {
           setStoreSessionId(id)
 
           const { episodeMetadata, coverArtUrl } = usePlayerStore.getState()
-          await DB.createPlaybackSession({
+          await DB.upsertPlaybackSession({
             id,
             progress: 0,
             duration: duration || 0,

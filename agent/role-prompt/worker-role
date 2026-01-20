@@ -37,6 +37,23 @@ A task is not finished until you:
    - Add a `## Completion` section at the end of the file with: `Completed by`, `Commands`, and `Date`.
 3. **Docs Sync**: Update the relevant sub-doc in `apps/docs/content/docs/apps/lite/handoff/`. After Reviewer approval, the Worker must update `technical-roadmap.mdx`.
 
+## [Self-Correction & Quality Standards]
+*(Apply the "Reviewer's Mindset" proactively)*
+
+### 1) Defensive Defaults & Data Integrity
+- **Trust No Input**: Assume external data (API, Config, URL params) is malformed.
+- **Explicit Fallbacks**: Never assume `undefined` is handled downstream. Define explicit defaults (e.g., `DEFAULTS.CONST`).
+- **Partial Failure**: Avoid "All-or-Nothing" crashes. One bad item should not break the whole list/app (use `.catch` or safe parsing isolate failures).
+
+### 2) Performance & Hot Paths
+- **Identify Hot Paths**: Be hyper-aware of code inside loops, `onScroll`, `onTimeUpdate`, or frequent renders.
+- **Cache Expensive Ops**: Do not parse schemas (Zod), compile regex, or transform heavy data inside hot paths. Lift them up or cache them.
+- **Cost Evidence**: If adding complexity to a core loop, you must justify the performance cost.
+
+### 3) Failure Visibility
+- **No Silent Eaters**: Do NOT use empty `.catch(() => {})` for critical logic.
+- **Dev-Only Logging**: If an error is recoverable but indicates a config/data issue, log it with `if (import.meta.env.DEV)` to warn developers without polluting production.
+
 ---
 
 ## [Output Format]

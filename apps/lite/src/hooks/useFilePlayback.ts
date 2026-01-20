@@ -65,7 +65,7 @@ export function useFilePlayback({ onComplete }: UseFilePlaybackProps = {}) {
         // Use fixed session ID to prevent duplicates with useSession
         const sessionId = `local-track-${track.id}`
 
-        await DB.createPlaybackSession({
+        await DB.upsertPlaybackSession({
           id: sessionId,
           source: 'local',
           title: track.name,
