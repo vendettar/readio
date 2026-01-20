@@ -74,10 +74,11 @@ export function useSelectionActions(
 
         // Only update error if this is still the latest request
         if (currentSequence === sequenceRef.current) {
+          const isNotFound = error instanceof Error && error.message === 'Word not found'
           setState((s) => ({
             ...s,
             lookupLoading: false,
-            lookupErrorKey: 'lookupNotFound',
+            lookupErrorKey: isNotFound ? 'lookupNotFound' : 'errorNetwork',
           }))
         }
       }

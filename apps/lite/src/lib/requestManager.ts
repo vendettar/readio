@@ -1,5 +1,4 @@
-// src/lib/requestManager.ts
-// Request deduplication and concurrency control
+import { getAppConfig } from './runtimeConfig'
 
 type InflightRequest<T> = {
   promise: Promise<T>
@@ -8,7 +7,7 @@ type InflightRequest<T> = {
 
 const inflight = new Map<string, InflightRequest<unknown>>()
 
-const MAX_CONCURRENT_REQUESTS = 6
+const getPoolSize = () => Math.max(1, getAppConfig().MAX_CONCURRENT_REQUESTS)
 let activeRequests = 0
 const pendingQueue: Array<() => void> = []
 
@@ -24,7 +23,7 @@ export function getRequestKey(url: string, options?: { method?: string }): strin
  * Wait for a slot in the concurrency pool
  */
 async function acquireSlot(): Promise<void> {
-  if (activeRequests < MAX_CONCURRENT_REQUESTS) {
+  if (activeRequests < getPoolSize()) {
     activeRequests++
     return
   }

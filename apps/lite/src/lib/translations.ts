@@ -87,6 +87,7 @@ export const translations = {
     errorSearchFailed: '搜索失败，请稍后重试。',
     errorLoadEpisodesFailed: '加载节目失败，请稍后重试。',
     errorPodcastUnavailable: '无法打开该播客。',
+    errorNetwork: '网络连接出现问题，请重试。',
     modalCrashedTitle: '出现问题',
     modalCrashedHint: '请关闭弹窗并重试。',
     modalCrashedRetry: '重试',
@@ -437,6 +438,7 @@ export const translations = {
     errorSearchFailed: 'Search failed. Please try again.',
     errorLoadEpisodesFailed: 'Failed to load episodes. Please try again.',
     errorPodcastUnavailable: "This podcast can't be opened.",
+    errorNetwork: 'Network error. Please try again.',
     modalCrashedTitle: 'Something went wrong',
     modalCrashedHint: 'Close this window and try again.',
     modalCrashedRetry: 'Try again',
@@ -797,6 +799,7 @@ export const translations = {
     errorLoadEpisodesFailed:
       'エピソードの読み込みに失敗しました。しばらくしてからもう一度お試しください。',
     errorPodcastUnavailable: 'このポッドキャストを開けません。',
+    errorNetwork: 'ネットワークエラーが発生しました。もう一度お試しください。',
     toastSubscribeFailed: '購読に失敗しました。しばらくしてからもう一度お試しください。',
     toastUnsubscribeFailed: '購読解除に失敗しました。しばらくしてからもう一度お試しください。',
     toastAddFavoriteFailed:
@@ -1149,6 +1152,7 @@ export const translations = {
     errorSearchFailed: '검색에 실패했습니다. 잠시 후 다시 시도하세요.',
     errorLoadEpisodesFailed: '에피소드를 불러오지 못했습니다. 잠시 후 다시 시도하세요.',
     errorPodcastUnavailable: '이 팟캐스트를 열 수 없습니다.',
+    errorNetwork: '네트워크 오류가 발생했습니다. 다시 시도해 주세요.',
     toastSubscribeFailed: '구독에 실패했습니다. 잠시 후 다시 시도하세요.',
     toastUnsubscribeFailed: '구독 해제에 실패했습니다. 잠시 후 다시 시도하세요.',
     toastAddFavoriteFailed: '즐겨찾기에 추가하지 못했습니다. 잠시 후 다시 시도하세요.',
@@ -1499,6 +1503,7 @@ export const translations = {
     errorLoadEpisodesFailed:
       'Episoden konnten nicht geladen werden. Bitte später erneut versuchen.',
     errorPodcastUnavailable: 'Dieser Podcast kann nicht geöffnet werden.',
+    errorNetwork: 'Netzwerkfehler. Bitte versuche es erneut.',
     toastSubscribeFailed: 'Abonnieren fehlgeschlagen. Bitte später erneut versuchen.',
     toastUnsubscribeFailed: 'Abbestellen fehlgeschlagen. Bitte später erneut versuchen.',
     toastAddFavoriteFailed: 'Konnte nicht zu Favoriten hinzufügen. Bitte später erneut versuchen.',
@@ -1855,6 +1860,7 @@ export const translations = {
     errorSearchFailed: 'La búsqueda falló. Inténtalo de nuevo más tarde.',
     errorLoadEpisodesFailed: 'No se pudieron cargar los episodios. Inténtalo de nuevo más tarde.',
     errorPodcastUnavailable: 'No se puede abrir este podcast.',
+    errorNetwork: 'Error de red. Inténtalo de nuevo.',
     toastSubscribeFailed: 'No se pudo suscribir. Inténtalo de nuevo más tarde.',
     toastUnsubscribeFailed: 'No se pudo cancelar la suscripción. Inténtalo de nuevo más tarde.',
     toastAddFavoriteFailed: 'No se pudo añadir a favoritos. Inténtalo de nuevo más tarde.',

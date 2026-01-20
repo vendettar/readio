@@ -42,8 +42,8 @@ export function useTopPodcasts(country: string = 'us', limit: number = 25) {
       if (USE_MOCK_DATA) return Promise.resolve(MOCK_TOP_PODCASTS.slice(0, limit))
       return discovery.fetchTopPodcasts(country, limit, signal)
     },
-    staleTime: 12 * 60 * 60 * 1000, // 12 hours
-    gcTime: 72 * 60 * 60 * 1000, // 72 hours
+    staleTime: 6 * 60 * 60 * 1000, // 6 hours
+    gcTime: 24 * 60 * 60 * 1000, // 24 hours
     retry: USE_MOCK_DATA ? 0 : 2,
   })
 }
@@ -62,8 +62,8 @@ export function useEditorPicks(country: string = 'us') {
       const picks = getEditorPicksForRegion(country)
       return picks ? discovery.lookupPodcastsByIds([...picks], country, signal) : []
     },
-    staleTime: 24 * 60 * 60 * 1000, // 24 hours (Editor's Picks change very slowly)
-    gcTime: 72 * 60 * 60 * 1000,
+    staleTime: 6 * 60 * 60 * 1000, // 6 hours
+    gcTime: 24 * 60 * 60 * 1000, // 24 hours
     retry: USE_MOCK_DATA ? 0 : 2,
   })
 }
@@ -78,8 +78,8 @@ export function useTopEpisodes(country: string = 'us', limit: number = 25) {
       if (USE_MOCK_DATA) return Promise.resolve(MOCK_TOP_EPISODES.slice(0, limit))
       return discovery.fetchTopEpisodes(country, limit, signal)
     },
-    staleTime: 12 * 60 * 60 * 1000,
-    gcTime: 72 * 60 * 60 * 1000,
+    staleTime: 6 * 60 * 60 * 1000, // 6 hours
+    gcTime: 24 * 60 * 60 * 1000, // 24 hours
     retry: USE_MOCK_DATA ? 0 : 2,
   })
 }

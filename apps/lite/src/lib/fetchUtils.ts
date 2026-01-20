@@ -205,6 +205,22 @@ export interface FetchWithFallbackOptions {
   timeoutMs?: number
   /** If true, response is JSON; otherwise text */
   json?: boolean
+  /** Optional request headers */
+  headers?: Record<string, string>
+  /** If true, skip proxy fallback if the direct fetch returns a 4xx error */
+  skipProxyOn4xx?: boolean
+}
+
+export class FetchError extends Error {
+  status?: number
+  url: string
+
+  constructor(message: string, url: string, status?: number) {
+    super(message)
+    this.name = 'FetchError'
+    this.url = url
+    this.status = status
+  }
 }
 
 /**
@@ -216,7 +232,7 @@ export async function fetchWithFallback<T = string>(
   options: FetchWithFallbackOptions = {}
 ): Promise<T> {
   const config = getAppConfig()
-  const { signal, timeoutMs = config.TIMEOUT_MS, json = false } = options
+  const { signal, timeoutMs = config.TIMEOUT_MS, json = false, headers = {} } = options
   const { proxyUrl, proxyPrimary } = getCorsProxyConfig()
 
   const controller = new AbortController()
@@ -239,8 +255,11 @@ export async function fetchWithFallback<T = string>(
     const response = await fetch(url, {
       signal: internalSignal,
       credentials: 'omit',
+      headers,
     })
-    if (!response.ok) throw new Error(`Direct fetch failed: ${response.status}`)
+    if (!response.ok) {
+      throw new FetchError(`Direct fetch failed: ${response.status}`, url, response.status)
+    }
     return json ? response.json() : (response.text() as unknown as T)
   }
 
@@ -256,8 +275,17 @@ export async function fetchWithFallback<T = string>(
     const response = await fetch(finalProxyUrl, {
       signal: internalSignal,
       credentials: 'omit',
+      // We don't typically pass client headers to generic proxies like AllOrigins
+      // but some custom proxies might need them.
+      headers,
     })
-    if (!response.ok) throw new Error(`Proxy (${baseProxyUrl}) failed: ${response.status}`)
+    if (!response.ok) {
+      throw new FetchError(
+        `Proxy (${baseProxyUrl}) failed: ${response.status}`,
+        url,
+        response.status
+      )
+    }
 
     // JSON-wrapped proxies return JSON with contents field
     if (isJsonWrapped) {
@@ -380,6 +408,22 @@ export async function fetchWithFallback<T = string>(
         return result
       } catch (error) {
         lastError = error
+
+        // Short-circuit on 4xx if requested (typically for Dictionary 404s)
+        if (
+          options.skipProxyOn4xx &&
+          attempts[i].name === 'Direct' &&
+          error instanceof FetchError &&
+          error.status &&
+          error.status >= 400 &&
+          error.status < 500
+        ) {
+          log(
+            `[fetchWithFallback] [Direct] 4xx status received (${error.status}), skipping proxies as requested.`
+          )
+          throw error
+        }
+
         // If it's a manual abort, don't try next steps
         if (error instanceof Error && error.name === 'AbortError' && !didTimeout) {
           throw error
