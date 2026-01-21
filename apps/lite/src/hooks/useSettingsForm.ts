@@ -4,6 +4,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useEffect, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
+import { useTranslation } from 'react-i18next'
 import {
   createSettingsFormSchema,
   SETTINGS_STORAGE_KEY,
@@ -18,8 +19,12 @@ import { getJson, setJson } from '../lib/storage'
  * - Provides form methods and field registration
  */
 export function useSettingsForm() {
+  const { i18n } = useTranslation()
+
   // Create schema with current locale error messages
-  const schema = useMemo(() => createSettingsFormSchema(), [])
+  // Re-create when language changes so validation messages update
+  // biome-ignore lint/correctness/useExhaustiveDependencies: i18n.language is used to trigger re-creation of schema with new translations
+  const schema = useMemo(() => createSettingsFormSchema(), [i18n.language])
 
   const form = useForm<SettingsFormValues>({
     resolver: zodResolver(schema),

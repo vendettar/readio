@@ -192,3 +192,11 @@ description: Architecture decisions and rationale.
   - **Backend**: Deep content validation (Magic numbers, full parsing).
   - **Native**: Decoder-based validation or lightweight head sniffing.
 - **Rationale**: Keep client-side logic fast and lightweight while deferring intensive checks to secure environments.
+
+## D047 — UI Pattern Change Gate
+- **Decision**: Every modification to `ui-patterns/*.mdx` that introduces a new standardized interaction (e.g., standard forms, file drop zones) MUST be logged in the Decision Log.
+- **Rationale**: Ensure architecture consistency and maintain a source of truth for UI standardization across the project (Instructions 012-015).
+
+## D048 — Standardized File Drop Zone
+- **Decision**: All file upload surfaces MUST use the `FileDropZone` component based on `react-dropzone` with Zod-based validation.
+- **Rationale**: Provides consistent visual feedback (Glassmorphism), centralized error handling, and type-safe validation across the application (Instruction 015).

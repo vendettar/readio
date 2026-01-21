@@ -27,6 +27,7 @@ Unlike the **Worker** (who builds features), your primary metric is **Technical 
   2.  *Migration*: Switch consumers to new structure.
   3.  *Cleanup*: Remove old structure.
 - **Strict Typing**: Refactoring is the time to kill `any`. Strengthen type definitions as you touch files.
+- **Dynamic Context Consistency**: Any derived data or caches that depend on runtime context (language/theme/timezone/permissions/env) must be invalidated or recomputed when the context changes.
 - **Core Separation**: Actively enforce the boundary between `packages/core` (Business Logic/Shared) and `apps/lite` (UI/App State). Move pure logic down to Core.
 
 ### 3) Readio-Specific Patterns (Enforcement)

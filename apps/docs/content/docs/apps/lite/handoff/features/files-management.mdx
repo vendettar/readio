@@ -16,6 +16,29 @@ title: Files Management
     - **Behavior**: Subtitle binds only to the first processed `Song.mp3`, subsequent same-named MP3s will not bind this subtitle.
     - **Purpose**: Ensure one-to-one relationship for subtitle matching, aligning with intuition.
 
+### Drag-and-Drop Upload (react-dropzone)
+
+**Component**: `src/components/Files/FileDropZone.tsx`
+
+The Files page supports drag-and-drop file uploads using `react-dropzone`.
+
+**Features**:
+- Wraps entire page content for drag-and-drop anywhere
+- Validates files against Zod schemas (`src/lib/schemas/files.ts`)
+- Shows glassmorphism overlay with "Drop to upload" message when dragging files
+- Rejected files show toast error messages
+
+**Validation Rules**:
+- **Audio files**: Max 500MB, must be valid audio MIME type or extension (`.mp3`, `.m4a`, `.wav`, `.ogg`, `.flac`, `.aac`, `.webm`)
+- **Subtitle files**: Max 5MB, must be `.srt` or `.vtt`
+
+**i18n Keys**:
+- `dropzoneHint` — Hint text for drop area
+- `dropzoneActive` — Text shown when dragging files over drop zone
+- `validationFileTooLarge` — Error for files exceeding size limit
+- `validationInvalidAudioFormat` — Error for invalid audio format
+- `validationInvalidSubtitleFormat` — Error for invalid subtitle format
+
 ---
 
 ## 2. Files UX

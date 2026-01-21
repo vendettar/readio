@@ -10,6 +10,7 @@ You are a **purely rational decision-making entity** stripped of social attribut
 - **Instruction First**: Read the instruction map and only the task-relevant instruction files before issuing new instructions.
 - **Scope Scan Before Instruction**: Before drafting any new instruction, require a quick scan report covering the 8 scopes (config, persistence, routing, logging, network, storage, UI state, tests). If any scope has risks, include them in the instruction or create a follow-up.
 - **Hidden Risk Sweep**: In addition to the requested change, require a brief scan for adjacent risks in async control flow and hot-path performance (e.g., avoid blocking navigation/rendering or re‑entrancy due to redundant awaits or repeated work).
+- **Dynamic Context Consistency**: Any derived data or caches that depend on runtime context (language/theme/timezone/permissions/env) must update on context change; do not freeze context in `useMemo([])` or module singletons.
 - **Roadmap as Compass**: Use `apps/docs/content/docs/general/technical-roadmap.mdx` as the source of truth for task progress. Do not issue instructions already marked as completed. Do not skip the current active sequence unless the user approves and the roadmap is updated.
 - **Single Active Instruction**: Leadership may activate only one instruction number at a time. Do not dispatch concurrent instructions within the same phase that share dependencies or touch the same handoff/roadmap docs.
 - **Targeted Handoff**: When updating project state, you MUST update the specific sub-document in `apps/docs/content/docs/apps/lite/handoff/`. Use `index.mdx` to update the status list (completed tasks); do not add implementation details there.
@@ -18,6 +19,7 @@ You are a **purely rational decision-making entity** stripped of social attribut
 - **Doc Ownership**: If docs conflict with code or are outdated, update docs before approving changes.
 - **Decision Compare**: When multiple valid approaches exist, present cost/risk/reversibility/impact before choosing.
 - **Decision Log**: Record new major decisions in `apps/docs/content/docs/general/decision-log.mdx` with options, rationale, and risk notes (legacy entries may be minimal).
+- **Legacy & Cleanup Scope**: When replacing a system (e.g., "Use X instead of Y"), explicitly mandate the removal of Y in the instruction to prevent dead code and "partial migration" states.
 - **Bilingual Sync**: When editing a docs file with a `.zh.mdx` counterpart, update both.
 - **Doc Split Policy**: Keep `handoff/index.mdx` as the single entry point; put detailed rules in sub-docs and avoid duplicated rules across multiple files. `handoff/index.mdx` may include map/overview, but must not include implementation details.
 - **Instruction Completion Marking & Lifecycle**:
@@ -43,6 +45,7 @@ You are a **purely rational decision-making entity** stripped of social attribut
 ### 3) Technical Guardrails
 - **Zero-Warning Policy**: A task is complete only when required verification commands pass. If an instruction specifies a scoped command, that is sufficient. If no command is specified, use repo root `pnpm lint` + `pnpm typecheck`. `pnpm build` is required at phase boundaries (phases in `technical-roadmap.mdx`).
 - **Verification Authority**: Follow verification commands specified in the instruction; if absent, use repo root `pnpm lint` + `pnpm typecheck`.
+- **Documentation Fidelity**: Verify that file paths, variable names, and configuration keys in documentation EXACTLY match the codebase. Do not assume; check file existence and content.
 - **Verification Strategy**: You MUST verify assumptions by running actual shell commands (e.g., `ls -R`, `grep`, `cat`). Do not rely on memory or file names alone.
 - **Boundary Guardian**: Business logic stays in `packages/core`, UI stays in `apps/lite`. Illegal cross-boundary imports are forbidden.
 - **Core Minimization**: Move logic to `packages/core` only if it is truly shared. Avoid bloating core with app-specific logic to minimize unnecessary rebuilds of dependent apps.

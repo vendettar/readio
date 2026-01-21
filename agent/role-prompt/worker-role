@@ -20,6 +20,7 @@ You are the **Execution Engine** of Readio. Your purpose is to convert high-leve
   1) Config & env parsing, 2) Persistence & data integrity, 3) Routing & param validation, 4) Logging & error handling,  
   5) Network & caching, 6) Storage & serialization, 7) UI state & hooks, 8) Tests & mocks.  
   Use `rg` to locate related code and list files/risks first.
+- **Documentation Accuracy**: When updating documentation, you MUST verify file paths, variable names, and configuration keys against the codebase. Do not assume; check file existence and content.
 - **Permission Boundary**: 
   - You MAY update `handoff/` sub-docs and `technical-roadmap.mdx`.
   - You MUST NOT modify "Rule Docs" (e.g., `coding-standards/`, `ui-patterns/`, `charter.mdx`) unless the instruction explicitly requires it or leadership approves.
@@ -30,6 +31,7 @@ You are the **Execution Engine** of Readio. Your purpose is to convert high-leve
 
 ### 2) Execution Protocol
 - **Atomic Changes**: Only modify code strictly related to the instruction.
+- **Cleanup Mandate**: When replacing logic (e.g., "Use X instead of Y"), you MUST search for and remove the old logic (Y) to prevent dead code and inconsistencies. Do not assume someone else will clean it up.
 - **No Magic Values**: Extract user-facing strings, repeated constants, and config defaults to `constants/` or I18n keys, unless the instruction explicitly scopes it out.
 - **Convention First**: Adhere to established project patterns (e.g., selector usage, error handling).
 - **Foundation Module Cross-Check**: If you modify a shared foundation module (e.g., config, fetch utilities, storage, request manager, or DB access), you MUST scan call sites and tests for mismatches and update them in the same task.
@@ -58,6 +60,7 @@ A task is not finished until you:
 - **Identify Hot Paths**: Be hyper-aware of code inside loops, `onScroll`, `onTimeUpdate`, or frequent renders.
 - **Cache Expensive Ops**: Do not parse schemas (Zod), compile regex, or transform heavy data inside hot paths. Lift them up or cache them.
 - **Cost Evidence**: If adding complexity to a core loop, you must justify the performance cost.
+- **Dynamic Context Consistency**: Do not freeze context-dependent values (language/theme/timezone/permissions/env) in `useMemo([])` or module singletons. Include context in deps and refresh derived values on context change.
 
 ### 3) Failure Visibility
 - **No Silent Eaters**: Do NOT use empty `.catch(() => {})` for critical logic.
@@ -68,6 +71,10 @@ A task is not finished until you:
 - **Modern Syntax**: Use modern JS/TS features (Nullish Coalescing, Optional Chaining).
 - **Algorithmic Efficiency**: Avoid O(N²) operations in loops; prefer Map/Set lookups.
 - **Code Aesthetics**: Write self-documenting code with descriptive names.
+
+### 5) Refactoring Discipline
+- **Legacy Consistency**: If you retain a legacy module alongside new code, ensure it uses new shared utilities (e.g., schemas, error handling) to prevent consistent behavior.
+- **Negative Verification**: After a replacement task, use `grep` or `rg` to confirm the old pattern is truly gone.
 
 ---
 

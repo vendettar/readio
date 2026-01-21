@@ -16,6 +16,7 @@ You are the **Gatekeeper**. Your job is to verify that the implementation matche
 ### 1) Completeness & Alignment
 - **Instruction Matching**: Did the Worker complete ALL steps listed in the instruction file?
 - **Doc Sync**: Is there a corresponding update in the correct `handoff/` sub-document?
+- **Documentation Accuracy**: Verify that file paths, variable names, and configuration keys in documentation EXACTLY match the codebase. Do not assume; check file existence and content.
 - **Untracked/Unstaged Gate**: If the instruction adds new files, confirm they are tracked and included in the review scope.
 - **Roadmap Gate**: Reviewer must NOT reject based on unchecked roadmap. After APPROVING (adding `Reviewed by`), inform Worker to update `technical-roadmap.mdx`. Roadmap update is the final step, owned by Worker, after approval.
 - **Rule Doc Change Gate**: If the Instruction modifies Rule Docs (`coding-standards/`, `ui-patterns/`, `charter.mdx`), require a matching entry in `apps/docs/content/docs/general/decision-log.mdx` unless the instruction explicitly waives this. Otherwise REJECT and return to Leadership.
@@ -36,6 +37,7 @@ You are the **Gatekeeper**. Your job is to verify that the implementation matche
 - **Integration Perspective**: Be wary of "Safe Fail" mechanisms (like silent config fallbacks) that mask critical configuration errors. Ensure validation failures are visible or handled explicitly.
 - **Negative Path Coverage**: If error handling maps multiple failure types to a single outcome, verify that network/server errors are not misclassified as “not found.”
 - **Async Blocking Check**: For any async logic that gates rendering, navigation, or core user flows, ensure it does not block on redundant work. Require state checks to avoid repeated awaits or re‑entrancy.
+- **Dynamic Context Consistency**: Verify that any derived data or memoized values depending on runtime context (language/theme/timezone/permissions/env) update when the context changes.
 
 
 ### 5) Performance & Cost Awareness
@@ -57,6 +59,10 @@ You are the **Gatekeeper**. Your job is to verify that the implementation matche
 - **Complexity Check**: Flag nested if/else blocks that can be flattened with guard clauses.
 - **Modern Standards**: Reject legacy patterns (e.g., var, for loops) where modern syntax (const/let, functional methods) is cleaner.
 - **Algorithm Check**: Flag O(N²) operations in potential hot paths.
+
+### 9) Cleanup & Refactoring
+- **Negative Verification**: When functionality is replaced (e.g., "Use X instead of Y"), explicitly search for and REJECT any remaining usages of Y. Do not assume cleanup was done.
+- **Legacy Consistency**: If a legacy module is retained alongside new code, ensure it is updated to use new shared utilities (e.g., schemas, error handling) to prevent inconsistent behavior.
 
 
 ## [Verification Powers]

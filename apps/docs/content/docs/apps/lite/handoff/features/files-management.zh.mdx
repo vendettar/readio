@@ -16,6 +16,29 @@ title: Files Management
     - **行为**：Subtitle 只会绑定给第一个被处理的 `Song.mp3`，后续的同名 MP3 不会绑定该字幕。
     - **目的**：确保字幕匹配的一对一关系，符合直觉。
 
+### 拖拽上传 (react-dropzone)
+
+**组件**：`src/components/Files/FileDropZone.tsx`
+
+Files 页面支持使用 `react-dropzone` 进行拖拽文件上传。
+
+**功能特性**：
+- 包裹整个页面内容，支持在页面任何位置触发拖拽
+- 使用 Zod Schema 进行文件校验 (`src/lib/schemas/files.ts`)
+- 拖拽文件经过时显示毛玻璃效果覆盖层，并提示“放开以上传文件”
+- 校验失败的文件会触发 Toast 错误提示
+
+**校验规则**：
+- **音频文件**：最大 500MB，必须是有效的音频 MIME 类型或扩展名 (`.mp3`, `.m4a`, `.wav`, `.ogg`, `.flac`, `.aac`, `.webm`)
+- **字幕文件**：最大 5MB，必须是 `.srt` 或 `.vtt` 扩展名
+
+**i18n Keys**：
+- `dropzoneHint` — 拖拽区域提示语
+- `dropzoneActive` — 拖拽激活（悬停）时的文字
+- `validationFileTooLarge` — 文件超过大小限制的错误提示
+- `validationInvalidAudioFormat` — 音频格式无效提示
+- `validationInvalidSubtitleFormat` — 字幕格式无效提示
+
 ---
 
 ## 2. Files UX

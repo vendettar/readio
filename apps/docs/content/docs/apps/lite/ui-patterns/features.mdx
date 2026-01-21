@@ -9,6 +9,13 @@ title: Feature Patterns
 - **Entrance Animations**: Lists (Files, Episodes) should not appear instantly. Use a staggered fade-in + slide-up effect for items (Duration: 300ms total).
 - **App Boot**: Do not show half-loaded UI. Use a centered App Logo with a breathing animation while stores are hydrating from Dexie. Use `AnimatePresence` to fade out the loader.
 
+## File Drop Interaction
+
+- **Global Drop Zone**: In functional areas (like Files), the entire content area SHOULD be a drop target.
+- **Visual Feedback**: Use a full-screen or area-wide overlay with code `backdrop-blur-md` and `bg-background/80` (Glassmorphism) when `isDragActive` triggers.
+- **Validation & Toasts**: Immediate validation against file schemas (Type/Size). Failed files MUST trigger an error Toast.
+- **Overlay Content**: Display a prominent "Drop to upload" message with an animated icon (e.g. bouncing Upload icon) to confirm active state.
+
 ## Planned (Pending Execution)
 
 - **Onboarding Empty States**: First-run guidance for Subscriptions, Files, Favorites, History (Instruction 045).

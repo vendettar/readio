@@ -12,6 +12,30 @@ interface UseFileProcessingOptions {
 }
 
 export function useFileProcessing({ currentFolderId, onComplete }: UseFileProcessingOptions) {
+  /**
+   * Handle files dropped via react-dropzone
+   */
+  const handleDroppedFiles = useCallback(
+    async (files: File[]) => {
+      if (files.length === 0) return
+
+      try {
+        await ingestFiles({
+          files,
+          folderId: currentFolderId,
+        })
+        await onComplete()
+      } catch (err) {
+        logError('[Files] Failed to ingest dropped files:', err)
+        toast.errorKey('toastUploadFailed')
+      }
+    },
+    [currentFolderId, onComplete]
+  )
+
+  /**
+   * Handle files selected via file input
+   */
   const handleAudioInputChange = useCallback(
     async (
       e: React.ChangeEvent<HTMLInputElement>,
@@ -57,6 +81,7 @@ export function useFileProcessing({ currentFolderId, onComplete }: UseFileProces
   )
 
   return {
+    handleDroppedFiles,
     handleAudioInputChange,
     handleSubtitleInputChange,
   }

@@ -112,5 +112,5 @@ export function GlobalAudioController() {
 
   // Render nothing visible, just the audio element
   // biome-ignore lint/a11y/useMediaCaption: Audio captions handled via transcript component
-  return <audio ref={audioRef} src={audioUrl ?? undefined} />
+  return <audio ref={audioRef} src={audioUrl || undefined} />
 }
