@@ -1,7 +1,7 @@
 > **⚠️ CRITICAL**: You MUST preserve the current UI/UX layout and styling. Do NOT change visual appearance unless explicitly instructed.
 > **Prerequisites**: Read `apps/docs/content/docs/general/design-system/index.mdx` and `apps/docs/content/docs/apps/lite/ui-patterns/index.mdx` before starting.
 
-# Task: Standardize Forms (Zod + Hook Form)
+# Task: Standardize Forms (Zod + Hook Form) [COMPLETED]
 
 ## Objective
 Replace uncontrolled inputs and manual validation with `react-hook-form` + `zod`. This applies mainly to the "Settings" page and any future input forms.
@@ -39,3 +39,22 @@ Replace uncontrolled inputs and manual validation with `react-hook-form` + `zod`
 - Update `apps/docs/content/docs/apps/lite/ui-patterns/forms.mdx`.
 - Update `apps/docs/content/docs/apps/lite/handoff/standards.mdx`.
 - Update `apps/docs/content/docs/apps/lite/handoff/index.mdx` with the new status.
+
+## Completion
+- **Status**: Completed
+- **Date**: 2026-01-21
+- **Completed by**: Antigravity (AI Assistant)
+- **Reviewed by**: USER
+- **Commands**: 
+  - `pnpm --filter @readio/lite typecheck`
+  - `pnpm --filter @readio/lite lint`
+- **Key Changes**:
+  - Created Zod schemas in `src/lib/schemas/settings.ts`.
+  - Added shadcn Form components in `src/components/ui/form.tsx`.
+  - Created `useSettingsForm` hook with persistence and auto-save on blur.
+  - Refactored SettingsPage API Keys card to use react-hook-form.
+  - Updated `ui-patterns/forms.mdx` with Form Validation documentation.
+- **Verification**:
+  - Typecheck passed: ✅
+  - Lint passed: ✅
+  - Settings form persists values across page reloads: ✅

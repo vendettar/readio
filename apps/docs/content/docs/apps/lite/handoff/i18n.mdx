@@ -17,7 +17,7 @@ Uses **react-i18next** directly. Components call `useTranslation()` without an a
 All user-visible text must be handled through the t(key) system:
 - **In React Components**: Use `useTranslation()` and call `t(key, options)`
 - **Store and Utility Functions**: Use `src/lib/i18nUtils.ts`'s `translate(key, options)` function (calls `i18next.t` internally)
-  - Supports interpolation (e.g., `{size}`, `{total}`, `{count}`)
+  - Supports interpolation (e.g., `{{size}}`, `{{total}}`, `{{count}}`)
   - Built-in fallback to English
   - Prevents crash on undefined key
   - **Only outputs console.warn in dev environment**, silent in production
@@ -35,7 +35,7 @@ toast.info(translate('largeFileNotCached', { size: fileSize }));
 
 ### i18n Enhancements (Interpolation)
 
-- **Variable Substitution**: `t(key, options)` supports template syntax like `{count}` or `{total}`.
+- **Variable Substitution**: `t(key, options)` supports template syntax like `{{count}}` or `{{total}}`.
 - **Type Safety**: `t()` only accepts valid keys via i18next module augmentation. Dynamic keys are forbidden.
 - **Rule**: Do NOT cast keys to `string`, `any`, or `TranslationKey` to bypass typing; add missing keys instead.
 
@@ -53,12 +53,12 @@ toast.info(translate('largeFileNotCached', { size: fileSize }));
 | `searchEmptyHint` | Hint when search yields no results | "Try a different search term" |
 | `searchEmptyTitle` | Title when search page has no query | "Search for podcasts and episodes" |
 | `searchEmptyBody` | Description when search page has no query | "Use the search bar above to find content" |
-| `searchResultsCount` | Search results count (supports interpolation) | `"{count} results"` |
+| `searchResultsCount` | Search results count (supports interpolation) | `"{{count}} results"` |
 | `historyProgressSuffix` | History page progress suffix | "played" |
 | `historyPlayedAt` | History page played time label | "Played at" |
 | `historySourceLocal` | History source: Local File | "Files" |
 | `historySourcePodcast` | History source: Podcast | "Podcast" |
-| `favoritesAddedLabel` | Favorites added time (supports interpolation) | ` "Added {date}" ` |
+| `favoritesAddedLabel` | Favorites added time (supports interpolation) | ` "Added {{date}}" ` |
 | `readingBgTitle` | Reading background setting title | "Reading Background" |
 | `readingBgHint` | Reading background setting hint | "Applied to the transcript..." |
 | `ariaRemoveDownloadedAudio` | Aria label for removing downloaded audio | "Remove downloaded audio" |

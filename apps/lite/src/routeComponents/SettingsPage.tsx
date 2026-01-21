@@ -6,11 +6,20 @@ import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Checkbox } from '../components/ui/checkbox'
 import { ConfirmAlertDialog } from '../components/ui/confirm-alert-dialog'
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '../components/ui/form'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { useConfirmDialog } from '../hooks/useConfirmDialog'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import { useSettingsData } from '../hooks/useSettingsData'
+import { useSettingsForm } from '../hooks/useSettingsForm'
 import { useStorageMaintenance } from '../hooks/useStorageMaintenance'
 import { formatBytes, formatTimestamp } from '../lib/formatters'
 import { type Language, languageNativeNames } from '../lib/translations'
@@ -22,6 +31,9 @@ export default function SettingsPage() {
   const setLanguage = (lang: string) => i18n.changeLanguage(lang)
   const languages = languageNativeNames
   const { accent, setAccent } = useThemeStore()
+
+  // Settings form with validation
+  const { form, onSubmit, handleFieldBlur } = useSettingsForm()
 
   // Data loading hook
   const { storageInfo, sessions, reload } = useSettingsData()
@@ -155,15 +167,60 @@ export default function SettingsPage() {
                 <CardDescription>{t('settingsApiKeysDesc')}</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2">
-                  <Label htmlFor="openai-key">{t('settingsOpenAiKey')}</Label>
-                  <Input
-                    id="openai-key"
-                    type="password"
-                    placeholder="sk-..."
-                    className="max-w-md"
-                  />
-                </div>
+                <Form {...form}>
+                  <form
+                    className="space-y-4"
+                    onSubmit={(e) => {
+                      e.preventDefault()
+                      onSubmit()
+                    }}
+                  >
+                    <FormField
+                      control={form.control}
+                      name="openAiKey"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('settingsOpenAiKey')}</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="password"
+                              placeholder="sk-..."
+                              className="max-w-md"
+                              {...field}
+                              onBlur={() => {
+                                field.onBlur()
+                                handleFieldBlur()
+                              }}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="proxyUrl"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('proxyUrlLabel')}</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="text"
+                              placeholder="https://..."
+                              className="max-w-md"
+                              {...field}
+                              onBlur={() => {
+                                field.onBlur()
+                                handleFieldBlur()
+                              }}
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </form>
+                </Form>
               </CardContent>
             </Card>
           </div>

@@ -40,7 +40,7 @@ The `t` function will only accept keys that exist in the English (`en`) locale.
 
 Do NOT use ternary operators for plurals. Use i18next's built-in support.
 
-- **JSON**: `{ "episode_count": "{count} Episode", "episode_count_plural": "{count} Episodes" }`
+- **Translations Object**: `{ "episode_count": "{{count}} Episode", "episode_count_plural": "{{count}} Episodes" }`
 - **Code**: `t('episode_count', { count: 5 })`
 
 ## 5. Adding New Keys

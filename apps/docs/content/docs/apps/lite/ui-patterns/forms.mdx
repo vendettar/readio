@@ -18,3 +18,37 @@ title: Forms & Feedback
   - **Message**: "Connection Failed".
   - **Action**: A "Retry" button that calls `refetch()`.
 - **Proxy Health Indicator**: If the Custom Proxy fails but the Default Proxy works, notify the user in Settings.
+
+---
+
+## Form Validation (react-hook-form + Zod)
+
+Use `react-hook-form` with `zod` schemas for all user input forms that require validation.
+
+### Implementation Pattern
+
+1. **Schema Definition**: Create Zod schemas in `src/lib/schemas/`.
+2. **Hook Usage**: Use `useForm<T>({ resolver: zodResolver(schema) })`.
+3. **Components**: Use shadcn `Form` primitives (`FormField`, `FormItem`, `FormControl`, `FormLabel`, `FormMessage`).
+4. **Persistence**: Save to `localStorage` via `src/lib/storage.ts` helpers (never use `localStorage.setItem` directly).
+5. **Auto-save**: Trigger save on valid field blur for better UX.
+
+### Example
+
+```tsx
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { settingsFormSchema, type SettingsFormValues } from '../lib/schemas/settings'
+
+const form = useForm<SettingsFormValues>({
+  resolver: zodResolver(settingsFormSchema),
+  mode: 'onBlur',
+})
+```
+
+### Rules
+
+- **DO**: Define validation schemas in `src/lib/schemas/`.
+- **DO**: Use `FormMessage` to display validation errors.
+- **DON'T**: Use uncontrolled inputs for validated fields.
+- **DON'T**: Use `localStorage.setItem` directly; use `setJson()` from storage utilities.

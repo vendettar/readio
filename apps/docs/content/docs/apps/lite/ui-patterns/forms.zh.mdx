@@ -18,3 +18,37 @@ title: 表单与反馈
   - **消息**: "Connection Failed"。
   - **操作**: 调用 `refetch()` 的 "Retry" 按钮。
 - **代理运行状况指示器**: 如果自定义代理失败但默认代理工作，请在设置中通知用户。
+
+---
+
+## 表单验证 (react-hook-form + Zod)
+
+对于所有需要验证的用户输入表单，使用 `react-hook-form` 配合 `zod` schemas。
+
+### 实现模式
+
+1. **Schema 定义**: 在 `src/lib/schemas/` 中创建 Zod schemas。
+2. **Hook 使用**: 使用 `useForm<T>({ resolver: zodResolver(schema) })`。
+3. **组件**: 使用 shadcn `Form` 原语 (`FormField`, `FormItem`, `FormControl`, `FormLabel`, `FormMessage`)。
+4. **持久化**: 通过 `src/lib/storage.ts` 帮助函数保存到 `localStorage` (切勿直接使用 `localStorage.setItem`)。
+5. **自动保存**: 在有效字段失焦时触发保存，以获得更好的用户体验。
+
+### 示例
+
+```tsx
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { settingsFormSchema, type SettingsFormValues } from '../lib/schemas/settings'
+
+const form = useForm<SettingsFormValues>({
+  resolver: zodResolver(settingsFormSchema),
+  mode: 'onBlur',
+})
+```
+
+### 规则
+
+- **DO**: 在 `src/lib/schemas/` 中定义验证 schemas。
+- **DO**: 使用 `FormMessage` 显示验证错误。
+- **DON'T**: 对验证字段使用非受控输入。
+- **DON'T**: 直接使用 `localStorage.setItem`；使用 storage 工具中的 `setJson()`。

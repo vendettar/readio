@@ -5,6 +5,7 @@
  */
 
 import i18n from './i18n'
+import { warn } from './logger'
 import type { TranslationKey } from './translations'
 
 /**
@@ -16,7 +17,7 @@ import type { TranslationKey } from './translations'
 export function translate(key: TranslationKey, options?: Record<string, string | number>): string {
   // Check if key exists and warn in dev
   if (import.meta.env.DEV && !i18n.exists(key)) {
-    console.warn(`[i18n] Missing translation key: "${key}"`)
+    warn(`[i18n] Missing translation key: "${key}"`)
   }
 
   // Use i18next.t for consistency and power
