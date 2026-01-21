@@ -40,26 +40,29 @@ export function parseSubtitles(content: string): subtitle[] {
 
       const start = parseTime(startTimeStr)
       const end = parseTime(endTimeStr)
-      i++
 
-      // Collect text lines until next empty line
-      const textLines: string[] = []
-      while (i < lines.length && lines[i].trim() !== '') {
-        const text = lines[i].trim()
-        // Skip VTT style tags like <v Voice> or <b>
-        const cleanText = text.replace(/<[^>]+>/g, '')
-        if (cleanText) {
-          textLines.push(cleanText)
+      i++ // Advance past time line regardless of validation result
+
+      // Only collect text and push if timestamps are valid numbers
+      if (!Number.isNaN(start) && !Number.isNaN(end)) {
+        const textLines: string[] = []
+        while (i < lines.length && lines[i].trim() !== '') {
+          const text = lines[i].trim()
+          // Skip VTT style tags like <v Voice> or <b>
+          const cleanText = text.replace(/<[^>]+>/g, '')
+          if (cleanText) {
+            textLines.push(cleanText)
+          }
+          i++
         }
-        i++
-      }
 
-      if (textLines.length > 0) {
-        subtitles.push({
-          start,
-          end,
-          text: textLines.join('\n'),
-        })
+        if (textLines.length > 0) {
+          subtitles.push({
+            start,
+            end,
+            text: textLines.join('\n'),
+          })
+        }
       }
     } else {
       i++
@@ -82,11 +85,16 @@ export const parseSrt = parseSubtitles
  * - 00:00.000 (VTT short)
  */
 function parseTime(timeStr: string): number {
-  const normalized = timeStr.replace(',', '.')
+  if (!timeStr || !timeStr.trim()) return Number.NaN
+  const normalized = timeStr.trim().replace(',', '.')
   const [time, msStr] = normalized.split('.')
-  const ms = parseInt(msStr || '0', 10) / 1000
+
+  // Ensure ms is at least valid
+  const ms = msStr ? (parseInt(msStr, 10) || 0) / 1000 : 0
 
   const parts = time.split(':').map(Number)
+  if (parts.some((p) => Number.isNaN(p))) return Number.NaN
+
   if (parts.length === 3) {
     const [h, m, s] = parts
     return h * 3600 + m * 60 + (s || 0) + ms
@@ -95,7 +103,10 @@ function parseTime(timeStr: string): number {
     const [m, s] = parts
     return m * 60 + (s || 0) + ms
   }
-  return (parts[0] || 0) + ms
+  if (parts.length === 1 && !Number.isNaN(parts[0])) {
+    return parts[0] + ms
+  }
+  return Number.NaN
 }
 
 // Re-export time label formatter from shared utilities

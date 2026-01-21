@@ -55,12 +55,3 @@ export function createSubtitleFileSchema() {
       message: translate('validationInvalidSubtitleFormat'),
     })
 }
-
-// Legacy exports for backwards compatibility (static schemas)
-export const audioFileSchema = browserFileSchema.refine((file) => isValidAudioFile(file), {
-  message: 'Invalid audio file format',
-})
-
-export const subtitleFileSchema = browserFileSchema.refine((file) => isValidSubtitleFile(file), {
-  message: 'Invalid subtitle file format',
-})

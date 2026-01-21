@@ -26,7 +26,7 @@ describe('PlayerStore', () => {
     // Reset store between tests
     usePlayerStore.setState({
       audioLoaded: false,
-      audioUrl: '',
+      audioUrl: null,
       audioTitle: '',
       coverArtUrl: '',
       isPlaying: false,
@@ -154,7 +154,7 @@ describe('PlayerStore', () => {
       reset()
 
       const state = usePlayerStore.getState()
-      expect(state.audioUrl).toBe('')
+      expect(state.audioUrl).toBeNull()
       expect(state.progress).toBe(0)
       expect(state.audioLoaded).toBe(false)
     })

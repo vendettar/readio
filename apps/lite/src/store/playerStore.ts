@@ -23,7 +23,7 @@ export interface EpisodeMetadata {
 interface PlayerState {
   // audio state
   audioLoaded: boolean
-  audioUrl: string
+  audioUrl: string | null
   audioTitle: string
   coverArtUrl: string
   isPlaying: boolean
@@ -56,7 +56,7 @@ interface PlayerState {
   setVolume: (volume: number) => void
   setPlaybackRate: (rate: number) => void
   setAudioUrl: (
-    url: string,
+    url: string | null,
     title?: string,
     coverArt?: string,
     metadata?: EpisodeMetadata | null
@@ -80,7 +80,7 @@ interface PlayerState {
 
 const initialState = {
   audioLoaded: false,
-  audioUrl: '',
+  audioUrl: null as string | null,
   audioTitle: '',
   coverArtUrl: '',
   isPlaying: false,
@@ -145,21 +145,23 @@ export const usePlayerStore = create<PlayerState>((set) => ({
         URL.revokeObjectURL(state.currentBlobUrl)
       }
 
+      const normalizedUrl = url || null
+
       // Also track if coverArt is a blob URL (future-proofing)
-      const isAudioBlob = url.startsWith('blob:')
+      const isAudioBlob = normalizedUrl ? normalizedUrl.startsWith('blob:') : false
       const isCoverBlob = coverArt.startsWith('blob:')
 
       // For external URLs (podcast episodes), reset sessionId and progress
       // This prevents old session progress from being restored for new episodes
-      const shouldResetSession = !isAudioBlob && url !== state.audioUrl
+      const shouldResetSession = !!normalizedUrl && !isAudioBlob && normalizedUrl !== state.audioUrl
 
       return {
-        audioUrl: url,
-        audioLoaded: !!url,
+        audioUrl: normalizedUrl,
+        audioLoaded: !!normalizedUrl,
         audioTitle: title,
         coverArtUrl: coverArt,
         episodeMetadata: metadata, // Explicitly set (defaults to null for files)
-        currentBlobUrl: isAudioBlob ? url : isCoverBlob ? coverArt : null,
+        currentBlobUrl: isAudioBlob ? normalizedUrl : isCoverBlob ? coverArt : null,
         // Reset session for external URLs to start fresh
         ...(shouldResetSession
           ? { sessionId: null, progress: 0, localTrackId: null, duration: metadata?.duration || 0 }
