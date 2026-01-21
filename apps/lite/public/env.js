@@ -47,7 +47,6 @@ window.__READIO_ENV__ = window.__READIO_ENV__ || {
   READIO_CLICK_DELAY_MS: 240,
 
   // --- Localization ---
-  READIO_DEFAULT_LANG: 'en',
   READIO_DEFAULT_COUNTRY: 'us',
 
   // --- Assets ---

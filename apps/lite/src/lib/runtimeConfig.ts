@@ -39,7 +39,6 @@ declare global {
       READIO_CLICK_DELAY_MS?: number | string
 
       // Localization
-      READIO_DEFAULT_LANG?: string
       READIO_DEFAULT_COUNTRY?: string
 
       // Assets
@@ -146,7 +145,6 @@ const DEFAULTS = {
   ZOOM_STEP: 0.1,
   ZOOM_HIDE_DELAY_MS: 2000,
   CLICK_DELAY_MS: 240,
-  DEFAULT_LANG: 'en',
   DEFAULT_COUNTRY: 'us',
   FALLBACK_PODCAST_IMAGE: '/placeholder-podcast.svg',
   CACHE_TTL_EPISODES_MS: 3600000,
@@ -247,10 +245,6 @@ const AppConfigSchema = z.object({
     .positive()
     .default(DEFAULTS.CLICK_DELAY_MS)
     .catch(catchWithLog('CLICK_DELAY_MS', DEFAULTS.CLICK_DELAY_MS)),
-  DEFAULT_LANG: z
-    .string()
-    .default(DEFAULTS.DEFAULT_LANG)
-    .catch(catchWithLog('DEFAULT_LANG', DEFAULTS.DEFAULT_LANG)),
   DEFAULT_COUNTRY: z
     .string()
     .default(DEFAULTS.DEFAULT_COUNTRY)
@@ -298,7 +292,6 @@ const ENV_MAP: Record<keyof AppConfig, string> = {
   ZOOM_STEP: 'READIO_ZOOM_STEP',
   ZOOM_HIDE_DELAY_MS: 'READIO_ZOOM_HIDE_DELAY_MS',
   CLICK_DELAY_MS: 'READIO_CLICK_DELAY_MS',
-  DEFAULT_LANG: 'READIO_DEFAULT_LANG',
   DEFAULT_COUNTRY: 'READIO_DEFAULT_COUNTRY',
   FALLBACK_PODCAST_IMAGE: 'READIO_FALLBACK_PODCAST_IMAGE',
   CACHE_TTL_EPISODES_MS: 'READIO_CACHE_TTL_EPISODES_MS',

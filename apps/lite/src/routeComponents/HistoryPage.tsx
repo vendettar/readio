@@ -1,12 +1,13 @@
-// src/routes/history.tsx
-import { useNavigate } from '@tanstack/react-router'
-import { Clock, MoreHorizontal, Star, Trash2 } from 'lucide-react'
+import { Link, useNavigate } from '@tanstack/react-router'
+import { Clock, Compass, MoreHorizontal, Star, Trash2 } from 'lucide-react'
 import React, { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BaseEpisodeRow, GutterPlayButton } from '../components/EpisodeRow'
 import { InteractiveArtwork } from '../components/interactive/InteractiveArtwork'
 import { InteractiveTitle } from '../components/interactive/InteractiveTitle'
 import { Button } from '../components/ui/button'
+import { EmptyState } from '../components/ui/empty-state'
+import { LoadingPage } from '../components/ui/loading-spinner'
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import { useSubscriptionMap } from '../hooks/useSubscriptionMap'
@@ -148,21 +149,23 @@ export default function HistoryPage() {
         </header>
 
         {/* Loading */}
-        {isLoading && (
-          <div className="flex justify-center py-20">
-            <div className="w-8 h-8 border-2 border-muted border-t-primary rounded-full animate-spin" />
-          </div>
-        )}
+        {isLoading && <LoadingPage />}
 
         {/* Empty state */}
         {!isLoading && sessions.length === 0 && (
-          <div className="mt-20 text-center">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-muted mb-6">
-              <Clock className="w-6 h-6 text-muted-foreground opacity-50" />
-            </div>
-            <h3 className="text-lg font-medium text-foreground mb-2">{t('historyEmpty')}</h3>
-            <p className="text-muted-foreground max-w-sm mx-auto">{t('historyEmptyDesc')}</p>
-          </div>
+          <EmptyState
+            icon={Clock}
+            title={t('historyEmpty')}
+            description={t('historyEmptyDesc')}
+            action={
+              <Button asChild onClick={() => navigate({ to: '/explore' })}>
+                <Link to="/explore">
+                  <Compass className="w-4 h-4 mr-2" />
+                  {t('navExplore')}
+                </Link>
+              </Button>
+            }
+          />
         )}
 
         {/* Sessions list - EpisodeCard-like design */}

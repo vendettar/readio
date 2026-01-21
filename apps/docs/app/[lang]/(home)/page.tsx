@@ -1,10 +1,6 @@
 import Link from 'next/link'
 
-export default async function HomePage({
-  params,
-}: {
-  params: Promise<{ lang: string }>
-}) {
+export default async function HomePage({ params }: { params: Promise<{ lang: string }> }) {
   const { lang } = await params
   return (
     <div className="flex flex-col justify-center text-center flex-1">

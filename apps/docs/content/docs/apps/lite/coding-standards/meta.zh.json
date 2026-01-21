@@ -1,9 +1,4 @@
 {
-    "title": "编码规范",
-    "pages": [
-        "index",
-        "data-fetching",
-        "state-management",
-        "logic-flow"
-    ]
+  "title": "编码规范",
+  "pages": ["index", "data-fetching", "state-management", "logic-flow"]
 }

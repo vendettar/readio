@@ -1,9 +1,4 @@
 {
-    "title": "Features",
-    "pages": [
-        "audio-engine",
-        "files-management",
-        "search",
-        "discovery"
-    ]
+  "title": "Features",
+  "pages": ["audio-engine", "files-management", "search", "discovery"]
 }

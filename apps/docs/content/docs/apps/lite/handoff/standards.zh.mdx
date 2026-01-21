@@ -212,6 +212,12 @@ Provider 位于 `src/main.tsx`（`Tooltip.Provider`）。
      - 使用：在 `PodcastShowPage`, `PodcastEpisodesPage`, `SearchPage` 等场景直接使用。
      - 扩展：对于 `FavoritesPage` 和 `HistoryPage` 等有特殊交互需求的页面，直接复用 `BaseEpisodeRow` 并通过插槽注入自定义逻辑。
 
+6. **通用组件 (Common Components / DRY)** (`src/components/ui/`, `src/components/`)
+   - **`<LoadingSpinner />`**: 基于 Lucide `Loader2` 的旋转图标。
+   - **`<LoadingPage />`**: 全屏居中的加载状态页。
+   - **`<EmptyState />`**: 标准化的空状态组件（图标 + 标题 + 描述 + CTA 按钮）。强制要求所有列表场景使用。
+   - **`<PodcastGrid />`**: 播客卡片的响应式网格布局，支持 2 到 6 列 (`grid-cols-2` 至 `xl:grid-cols-6`)。
+
 ### App Initialization（应用初始化）
 
 全局数据加载（收藏、订阅）集中到根路由的 `useAppInitialization()` 钩子：

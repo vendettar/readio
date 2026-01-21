@@ -1,4 +1,5 @@
-import { MoreHorizontal, Star } from 'lucide-react'
+import { Link, useNavigate } from '@tanstack/react-router'
+import { Compass, MoreHorizontal, Star } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { BaseEpisodeRow, GutterPlayButton } from '../components/EpisodeRow'
@@ -11,6 +12,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '../components/ui/dropdown-menu'
+import { EmptyState } from '../components/ui/empty-state'
+import { LoadingPage } from '../components/ui/loading-spinner'
 import { useEpisodePlayback } from '../hooks/useEpisodePlayback'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import { useSubscriptionMap } from '../hooks/useSubscriptionMap'
@@ -22,6 +25,7 @@ import { useExploreStore } from '../store/exploreStore'
 
 export default function FavoritesPage() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
 
   const { favorites, favoritesLoaded, removeFavorite } = useExploreStore()
   const { playFavorite } = useEpisodePlayback()
@@ -54,21 +58,23 @@ export default function FavoritesPage() {
         </header>
 
         {/* Loading */}
-        {isInitialLoading && (
-          <div className="flex justify-center py-20">
-            <div className="w-8 h-8 border-2 border-muted border-t-primary rounded-full animate-spin" />
-          </div>
-        )}
+        {isInitialLoading && <LoadingPage />}
 
         {/* Empty state */}
         {!isInitialLoading && favorites.length === 0 && (
-          <div className="mt-20 text-center">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-muted mb-6">
-              <Star className="w-6 h-6 text-muted-foreground opacity-50" />
-            </div>
-            <h3 className="text-lg font-medium text-foreground mb-2">{t('favoritesEmpty')}</h3>
-            <p className="text-muted-foreground max-w-sm mx-auto">{t('favoritesEmptyDesc')}</p>
-          </div>
+          <EmptyState
+            icon={Star}
+            title={t('favoritesEmpty')}
+            description={t('favoritesEmptyDesc')}
+            action={
+              <Button asChild onClick={() => navigate({ to: '/explore' })}>
+                <Link to="/explore">
+                  <Compass className="w-4 h-4 mr-2" />
+                  {t('navExplore')}
+                </Link>
+              </Button>
+            }
+          />
         )}
 
         {/* Favorites list */}

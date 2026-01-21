@@ -215,6 +215,12 @@ Follows the five architecture consistency principles defined in `apps/docs/conte
      - Usage: Directly used in `PodcastShowPage`, `PodcastEpisodesPage`, `SearchPage`, etc.
      - Extension: For pages with special interaction needs like `FavoritesPage` and `HistoryPage`, reuse `BaseEpisodeRow` directly and inject custom logic via slots.
 
+6. **Common Components (DRY)** (`src/components/ui/`, `src/components/`)
+   - **`<LoadingSpinner />`**: Lucide-based `Loader2` spinner.
+   - **`<LoadingPage />`**: Full-page centered loading state.
+   - **`<EmptyState />`**: Standardized component for empty views (Icon + Title + Description + CTA Button). Required for all lists.
+   - **`<PodcastGrid />`**: Responsive 2-to-6 column grid for podcast cards (`grid-cols-2` to `xl:grid-cols-6`).
+
 ### App Initialization
 
 Global data loading (Favorites, Subscriptions) is centralized in the `useAppInitialization()` hook at the root route:

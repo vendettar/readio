@@ -1,13 +1,13 @@
 {
-    "title": "通用原则",
-    "pages": [
-        "charter",
-        "design-system",
-        "monorepo-strategy",
-        "technical-roadmap",
-        "feature-backlog",
-        "security",
-        "accessibility",
+  "title": "通用原则",
+  "pages": [
+    "charter",
+    "design-system",
+    "monorepo-strategy",
+    "technical-roadmap",
+    "feature-backlog",
+    "security",
+    "accessibility",
     "audit-system",
     "improvement-process",
     "future-standards",

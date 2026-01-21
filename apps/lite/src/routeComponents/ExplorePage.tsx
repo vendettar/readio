@@ -1,6 +1,10 @@
+import { Compass } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { PodcastEpisodesGrid } from '../components/Explore/PodcastEpisodesGrid'
 import { PodcastShowsCarousel } from '../components/Explore/PodcastShowsCarousel'
+import { Button } from '../components/ui/button'
+import { EmptyState } from '../components/ui/empty-state'
+import { LoadingPage } from '../components/ui/loading-spinner'
 import {
   type DiscoveryPodcast,
   useEditorPicks,
@@ -290,47 +294,66 @@ export default function ExplorePage() {
           <p className="text-lg text-muted-foreground">{t('exploreSubtitle')}</p>
         </header>
 
-        {/* Content Sections */}
-        <div className="space-y-12">
-          {/* Module D: Editor's Picks - Only show if region has configured picks */}
-          {editorPicks && editorPicks.length > 0 && (
+        {/* Global Loading State - fulfill instruction 012 requirement */}
+        {isLoadingPicks && isLoadingShows && isLoadingEpisodes ? (
+          <LoadingPage />
+        ) : !editorPicks?.length &&
+          !topShows?.length &&
+          !topEpisodes?.length &&
+          !isLoadingPicks &&
+          !isLoadingShows &&
+          !isLoadingEpisodes ? (
+          <EmptyState
+            icon={Compass}
+            title={t('noResults')}
+            description={t('errorNetwork')}
+            action={
+              <Button onClick={() => window.location.reload()}>{t('modalCrashedRetry')}</Button>
+            }
+          />
+        ) : (
+          /* Content Sections */
+          <div className="space-y-12">
+            {/* Module D: Editor's Picks - Only show if region has configured picks */}
+            {editorPicks && editorPicks.length > 0 && (
+              <section>
+                <h2 className="text-xl font-bold mb-4">{t('editorPicksTitle')}</h2>
+                <PodcastShowsCarousel
+                  podcasts={editorPicks}
+                  isLoading={isLoadingPicks}
+                  onPlayLatest={handlePlayLatestEpisode}
+                  onSubscribe={handleSubscribePodcast}
+                />
+              </section>
+            )}
+
+            {/* Top Shows */}
             <section>
-              <h2 className="text-xl font-bold mb-4">{t('editorPicksTitle')}</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold">{t('topShowsTitle')}</h2>
+              </div>
               <PodcastShowsCarousel
-                podcasts={editorPicks}
-                isLoading={isLoadingPicks}
+                podcasts={topShows || []}
+                isLoading={isLoadingShows}
                 onPlayLatest={handlePlayLatestEpisode}
                 onSubscribe={handleSubscribePodcast}
               />
             </section>
-          )}
 
-          {/* Top Shows */}
-          <section>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold">{t('topShowsTitle')}</h2>
-            </div>
-            <PodcastShowsCarousel
-              podcasts={topShows || []}
-              isLoading={isLoadingShows}
-              onPlayLatest={handlePlayLatestEpisode}
-              onSubscribe={handleSubscribePodcast}
-            />
-          </section>
-
-          {/* Top Episodes */}
-          <section>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold">{t('topEpisodesTitle')}</h2>
-            </div>
-            <PodcastEpisodesGrid
-              episodes={topEpisodes || []}
-              onPlay={handlePlayEpisode}
-              onFavorite={handleToggleFavoriteEpisode}
-              isLoading={isLoadingEpisodes}
-            />
-          </section>
-        </div>
+            {/* Top Episodes */}
+            <section>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold">{t('topEpisodesTitle')}</h2>
+              </div>
+              <PodcastEpisodesGrid
+                episodes={topEpisodes || []}
+                onPlay={handlePlayEpisode}
+                onFavorite={handleToggleFavoriteEpisode}
+                isLoading={isLoadingEpisodes}
+              />
+            </section>
+          </div>
+        )}
       </div>
     </div>
   )

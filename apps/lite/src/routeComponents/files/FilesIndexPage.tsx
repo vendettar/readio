@@ -3,12 +3,12 @@ import { useNavigate } from '@tanstack/react-router'
 import { Check, FileAudio, Home, Plus, Upload, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { EmptyState } from '../../components/Files/EmptyState'
 import { FolderCard } from '../../components/Files/FolderCard'
 import { TrackCard } from '../../components/Files/TrackCard'
 import type { ViewDensity } from '../../components/Files/types'
 import { ViewControlsBar } from '../../components/Files/ViewControlsBar'
 import { Button } from '../../components/ui/button'
+import { EmptyState } from '../../components/ui/empty-state'
 import { Input } from '../../components/ui/input'
 import { useFileDragDrop } from '../../hooks/useFileDragDrop'
 import { useFilePlayback } from '../../hooks/useFilePlayback'
@@ -485,7 +485,19 @@ export default function FilesIndexPage() {
                 // Only show EmptyState if we are inside a folder OR if (at root and no folders)
                 // This hides the "Start building..." message when user has collections but no root files
                 (!folders || folders.length === 0 || currentFolderId !== null) && (
-                  <EmptyState isFolder={currentFolderId !== null} />
+                  <EmptyState
+                    icon={Upload}
+                    title={
+                      currentFolderId !== null ? t('filesEmptyFolder') : t('filesEmptyHeadline')
+                    }
+                    description={currentFolderId !== null ? undefined : t('filesEmptyBody')}
+                    action={
+                      <Button onClick={() => audioInputRef.current?.click()}>
+                        <Upload className="w-4 h-4 mr-2" />
+                        {t('filesUpload')}
+                      </Button>
+                    }
+                  />
                 )
               )}
             </div>

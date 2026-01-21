@@ -6,9 +6,7 @@ import { LLMCopyButton, ViewOptions } from '@/components/ai/page-actions'
 import { getPageImage, source } from '@/lib/source'
 import { getMDXComponents } from '@/mdx-components'
 
-export default async function Page(props: {
-  params: Promise<{ lang: string; slug?: string[] }>
-}) {
+export default async function Page(props: { params: Promise<{ lang: string; slug?: string[] }> }) {
   const { lang, slug } = await props.params
   const page = source.getPage(slug, lang)
   if (!page) notFound()

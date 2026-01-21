@@ -31,6 +31,16 @@ Follow these patterns to ensure a consistent user experience.
 
 ---
 
+## Common Components (DRY)
+
+Reuse these components to maintain visual consistency across pages:
+
+- **`<LoadingSpinner />`**: Standard Lucide-based spinner. Use the `<LoadingPage />` variant for full-page centering.
+- **`<EmptyState />`**: Mandatory for all empty views. Requires an `icon`, `title`, and `action` (CTA button).
+- **`<PodcastGrid />`**: Standard responsive grid for podcast cards (`grid-cols-2` to `xl:grid-cols-6`).
+
+---
+
 ## Z-Index System (Stratification)
 
 Do NOT use magic numbers (`z-[999]`). Use this scale:

@@ -81,6 +81,7 @@ Transition from the legacy `useI18n` hook to **direct** `react-i18next` usage (`
   - Hardened i18n config with `supportedLngs` and `load: 'languageOnly'`.
   - Added Dev-only warnings for missing keys in `translate()` utility.
   - Normalized locale handling in `SettingsPage.tsx`.
+  - Removed dead `READIO_DEFAULT_LANG` configuration from `runtimeConfig.ts` and `public/env.js`.
 - **Verification**:
   - `pnpm --filter @readio/lite build` (tsc) passed: ✅
   - `pnpm --filter @readio/lite lint` passed: ✅

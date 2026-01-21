@@ -1,7 +1,7 @@
 import { DocsLayout } from 'fumadocs-ui/layouts/docs'
+import { LanguageSwitcher } from '@/components/layout/language-switcher'
 import { baseOptions } from '@/lib/layout.shared'
 import { source } from '@/lib/source'
-import { LanguageSwitcher } from '@/components/layout/language-switcher'
 
 export default async function Layout({
   children,

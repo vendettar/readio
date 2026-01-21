@@ -1,9 +1,13 @@
 import { useNavigate, useSearch } from '@tanstack/react-router'
-import { CircleMinus, CirclePlus, Library, Loader2, Mic2, Podcast, Search } from 'lucide-react'
+import { CircleMinus, CirclePlus, Library, Mic2, Podcast, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { SearchEpisodeItem } from '../components/GlobalSearch/SearchEpisodeItem'
 import { SearchResultItem } from '../components/GlobalSearch/SearchResultItem'
 import { PodcastCard } from '../components/PodcastCard/PodcastCard'
+import { PodcastGrid } from '../components/PodcastGrid'
+import { Button } from '../components/ui/button'
+import { EmptyState } from '../components/ui/empty-state'
+import { LoadingPage } from '../components/ui/loading-spinner'
 import { useEpisodePlayback } from '../hooks/useEpisodePlayback'
 import { type LocalSearchResult, useGlobalSearch } from '../hooks/useGlobalSearch'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
@@ -80,33 +84,26 @@ export default function SearchPage() {
         </header>
 
         {/* Loading state */}
-        {isLoading && (
-          <div className="flex items-center justify-center py-20">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            <span className="ml-3 text-lg text-muted-foreground">{t('searchSearching')}</span>
-          </div>
-        )}
+        {isLoading && <LoadingPage />}
 
         {/* Empty state */}
         {isEmpty && !isLoading && query && (
-          <div className="mt-20 text-center">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-muted mb-6">
-              <Search className="w-6 h-6 text-muted-foreground opacity-50" />
-            </div>
-            <h3 className="text-lg font-medium text-foreground mb-2">{t('searchNoResults')}</h3>
-            <p className="text-muted-foreground max-w-sm mx-auto">{t('searchEmptyHint')}</p>
-          </div>
+          <EmptyState
+            icon={Search}
+            title={t('searchNoResults')}
+            description={t('searchEmptyHint')}
+            action={<Button onClick={() => navigate({ to: '/explore' })}>{t('navExplore')}</Button>}
+          />
         )}
 
         {/* No query state */}
         {!query && (
-          <div className="mt-20 text-center">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-muted mb-6">
-              <Search className="w-6 h-6 text-muted-foreground opacity-50" />
-            </div>
-            <h3 className="text-lg font-medium text-foreground mb-2">{t('searchEmptyTitle')}</h3>
-            <p className="text-muted-foreground max-w-sm mx-auto">{t('searchEmptyBody')}</p>
-          </div>
+          <EmptyState
+            icon={Search}
+            title={t('searchEmptyTitle')}
+            description={t('searchEmptyBody')}
+            action={<Button onClick={() => navigate({ to: '/explore' })}>{t('navExplore')}</Button>}
+          />
         )}
 
         {/* Results */}
@@ -142,7 +139,7 @@ export default function SearchPage() {
                   <Podcast className="w-5 h-5" />
                   {t('searchPodcasts')}
                 </h2>
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+                <PodcastGrid>
                   {podcasts.map((podcast) => {
                     const subscribed = podcast.feedUrl ? isSubscribed(podcast.feedUrl) : false
                     return (
@@ -175,7 +172,7 @@ export default function SearchPage() {
                       />
                     )
                   })}
-                </div>
+                </PodcastGrid>
               </section>
             )}
 

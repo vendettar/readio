@@ -63,6 +63,12 @@ A task is not finished until you:
 - **No Silent Eaters**: Do NOT use empty `.catch(() => {})` for critical logic.
 - **Dev-Only Logging**: If an error is recoverable but indicates a config/data issue, log it with `if (import.meta.env.DEV)` to warn developers without polluting production.
 
+### 4) Pursuit of Elegance & Efficiency
+- **Simplify Complexity**: Flatten nested if/else blocks (Guard Clauses).
+- **Modern Syntax**: Use modern JS/TS features (Nullish Coalescing, Optional Chaining).
+- **Algorithmic Efficiency**: Avoid O(N²) operations in loops; prefer Map/Set lookups.
+- **Code Aesthetics**: Write self-documenting code with descriptive names.
+
 ---
 
 ## [Output Format]

@@ -1,9 +1,12 @@
-// src/routes/subscriptions.tsx
-import { useNavigate } from '@tanstack/react-router'
-import { CircleMinus, LayoutGrid } from 'lucide-react'
+import { Link, useNavigate } from '@tanstack/react-router'
+import { CircleMinus, Compass, LayoutGrid } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { PodcastCard } from '../components/PodcastCard/PodcastCard'
+import { PodcastGrid } from '../components/PodcastGrid'
+import { Button } from '../components/ui/button'
+import { EmptyState } from '../components/ui/empty-state'
+import { LoadingPage } from '../components/ui/loading-spinner'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import type { Subscription } from '../lib/dexieDb'
 import { useExploreStore } from '../store/exploreStore'
@@ -48,26 +51,28 @@ export default function SubscriptionsPage() {
         </header>
 
         {/* Loading */}
-        {isInitialLoading && (
-          <div className="flex justify-center py-20">
-            <div className="w-8 h-8 border-2 border-muted border-t-primary rounded-full animate-spin" />
-          </div>
-        )}
+        {isInitialLoading && <LoadingPage />}
 
         {/* Empty state */}
         {!isInitialLoading && subscriptions.length === 0 && (
-          <div className="mt-20 text-center">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-muted mb-6">
-              <LayoutGrid className="w-6 h-6 text-muted-foreground opacity-50" />
-            </div>
-            <h3 className="text-lg font-medium text-foreground mb-2">{t('subscriptionsEmpty')}</h3>
-            <p className="text-muted-foreground max-w-sm mx-auto">{t('subscriptionsEmptyDesc')}</p>
-          </div>
+          <EmptyState
+            icon={LayoutGrid}
+            title={t('subscriptionsEmpty')}
+            description={t('subscriptionsEmptyDesc')}
+            action={
+              <Button asChild onClick={() => navigate({ to: '/explore' })}>
+                <Link to="/explore">
+                  <Compass className="w-4 h-4 mr-2" />
+                  {t('navExplore')}
+                </Link>
+              </Button>
+            }
+          />
         )}
 
         {/* Subscriptions grid */}
         {!isInitialLoading && subscriptions.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+          <PodcastGrid>
             {subscriptions.map((subscription) => (
               <PodcastCard
                 key={subscription.feedUrl}
@@ -93,7 +98,7 @@ export default function SubscriptionsPage() {
                 ]}
               />
             ))}
-          </div>
+          </PodcastGrid>
         )}
       </div>
     </div>
