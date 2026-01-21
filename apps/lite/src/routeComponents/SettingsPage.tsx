@@ -184,7 +184,7 @@ export default function SettingsPage() {
                           <FormControl>
                             <Input
                               type="password"
-                              placeholder="sk-..."
+                              placeholder={t('placeholderApiKey')}
                               className="max-w-md"
                               {...field}
                               onBlur={() => {
@@ -206,7 +206,7 @@ export default function SettingsPage() {
                           <FormControl>
                             <Input
                               type="text"
-                              placeholder="https://..."
+                              placeholder={t('proxyUrlPlaceholder')}
                               className="max-w-md"
                               {...field}
                               onBlur={() => {

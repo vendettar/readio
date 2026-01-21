@@ -2,12 +2,12 @@
 // Hook for managing settings form state with react-hook-form and persistence
 
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 import {
+  createSettingsFormSchema,
   SETTINGS_STORAGE_KEY,
   type SettingsFormValues,
-  settingsFormSchema,
 } from '../lib/schemas/settings'
 import { getJson, setJson } from '../lib/storage'
 
@@ -18,8 +18,11 @@ import { getJson, setJson } from '../lib/storage'
  * - Provides form methods and field registration
  */
 export function useSettingsForm() {
+  // Create schema with current locale error messages
+  const schema = useMemo(() => createSettingsFormSchema(), [])
+
   const form = useForm<SettingsFormValues>({
-    resolver: zodResolver(settingsFormSchema),
+    resolver: zodResolver(schema),
     defaultValues: {
       openAiKey: '',
       proxyUrl: '',
