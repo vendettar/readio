@@ -2,7 +2,7 @@
 // Error fallback UI for TranscriptView with copy debug info button
 
 import { useCallback, useState } from 'react'
-import { useI18n } from '../../hooks/useI18n'
+import { useTranslation } from 'react-i18next'
 import { logError } from '../../lib/logger'
 import { Button } from '../ui/button'
 
@@ -12,7 +12,7 @@ interface TranscriptErrorFallbackProps {
 }
 
 export function TranscriptErrorFallback({ error, reset }: TranscriptErrorFallbackProps) {
-  const { t } = useI18n()
+  const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
 
   const handleCopyDebug = useCallback(async () => {

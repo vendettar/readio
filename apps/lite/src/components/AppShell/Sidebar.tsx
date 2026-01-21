@@ -1,7 +1,7 @@
 // src/components/AppShell/Sidebar.tsx
 import { Link, useRouterState } from '@tanstack/react-router'
 import { Clock, Disc, FolderOpen, LayoutGrid, Moon, Radio, Settings, Star, Sun } from 'lucide-react'
-import { useI18n } from '../../hooks/useI18n'
+import { useTranslation } from 'react-i18next'
 import { useThemeStore } from '../../store/themeStore'
 import { GlobalSearchInput, SearchOverlay } from '../GlobalSearch'
 import { Button } from '../ui/button'
@@ -41,7 +41,7 @@ function SidebarItem({ to, icon: Icon, label, isActive }: SidebarItemProps) {
 }
 
 export function Sidebar({ className = '' }: SidebarProps) {
-  const { t } = useI18n()
+  const { t } = useTranslation()
   const router = useRouterState()
   const currentPath = router.location.pathname
 
@@ -142,7 +142,7 @@ export function Sidebar({ className = '' }: SidebarProps) {
 // Theme Toggle Component - Icon only, state-aware
 function ThemeToggle() {
   const { theme, toggleTheme } = useThemeStore()
-  const { t } = useI18n()
+  const { t } = useTranslation()
   const isDark = theme === 'dark'
 
   return (

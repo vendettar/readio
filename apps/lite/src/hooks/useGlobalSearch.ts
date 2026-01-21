@@ -3,6 +3,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { formatDuration } from '../lib/dateUtils'
 import {
   DB,
@@ -16,7 +17,6 @@ import { formatFileSize } from '../lib/formatters'
 import { logError } from '../lib/logger'
 import { getAppConfig } from '../lib/runtimeConfig'
 import { useExploreStore } from '../store/exploreStore'
-import { useI18n } from './useI18n'
 
 // ========== Types ==========
 
@@ -78,7 +78,8 @@ export function useGlobalSearch(
   enabled = true,
   limits?: Partial<GlobalSearchLimits>
 ) {
-  const { t, language } = useI18n()
+  const { t, i18n } = useTranslation()
+  const language = i18n.language
   const country = useExploreStore((s) => s.country) || getAppConfig().DEFAULT_COUNTRY
   const mergedLimits = { ...DEFAULT_LIMITS, ...limits }
   const { subscriptionLimit, favoriteLimit, historyLimit, fileLimit } = mergedLimits

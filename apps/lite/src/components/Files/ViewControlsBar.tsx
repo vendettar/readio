@@ -2,7 +2,7 @@
 
 import { LayoutList, List } from 'lucide-react'
 import type * as React from 'react'
-import { useI18n } from '../../hooks/useI18n'
+import { useTranslation } from 'react-i18next'
 import { cn } from '../../lib/utils'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
@@ -22,7 +22,7 @@ export function ViewControlsBar({
   leftSlot,
   disabled = false,
 }: ViewControlsBarProps) {
-  const { t } = useI18n()
+  const { t } = useTranslation()
 
   return (
     <div className="flex items-center justify-between py-2 mb-4">

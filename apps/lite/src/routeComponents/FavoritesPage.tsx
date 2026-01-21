@@ -1,5 +1,6 @@
 import { MoreHorizontal, Star } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { BaseEpisodeRow, GutterPlayButton } from '../components/EpisodeRow'
 import { InteractiveArtwork } from '../components/interactive/InteractiveArtwork'
 import { InteractiveTitle } from '../components/interactive/InteractiveTitle'
@@ -11,7 +12,6 @@ import {
   DropdownMenuTrigger,
 } from '../components/ui/dropdown-menu'
 import { useEpisodePlayback } from '../hooks/useEpisodePlayback'
-import { useI18n } from '../hooks/useI18n'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import { useSubscriptionMap } from '../hooks/useSubscriptionMap'
 import { formatDateStandard, formatDuration, formatRelativeTime } from '../lib/dateUtils'
@@ -21,7 +21,7 @@ import { getDiscoveryArtworkUrl } from '../lib/imageUtils'
 import { useExploreStore } from '../store/exploreStore'
 
 export default function FavoritesPage() {
-  const { t } = useI18n()
+  const { t } = useTranslation()
 
   const { favorites, favoritesLoaded, removeFavorite } = useExploreStore()
   const { playFavorite } = useEpisodePlayback()

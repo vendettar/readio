@@ -16,7 +16,7 @@ import {
   X,
 } from 'lucide-react'
 import { useRef, useState } from 'react'
-import { useI18n } from '../../hooks/useI18n'
+import { useTranslation } from 'react-i18next'
 import { formatDuration } from '../../lib/dateUtils'
 import type { FileFolder, FileSubtitle, FileTrack } from '../../lib/dexieDb'
 import { formatFileSize } from '../../lib/formatters'
@@ -136,7 +136,8 @@ export function TrackCard({
   onAddSub,
   onMove,
 }: TrackCardProps) {
-  const { t, language } = useI18n()
+  const { t, i18n } = useTranslation()
+  const language = i18n.language
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: `track-${track.id}`,
     data: { type: 'track', track },

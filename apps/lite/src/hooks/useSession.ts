@@ -28,7 +28,6 @@ export function useSession() {
   const isManagingSessionRef = useRef(false)
 
   // 2. Create NEW session if files are loaded manually (not via restoration)
-  // biome-ignore lint/correctness/useExhaustiveDependencies: isManagingSessionRef is a guard and shouldn't trigger re-runs
   useEffect(() => {
     // We allow session creation if restoration is ready OR if it failed (so users can still upload)
     if (

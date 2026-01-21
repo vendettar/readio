@@ -2,12 +2,12 @@
 import { useNavigate } from '@tanstack/react-router'
 import { Clock, MoreHorizontal, Star, Trash2 } from 'lucide-react'
 import React, { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { BaseEpisodeRow, GutterPlayButton } from '../components/EpisodeRow'
 import { InteractiveArtwork } from '../components/interactive/InteractiveArtwork'
 import { InteractiveTitle } from '../components/interactive/InteractiveTitle'
 import { Button } from '../components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover'
-import { useI18n } from '../hooks/useI18n'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import { useSubscriptionMap } from '../hooks/useSubscriptionMap'
 import { formatDateStandard, formatDuration, formatTimeSmart } from '../lib/dateUtils'
@@ -20,7 +20,8 @@ import { useExploreStore } from '../store/exploreStore'
 import { usePlayerStore } from '../store/playerStore'
 
 export default function HistoryPage() {
-  const { t, language } = useI18n()
+  const { t, i18n } = useTranslation()
+  const language = i18n.language
   const navigate = useNavigate()
   const setAudioUrl = usePlayerStore((s) => s.setAudioUrl)
   const startPlayback = usePlayerStore((s) => s.play)

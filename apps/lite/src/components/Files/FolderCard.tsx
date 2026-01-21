@@ -3,7 +3,7 @@
 import { useDroppable } from '@dnd-kit/core'
 import { Check, Folder, FolderOpen, Pin, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useI18n } from '../../hooks/useI18n'
+import { useTranslation } from 'react-i18next'
 import type { FileFolder } from '../../lib/dexieDb'
 import { cn } from '../../lib/utils'
 import { Button } from '../ui/button'
@@ -41,7 +41,7 @@ export function FolderCard({
   measureRef,
   existingFolderNames = [],
 }: FolderCardProps) {
-  const { t } = useI18n()
+  const { t } = useTranslation()
   const { setNodeRef, isOver } = useDroppable({
     id: `folder-${folder.id}`,
     data: { type: 'folder', id: folder.id },

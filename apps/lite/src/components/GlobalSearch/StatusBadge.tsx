@@ -1,6 +1,6 @@
 // src/components/GlobalSearch/StatusBadge.tsx
 import { Bell, Clock, FolderOpen, Heart } from 'lucide-react'
-import { useI18n } from '../../hooks/useI18n'
+import { useTranslation } from 'react-i18next'
 import type { TranslationKey } from '../../lib/translations'
 
 export type BadgeType = 'favorited' | 'played' | 'subscribed' | 'local'
@@ -37,7 +37,7 @@ const badgeConfig: Record<
 }
 
 export function StatusBadge({ type, className = '' }: StatusBadgeProps) {
-  const { t } = useI18n()
+  const { t } = useTranslation()
   const config = badgeConfig[type]
   const Icon = config.icon
   const label = t(config.labelKey)

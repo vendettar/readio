@@ -2,7 +2,7 @@
 
 import { CircleMinus, CirclePlus } from 'lucide-react'
 import React from 'react'
-import { useI18n } from '../../hooks/useI18n'
+import { useTranslation } from 'react-i18next'
 import type { DiscoveryPodcast } from '../../lib/discovery'
 import { useExploreStore } from '../../store/exploreStore'
 import { PodcastCard } from '../PodcastCard/PodcastCard'
@@ -19,7 +19,7 @@ interface TopShowCardProps {
  */
 export const PodcastShowCard = React.memo(
   ({ podcast, index, onPlayLatest, onSubscribe }: TopShowCardProps) => {
-    const { t } = useI18n()
+    const { t } = useTranslation()
     const subscriptions = useExploreStore((state) => state.subscriptions)
 
     // Check by providerPodcastId or feedUrl

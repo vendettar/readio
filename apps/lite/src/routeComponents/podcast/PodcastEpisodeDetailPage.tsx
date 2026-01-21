@@ -5,9 +5,9 @@ import { useQuery } from '@tanstack/react-query'
 import { useParams } from '@tanstack/react-router'
 import { AlertTriangle, FileText, List, Play, SquareArrowUpRight, Star } from 'lucide-react'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { InteractiveTitle } from '@/components/interactive/InteractiveTitle'
 import { Button } from '@/components/ui/button'
-import { useI18n } from '@/hooks/useI18n'
 import { formatDuration, formatRelativeTime } from '@/lib/dateUtils'
 import discovery from '@/lib/discovery'
 import { sanitizeHtml } from '@/lib/htmlUtils'
@@ -19,7 +19,7 @@ import { useExploreStore } from '@/store/exploreStore'
 import { usePlayerStore } from '@/store/playerStore'
 
 export default function PodcastEpisodeDetailPage() {
-  const { t } = useI18n()
+  const { t } = useTranslation()
   const { id, episodeId } = useParams({ from: '/podcast/$id/episode/$episodeId' })
   const [imageError, setImageError] = useState(false)
 

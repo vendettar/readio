@@ -1,11 +1,11 @@
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { CircleMinus, CirclePlus, Library, Loader2, Mic2, Podcast, Search } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { SearchEpisodeItem } from '../components/GlobalSearch/SearchEpisodeItem'
 import { SearchResultItem } from '../components/GlobalSearch/SearchResultItem'
 import { PodcastCard } from '../components/PodcastCard/PodcastCard'
 import { useEpisodePlayback } from '../hooks/useEpisodePlayback'
 import { type LocalSearchResult, useGlobalSearch } from '../hooks/useGlobalSearch'
-import { useI18n } from '../hooks/useI18n'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import discovery, { type SearchEpisode } from '../lib/discovery'
 import { executeLocalSearchAction } from '../lib/localSearchActions'
@@ -14,7 +14,7 @@ import { useExploreStore } from '../store/exploreStore'
 import { usePlayerStore } from '../store/playerStore'
 
 export default function SearchPage() {
-  const { t } = useI18n()
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const { q: query = '' } = useSearch({ from: '/search' })
   const setAudioUrl = usePlayerStore((s) => s.setAudioUrl)
@@ -117,7 +117,7 @@ export default function SearchPage() {
               <section>
                 <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
                   <Library className="w-5 h-5" />
-                  {t('searchInLibrary')}
+                  {t('searchYourLibrary')}
                 </h2>
                 <div className="space-y-2">
                   {local.map((result) => (

@@ -1,6 +1,6 @@
 // src/components/Explore/CarouselNavigation.tsx
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { useI18n } from '../../hooks/useI18n'
+import { useTranslation } from 'react-i18next'
 import { cn } from '../../lib/utils'
 import { Button } from '../ui/button'
 
@@ -21,7 +21,7 @@ export function CarouselNavigation({
   heightClassName = 'h-14',
   parentGroupName = 'carousel',
 }: CarouselNavigationProps) {
-  const { t } = useI18n()
+  const { t } = useTranslation()
   const groupClass =
     parentGroupName === 'carousel'
       ? 'group-hover/carousel:opacity-100'

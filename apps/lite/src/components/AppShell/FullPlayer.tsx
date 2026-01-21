@@ -2,7 +2,7 @@
 
 import { Minimize2, Pause, Play, Settings2, SkipBack, SkipForward } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
-import { useI18n } from '../../hooks/useI18n'
+import { useTranslation } from 'react-i18next'
 import { useZoom } from '../../hooks/useZoom'
 import { reportError } from '../../lib/errorReporter'
 import { logError } from '../../lib/logger'
@@ -20,7 +20,7 @@ import { Slider } from '../ui/slider'
 import { ZoomControl } from '../ZoomControl'
 
 export function FullPlayer() {
-  const { t } = useI18n()
+  const { t } = useTranslation()
   const { zoomScale, showZoomBar, zoomIn, zoomOut, zoomReset, setShowZoomBar, scheduleHide } =
     useZoom()
   const [isFollowing, setIsFollowing] = useState(true)

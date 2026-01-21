@@ -1,11 +1,11 @@
 import { createFileRoute, Link, redirect } from '@tanstack/react-router'
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { FollowButton } from '../components/FollowButton'
 import { TranscriptErrorFallback } from '../components/Transcript/TranscriptErrorFallback'
 import { Button } from '../components/ui/button'
 import { ZoomControl } from '../components/ZoomControl'
-import { useI18n } from '../hooks/useI18n'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import { useZoom } from '../hooks/useZoom'
 import { reportError } from '../lib/errorReporter'
@@ -18,7 +18,7 @@ const LazyTranscriptView = lazy(() =>
 )
 
 function HomePage() {
-  const { t } = useI18n()
+  const { t } = useTranslation()
   const { zoomScale, showZoomBar, zoomIn, zoomOut, zoomReset, setShowZoomBar, scheduleHide } =
     useZoom()
   const [isFollowing, setIsFollowing] = useState(true)

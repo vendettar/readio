@@ -1,7 +1,7 @@
 > **⚠️ CRITICAL**: You MUST preserve the current UI/UX layout and styling. Do NOT change visual appearance unless explicitly instructed.
 > **Prerequisites**: Read `apps/docs/content/docs/general/design-system/index.mdx` and `apps/docs/content/docs/apps/lite/ui-patterns/index.mdx` before starting.
 
-# Task: Type-Safe I18n Transition (Standard)
+# Task: Type-Safe I18n Transition (Standard) [COMPLETED]
 
 ## Objective
 Transition from the legacy `useI18n` hook to **direct** `react-i18next` usage (`useTranslation`), while strictly adhering to the project's TypeScript-first translation strategy (no JSON files).
@@ -72,4 +72,22 @@ Transition from the legacy `useI18n` hook to **direct** `react-i18next` usage (`
 ## Documentation
 - Update `apps/docs/content/docs/apps/lite/handoff/i18n.mdx`.
 - Update `apps/docs/content/docs/apps/lite/i18n-guide.mdx`.
-- Update `apps/docs/content/docs/apps/lite/handoff/index.mdx` with the new status.
+## Completion
+- **Status**: Completed 2026-01-21
+- **Key Changes**:
+  - Migrated from custom `useI18n` to `react-i18next`.
+  - Implemented strictly typed `t()` function via module augmentation.
+  - Consolidated all configuration in `src/lib/i18n.ts`.
+  - Hardened i18n config with `supportedLngs` and `load: 'languageOnly'`.
+  - Added Dev-only warnings for missing keys in `translate()` utility.
+  - Normalized locale handling in `SettingsPage.tsx`.
+- **Verification**:
+  - `pnpm --filter @readio/lite build` (tsc) passed: ✅
+  - `pnpm --filter @readio/lite lint` passed: ✅
+  - `rg "useI18n" apps/lite/src` returns 0 results: ✅
+  - Locale normalization tested (e.g., `en-US` correctly maps to `en`): ✅
+  - Missing key warning in dev environment verified: ✅
+- **Bilingual Documentation**:
+  - `apps/docs/content/docs/apps/lite/handoff/i18n.mdx` & `.zh.mdx`: Updated ✅
+  - `apps/docs/content/docs/apps/lite/i18n-guide.mdx` & `.zh.mdx`: Updated ✅
+  - `apps/docs/content/docs/apps/lite/handoff/index.mdx` & `.zh.mdx`: Status updated ✅

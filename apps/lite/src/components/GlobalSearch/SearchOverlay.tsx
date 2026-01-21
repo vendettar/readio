@@ -2,8 +2,8 @@
 
 import { useNavigate } from '@tanstack/react-router'
 import { ArrowRight, Loader2, Search } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { type LocalSearchResult, useGlobalSearch } from '../../hooks/useGlobalSearch'
-import { useI18n } from '../../hooks/useI18n'
 import { useOnClickOutside } from '../../hooks/useOnClickOutside'
 import discovery, { type Podcast as PodcastType, type SearchEpisode } from '../../lib/discovery'
 import { formatTimestamp } from '../../lib/formatters'
@@ -37,7 +37,8 @@ function PodcastItem({ podcast, onClick }: { podcast: PodcastType; onClick: () =
 }
 
 function EpisodeItem({ episode, onClick }: { episode: SearchEpisode; onClick: () => void }) {
-  const { language } = useI18n()
+  const { i18n } = useTranslation()
+  const language = i18n.language
   const date = episode.releaseDate
     ? formatTimestamp(new Date(episode.releaseDate).getTime(), language)
     : ''
@@ -67,7 +68,7 @@ function LocalItem({ item, onClick }: { item: LocalSearchResult; onClick: () => 
 
 export function SearchOverlay() {
   const navigate = useNavigate()
-  const { t } = useI18n()
+  const { t } = useTranslation()
   const { query, isOverlayOpen, closeOverlay } = useSearchStore()
   const setAudioUrl = usePlayerStore((s) => s.setAudioUrl)
   const play = usePlayerStore((s) => s.play)

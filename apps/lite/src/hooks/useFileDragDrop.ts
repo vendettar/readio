@@ -9,18 +9,18 @@ import {
   useSensors,
 } from '@dnd-kit/core'
 import { useCallback, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { DB, type FileTrack } from '../lib/dexieDb'
 import { resolveDuplicateName } from '../lib/files/ingest'
 import { logError } from '../lib/logger'
 import { toast } from '../lib/toast'
-import { useI18n } from './useI18n'
 
 interface UseFileDragDropOptions {
   onComplete: () => Promise<void>
 }
 
 export function useFileDragDrop({ onComplete }: UseFileDragDropOptions) {
-  const { t } = useI18n()
+  const { t } = useTranslation()
   const [activeDragItem, setActiveDragItem] = useState<FileTrack | null>(null)
 
   const isDragging = activeDragItem !== null

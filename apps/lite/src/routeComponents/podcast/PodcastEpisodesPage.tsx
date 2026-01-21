@@ -4,9 +4,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { useParams } from '@tanstack/react-router'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { EpisodeRow } from '../../components/EpisodeRow/EpisodeRow'
 import { useEpisodePlayback } from '../../hooks/useEpisodePlayback'
-import { useI18n } from '../../hooks/useI18n'
 import discovery, { type Episode } from '../../lib/discovery'
 import { logError } from '../../lib/logger'
 
@@ -15,7 +15,7 @@ const INITIAL_LOAD_COUNT = 25
 const BATCH_SIZE = 25
 
 export default function PodcastEpisodesPage() {
-  const { t } = useI18n()
+  const { t } = useTranslation()
   const { id } = useParams({ from: '/podcast/$id/episodes' })
   const [visibleCount, setVisibleCount] = useState(INITIAL_LOAD_COUNT)
   const loaderRef = useRef<HTMLDivElement>(null)

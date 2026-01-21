@@ -1,6 +1,6 @@
 import { Book, Copy, Search, X } from 'lucide-react'
 import type { CSSProperties } from 'react'
-import { useI18n } from '../../hooks/useI18n'
+import { useTranslation } from 'react-i18next'
 import type { DictEntry, SelectionState } from '../../lib/selection'
 import { Button } from '../ui/button'
 
@@ -13,7 +13,7 @@ interface ContextMenuProps {
 }
 
 export function ContextMenu({ state, onCopy, onSearch, onLookup, onClose }: ContextMenuProps) {
-  const { t } = useI18n()
+  const { t } = useTranslation()
 
   if (!state.showMenu) return null
 
@@ -65,7 +65,7 @@ interface LookupPopoverProps {
 }
 
 export function LookupPopover({ state, onClose }: LookupPopoverProps) {
-  const { t } = useI18n()
+  const { t } = useTranslation()
   if (!state.showLookup) return null
 
   // Position calculation

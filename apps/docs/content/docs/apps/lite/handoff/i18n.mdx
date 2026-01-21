@@ -17,7 +17,7 @@ Uses **react-i18next** directly. Components call `useTranslation()` without an a
 All user-visible text must be handled through the t(key) system:
 - **In React Components**: Use `useTranslation()` and call `t(key, options)`
 - **Store and Utility Functions**: Use `src/lib/i18nUtils.ts`'s `translate(key, options)` function (calls `i18next.t` internally)
-  - Supports interpolation (e.g., `{size}`, `{count}`)
+  - Supports interpolation (e.g., `{size}`, `{total}`, `{count}`)
   - Built-in fallback to English
   - Prevents crash on undefined key
   - **Only outputs console.warn in dev environment**, silent in production
@@ -35,7 +35,7 @@ toast.info(translate('largeFileNotCached', { size: fileSize }));
 
 ### i18n Enhancements (Interpolation)
 
-- **Variable Substitution**: `t(key, options)` supports template syntax like `{count}`.
+- **Variable Substitution**: `t(key, options)` supports template syntax like `{count}` or `{total}`.
 - **Type Safety**: `t()` only accepts valid keys via i18next module augmentation. Dynamic keys are forbidden.
 - **Rule**: Do NOT cast keys to `string`, `any`, or `TranslationKey` to bypass typing; add missing keys instead.
 

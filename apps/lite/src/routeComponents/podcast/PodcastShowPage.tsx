@@ -5,10 +5,10 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, useParams } from '@tanstack/react-router'
 import { Check, ChevronRight, Play, Plus } from 'lucide-react'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { EpisodeRow } from '../../components/EpisodeRow/EpisodeRow'
 import { Button } from '../../components/ui/button'
 import { useEpisodePlayback } from '../../hooks/useEpisodePlayback'
-import { useI18n } from '../../hooks/useI18n'
 import discovery from '../../lib/discovery'
 import { formatCompactNumber } from '../../lib/formatters'
 import { stripHtml } from '../../lib/htmlUtils'
@@ -19,7 +19,7 @@ import { cn } from '../../lib/utils'
 import { useExploreStore } from '../../store/exploreStore'
 
 export default function PodcastShowPage() {
-  const { t } = useI18n()
+  const { t } = useTranslation()
   const { id } = useParams({ from: '/podcast/$id/' })
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false)
 
@@ -320,7 +320,7 @@ export default function PodcastShowPage() {
                   >
                     <Link to="/podcast/$id/episodes" params={{ id }}>
                       {t('seeAll', {
-                        count: formatCompactNumber(podcast.trackCount || feed.episodes.length),
+                        total: formatCompactNumber(podcast.trackCount || feed.episodes.length),
                       })}
                     </Link>
                   </Button>

@@ -1,6 +1,6 @@
 import { MoreHorizontal, Star } from 'lucide-react'
 import React from 'react'
-import { useI18n } from '../../hooks/useI18n'
+import { useTranslation } from 'react-i18next'
 import { formatDuration, formatRelativeTime } from '../../lib/dateUtils'
 import discovery, { type Episode, type Podcast, type SearchEpisode } from '../../lib/discovery'
 import { stripHtml } from '../../lib/htmlUtils'
@@ -25,7 +25,7 @@ interface SearchEpisodeItemProps {
 }
 
 export function SearchEpisodeItem({ episode, onPlay }: SearchEpisodeItemProps) {
-  const { t } = useI18n()
+  const { t } = useTranslation()
   const { favorites, addFavorite, removeFavorite } = useExploreStore()
 
   const [isSaving, setIsSaving] = React.useState(false)

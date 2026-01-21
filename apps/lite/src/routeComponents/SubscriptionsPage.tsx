@@ -2,14 +2,14 @@
 import { useNavigate } from '@tanstack/react-router'
 import { CircleMinus, LayoutGrid } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { PodcastCard } from '../components/PodcastCard/PodcastCard'
-import { useI18n } from '../hooks/useI18n'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import type { Subscription } from '../lib/dexieDb'
 import { useExploreStore } from '../store/exploreStore'
 
 export default function SubscriptionsPage() {
-  const { t } = useI18n()
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const { subscriptions, subscriptionsLoaded, unsubscribe } = useExploreStore()
   const [isInitialLoading, setIsInitialLoading] = useState(!subscriptionsLoaded)

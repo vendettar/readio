@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { PodcastEpisodesGrid } from '../components/Explore/PodcastEpisodesGrid'
 import { PodcastShowsCarousel } from '../components/Explore/PodcastShowsCarousel'
 import {
@@ -6,7 +7,6 @@ import {
   useTopEpisodes,
   useTopPodcasts,
 } from '../hooks/useDiscoveryPodcasts'
-import { useI18n } from '../hooks/useI18n'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import type { Subscription } from '../lib/dexieDb'
 import discovery, { type Episode, type Podcast } from '../lib/discovery'
@@ -26,7 +26,7 @@ function extractPodcastIdFromUrl(url: string): string | null {
 }
 
 export default function ExplorePage() {
-  const { t } = useI18n()
+  const { t } = useTranslation()
 
   // Player actions
   const setAudioUrl = usePlayerStore((state) => state.setAudioUrl)

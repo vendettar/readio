@@ -2,7 +2,7 @@
 
 import { ChevronLeft, Folder, Home, Inbox, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
 import { useLayoutEffect, useRef, useState } from 'react'
-import { useI18n } from '../../hooks/useI18n'
+import { useTranslation } from 'react-i18next'
 import type { FileFolder } from '../../lib/dexieDb'
 import { cn } from '../../lib/utils'
 import { Button } from '../ui/button'
@@ -33,7 +33,7 @@ export function TrackOverflowMenu({
   onDeleteTrack,
   disabled = false,
 }: TrackOverflowMenuProps) {
-  const { t } = useI18n()
+  const { t } = useTranslation()
   const triggerRef = useRef<HTMLButtonElement>(null)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   // Track if we are closing because of a rename to prevent focus restoration conflict

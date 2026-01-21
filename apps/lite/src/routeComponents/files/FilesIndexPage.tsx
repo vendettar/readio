@@ -2,6 +2,7 @@ import { DndContext, DragOverlay, type Modifier } from '@dnd-kit/core'
 import { useNavigate } from '@tanstack/react-router'
 import { Check, FileAudio, Home, Plus, Upload, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { EmptyState } from '../../components/Files/EmptyState'
 import { FolderCard } from '../../components/Files/FolderCard'
 import { TrackCard } from '../../components/Files/TrackCard'
@@ -14,7 +15,6 @@ import { useFilePlayback } from '../../hooks/useFilePlayback'
 import { useFileProcessing } from '../../hooks/useFileProcessing'
 import { useFilesData } from '../../hooks/useFilesData'
 import { useFolderManagement } from '../../hooks/useFolderManagement'
-import { useI18n } from '../../hooks/useI18n'
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
 import { DB } from '../../lib/dexieDb'
 import { sortFolders } from '../../lib/files/sortFolders'
@@ -45,7 +45,7 @@ const snapCenterCursor: Modifier = ({ transform, activatorEvent, activeNodeRect 
 }
 
 export default function FilesIndexPage() {
-  const { t } = useI18n()
+  const { t } = useTranslation()
   const navigate = useNavigate()
   useKeyboardShortcuts({ isModalOpen: false })
 

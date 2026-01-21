@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
-import { useI18n } from '../hooks/useI18n'
 import { reportError } from '../lib/errorReporter'
 import { logError } from '../lib/logger'
 import { ErrorBoundary } from './ErrorBoundary'
@@ -8,7 +8,7 @@ import { ErrorBoundary } from './ErrorBoundary'
 const IS_DEV = import.meta.env.DEV
 
 export function RootErrorBoundary({ children }: { children: React.ReactNode }) {
-  const { t } = useI18n()
+  const { t } = useTranslation()
   const [lastErrorText, setLastErrorText] = useState('')
 
   const handleReload = useCallback(() => {

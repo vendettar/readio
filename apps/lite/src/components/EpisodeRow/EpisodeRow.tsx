@@ -1,7 +1,7 @@
 import { MoreHorizontal, Star } from 'lucide-react'
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { useEpisodePlayback } from '../../hooks/useEpisodePlayback'
-import { useI18n } from '../../hooks/useI18n'
 import { formatDuration, formatRelativeTime } from '../../lib/dateUtils'
 import type { Episode, Podcast } from '../../lib/discovery'
 import { stripHtml } from '../../lib/htmlUtils'
@@ -42,7 +42,7 @@ export function EpisodeRow({
   isLast = false,
   titleMaxLines = 2,
 }: EpisodeRowProps) {
-  const { t } = useI18n()
+  const { t } = useTranslation()
   const { addFavorite, removeFavorite, isFavorited } = useExploreStore()
   const { playEpisode } = useEpisodePlayback()
   const [isMenuOpen, setIsMenuOpen] = React.useState(false)

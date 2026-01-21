@@ -1,11 +1,11 @@
-import { useI18n } from '../hooks/useI18n'
+import { useTranslation } from 'react-i18next'
 import { type ReadingBg, useThemeStore } from '../store/themeStore'
 import { Button } from './ui/button'
 import { Label } from './ui/label'
 
 export function ReadingBgControl() {
   const { readingBg, setReadingBg } = useThemeStore()
-  const { t } = useI18n()
+  const { t } = useTranslation()
 
   const readingBgs = [
     { id: 'default', label: t('readingBgDefault'), bg: 'bg-background' },

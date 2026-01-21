@@ -1,7 +1,7 @@
 // src/components/ZoomControl/ZoomControl.tsx
 import { Minus, Plus } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
-import { useI18n } from '../../hooks/useI18n'
 
 interface ZoomControlProps {
   zoomScale: number
@@ -22,7 +22,7 @@ export function ZoomControl({
   onMouseEnter,
   onMouseLeave,
 }: ZoomControlProps) {
-  const { t } = useI18n()
+  const { t } = useTranslation()
 
   if (!isVisible) return null
 

@@ -2,8 +2,8 @@
 
 import { MoreHorizontal, Pencil, Pin, PinOff, Trash2 } from 'lucide-react'
 import { useLayoutEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
-import { useI18n } from '../../hooks/useI18n'
 import { Button } from '../ui/button'
 import {
   DropdownMenu,
@@ -32,7 +32,7 @@ export function FolderOverflowMenu({
   onOpenChange,
   disabled = false,
 }: FolderOverflowMenuProps) {
-  const { t } = useI18n()
+  const { t } = useTranslation()
   const triggerRef = useRef<HTMLButtonElement>(null)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   // Track if we are closing because of a rename to prevent focus restoration conflict

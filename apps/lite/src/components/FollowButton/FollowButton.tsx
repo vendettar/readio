@@ -1,5 +1,5 @@
 // src/components/FollowButton/FollowButton.tsx
-import { useI18n } from '../../hooks/useI18n'
+import { useTranslation } from 'react-i18next'
 import { Button } from '../ui/button'
 
 interface FollowButtonProps {
@@ -9,7 +9,7 @@ interface FollowButtonProps {
 }
 
 export function FollowButton({ isPlaying, isVisible, onClick }: FollowButtonProps) {
-  const { t } = useI18n()
+  const { t } = useTranslation()
   if (!isVisible) return null
 
   return (

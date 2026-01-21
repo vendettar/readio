@@ -3,9 +3,9 @@
 import { Link } from '@tanstack/react-router'
 import { Info, Link as LinkIcon, MoreHorizontal, Play, RadioTower, Star } from 'lucide-react'
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { CAROUSEL_DEFAULTS } from '../../constants/layout'
 import { useCarouselLayout } from '../../hooks/useCarouselLayout'
-import { useI18n } from '../../hooks/useI18n'
 import type { DiscoveryPodcast } from '../../lib/discovery'
 import { getDiscoveryArtworkUrl } from '../../lib/imageUtils'
 import { cn } from '../../lib/utils'
@@ -36,7 +36,7 @@ export function PodcastEpisodesGrid({
   onFavorite,
   isLoading,
 }: PodcastEpisodesGridProps) {
-  const { t } = useI18n()
+  const { t } = useTranslation()
   const favorites = useExploreStore((s) => s.favorites)
   const [openMenuId, setOpenMenuId] = React.useState<string | null>(null)
   const [processingId, setProcessingId] = React.useState<string | null>(null)

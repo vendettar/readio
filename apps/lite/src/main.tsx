@@ -3,8 +3,8 @@ import { RouterProvider } from '@tanstack/react-router'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { RootErrorBoundary } from './components/RootErrorBoundary'
-import { I18nProvider } from './hooks/useI18n'
 import { router } from './router'
+import './lib/i18n'
 import './index.css'
 // Note: legacy interactions.css and theme-tokens.css are being consolidated/removed
 
@@ -32,13 +32,11 @@ import { TooltipProvider } from './components/ui/tooltip'
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <I18nProvider>
-        <RootErrorBoundary>
-          <TooltipProvider>
-            <RouterProvider router={router} />
-          </TooltipProvider>
-        </RootErrorBoundary>
-      </I18nProvider>
+      <RootErrorBoundary>
+        <TooltipProvider>
+          <RouterProvider router={router} />
+        </TooltipProvider>
+      </RootErrorBoundary>
     </QueryClientProvider>
   </StrictMode>
 )

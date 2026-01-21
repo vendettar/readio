@@ -1,8 +1,8 @@
 import { useNavigate } from '@tanstack/react-router'
 import { Search, X } from 'lucide-react'
 import { useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useEventListener } from '../../hooks/useEventListener'
-import { useI18n } from '../../hooks/useI18n'
 import { useSearchStore } from '../../store/searchStore'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
@@ -10,7 +10,7 @@ import { Input } from '../ui/input'
 export function GlobalSearchInput() {
   const inputRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
-  const { t } = useI18n()
+  const { t } = useTranslation()
   const { query, setQuery, openOverlay, closeOverlay, clearSearch } = useSearchStore()
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {

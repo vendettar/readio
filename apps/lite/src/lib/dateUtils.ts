@@ -7,15 +7,13 @@ import {
   format,
   startOfDay,
 } from 'date-fns'
+import type { TFunction } from 'i18next'
 
 /**
  * Format a date as relative time (e.g., "3D AGO", "2H AGO")
  * Matches premium podcast styles. Supports i18n via translation function.
  */
-export function formatRelativeTime(
-  dateStr: string,
-  t: (key: string, options?: Record<string, string | number>) => string
-): string {
+export function formatRelativeTime(dateStr: string, t: TFunction): string {
   if (!dateStr) return ''
 
   const date = new Date(dateStr)
@@ -49,10 +47,7 @@ export function formatRelativeTime(
  * Format duration in seconds to a condensed format
  * Uses Math.round to match common industry "nearest minute" display
  */
-export function formatDuration(
-  seconds: number | undefined,
-  t: (key: string, options?: Record<string, string | number>) => string
-): string {
+export function formatDuration(seconds: number | undefined, t: TFunction): string {
   if (!seconds) return ''
 
   const totalMinutes = Math.round(seconds / 60)

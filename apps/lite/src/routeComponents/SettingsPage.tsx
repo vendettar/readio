@@ -1,5 +1,6 @@
 import { Eraser, Info, Trash2 } from 'lucide-react'
 import type { CSSProperties } from 'react'
+import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
@@ -8,15 +9,18 @@ import { ConfirmAlertDialog } from '../components/ui/confirm-alert-dialog'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { useConfirmDialog } from '../hooks/useConfirmDialog'
-import { type Language, useI18n } from '../hooks/useI18n'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import { useSettingsData } from '../hooks/useSettingsData'
 import { useStorageMaintenance } from '../hooks/useStorageMaintenance'
 import { formatBytes, formatTimestamp } from '../lib/formatters'
+import { type Language, languageNativeNames } from '../lib/translations'
 import { ACCENT_OPTIONS, useThemeStore } from '../store/themeStore'
 
 export default function SettingsPage() {
-  const { t, language, setLanguage, languages } = useI18n()
+  const { t, i18n } = useTranslation()
+  const language = i18n.resolvedLanguage || i18n.language.split('-')[0]
+  const setLanguage = (lang: string) => i18n.changeLanguage(lang)
+  const languages = languageNativeNames
   const { accent, setAccent } = useThemeStore()
 
   // Data loading hook

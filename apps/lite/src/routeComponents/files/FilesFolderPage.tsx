@@ -4,6 +4,7 @@ import { DndContext, DragOverlay, type Modifier, useDroppable } from '@dnd-kit/c
 import { useNavigate, useParams } from '@tanstack/react-router'
 import { FileAudio, Home, Upload } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { TrackCard } from '../../components/Files/TrackCard'
 import type { ViewDensity } from '../../components/Files/types'
 import { ViewControlsBar } from '../../components/Files/ViewControlsBar'
@@ -11,7 +12,6 @@ import { Button } from '../../components/ui/button'
 import { useFileDragDrop } from '../../hooks/useFileDragDrop'
 import { useFilePlayback } from '../../hooks/useFilePlayback'
 import { useFileProcessing } from '../../hooks/useFileProcessing'
-import { useI18n } from '../../hooks/useI18n'
 import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
 import { DB, type FileFolder, type FileSubtitle, type FileTrack } from '../../lib/dexieDb'
 import { logError, warn as logWarn } from '../../lib/logger'
@@ -82,7 +82,7 @@ function BackDropTarget({ children }: { children: React.ReactNode }) {
 export default function FilesFolderPage() {
   const { folderId } = useParams({ from: '/files/folder/$folderId' })
   const navigate = useNavigate()
-  const { t } = useI18n()
+  const { t } = useTranslation()
   useKeyboardShortcuts({ isModalOpen: false })
 
   // folderId is now a string UUID from the route
