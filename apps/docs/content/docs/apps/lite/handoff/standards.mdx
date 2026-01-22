@@ -22,9 +22,14 @@ SVG Resources:
 
 Icon sources are unified and consistent in style; UI operation SVG files should not be extended in `src/assets/`.
 
-### Global CSS
+### Global CSS & Visual Style (Premium Glass)
 
-`src/index.css` contains theme tokens, interaction class styles (reading/selection/drag-and-drop), Smart List Dividers, and local scrollbar styles. Layout dimensions use Tailwind tokens and extended tokens (`w-panel` 25rem, `w-panel-sm` 20rem, `max-w-content` 105rem/1680px, `max-w-content-wide` 112.5rem).
+`src/index.css` contains theme tokens, interaction class styles (reading/selection/drag-and-drop), Smart List Dividers, and local scrollbar styles. 
+
+**Visual Language**:
+- **Glassmorphism**: Surfaces like the Sidebar, Player controls, and Dropdowns use `backdrop-blur-xl` and semi-transparent backgrounds (`bg-background/80` or `bg-popover/95`).
+- **Saturate**: Overlays use `backdrop-saturate-150` for an Apple-like premium feel.
+- **Borders**: Avoid solid `border-gray-*`. Use semantic `border-border/50` for subtle separation.
 
 **Tailwind Layout Tokens** (via `tailwind.config.js`):
 - **Spacing**: `sidebar`, `mini-player`, `page-gutter`, `page-margin` (all map to CSS variables).

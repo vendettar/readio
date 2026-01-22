@@ -2,6 +2,7 @@
 import { Link, useRouterState } from '@tanstack/react-router'
 import { Clock, Disc, FolderOpen, LayoutGrid, Moon, Radio, Settings, Star, Sun } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { cn } from '../../lib/utils'
 import { useThemeStore } from '../../store/themeStore'
 import { GlobalSearchInput, SearchOverlay } from '../GlobalSearch'
 import { Button } from '../ui/button'
@@ -21,14 +22,12 @@ function SidebarItem({ to, icon: Icon, label, isActive }: SidebarItemProps) {
   return (
     <Link
       to={to}
-      className={`
-                w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer
-                ${
-                  isActive
-                    ? 'bg-primary/10 text-primary font-bold'
-                    : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
-                }
-            `}
+      className={cn(
+        'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer',
+        isActive
+          ? 'bg-primary/10 text-primary font-bold'
+          : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+      )}
     >
       <Icon
         size={20}
@@ -47,7 +46,10 @@ export function Sidebar({ className = '' }: SidebarProps) {
 
   return (
     <aside
-      className={`w-sidebar h-screen bg-card border-r border-border flex flex-col flex-shrink-0 ${className}`}
+      className={cn(
+        'w-sidebar h-screen bg-background/80 backdrop-blur-xl backdrop-saturate-150 border-r border-border/50 flex flex-col flex-shrink-0',
+        className
+      )}
     >
       {/* App Header */}
       <div className="px-6 py-8 pb-3">
@@ -116,14 +118,12 @@ export function Sidebar({ className = '' }: SidebarProps) {
         <div className="flex items-center gap-4">
           <Link
             to="/settings"
-            className={`
-                            flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer flex-1
-                            ${
-                              currentPath === '/settings'
-                                ? 'bg-primary/10 text-primary font-bold'
-                                : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
-                            }
-                        `}
+            className={cn(
+              'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer flex-1',
+              currentPath === '/settings'
+                ? 'bg-primary/10 text-primary font-bold'
+                : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+            )}
           >
             <Settings
               size={20}
@@ -151,14 +151,7 @@ function ThemeToggle() {
       size="icon"
       type="button"
       onClick={toggleTheme}
-      className={`
-                h-10 w-10 flex-shrink-0 rounded-lg transition-all duration-200
-                ${
-                  isDark
-                    ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20'
-                    : 'bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20'
-                }
-            `}
+      className="h-10 w-10 flex-shrink-0 rounded-lg text-muted-foreground hover:text-foreground"
       aria-label={isDark ? t('themeToggleLight') : t('themeToggleDark')}
     >
       {isDark ? <Sun size={18} strokeWidth={2} /> : <Moon size={18} strokeWidth={2} />}

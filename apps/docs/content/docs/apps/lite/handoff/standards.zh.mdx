@@ -22,11 +22,26 @@ SVG 资源：
 
 图标来源统一且风格一致，UI 操作类 SVG 文件不在 `src/assets/` 中扩展。
 
-### Global CSS
+### 全局 CSS 与视觉风格 (Premium Glass)
 
-`src/index.css` 包含主题 token、交互类样式（reading/selection/拖拽）、Smart List Divider、以及局部滚动条样式；布局尺寸使用 Tailwind 令牌与扩展 token（`w-panel` 25rem、`w-panel-sm` 20rem、`max-w-content` 105rem/1680px、`max-w-content-wide` 112.5rem）。
+`src/index.css` 包含主题 token、交互类样式（reading/selection/拖拽）、Smart List Divider、以及局部滚动条样式。
 
-**Tailwind 布局 Tokens**（通过 `tailwind.config.js`）：
+**视觉语言**:
+- **玻璃拟态 (Glassmorphism)**: 侧边栏 (Sidebar)、播放器控制 (Player controls) 和下拉菜单 (Dropdowns) 使用 `backdrop-blur-xl` 和半透明背景 (`bg-background/80` 或 `bg-popover/95`)。
+- **饱和度 (Saturate)**: 覆盖层使用 `backdrop-saturate-150` 来营造 Apple 风格的高级感。
+- **边框**: 避免使用纯色 `border-gray-*`。使用语义化的 `border-border/50` 来实现微妙的分隔。
+
+- **零任意值**：避免使用 Tailwind 的任意值语法 `-[...]` 来设置静态属性（颜色、间距、z-index）。在 `tailwind.config.js` 中注册它们或使用标准 token。
+
+## 全局 CSS 白名单 (Whitelist B)
+
+以下类名在 `src/index.css` 中预定义，是代码库中允许使用的唯一全局工具类：
+
+- `.reading-area`: 应用于主字幕背景；支持主题感知的过渡效果。
+- `.is-dragging`: 在拖拽操作期间应用于 `body` 或活动容器，以强制显示 `grabbing` 指针。
+- `.smart-divider`: 应用于列表项分隔线；当邻近元素悬停时自动淡出。
+- `.scrollbar-none`: 隐藏滚动条，同时保留滚动功能。
+- `.custom-scrollbar`: 应用于可滚动容器，以使用风格化、非侵入式的滚动条。
 - **间距 (Spacing)**: `sidebar`, `mini-player`, `page-gutter`, `page-margin`（均映射到 CSS 变量）。
 - **宽度 (Width)**: `w-sidebar`。
 - **高度 (Height)**: `h-mini-player`。
@@ -132,6 +147,14 @@ Provider 位于 `src/main.tsx`（`Tooltip.Provider`）。
 **验证策略**
 - **数据真实性**: 拒绝“凑数”对象，核心字段缺失即视为整条数据无效。
 - **颗粒度降级**: 在配置校验中实现“局部损坏、整体可用”，增强系统鲁棒性。
+- **应用启动**: 不要显示加载了一半的 UI。在 store 从 Dexie 恢复时，使用带有呼吸动画的居中应用 Logo。使用 `AnimatePresence` 淡出加载器。
+
+## 列表行交互 (List Row Interactions)
+
+- **悬停层 (Hover Layer)**: 使用 `bg-accent/50` 作为列表行和卡片的背景高亮。
+- **微妙分割**: 使用 `border-border/50` 作为分隔线。
+- **智能分隔线 (Smart Dividers)**: 分隔线应在活动（悬停）行及其直接邻居上自动隐藏，创造出“浮动”焦点卡片的效果。
+- **动作可见性**: 交互式按钮（播放、收藏、菜单）通常应在行悬停时出现或增加透明度。
 - **非侵入性**: 不在 UI 组件内部或性能敏感的循环（如字幕渲染）中使用 Zod。
 - **类型同步**: 使用 `z.infer<T>` 自动导出 TypeScript 类型。
 

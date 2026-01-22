@@ -28,6 +28,7 @@ Follow these patterns to ensure a consistent user experience.
 - **Safe Link Guard**: Do not render a `Link` if required route params are missing; render non-interactive text instead.
 - **Playable Card Rule**: Render Play buttons **only** when a valid `onPlay` handler exists. Never show a non-functional Play button.
 - **Event Propagation**: Explicitly handle `e.stopPropagation()` in dropdown triggers and interactive children to prevent parent card clicks.
+- **Premium Glass (Visuals)**: Surfaces like the Sidebar and Player controls use `backdrop-blur-xl` and `backdrop-saturate-150` for a high-quality native feel.
 
 ---
 

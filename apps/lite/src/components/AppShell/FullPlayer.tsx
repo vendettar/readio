@@ -110,7 +110,7 @@ export function FullPlayer() {
   }
 
   return (
-    <div className="fixed inset-0 z-40 bg-background flex flex-col">
+    <div className="fixed inset-0 z-40 bg-background/95 backdrop-blur-3xl flex flex-col">
       {/* Minimize Button */}
       <div className="absolute top-4 right-4 z-50">
         <Button
@@ -145,7 +145,7 @@ export function FullPlayer() {
         </div>
 
         {/* Right (or Main): Transcript */}
-        <div className="flex-1 relative overflow-hidden">
+        <div className="flex-1 relative overflow-hidden pb-32">
           {/* Mobile Header (only visible on small screens) */}
           <div className="xl:hidden p-8 pb-0 text-center mb-8">
             <div className="w-48 h-48 mx-auto shadow-xl rounded-xl overflow-hidden mb-6 bg-muted">
@@ -208,7 +208,7 @@ export function FullPlayer() {
       </div>
 
       {/* Player Controls Footer */}
-      <div className="bg-background border-t border-border px-8 py-6 z-20">
+      <div className="absolute bottom-0 left-0 right-0 bg-background/60 backdrop-blur-xl backdrop-saturate-150 border-t border-border/50 px-8 py-6 z-20">
         <div className="max-w-4xl mx-auto">
           {/* Seek Bar */}
           <div className="flex items-center gap-4 mb-6 group">

@@ -195,7 +195,7 @@ export function PodcastCard({
       {/* Hover Background Overlay - Visual Only */}
       <div
         className={cn(
-          'absolute inset-0 z-0 opacity-0 group-hover/card:bg-foreground/5 transition-colors pointer-events-none',
+          'absolute inset-0 z-0 opacity-0 group-hover/card:bg-accent/50 transition-colors pointer-events-none',
           overlayRadius
         )}
       />

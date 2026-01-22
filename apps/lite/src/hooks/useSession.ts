@@ -78,7 +78,7 @@ export function useSession() {
             progress: 0,
             duration: duration || 0,
             source: localTrackId ? 'local' : 'explore',
-            audioUrl: !audioUrl.startsWith('blob:') ? audioUrl : undefined,
+            audioUrl: audioUrl && !audioUrl.startsWith('blob:') ? audioUrl : undefined,
             audioFilename: audioTitle,
             title: audioTitle,
             localTrackId: localTrackId || undefined,

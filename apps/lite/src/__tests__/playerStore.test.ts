@@ -159,4 +159,26 @@ describe('PlayerStore', () => {
       expect(state.audioLoaded).toBe(false)
     })
   })
+
+  describe('Clear audio URL', () => {
+    it('should clear session state when audio URL is cleared', () => {
+      const { setAudioUrl } = usePlayerStore.getState()
+
+      usePlayerStore.setState({
+        sessionId: 'session-1',
+        progress: 120,
+        localTrackId: 'track-1',
+        duration: 300,
+      })
+
+      setAudioUrl(null)
+
+      const state = usePlayerStore.getState()
+      expect(state.audioUrl).toBeNull()
+      expect(state.sessionId).toBeNull()
+      expect(state.progress).toBe(0)
+      expect(state.localTrackId).toBeNull()
+      expect(state.duration).toBe(0)
+    })
+  })
 })

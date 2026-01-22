@@ -16,6 +16,16 @@ title: 概述与哲学
 - 视觉一致性比新颖性更重要。
 - **零任意值**：避免使用 Tailwind 的任意值语法 `-[...]` 来设置静态属性（颜色、间距、z-index）。在 `tailwind.config.js` 中注册它们或使用标准 token。
 
+## 全局 CSS 白名单
+
+以下类名在 `src/index.css` 中预定义，是代码库中允许使用的唯一全局工具类：
+
+- `.reading-area`：应用于主字幕背景；支持主题感知的过渡效果。
+- `.is-dragging`：在拖放操作期间应用于 `body` 或活动容器，以强制显示 `grabbing` 光标。
+- `.smart-divider`：应用于列表项分隔线；当邻近元素悬停时自动淡出。
+- `.scrollbar-none`：隐藏滚动条，同时保留滚动功能。
+- `.custom-scrollbar`：应用于可滚动容器，以使用风格化、非侵入性的滚动条。
+
 **CSS 策略：**
 - 仅在绝对必要时使用 CSS。
 - CSS 必须是组件作用域的、简单的，并且仅使用现有的 token。
@@ -26,6 +36,12 @@ title: 概述与哲学
 - 永远不要一步生成整个页面。
 - 内部遵循原子顺序：原子 → 组件 → 区块 → 页面。
 - 尽可能重用以前定义的组件。
+
+## 文档导航图
+
+- **Tokens 与布局**: `design-system/tokens.zh.mdx` - 颜色、间距和布局常量。
+- **组件**: `design-system/components.zh.mdx` - 标准化 UI 组件和原语。
+- **视觉风格**: `design-system/visuals.zh.mdx` - 玻璃拟态、动画和美学规则。
 
 ---
 

@@ -89,7 +89,7 @@ export function BaseEpisodeRow({
       */}
       <div
         className={cn(
-          'absolute inset-y-0 -left-page-gutter right-0 rounded-lg bg-foreground/5 opacity-0 group-hover/episode:opacity-100 transition-opacity duration-300 pointer-events-none z-0'
+          'absolute inset-y-0 -left-page-gutter right-0 rounded-lg bg-accent/50 opacity-0 group-hover/episode:opacity-100 transition-opacity duration-300 pointer-events-none z-0'
         )}
       />
 
@@ -152,7 +152,7 @@ export function BaseEpisodeRow({
       {showDivider && (
         <div
           className={cn(
-            'absolute bottom-0 left-0 right-4 h-px bg-border transition-opacity duration-200 smart-divider',
+            'absolute bottom-0 left-0 right-4 h-px bg-border/50 transition-opacity duration-200 smart-divider',
             'group-hover/episode:opacity-0', // Hide self on hover
             isLast && 'hidden'
           )}

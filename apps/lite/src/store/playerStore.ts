@@ -153,7 +153,8 @@ export const usePlayerStore = create<PlayerState>((set) => ({
 
       // For external URLs (podcast episodes), reset sessionId and progress
       // This prevents old session progress from being restored for new episodes
-      const shouldResetSession = !!normalizedUrl && !isAudioBlob && normalizedUrl !== state.audioUrl
+      const shouldResetSession =
+        (!!normalizedUrl && !isAudioBlob && normalizedUrl !== state.audioUrl) || !normalizedUrl
 
       return {
         audioUrl: normalizedUrl,
@@ -164,7 +165,12 @@ export const usePlayerStore = create<PlayerState>((set) => ({
         currentBlobUrl: isAudioBlob ? normalizedUrl : isCoverBlob ? coverArt : null,
         // Reset session for external URLs to start fresh
         ...(shouldResetSession
-          ? { sessionId: null, progress: 0, localTrackId: null, duration: metadata?.duration || 0 }
+          ? {
+              sessionId: null,
+              progress: 0,
+              localTrackId: null,
+              duration: normalizedUrl ? metadata?.duration || 0 : 0,
+            }
           : {}),
         // Always update duration if provided in metadata
         ...(metadata?.duration ? { duration: metadata.duration } : {}),

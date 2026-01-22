@@ -16,6 +16,16 @@ You MUST strictly follow the project design system and UI rules defined in the p
 - Visual consistency is more important than novelty.
 - **Zero Arbitrary Values**: Avoid Tailwind's arbitrary value syntax `-[...]` for static properties (colors, spacing, z-index). Register them in `tailwind.config.js` or use standard tokens.
 
+## Global CSS Whitelist
+
+The following classes are predefined in `src/index.css` and are the ONLY global utilities allowed in the codebase (Whitelist B):
+
+- `.reading-area`: Applied to the main transcript background; supports theme-aware transitions.
+- `.is-dragging`: Applied to `body` or active container during drag operations to force `grabbing` cursor.
+- `.smart-divider`: Applied to list item dividers; fades out automatically when neighbors are hovered.
+- `.scrollbar-none`: Hides scrollbars while preserving scroll functionality.
+- `.custom-scrollbar`: Applied to scrollable containers to use the stylized, non-intrusive scrollbar.
+
 **CSS policy:**
 - CSS is allowed only when absolutely necessary.
 - CSS must be component-scoped, simple, and use existing tokens only.

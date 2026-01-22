@@ -9,6 +9,13 @@ title: Feature Patterns
 - **Entrance Animations**: Lists (Files, Episodes) should not appear instantly. Use a staggered fade-in + slide-up effect for items (Duration: 300ms total).
 - **App Boot**: Do not show half-loaded UI. Use a centered App Logo with a breathing animation while stores are hydrating from Dexie. Use `AnimatePresence` to fade out the loader.
 
+## List Row Interactions
+
+- **Hover Layer**: Use `bg-accent/50` for the background highlight of list rows and cards.
+- **Subtle Separation**: Use `border-border/50` for dividers.
+- **Smart Dividers**: Dividers should hide automatically on the active (hovered) row and its immediate neighbor to create a "floating" focused card effect.
+- **Action Visibility**: Interactive buttons (Play, Favorite, Menu) should typically appear or increase in opacity on row hover.
+
 ## File Drop Interaction
 
 - **Global Drop Zone**: In functional areas (like Files), the entire content area SHOULD be a drop target.

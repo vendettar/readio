@@ -1,7 +1,7 @@
 > **⚠️ CRITICAL**: You MUST preserve the current UI/UX layout and styling. Do NOT change visual appearance unless explicitly instructed.
 > **Prerequisites**: Read `apps/docs/content/docs/general/design-system/index.mdx` and `apps/docs/content/docs/apps/lite/ui-patterns/index.mdx` before starting.
 
-# Task: Upgrade UI Design System (Glassmorphism)
+# Task: Upgrade UI Design System (Glassmorphism) [COMPLETED 2026-01-22]
 
 ## Objective
 The Design System has been updated to include "Premium Glass" materials (Apple-like blur/saturation) and stricter semantic color usage.
@@ -51,8 +51,16 @@ We must upgrade the application shell and cards to match the new Vibe.
 - **Lint**: Run `pnpm --filter @readio/lite lint`.
 
 ---
-## Documentation
-- Update `apps/docs/content/docs/general/design-system/index.mdx`.
-- Update `apps/docs/content/docs/apps/lite/ui-patterns/index.mdx`.
-- Update `apps/docs/content/docs/apps/lite/handoff/standards.mdx`.
-- Update `apps/docs/content/docs/apps/lite/handoff/index.mdx` with the new status.
+---
+## Completion
+
+- **Completed by**: Antigravity
+- **Commands**: `pnpm --filter @readio/lite lint`, `pnpm --filter @readio/lite typecheck`
+- **Date**: 2026-01-22
+- **Reviewed by**: USER
+- **Key Changes**:
+  - Upgraded Sidebar, FullPlayer, and DropdownMenu with Premium Glass materials (blur, saturate, semi-transparent backgrounds).
+  - Standardized List Row Interactions with `bg-accent/50` hover and smart dividers.
+  - Refactored hardcoded colors to semantic tokens and `cn()` helper.
+  - Synchronized and updated English/Chinese documentation (Design System, UI Patterns, Handoff).
+- **Verification**: Verified glass effect in Sidebar/Player, dropdown aesthetics, and list hover feedback in local dev environment. All lint and type checks pass.
