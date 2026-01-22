@@ -1,57 +1,42 @@
 // src/lib/toast.ts
 
+import { toast as sonnerToast } from 'sonner'
+import { translate } from './i18nUtils'
 import type { TranslationKey } from './translations'
 
-type ToastType = 'error' | 'success' | 'info'
+type SonnerOptions = Parameters<typeof sonnerToast.success>[1]
 
-export interface ToastEvent {
-  type: ToastType
-  duration?: number
-  message?: string
-  messageKey?: TranslationKey
+export const toast = {
+  success: (message: string, options?: SonnerOptions) => sonnerToast.success(message, options),
+  successKey: (
+    key: TranslationKey,
+    variables?: Record<string, string | number>,
+    options?: SonnerOptions
+  ) => sonnerToast.success(translate(key, variables), options),
+
+  error: (message: string, options?: SonnerOptions) => sonnerToast.error(message, options),
+  errorKey: (
+    key: TranslationKey,
+    variables?: Record<string, string | number>,
+    options?: SonnerOptions
+  ) => sonnerToast.error(translate(key, variables), options),
+
+  info: (message: string, options?: SonnerOptions) => sonnerToast.info(message, options),
+  infoKey: (
+    key: TranslationKey,
+    variables?: Record<string, string | number>,
+    options?: SonnerOptions
+  ) => sonnerToast.info(translate(key, variables), options),
+
+  warning: (message: string, options?: SonnerOptions) => sonnerToast.warning(message, options),
+  warningKey: (
+    key: TranslationKey,
+    variables?: Record<string, string | number>,
+    options?: SonnerOptions
+  ) => sonnerToast.warning(translate(key, variables), options),
+
+  promise: sonnerToast.promise,
+  dismiss: sonnerToast.dismiss,
+  custom: sonnerToast.custom,
+  loading: sonnerToast.loading,
 }
-
-type ToastListener = (event: ToastEvent) => void
-
-class ToastManager {
-  private listeners: Set<ToastListener> = new Set()
-
-  subscribe(listener: ToastListener) {
-    this.listeners.add(listener)
-    return () => {
-      this.listeners.delete(listener)
-    }
-  }
-
-  error(message: string, duration = 3000) {
-    this.notify({ message, type: 'error', duration })
-  }
-
-  errorKey(messageKey: TranslationKey, duration = 3000) {
-    this.notify({ messageKey, type: 'error', duration })
-  }
-
-  success(message: string, duration = 2000) {
-    this.notify({ message, type: 'success', duration })
-  }
-
-  successKey(messageKey: TranslationKey, duration = 2000) {
-    this.notify({ messageKey, type: 'success', duration })
-  }
-
-  info(message: string, duration = 2500) {
-    this.notify({ message, type: 'info', duration })
-  }
-
-  infoKey(messageKey: TranslationKey, duration = 2500) {
-    this.notify({ messageKey, type: 'info', duration })
-  }
-
-  private notify(event: ToastEvent) {
-    this.listeners.forEach((listener) => {
-      listener(event)
-    })
-  }
-}
-
-export const toast = new ToastManager()

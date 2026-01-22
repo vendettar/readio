@@ -145,7 +145,7 @@ export function FullPlayer() {
         </div>
 
         {/* Right (or Main): Transcript */}
-        <div className="flex-1 relative overflow-hidden pb-32">
+        <div className="flex-1 relative overflow-hidden pb-player-footer">
           {/* Mobile Header (only visible on small screens) */}
           <div className="xl:hidden p-8 pb-0 text-center mb-8">
             <div className="w-48 h-48 mx-auto shadow-xl rounded-xl overflow-hidden mb-6 bg-muted">

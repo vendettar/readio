@@ -41,7 +41,6 @@ export default function SettingsPage() {
   // Storage actions hook
   const { deleteSession, clearSessionCache, wipeAll, isClearing } = useStorageMaintenance({
     reload,
-    t,
   })
 
   // Confirmation dialog hook

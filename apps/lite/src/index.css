@@ -47,6 +47,7 @@
     /* Layout dimensions - single source of truth */
     --sidebar-width: 260px;
     --mini-player-height: 73px;
+    --player-footer-height: 10rem;
     --page-margin-x: 3rem;
     /* 48px */
     --page-gutter-x: 1.5rem;

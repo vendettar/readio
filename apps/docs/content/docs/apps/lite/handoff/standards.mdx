@@ -32,7 +32,7 @@ Icon sources are unified and consistent in style; UI operation SVG files should 
 - **Borders**: Avoid solid `border-gray-*`. Use semantic `border-border/50` for subtle separation.
 
 **Tailwind Layout Tokens** (via `tailwind.config.js`):
-- **Spacing**: `sidebar`, `mini-player`, `page-gutter`, `page-margin` (all map to CSS variables).
+- **Spacing**: `sidebar`, `mini-player`, `player-footer`, `page-gutter`, `page-margin` (all map to CSS variables).
 - **Width**: `w-sidebar`.
 - **Height**: `h-mini-player`.
 - **Padding/Margin**: `p-page`, `px-page`, `m-page`, `mx-page`, `p-gutter`, `px-gutter`, `m-gutter`, `mx-gutter`.
@@ -58,7 +58,7 @@ Icon sources are unified and consistent in style; UI operation SVG files should 
 #### Toast (Sonner)
 
 Provider is located at `src/routes/__root.tsx` (`<Toaster />`), working with `src/lib/toast.ts` imperative API.
-**Key Rule**: Keep `toast.*Key` helpers. Key → text translation happens inside `src/lib/toast.ts` via `i18next.t` (or `translate()`), not at call sites.
+**Key Rule**: Use `toast.*Key` (e.g., `toast.successKey('key', { var })`) for i18n support. Key → text translation MUST happen inside `src/lib/toast.ts` via `i18next.t`; call sites should never call translation functions inside toast arguments.
 
 #### Tooltip
 

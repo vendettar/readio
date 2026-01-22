@@ -1,7 +1,7 @@
 > **⚠️ CRITICAL**: You MUST preserve the current UI/UX layout and styling. Do NOT change visual appearance unless explicitly instructed.
 > **Prerequisites**: Read `apps/docs/content/docs/general/design-system/index.mdx` and `apps/docs/content/docs/apps/lite/ui-patterns/index.mdx` before starting.
 
-# Task: Install Sonner (Toast)
+# Task: Install Sonner (Toast)[COMPLETED]
 
 ## Objective
 Replace the custom Radix UI Toast implementation with **Sonner**.
@@ -55,7 +55,16 @@ Sonner provides a better DX, better stacking, and promise support.
 - **Lint**: Run `pnpm --filter @readio/lite lint`.
 
 ---
-## Documentation
-- Update `apps/docs/content/docs/apps/lite/handoff/standards.mdx`.
-- Update `apps/docs/content/docs/apps/lite/ui-patterns/shell.mdx`.
-- Update `apps/docs/content/docs/apps/lite/handoff/index.mdx` with the new status.
+## Completion
+- **Date**: 2026-01-22
+- **Commands**:
+  - `pnpm --filter @readio/lite remove @radix-ui/react-toast`
+- **Key Changes**:
+  - Replaced Radix Toast with Sonner in `__root.tsx`.
+  - Rewrote `src/lib/toast.ts` as a Sonner wrapper with i18n support.
+  - Refactored all call sites to use `toast.*Key` helpers, ensuring 100% decoupling between UI components and translation logic for toasts.
+  - Removed legacy `src/components/Toast` directory.
+  - Updated English and Chinese documentation (`standards.mdx`, `shell.mdx`, `handoff/index.mdx`).
+- **Verification**:
+  - `pnpm --filter @readio/lite typecheck`: PASSED
+  - `pnpm --filter @readio/lite lint`: PASSED

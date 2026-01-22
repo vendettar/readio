@@ -23,7 +23,7 @@ title: Shell 与覆盖层
   - **为什么**: Sonner 比 Radix Toast 提供更好的堆叠、Promise 和视觉效果。
 - **禁止**: **不要** 为通知创建自定义 `fixed` 覆盖层 div。
 - **异步模式**: 对异步操作 (如文件处理) 使用 `toast.promise` 以给予即时反馈。
-- **关键规则**：优先使用 `toast.*Key`，key → 文案转换必须在 `src/lib/toast.ts` 内完成。
+- **关键规则**：使用 `toast.*Key`（如 `toast.successKey('key', { var })`）支持国际化。key → 文案转换**必须**在 `src/lib/toast.ts` 内通过 `i18next.t` 完成，不允许在调用点直接调用翻译函数。
 - **用法**:
   ```tsx
   import { toast } from '@/lib/toast'

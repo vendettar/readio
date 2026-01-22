@@ -42,7 +42,7 @@ SVG 资源：
 - `.smart-divider`: 应用于列表项分隔线；当邻近元素悬停时自动淡出。
 - `.scrollbar-none`: 隐藏滚动条，同时保留滚动功能。
 - `.custom-scrollbar`: 应用于可滚动容器，以使用风格化、非侵入式的滚动条。
-- **间距 (Spacing)**: `sidebar`, `mini-player`, `page-gutter`, `page-margin`（均映射到 CSS 变量）。
+- **间距 (Spacing)**: `sidebar`, `mini-player`, `player-footer`, `page-gutter`, `page-margin`（均映射到 CSS 变量）。
 - **宽度 (Width)**: `w-sidebar`。
 - **高度 (Height)**: `h-mini-player`。
 - **内边距/外边距 (Padding/Margin)**: `p-page`, `px-page`, `m-page`, `mx-page`, `p-gutter`, `px-gutter`, `m-gutter`, `mx-gutter`。
@@ -68,7 +68,7 @@ SVG 资源：
 #### Toast (Sonner)
 
 Provider 位于 `src/routes/__root.tsx`（`<Toaster />`），配合 `src/lib/toast.ts` 命令式 API。
-**关键规则**：保留 `toast.*Key` 辅助方法，key → 文案转换在 `src/lib/toast.ts` 内完成，不允许在调用点翻译。
+**关键规则**：使用 `toast.*Key`（如 `toast.successKey('key', { var })`）支持国际化。key → 文案转换**必须**在 `src/lib/toast.ts` 内通过 `i18next.t` 完成，不允许在调用点直接调用翻译函数。
 
 #### Tooltip
 

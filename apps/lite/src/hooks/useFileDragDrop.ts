@@ -9,7 +9,6 @@ import {
   useSensors,
 } from '@dnd-kit/core'
 import { useCallback, useState } from 'react'
-import { useTranslation } from 'react-i18next'
 import { DB, type FileTrack } from '../lib/dexieDb'
 import { resolveDuplicateName } from '../lib/files/ingest'
 import { logError } from '../lib/logger'
@@ -20,7 +19,6 @@ interface UseFileDragDropOptions {
 }
 
 export function useFileDragDrop({ onComplete }: UseFileDragDropOptions) {
-  const { t } = useTranslation()
   const [activeDragItem, setActiveDragItem] = useState<FileTrack | null>(null)
 
   const isDragging = activeDragItem !== null
@@ -55,14 +53,14 @@ export function useFileDragDrop({ onComplete }: UseFileDragDropOptions) {
         await onComplete()
 
         if (isRenamed) {
-          toast.success(t('toastMoveRenamed', { name: newName }))
+          toast.successKey('toastMoveRenamed', { name: newName })
         }
       } catch (err) {
         logError('[Files] Failed to move track', err)
         toast.errorKey('toastMoveFailed')
       }
     },
-    [onComplete, t]
+    [onComplete]
   )
 
   const handleDragEnd = useCallback(

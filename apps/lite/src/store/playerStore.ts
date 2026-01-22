@@ -1,7 +1,6 @@
 // src/store/playerStore.ts
 import { create } from 'zustand'
 import { DB } from '../lib/dexieDb'
-import { translate } from '../lib/i18nUtils'
 import { log, logError } from '../lib/logger'
 import { getAppConfig } from '../lib/runtimeConfig'
 import { getJson, setJson } from '../lib/storage'
@@ -216,7 +215,7 @@ export const usePlayerStore = create<PlayerState>((set) => ({
 
     if (!shouldCache) {
       const fileSize = (file.size / (1024 * 1024)).toFixed(0)
-      toast.info(translate('largeFileNotCached', { size: fileSize }))
+      toast.infoKey('largeFileNotCached', { size: fileSize })
     }
 
     // Save to IndexedDB in background (async, don't block UI)

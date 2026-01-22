@@ -50,6 +50,7 @@ export default {
       spacing: {
         sidebar: 'var(--sidebar-width)',
         'mini-player': 'var(--mini-player-height)',
+        'player-footer': 'var(--player-footer-height)',
         'page-gutter': 'var(--page-gutter-x)',
         'page-margin': 'var(--page-margin-x)',
       },

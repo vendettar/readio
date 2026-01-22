@@ -1,9 +1,9 @@
 // src/routes/__root.tsx
 import { createRootRoute, Outlet } from '@tanstack/react-router'
 import { createContext, useCallback, useContext, useEffect, useRef } from 'react'
+import { Toaster } from 'sonner'
 import { AppShell } from '../components/AppShell'
 import { GlobalAudioController } from '../components/AppShell/GlobalAudioController'
-import { ToastContainer } from '../components/Toast'
 import { useAppInitialization } from '../hooks/useAppInitialization'
 import { useFileHandler } from '../hooks/useFileHandler'
 
@@ -53,7 +53,7 @@ function RootLayout() {
         <Outlet />
       </AppShell>
 
-      <ToastContainer />
+      <Toaster richColors position="bottom-right" />
     </FilePickerContext.Provider>
   )
 }

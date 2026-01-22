@@ -44,7 +44,7 @@ export function FileDropZone({
     (acceptedFiles: File[], rejectedFiles: FileRejection[]) => {
       // Handle rejected files (rejected by dropzone filters)
       for (const _rejection of rejectedFiles) {
-        toast.error(t('toastFileValidationError'))
+        toast.errorKey('toastFileValidationError')
       }
 
       // Filter and validate accepted files using schemas
@@ -58,17 +58,21 @@ export function FileDropZone({
           if (result.success) {
             validFiles.push(file)
           } else {
-            toast.error(result.error.issues[0]?.message || t('toastFileValidationError'))
+            const message = result.error.issues[0]?.message
+            if (message) toast.error(message)
+            else toast.errorKey('toastFileValidationError')
           }
         } else if (isValidSubtitleFile(file)) {
           const result = subtitleSchema.safeParse(file)
           if (result.success) {
             validFiles.push(file)
           } else {
-            toast.error(result.error.issues[0]?.message || t('toastFileValidationError'))
+            const message = result.error.issues[0]?.message
+            if (message) toast.error(message)
+            else toast.errorKey('toastFileValidationError')
           }
         } else {
-          toast.error(t('toastFileValidationError'))
+          toast.errorKey('toastFileValidationError')
         }
       }
 
@@ -77,7 +81,7 @@ export function FileDropZone({
         onFilesAccepted(validFiles)
       }
     },
-    [onFilesAccepted, t]
+    [onFilesAccepted]
   )
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({

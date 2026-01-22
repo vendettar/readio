@@ -23,7 +23,7 @@ title: Overlays & Shell
   - **Why**: Sonner provides better stacking, promises, and visuals than Radix Toast.
 - **Forbidden**: Do NOT create custom `fixed` overlay divs for notifications.
 - **Async Pattern**: Use `toast.promise` for async actions (like file processing) to give immediate feedback.
-- **Key Rule**: Prefer `toast.*Key` helpers. Key → text translation must happen inside `src/lib/toast.ts`, not at call sites.
+- **Key Rule**: Use `toast.*Key` (e.g., `toast.successKey('key', { var })`) for i18n support. Key → text translation MUST happen inside `src/lib/toast.ts` via `i18next.t`; call sites should never call translation functions inside toast arguments.
 - **Usage**:
   ```tsx
   import { toast } from '@/lib/toast'

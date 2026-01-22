@@ -5,28 +5,26 @@ import { useCallback, useState } from 'react'
 import { DB } from '../lib/dexieDb'
 import { logError } from '../lib/logger'
 import { toast } from '../lib/toast'
-import type { TranslationKey } from '../lib/translations'
 
 interface UseStorageMaintenanceOptions {
   reload: () => Promise<void>
-  t: (key: TranslationKey) => string
 }
 
-export function useStorageMaintenance({ reload, t }: UseStorageMaintenanceOptions) {
+export function useStorageMaintenance({ reload }: UseStorageMaintenanceOptions) {
   const [isClearing, setIsClearing] = useState(false)
 
   const deleteSession = useCallback(
     async (id: string) => {
       try {
         await DB.deletePlaybackSession(id)
-        toast.success(t('toastDeleted'))
+        toast.successKey('toastDeleted')
         await reload()
       } catch (err) {
         logError('[useStorageMaintenance] Failed to delete session:', err)
-        toast.error(t('toastDeleteFailed'))
+        toast.errorKey('toastDeleteFailed')
       }
     },
-    [reload, t]
+    [reload]
   )
 
   const clearSessionCache = useCallback(
@@ -36,30 +34,30 @@ export function useStorageMaintenance({ reload, t }: UseStorageMaintenanceOption
         if (session?.audioId) {
           await DB.deleteAudioBlob(session.audioId)
           await DB.updatePlaybackSession(id, { audioId: null, hasAudioBlob: false })
-          toast.success(t('toastAudioRemoved'))
+          toast.successKey('toastAudioRemoved')
           await reload()
         }
       } catch (err) {
         logError('[useStorageMaintenance] Failed to clear cache:', err)
-        toast.error(t('toastRemoveFavoriteFailed'))
+        toast.errorKey('toastRemoveFavoriteFailed')
       }
     },
-    [reload, t]
+    [reload]
   )
 
   const wipeAll = useCallback(async () => {
     setIsClearing(true)
     try {
       await DB.clearAllData()
-      toast.success(t('toastAllDataCleared'))
+      toast.successKey('toastAllDataCleared')
       await reload()
     } catch (err) {
       logError('[useStorageMaintenance] Failed to wipe all:', err)
-      toast.error(t('toastWipeFailed'))
+      toast.errorKey('toastWipeFailed')
     } finally {
       setIsClearing(false)
     }
-  }, [reload, t])
+  }, [reload])
 
   return {
     deleteSession,

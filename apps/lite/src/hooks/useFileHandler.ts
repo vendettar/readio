@@ -1,6 +1,5 @@
 // src/hooks/useFileHandler.ts
 import { useCallback } from 'react'
-import { useTranslation } from 'react-i18next'
 import { log, error as logError } from '../lib/logger'
 import {
   createAudioFileSchema,
@@ -12,7 +11,6 @@ import { toast } from '../lib/toast'
 import { usePlayerStore } from '../store/playerStore'
 
 export function useFileHandler() {
-  const { t } = useTranslation()
   const audioLoaded = usePlayerStore((s) => s.audioLoaded)
   const subtitlesLoaded = usePlayerStore((s) => s.subtitlesLoaded)
   const loadAudio = usePlayerStore((s) => s.loadAudio)
@@ -36,7 +34,9 @@ export function useFileHandler() {
               loadAudio(file)
               continue
             }
-            toast.error(result.error.issues[0]?.message || t('toastFileValidationError'))
+            const message = result.error.issues[0]?.message
+            if (message) toast.error(message)
+            else toast.errorKey('toastFileValidationError')
             continue
           }
 
@@ -48,7 +48,9 @@ export function useFileHandler() {
               await loadSubtitles(file)
               continue
             }
-            toast.error(result.error.issues[0]?.message || t('toastFileValidationError'))
+            const message = result.error.issues[0]?.message
+            if (message) toast.error(message)
+            else toast.errorKey('toastFileValidationError')
             continue
           }
 
@@ -61,7 +63,7 @@ export function useFileHandler() {
         }
       }
     },
-    [loadAudio, loadSubtitles, t]
+    [loadAudio, loadSubtitles]
   )
 
   const handleFileChange = useCallback(

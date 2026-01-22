@@ -52,7 +52,7 @@ export default function SearchPage() {
     }
 
     if (!podcastFeedUrl) {
-      toast.error(t('errorPodcastFeedNotFound'))
+      toast.errorKey('errorPodcastFeedNotFound')
       navigate({ to: '/podcast/$id', params: { id: episode.providerPodcastId.toString() } })
       return
     }
