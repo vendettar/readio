@@ -133,6 +133,7 @@ export function TranscriptView({
       <div
         id="transcript-container"
         ref={containerRef}
+        data-scroll-guard="transcript"
         className="reading-area h-full overflow-auto"
       >
         <Virtuoso

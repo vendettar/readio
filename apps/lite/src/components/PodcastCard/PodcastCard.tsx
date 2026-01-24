@@ -1,16 +1,11 @@
-import { MoreHorizontal } from 'lucide-react'
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { getDiscoveryArtworkUrl } from '@/lib/imageUtils'
 import { cn } from '@/lib/utils'
 import { InteractiveArtwork } from '../interactive/InteractiveArtwork'
 import { InteractiveTitle } from '../interactive/InteractiveTitle'
-import { Button } from '../ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '../ui/dropdown-menu'
+import { DropdownMenuItem } from '../ui/dropdown-menu'
+import { OverflowMenu } from '../ui/overflow-menu'
 
 export interface PodcastCardMenuItem {
   label: string
@@ -62,6 +57,7 @@ export function PodcastCard({
   imageSize = 400,
   variant = 'standard',
 }: PodcastCardProps) {
+  const { t } = useTranslation()
   const [isMenuOpen, setIsMenuOpen] = React.useState(false)
 
   const containerClasses = cn(
@@ -118,44 +114,32 @@ export function PodcastCard({
               isMenuOpen && 'opacity-100 translate-y-0'
             )}
           >
-            <DropdownMenu open={isMenuOpen} onOpenChange={setIsMenuOpen}>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  size="icon"
-                  className="w-8 h-8 rounded-full bg-background/90 text-foreground hover:bg-primary hover:text-primary-foreground shadow-xl backdrop-blur-sm border-0 transition-all ring-0 focus-visible:ring-0"
-                  onClick={(e) => {
-                    e.preventDefault()
-                    e.stopPropagation()
+            <OverflowMenu
+              open={isMenuOpen}
+              onOpenChange={setIsMenuOpen}
+              triggerAriaLabel={t('ariaMoreActions') || 'More Actions'}
+              stopPropagation
+              triggerClassName="w-8 h-8 rounded-full bg-background/90 text-foreground hover:bg-primary hover:text-primary-foreground shadow-xl backdrop-blur-sm border-0 transition-all ring-0 focus-visible:ring-0"
+              iconSize={16}
+              collisionPadding={16}
+              contentClassName="min-w-44 rounded-xl shadow-2xl p-0 border border-border/50 bg-popover/95 backdrop-blur-xl"
+            >
+              {menuItems.map((item, index) => (
+                <DropdownMenuItem
+                  key={index}
+                  onSelect={() => {
+                    item.onClick()
                   }}
+                  className={cn(
+                    item.variant === 'destructive' &&
+                      'text-destructive focus:text-destructive focus:bg-destructive/10'
+                  )}
                 >
-                  <MoreHorizontal className="w-4 h-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                side="bottom"
-                align="start"
-                sideOffset={8}
-                onMouseDown={(e) => e.stopPropagation()}
-                onClick={(e) => e.stopPropagation()}
-                className="min-w-44 rounded-xl shadow-2xl overflow-hidden p-0 border border-border/50 bg-popover/95 backdrop-blur-xl"
-              >
-                {menuItems.map((item, index) => (
-                  <DropdownMenuItem
-                    key={index}
-                    onSelect={() => {
-                      item.onClick()
-                    }}
-                    className={cn(
-                      item.variant === 'destructive' &&
-                        'text-destructive focus:text-destructive focus:bg-destructive/10'
-                    )}
-                  >
-                    {item.icon && <span className="mr-2 opacity-80">{item.icon}</span>}
-                    <span className="font-medium">{item.label}</span>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  {item.icon && <span className="mr-2 opacity-80">{item.icon}</span>}
+                  <span className="font-medium">{item.label}</span>
+                </DropdownMenuItem>
+              ))}
+            </OverflowMenu>
           </div>
         )}
       </div>

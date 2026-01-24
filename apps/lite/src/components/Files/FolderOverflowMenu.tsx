@@ -94,6 +94,7 @@ export function FolderOverflowMenu({
         side="bottom"
         align="start"
         sideOffset={8}
+        collisionPadding={16}
         className="w-56 p-0 rounded-xl shadow-2xl overflow-hidden"
         onMouseDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}

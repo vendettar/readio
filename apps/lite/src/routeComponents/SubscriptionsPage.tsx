@@ -7,7 +7,7 @@ import { PodcastGrid } from '../components/PodcastGrid'
 import { Button } from '../components/ui/button'
 import { EmptyState } from '../components/ui/empty-state'
 import { LoadingPage } from '../components/ui/loading-spinner'
-import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
+
 import type { Subscription } from '../lib/dexieDb'
 import { useExploreStore } from '../store/exploreStore'
 
@@ -16,9 +16,6 @@ export default function SubscriptionsPage() {
   const navigate = useNavigate()
   const { subscriptions, subscriptionsLoaded, unsubscribe } = useExploreStore()
   const [isInitialLoading, setIsInitialLoading] = useState(!subscriptionsLoaded)
-
-  // Keyboard shortcuts
-  useKeyboardShortcuts({ isModalOpen: false })
 
   // Loading state (subscriptions are loaded globally by useAppInitialization)
   useEffect(() => {

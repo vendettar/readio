@@ -53,23 +53,33 @@ export default {
         'player-footer': 'var(--player-footer-height)',
         'page-gutter': 'var(--page-gutter-x)',
         'page-margin': 'var(--page-margin-x)',
+        48: '48%',
       },
       borderRadius: {
         lg: 'var(--radius)',
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
       },
+      inset: {
+        '1/2': '50%',
+        48: '48%',
+      },
       width: {
         panel: '25rem',
         'panel-sm': '20rem',
         sidebar: 'var(--sidebar-width)',
+        'search-palette': 'calc(var(--sidebar-width) * 1.5)',
       },
       height: {
         'mini-player': 'var(--mini-player-height)',
       },
+      maxHeight: {
+        'search-results': '60vh',
+      },
       maxWidth: {
         content: '105rem',
         'content-wide': '112.5rem',
+        'search-palette': 'min(calc(var(--sidebar-width) * 1.5), calc(100vw - 2rem))',
       },
       padding: {
         page: 'var(--page-margin-x)',
@@ -106,6 +116,12 @@ export default {
             'b, strong': { fontWeight: '700' },
           },
         },
+      },
+      zIndex: {
+        sidebar: 'var(--z-sidebar)',
+        'mini-player': 'var(--z-mini-player)',
+        overlay: 'var(--z-overlay)',
+        modal: 'var(--z-modal)',
       },
     },
   },

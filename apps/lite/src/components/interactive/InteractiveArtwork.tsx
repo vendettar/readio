@@ -107,7 +107,8 @@ export function InteractiveArtwork({
   return (
     <div
       className={cn(
-        'relative group/artwork overflow-hidden rounded-lg bg-muted shadow-sm flex-shrink-0',
+        'relative group/artwork overflow-hidden rounded-lg flex-shrink-0 bg-white',
+        !src && 'bg-muted shadow-sm',
         sizeClasses[size],
         className
       )}
@@ -126,7 +127,7 @@ export function InteractiveArtwork({
               referrerPolicy={referrerPolicy}
               onError={() => setHasError(true)}
               className={cn(
-                'w-full h-full object-cover transition-transform duration-500',
+                'absolute inset-[-4px] w-[calc(100%+8px)] h-[calc(100%+8px)] max-w-none object-cover transition-transform duration-500 block',
                 hoverScale && hoverScaleClass
               )}
             />
@@ -139,11 +140,14 @@ export function InteractiveArtwork({
           referrerPolicy={referrerPolicy}
           onError={() => setHasError(true)}
           className={cn(
-            'w-full h-full object-cover transition-transform duration-500',
+            'absolute inset-[-4px] w-[calc(100%+8px)] h-[calc(100%+8px)] max-w-none object-cover transition-transform duration-500 block',
             hoverScale && hoverScaleClass
           )}
         />
       )}
+
+      {/* Edge Artifact Sealer */}
+      <div className="absolute inset-0 rounded-lg ring-1 ring-inset ring-white pointer-events-none" />
 
       {/* 2. Play Button Layer (Absolute Overlay) */}
       {onPlay && (

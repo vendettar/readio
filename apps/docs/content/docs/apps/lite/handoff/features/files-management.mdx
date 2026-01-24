@@ -67,8 +67,18 @@ The Files page supports drag-and-drop file uploads using `react-dropzone`.
 **Loading Skeleton**:
 - Files display simple skeleton placeholders (Collection grid + Track list) during load, avoiding white flashes.
 
-**Metadata Parsing (Best-Effort)**:
-- If metadata parsing fails, fall back to filename + duration without blocking import.
+### Metadata Parsing (Best-Effort)
+
+- **Library**: `music-metadata-browser` (Industry standard binary parser).
+- **Execution**: Runs in a dedicated Web Worker (`src/lib/files/metadata.worker.ts`) to prevent blocking the main thread during large file imports.
+- **Title/Duration**: Prefer metadata fields over filename/audio element heuristics.
+- **Artwork Extraction**:
+    - Embedded ID3/M4A cover art is extracted during ingestion.
+    - Artwork is stored as a `Blob` in the `audioBlobs` table with a generated `artworkId`.
+    - **Performance**: UI layers (Files Index, Folders, Search) fetch this blob and generate a `ObjectURL` on-the-fly.
+    - **Cleanup**: `ObjectURL`s are revoked on component unmount to prevent memory leaks.
+- **Failback**: If metadata parsing fails, fall back to filename + duration without blocking import.
+
 
 ### View Controls Bar
 
@@ -227,9 +237,12 @@ Content
 
 ---
 
-## Planned (Pending Execution)
+## Implemented Features
 
-- **Robust Metadata Parser**: Use `music-metadata-browser` in a Worker for ID3 parsing (Instruction 069).
+- **Robust Metadata Parser**: Uses `music-metadata-browser` for ID3 parsing (Decision D032).
+  - Extracts **Artwork**: Embedded cover art is extracted and stored in `audioBlobs` (Blob → ObjectURL).
+  - Extracts **Title & Duration**: Falls back to filename and audio element if missing.
+  - **Buffer Polyfill**: `buffer` package added to `main.tsx` to support browser execution.
 - **Offline Content Visibility**: Offline badges + cache cleanup tools (Instruction 053).
 
 ### Confirm Dialog

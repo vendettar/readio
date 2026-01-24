@@ -43,6 +43,12 @@ Readio is an audio application.
 - **Component**: Use standard `img` with `loading="lazy"`.
 - **Decoding**: Use `decoding="async"` to prevent image decoding from blocking the main thread.
 
+### Embedded Artwork Resizing
+**Rule**: (Planned) Never store raw 4K embedded album art in IndexedDB.
+- **Action**: Resize all extracted ID3 APIC images to max ~1024px during ingestion.
+- **Why**: Reduces DB size, speeds up queries, and prevents memory spikes during `createObjectURL`.
+- **Status**: Currently DISABLED. `normalizeArtwork` logic in `metadata.worker.ts` is commented out due to stability issues with `OffscreenCanvas` on some files. We currently store raw blobs (with JPEG EOI repair enabled).
+
 ## 5. Re-render Hygiene
 
 **Rule**: Audio Player components (Progress Bar, Timer) update every second.

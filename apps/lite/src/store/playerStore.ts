@@ -31,7 +31,7 @@ interface PlayerState {
   volume: number // 0-1 range
   playbackRate: number // 0.5 - 4.0
   pendingSeek: number | null // When set, App should sync to audio element
-  currentBlobUrl: string | null // Track blob URLs for cleanup
+  activeBlobUrls: string[] // Track blob URLs for cleanup
 
   // Session tracking for progress persistence
   sessionId: string | null
@@ -91,7 +91,7 @@ const initialState = {
   sessionId: null as string | null,
   localTrackId: null as string | null,
   episodeMetadata: null as EpisodeMetadata | null,
-  currentBlobUrl: null as string | null,
+  activeBlobUrls: [] as string[],
   subtitles: [] as subtitle[],
   subtitlesLoaded: false,
   currentIndex: -1,
@@ -139,16 +139,20 @@ export const usePlayerStore = create<PlayerState>((set) => ({
   },
   setAudioUrl: (url, title = '', coverArt = '', metadata = null) =>
     set((state) => {
-      // Revoke old blob URL
-      if (state.currentBlobUrl) {
-        URL.revokeObjectURL(state.currentBlobUrl)
-      }
+      // Revoke old blob URLs
+      state.activeBlobUrls.forEach((u) => {
+        URL.revokeObjectURL(u)
+      })
 
       const normalizedUrl = url || null
 
       // Also track if coverArt is a blob URL (future-proofing)
       const isAudioBlob = normalizedUrl ? normalizedUrl.startsWith('blob:') : false
       const isCoverBlob = coverArt.startsWith('blob:')
+
+      const newBlobUrls: string[] = []
+      if (isAudioBlob && normalizedUrl) newBlobUrls.push(normalizedUrl)
+      if (isCoverBlob && coverArt) newBlobUrls.push(coverArt)
 
       // For external URLs (podcast episodes), reset sessionId and progress
       // This prevents old session progress from being restored for new episodes
@@ -161,7 +165,7 @@ export const usePlayerStore = create<PlayerState>((set) => ({
         audioTitle: title,
         coverArtUrl: coverArt,
         episodeMetadata: metadata, // Explicitly set (defaults to null for files)
-        currentBlobUrl: isAudioBlob ? normalizedUrl : isCoverBlob ? coverArt : null,
+        activeBlobUrls: newBlobUrls,
         // Reset session for external URLs to start fresh
         ...(shouldResetSession
           ? {
@@ -198,9 +202,9 @@ export const usePlayerStore = create<PlayerState>((set) => ({
 
   reset: () => {
     set((state) => {
-      if (state.currentBlobUrl) {
-        URL.revokeObjectURL(state.currentBlobUrl)
-      }
+      state.activeBlobUrls.forEach((u) => {
+        URL.revokeObjectURL(u)
+      })
       return initialState
     })
   },
@@ -245,17 +249,17 @@ export const usePlayerStore = create<PlayerState>((set) => ({
     saveToDb()
 
     set((state) => {
-      // Revoke old blob URL
-      if (state.currentBlobUrl && state.currentBlobUrl !== url) {
-        URL.revokeObjectURL(state.currentBlobUrl)
-      }
+      // Revoke old blob URLs
+      state.activeBlobUrls.forEach((u) => {
+        URL.revokeObjectURL(u)
+      })
 
       return {
         audioUrl: url,
         audioLoaded: true,
         audioTitle: file.name,
         coverArtUrl: '',
-        currentBlobUrl: url,
+        activeBlobUrls: [url],
         // Reset session for NEW manual upload
         sessionId: null,
         progress: 0,
@@ -377,15 +381,38 @@ export const usePlayerStore = create<PlayerState>((set) => ({
           // Create blob URL for restored file
           const url = URL.createObjectURL(file)
 
+          let artworkUrl = ''
+          // If we have a local track ID, try to restore its artwork
+          if (lastSession.localTrackId) {
+            try {
+              const track = await DB.getFileTrack(lastSession.localTrackId)
+              if (track?.artworkId) {
+                const artworkBlob = await DB.getAudioBlob(track.artworkId)
+                if (artworkBlob) {
+                  artworkUrl = URL.createObjectURL(artworkBlob.blob)
+                }
+              }
+            } catch (err) {
+              logError('[PlayerStore] Failed to restore artwork for local track', err)
+            }
+          }
+
           // Update state ATOMICALLY with the restored sessionId
           set((state) => {
-            if (state.currentBlobUrl) URL.revokeObjectURL(state.currentBlobUrl)
+            state.activeBlobUrls.forEach((u) => {
+              URL.revokeObjectURL(u)
+            })
+
+            const newBlobUrls = [url]
+            if (artworkUrl) newBlobUrls.push(artworkUrl)
+
             return {
               sessionId: lastSession.id,
               audioUrl: url,
               audioLoaded: true,
               audioTitle: file.name,
-              currentBlobUrl: url,
+              coverArtUrl: artworkUrl,
+              activeBlobUrls: newBlobUrls,
               progress: lastSession.progress,
             }
           })

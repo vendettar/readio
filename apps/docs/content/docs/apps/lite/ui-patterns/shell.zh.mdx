@@ -9,6 +9,14 @@ title: Shell 与覆盖层
 - **多步菜单**: 在菜单内容 **内部** 实现确认步骤 (面板-网格模式)，而不是在顶部打开新的 Dialog。
 - **禁止全局覆盖层 Store**：`isOpen` 状态保持在组件内部，通过共享 z-index tokens 统一分层，不建立全局模态状态。
 
+### 三点操作菜单（Overflow Menus）
+- **组件选择**：操作列表必须用 `DropdownMenu`。仅展示富内容/信息时使用 `Popover`。
+- **定位规范**：所有三点菜单必须使用 `sideOffset={8}` 与 `collisionPadding={16}`。
+- **模态模式**：若动作触发内联编辑（重命名、内联输入），使用 `modal={false}`。
+- **事件隔离**：菜单触发器与内容需 `stopPropagation`，避免影响行/卡片点击。
+- **Overflow Hidden**：仅允许用于多面板滑动菜单（如 menu → confirm），单面板菜单禁止使用。
+- **默认封装**：标准场景优先使用 `src/components/ui/overflow-menu.tsx` 以保持一致性。
+
 ### 表面决策树 (哪个组件?)
 - **它是关键确认吗?** (删除, 擦除) -> **`AlertDialog`** (必须要求显式操作)。
 - **它是复杂的表单/内容吗?** (设置, 编辑详情) -> **`Dialog`** (模态, 屏幕居中)。

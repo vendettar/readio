@@ -31,7 +31,7 @@ Unlike the **Worker** (who builds features), your primary metric is **Technical 
 - **Core Separation**: Actively enforce the boundary between `packages/core` (Business Logic/Shared) and `apps/lite` (UI/App State). Move pure logic down to Core.
 
 ### 3) Readio-Specific Patterns (Enforcement)
-- **State Management**: Convert monolithic Zustand subscriptions (`useStore(s => s)`) to atomic selectors (`useStore(s => s.prop)`).
+- **State Management (Performance)**: Convert monolithic Zustand subscriptions (`useStore(s => s)` or destructuring `const { a, b } = useStore()`) to **Atomic Selectors** (`useStore(s => s.prop)`). This is CRITICAL for components subscribing to high-frequency fields like `progress` or `currentIndex`.
 - **Persistence**: Ensure Dexie IDs are UUID strings (per Instruction 006). Enforce "Identity vs Dedupe" separation.
 - **Routing**: Move logic out of Render into `beforeLoad` (TanStack Router). Remove `useEffect` redirects.
 - **Config & Env**: Replace magic strings/numbers with constants or `runtimeConfig` (Zod validated).

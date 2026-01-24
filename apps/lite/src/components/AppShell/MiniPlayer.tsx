@@ -38,20 +38,22 @@ function getVolumeIcon(volume: number) {
 
 export function MiniPlayer() {
   const { t } = useTranslation()
-  const {
-    audioLoaded,
-    audioTitle,
-    coverArtUrl,
-    isPlaying,
-    progress,
-    duration,
-    volume,
-    setVolume,
-    togglePlayPause,
-    seekTo,
-    subtitles,
-    currentIndex,
-  } = usePlayerStore()
+
+  // Use atomic selectors to prevent unnecessary re-renders
+  // Critical: Don't subscribe to progress/currentIndex directly at top level
+  const audioLoaded = usePlayerStore((s) => s.audioLoaded)
+  const audioTitle = usePlayerStore((s) => s.audioTitle)
+  const coverArtUrl = usePlayerStore((s) => s.coverArtUrl)
+  const isPlaying = usePlayerStore((s) => s.isPlaying)
+  const progress = usePlayerStore((s) => s.progress)
+  const duration = usePlayerStore((s) => s.duration)
+  const volume = usePlayerStore((s) => s.volume)
+  const subtitles = usePlayerStore((s) => s.subtitles)
+  const currentIndex = usePlayerStore((s) => s.currentIndex)
+
+  const setVolume = usePlayerStore((s) => s.setVolume)
+  const togglePlayPause = usePlayerStore((s) => s.togglePlayPause)
+  const seekTo = usePlayerStore((s) => s.seekTo)
 
   const { enterImmersion } = useImmersionStore()
 
@@ -193,16 +195,25 @@ export function MiniPlayer() {
           aria-label={t('ariaExpandPlayer')}
         >
           {coverArtUrl ? (
-            <img
-              src={getDiscoveryArtworkUrl(coverArtUrl, 100)}
-              alt=""
-              className="w-12 h-12 rounded-md object-cover shadow-sm bg-muted"
-              onError={(e) => {
-                e.currentTarget.src = '/placeholder-podcast.svg'
-              }}
-            />
+            <div
+              className={cn(
+                "relative w-12 h-12 rounded-md overflow-hidden bg-white shadow-md ring-1 ring-inset ring-white/10",
+                !coverArtUrl && "bg-card"
+              )}
+            >
+              <img
+                src={getDiscoveryArtworkUrl(coverArtUrl, 100)}
+                alt=""
+                className="absolute inset-[-4px] w-[calc(100%+8px)] h-[calc(100%+8px)] max-w-none block object-cover"
+                onError={(e) => {
+                  e.currentTarget.src = '/placeholder-podcast.svg'
+                }}
+              />
+              {/* Sealer overlay */}
+              <div className="absolute inset-0 rounded-md ring-1 ring-inset ring-white pointer-events-none" />
+            </div>
           ) : (
-            <div className="w-12 h-12 rounded-md bg-muted flex items-center justify-center">
+            <div className="w-12 h-12 rounded-md bg-muted flex items-center justify-center border border-border/10">
               <Podcast size={20} className="text-muted-foreground" />
             </div>
           )}

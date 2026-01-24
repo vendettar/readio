@@ -6,16 +6,12 @@ import { BaseEpisodeRow, GutterPlayButton } from '../components/EpisodeRow'
 import { InteractiveArtwork } from '../components/interactive/InteractiveArtwork'
 import { InteractiveTitle } from '../components/interactive/InteractiveTitle'
 import { Button } from '../components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '../components/ui/dropdown-menu'
+import { DropdownMenuItem } from '../components/ui/dropdown-menu'
 import { EmptyState } from '../components/ui/empty-state'
 import { LoadingPage } from '../components/ui/loading-spinner'
+import { OverflowMenu } from '../components/ui/overflow-menu'
 import { useEpisodePlayback } from '../hooks/useEpisodePlayback'
-import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
+
 import { useSubscriptionMap } from '../hooks/useSubscriptionMap'
 import { formatDateStandard, formatDuration, formatRelativeTime } from '../lib/dateUtils'
 import type { Favorite } from '../lib/dexieDb'
@@ -32,7 +28,6 @@ export default function FavoritesPage() {
   const [isInitialLoading, setIsInitialLoading] = useState(!favoritesLoaded)
 
   // Keyboard shortcuts
-  useKeyboardShortcuts({ isModalOpen: false })
 
   // Loading state (favorites are loaded globally by useAppInitialization)
   useEffect(() => {
@@ -165,33 +160,21 @@ export default function FavoritesPage() {
                       </Button>
 
                       {/* More Actions Menu */}
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="w-8 h-8 text-primary hover:bg-transparent hover:opacity-80 transition-all duration-200"
-                            aria-label={t('ariaMoreActions')}
-                          >
-                            <MoreHorizontal size={15} />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="end"
-                          sideOffset={8}
-                          onMouseDown={(e) => e.stopPropagation()}
-                          onClick={(e) => e.stopPropagation()}
-                          className="rounded-xl shadow-2xl overflow-hidden p-0 border border-border/50 bg-popover/95 backdrop-blur-xl min-w-44"
+                      <OverflowMenu
+                        triggerAriaLabel={t('ariaMoreActions')}
+                        triggerClassName="h-8 w-8 !rounded-full text-foreground/80 hover:bg-accent hover:text-foreground transition-all"
+                        icon={<MoreHorizontal size={15} />}
+                        stopPropagation
+                        contentClassName="rounded-xl shadow-2xl p-0 border border-border/50 bg-popover/95 backdrop-blur-xl min-w-44"
+                      >
+                        <DropdownMenuItem
+                          onSelect={() => handleRemoveFavorite(favorite.key)}
+                          className="text-destructive focus:text-destructive focus:bg-destructive/10 whitespace-nowrap cursor-pointer"
                         >
-                          <DropdownMenuItem
-                            onSelect={() => handleRemoveFavorite(favorite.key)}
-                            className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                          >
-                            <Star size={14} className="mr-2" />
-                            {t('removeFavorite')}
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                          <Star size={14} className="mr-2" />
+                          {t('removeFavorite')}
+                        </DropdownMenuItem>
+                      </OverflowMenu>
                     </>
                   }
                 />

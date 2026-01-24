@@ -130,9 +130,12 @@ description: Architecture decisions and rationale.
 - **Decision**: Use requestId/AbortController to ensure last-action-wins.
 - **Rationale**: Avoid playback/UI desync under rapid interactions.
 
-## D032 — Robust Metadata Parser
-- **Decision**: Use `music-metadata-browser` for ID3 parsing in a Worker.
-- **Rationale**: Reduce parsing errors and keep the main thread responsive.
+## D032 — Robust Metadata Parser (Phase 1)
+- **Decision**: Use `music-metadata-browser` for ID3/M4A parsing.
+- **Rationale**: Replaces filename-based heuristics with binary stream parsing to extract high-quality metadata (Artwork, Title, Duration).
+- **Artwork Strategy**: Extract embedded covers, store as Blobs in Dexie, and serve via ephemeral `ObjectURL` in UI.
+- **Implementation**: Currently main-thread. Worker migration (Phase 2) reserved for performance optimization if blocking becomes noticeable.
+
 
 ## D033 — Skeleton UI System
 - **Decision**: Standardize shimmer-based skeletons for key surfaces.
@@ -212,3 +215,15 @@ description: Architecture decisions and rationale.
 ## D051 — Modern Toast Notifications (Sonner)
 - **Decision**: Replace Radix Toast with `sonner` for all notification feedback.
 - **Rationale**: Sonner provides superior developer experience (imperative API), better visual stacking, built-in promise support, and native-feeling animations (Instruction 017).
+
+## D052 — Command Palette Search (cmdk)
+- **Decision**: Replace custom floating Search Overlay with an inline sidebar `CommandPalette` based on `cmdk`.
+- **Rationale**: Provides consistent keyboard navigation, improved accessibility, and a modern "inline sidebar search experience" that works globally (Instruction 018).
+
+## D053 — Standardized Badge System
+- **Decision**: All status indicators (Subscriptions, Favorites, History, Files, Listen Later) in lists and Command Palette MUST use a unified visual language: right-aligned, vertically centered, and `text-primary` color.
+- **Rationale**: Ensures visual consistency and reduces cognitive load by establishing a predictable location and color for "Status" metadata across the application.
+
+## D054 — Standardized Hotkeys & Gestures
+- **Decision**: Enforce a strict set of global hotkeys (`Space` Play/Pause, `Arrows` Seek, `Cmd+K` Search, `Esc` Close) and gesture patterns (Swipe Down to Collapse Player).
+- **Rationale**: Provides a predictable, native-like interaction model that users expect from premium media applications (Instruction 019).

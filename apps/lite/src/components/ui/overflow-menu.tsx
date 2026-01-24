@@ -20,6 +20,10 @@ export interface OverflowMenuProps {
   align?: 'start' | 'end'
   /** Additional classes for trigger button */
   triggerClassName?: string
+  /** Button variant for trigger */
+  triggerVariant?: 'default' | 'destructive' | 'outline' | 'secondary' | 'ghost' | 'link'
+  /** Button size for trigger */
+  triggerSize?: 'default' | 'sm' | 'lg' | 'icon'
   /** Additional classes for content */
   contentClassName?: string
   /** Whether menu is modal (traps focus). Default: false for inline contexts */
@@ -30,6 +34,12 @@ export interface OverflowMenuProps {
   sideOffset?: number
   /** Callback to prevent focus restore on close */
   onCloseAutoFocus?: (e: Event) => void
+  /** Padding from viewport edges. Default: 16 */
+  collisionPadding?: number
+  /** Icon size. Default: 18 */
+  iconSize?: number
+  /** Custom icon component (overrides orientation) */
+  icon?: React.ReactNode
 }
 
 export function OverflowMenu({
@@ -41,11 +51,16 @@ export function OverflowMenu({
   onOpenChange,
   align = 'end',
   triggerClassName,
+  triggerVariant = 'ghost',
+  triggerSize = 'icon',
   contentClassName,
   modal = false,
   stopPropagation = false,
   sideOffset = 8,
   onCloseAutoFocus,
+  collisionPadding = 16,
+  iconSize = 18,
+  icon,
 }: OverflowMenuProps) {
   const [internalOpen, setInternalOpen] = useState(false)
   const isControlled = controlledOpen !== undefined
@@ -58,14 +73,14 @@ export function OverflowMenu({
     onOpenChange?.(open)
   }
 
-  const Icon = iconOrientation === 'vertical' ? MoreVertical : MoreHorizontal
+  const IconComp = iconOrientation === 'vertical' ? MoreVertical : MoreHorizontal
 
   return (
     <DropdownMenu open={isOpen} onOpenChange={handleOpenChange} modal={modal}>
       <DropdownMenuTrigger asChild>
         <Button
-          variant="ghost"
-          size="icon"
+          variant={triggerVariant}
+          size={triggerSize}
           disabled={disabled}
           onClick={stopPropagation ? (e) => e.stopPropagation() : undefined}
           className={cn(
@@ -75,14 +90,15 @@ export function OverflowMenu({
           )}
           aria-label={triggerAriaLabel}
         >
-          <Icon size={18} />
+          {icon ? icon : <IconComp size={iconSize} />}
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
         side="bottom"
         align={align}
         sideOffset={sideOffset}
-        className={cn('w-48', contentClassName)}
+        collisionPadding={collisionPadding}
+        className={cn('min-w-48', contentClassName)}
         onClick={stopPropagation ? (e) => e.stopPropagation() : undefined}
         onCloseAutoFocus={onCloseAutoFocus}
       >

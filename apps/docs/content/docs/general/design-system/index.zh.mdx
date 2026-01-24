@@ -43,6 +43,18 @@ title: 概述与哲学
 - **组件**: `design-system/components.zh.mdx` - 标准化 UI 组件和原语。
 - **视觉风格**: `design-system/visuals.zh.mdx` - 玻璃拟态、动画和美学规则。
 
+## Z-Index Tokens (禁止 Magic Numbers)
+
+所有层级必须使用 `tailwind.config.ts` 中定义的标准化 Z-Index tokens。禁止在叠加元素中使用像 `z-[10]` 或 `z-50` 这样的原始值。
+
+- `z-navbar` (40): 侧边栏和粘性页眉。
+- `z-mini-player` (50): 迷你播放器（位于侧边栏之上）。
+- `z-full-player` (100): 全屏播放器（覆盖除 toast/dialog 外的所有内容）。
+- `z-overlay` (200): 下拉菜单、弹出框、上下文菜单。
+- `z-dialog` (300): 模态框和对话框。
+- `z-toast` (400): Toast 通知（最高 UI 层）。
+- `z-cursor` (9999): 全局自定义光标（如适用）。
+
 ---
 
 ## 单一数据源 (Tokens)

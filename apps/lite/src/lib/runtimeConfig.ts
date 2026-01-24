@@ -150,6 +150,9 @@ const DEFAULTS = {
   CACHE_TTL_EPISODES_MS: 3600000,
   RECOMMENDED_TTL_MS: 86400000,
   USE_MOCK_DATA: false,
+  SEARCH_SUGGESTIONS_LIMIT: 3,
+  SEARCH_PODCASTS_LIMIT: 5,
+  SEARCH_EPISODES_LIMIT: 5,
 } as const
 
 // Schema with field-level fallback via .catch()
@@ -265,6 +268,21 @@ const AppConfigSchema = z.object({
   USE_MOCK_DATA: stringBoolean
     .default(DEFAULTS.USE_MOCK_DATA)
     .catch(catchWithLog('USE_MOCK_DATA', DEFAULTS.USE_MOCK_DATA)),
+  SEARCH_SUGGESTIONS_LIMIT: z.coerce
+    .number()
+    .positive()
+    .default(DEFAULTS.SEARCH_SUGGESTIONS_LIMIT)
+    .catch(catchWithLog('SEARCH_SUGGESTIONS_LIMIT', DEFAULTS.SEARCH_SUGGESTIONS_LIMIT)),
+  SEARCH_PODCASTS_LIMIT: z.coerce
+    .number()
+    .positive()
+    .default(DEFAULTS.SEARCH_PODCASTS_LIMIT)
+    .catch(catchWithLog('SEARCH_PODCASTS_LIMIT', DEFAULTS.SEARCH_PODCASTS_LIMIT)),
+  SEARCH_EPISODES_LIMIT: z.coerce
+    .number()
+    .positive()
+    .default(DEFAULTS.SEARCH_EPISODES_LIMIT)
+    .catch(catchWithLog('SEARCH_EPISODES_LIMIT', DEFAULTS.SEARCH_EPISODES_LIMIT)),
 })
 
 export type AppConfig = z.infer<typeof AppConfigSchema>
@@ -297,6 +315,9 @@ const ENV_MAP: Record<keyof AppConfig, string> = {
   CACHE_TTL_EPISODES_MS: 'READIO_CACHE_TTL_EPISODES_MS',
   RECOMMENDED_TTL_MS: 'READIO_RECOMMENDED_TTL_MS',
   USE_MOCK_DATA: 'READIO_USE_MOCK',
+  SEARCH_SUGGESTIONS_LIMIT: 'READIO_SEARCH_SUGGESTIONS_LIMIT',
+  SEARCH_PODCASTS_LIMIT: 'READIO_SEARCH_PODCASTS_LIMIT',
+  SEARCH_EPISODES_LIMIT: 'READIO_SEARCH_EPISODES_LIMIT',
 } as const
 
 // Module-level cache to prevent re-parsing on hot paths (e.g., updateProgress)

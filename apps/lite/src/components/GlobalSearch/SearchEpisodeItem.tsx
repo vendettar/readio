@@ -1,4 +1,4 @@
-import { MoreHorizontal, Star } from 'lucide-react'
+import { Star } from 'lucide-react'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatDuration, formatRelativeTime } from '../../lib/dateUtils'
@@ -12,12 +12,8 @@ import { BaseEpisodeRow, GutterPlayButton } from '../EpisodeRow'
 import { InteractiveArtwork } from '../interactive/InteractiveArtwork'
 import { InteractiveTitle } from '../interactive/InteractiveTitle'
 import { Button } from '../ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '../ui/dropdown-menu'
+import { DropdownMenuItem } from '../ui/dropdown-menu'
+import { OverflowMenu } from '../ui/overflow-menu'
 
 interface SearchEpisodeItemProps {
   episode: SearchEpisode
@@ -168,45 +164,32 @@ export function SearchEpisodeItem({ episode, onPlay }: SearchEpisodeItemProps) {
             />
           </Button>
 
-          <DropdownMenu open={isMenuOpen} onOpenChange={setIsMenuOpen}>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className={cn(
-                  'w-9 h-9 text-primary hover:bg-transparent hover:opacity-80 transition-opacity duration-200 relative z-20',
-                  isMenuOpen && 'opacity-100'
-                )}
-                aria-label={t('ariaMoreActions')}
-              >
-                <MoreHorizontal size={16} />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="end"
-              sideOffset={8}
-              onMouseDown={(e) => e.stopPropagation()}
-              onClick={(e) => e.stopPropagation()}
-              className="rounded-xl shadow-2xl border border-border/50 bg-popover/95 backdrop-blur-xl p-0 overflow-hidden"
+          <OverflowMenu
+            open={isMenuOpen}
+            onOpenChange={setIsMenuOpen}
+            triggerAriaLabel={t('ariaMoreActions')}
+            stopPropagation
+            triggerClassName="w-9 h-9 rounded-full text-muted-foreground hover:text-primary hover:bg-accent transition-all relative z-20"
+            iconSize={16}
+            contentClassName="min-w-44 rounded-xl shadow-2xl border border-border/50 bg-popover/95 backdrop-blur-xl p-0"
+          >
+            <DropdownMenuItem
+              onSelect={(e) => {
+                handleToggleFavorite(e as unknown as React.MouseEvent)
+              }}
+              className="text-sm font-medium focus:bg-primary focus:text-primary-foreground whitespace-nowrap cursor-pointer"
             >
-              <DropdownMenuItem
-                onSelect={(e) => {
-                  handleToggleFavorite(e as unknown as React.MouseEvent)
-                }}
-                className="text-sm font-medium focus:bg-primary focus:text-primary-foreground"
-              >
-                <Star
-                  size={14}
-                  className={cn(
-                    'mr-2',
-                    favorited && 'fill-current',
-                    isSaving && 'animate-pulse opacity-50'
-                  )}
-                />
-                {favorited ? t('favoritesRemove') : t('favoritesAdd')}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+              <Star
+                size={14}
+                className={cn(
+                  'mr-2',
+                  favorited && 'fill-current',
+                  isSaving && 'animate-pulse opacity-50'
+                )}
+              />
+              {favorited ? t('favoritesRemove') : t('favoritesAdd')}
+            </DropdownMenuItem>
+          </OverflowMenu>
         </>
       }
       descriptionLines={3}

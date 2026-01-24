@@ -1,8 +1,7 @@
-// src/components/AppShell/FullPlayer.tsx
-
 import { Minimize2, Pause, Play, Settings2, SkipBack, SkipForward } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { usePlayerGestures } from '../../hooks/usePlayerGestures'
 import { useZoom } from '../../hooks/useZoom'
 import { reportError } from '../../lib/errorReporter'
 import { logError } from '../../lib/logger'
@@ -18,6 +17,7 @@ import { Button } from '../ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { Slider } from '../ui/slider'
 import { ZoomControl } from '../ZoomControl'
+import { cn } from '../../lib/utils'
 
 export function FullPlayer() {
   const { t } = useTranslation()
@@ -25,24 +25,25 @@ export function FullPlayer() {
     useZoom()
   const [isFollowing, setIsFollowing] = useState(true)
 
-  const {
-    audioLoaded,
-    audioTitle,
-    coverArtUrl,
-    isPlaying,
-    progress,
-    duration,
-    togglePlayPause,
-    seekTo,
-    subtitles,
-    subtitlesLoaded,
-    currentIndex,
-    setCurrentIndex,
-    playbackRate,
-    setPlaybackRate,
-  } = usePlayerStore()
+  // Use atomic selectors to prevent unnecessary re-renders from progress updates
+  const audioLoaded = usePlayerStore((s) => s.audioLoaded)
+  const audioTitle = usePlayerStore((s) => s.audioTitle)
+  const coverArtUrl = usePlayerStore((s) => s.coverArtUrl)
+  const isPlaying = usePlayerStore((s) => s.isPlaying)
+  const progress = usePlayerStore((s) => s.progress)
+  const duration = usePlayerStore((s) => s.duration)
+  const subtitles = usePlayerStore((s) => s.subtitles)
+  const subtitlesLoaded = usePlayerStore((s) => s.subtitlesLoaded)
+  const currentIndex = usePlayerStore((s) => s.currentIndex)
+  const playbackRate = usePlayerStore((s) => s.playbackRate)
 
-  const { exitImmersion } = useImmersionStore()
+  const togglePlayPause = usePlayerStore((s) => s.togglePlayPause)
+  const seekTo = usePlayerStore((s) => s.seekTo)
+  const setCurrentIndex = usePlayerStore((s) => s.setCurrentIndex)
+  const setPlaybackRate = usePlayerStore((s) => s.setPlaybackRate)
+
+  const exitImmersion = useImmersionStore((s) => s.exitImmersion)
+  const { bind, y } = usePlayerGestures()
 
   // Find current subtitle using optimized algorithm
   useEffect(() => {
@@ -110,7 +111,17 @@ export function FullPlayer() {
   }
 
   return (
-    <div className="fixed inset-0 z-40 bg-background/95 backdrop-blur-3xl flex flex-col">
+    <div
+      {...bind()}
+      className="fixed inset-0 z-40 bg-background/95 backdrop-blur-3xl flex flex-col will-change-transform"
+      style={{
+        transform: `translateY(${y}px)`,
+        transition: y === 0 ? 'transform 0.3s cubic-bezier(0.2, 0, 0, 1)' : 'none',
+      }}
+    >
+      {/* Drag Handle for swipe-down to close */}
+      <div className="absolute top-2 left-1/2 -translate-x-1/2 w-12 h-1.5 bg-muted-foreground/20 rounded-full z-50 pointer-events-none" />
+
       {/* Minimize Button */}
       <div className="absolute top-4 right-4 z-50">
         <Button
@@ -128,14 +139,33 @@ export function FullPlayer() {
       <div className="flex-1 flex overflow-hidden">
         {/* Left: Artwork & Info (Fixed side on desktop) */}
         <div className="w-96 hidden xl:flex flex-col items-center justify-center p-12 bg-muted/30 border-r border-border/50">
-          <div className="w-80 h-80 shadow-2xl shadow-muted/50 rounded-2xl overflow-hidden mb-10 bg-card">
-            {coverArtUrl ? (
-              <img src={coverArtUrl} alt="Art" className="w-full h-full object-cover" />
-            ) : (
-              <div className="w-full h-full bg-muted flex items-center justify-center text-muted-foreground/30">
-                <span className="text-4xl font-serif">Readio</span>
-              </div>
-            )}
+          <div className="relative mb-10">
+            {/* Standard Soft outer glow */}
+            <div className="absolute inset-2 shadow-2xl shadow-black/20 rounded-2xl pointer-events-none" />
+
+            <div
+              className={cn(
+                "relative w-80 h-80 rounded-2xl overflow-hidden bg-white transition-shadow duration-500",
+                "ring-1 ring-white/10 ring-inset",
+                !coverArtUrl && "bg-card"
+              )}
+            >
+              {coverArtUrl ? (
+                <>
+                  <img
+                    src={coverArtUrl}
+                    alt="Art"
+                    className="absolute inset-[-4px] w-[calc(100%+8px)] h-[calc(100%+8px)] max-w-none block object-cover"
+                  />
+                  {/* The 'Sealer': Standardized ring-inset overlay */}
+                  <div className="absolute inset-0 rounded-2xl ring-1 ring-inset ring-white pointer-events-none" />
+                </>
+              ) : (
+                <div className="w-full h-full bg-muted flex items-center justify-center text-muted-foreground/30">
+                  <span className="text-4xl font-serif">Readio</span>
+                </div>
+              )}
+            </div>
           </div>
           <div className="text-center space-y-3 max-w-xs">
             <h2 className="text-3xl font-bold text-foreground tracking-tight leading-tight">
@@ -148,10 +178,26 @@ export function FullPlayer() {
         <div className="flex-1 relative overflow-hidden pb-player-footer">
           {/* Mobile Header (only visible on small screens) */}
           <div className="xl:hidden p-8 pb-0 text-center mb-8">
-            <div className="w-48 h-48 mx-auto shadow-xl rounded-xl overflow-hidden mb-6 bg-muted">
-              {coverArtUrl && (
-                <img src={coverArtUrl} className="w-full h-full object-cover" alt="" />
-              )}
+            <div className="relative mb-6">
+              <div className="absolute inset-1 shadow-lg shadow-black/10 rounded-xl pointer-events-none" />
+              <div
+                className={cn(
+                  "relative w-48 h-48 mx-auto rounded-xl overflow-hidden bg-white ring-1 ring-inset ring-white",
+                  !coverArtUrl && "bg-muted"
+                )}
+              >
+                {coverArtUrl && (
+                  <>
+                    <img
+                      src={coverArtUrl}
+                      className="absolute inset-[-4px] w-[calc(100%+8px)] h-[calc(100%+8px)] max-w-none block object-cover"
+                      alt=""
+                    />
+                    {/* Defensive white sealer */}
+                    <div className="absolute inset-0 rounded-xl ring-1 ring-inset ring-white pointer-events-none" />
+                  </>
+                )}
+              </div>
             </div>
             <h2 className="text-2xl font-bold text-foreground mb-1">
               {audioTitle || t('untitled')}

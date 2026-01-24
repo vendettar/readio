@@ -106,6 +106,7 @@ export function TrackOverflowMenu({
         side="bottom"
         align="end"
         sideOffset={8}
+        collisionPadding={16}
         className="w-52 p-0 rounded-xl shadow-2xl overflow-hidden"
         onMouseDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}

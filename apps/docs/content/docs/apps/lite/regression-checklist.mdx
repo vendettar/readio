@@ -33,6 +33,7 @@ Checkpoints:
   - Library: `/subscriptions`, `/favorites`, `/history`, `/files`
 - [ ] Sidebar active state matches the URL (`useLocation().pathname`).
 - [ ] MiniPlayer persists when **audioLoaded** is true (Normal mode), and clicking the main body enters immersion mode (non-button area).
+- [ ] Mini/Full Player subscribe to store fields with selectors only; avoid full-store subscription for high-frequency fields (progress/time/scroll/drag).
 - [ ] Immersion mode is controlled by `src/store/immersionStore.ts` (state-driven); `FullPlayer` renders when `isImmersed=true`.
 - [ ] FullPlayer can correctly exit immersion mode (`exitImmersion()`), returning to the App Shell.
 

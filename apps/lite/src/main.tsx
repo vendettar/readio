@@ -1,11 +1,21 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider } from '@tanstack/react-router'
+import { Buffer } from 'buffer'
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { RootErrorBoundary } from './components/RootErrorBoundary'
-import { router } from './router'
-import './lib/i18n'
+import { TooltipProvider } from './components/ui/tooltip'
 import './index.css'
+import './lib/i18n'
+import { router } from './router'
+
+// Polyfill Buffer for browser compatibility (required by music-metadata-browser)
+// Must happen before modules that depend on it are loaded if they are dynamic,
+// but generally better at top.
+if (typeof window !== 'undefined') {
+  window.Buffer = window.Buffer || Buffer
+}
+
 // Note: legacy interactions.css and theme-tokens.css are being consolidated/removed
 
 // TanStack Query client configuration
@@ -26,8 +36,6 @@ if (import.meta.env.DEV || import.meta.env.VITE_E2E === 'true' || import.meta.en
     registerTestHarness(router, queryClient)
   })
 }
-
-import { TooltipProvider } from './components/ui/tooltip'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

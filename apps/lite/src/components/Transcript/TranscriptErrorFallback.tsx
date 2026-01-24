@@ -3,6 +3,7 @@
 
 import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { UI_FEEDBACK_DURATION } from '../../constants/app'
 import { logError } from '../../lib/logger'
 import { Button } from '../ui/button'
 
@@ -27,7 +28,7 @@ export function TranscriptErrorFallback({ error, reset }: TranscriptErrorFallbac
     try {
       await navigator.clipboard.writeText(debugInfo)
       setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      setTimeout(() => setCopied(false), UI_FEEDBACK_DURATION)
     } catch {
       // Clipboard may be blocked
       logError('[TranscriptErrorFallback] Failed to copy debug info', error)

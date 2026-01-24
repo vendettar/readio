@@ -68,6 +68,9 @@ Files 页面支持使用 `react-dropzone` 进行拖拽文件上传。
 - Files 加载时显示简易骨架占位（合集网格 + 轨道列表），避免空白跳闪。
 
 **元数据解析（尽力而为）**：
+- **库**：`music-metadata-browser`（行业标准二进制解析器）。
+- **执行**：在专用 Web Worker (`src/lib/files/metadata.worker.ts`) 中运行，防止大文件导入时阻塞主线程。
+- **标题/时长**：优先使用元数据字段，而非文件名/音频元素估算值。
 - 解析失败时回退到文件名 + 时长，不阻断导入。
 
 ### View Controls Bar
@@ -273,5 +276,4 @@ Readio 的确认交互基于 shadcn/Radix primitives：
 
 ## 计划中（待执行）
 
-- **元数据解析器升级**：使用 `music-metadata-browser` + Worker 解析 ID3（指令 069）。
 - **离线内容可视化**：离线标识与缓存清理工具（指令 053）。

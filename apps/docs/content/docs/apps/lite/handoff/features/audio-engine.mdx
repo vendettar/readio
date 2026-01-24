@@ -20,6 +20,9 @@ title: Audio Engine
   2. Otherwise find by `localTrackId` or `audioUrl` index
   3. Create new session only if not found
 - **Race Condition Prevention**: Set sessionId + deterministic ID query first, completely eliminating duplicate creation risk
+- **History Deletion Semantics**:
+  - Deleting a History item removes its `playback_sessions` record (progress + last played).
+  - It MUST NOT delete the underlying local audio file; Files are managed only in the Files area.
 
 ### Player Basic Capabilities
 

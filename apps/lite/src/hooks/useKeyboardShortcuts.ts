@@ -1,63 +1,75 @@
-// src/hooks/useKeyboardShortcuts.ts
-// Original shortcuts: Space, Left Arrow, Right Arrow
-import { useEffect } from 'react'
+import { useHotkeys } from 'react-hotkeys-hook'
+import { useImmersionStore } from '../store/immersionStore'
 import { usePlayerStore } from '../store/playerStore'
+import { useSearchStore } from '../store/searchStore'
 
-interface KeyboardShortcutsOptions {
-  isModalOpen?: boolean
-}
+export function useKeyboardShortcuts() {
+  const togglePlayPause = usePlayerStore((s) => s.togglePlayPause)
+  const seekTo = usePlayerStore((s) => s.seekTo)
 
-export function useKeyboardShortcuts({ isModalOpen = false }: KeyboardShortcutsOptions = {}) {
-  useEffect(() => {
-    const handleKeyPress = (e: KeyboardEvent) => {
-      // Skip if modal is open (allow modal to handle its own keyboard events)
-      if (isModalOpen) {
-        return
+  // Space - Toggle Play/Pause
+  useHotkeys(
+    'space',
+    () => {
+      togglePlayPause()
+    },
+    { preventDefault: true, enableOnFormTags: false }
+  )
+
+  // ArrowLeft - Seek back 15s
+  useHotkeys(
+    'left',
+    (e) => {
+      e.preventDefault()
+      const { progress } = usePlayerStore.getState()
+      seekTo(Math.max(0, progress - 15))
+    },
+    { enableOnFormTags: false }
+  )
+
+  // ArrowRight - Seek forward 15s
+  useHotkeys(
+    'right',
+    (e) => {
+      e.preventDefault()
+      const { progress, duration } = usePlayerStore.getState()
+      // If duration is not yet available (e.g., 0 or negative), just add 15s without clamping.
+      // Otherwise, clamp to duration.
+      seekTo(duration > 0 ? Math.min(duration, progress + 15) : progress + 15)
+    },
+    { enableOnFormTags: false }
+  )
+
+  // Cmd+K - Toggle Search
+  useHotkeys(
+    'mod+k',
+    (e) => {
+      e.preventDefault()
+      const { isOverlayOpen, closeOverlay, openOverlay } = useSearchStore.getState()
+      if (isOverlayOpen) {
+        closeOverlay()
+      } else {
+        openOverlay()
       }
+    },
+    { enableOnFormTags: true }
+  )
 
-      // Ignore if typing in input field
-      const target = e.target as HTMLElement
-      if (
-        target instanceof HTMLInputElement ||
-        target instanceof HTMLTextAreaElement ||
-        target.isContentEditable
-      ) {
-        return
+  // Esc - Close Search or Exit Immersion
+  useHotkeys(
+    'esc',
+    (e) => {
+      const searchState = useSearchStore.getState()
+      const immersionState = useImmersionStore.getState()
+
+      if (searchState.isOverlayOpen) {
+        e.preventDefault()
+        searchState.closeOverlay()
+      } else if (immersionState.isImmersed) {
+        e.preventDefault()
+        immersionState.exitImmersion()
       }
-
-      // Read latest state inside handler to avoid frequent effect re-runs
-      const { togglePlayPause, subtitles, currentIndex, seekTo } = usePlayerStore.getState()
-      const key = e.key
-
-      switch (key) {
-        case ' ': // Space - Play/Pause
-          e.preventDefault()
-          togglePlayPause()
-          break
-
-        case 'ArrowLeft': // ← - Previous line
-          e.preventDefault()
-          if (subtitles.length > 0 && currentIndex > 0) {
-            const prevSubtitle = subtitles[currentIndex - 1]
-            if (prevSubtitle) {
-              seekTo(prevSubtitle.start)
-            }
-          }
-          break
-
-        case 'ArrowRight': // → - Next line
-          e.preventDefault()
-          if (subtitles.length > 0 && currentIndex < subtitles.length - 1) {
-            const nextSubtitle = subtitles[currentIndex + 1]
-            if (nextSubtitle) {
-              seekTo(nextSubtitle.start)
-            }
-          }
-          break
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyPress)
-    return () => window.removeEventListener('keydown', handleKeyPress)
-  }, [isModalOpen]) // Only re-bind when modal state changes
+    },
+    { enableOnFormTags: true }
+  )
 }

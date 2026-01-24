@@ -33,6 +33,7 @@ title: 回归清单
   - Library: `/subscriptions`, `/favorites`, `/history`, `/files`
 - [ ] 侧边栏活动状态与 URL 匹配 (`useLocation().pathname`)。
 - [ ] 当 **audioLoaded** 为 true 时，MiniPlayer 保持存在 (正常模式)，点击主体进入沉浸模式 (非按钮区域)。
+- [ ] Mini/Full Player 只用选择器订阅 store 字段；避免对高频字段（progress/time/scroll/drag）进行全量订阅。
 - [ ] 沉浸模式由 `src/store/immersionStore.ts` 控制 (状态驱动)；当 `isImmersed=true` 时渲染 `FullPlayer`。
 - [ ] FullPlayer 可以正确退出沉浸模式 (`exitImmersion()`)，返回 App Shell。
 

@@ -15,6 +15,7 @@ title: State Management
 - **Zustand & Persistence**:
   - Keep store logic pure and typed.
   - Use explicit selectors to prevent unnecessary re-renders.
+  - **High-Frequency Fields**: Do NOT subscribe to entire stores when fields update frequently (e.g., progress/time/scroll/drag). Use atomic selectors or `useShallow` for multi-select.
   - **Persistence**: Prefer explicit `loadFromDB()` / `saveToDB()` actions (using `src/lib/dexieDb.ts`) over `zustand/persist`.
   - **Dexie Versioning**: Use a single schema version only. If schema changes, reset local data.
 

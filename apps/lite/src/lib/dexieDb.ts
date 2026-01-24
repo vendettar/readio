@@ -116,6 +116,7 @@ export interface FileTrack {
   durationSeconds?: number // Duration in seconds
   createdAt: number
   activeSubtitleId?: string // FK to local_subtitles.id - which subtitle is active
+  artworkId?: string // FK to audioBlobs (embedded cover art)
 }
 
 export interface FileSubtitle {
@@ -262,12 +263,9 @@ export const DB = {
   },
 
   async deletePlaybackSession(id: string): Promise<void> {
-    const item = await db.playback_sessions.get(id)
-    if (item) {
-      // Delete associated blobs
-      if (item.audioId) await this.deleteAudioBlob(item.audioId)
-      if (item.subtitleId) await this.deleteSubtitle(item.subtitleId)
-    }
+    // Note: We deliberately do NOT delete associated audio/subtitle blobs here.
+    // Audio blobs are source files (possibly shared or managed by File Library).
+    // Sessions are just playback records.
     await db.playback_sessions.delete(id)
   },
 
@@ -580,6 +578,11 @@ export const DB = {
     if (!query) return []
     // Use index for O(log N) search
     return db.playback_sessions.where('title').startsWithIgnoreCase(query).limit(limit).toArray()
+  },
+
+  async searchSessionsByAudioUrls(urls: string[]): Promise<PlaybackSession[]> {
+    if (!urls.length) return []
+    return db.playback_sessions.where('audioUrl').anyOf(urls).toArray()
   },
 
   async searchFileTracksByName(query: string, limit = 200): Promise<FileTrack[]> {

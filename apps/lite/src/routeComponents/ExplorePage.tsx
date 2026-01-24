@@ -11,7 +11,7 @@ import {
   useTopEpisodes,
   useTopPodcasts,
 } from '../hooks/useDiscoveryPodcasts'
-import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
+
 import type { Subscription } from '../lib/dexieDb'
 import discovery, { type Episode, type Podcast } from '../lib/discovery'
 import { getDiscoveryArtworkUrl } from '../lib/imageUtils'
@@ -40,9 +40,6 @@ export default function ExplorePage() {
   const { data: editorPicks, isLoading: isLoadingPicks } = useEditorPicks('us')
   const { data: topShows, isLoading: isLoadingShows } = useTopPodcasts('us', 30)
   const { data: topEpisodes, isLoading: isLoadingEpisodes } = useTopEpisodes('us', 30)
-
-  // Keyboard shortcuts (no modal open now)
-  useKeyboardShortcuts({ isModalOpen: false })
 
   // Handler for playing episode directly (Optimized: single lookup call)
   const handlePlayEpisode = async (episode: DiscoveryPodcast) => {

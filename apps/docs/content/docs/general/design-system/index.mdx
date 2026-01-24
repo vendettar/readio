@@ -43,6 +43,18 @@ The following classes are predefined in `src/index.css` and are the ONLY global 
 - **Components**: `design-system/components.mdx` - Standardized UI components and primitives.
 - **Visuals**: `design-system/visuals.mdx` - Glassmorphism, animations, and aesthetic rules.
 
+## Z-Index Tokens (No Magic Numbers)
+
+All layering must use standardized Z-Index tokens defined in `tailwind.config.ts`. Raw values like `z-[10]` or `z-50` are prohibited for overlay elements.
+
+- `z-navbar` (40): Sidebar and sticky headers.
+- `z-mini-player` (50): Mini Player (above sidebar).
+- `z-full-player` (100): Full Screen Player (covers everything except toast/dialog).
+- `z-overlay` (200): Dropdowns, Popovers, Context Menus.
+- `z-dialog` (300): Modals and Dialogs.
+- `z-toast` (400): Toast Notifications (highest UI layer).
+- `z-cursor` (9999): Global custom cursor (if applicable).
+
 ---
 
 ## Source of Truth (Tokens)

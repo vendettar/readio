@@ -14,6 +14,7 @@ export function getDefaultCountry() {
 
 export const APP_VERSION = '1.0.0' // Temporary backward compatibility if needed, but better to update callers.
 export const DEFAULT_COUNTRY = 'us'
+export const UI_FEEDBACK_DURATION = 2000
 
 export const DISCOVERY_CATEGORIES = {
   // any static category mappings if needed

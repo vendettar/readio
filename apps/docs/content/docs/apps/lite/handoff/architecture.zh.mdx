@@ -45,9 +45,13 @@ src/
 │   └── Toast/           # Toast 通知
 ├── hooks/               # 自定义 Hooks
 │   ├── useLocalFilesData.ts      # 本地文件数据加载
-│   ├── useLocalFileProcessing.ts # 文件处理（仅暴露 handlers）
-│   ├── useLocalFileDragDrop.ts   # 拖放逻辑
-│   └── useLocalFolderManagement.ts # 文件夹管理
+│   ├── useLocalFileProcessing.ts # 文件处理逻辑（处理器）
+│   ├── useLocalFileDragDrop.ts   # 拖拽逻辑
+│   ├── useLocalFolderManagement.ts # 文件夹管理
+│   ├── useEpisodeResolution.ts   # 单集解析与恢复逻辑
+│   ├── useGlobalSearch.ts        # 全局搜索聚合器
+│   ├── useLocalSearch.ts         # 本地数据库/Store 搜索
+│   └── useDiscoverySearch.ts     # 远程 Provider 搜索
 ├── libs/                # 工具库
 │   ├── dexieDb.ts       # Dexie 数据库封装
 │   ├── exploreApi.ts    # 播客搜索/RSS 解析 API
@@ -187,6 +191,87 @@ src/
 - **分层校验**：文件校验与注入逻辑解耦。Lite 应用执行 MIME/扩展名校验，深层内容校验推迟到后端或 Native 层（见决策 D046）。
 - **异步任务卫生 (Async Hygiene)**：所有异步任务都使用 `requestId` 或 `AbortSignal` 防止过期更新。显式追踪 `setTimeout` 和 `requestAnimationFrame` 并在组件卸载时取消，防止内存泄漏。
 - **异步序列门控 (Sequence Gating)**：关键流程（如会话创建、词典查询）使用 Ref 门控防止同一异步操作的并行重入。
+
+
+---
+
+## 3a. 状态管理最佳实践 (Zustand)
+
+### 原子选择器 (Atomic Selectors) - 性能关键
+
+**务必使用原子选择器**来订阅单个 Store 字段。严禁解构整个 Store。
+
+```tsx
+// ❌ 反模式：订阅了 Store 的所有变更
+const { field1, field2, field3, progress } = usePlayerStore()
+
+// ✅ 最佳实践：订阅单个字段
+const field1 = usePlayerStore((s) => s.field1)
+const field2 = usePlayerStore((s) => s.field2)
+const field3 = usePlayerStore((s) => s.field3)
+const progress = usePlayerStore((s) => s.progress)
+```
+
+**原理说明**: 
+- 解构赋值 `const { ... } = useStore()` 会让组件订阅 **Store 中的每一个字段**。
+- 意味着 Store 中任何一个字段更新（甚至是组件未使用的字段），都会触发该组件重新渲染。
+- 对于 `progress` 这种每秒更新多次的高频字段，这会导致严重的性能损耗。
+
+**适用场景**:
+- 渲染高频更新字段的组件（如 `progress`, `currentIndex`）。
+- 渲染成本较高的组件（包含图片、复杂布局、手势、动画等）。
+- 列表组件或媒体资产渲染组件。
+
+### 示例：优化前后对比
+
+**优化前（存在性能瓶颈）**:
+```tsx
+export function MiniPlayer() {
+  const { progress, coverArtUrl, isPlaying } = usePlayerStore()
+  // ❌ 只要 Store 发生任何变更，组件就会重新渲染
+  // ❌ 会导致 progress 更新时封面图闪烁
+}
+```
+
+**优化后（已隔离性能影响）**:
+```tsx
+export function MiniPlayer() {
+  const progress = usePlayerStore((s) => s.progress)
+  const coverArtUrl = usePlayerStore((s) => s.coverArtUrl)
+  const isPlaying = usePlayerStore((s) => s.isPlaying)
+  // ✅ 组件仅在这些特定字段变化时才重新渲染
+  // ✅ 消除闪烁，最小化渲染开销
+}
+```
+
+### Store 访问模式
+
+**只读访问 (非响应式)**:
+```tsx
+// 用于异步函数或事件处理函数内部读取状态
+const currentProgress = usePlayerStore.getState().progress
+```
+
+**订阅变更 (响应式)**:
+```tsx
+// 用于反应式 UI 更新
+const progress = usePlayerStore((s) => s.progress)
+```
+
+**Actions (函数)**:
+```tsx
+// Action 函数不会改变，一次提取即可
+const seekTo = usePlayerStore((s) => s.seekTo)
+const togglePlayPause = usePlayerStore((s) => s.togglePlayPause)
+```
+
+### 性能验证方法
+
+重构订阅模式后：
+1. 使用 React DevTools Profiler 测量渲染计数。
+2. 预期结果：播放 10 秒期间，组件渲染次数应从 100+ 次降低到 ~5-10 次。
+3. 验证图片/封面图无视觉闪烁。
+4. 确认所有交互逻辑正常。
 
 ---
 

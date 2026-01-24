@@ -12,7 +12,7 @@ import { Button } from '../../components/ui/button'
 import { useFileDragDrop } from '../../hooks/useFileDragDrop'
 import { useFilePlayback } from '../../hooks/useFilePlayback'
 import { useFileProcessing } from '../../hooks/useFileProcessing'
-import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
+
 import { DB, type FileFolder, type FileSubtitle, type FileTrack } from '../../lib/dexieDb'
 import { logError, warn as logWarn } from '../../lib/logger'
 import { toast } from '../../lib/toast'
@@ -83,7 +83,6 @@ export default function FilesFolderPage() {
   const { folderId } = useParams({ from: '/files/folder/$folderId' })
   const navigate = useNavigate()
   const { t } = useTranslation()
-  useKeyboardShortcuts({ isModalOpen: false })
 
   // folderId is now a string UUID from the route
   const folderIdIsValid = folderId && folderId.length > 0
@@ -246,6 +245,44 @@ export default function FilesFolderPage() {
 
   const existingTrackNames = tracks?.map((t) => t.name) || []
 
+  // Artwork URL management
+  const [artworkUrls, setArtworkUrls] = useState<Record<string, string>>({})
+
+  // Fetch artwork blobs and generate object URLs
+  useEffect(() => {
+    if (!tracks || tracks.length === 0) return
+
+    let cancelled = false
+    const urls: Record<string, string> = {}
+
+    const fetchArtworks = async () => {
+      for (const track of tracks) {
+        if (!track.artworkId) continue
+        try {
+          const blob = await DB.getAudioBlob(track.artworkId)
+          if (cancelled) return
+          if (blob) {
+            urls[track.id] = URL.createObjectURL(blob.blob)
+          }
+        } catch (err) {
+          logWarn('[FolderView] Failed to fetch artwork blob', err)
+        }
+      }
+      if (!cancelled) {
+        setArtworkUrls(urls)
+      }
+    }
+
+    fetchArtworks()
+
+    return () => {
+      cancelled = true
+      for (const url of Object.values(urls)) {
+        URL.revokeObjectURL(url)
+      }
+    }
+  }, [tracks])
+
   const handleBack = useCallback(() => {
     navigate({ to: '/files' })
   }, [navigate])
@@ -348,6 +385,7 @@ export default function FilesFolderPage() {
                       lastPlayedAt={track.audioId ? lastPlayedMap[track.audioId] : undefined}
                       isGlobalDragging={isDragging}
                       existingTrackNames={existingTrackNames}
+                      artworkUrl={artworkUrls[track.id]}
                       onPlay={(t, s) => handlePlay(t, subtitles, s)}
                       onSetActiveSubtitle={handleSetActiveSubtitle}
                       onRename={async (newName) => {

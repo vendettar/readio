@@ -33,6 +33,27 @@ beforeAll(() => {
   })
 })
 
+// Mock Worker
+const mockPostMessage = vi.fn()
+// We need a way to access the current worker instance from the test to trigger onmessage
+// biome-ignore lint/suspicious/noExplicitAny: Mock worker reference
+let currentWorker: any = null
+
+vi.mock('../metadata.worker?worker', () => {
+  return {
+    default: class MockWorker {
+      onmessage: ((e: MessageEvent) => void) | null = null
+      onerror: ((e: ErrorEvent) => void) | null = null
+      terminate = vi.fn()
+      postMessage = mockPostMessage
+
+      constructor() {
+        currentWorker = this
+      }
+    },
+  }
+})
+
 // Now import the module after mocks are set up
 import { ingestFiles } from '../ingest'
 
@@ -40,6 +61,19 @@ describe('ingestFiles', () => {
   beforeEach(async () => {
     // Clear all data before each test
     await DB.clearAllData()
+    vi.clearAllMocks()
+    currentWorker = null
+
+    // Default mock behavior: return empty metadata immediately
+    mockPostMessage.mockImplementation((_file) => {
+      setTimeout(() => {
+        if (currentWorker?.onmessage) {
+          currentWorker.onmessage({
+            data: { success: true, data: {} },
+          } as MessageEvent)
+        }
+      }, 0)
+    })
   })
 
   /**
@@ -68,7 +102,33 @@ describe('ingestFiles', () => {
       const tracks = await DB.getFileTracksInFolder(null)
       expect(tracks).toHaveLength(1)
       expect(tracks[0].name).toBe('test-song')
-      expect(tracks[0].durationSeconds).toBe(225)
+      expect(tracks[0].durationSeconds).toBe(225) // Fallback to Audio element
+    })
+
+    it('should prioritize metadata title over filename', async () => {
+      // Mock worker response with metadata
+      mockPostMessage.mockImplementation(() => {
+        setTimeout(() => {
+          if (currentWorker?.onmessage) {
+            currentWorker.onmessage({
+              data: {
+                success: true,
+                data: { title: 'Real Song Title', duration: 100 },
+              },
+            } as MessageEvent)
+          }
+        }, 0)
+      })
+
+      const audioFile = createMockFile('ignored-filename.mp3', 'audio/mpeg')
+      await ingestFiles({
+        files: [audioFile],
+        folderId: null,
+      })
+
+      const tracks = await DB.getFileTracksInFolder(null)
+      expect(tracks[0].name).toBe('Real Song Title')
+      expect(tracks[0].durationSeconds).toBe(100)
     })
 
     it('should assign track to specified folder', async () => {

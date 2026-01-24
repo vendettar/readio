@@ -17,7 +17,7 @@ import {
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { useConfirmDialog } from '../hooks/useConfirmDialog'
-import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
+
 import { useSettingsData } from '../hooks/useSettingsData'
 import { useSettingsForm } from '../hooks/useSettingsForm'
 import { useStorageMaintenance } from '../hooks/useStorageMaintenance'
@@ -80,7 +80,6 @@ export default function SettingsPage() {
   }
 
   // Keyboard shortcuts
-  useKeyboardShortcuts({ isModalOpen: false })
 
   return (
     <div className="h-full overflow-y-auto bg-background text-foreground">

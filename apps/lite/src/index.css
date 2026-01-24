@@ -52,6 +52,12 @@
     /* 48px */
     --page-gutter-x: 1.5rem;
     /* 24px (Half for 1:1 symmetry) */
+
+    /* Z-index system */
+    --z-sidebar: 40;
+    --z-mini-player: 50;
+    --z-overlay: 60;
+    --z-modal: 100;
   }
 
   @media (max-width: 640px) {

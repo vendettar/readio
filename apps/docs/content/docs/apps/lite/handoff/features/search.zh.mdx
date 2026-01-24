@@ -6,12 +6,12 @@ title: Search System
 
 搜索系统作为全局入口，采用两阶段工作流：
 
-### 一阶段：预览 (Preview Overlay)
-- **触发**：Sidebar 搜索框聚焦或输入时。
-- **展示**：`SearchOverlay` 组件以悬浮窗形式出现在搜索框下方。
-- **内容**：展示高置信度的 Top Matches，每个类型（节目、单集、本地文件）限额 3-5 条。
-- **状态标识**：使用 `StatusBadge` 实时显示内容与用户的关系（Subscribed, Favorited, Played, Local）。
-- SearchOverlay 宽度使用 `w-96`，日期显示统一使用 `formatTimestamp`。
+### 一阶段：命令面板 (Command Palette)
+- **触发**：Sidebar 搜索触发输入框或快捷键 (`Cmd+K`)。
+- **展示**：侧边栏内嵌集成形式的 `CommandPalette` 组件 (`cmdk`)。
+- **内容**：展示高置信度的 Top Matches，每个类型（节目、单集、本地文件）限额 5 条。
+- **状态标识**：使用统一的右对齐图标徽章系统显示内容与用户的关系（Subscribed, Favorited, Played, Local）。
+  - **多状态合并 (Multi-State Merging)**：若同一条目满足多个条件（如既是 Favorites 也是 History），必须**并列显示所有相关图标**。去重逻辑应合并元数据而非覆盖。
 
 ### 二阶段：结果页 (Full Search Page)
 - **触发**：回车键或点击 "View all results"。
@@ -34,7 +34,7 @@ title: Search System
 - **加载顺序**：任何依赖 `useExploreStore` 中 `subscriptions` / `favorites` 的搜索场景（Search Overlay、Full Search Page、自定义 hooks）都必须在访问前调用 `loadSubscriptions()` / `loadFavorites()`。若在 store 中未加载成功，需要回退到 Dexie 查询，而不是直接假设列表已就绪。
 - **实时刷新**：搜索结果必须订阅 `useExploreStore` 的状态变化（例如通过 selector + Zustand subscription），而不是仅在挂载时读取一次 `getState()`。用户在搜索过程中若执行收藏/取关操作，Overlay/结果页需要即时刷新标记。
 - **统一上限**：`useGlobalSearch(query, enabled, limits?)` 在 hook 层对四类本地结果（Subscriptions/Favorites/History/Local Files）做了统一上限控制（默认 5）。调用方不得在 UI 层随意扩展数量，如需特殊情况（例如 Search 页展示完整列表）必须显式传入 `limits` 覆盖。这样 Overlay / Spotlight / 结果页都共用同一套策略。
-- **避免全表扫描**：本地历史 (`playback_sessions`) 和本地文件 (`local_tracks`) 表可能非常大，不允许在每次键入时 `getAll*()` 全量扫描。`useGlobalSearch` 使用 Dexie 的 `searchPlaybackSessionsByTitle` / `searchLocalTracksByName` 并配合节流读取最近 N 条；新增场景必须遵循同样策略（基于索引、分页或 Worker），禁止再写新的全表扫描。
+- **避免全表扫描**：本地历史 (`playback_sessions`) 和本地文件 (`local_tracks`) 表可能非常大，不允许在每次键入时 `getAll*()` 全量扫描。`useGlobalSearch` 使用 Dexie 的 `searchPlaybackSessionsByTitle` / `searchFileTracksByName` 并配合节流读取最近 N 条；新增场景必须遵循同样策略（基于索引、分页或 Worker），禁止再写新的全表扫描。
 - **结果上限**：Overlay 模式必须限制本地结果数量（Top N），结果页可显式提升上限。
 - **远程节流**：远程搜索必须 debounce 且取消/忽略过期请求（`AbortController` 或 requestId）。
 - **竞态防护**：本地 Dexie 搜索使用 200ms debounce + requestId 失效机制；清空查询会立即清空结果并阻止旧请求回写，避免短时间“闪回旧结果”。

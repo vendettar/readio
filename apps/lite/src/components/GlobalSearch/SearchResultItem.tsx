@@ -52,7 +52,7 @@ export function SearchResultItem({
           <img
             src={getDiscoveryArtworkUrl(artworkUrl, 100)}
             alt=""
-            className="w-full h-full object-cover"
+            className="block w-full h-full object-cover"
           />
         </Button>
 
@@ -110,7 +110,7 @@ export function SearchResultItem({
         <img
           src={getDiscoveryArtworkUrl(artworkUrl, 100)}
           alt=""
-          className="w-full h-full object-cover transition-transform group-hover:scale-110"
+          className="block w-full h-full object-cover transition-transform group-hover:scale-110"
         />
 
         {/* Improved Play Overlay: Use foreground/20 and backdrop blur */}

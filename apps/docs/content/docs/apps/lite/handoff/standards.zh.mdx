@@ -12,6 +12,20 @@ UI 交互控件采用 `shadcn/ui` primitives（`Button/Input/Select/DropdownMenu
 
 焦点由 React `autoFocus` 与 Radix `onCloseAutoFocus` 管理；滚动状态判断使用 Virtuoso 的 `isScrolling` 等原生钩子，不依赖定时器。
 
+#### 热键（全局）
+
+键盘快捷键集中在 `src/hooks/useKeyboardShortcuts.ts` 中，使用 `react-hotkeys-hook`。
+- **Space**：切换播放/暂停（全局启用，但在输入框/文本域聚焦时禁用）。
+- **Arrow Left/Right**：向后/向前跳转 15 秒。
+- **Cmd/Ctrl + K**：启动全局搜索命令面板。
+- **Esc**：全局优先关闭搜索覆盖层，或退出全屏播放器（沉浸模式）。
+
+#### 手势（触摸）
+
+移动端交互遵循原生播放器模式：
+- **下滑关闭**：在 `FullPlayer.tsx` 中使用 `@use-gesture/react` 实现。从容器（包括顶部拖拽手柄）向下滑动超过 100px 触发 `exitImmersion()`。
+- **拖拽手柄**：顶部 `top-2` 位置的可视化药丸形手柄提示下滑交互。组件设置 `pointer-events-none` 以不干扰点击/轻触。
+
 ### Icon Policy (Lucide-First)
 
 UI 操作图标来自 `lucide-react`；SVG 仅用于 logo 与交互绑定资源。
@@ -185,6 +199,11 @@ Provider 位于 `src/main.tsx`（`Tooltip.Provider`）。
    - `OverflowMenu` - 标准化的下拉菜单触发器和内容
    - 提供一致的 Button 触发器（ghost, icon）和 DropdownMenuContent 默认值
    - 支持 `disabled`（用于拖拽/重命名等状态下禁用菜单触发）
+   - **必选默认值**：
+     - 所有三点菜单必须使用 `sideOffset={8}` 与 `collisionPadding={16}`
+     - 动作触发内联编辑（重命名、内联输入）时使用 `modal={false}`
+     - 行/卡片上下文需在触发器与内容上 `stopPropagation`
+   - **Overflow Hidden**：仅允许用于多面板滑动菜单（menu → confirm）。单面板菜单禁止使用 `overflow-hidden`。
    - 使用位置: `TrackOverflowMenu.tsx`, `FolderOverflowMenu.tsx`
 
 3. **交互式标题 (InteractiveTitle)** (`src/components/interactive/InteractiveTitle.tsx`)

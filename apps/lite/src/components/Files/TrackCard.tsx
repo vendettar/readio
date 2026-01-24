@@ -46,16 +46,21 @@ const trackCardContentVariants = cva('flex items-center bg-card', {
 })
 
 const trackCardIconVariants = cva(
-  'bg-muted rounded-xl flex items-center justify-center flex-shrink-0 text-muted-foreground shadow-inner cursor-grab active:cursor-grabbing',
+  'flex items-center justify-center flex-none text-muted-foreground cursor-grab active:cursor-grabbing',
   {
     variants: {
       density: {
         comfortable: 'w-12 h-12',
         compact: 'w-10 h-10',
       },
+      hasArtwork: {
+        true: 'shadow-none bg-transparent rounded-xl overflow-hidden',
+        false: 'bg-muted shadow-inner rounded-xl overflow-hidden',
+      },
     },
     defaultVariants: {
       density: 'comfortable',
+      hasArtwork: false,
     },
   }
 )
@@ -111,6 +116,7 @@ interface TrackCardProps {
   lastPlayedAt?: number
   isGlobalDragging?: boolean
   existingTrackNames?: string[]
+  artworkUrl?: string // Optional blob URL for embedded artwork
   onPlay: (track: FileTrack, subtitle?: FileSubtitle) => void
   onSetActiveSubtitle: (trackId: string, subtitleId: string) => void
   onRename: (newName: string) => void
@@ -128,6 +134,7 @@ export function TrackCard({
   lastPlayedAt,
   isGlobalDragging = false,
   existingTrackNames = [],
+  artworkUrl,
   onPlay,
   onSetActiveSubtitle,
   onRename,
@@ -264,8 +271,22 @@ export function TrackCard({
     >
       {/* Main Track Info */}
       <div className={trackCardContentVariants({ density })} {...listeners} {...attributes}>
-        <div className={trackCardIconVariants({ density })}>
-          <FileAudio size={isCompact ? 20 : 24} strokeWidth={1.5} />
+        <div
+          className={cn(
+            trackCardIconVariants({ density, hasArtwork: !!artworkUrl }),
+            'relative aspect-square'
+          )}
+          style={{ WebkitMaskImage: '-webkit-radial-gradient(white, black)' }}
+        >
+          {artworkUrl ? (
+            <img
+              src={artworkUrl}
+              alt=""
+              className="absolute -inset-[1px] w-[calc(100%+2px)] h-[calc(100%+2px)] max-w-none object-cover block"
+            />
+          ) : (
+            <FileAudio size={isCompact ? 20 : 24} strokeWidth={1.5} />
+          )}
         </div>
 
         <div className="flex-1 min-w-0">

@@ -6,6 +6,7 @@ import { AppShell } from '../components/AppShell'
 import { GlobalAudioController } from '../components/AppShell/GlobalAudioController'
 import { useAppInitialization } from '../hooks/useAppInitialization'
 import { useFileHandler } from '../hooks/useFileHandler'
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 
 // FilePickerContext to avoid document.getElementById
 const FilePickerContext = createContext<{ triggerFilePicker: () => void } | null>(null)
@@ -21,6 +22,9 @@ export function useFilePicker() {
 function RootLayout() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { handleFileChange } = useFileHandler()
+
+  // Initialize global keyboard shortcuts
+  useKeyboardShortcuts()
 
   // Initialize app-level data (subscriptions, favorites)
   useAppInitialization()

@@ -3,6 +3,37 @@
 
 import { DB } from '../dexieDb'
 import { log } from '../logger'
+import type { ParseResult } from './metadata.worker'
+import MetadataWorker from './metadata.worker?worker'
+
+/**
+ * Parse metadata using a Web Worker to avoid blocking the main thread
+ */
+function parseMetadataInWorker(file: File): Promise<ParseResult> {
+  return new Promise((resolve, _reject) => {
+    const worker = new MetadataWorker()
+
+    worker.onmessage = (e) => {
+      const { success, data, error } = e.data
+      worker.terminate()
+      if (success) {
+        resolve(data)
+      } else {
+        // Resolve with empty/partial data instead of rejecting to allow fallback
+        log('[Files] Worker parsing warning:', error)
+        resolve({})
+      }
+    }
+
+    worker.onerror = (err) => {
+      worker.terminate()
+      log('[Files] Worker parsing error:', err)
+      resolve({})
+    }
+
+    worker.postMessage(file)
+  })
+}
 
 /**
  * Read file content as text with fallback for different environments
@@ -131,11 +162,29 @@ export async function ingestFiles(params: IngestParams): Promise<IngestResult> {
   const usedSubtitleFiles = new Set<File>()
 
   for (const file of audioFiles) {
-    const durationSeconds = await getAudioDuration(file)
-    // Original logic: baseName is filename without extension
-    // Wait, for tracks, the 'name' IS the name user sees.
-    // Usually we use filename without extension as the initial track title.
-    let baseName = file.name.replace(/\.[^/.]+$/, '')
+    // Extract metadata using Worker
+    let metadataTitle: string | undefined
+    let metadataDuration: number | undefined
+    let artworkId: string | undefined
+
+    try {
+      const metadata = await parseMetadataInWorker(file)
+
+      metadataTitle = metadata.title
+      metadataDuration = metadata.duration
+
+      if (metadata.artworkBlob) {
+        artworkId = await DB.addAudioBlob(metadata.artworkBlob, `artwork-${file.name}`)
+      }
+    } catch (err) {
+      log('[Files] Metadata parsing failed, using fallbacks:', file.name, err)
+    }
+
+    // Fallback to Audio element for duration if metadata didn't provide it
+    const durationSeconds = metadataDuration ?? (await getAudioDuration(file))
+
+    // Use metadata title if available, otherwise fallback to filename without extension
+    let baseName = metadataTitle || file.name.replace(/\.[^/.]+$/, '')
 
     // Resolve duplication against existing tracks in DB
     baseName = resolveDuplicateName(baseName, existingTrackNames)
@@ -153,6 +202,7 @@ export async function ingestFiles(params: IngestParams): Promise<IngestResult> {
       audioId,
       sizeBytes: file.size,
       durationSeconds,
+      artworkId,
     })
 
     createdTrackIds.push(trackId)
@@ -190,7 +240,7 @@ export async function ingestFiles(params: IngestParams): Promise<IngestResult> {
       usedSubtitleFiles.add(sub)
     }
 
-    log('[Files] Added track:', baseName)
+    log('[Files] Added track:', baseName, artworkId ? '(with artwork)' : '(no artwork)')
   }
 
   return { createdTrackIds, attachedSubtitleCount }

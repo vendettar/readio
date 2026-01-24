@@ -32,6 +32,19 @@ export function useFilePlayback({ onComplete }: UseFilePlaybackProps = {}) {
           return
         }
 
+        // Fetch artwork if available
+        let artworkUrl = ''
+        if (track.artworkId) {
+          try {
+            const artworkBlob = await DB.getAudioBlob(track.artworkId)
+            if (artworkBlob) {
+              artworkUrl = URL.createObjectURL(artworkBlob.blob)
+            }
+          } catch {
+            // Best-effort: continue without artwork
+          }
+        }
+
         // Filter subtitles for this track
         const trackSubs = availableSubtitles.filter((s) => s.trackId === track.id)
 
@@ -53,7 +66,7 @@ export function useFilePlayback({ onComplete }: UseFilePlaybackProps = {}) {
         }
 
         const audioUrl = URL.createObjectURL(audioBlob.blob)
-        setAudioUrl(audioUrl, track.name, '')
+        setAudioUrl(audioUrl, track.name, artworkUrl)
         setPlayerSubtitles(parsedSubtitles)
 
         // Set localTrackId for session tracking
@@ -70,10 +83,12 @@ export function useFilePlayback({ onComplete }: UseFilePlaybackProps = {}) {
           source: 'local',
           title: track.name,
           audioId: track.audioId, // Required for Last Played map
+          artworkUrl: artworkUrl || undefined, // Set artwork URL for History display
           subtitleId: subToLoad?.subtitleId || null,
           hasAudioBlob: true,
           lastPlayedAt: Date.now(),
           localTrackId: track.id,
+          duration: track.durationSeconds || 0,
         })
 
         setStoreSessionId(sessionId) // Set sessionId AFTER creating (safe)

@@ -1,11 +1,12 @@
 // src/components/AppShell/Sidebar.tsx
 import { Link, useRouterState } from '@tanstack/react-router'
-import { Clock, Disc, FolderOpen, LayoutGrid, Moon, Radio, Settings, Star, Sun } from 'lucide-react'
+import { Clock, Disc, FolderOpen, LayoutGrid, Moon, Settings, Star, Sun } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '../../lib/utils'
 import { useThemeStore } from '../../store/themeStore'
-import { GlobalSearchInput, SearchOverlay } from '../GlobalSearch'
+import { CommandPalette } from '../GlobalSearch'
 import { Button } from '../ui/button'
+import { Logo } from '../ui/Logo'
 
 interface SidebarProps {
   className?: string
@@ -47,25 +48,22 @@ export function Sidebar({ className = '' }: SidebarProps) {
   return (
     <aside
       className={cn(
-        'w-sidebar h-screen bg-background/80 backdrop-blur-xl backdrop-saturate-150 border-r border-border/50 flex flex-col flex-shrink-0',
+        'w-sidebar h-screen bg-background/80 backdrop-blur-xl backdrop-saturate-150 border-r border-border/50 flex flex-col flex-shrink-0 relative z-sidebar',
         className
       )}
     >
       {/* App Header */}
       <div className="px-6 py-8 pb-3">
         <div className="flex items-center gap-3">
-          <div className="bg-primary/10 text-primary p-1.5 rounded-lg">
-            <Radio size={20} />
+          <div className="bg-primary/10 text-primary p-1.5 rounded-lg flex items-center justify-center">
+            <Logo size={20} />
           </div>
           <span className="font-bold text-xl tracking-tight text-foreground/90">Readio</span>
         </div>
       </div>
 
       {/* Global Search */}
-      <div className="relative">
-        <GlobalSearchInput />
-        <SearchOverlay />
-      </div>
+      <CommandPalette />
 
       <nav className="flex-1 px-4 space-y-8 overflow-y-auto">
         {/* Section: Discover */}

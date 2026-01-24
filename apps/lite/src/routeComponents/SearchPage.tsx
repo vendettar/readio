@@ -10,7 +10,7 @@ import { EmptyState } from '../components/ui/empty-state'
 import { LoadingPage } from '../components/ui/loading-spinner'
 import { useEpisodePlayback } from '../hooks/useEpisodePlayback'
 import { type LocalSearchResult, useGlobalSearch } from '../hooks/useGlobalSearch'
-import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
+
 import discovery, { type SearchEpisode } from '../lib/discovery'
 import { executeLocalSearchAction } from '../lib/localSearchActions'
 import { toast } from '../lib/toast'
@@ -27,9 +27,6 @@ export default function SearchPage() {
   const subscribe = useExploreStore((s) => s.subscribe)
   const unsubscribe = useExploreStore((s) => s.unsubscribe)
   const isSubscribed = useExploreStore((s) => s.isSubscribed)
-
-  // Keyboard shortcuts
-  useKeyboardShortcuts({ isModalOpen: false })
 
   // Search results
   const { playSearchEpisode } = useEpisodePlayback()

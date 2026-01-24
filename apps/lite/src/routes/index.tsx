@@ -6,7 +6,7 @@ import { FollowButton } from '../components/FollowButton'
 import { TranscriptErrorFallback } from '../components/Transcript/TranscriptErrorFallback'
 import { Button } from '../components/ui/button'
 import { ZoomControl } from '../components/ZoomControl'
-import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
+
 import { useZoom } from '../hooks/useZoom'
 import { reportError } from '../lib/errorReporter'
 import { logError } from '../lib/logger'
@@ -23,19 +23,16 @@ function HomePage() {
     useZoom()
   const [isFollowing, setIsFollowing] = useState(true)
 
-  // Keyboard shortcuts active on home page
-  useKeyboardShortcuts({ isModalOpen: false })
+  // Use atomic selectors to prevent unnecessary re-renders from progress updates
+  const audioLoaded = usePlayerStore((s) => s.audioLoaded)
+  const subtitles = usePlayerStore((s) => s.subtitles)
+  const subtitlesLoaded = usePlayerStore((s) => s.subtitlesLoaded)
+  const currentIndex = usePlayerStore((s) => s.currentIndex)
+  const progress = usePlayerStore((s) => s.progress)
+  const isPlaying = usePlayerStore((s) => s.isPlaying)
 
-  const {
-    audioLoaded,
-    subtitles,
-    subtitlesLoaded,
-    currentIndex,
-    setCurrentIndex,
-    progress,
-    isPlaying,
-    seekTo,
-  } = usePlayerStore()
+  const setCurrentIndex = usePlayerStore((s) => s.setCurrentIndex)
+  const seekTo = usePlayerStore((s) => s.seekTo)
 
   // Find current subtitle using optimized algorithm
   useEffect(() => {

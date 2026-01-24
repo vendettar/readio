@@ -16,7 +16,7 @@ import { useFilePlayback } from '../../hooks/useFilePlayback'
 import { useFileProcessing } from '../../hooks/useFileProcessing'
 import { useFilesData } from '../../hooks/useFilesData'
 import { useFolderManagement } from '../../hooks/useFolderManagement'
-import { useKeyboardShortcuts } from '../../hooks/useKeyboardShortcuts'
+
 import { DB } from '../../lib/dexieDb'
 import { sortFolders } from '../../lib/files/sortFolders'
 import { logError, warn as logWarn } from '../../lib/logger'
@@ -48,7 +48,6 @@ const snapCenterCursor: Modifier = ({ transform, activatorEvent, activeNodeRect 
 export default function FilesIndexPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  useKeyboardShortcuts({ isModalOpen: false })
 
   // Data management
   const {
@@ -200,6 +199,45 @@ export default function FilesIndexPage() {
 
   const existingTrackNames = tracks?.map((t) => t.name) || []
   const isInitialLoading = status === 'loading' && !folders?.length && !tracks?.length
+
+  // Artwork URL management
+  const [artworkUrls, setArtworkUrls] = useState<Record<string, string>>({})
+
+  // Fetch artwork blobs and generate object URLs
+  useEffect(() => {
+    if (!tracks || tracks.length === 0) return
+
+    let cancelled = false
+    const urls: Record<string, string> = {}
+
+    const fetchArtworks = async () => {
+      for (const track of tracks) {
+        if (!track.artworkId) continue
+        try {
+          const blob = await DB.getAudioBlob(track.artworkId)
+          if (cancelled) return
+          if (blob) {
+            urls[track.id] = URL.createObjectURL(blob.blob)
+          }
+        } catch (err) {
+          logWarn('[Files] Failed to fetch artwork blob', err)
+        }
+      }
+      if (!cancelled) {
+        setArtworkUrls(urls)
+      }
+    }
+
+    fetchArtworks()
+
+    return () => {
+      cancelled = true
+      // Revoke old URLs
+      for (const url of Object.values(urls)) {
+        URL.revokeObjectURL(url)
+      }
+    }
+  }, [tracks])
 
   const folderSkeletonKeys = [
     'folder-skeleton-1',
@@ -451,6 +489,7 @@ export default function FilesIndexPage() {
                           lastPlayedAt={track.audioId ? lastPlayedMap[track.audioId] : undefined}
                           isGlobalDragging={isDragging}
                           existingTrackNames={existingTrackNames}
+                          artworkUrl={artworkUrls[track.id]}
                           onPlay={(t, s) => handlePlay(t, subtitles, s)}
                           onSetActiveSubtitle={handleSetActiveSubtitle}
                           onRename={async (newName) => {

@@ -113,3 +113,17 @@ const { data } = useQuery({
 - ❌ **Effect Sync**: Don't use `useEffect` to listen to Store changes and write to DB. This is hard to trace. Write to DB explicitly inside the Action.
 - ❌ **Direct DB Render**: Don't use `useLiveQuery` (Dexie-React) unless absolutely necessary for a real-time list. Prefer `useQuery` for better control.
 - ❌ **Split Logic**: Don't have `useFileHandler` saving to DB while `playerStore` also saves to DB. Consolidate into the Store.
+
+---
+
+## 6. Blob Handling & Persistence
+
+Handling binary data (Blobs) requires special care to avoid stale data bugs.
+
+- **URL Lifecycle**: `blob:http://...` URLs are ephemeral. They expire immediately on page refresh.
+- **Do NOT Persist URLs**: Never save a `blob:` URL string to IndexedDB or LocalStorage.
+- **Persist Blobs**: Save the `Blob` object itself to IndexedDB (as `ArrayBuffer` or `Blob`).
+- **Dynamic Resolution**:
+    - When loading a file from DB, generate a fresh `blob:` URL using `URL.createObjectURL()` inside a `useEffect`.
+    - Always `revokeObjectURL` in the effect cleanup to avoid memory leaks.
+- **UI Priority**: When rendering images/audio, prioritize the dynamically resolved URL from local state over any potentially stale URL found in persistent storage objects.

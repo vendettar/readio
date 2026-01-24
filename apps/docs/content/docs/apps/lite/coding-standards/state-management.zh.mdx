@@ -15,6 +15,7 @@ title: 状态管理
 - **Zustand & 持久化**:
   - 保持 store 逻辑纯净和类型化。
   - 使用显式选择器防止不必要的重新渲染。
+  - **高频字段**：当字段高频更新（如 progress/time/scroll/drag）时，禁止订阅整个 store；使用原子选择器或 `useShallow` 多字段选择。
   - **持久化**: 优先使用显式的 `loadFromDB()` / `saveToDB()` 操作 (使用 `src/lib/dexieDb.ts`) 而不是 `zustand/persist`。
   - **Dexie 版本控制**: 仅使用单个模式版本。如果模式更改，重置本地数据。
 

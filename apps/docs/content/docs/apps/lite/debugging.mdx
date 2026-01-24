@@ -87,3 +87,13 @@ When API data looks wrong, don't guess.
 ## Planned (Pending Execution)
 
 - **Local Error Logger**: Downloadable diagnostics log with PII redaction (Instruction 047).
+
+## 6. Case Studies & Known Issues
+
+### MP3 Artwork: Missing EOI Marker
+**Problem**: Some MP3s contain valid JPEG data in their ID3 tags but are missing the End of Image (EOI) marker (`FF D9`).
+- **Symptom**: Chrome/Blink browsers truncate the bottom of the image (often 10-20%), while macOS Finder or older tools display it correctly (due to more lenient decoders).
+- **Error**: `createImageBitmap` throws `InvalidStateError`.
+- **Solution**: Implemented in `src/lib/files/ingest.ts`.
+  1. **Binary Fix**: We scan the blob's tail. If `FF D9` is missing, we append it manually to the Uint8Array.
+  2. **Normalization**: We pass the fixed blob through an offscreen Canvas. This re-encodes the image into a perfectly valid standard JPEG, ensuring it works across all devices and caches correctly in IndexedDB.

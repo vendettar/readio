@@ -6,12 +6,15 @@ title: Search System
 
 Search system as a global entry point, adopts a two-stage workflow:
 
-### Stage 1: Preview (Preview Overlay)
-- **Trigger**: Sidebar search box focus or input.
-- **Display**: `SearchOverlay` component appears as a floating window below the search box.
-- **Content**: Displays high-confidence Top Matches, limited to 3-5 items per type (Shows, Episodes, Local Files).
-- **Status Indicator**: Uses `StatusBadge` to display relation between content and user in real-time (Subscribed, Favorited, Played, Local).
-- SearchOverlay width uses `w-96`, date display uniformly uses `formatTimestamp`.
+### Stage 1: Palette (Command Palette)
+- **Trigger**: Sidebar search trigger input or shortcut (`Cmd+K`).
+- **Display**: Integrated sidebar `CommandPalette` component (`cmdk`) with premium glass effects.
+- **Content**: Displays high-confidence Top Matches, limited to 5 items per type (Shows, Episodes, Local Files).
+- **Status Indicator**: **Standardized Right-Aligned Badges**.
+
+  - All status indicators (Subscribed, Favorited, History, File) use a unified visual language: right-aligned, vertically centered, and `text-primary` color (Decision D053).
+  - **Multi-State Merging**: If an item matches multiple criteria (e.g., it is both Favorited and in History), **ALL** relevant icons must be displayed side-by-side. Deduplication logic must merge metadata rather than overriding it.
+  - Replaces previous "StatusBadge" chip component to reduce visual noise.
 
 ### Stage 2: Results Page (Full Search Page)
 - **Trigger**: Enter key or click "View all results".
@@ -34,7 +37,7 @@ Search system as a global entry point, adopts a two-stage workflow:
 - **Load Order**: Any search scenario (Search Overlay, Full Search Page, custom hooks) dependent on `subscriptions` / `favorites` in `useExploreStore` must call `loadSubscriptions()` / `loadFavorites()` before access. If not loaded successfully in store, fallback to Dexie query instead of directly assuming list is ready.
 - **Real-time Refresh**: Search results must subscribe to `useExploreStore` state changes (e.g., via selector + Zustand subscription), rather than reading `getState()` once on mount. If user performs favorite/unfollow operations during search, Overlay/Results Page needs to refresh tags instantly.
 - **Unified Limit**: `useGlobalSearch(query, enabled, limits?)` controls unified upper limit for four types of local results (Subscriptions/Favorites/History/Local Files) at hook layer (default 5). Caller must not arbitrarily extend quantity at UI layer; if special case needed (e.g., Search Page displaying full list), `limits` override must be explicitly passed. This way Overlay / Spotlight / Results Page all share the same strategy.
-- **Avoid Full Table Scan**: Local History (`playback_sessions`) and Local Files (`local_tracks`) tables can be very large; do not `getAll*()` full scan on every keystroke. `useGlobalSearch` uses Dexie's `searchPlaybackSessionsByTitle` / `searchLocalTracksByName` combined with throttled reading of recent N items; new scenarios must follow same strategy (Index-based, Pagination or Worker), creating new full table scans is prohibited.
+- **Avoid Full Table Scan**: Local History (`playback_sessions`) and Local Files (`local_tracks`) tables can be very large; do not `getAll*()` full scan on every keystroke. `useGlobalSearch` uses Dexie's `searchPlaybackSessionsByTitle` / `searchFileTracksByName` combined with throttled reading of recent N items; new scenarios must follow same strategy (Index-based, Pagination or Worker), creating new full table scans is prohibited.
 - **Result Caps**: Local results must be capped (Top N) in overlay mode. Full search page can raise limits explicitly.
 - **Remote Throttle**: Remote search must debounce and cancel/ignore stale requests (use `AbortController` or requestId).
 - **Index-Based Search**: Local searches on large tables (History, Local Tracks) must avoid table scans. Enforce `startsWithIgnoreCase` on indexed fields (`title`, `name`) for O(log N) performance.

@@ -6,10 +6,11 @@ import { BaseEpisodeRow, GutterPlayButton } from '../components/EpisodeRow'
 import { InteractiveArtwork } from '../components/interactive/InteractiveArtwork'
 import { InteractiveTitle } from '../components/interactive/InteractiveTitle'
 import { Button } from '../components/ui/button'
+import { DropdownMenuItem } from '../components/ui/dropdown-menu'
 import { EmptyState } from '../components/ui/empty-state'
 import { LoadingPage } from '../components/ui/loading-spinner'
-import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover'
-import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
+import { OverflowMenu } from '../components/ui/overflow-menu'
+
 import { useSubscriptionMap } from '../hooks/useSubscriptionMap'
 import { formatDateStandard, formatDuration, formatTimeSmart } from '../lib/dateUtils'
 import { DB, type PlaybackSession } from '../lib/dexieDb'
@@ -42,11 +43,9 @@ export default function HistoryPage() {
   }, [favorites])
 
   const [sessions, setSessions] = useState<PlaybackSession[]>([])
+  const [artworkUrls, setArtworkUrls] = useState<Record<string, string>>({})
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-
-  // Keyboard shortcuts
-  useKeyboardShortcuts({ isModalOpen: false })
 
   // Load sessions on mount (favorites are loaded globally by useAppInitialization)
   useEffect(() => {
@@ -54,6 +53,72 @@ export default function HistoryPage() {
       .then((s) => setSessions(s))
       .catch((err) => logError('[HistoryPage] Failed to load sessions:', err))
       .finally(() => setIsLoading(false))
+  }, [])
+
+  // Artwork resolution for local files
+  useEffect(() => {
+    if (sessions.length === 0) return
+
+    let cancelled = false
+    // Use a ref to track URLs created by THIS specific run of the effect
+    // We don't want to revoke them immediately in cleanup if we are just re-running
+    // BUT we must track them for component unmount
+
+    // Actually, simpler strategy:
+    // 1. We have a ref tracking ALL active URLs for this component lifetime
+    // 2. We only add new ones
+    // 3. We revoke ALL on unmount
+
+    const resolveArtworks = async () => {
+      const localSessions = sessions.filter((s) => s.source === 'local' && s.localTrackId)
+      if (localSessions.length === 0) return
+
+      const newUrls: Record<string, string> = {}
+      let hasUpdates = false
+
+      for (const session of localSessions) {
+        // Skip if we already have a URL for this session
+        if (activeUrlsRef.current[session.id]) continue
+
+        if (!session.localTrackId) continue
+        try {
+          const track = await DB.getFileTrack(session.localTrackId)
+          if (cancelled) return
+          if (track?.artworkId) {
+            const blob = await DB.getAudioBlob(track.artworkId)
+            if (cancelled) return
+            if (blob) {
+              const url = URL.createObjectURL(blob.blob)
+              activeUrlsRef.current[session.id] = url
+              newUrls[session.id] = url
+              hasUpdates = true
+            }
+          }
+        } catch (err) {
+          logError('[HistoryPage] Failed to resolve artwork for session:', session.id, err)
+        }
+      }
+
+      if (!cancelled && hasUpdates) {
+        setArtworkUrls((prev) => ({ ...prev, ...newUrls }))
+      }
+    }
+
+    void resolveArtworks()
+
+    return () => {
+      cancelled = true
+    }
+  }, [sessions])
+
+  // Cleanup on unmount
+  const activeUrlsRef = React.useRef<Record<string, string>>({})
+  useEffect(() => {
+    return () => {
+      Object.values(activeUrlsRef.current).forEach((url) => {
+        URL.revokeObjectURL(url)
+      })
+    }
   }, [])
 
   const handlePlaySession = async (session: PlaybackSession) => {
@@ -83,7 +148,8 @@ export default function HistoryPage() {
       const audioBlob = await DB.getAudioBlob(session.audioId)
       if (audioBlob) {
         const url = URL.createObjectURL(audioBlob.blob)
-        setAudioUrl(url, session.title, session.artworkUrl || '')
+        const artworkUrl = artworkUrls[session.id] || session.artworkUrl || ''
+        setAudioUrl(url, session.title, artworkUrl)
         setFileTrackId(session.localTrackId ?? null)
 
         // Ensure session ID is set last
@@ -186,16 +252,20 @@ export default function HistoryPage() {
                 ? { id: providerPodcastId, episodeId: encodeURIComponent(episodeId) }
                 : undefined
 
+              const isLocal = session.source === 'local'
+              const displayArtworkUrl =
+                artworkUrls[session.id] || (isLocal ? undefined : session.artworkUrl)
+
               return (
                 <BaseEpisodeRow
                   key={session.id}
                   isLast={index === sessions.length - 1}
                   descriptionLines={1}
                   artwork={
-                    session.artworkUrl ? (
+                    displayArtworkUrl ? (
                       <div className="relative flex-shrink-0 z-20">
                         <InteractiveArtwork
-                          src={session.artworkUrl ?? ''}
+                          src={displayArtworkUrl}
                           to={navigationTo}
                           params={navigationParams}
                           onPlay={() => handlePlaySession(session)}
@@ -209,7 +279,7 @@ export default function HistoryPage() {
                   }
                   title={
                     <div className="flex items-center">
-                      {!session.artworkUrl && (
+                      {!displayArtworkUrl && (
                         <GutterPlayButton
                           onPlay={() => handlePlaySession(session)}
                           ariaLabel={t('btnPlayOnly')}
@@ -270,40 +340,23 @@ export default function HistoryPage() {
                         </Button>
                       )}
 
-                      <Popover
+                      <OverflowMenu
                         open={openMenuId === session.id}
                         onOpenChange={(open) => setOpenMenuId(open ? session.id : null)}
+                        triggerAriaLabel={t('ariaMoreActions')}
+                        stopPropagation
+                        triggerClassName="h-8 w-8 !rounded-full text-foreground/80 hover:bg-accent hover:text-foreground transition-all"
+                        icon={<MoreHorizontal size={15} />}
+                        contentClassName="p-0 border border-border/50 bg-popover/95 backdrop-blur-xl"
                       >
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className={cn(
-                              'w-8 h-8 text-primary hover:bg-transparent hover:opacity-80 transition-all duration-200',
-                              openMenuId === session.id && 'opacity-100'
-                            )}
-                            aria-label={t('ariaMoreActions')}
-                          >
-                            <MoreHorizontal size={15} />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent
-                          align="end"
-                          sideOffset={8}
-                          onMouseDown={(e) => e.stopPropagation()}
-                          onClick={(e) => e.stopPropagation()}
-                          className="w-48 p-0 overflow-hidden border border-border/50 bg-popover/95 backdrop-blur-xl"
+                        <DropdownMenuItem
+                          onSelect={() => handleDeleteSession(session.id)}
+                          className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer whitespace-nowrap"
                         >
-                          <Button
-                            variant="ghost"
-                            className="w-full justify-start text-destructive hover:text-destructive hover:bg-destructive/10 rounded-none h-10 px-3"
-                            onClick={() => handleDeleteSession(session.id)}
-                          >
-                            <Trash2 size={16} className="mr-2" />
-                            {t('commonDelete')}
-                          </Button>
-                        </PopoverContent>
-                      </Popover>
+                          <Trash2 size={16} className="mr-2" />
+                          {t('commonDelete')}
+                        </DropdownMenuItem>
+                      </OverflowMenu>
                     </>
                   }
                 />

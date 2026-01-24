@@ -9,6 +9,14 @@ title: Overlays & Shell
 - **Multi-Step Menus**: Implement confirmation steps **inside** the menu content (Panel-Grid pattern) rather than opening a new Dialog on top.
 - **No Global Overlay Store**: Keep `isOpen` state local to the component; standardize layering with shared z-index tokens instead of global modal state.
 
+### 3-dot Action Menus (Overflow Menus)
+- **Component Choice**: Use `DropdownMenu` for action lists. Use `Popover` only for non-interactive rich content or info.
+- **Positioning**: `sideOffset={8}` and `collisionPadding={16}` are required for all 3-dot menus.
+- **Modal Mode**: Use `modal={false}` when an action triggers inline editing (rename, inline inputs).
+- **Event Isolation**: Stop propagation on trigger and content when nested inside clickable rows/cards.
+- **Overflow Hidden**: Only allowed for multi-panel sliding menus (e.g., menu → confirm). Avoid for single-panel menus.
+- **Default Wrapper**: Prefer `src/components/ui/overflow-menu.tsx` for standard cases to keep behavior consistent.
+
 ### Surface Decision Tree (Which Component?)
 - **Is it a critical confirmation?** (Delete, Wipe) -> **`AlertDialog`** (Must require explicit action).
 - **Is it a complex form/content?** (Settings, Edit Details) -> **`Dialog`** (Modal, centers screen).

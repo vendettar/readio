@@ -1,7 +1,7 @@
 // src/components/Explore/PodcastEpisodesGrid.tsx
 
 import { Link } from '@tanstack/react-router'
-import { Info, Link as LinkIcon, MoreHorizontal, Play, RadioTower, Star } from 'lucide-react'
+import { Info, Link as LinkIcon, Play, RadioTower, Star } from 'lucide-react'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { CAROUSEL_DEFAULTS } from '../../constants/layout'
@@ -13,12 +13,8 @@ import { useExploreStore } from '../../store/exploreStore'
 import { InteractiveArtwork } from '../interactive/InteractiveArtwork'
 import { InteractiveTitle } from '../interactive/InteractiveTitle'
 import { Button } from '../ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '../ui/dropdown-menu'
+import { DropdownMenuItem } from '../ui/dropdown-menu'
+import { OverflowMenu } from '../ui/overflow-menu'
 import { CarouselNavigation } from './CarouselNavigation'
 
 interface PodcastEpisodesGridProps {
@@ -40,7 +36,8 @@ export function PodcastEpisodesGrid({
   const favorites = useExploreStore((s) => s.favorites)
   const [openMenuId, setOpenMenuId] = React.useState<string | null>(null)
   const [processingId, setProcessingId] = React.useState<string | null>(null)
-  const menuItemClassName = 'text-sm font-medium focus:bg-primary focus:text-primary-foreground'
+  const menuItemClassName =
+    'text-sm font-medium focus:bg-primary focus:text-primary-foreground whitespace-nowrap cursor-pointer'
   const favoritedIds = React.useMemo(
     () => new Set(favorites.map((f) => f.episodeId).filter(Boolean) as string[]),
     [favorites]
@@ -225,79 +222,63 @@ export function PodcastEpisodesGrid({
                         />
                       </Button>
 
-                      <DropdownMenu
+                      <OverflowMenu
                         open={openMenuId === episode.id}
                         onOpenChange={(open) => setOpenMenuId(open ? episode.id : null)}
+                        triggerAriaLabel={t('ariaMoreActions')}
+                        stopPropagation
+                        triggerClassName="w-8 h-8 rounded-full text-muted-foreground hover:text-primary hover:bg-accent transition-all"
+                        iconSize={16}
+                        contentClassName="min-w-44 rounded-xl shadow-2xl border border-border/50 bg-popover/95 backdrop-blur-xl p-0"
                       >
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={(e) => e.stopPropagation()}
-                            className={cn(
-                              'w-8 h-8 text-muted-foreground hover:text-primary transition-colors hover:bg-transparent',
-                              openMenuId === episode.id && 'text-primary opacity-100'
-                            )}
-                          >
-                            <MoreHorizontal size={16} />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent
-                          align="end"
-                          sideOffset={8}
-                          onMouseDown={(e) => e.stopPropagation()}
-                          onClick={(e) => e.stopPropagation()}
-                          className="rounded-xl shadow-2xl border border-border/50 bg-popover/95 backdrop-blur-xl p-0 overflow-hidden"
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            onPlay?.(episode)
+                          }}
+                          className={menuItemClassName}
                         >
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              onPlay?.(episode)
-                            }}
-                            className={menuItemClassName}
-                          >
-                            <Play size={14} className="mr-2 fill-current" />
-                            {t('playerPlay')}
+                          <Play size={14} className="mr-2 fill-current" />
+                          {t('playerPlay')}
+                        </DropdownMenuItem>
+                        {podcastId && (
+                          <DropdownMenuItem asChild className={menuItemClassName}>
+                            <Link
+                              to="/podcast/$id/episode/$episodeId"
+                              params={{
+                                id: podcastId,
+                                episodeId: encodeURIComponent(episode.id),
+                              }}
+                            >
+                              <Info size={14} className="mr-2" />
+                              {t('details')}
+                            </Link>
                           </DropdownMenuItem>
-                          {podcastId && (
-                            <DropdownMenuItem asChild className={menuItemClassName}>
-                              <Link
-                                to="/podcast/$id/episode/$episodeId"
-                                params={{
-                                  id: podcastId,
-                                  episodeId: encodeURIComponent(episode.id),
-                                }}
-                              >
-                                <Info size={14} className="mr-2" />
-                                {t('details')}
-                              </Link>
-                            </DropdownMenuItem>
-                          )}
-                          {podcastId && (
-                            <DropdownMenuItem asChild className={menuItemClassName}>
-                              <Link
-                                to="/podcast/$id"
-                                params={{
-                                  id: podcastId,
-                                }}
-                              >
-                                <RadioTower size={14} className="mr-2" />
-                                {t('podcastLabel')}
-                              </Link>
-                            </DropdownMenuItem>
-                          )}
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              if (episode.url) navigator.clipboard.writeText(episode.url)
-                            }}
-                            className={menuItemClassName}
-                          >
-                            <LinkIcon size={14} className="mr-2" />
-                            {t('copyLink')}
+                        )}
+                        {podcastId && (
+                          <DropdownMenuItem asChild className={menuItemClassName}>
+                            <Link
+                              to="/podcast/$id"
+                              params={{
+                                id: podcastId,
+                              }}
+                            >
+                              <RadioTower size={14} className="mr-2" />
+                              {t('podcastLabel')}
+                            </Link>
                           </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                        )}
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (episode.url) navigator.clipboard.writeText(episode.url)
+                          }}
+                          className={menuItemClassName}
+                        >
+                          <LinkIcon size={14} className="mr-2" />
+                          {t('copyLink')}
+                        </DropdownMenuItem>
+                      </OverflowMenu>
                     </div>
                   </div>
                 </div>

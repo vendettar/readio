@@ -16,16 +16,34 @@ title: Feature Patterns
 - **Smart Dividers**: Dividers should hide automatically on the active (hovered) row and its immediate neighbor to create a "floating" focused card effect.
 - **Action Visibility**: Interactive buttons (Play, Favorite, Menu) should typically appear or increase in opacity on row hover.
 
-## File Drop Interaction
-
-- **Global Drop Zone**: In functional areas (like Files), the entire content area SHOULD be a drop target.
-- **Visual Feedback**: Use a full-screen or area-wide overlay with code `backdrop-blur-md` and `bg-background/80` (Glassmorphism) when `isDragActive` triggers.
-- **Validation & Toasts**: Immediate validation against file schemas (Type/Size). Failed files MUST trigger an error Toast.
 - **Overlay Content**: Display a prominent "Drop to upload" message with an animated icon (e.g. bouncing Upload icon) to confirm active state.
+
+## Search & Command Palette
+
+- **Global Entry**: The search trigger in the sidebar MUST be an integrated search input that expands into a premium floating results overlay.
+- **Keyboard-First**: Navigation within the palette MUST support Arrow keys and Enter (via `cmdk`).
+- **Shortcut**: `Cmd+K` (or `Ctrl+K`) MUST be globally bound to open the palette.
+- **Vibe**: The palette MUST use Premium Glass visuals (`backdrop-blur-xl`, `bg-popover/95`, `backdrop-saturate-150`).
+- **Standardized Badge System**: All status indicators (Subscribed, Favorited, History) MUST use a unified, right-aligned **icon-based** style (text-primary color). When multiple states exist (e.g., Favorited AND History), ALL relevant icons MUST be displayed side-by-side, never overriding each other.
+
+## Hotkeys & Gestures
+
+- **Global Shortcuts**:
+  - `Space`: Toggle Play/Pause (globally, except when typing in inputs).
+  - `Arrow Left/Right`: Seek -/+ 15 seconds.
+  - `Cmd/Ctrl + K`: Focus Search.
+  - `Esc`: Close Overlays or Exit Full Player.
+- **Touch Interaction**:
+  - **Swipe Down**: Swiping down on the Full Player container (especially from the top drag handle) MUST collapse the player and return to the main view.
+  - **Drag Handle**: A subtle visual handle (pill shape, low opacity) should be visible at the top of the Full Player to hint at swipe-down behavior.
+
 
 ## Planned (Pending Execution)
 
 - **Onboarding Empty States**: First-run guidance for Subscriptions, Files, Favorites, History (Instruction 045).
-- **Image Fallback Strategy**: Loading skeleton + fallback icon for broken artwork (Instruction 046).
+- **Image Fallback Strategy**: 
+  - RSS Episodes/Podcasts: Loading skeleton + fallback icon for broken artwork (Instruction 046).
+  - **Local Files**: If metadata contains embedded artwork, display it. Otherwise, use the `FileAudio` lucide icon inside a `bg-muted` square with `shadow-inner`.
+
 - **Offline Content Badges**: Visual indicator for locally cached content + cleanup actions (Instruction 053).
 - **Episode Sorting/Filtering UI**: Controls for sort/filter in episode lists (Instruction 054).

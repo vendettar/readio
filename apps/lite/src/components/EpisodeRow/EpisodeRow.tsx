@@ -1,4 +1,4 @@
-import { MoreHorizontal, Star } from 'lucide-react'
+import { Star } from 'lucide-react'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { useEpisodePlayback } from '../../hooks/useEpisodePlayback'
@@ -11,12 +11,8 @@ import { useExploreStore } from '../../store/exploreStore'
 import { InteractiveArtwork } from '../interactive/InteractiveArtwork'
 import { InteractiveTitle } from '../interactive/InteractiveTitle'
 import { Button } from '../ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '../ui/dropdown-menu'
+import { DropdownMenuItem } from '../ui/dropdown-menu'
+import { OverflowMenu } from '../ui/overflow-menu'
 import { BaseEpisodeRow } from './BaseEpisodeRow'
 import { GutterPlayButton } from './GutterPlayButton'
 
@@ -89,43 +85,29 @@ export function EpisodeRow({
         <Star size={15} className={cn('stroke-2', favorited && 'fill-current')} />
       </Button>
 
-      <DropdownMenu open={isMenuOpen} onOpenChange={setIsMenuOpen}>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className={cn(
-              'w-8 h-8 text-primary hover:bg-transparent hover:opacity-80 transition-opacity duration-200 relative z-20',
-              isMenuOpen && 'text-primary opacity-100' // Keeping it highlighted or visible
-            )}
-            aria-label={t('ariaMoreActions')}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <MoreHorizontal size={15} />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          align="end"
-          sideOffset={8}
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={(e) => e.stopPropagation()}
-          className="rounded-xl shadow-2xl border border-border/50 bg-popover/95 backdrop-blur-xl p-0 overflow-hidden"
+      <OverflowMenu
+        open={isMenuOpen}
+        onOpenChange={setIsMenuOpen}
+        triggerAriaLabel={t('ariaMoreActions')}
+        stopPropagation
+        triggerClassName="w-8 h-8 rounded-full text-muted-foreground hover:text-primary hover:bg-accent transition-all relative z-20"
+        iconSize={15}
+        contentClassName="min-w-44 rounded-xl shadow-2xl border border-border/50 bg-popover/95 backdrop-blur-xl p-0"
+      >
+        <DropdownMenuItem
+          onSelect={() => {
+            if (favorited) {
+              removeFavorite(`${podcast.feedUrl ?? ''}::${episode.audioUrl ?? ''}`)
+            } else {
+              addFavorite(podcast, episode)
+            }
+          }}
+          className="text-sm font-medium focus:bg-primary focus:text-primary-foreground whitespace-nowrap cursor-pointer"
         >
-          <DropdownMenuItem
-            onSelect={() => {
-              if (favorited) {
-                removeFavorite(`${podcast.feedUrl ?? ''}::${episode.audioUrl ?? ''}`)
-              } else {
-                addFavorite(podcast, episode)
-              }
-            }}
-            className="text-sm font-medium focus:bg-primary focus:text-primary-foreground"
-          >
-            <Star size={14} className={cn('mr-2', favorited && 'fill-current')} />
-            {favorited ? t('favoritesRemove') : t('favoritesAdd')}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+          <Star size={14} className={cn('mr-2', favorited && 'fill-current')} />
+          {favorited ? t('favoritesRemove') : t('favoritesAdd')}
+        </DropdownMenuItem>
+      </OverflowMenu>
     </>
   )
 

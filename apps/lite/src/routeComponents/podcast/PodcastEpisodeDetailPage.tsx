@@ -1,18 +1,16 @@
 // src/routes/podcast/$id/episode/$episodeId.tsx
 // Single episode detail page - Maximum information extraction
 
-import { useQuery } from '@tanstack/react-query'
 import { useParams } from '@tanstack/react-router'
 import { AlertTriangle, FileText, List, Play, SquareArrowUpRight, Star } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { InteractiveTitle } from '@/components/interactive/InteractiveTitle'
 import { Button } from '@/components/ui/button'
+import { useEpisodeResolution } from '@/hooks/useEpisodeResolution'
 import { formatDuration, formatRelativeTime } from '@/lib/dateUtils'
-import discovery from '@/lib/discovery'
 import { sanitizeHtml } from '@/lib/htmlUtils'
 import { getDiscoveryArtworkUrl } from '@/lib/imageUtils'
-import { logError } from '@/lib/logger'
 import { openExternal } from '@/lib/openExternal'
 import { cn } from '@/lib/utils'
 import { useExploreStore } from '@/store/exploreStore'
@@ -23,84 +21,8 @@ export default function PodcastEpisodeDetailPage() {
   const { id, episodeId } = useParams({ from: '/podcast/$id/episode/$episodeId' })
   const [imageError, setImageError] = useState(false)
 
-  // Fetch podcast metadata via Lookup API
-  const {
-    data: podcast,
-    isLoading: isLoadingPodcast,
-    error: podcastError,
-  } = useQuery({
-    queryKey: ['podcast', 'lookup', id],
-    queryFn: () => discovery.getPodcast(id),
-    staleTime: 1000 * 60 * 60, // 1 hour
-    gcTime: 1000 * 60 * 60 * 24, // 24 hours
-  })
-
-  // Fetch episodes via RSS feed (only when we have feedUrl)
-  const feedUrl = podcast?.feedUrl
-  const { data: feed, isLoading: isLoadingFeed } = useQuery({
-    queryKey: ['podcast', 'feed', podcast?.feedUrl],
-    queryFn: async () => {
-      try {
-        return await discovery.fetchPodcastFeed(feedUrl ?? '')
-      } catch (err) {
-        logError('[PodcastEpisodeDetailPage] RSS feed failed, returning basic info:', err)
-        return {
-          title: podcast?.collectionName || '',
-          description: '',
-          artworkUrl: podcast?.artworkUrl600,
-          episodes: [], // Episodes will be recovered from providerEpisodes query
-        }
-      }
-    },
-    enabled: !!podcast?.feedUrl,
-    staleTime: 1000 * 60 * 30, // 30 minutes
-    gcTime: 1000 * 60 * 60 * 6, // 6 hours
-  })
-
-  // Find the episode from the feed
-  let decodedEpisodeId = (episodeId || '').trim()
-  try {
-    decodedEpisodeId = decodeURIComponent(decodedEpisodeId)
-  } catch {
-    // Keep raw param if decoding fails.
-  }
-
-  // STEP 1: Direct ID Match (Fastest)
-  let episode = feed?.episodes.find((ep) => ep.id === decodedEpisodeId)
-
-  // STEP 2: Match Recovery Strategy (If direct GUID match fails)
-  // Sometimes iTunes API GUID vs RSS GUID have subtle differences or iTunes GUID is missing
-  const { data: providerEpisodes, isLoading: isLoadingItunes } = useQuery({
-    queryKey: ['podcast', 'provider-episodes', id],
-    queryFn: () => discovery.getPodcastEpisodes(id, 'us', 50),
-    enabled: !!feed && !episode, // Only run if feed is loaded but episode not found
-    staleTime: 1000 * 60 * 60,
-  })
-
-  if (!episode && feed && providerEpisodes) {
-    // Recovery Strategy: Find in provider results using current ID or iTunes trackId
-    const providerMeta = providerEpisodes.find(
-      (ep) => ep.id === decodedEpisodeId || ep.providerEpisodeId === decodedEpisodeId
-    )
-
-    if (providerMeta) {
-      // 1. Double-hop: Try to find in RSS feed using provider metadata (Title or URL match)
-      episode = feed.episodes.find((ep) => {
-        const titleMatch =
-          providerMeta.title &&
-          ep.title.trim().toLowerCase() === providerMeta.title.trim().toLowerCase()
-        const urlMatch =
-          providerMeta.audioUrl && ep.audioUrl.includes(providerMeta.audioUrl.split('?')[0])
-        return titleMatch || urlMatch
-      })
-
-      // 2. Critical Fallback: Use provider metadata to create a "Virtual Episode"
-      // This happens if the episode dropped off the RSS feed (very common for "This American Life")
-      if (!episode) {
-        episode = providerMeta
-      }
-    }
-  }
+  // Resolve podcast and episode metadata using centralized logic
+  const { podcast, episode, isLoading, podcastError } = useEpisodeResolution(id, episodeId)
 
   // Favorite state
   const { addFavorite, removeFavorite, isFavorited } = useExploreStore()
@@ -139,7 +61,6 @@ export default function PodcastEpisodeDetailPage() {
   }
 
   // Loading state: Include recovery phase to prevent "Flash of Empty State"
-  const isLoading = isLoadingPodcast || isLoadingFeed || (isLoadingItunes && !episode)
   if (isLoading) {
     return (
       <div className="h-full overflow-y-auto bg-background text-foreground">
@@ -242,7 +163,7 @@ export default function PodcastEpisodeDetailPage() {
             {/* 2. Center Group: Perfectly centered relative to image on desktop */}
             <div className="flex flex-col justify-center text-left">
               {/* Line 1: Small Caps Metadata */}
-              <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-bold tracking-widest text-muted-foreground uppercase mb-1.5">
+              <div className="flex flex-wrap items-center gap-1.5 text-xxs font-bold tracking-widest text-muted-foreground uppercase mb-1.5">
                 {relativeTime && <span>{relativeTime}</span>}
                 {relativeTime && (episodeLabel || duration) && <span>·</span>}
                 {episodeLabel && <span>{episodeLabel.replace(' · ', ' ')}</span>}
@@ -260,7 +181,7 @@ export default function PodcastEpisodeDetailPage() {
               </div>
 
               {/* Line 2: Big Episode Title */}
-              <h1 className="text-2xl sm:text-4xl font-medium tracking-tight mb-2 leading-[1.15]">
+              <h1 className="text-2xl sm:text-4xl font-medium tracking-tight mb-2 leading-tight">
                 {episode.title}
               </h1>
 
@@ -276,7 +197,7 @@ export default function PodcastEpisodeDetailPage() {
                 {(episode.episodeType === 'trailer' || episode.episodeType === 'bonus') && (
                   <span
                     className={cn(
-                      'text-[10px] px-1.5 py-0.5 rounded font-bold uppercase tracking-wider',
+                      'text-xxs px-1.5 py-0.5 rounded font-bold uppercase tracking-wider',
                       episode.episodeType === 'trailer'
                         ? 'bg-amber-500/10 text-amber-600'
                         : 'bg-purple-500/10 text-purple-600'

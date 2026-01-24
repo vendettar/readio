@@ -47,7 +47,11 @@ src/
 │   ├── useLocalFilesData.ts      # Local files data loading
 │   ├── useLocalFileProcessing.ts # File processing (handlers only)
 │   ├── useLocalFileDragDrop.ts   # Drag & Drop logic
-│   └── useLocalFolderManagement.ts # Folder management
+│   ├── useLocalFolderManagement.ts # Folder management
+│   ├── useEpisodeResolution.ts   # Episode recovery logic
+│   ├── useGlobalSearch.ts        # Global search aggregator
+│   ├── useLocalSearch.ts         # Local DB/Store search
+│   └── useDiscoverySearch.ts     # Remote provider search
 ├── libs/                # Utilities
 │   ├── dexieDb.ts       # Dexie Database Wrapper
 │   ├── exploreApi.ts    # Podcast Search/RSS Parse API
@@ -187,6 +191,87 @@ The system uses a robust, store-driven lifecycle for maintaining playback progre
 - **Validation Layers**: File validation is decoupled from ingestion. The `lite` app performs MIME/extension checks, while deep content validation is deferred to backend/native layers (see Decision D046).
 - **Async Task Hygiene**: All async tasks are gated against stale updates using `requestId` or `AbortSignal`. Timers and `requestAnimationFrame` calls are explicitly tracked and cancelled on unmount to prevent memory leaks and state updates on unmounted components.
 - **Async Sequence Gating**: Critical flows (e.g., session creation, dictionary lookup) use ref-based guards to prevent parallel re-entrancy of the same async operation.
+
+
+---
+
+## 4a. State Management Best Practices (Zustand)
+
+### Atomic Selectors (Critical for Performance)
+
+**Always use atomic selectors** to subscribe to individual store fields. Never destructure the entire store.
+
+```tsx
+// ❌ ANTI-PATTERN: Subscribes to ALL store changes
+const { field1, field2, field3, progress } = usePlayerStore()
+
+// ✅ BEST PRACTICE: Subscribe to individual fields
+const field1 = usePlayerStore((s) => s.field1)
+const field2 = usePlayerStore((s) => s.field2)
+const field3 = usePlayerStore((s) => s.field3)
+const progress = usePlayerStore((s) => s.progress)
+```
+
+**Rationale**: 
+- Destructuring `const { ... } = useStore()` subscribes to **every field in the store**
+- Components will re-render on **any** store update, not just changes to destructured fields
+- This causes severe performance issues with high-frequency fields like `progress` (updates multiple times per second)
+
+**Critical for**:
+- Components rendering high-frequency fields (`progress`, `currentIndex`)
+- Components with expensive rendering (images, complex layouts, gestures, animations)
+- List components or components rendering media assets
+
+### Example: Before vs After
+
+**Before (Performance Issue)**:
+```tsx
+export function MiniPlayer() {
+  const { progress, coverArtUrl, isPlaying } = usePlayerStore()
+  // ❌ Component re-renders every time ANY store field changes
+  // ❌ Causes image flickering when progress updates
+}
+```
+
+**After (Optimized)**:
+```tsx
+export function MiniPlayer() {
+  const progress = usePlayerStore((s) => s.progress)
+  const coverArtUrl = usePlayerStore((s) => s.coverArtUrl)
+  const isPlaying = usePlayerStore((s) => s.isPlaying)
+  // ✅ Component only re-renders when individual fields change
+  // ✅ No flickering, minimal re-renders
+}
+```
+
+### Store Access Patterns
+
+**Read-Only Access**:
+```tsx
+// For reading state in async functions or event handlers
+const currentProgress = usePlayerStore.getState().progress
+```
+
+**Subscribe to Changes**:
+```tsx
+// For reactive UI updates
+const progress = usePlayerStore((s) => s.progress)
+```
+
+**Actions (Functions)**:
+```tsx
+// Actions don't change, safe to extract once
+const seekTo = usePlayerStore((s) => s.seekTo)
+const togglePlayPause = usePlayerStore((s) => s.togglePlayPause)
+```
+
+### Performance Verification
+
+After refactoring store subscriptions:
+1. Use React DevTools Profiler to measure render counts
+2. Expected: ~5-10 renders during 10s of playback (down from 100+)
+3. Verify no visual flickering in images/artwork
+4. Confirm all functionality works correctly
 
 ---
 

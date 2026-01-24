@@ -20,6 +20,9 @@ title: Audio Engine
   2. 否则通过 `localTrackId` 或 `audioUrl` 索引查找
   3. 都未找到才创建新 session
 - **防止竞态**: 先设置 sessionId + 确定性 ID 查询，完全消除重复创建风险
+- **历史删除语义**：
+  - 删除 History 项仅移除 `playback_sessions` 记录（进度 + 最近播放）。
+  - **不得**删除底层本地音频文件；文件仅由 Files 区域管理。
 
 ### 播放器基础能力
 

@@ -12,6 +12,21 @@ UI interaction controls use `shadcn/ui` primitives (`Button/Input/Select/Dropdow
 
 Focus is managed by React `autoFocus` and Radix `onCloseAutoFocus`. Scroll status judgment uses native hooks like Virtuoso's `isScrolling`, avoiding dependency on timers.
 
+#### Hotkeys (Global)
+
+Keyboard shortcuts are centralized in `src/hooks/useKeyboardShortcuts.ts` using `react-hotkeys-hook`.
+- **Space**: Toggle Play/Pause (globally enabled, except when focus is in an input/textarea).
+- **Arrow Left/Right**: Seek backward/forward 15 seconds.
+- **Cmd/Ctrl + K**: Launch Global Search Command Palette.
+- **Esc**: Globally prioritized to close the Search Overlay, or exit the Full Player (Immersion mode).
+
+#### Gestures (Touch)
+
+Mobile interaction follows native player patterns:
+- **Swipe Down to Close**: Implemented in `FullPlayer.tsx` using `@use-gesture/react`. Swiping down more than 100px from the container (including the top drag handle) triggers `exitImmersion()`.
+- **Drag Handle**: A visual pill handle at `top-2` signals the swipe-down interaction. Component is `pointer-events-none` to not interfere with clicks/taps.
+
+
 ### Icon Policy (Lucide-First)
 
 UI operation icons come from `lucide-react`; SVGs are used only for logos and interactive binding resources.
@@ -170,6 +185,11 @@ Follows the five architecture consistency principles defined in `apps/docs/conte
    - `OverflowMenu` - Standardized dropdown menu trigger and content
    - Provides consistent Button trigger (ghost, icon) and DropdownMenuContent defaults
    - Supports `disabled` (for disabling menu trigger in drag/rename states)
+   - **Required Defaults**:
+     - `sideOffset={8}` and `collisionPadding={16}` for all 3-dot menus
+     - `modal={false}` when actions trigger inline editing (rename, inline inputs)
+     - `stopPropagation` on trigger/content for row/card contexts
+   - **Overflow Hidden**: Only allowed for multi-panel sliding menus (menu → confirm). Single-panel menus must not use `overflow-hidden`.
    - Usage: `TrackOverflowMenu.tsx`, `FolderOverflowMenu.tsx`
 
 3. **Interactive Title** (`src/components/interactive/InteractiveTitle.tsx`)

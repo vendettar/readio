@@ -24,9 +24,9 @@ export function ContextMenu({ state, onCopy, onSearch, onLookup, onClose }: Cont
 
   return (
     <>
-      <div className="fixed inset-0 z-[1000]" onClick={onClose} />
+      <div className="fixed inset-0 z-modal" onClick={onClose} />
       <div
-        className="fixed z-[1001] min-w-36 p-0 bg-popover text-popover-foreground border rounded-lg shadow-xl flex flex-col gap-0 animate-in fade-in zoom-in-95 duration-100 -translate-x-1/2 -translate-y-full -translate-y-2 overflow-hidden"
+        className="fixed z-modal min-w-36 p-0 bg-popover text-popover-foreground border rounded-lg shadow-xl flex flex-col gap-0 animate-in fade-in zoom-in-95 duration-100 -translate-x-1/2 -translate-y-full -translate-y-2 overflow-hidden"
         style={{
           left: state.menuPosition.x,
           top: state.menuPosition.y,
@@ -92,11 +92,11 @@ export function LookupPopover({ state, onClose }: LookupPopoverProps) {
   return (
     <>
       <div
-        className="fixed inset-0 z-[1100] bg-foreground/20 animate-in fade-in"
+        className="fixed inset-0 z-modal bg-foreground/20 animate-in fade-in"
         onClick={onClose}
       />
       <div
-        className="fixed z-[1101] w-80 max-h-96 bg-popover text-popover-foreground border rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2 -translate-y-1/2"
+        className="fixed z-modal w-80 max-h-96 bg-popover text-popover-foreground border rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2 -translate-y-1/2"
         style={{
           left,
           top,
@@ -164,7 +164,7 @@ export function WordHoverOverlay({ rects, isPressed }: WordHoverOverlayProps) {
   if (rects.length === 0) return null
 
   return (
-    <div className="fixed inset-0 pointer-events-none z-[100]">
+    <div className="fixed inset-0 pointer-events-none z-overlay">
       {rects.map((rect, idx) => (
         <div
           key={idx}
