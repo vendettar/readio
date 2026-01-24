@@ -2,6 +2,8 @@ import { useQuery } from '@tanstack/react-query'
 import type { Episode, ParsedFeed, Podcast } from '@/lib/discovery'
 import discovery from '@/lib/discovery'
 import { logError } from '@/lib/logger'
+import { getAppConfig } from '@/lib/runtimeConfig'
+import { useExploreStore } from '@/store/exploreStore'
 
 interface UseEpisodeResolutionResult {
   podcast: Podcast | undefined | null
@@ -18,14 +20,16 @@ export function useEpisodeResolution(
   podcastId: string,
   rawEpisodeId: string
 ): UseEpisodeResolutionResult {
+  const country = useExploreStore((s) => s.country) || getAppConfig().DEFAULT_COUNTRY
+
   // 1. Fetch podcast metadata via Lookup API
   const {
     data: podcast,
     isLoading: isLoadingPodcast,
     error: podcastError,
   } = useQuery<Podcast | null>({
-    queryKey: ['podcast', 'lookup', podcastId],
-    queryFn: () => discovery.getPodcast(podcastId),
+    queryKey: ['podcast', 'lookup', podcastId, country],
+    queryFn: () => discovery.getPodcast(podcastId, country),
     staleTime: 1000 * 60 * 60, // 1 hour
     gcTime: 1000 * 60 * 60 * 24, // 24 hours
   })
@@ -67,8 +71,8 @@ export function useEpisodeResolution(
   // STEP 2: Match Recovery Strategy (If direct GUID match fails)
   // Sometimes iTunes API GUID vs RSS GUID have subtle differences or iTunes GUID is missing
   const { data: providerEpisodes, isLoading: isLoadingProvider } = useQuery({
-    queryKey: ['podcast', 'provider-episodes', podcastId],
-    queryFn: () => discovery.getPodcastEpisodes(podcastId, 'us', 50),
+    queryKey: ['podcast', 'provider-episodes', podcastId, country],
+    queryFn: () => discovery.getPodcastEpisodes(podcastId, country, 50),
     enabled: !!feed && !episode, // Only run if feed is loaded but episode not found
     staleTime: 1000 * 60 * 60,
   })

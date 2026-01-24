@@ -22,6 +22,7 @@ import type { FileFolder, FileSubtitle, FileTrack } from '../../lib/dexieDb'
 import { formatFileSize } from '../../lib/formatters'
 import { formatRelativeTime } from '../../lib/relativeTime'
 import { cn } from '../../lib/utils'
+import styles from './TrackCard.module.css'
 import { Button } from '../ui/button'
 import { Input } from '../ui/input'
 import { Popover, PopoverAnchor, PopoverContent } from '../ui/popover'
@@ -274,9 +275,9 @@ export function TrackCard({
         <div
           className={cn(
             trackCardIconVariants({ density, hasArtwork: !!artworkUrl }),
-            'relative aspect-square'
+            'relative aspect-square',
+            styles.artworkMask
           )}
-          style={{ WebkitMaskImage: '-webkit-radial-gradient(white, black)' }}
         >
           {artworkUrl ? (
             <img

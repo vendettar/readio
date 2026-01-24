@@ -1,5 +1,5 @@
 import { Minimize2, Pause, Play, Settings2, SkipBack, SkipForward } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import { usePlayerGestures } from '../../hooks/usePlayerGestures'
 import { useZoom } from '../../hooks/useZoom'
@@ -113,11 +113,9 @@ export function FullPlayer() {
   return (
     <div
       {...bind()}
-      className="fixed inset-0 z-40 bg-background/95 backdrop-blur-3xl flex flex-col will-change-transform"
-      style={{
-        transform: `translateY(${y}px)`,
-        transition: y === 0 ? 'transform 0.3s cubic-bezier(0.2, 0, 0, 1)' : 'none',
-      }}
+      className="fixed inset-0 z-40 bg-background/95 backdrop-blur-3xl flex flex-col will-change-transform full-player-drag"
+      data-dragging={y > 0}
+      style={{ '--player-drag-y': `${y}px` } as CSSProperties}
     >
       {/* Drag Handle for swipe-down to close */}
       <div className="absolute top-2 left-1/2 -translate-x-1/2 w-12 h-1.5 bg-muted-foreground/20 rounded-full z-50 pointer-events-none" />
