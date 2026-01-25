@@ -1058,6 +1058,8 @@ export const translations = {
     settingsAccentColor: 'アクセントカラー',
     settingsStorageOverview: 'ストレージ概要',
     settingsStorageUsageDesc: '{{size}} のキャッシュデータを管理中',
+    settingsStorageUsageDescPrefix: '',
+    settingsStorageUsageDescSuffix: 'のキャッシュデータを管理中',
     settingsTotalUsage: '合計使用量',
     settingsStorageNote:
       '注意: デバイスの空き容量が不足すると、ブラウザがこのデータを削除する場合があります。重要なファイルはバックアップしてください。',
@@ -1422,6 +1424,8 @@ export const translations = {
     settingsAccentColor: '강조 색상',
     settingsStorageOverview: '저장소 개요',
     settingsStorageUsageDesc: '{{size}}의 캐시된 데이터 관리 중',
+    settingsStorageUsageDescPrefix: '',
+    settingsStorageUsageDescSuffix: '의 캐시된 데이터를 관리 중',
     settingsTotalUsage: '총 사용량',
     settingsStorageNote:
       '참고: 기기 공간이 부족하면 브라우저가 이 데이터를 삭제할 수 있습니다. 중요한 파일을 백업하세요.',
@@ -1793,6 +1797,8 @@ export const translations = {
     settingsAccentColor: 'Akzentfarbe',
     settingsStorageOverview: 'Speicherübersicht',
     settingsStorageUsageDesc: '{{size}} an zwischengespeicherten Daten werden verwaltet',
+    settingsStorageUsageDescPrefix: '',
+    settingsStorageUsageDescSuffix: ' an zwischengespeicherten Daten werden verwaltet',
     settingsTotalUsage: 'Gesamtnutzung',
     settingsStorageNote:
       'Hinweis: Bei wenig Speicherplatz kann der Browser diese Daten löschen. Sichern Sie wichtige lokale Dateien.',
@@ -2160,6 +2166,8 @@ export const translations = {
     settingsAccentColor: 'Color de acento',
     settingsStorageOverview: 'Resumen de almacenamiento',
     settingsStorageUsageDesc: 'Gestionando {{size}} de datos en caché',
+    settingsStorageUsageDescPrefix: 'Gestionando ',
+    settingsStorageUsageDescSuffix: ' de datos en caché',
     settingsTotalUsage: 'Uso total',
     settingsStorageNote:
       'Nota: Si el dispositivo tiene poco espacio, el navegador puede eliminar estos datos. Haz una copia de seguridad de los archivos locales importantes.',

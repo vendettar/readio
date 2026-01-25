@@ -1,22 +1,26 @@
 import { AnimatePresence, motion } from 'framer-motion'
-import React from 'react'
+import type React from 'react'
 import { cn } from '@/lib/utils'
 
-interface AnimatedListProps {
-  children: React.ReactNode
+interface AnimatedListProps<T> {
+  items: T[]
+  renderItem: (item: T, index: number) => React.ReactNode
+  getKey: (item: T, index: number) => React.Key
   className?: string
   delay?: number
   staggerDelay?: number
   enableLayout?: boolean
 }
 
-export function AnimatedList({
-  children,
+export function AnimatedList<T>({
+  items,
+  renderItem,
+  getKey,
   className,
   delay = 0,
   staggerDelay = 0.05,
   enableLayout = false,
-}: AnimatedListProps) {
+}: AnimatedListProps<T>) {
   const container = {
     hidden: { opacity: 0 },
     show: {
@@ -28,7 +32,7 @@ export function AnimatedList({
     },
   } as const
 
-  const item = {
+  const itemVariants = {
     hidden: { opacity: 0, y: 10, scale: 0.98 },
     show: {
       opacity: 1,
@@ -50,18 +54,15 @@ export function AnimatedList({
       className={cn('flex flex-col', className)}
     >
       <AnimatePresence mode="popLayout">
-        {React.Children.map(children, (child, index) => {
-          if (!React.isValidElement(child)) return null
-          return (
-            <motion.div
-              key={child.key ?? index}
-              variants={item}
-              layout={enableLayout ? true : undefined}
-            >
-              {child}
-            </motion.div>
-          )
-        })}
+        {items.map((data, index) => (
+          <motion.div
+            key={getKey(data, index)}
+            variants={itemVariants}
+            layout={enableLayout ? true : undefined}
+          >
+            {renderItem(data, index)}
+          </motion.div>
+        ))}
       </AnimatePresence>
     </motion.div>
   )

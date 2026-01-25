@@ -105,20 +105,23 @@ export function PodcastEpisodesGrid({
             key={colIndex}
             className="flex-shrink-0 flex flex-col w-[var(--column-width)] snap-start"
           >
-            <AnimatedList delay={colIndex * 0.1} staggerDelay={0.08} className="gap-4">
-              {Array.from({ length: ROWS }).map((_, rowIndex) => {
-                const episodeIndex = colIndex * ROWS + rowIndex
-                const episode = episodes[episodeIndex]
-                if (!episode) return null
-
+            <AnimatedList
+              items={Array.from({ length: ROWS })
+                .map((_, rowIndex) => episodes[colIndex * ROWS + rowIndex])
+                .filter((ep): ep is NonNullable<typeof ep> => !!ep)}
+              getKey={(episode) => episode.id}
+              delay={colIndex * 0.1}
+              staggerDelay={0.08}
+              className="gap-4"
+              renderItem={(episode, rowIndex) => {
                 const favorited =
                   favoritedIds.has(episode.id) ||
                   (episode.url ? favoriteAudioUrls.has(episode.url) : false)
                 const podcastId = episode.url?.match(/\/id(\d+)/)?.[1]
+                const episodeIndex = colIndex * ROWS + rowIndex
 
                 return (
                   <div
-                    key={episode.id}
                     className={cn(
                       'relative flex gap-0 py-3 px-0 h-24 w-full group/item transition-colors justify-start items-stretch text-left whitespace-normal overflow-hidden'
                     )}
@@ -285,8 +288,8 @@ export function PodcastEpisodesGrid({
                     </div>
                   </div>
                 )
-              })}
-            </AnimatedList>
+              }}
+            />
           </div>
         ))}
       </div>

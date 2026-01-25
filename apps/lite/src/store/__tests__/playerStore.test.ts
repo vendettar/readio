@@ -6,8 +6,8 @@ import { usePlayerStore } from '../playerStore'
 
 // Mock URL.createObjectURL and URL.revokeObjectURL
 // Use spyOn to safely mock without redefinition errors
-const createObjectURLMock = vi.spyOn(URL, 'createObjectURL').mockImplementation(() => 'blob:mock-url')
-const revokeObjectURLMock = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+vi.spyOn(URL, 'createObjectURL').mockImplementation(() => 'blob:mock-url')
+vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
 
 describe('playerStore - Session Restoration', () => {
   beforeEach(async () => {
@@ -25,7 +25,7 @@ describe('playerStore - Session Restoration', () => {
     // 1. Setup: Seed DB with a previous session and audio blob
     const mockBlob = new Blob(['mock audio data'], { type: 'audio/mp3' })
     const audioId = await DB.addAudioBlob(mockBlob, 'test-song.mp3')
-    
+
     // Create a session pointing to this audio
     await DB.createPlaybackSession({
       id: 'session-123',
@@ -35,7 +35,7 @@ describe('playerStore - Session Restoration', () => {
       progress: 42.5, // 42.5 seconds in
       duration: 120,
       source: 'local',
-      title: 'test-song.mp3'
+      title: 'test-song.mp3',
     })
 
     const { result } = renderHook(() => usePlayerStore())
@@ -50,12 +50,12 @@ describe('playerStore - Session Restoration', () => {
     expect(result.current.audioTitle).toBe('test-song.mp3')
     expect(result.current.progress).toBe(42.5)
     expect(result.current.duration).toBe(120)
-    
+
     // Verify Blob URL generation
     expect(global.URL.createObjectURL).toHaveBeenCalledTimes(1)
     expect(result.current.audioUrl).toBe('blob:mock-url')
     expect(result.current.audioLoaded).toBe(true)
-    
+
     // Verify it didn't auto-play (browser policy safety)
     expect(result.current.isPlaying).toBe(false)
   })
@@ -68,7 +68,7 @@ describe('playerStore - Session Restoration', () => {
       audioFilename: 'ghost.mp3',
       hasAudioBlob: true,
       progress: 10,
-      source: 'local'
+      source: 'local',
     })
 
     const { result } = renderHook(() => usePlayerStore())
