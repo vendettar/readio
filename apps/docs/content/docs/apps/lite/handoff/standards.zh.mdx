@@ -260,6 +260,10 @@ Provider 位于 `src/main.tsx`（`Tooltip.Provider`）。
    - **`<EmptyState />`**: 标准化的空状态组件（图标 + 标题 + 描述 + CTA 按钮）。强制要求所有列表场景使用。
    - **`<PodcastGrid />`**: 播客卡片的响应式网格布局，支持 2 到 6 列 (`grid-cols-2` 至 `xl:grid-cols-6`)。
 
+7. **标准化 Bits (动画)** (`src/components/bits/`)
+   - **`AnimatedList`**: 入场动画的标准容器。使用 Framer Motion 的 `AnimatePresence` 和 `staggerChildren` 创建高级的交错上滑效果。
+   - **`CountUp`**: 数字动画组件。使用 `useSpring` 实现平滑的数值过渡。主要用于统计和用量数值（如 Settings 存储信息）。
+
 ### App Initialization（应用初始化）
 
 全局数据加载（收藏、订阅）集中到根路由的 `useAppInitialization()` 钩子：

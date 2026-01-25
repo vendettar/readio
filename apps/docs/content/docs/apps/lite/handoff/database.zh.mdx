@@ -24,9 +24,11 @@ title: Database & Persistence
 | favorites | id (UUID) | &key | 收藏的节目。key 用于去重检查。 |
 | settings | key | — | 用户设置（如 country） |
 
-### 会话硬化（防止进度丢失 / Session Hardening）
+### 会话硬化（防止进度丢失与时间戳污染 / Session Hardening）
 
 为防止在重新创建固定会话 ID（例如 `local-track-${id}`）时意外覆盖现有播放会话，请使用 `DB.upsertPlaybackSession(data)`。该辅助方法会合并字段，并保留现有的 `progress`、`duration` 和 `lastPlayedAt`，除非在 `data` 中显式提供。
+
+**时间戳逻辑**：`DB.updatePlaybackSession` 不再自动更新 `lastPlayedAt`。时间戳仅在播放器处于活跃的 `isPlaying` 状态时由 Store 更新。这确保了打开应用（恢复会话）或在暂停时跳转进度不会通过将回话推至列表顶部来“污染”历史记录。
 
 ### 重置策略
 

@@ -2,6 +2,7 @@ import { Eraser, Info, Trash2 } from 'lucide-react'
 import type { CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
+import { CountUp } from '../components/bits/CountUp'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Checkbox } from '../components/ui/checkbox'
@@ -17,11 +18,10 @@ import {
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { useConfirmDialog } from '../hooks/useConfirmDialog'
-
 import { useSettingsData } from '../hooks/useSettingsData'
 import { useSettingsForm } from '../hooks/useSettingsForm'
 import { useStorageMaintenance } from '../hooks/useStorageMaintenance'
-import { formatBytes, formatTimestamp } from '../lib/formatters'
+import { formatBytes, formatFileSizeStructured, formatTimestamp } from '../lib/formatters'
 import { type Language, languageNativeNames } from '../lib/translations'
 import { ACCENT_OPTIONS, useThemeStore } from '../store/themeStore'
 
@@ -229,9 +229,20 @@ export default function SettingsPage() {
               <CardHeader>
                 <CardTitle className="text-lg">{t('settingsStorageOverview')}</CardTitle>
                 <CardDescription>
-                  {t('settingsStorageUsageDesc', {
-                    size: formatBytes(storageInfo?.indexedDB.totalSize ?? 0),
-                  })}
+                  {(() => {
+                    const { value, unit } = formatFileSizeStructured(
+                      storageInfo?.indexedDB.totalSize ?? 0
+                    )
+                    return (
+                      <span className="flex items-center gap-1.5 flex-wrap">
+                        {t('settingsStorageUsageDescPrefix', { defaultValue: 'Managing' })}{' '}
+                        <span className="font-bold text-foreground">
+                          <CountUp to={value} precision={value % 1 !== 0 ? 1 : 0} /> {unit}
+                        </span>{' '}
+                        {t('settingsStorageUsageDescSuffix', { defaultValue: 'of cached data' })}
+                      </span>
+                    )
+                  })()}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">

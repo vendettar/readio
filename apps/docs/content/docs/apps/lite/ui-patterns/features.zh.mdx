@@ -6,7 +6,8 @@ title: 功能模式
 
 - **共享元素转换**: 当持久元素 (如播客封面) 从一个视图移动到另一个视图 (例如 Mini Player 到 Full Player) 时，必须使用共享布局转换 (Framer Motion 中的 `layoutId`) 以保持空间方向。
 - **layoutId 唯一性**：`layoutId` 必须包含视图上下文（如 `miniplayer`/`fullplayer`/`list`），避免多列表同时渲染时冲突。
-- **入场动画**: 列表 (文件, 剧集) 不应立即出现。对项目使用交错淡入 + 上滑效果 (总持续时间: 300ms)。
+- **入场动画**: 列表 (文件, 剧集) 不应立即出现。使用 `AnimatedList` bit 实现交错淡入 + 上滑效果。
+- **微交互**: 使用 `CountUp` bit 处理数值变化（如存储占用量），提供高级、动态的交互感。
 - **应用启动**: 不要显示加载了一半的 UI。在 store 从 Dexie 恢复时，使用带有呼吸动画的居中应用 Logo。使用 `AnimatePresence` 淡出加载器。
 
 ## 列表行交互

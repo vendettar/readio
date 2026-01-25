@@ -2,10 +2,60 @@
 // Pure formatting utilities - fully testable without dependencies
 
 /**
+ * Structured file size representation
+ */
+export interface FormattedFileSize {
+  /** Numeric value (e.g., 1.5) */
+  value: number
+  /** Unit string (e.g., "MB", "GB") */
+  unit: string
+  /** Full formatted string for display (e.g., "1.5 MB") - locale-aware */
+  formatted: string
+}
+
+/**
+ * Format bytes to structured file size with separated value and unit.
+ * Use this when you need programmatic access to the numeric value.
+ */
+export function formatFileSizeStructured(bytes: number, locale?: string): FormattedFileSize {
+  const safeBytes = Math.max(0, Number.isFinite(bytes) ? bytes : 0)
+
+  const thresholds = [
+    { unit: 'B', intlUnit: 'byte', value: 1 },
+    { unit: 'KB', intlUnit: 'kilobyte', value: 1024 },
+    { unit: 'MB', intlUnit: 'megabyte', value: 1024 * 1024 },
+    { unit: 'GB', intlUnit: 'gigabyte', value: 1024 * 1024 * 1024 },
+  ] as const
+
+  const picked = thresholds.reduce(
+    (acc, curr) => (safeBytes >= curr.value ? curr : acc),
+    thresholds[0]
+  )
+
+  const numericValue = safeBytes / picked.value
+  // Round to 1 decimal place for consistency
+  const roundedValue = Math.round(numericValue * 10) / 10
+
+  const formatter = new Intl.NumberFormat(locale, {
+    style: 'unit',
+    unit: picked.intlUnit,
+    unitDisplay: 'narrow',
+    maximumFractionDigits: 1,
+    minimumFractionDigits: 0,
+  })
+
+  return {
+    value: roundedValue,
+    unit: picked.unit,
+    formatted: formatter.format(numericValue),
+  }
+}
+
+/**
  * Format file size in bytes to human-readable string (localized units)
  */
 export function formatFileSize(bytes: number, locale?: string): string {
-  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
+  const safeBytes = Math.max(0, Number.isFinite(bytes) ? bytes : 0)
 
   const thresholds = [
     { unit: 'byte', value: 1 },
@@ -14,7 +64,10 @@ export function formatFileSize(bytes: number, locale?: string): string {
     { unit: 'gigabyte', value: 1024 * 1024 * 1024 },
   ] as const
 
-  const picked = thresholds.reduce((acc, curr) => (bytes >= curr.value ? curr : acc), thresholds[0])
+  const picked = thresholds.reduce(
+    (acc, curr) => (safeBytes >= curr.value ? curr : acc),
+    thresholds[0]
+  )
   const formatter = new Intl.NumberFormat(locale, {
     style: 'unit',
     unit: picked.unit,
@@ -23,7 +76,7 @@ export function formatFileSize(bytes: number, locale?: string): string {
     minimumFractionDigits: 0,
   })
 
-  const value = bytes / picked.value
+  const value = safeBytes / picked.value
   return formatter.format(value)
 }
 

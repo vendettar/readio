@@ -30,6 +30,8 @@ You are the **Gatekeeper**. Your job is to verify that the implementation matche
 ### 3) Code Health
 - **Type Safety**: Reject any `any` or `// @ts-ignore`.
 - **Logic**: Check for race conditions in async actions and missing cleanup in effects.
+- **Iteration Identity**: Inspect iteration logic that renders UI elements; verify stable unique identifiers are provided. Flag index-only keys for dynamic/reorderable lists.
+- **API Contract Fulfillment**: When a library/API is introduced, inspect whether its core contract is fulfilled (required props, lifecycle methods, configuration). Flag unused or partially-used APIs as overhead.
 
 ### 4) Deep Logic & Context Review
 - **Default Value Trap**: When reviewing validation logic (e.g., Zod schemas), strict validation MUST explicitly account for default values (like empty strings) or potential initialization states.
@@ -38,6 +40,8 @@ You are the **Gatekeeper**. Your job is to verify that the implementation matche
 - **Negative Path Coverage**: If error handling maps multiple failure types to a single outcome, verify that network/server errors are not misclassified as “not found.”
 - **Async Blocking Check**: For any async logic that gates rendering, navigation, or core user flows, ensure it does not block on redundant work. Require state checks to avoid repeated awaits or re‑entrancy.
 - **Dynamic Context Consistency**: Verify that any derived data or memoized values depending on runtime context (language/theme/timezone/permissions/env) update when the context changes.
+- **Formatted Output is Not Data**: Flag any code that parses human-readable formatted strings (splitting, regex) as a code smell. Formatted output varies by locale, configuration, and library version. Require structured data APIs instead.
+- **Dependency Implementation Verification**: Do not trust function names or type signatures alone. Trace the actual implementation of consumed helpers (formatters, validators, transformers) to verify behavior matches assumptions.
 
 
 ### 5) Performance & Cost Awareness

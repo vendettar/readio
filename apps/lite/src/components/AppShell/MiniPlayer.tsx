@@ -197,8 +197,8 @@ export function MiniPlayer() {
           {coverArtUrl ? (
             <div
               className={cn(
-                "relative w-12 h-12 rounded-md overflow-hidden bg-white shadow-md ring-1 ring-inset ring-white/10",
-                !coverArtUrl && "bg-card"
+                'relative w-12 h-12 rounded-md overflow-hidden bg-white shadow-md ring-1 ring-inset ring-white/10',
+                !coverArtUrl && 'bg-card'
               )}
             >
               <img

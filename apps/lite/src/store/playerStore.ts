@@ -325,7 +325,8 @@ export const usePlayerStore = create<PlayerState>((set) => ({
     DB.updatePlaybackSession(state.sessionId, {
       progress: time,
       duration: state.duration || 0,
-      lastPlayedAt: now,
+      // Only update timestamp if actively playing
+      ...(state.isPlaying ? { lastPlayedAt: now } : {}),
     })
       .then(() => {
         log(`[PlayerStore] Saved progress: ${time.toFixed(1)}s`)
@@ -344,7 +345,8 @@ export const usePlayerStore = create<PlayerState>((set) => ({
       await DB.updatePlaybackSession(state.sessionId, {
         progress: state.progress,
         duration: state.duration || 0,
-        lastPlayedAt: Date.now(),
+        // Only update timestamp if actively playing
+        ...(state.isPlaying ? { lastPlayedAt: Date.now() } : {}),
       })
     } catch (err) {
       logError('[PlayerStore] Failed to save progress on unmount:', err)

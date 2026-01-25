@@ -15,7 +15,7 @@ export function usePlayerGestures() {
       if (first) {
         const target = event?.target
         // Ignore drags starting inside the scrollable transcript content
-        if (target instanceof Element && target.closest('[data-scroll-guard=\"transcript\"]')) {
+        if (target instanceof Element && target.closest('[data-scroll-guard="transcript"]')) {
           cancel()
           return
         }

@@ -224,7 +224,8 @@ export const DB = {
     await db.playback_sessions.put({
       ...existing,
       ...updates,
-      lastPlayedAt: Date.now(),
+      // Only update timestamp if explicitly provided, otherwise keep existing
+      lastPlayedAt: updates.lastPlayedAt ?? existing.lastPlayedAt,
     })
   },
 

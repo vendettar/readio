@@ -153,15 +153,6 @@
     color 0.3s ease;
 }
 
-.full-player-drag {
-  transform: translateY(var(--player-drag-y, 0px));
-  transition: transform 0.3s cubic-bezier(0.2, 0, 0, 1);
-}
-
-.full-player-drag[data-dragging="true"] {
-  transition: none;
-}
-
 .readio-highlight::before,
 .readio-highlight::after,
 .readio-overlay-rect.start::before,

@@ -224,6 +224,16 @@ description: Architecture decisions and rationale.
 - **Decision**: All status indicators (Subscriptions, Favorites, History, Files, Listen Later) in lists and Command Palette MUST use a unified visual language: right-aligned, vertically centered, and `text-primary` color.
 - **Rationale**: Ensures visual consistency and reduces cognitive load by establishing a predictable location and color for "Status" metadata across the application.
 
-## D054 — Standardized Hotkeys & Gestures
-- **Decision**: Enforce a strict set of global hotkeys (`Space` Play/Pause, `Arrows` Seek, `Cmd+K` Search, `Esc` Close) and gesture patterns (Swipe Down to Collapse Player).
-- **Rationale**: Provides a predictable, native-like interaction model that users expect from premium media applications (Instruction 019).
+## D055 — Standardized Bits Animations
+- **Decision**: Introduce a set of standardized, high-quality animation components (Bits) in `src/components/bits/`, starting with `AnimatedList` and `CountUp`.
+- **Rationale**: Elevates the "vibe" and perceived quality of the application with fluid, premium motion patterns (Framer Motion) while ensuring reusability and architectural consistency (Instruction 021).
+- **Implementation**:
+    - `AnimatedList`: Staggered entrance animations for lists and grids.
+    - `CountUp`: Smooth spring-based numeric transitions for statistics and usage values.
+
+## D056 — Conditional "Last Played" Timestamp Update
+- **Decision**: The `lastPlayedAt` timestamp in `PlaybackSession` is ONLY updated when `isPlaying` is true.
+- **Rationale**: Prevents session restoration (e.g., reopening a tab) or manual seeking while paused from incorrectly bumping an item to the top of "Recent" lists. "Last Played" should semantically represent active consumption of content.
+- **Implementation**:
+    - Removed forced `Date.now()` in `DB.updatePlaybackSession`.
+    - `playerStore` actions (`updateProgress`, `saveProgressNow`) conditionally include `lastPlayedAt` based on the current `isPlaying` state.

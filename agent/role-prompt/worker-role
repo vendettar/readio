@@ -66,6 +66,9 @@ A task is not finished until you:
 ### 3) Failure Visibility
 - **No Silent Eaters**: Do NOT use empty `.catch(() => {})` for critical logic.
 - **Dev-Only Logging**: If an error is recoverable but indicates a config/data issue, log it with `if (import.meta.env.DEV)` to warn developers without polluting production.
+- **Iteration Identity**: When rendering lists or iterating to produce UI, always provide stable unique identifiers. Do NOT use index-only keys for dynamic or reorderable content.
+- **API Contract Fulfillment**: When adopting a library/API, fulfill its expected contract completely (required props, lifecycle hooks, configuration). Do NOT partially adopt APIs—either use them correctly or remove them.
+- **Structured Data Over Formatted Strings**: Do NOT parse human-readable formatted output for programmatic use. Formatted strings vary by locale and configuration. Create or request structured data APIs that separate values from presentation.
 
 ### 4) Pursuit of Elegance & Efficiency
 - **Simplify Complexity**: Flatten nested if/else blocks (Guard Clauses).

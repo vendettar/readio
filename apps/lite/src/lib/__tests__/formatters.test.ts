@@ -1,8 +1,48 @@
 // src/lib/__tests__/formatters.test.ts
 import { describe, expect, it } from 'vitest'
-import { formatFileSize, formatNumber, formatTimeLabel, formatTimestamp } from '../formatters'
+import {
+  formatFileSize,
+  formatFileSizeStructured,
+  formatNumber,
+  formatTimeLabel,
+  formatTimestamp,
+} from '../formatters'
 
 describe('formatters - pure functions', () => {
+  describe('formatFileSizeStructured', () => {
+    it('returns structured data for bytes', () => {
+      const result = formatFileSizeStructured(500)
+      expect(result.value).toBe(500)
+      expect(result.unit).toBe('B')
+      expect(result.formatted).toContain('500')
+    })
+
+    it('returns structured data for kilobytes', () => {
+      const result = formatFileSizeStructured(1536) // 1.5 KB
+      expect(result.value).toBe(1.5)
+      expect(result.unit).toBe('KB')
+    })
+
+    it('returns structured data for megabytes', () => {
+      const result = formatFileSizeStructured(1.5 * 1024 * 1024)
+      expect(result.value).toBe(1.5)
+      expect(result.unit).toBe('MB')
+    })
+
+    it('handles zero bytes', () => {
+      const result = formatFileSizeStructured(0)
+      expect(result.value).toBe(0)
+      expect(result.unit).toBe('B')
+      expect(result.formatted).toMatch(/0\s?B/)
+    })
+
+    it('handles negative bytes', () => {
+      const result = formatFileSizeStructured(-100)
+      expect(result.value).toBe(0)
+      expect(result.unit).toBe('B')
+    })
+  })
+
   describe('formatFileSize', () => {
     it('should format bytes correctly', () => {
       expect(formatFileSize(0, 'en')).toMatch(/0\s?B/i)

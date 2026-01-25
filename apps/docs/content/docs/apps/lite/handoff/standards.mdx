@@ -246,6 +246,10 @@ Follows the five architecture consistency principles defined in `apps/docs/conte
    - **`<EmptyState />`**: Standardized component for empty views (Icon + Title + Description + CTA Button). Required for all lists.
    - **`<PodcastGrid />`**: Responsive 2-to-6 column grid for podcast cards (`grid-cols-2` to `xl:grid-cols-6`).
 
+7. **Standardized Bits (Animations)** (`src/components/bits/`)
+   - **`AnimatedList`**: Standard container for entrance animations. Uses Framer Motion's `AnimatePresence` and `staggerChildren` to create a premium staggered slide-up effect.
+   - **`CountUp`**: Animated number component. Uses `useSpring` for smooth numeric transitions. Used primarily for statistics and usage values (e.g., Settings storage info).
+
 ### App Initialization
 
 Global data loading (Favorites, Subscriptions) is centralized in the `useAppInitialization()` hook at the root route:

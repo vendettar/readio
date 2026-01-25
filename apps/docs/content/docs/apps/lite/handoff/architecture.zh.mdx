@@ -187,6 +187,7 @@ src/
 - **状态机**：`playerStore` 维护 `initializationStatus` (`idle | restoring | ready | failed`) 以防止启动时的竞态条件。
 - **单一数据源**：所有持久化操作集中在 `playerStore.ts` 中。`useSession` 和 `useFileHandler` 等 Hook 委托 Store Action 处理存储，不再直接操作数据库。
 - **节流持久化**：进度更新采用节流机制（默认 5s）以减轻 IndexedDB 写入压力。`saveProgressNow` Action 确保在组件卸载或关键事件时立即保存。
+- **时间戳完整性**：`lastPlayedAt` 时间戳仅在活跃播放期间（`isPlaying: true`）更新。这确保了后台恢复或仅 UI 的调整（暂停时跳转）不会影响 History/Files 中的时间排序（见决策 D056）。
 - **原子化恢复**：`restoreSession` Action 封装了获取最后会话、恢复文件/URL 以及更新状态的完整逻辑，确保恢复过程的原子性。
 - **分层校验**：文件校验与注入逻辑解耦。Lite 应用执行 MIME/扩展名校验，深层内容校验推迟到后端或 Native 层（见决策 D046）。
 - **异步任务卫生 (Async Hygiene)**：所有异步任务都使用 `requestId` 或 `AbortSignal` 防止过期更新。显式追踪 `setTimeout` 和 `requestAnimationFrame` 并在组件卸载时取消，防止内存泄漏。

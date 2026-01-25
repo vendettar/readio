@@ -10,6 +10,7 @@ import type { DiscoveryPodcast } from '../../lib/discovery'
 import { getDiscoveryArtworkUrl } from '../../lib/imageUtils'
 import { cn } from '../../lib/utils'
 import { useExploreStore } from '../../store/exploreStore'
+import { AnimatedList } from '../bits/AnimatedList'
 import { InteractiveArtwork } from '../interactive/InteractiveArtwork'
 import { InteractiveTitle } from '../interactive/InteractiveTitle'
 import { Button } from '../ui/button'
@@ -102,188 +103,190 @@ export function PodcastEpisodesGrid({
         {Array.from({ length: totalColumns }).map((_, colIndex) => (
           <div
             key={colIndex}
-            className="flex-shrink-0 flex flex-col gap-4 w-[var(--column-width)] snap-start"
+            className="flex-shrink-0 flex flex-col w-[var(--column-width)] snap-start"
           >
-            {Array.from({ length: ROWS }).map((_, rowIndex) => {
-              const episodeIndex = colIndex * ROWS + rowIndex
-              const episode = episodes[episodeIndex]
-              if (!episode) return null
+            <AnimatedList delay={colIndex * 0.1} staggerDelay={0.08} className="gap-4">
+              {Array.from({ length: ROWS }).map((_, rowIndex) => {
+                const episodeIndex = colIndex * ROWS + rowIndex
+                const episode = episodes[episodeIndex]
+                if (!episode) return null
 
-              const favorited =
-                favoritedIds.has(episode.id) ||
-                (episode.url ? favoriteAudioUrls.has(episode.url) : false)
-              const podcastId = episode.url?.match(/\/id(\d+)/)?.[1]
+                const favorited =
+                  favoritedIds.has(episode.id) ||
+                  (episode.url ? favoriteAudioUrls.has(episode.url) : false)
+                const podcastId = episode.url?.match(/\/id(\d+)/)?.[1]
 
-              return (
-                <div
-                  key={episode.id}
-                  className={cn(
-                    'relative flex gap-0 py-3 px-0 h-24 w-full group/item transition-colors justify-start items-stretch text-left whitespace-normal overflow-hidden'
-                  )}
-                >
-                  {/* Artwork with Navigation & Play */}
-                  <div className="relative flex-shrink-0 z-20">
-                    <InteractiveArtwork
-                      src={getDiscoveryArtworkUrl(episode.artworkUrl100, 200)}
-                      to={podcastId ? '/podcast/$id/episode/$episodeId' : undefined}
-                      params={
-                        podcastId
-                          ? {
-                              id: podcastId,
-                              episodeId: encodeURIComponent(episode.id),
-                            }
-                          : undefined
-                      }
-                      onPlay={() => onPlay?.(episode)}
-                      playButtonSize="sm"
-                      playIconSize={14}
-                      hoverGroup="item"
-                      size="md"
-                      className="rounded-md"
-                    />
-                  </div>
-
-                  <div className="flex-1 min-w-0 flex flex-col z-20 relative pt-1 pl-10">
-                    {/* Rank: Absolutely centered in the 40px padding gutter */}
-                    <span className="absolute left-0 top-1 w-10 text-sm font-medium text-foreground/70 tabular-nums leading-5 text-center pointer-events-none">
-                      {episodeIndex + 1}
-                    </span>
-
-                    <InteractiveTitle
-                      title={episode.name}
-                      to={podcastId ? '/podcast/$id/episode/$episodeId' : undefined}
-                      params={
-                        podcastId
-                          ? {
-                              id: podcastId,
-                              episodeId: encodeURIComponent(episode.id),
-                            }
-                          : undefined
-                      }
-                      className="text-sm font-medium leading-5"
-                    />
-
-                    {/* Row 2+: Metadata (Inherits pl-10 alignment) */}
-                    <div className="pr-2 flex flex-col gap-0 mt-0">
-                      <span className="text-xs text-foreground/70 truncate font-normal pointer-events-none">
-                        {episode.artistName}
-                      </span>
-
-                      {episode.genres?.[0]?.name && (
-                        <span className="text-xxs text-muted-foreground/60 uppercase tracking-wide mt-0 pointer-events-none">
-                          {episode.genres[0].name}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Separator: aligns from image left to content right (last dot) */}
-                  {rowIndex < ROWS - 1 && (
-                    <div className="absolute bottom-0 left-0 right-0 h-px bg-border/70 z-40" />
-                  )}
-
-                  {/* Hover actions with fade effect */}
+                return (
                   <div
+                    key={episode.id}
                     className={cn(
-                      'absolute right-0 inset-y-0 flex transition-opacity duration-200 z-30',
-                      openMenuId === episode.id
-                        ? 'opacity-100'
-                        : 'opacity-0 group-hover/item:opacity-100'
+                      'relative flex gap-0 py-3 px-0 h-24 w-full group/item transition-colors justify-start items-stretch text-left whitespace-normal overflow-hidden'
                     )}
                   >
-                    {/* Gradient fade */}
-                    <div className="w-12 bg-gradient-to-r from-transparent to-background" />
-                    {/* Solid background covering all text to the right */}
-                    <div className="bg-background flex items-center gap-1 pr-2 pl-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={async (e) => {
-                          e.stopPropagation()
-                          setProcessingId(episode.id)
-                          try {
-                            await onFavorite?.(episode)
-                          } finally {
-                            setProcessingId(null)
-                          }
-                        }}
-                        className={cn(
-                          'w-8 h-8 transition-colors hover:bg-transparent',
-                          favorited ? 'text-primary' : 'text-muted-foreground hover:text-primary'
-                        )}
-                      >
-                        <Star
-                          size={16}
-                          className={cn(
-                            'stroke-2',
-                            favorited && 'fill-current',
-                            processingId === episode.id && 'animate-pulse opacity-50'
-                          )}
-                        />
-                      </Button>
-
-                      <OverflowMenu
-                        open={openMenuId === episode.id}
-                        onOpenChange={(open) => setOpenMenuId(open ? episode.id : null)}
-                        triggerAriaLabel={t('ariaMoreActions')}
-                        stopPropagation
-                        triggerClassName="w-8 h-8 rounded-full text-muted-foreground hover:text-primary hover:bg-accent transition-all"
-                        iconSize={16}
-                        contentClassName="min-w-44 rounded-xl shadow-2xl border border-border/50 bg-popover/95 backdrop-blur-xl p-0"
-                      >
-                        <DropdownMenuItem
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            onPlay?.(episode)
-                          }}
-                          className={menuItemClassName}
-                        >
-                          <Play size={14} className="mr-2 fill-current" />
-                          {t('playerPlay')}
-                        </DropdownMenuItem>
-                        {podcastId && (
-                          <DropdownMenuItem asChild className={menuItemClassName}>
-                            <Link
-                              to="/podcast/$id/episode/$episodeId"
-                              params={{
+                    {/* Artwork with Navigation & Play */}
+                    <div className="relative flex-shrink-0 z-20">
+                      <InteractiveArtwork
+                        src={getDiscoveryArtworkUrl(episode.artworkUrl100, 200)}
+                        to={podcastId ? '/podcast/$id/episode/$episodeId' : undefined}
+                        params={
+                          podcastId
+                            ? {
                                 id: podcastId,
                                 episodeId: encodeURIComponent(episode.id),
-                              }}
-                            >
-                              <Info size={14} className="mr-2" />
-                              {t('details')}
-                            </Link>
-                          </DropdownMenuItem>
-                        )}
-                        {podcastId && (
-                          <DropdownMenuItem asChild className={menuItemClassName}>
-                            <Link
-                              to="/podcast/$id"
-                              params={{
+                              }
+                            : undefined
+                        }
+                        onPlay={() => onPlay?.(episode)}
+                        playButtonSize="sm"
+                        playIconSize={14}
+                        hoverGroup="item"
+                        size="md"
+                        className="rounded-md"
+                      />
+                    </div>
+
+                    <div className="flex-1 min-w-0 flex flex-col z-20 relative pt-1 pl-10">
+                      {/* Rank: Absolutely centered in the 40px padding gutter */}
+                      <span className="absolute left-0 top-1 w-10 text-sm font-medium text-foreground/70 tabular-nums leading-5 text-center pointer-events-none">
+                        {episodeIndex + 1}
+                      </span>
+
+                      <InteractiveTitle
+                        title={episode.name}
+                        to={podcastId ? '/podcast/$id/episode/$episodeId' : undefined}
+                        params={
+                          podcastId
+                            ? {
                                 id: podcastId,
-                              }}
-                            >
-                              <RadioTower size={14} className="mr-2" />
-                              {t('podcastLabel')}
-                            </Link>
-                          </DropdownMenuItem>
+                                episodeId: encodeURIComponent(episode.id),
+                              }
+                            : undefined
+                        }
+                        className="text-sm font-medium leading-5"
+                      />
+
+                      {/* Row 2+: Metadata (Inherits pl-10 alignment) */}
+                      <div className="pr-2 flex flex-col gap-0 mt-0">
+                        <span className="text-xs text-foreground/70 truncate font-normal pointer-events-none">
+                          {episode.artistName}
+                        </span>
+
+                        {episode.genres?.[0]?.name && (
+                          <span className="text-xxs text-muted-foreground/60 uppercase tracking-wide mt-0 pointer-events-none">
+                            {episode.genres[0].name}
+                          </span>
                         )}
-                        <DropdownMenuItem
-                          onClick={(e) => {
+                      </div>
+                    </div>
+
+                    {/* Separator: aligns from image left to content right (last dot) */}
+                    {rowIndex < ROWS - 1 && (
+                      <div className="absolute bottom-0 left-0 right-0 h-px bg-border/70 z-40" />
+                    )}
+
+                    {/* Hover actions with fade effect */}
+                    <div
+                      className={cn(
+                        'absolute right-0 inset-y-0 flex transition-opacity duration-200 z-30',
+                        openMenuId === episode.id
+                          ? 'opacity-100'
+                          : 'opacity-0 group-hover/item:opacity-100'
+                      )}
+                    >
+                      {/* Gradient fade */}
+                      <div className="w-12 bg-gradient-to-r from-transparent to-background" />
+                      {/* Solid background covering all text to the right */}
+                      <div className="bg-background flex items-center gap-1 pr-2 pl-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={async (e) => {
                             e.stopPropagation()
-                            if (episode.url) navigator.clipboard.writeText(episode.url)
+                            setProcessingId(episode.id)
+                            try {
+                              await onFavorite?.(episode)
+                            } finally {
+                              setProcessingId(null)
+                            }
                           }}
-                          className={menuItemClassName}
+                          className={cn(
+                            'w-8 h-8 transition-colors hover:bg-transparent',
+                            favorited ? 'text-primary' : 'text-muted-foreground hover:text-primary'
+                          )}
                         >
-                          <LinkIcon size={14} className="mr-2" />
-                          {t('copyLink')}
-                        </DropdownMenuItem>
-                      </OverflowMenu>
+                          <Star
+                            size={16}
+                            className={cn(
+                              'stroke-2',
+                              favorited && 'fill-current',
+                              processingId === episode.id && 'animate-pulse opacity-50'
+                            )}
+                          />
+                        </Button>
+
+                        <OverflowMenu
+                          open={openMenuId === episode.id}
+                          onOpenChange={(open) => setOpenMenuId(open ? episode.id : null)}
+                          triggerAriaLabel={t('ariaMoreActions')}
+                          stopPropagation
+                          triggerClassName="w-8 h-8 rounded-full text-muted-foreground hover:text-primary hover:bg-accent transition-all"
+                          iconSize={16}
+                          contentClassName="min-w-44 rounded-xl shadow-2xl border border-border/50 bg-popover/95 backdrop-blur-xl p-0"
+                        >
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              onPlay?.(episode)
+                            }}
+                            className={menuItemClassName}
+                          >
+                            <Play size={14} className="mr-2 fill-current" />
+                            {t('playerPlay')}
+                          </DropdownMenuItem>
+                          {podcastId && (
+                            <DropdownMenuItem asChild className={menuItemClassName}>
+                              <Link
+                                to="/podcast/$id/episode/$episodeId"
+                                params={{
+                                  id: podcastId,
+                                  episodeId: encodeURIComponent(episode.id),
+                                }}
+                              >
+                                <Info size={14} className="mr-2" />
+                                {t('details')}
+                              </Link>
+                            </DropdownMenuItem>
+                          )}
+                          {podcastId && (
+                            <DropdownMenuItem asChild className={menuItemClassName}>
+                              <Link
+                                to="/podcast/$id"
+                                params={{
+                                  id: podcastId,
+                                }}
+                              >
+                                <RadioTower size={14} className="mr-2" />
+                                {t('podcastLabel')}
+                              </Link>
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              if (episode.url) navigator.clipboard.writeText(episode.url)
+                            }}
+                            className={menuItemClassName}
+                          >
+                            <LinkIcon size={14} className="mr-2" />
+                            {t('copyLink')}
+                          </DropdownMenuItem>
+                        </OverflowMenu>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )
-            })}
+                )
+              })}
+            </AnimatedList>
           </div>
         ))}
       </div>

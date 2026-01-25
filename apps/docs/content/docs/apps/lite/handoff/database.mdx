@@ -24,9 +24,11 @@ Uses Dexie.js to encapsulate IndexedDB. Default DB name is `readio-lite` and can
 | favorites | id (UUID) | &key | Favorite episodes. key used for deduplication check. |
 | settings | key | — | User settings (e.g., country) |
 
-### Session Hardening (Prevent Progress Loss)
+### Session Hardening (Prevent Progress Loss & Timestamp Pollution)
 
 To prevent accidental overwrites of existing playback sessions when re‑creating fixed session IDs (e.g., `local-track-${id}`), use `DB.upsertPlaybackSession(data)`. This helper merges fields and preserves existing `progress`, `duration`, and `lastPlayedAt` unless explicitly provided in `data`.
+
+**Timestamp Logic**: `DB.updatePlaybackSession` does NOT automatically update `lastPlayedAt`. The timestamp is only updated by the Store when the player is in an active `isPlaying` state. This ensures that opening the app (restoration) or seeking while paused does not "pollute" the history by bumping the session to the top of the list.
 
 ### Reset Strategy
 

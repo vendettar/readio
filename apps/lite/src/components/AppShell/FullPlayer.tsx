@@ -1,11 +1,12 @@
 import { Minimize2, Pause, Play, Settings2, SkipBack, SkipForward } from 'lucide-react'
-import { useCallback, useEffect, useState, type CSSProperties } from 'react'
+import { type CSSProperties, useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { usePlayerGestures } from '../../hooks/usePlayerGestures'
 import { useZoom } from '../../hooks/useZoom'
 import { reportError } from '../../lib/errorReporter'
 import { logError } from '../../lib/logger'
 import { findSubtitleIndex, formatTimeLabel } from '../../lib/subtitles'
+import { cn } from '../../lib/utils'
 import { useImmersionStore } from '../../store/immersionStore'
 import { usePlayerStore } from '../../store/playerStore'
 import { ErrorBoundary } from '../ErrorBoundary'
@@ -17,7 +18,7 @@ import { Button } from '../ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { Slider } from '../ui/slider'
 import { ZoomControl } from '../ZoomControl'
-import { cn } from '../../lib/utils'
+import styles from './FullPlayer.module.css'
 
 export function FullPlayer() {
   const { t } = useTranslation()
@@ -113,7 +114,10 @@ export function FullPlayer() {
   return (
     <div
       {...bind()}
-      className="fixed inset-0 z-40 bg-background/95 backdrop-blur-3xl flex flex-col will-change-transform full-player-drag"
+      className={cn(
+        'fixed inset-0 z-40 bg-background/95 backdrop-blur-3xl flex flex-col will-change-transform',
+        styles.fullPlayerDrag
+      )}
       data-dragging={y > 0}
       style={{ '--player-drag-y': `${y}px` } as CSSProperties}
     >
@@ -143,9 +147,9 @@ export function FullPlayer() {
 
             <div
               className={cn(
-                "relative w-80 h-80 rounded-2xl overflow-hidden bg-white transition-shadow duration-500",
-                "ring-1 ring-white/10 ring-inset",
-                !coverArtUrl && "bg-card"
+                'relative w-80 h-80 rounded-2xl overflow-hidden bg-white transition-shadow duration-500',
+                'ring-1 ring-white/10 ring-inset',
+                !coverArtUrl && 'bg-card'
               )}
             >
               {coverArtUrl ? (
@@ -180,8 +184,8 @@ export function FullPlayer() {
               <div className="absolute inset-1 shadow-lg shadow-black/10 rounded-xl pointer-events-none" />
               <div
                 className={cn(
-                  "relative w-48 h-48 mx-auto rounded-xl overflow-hidden bg-white ring-1 ring-inset ring-white",
-                  !coverArtUrl && "bg-muted"
+                  'relative w-48 h-48 mx-auto rounded-xl overflow-hidden bg-white ring-1 ring-inset ring-white',
+                  !coverArtUrl && 'bg-muted'
                 )}
               >
                 {coverArtUrl && (

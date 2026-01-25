@@ -312,6 +312,8 @@ export const translations = {
     settingsAccentColor: '强调色',
     settingsStorageOverview: '存储概览',
     settingsStorageUsageDesc: '正在管理 {{size}} 已缓存数据',
+    settingsStorageUsageDescPrefix: '正在管理',
+    settingsStorageUsageDescSuffix: '已缓存数据',
     settingsTotalUsage: '总用量',
     settingsStorageNote: '注意：如果设备空间不足，浏览器可能会删除这些数据。请确保备份重要的文件。',
     settingsNoHistory: '无播放历史',
@@ -681,6 +683,8 @@ export const translations = {
     settingsAccentColor: 'Accent Color',
     settingsStorageOverview: 'Storage Overview',
     settingsStorageUsageDesc: 'Managing {{size}} of cached data',
+    settingsStorageUsageDescPrefix: 'Managing',
+    settingsStorageUsageDescSuffix: 'of cached data',
     settingsTotalUsage: 'Total Usage',
     settingsStorageNote:
       'Note: Browsers may delete this data if the device runs low on space. Ensure you keep backups of important files.',
