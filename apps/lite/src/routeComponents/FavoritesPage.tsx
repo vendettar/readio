@@ -18,12 +18,14 @@ import type { Favorite } from '../lib/dexieDb'
 import { stripHtml } from '../lib/htmlUtils'
 import { getDiscoveryArtworkUrl } from '../lib/imageUtils'
 import { useExploreStore } from '../store/exploreStore'
+import { usePlayerStore } from '../store/playerStore'
 
 export default function FavoritesPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
 
   const { favorites, favoritesLoaded, removeFavorite } = useExploreStore()
+  const activeEpisodeId = usePlayerStore((s) => s.episodeMetadata?.episodeId)
   const { playFavorite } = useEpisodePlayback()
   const [isInitialLoading, setIsInitialLoading] = useState(!favoritesLoaded)
 
@@ -107,7 +109,11 @@ export default function FavoritesPage() {
                         playIconSize={20}
                         hoverGroup="episode"
                         size="lg"
-                        layoutId={`artwork-${favorite.episodeId}-player`}
+                        layoutId={
+                          activeEpisodeId === favorite.episodeId
+                            ? `artwork-${favorite.episodeId}-player`
+                            : undefined
+                        }
                       />
                     ) : undefined
                   }
