@@ -204,6 +204,13 @@ The system uses a robust, store-driven lifecycle for maintaining playback progre
 - **Async Task Hygiene**: All async tasks are gated against stale updates using `requestId` or `AbortSignal`. Timers and `requestAnimationFrame` calls are explicitly tracked and cancelled on unmount to prevent memory leaks and state updates on unmounted components.
 - **Async Sequence Gating**: Critical flows (e.g., session creation, dictionary lookup) use ref-based guards to prevent parallel re-entrancy of the same async operation.
 
+### Centralized Resource Management (ObjectURLs)
+
+The application follows strict rules for managing transient browser resources (Blob URLs) to prevent memory leaks in a single-page environment:
+
+- **Audio Resource Authority**: The `playerStore` is the **only** permitted creator and owner of Audio ObjectURLs. It maintains an `activeBlobUrls` array and ensures that before a new audio source is loaded or restored, all previously tracked URLs are explicitly revoked via `URL.revokeObjectURL()`.
+- **Image Resource Delegation**: Image ObjectURLs are managed at the component level using the `useImageObjectUrl` hook. This hook encapsulates the `create` and `revoke` lifecycle, tying the lifetime of the URL to the mounting of the component (e.g., `TrackCard`, `InteractiveArtwork`) or the presence of the source Blob.
+- **Strict Separation**: Components never create audio URLs. Instead, they pass raw Blobs from IndexedDB to store actions like `loadAudioBlob()`.
 
 ---
 

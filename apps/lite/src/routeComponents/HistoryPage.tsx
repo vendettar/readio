@@ -44,7 +44,7 @@ export default function HistoryPage() {
   }, [favorites])
 
   const [sessions, setSessions] = useState<PlaybackSession[]>([])
-  const [artworkUrls, setArtworkUrls] = useState<Record<string, string>>({})
+  const [artworkBlobs, setArtworkBlobs] = useState<Record<string, Blob>>({})
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
@@ -61,25 +61,17 @@ export default function HistoryPage() {
     if (sessions.length === 0) return
 
     let cancelled = false
-    // Use a ref to track URLs created by THIS specific run of the effect
-    // We don't want to revoke them immediately in cleanup if we are just re-running
-    // BUT we must track them for component unmount
-
-    // Actually, simpler strategy:
-    // 1. We have a ref tracking ALL active URLs for this component lifetime
-    // 2. We only add new ones
-    // 3. We revoke ALL on unmount
 
     const resolveArtworks = async () => {
       const localSessions = sessions.filter((s) => s.source === 'local' && s.localTrackId)
       if (localSessions.length === 0) return
 
-      const newUrls: Record<string, string> = {}
+      const newBlobs: Record<string, Blob> = {}
       let hasUpdates = false
 
       for (const session of localSessions) {
-        // Skip if we already have a URL for this session
-        if (activeUrlsRef.current[session.id]) continue
+        // Skip if we already have a blob for this session
+        if (artworkBlobs[session.id]) continue
 
         if (!session.localTrackId) continue
         try {
@@ -89,9 +81,7 @@ export default function HistoryPage() {
             const blob = await DB.getAudioBlob(track.artworkId)
             if (cancelled) return
             if (blob) {
-              const url = URL.createObjectURL(blob.blob)
-              activeUrlsRef.current[session.id] = url
-              newUrls[session.id] = url
+              newBlobs[session.id] = blob.blob
               hasUpdates = true
             }
           }
@@ -101,7 +91,7 @@ export default function HistoryPage() {
       }
 
       if (!cancelled && hasUpdates) {
-        setArtworkUrls((prev) => ({ ...prev, ...newUrls }))
+        setArtworkBlobs((prev) => ({ ...prev, ...newBlobs }))
       }
     }
 
@@ -110,15 +100,12 @@ export default function HistoryPage() {
     return () => {
       cancelled = true
     }
-  }, [sessions])
+  }, [sessions, artworkBlobs])
 
   // Cleanup on unmount
-  const activeUrlsRef = React.useRef<Record<string, string>>({})
   useEffect(() => {
     return () => {
-      Object.values(activeUrlsRef.current).forEach((url) => {
-        URL.revokeObjectURL(url)
-      })
+      // NOTE: ObjectsURLs are now handled by hooks in subcomponents
     }
   }, [])
 
@@ -144,17 +131,14 @@ export default function HistoryPage() {
       return
     }
 
-    // For local sessions, load from IDB
+    // For local sessions, load from IDB via store action
     if (session.source === 'local' && session.audioId) {
       const audioBlob = await DB.getAudioBlob(session.audioId)
       if (audioBlob) {
-        const url = URL.createObjectURL(audioBlob.blob)
-        const artworkUrl = artworkUrls[session.id] || session.artworkUrl || ''
-        setAudioUrl(url, session.title, artworkUrl)
+        const loadAudioBlob = usePlayerStore.getState().loadAudioBlob
+        const artworkUrl = session.artworkUrl || ''
+        await loadAudioBlob(audioBlob.blob, session.title, artworkUrl, session.id)
         setFileTrackId(session.localTrackId ?? null)
-
-        // Ensure session ID is set last
-        setSessionId(session.id)
         startPlayback()
       }
     } else {
@@ -254,8 +238,7 @@ export default function HistoryPage() {
                 : undefined
 
               const isLocal = session.source === 'local'
-              const displayArtworkUrl =
-                artworkUrls[session.id] || (isLocal ? undefined : session.artworkUrl)
+              const localBlob = artworkBlobs[session.id] || null
 
               return (
                 <BaseEpisodeRow
@@ -263,10 +246,11 @@ export default function HistoryPage() {
                   isLast={index === sessions.length - 1}
                   descriptionLines={1}
                   artwork={
-                    displayArtworkUrl ? (
+                    localBlob || session.artworkUrl ? (
                       <div className="relative flex-shrink-0 z-20">
                         <InteractiveArtwork
-                          src={displayArtworkUrl}
+                          src={isLocal ? undefined : session.artworkUrl}
+                          blob={localBlob}
                           to={navigationTo}
                           params={navigationParams}
                           onPlay={() => handlePlaySession(session)}
@@ -285,7 +269,7 @@ export default function HistoryPage() {
                   }
                   title={
                     <div className="flex items-center">
-                      {!displayArtworkUrl && (
+                      {!(localBlob || session.artworkUrl) && (
                         <GutterPlayButton
                           onPlay={() => handlePlaySession(session)}
                           ariaLabel={t('btnPlayOnly')}

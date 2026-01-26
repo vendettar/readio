@@ -9,10 +9,16 @@ export interface LocalSearchActionDeps {
   setAudioUrl: (
     url: string,
     title: string,
-    coverArt?: string,
+    coverArt?: string | Blob | null,
     metadata?: EpisodeMetadata | null
   ) => void
   play: () => void
+  loadAudioBlob: (
+    blob: Blob,
+    title: string,
+    artwork?: string | Blob | null,
+    sessionId?: string | null
+  ) => Promise<void>
   setEpisodeMetadata: (metadata: EpisodeMetadata | null) => void
 }
 
@@ -74,8 +80,12 @@ export async function executeLocalSearchAction(
       if (session.source === 'local' && session.audioId) {
         const audioBlob = await DB.getAudioBlob(session.audioId)
         if (audioBlob) {
-          const url = URL.createObjectURL(audioBlob.blob)
-          deps.setAudioUrl(url, session.title, session.artworkUrl || '')
+          await deps.loadAudioBlob(
+            audioBlob.blob,
+            session.title,
+            result.artworkBlob || session.artworkUrl || null,
+            session.id
+          )
           deps.play()
           return
         }

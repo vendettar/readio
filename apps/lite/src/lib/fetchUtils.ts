@@ -36,23 +36,23 @@ export function getCorsProxyConfig(): { proxyUrl: string; proxyPrimary: boolean 
 
 export type ProxyHealthResult =
   | {
-    ok: true
-    proxyUrl: string
-    proxyType: 'default' | 'custom'
-    targetUrl: string
-    elapsedMs: number
-    at: number
-  }
+      ok: true
+      proxyUrl: string
+      proxyType: 'default' | 'custom'
+      targetUrl: string
+      elapsedMs: number
+      at: number
+    }
   | {
-    ok: false
-    proxyUrl: string
-    proxyType: 'default' | 'custom'
-    targetUrl: string
-    elapsedMs: number
-    at: number
-    error: string
-    status?: number
-  }
+      ok: false
+      proxyUrl: string
+      proxyType: 'default' | 'custom'
+      targetUrl: string
+      elapsedMs: number
+      at: number
+      error: string
+      status?: number
+    }
 
 /**
  * Build proxy URL supporting three formats:
@@ -246,7 +246,6 @@ export async function fetchWithFallback<T = string>(
   const { signal, timeoutMs = config.TIMEOUT_MS, json = false, headers = {} } = options
   const { proxyUrl, proxyPrimary } = getCorsProxyConfig()
 
-
   const controller = new AbortController()
   let didTimeout = false
 
@@ -265,24 +264,20 @@ export async function fetchWithFallback<T = string>(
 
   // 1. Direct Fetch
   const fetchDirect = async (): Promise<T> => {
-    try {
-      const response = await fetch(url, {
-        signal: internalSignal,
-        credentials: 'omit',
-        headers,
-      })
-      if (!response.ok) {
-        throw new FetchError(
-          `Direct fetch failed: ${response.status}`,
-          url,
-          response.status,
-          'direct'
-        )
-      }
-      return json ? response.json() : (response.text() as unknown as T)
-    } catch (e) {
-      throw e
+    const response = await fetch(url, {
+      signal: internalSignal,
+      credentials: 'omit',
+      headers,
+    })
+    if (!response.ok) {
+      throw new FetchError(
+        `Direct fetch failed: ${response.status}`,
+        url,
+        response.status,
+        'direct'
+      )
     }
+    return json ? response.json() : (response.text() as unknown as T)
   }
 
   // 2. Proxy Fetch Generic
@@ -294,25 +289,20 @@ export async function fetchWithFallback<T = string>(
       ? buildJsonWrappedProxyUrl(baseProxyUrl, url)
       : buildProxyUrl(baseProxyUrl, url)
 
-    let response: Response
-    try {
-      response = await fetch(finalProxyUrl, {
-        signal: internalSignal,
-        credentials: 'omit',
-        // We don't typically pass client headers to generic proxies like AllOrigins
-        // but some custom proxies might need them.
-        headers,
-      })
-      if (!response.ok) {
-        throw new FetchError(
-          `Proxy (${baseProxyUrl}) failed: ${response.status}`,
-          url,
-          response.status,
-          source
-        )
-      }
-    } catch (e) {
-      throw e
+    const response = await fetch(finalProxyUrl, {
+      signal: internalSignal,
+      credentials: 'omit',
+      // We don't typically pass client headers to generic proxies like AllOrigins
+      // but some custom proxies might need them.
+      headers,
+    })
+    if (!response.ok) {
+      throw new FetchError(
+        `Proxy (${baseProxyUrl}) failed: ${response.status}`,
+        url,
+        response.status,
+        source
+      )
     }
 
     // JSON-wrapped proxies return JSON with contents field
@@ -342,7 +332,10 @@ export async function fetchWithFallback<T = string>(
         try {
           return JSON.parse(contents) as T
         } catch (err) {
-          log('[fetchWithFallback] Proxy response contents not valid JSON', { error: err, contents: contents.slice(0, 100) })
+          log('[fetchWithFallback] Proxy response contents not valid JSON', {
+            error: err,
+            contents: contents.slice(0, 100),
+          })
           throw new Error('Proxy returned invalid JSON content')
         }
       }
@@ -458,7 +451,6 @@ export async function fetchWithFallback<T = string>(
           )
           throw error
         }
-
 
         // If it's a manual abort, don't try next steps
         if (error instanceof Error && error.name === 'AbortError' && !didTimeout) {

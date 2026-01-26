@@ -130,9 +130,9 @@ export function EpisodeRow({
             params={
               hasValidNavigation
                 ? {
-                  id: podcastId,
-                  episodeId: encodedEpisodeId,
-                }
+                    id: podcastId,
+                    episodeId: encodedEpisodeId,
+                  }
                 : undefined
             }
             onPlay={handlePlay}
@@ -153,9 +153,9 @@ export function EpisodeRow({
             params={
               hasValidNavigation
                 ? {
-                  id: podcastId,
-                  episodeId: encodedEpisodeId,
-                }
+                    id: podcastId,
+                    episodeId: encodedEpisodeId,
+                  }
                 : undefined
             }
             className="text-sm leading-tight flex-1"

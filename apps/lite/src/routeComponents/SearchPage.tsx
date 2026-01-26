@@ -22,6 +22,7 @@ export default function SearchPage() {
   const navigate = useNavigate()
   const { q: query = '' } = useSearch({ from: '/search' })
   const setAudioUrl = usePlayerStore((s) => s.setAudioUrl)
+  const loadAudioBlob = usePlayerStore((s) => s.loadAudioBlob)
   const play = usePlayerStore((s) => s.play)
   const setEpisodeMetadata = usePlayerStore((s) => s.setEpisodeMetadata)
   const subscribe = useExploreStore((s) => s.subscribe)
@@ -61,6 +62,7 @@ export default function SearchPage() {
     void executeLocalSearchAction(result, {
       navigate,
       setAudioUrl,
+      loadAudioBlob,
       play,
       setEpisodeMetadata,
     })
@@ -121,6 +123,7 @@ export default function SearchPage() {
                       subtitle={result.subtitle}
                       extraSubtitle={result.extraSubtitle}
                       artworkUrl={result.artworkUrl}
+                      artworkBlob={result.artworkBlob}
                       onClick={() => handleSelectLocalResult(result)}
                       className="py-3"
                     />

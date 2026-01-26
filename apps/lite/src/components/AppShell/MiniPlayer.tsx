@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import React, { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useImageObjectUrl } from '../../hooks/useImageObjectUrl'
 import { getDiscoveryArtworkUrl } from '../../lib/imageUtils'
 import { formatTimeLabel } from '../../lib/subtitles'
 import { cn } from '../../lib/utils'
@@ -61,6 +62,10 @@ export function MiniPlayer() {
   const { enterImmersion } = useImmersionStore()
   const episodeMetadata = usePlayerStore((s) => s.episodeMetadata)
   const audioUrl = usePlayerStore((s) => s.audioUrl)
+
+  const blobUrl = useImageObjectUrl(coverArtUrl instanceof Blob ? coverArtUrl : null)
+  const effectiveCoverArtUrl =
+    (typeof coverArtUrl === 'string' ? coverArtUrl : blobUrl) || undefined
 
   // Determine unique ID for the active item to use in layoutId
   const activeEpisodeId = episodeMetadata?.episodeId || audioUrl || 'active'
@@ -213,7 +218,7 @@ export function MiniPlayer() {
               )}
             >
               <img
-                src={getDiscoveryArtworkUrl(coverArtUrl, 100)}
+                src={getDiscoveryArtworkUrl(effectiveCoverArtUrl, 100)}
                 alt=""
                 className="absolute inset-[-4px] w-[calc(100%+8px)] h-[calc(100%+8px)] max-w-none block object-cover"
                 onError={(e) => {

@@ -18,12 +18,12 @@ Readio 是一个音频应用程序。
   - 减慢 UI 轮询/刷新间隔。
   - 当 `visibilitychange` 触发时立即恢复。
 
-## 2. 内存管理 (撤销规则)
+## 2. 内存管理 (撤销规则) - **已实现** (指令 027)
 
 **规则**: 每个 `URL.createObjectURL()` 必须有对应的 `URL.revokeObjectURL()`。
 
-- **音频 Blob**: Object URL 必须由 Store 统一创建与回收（如 `playerStore.loadAudioSource(blob)`）；组件不得为音频调用 `URL.createObjectURL`。
-- **图片 Blob**: 组件必须为封面创建 Object URL，并在卸载时回收（例如 `useImageObjectUrl`）。
+- **音频 Blob**: Object URL **严格在 Store 内部** (`playerStore`) 管理。组件绝不能为音频调用 `URL.createObjectURL`；它们应该使用 `loadAudio` 或 `loadAudioBlob`，这些方法会在创建新 URL 之前自动回收之前的 URL。
+- **图像 Blob**: 组件和 UI 元素必须使用 `useImageObjectUrl` Hook 来管理封面 Blob。这确保了当组件卸载或 Blob 发生变化时，URL 会被自动回收。
 - **验证**: 如果每次切歌后内存使用量增加，则说明发生了 Object URL 泄漏。
 
 ## 3. 列表虚拟化
@@ -42,6 +42,12 @@ Readio 是一个音频应用程序。
 **规则**: 延迟加载所有不在视口中的图像。
 - **组件**: 使用带有 `loading="lazy"` 的标准 `img`。
 - **解码**: 使用 `decoding="async"` 防止图像解码阻塞主线程。
+
+### 嵌入式封面调整大小
+**规则**: (计划中) 绝不要在 IndexedDB 中存储原始的 4K 嵌入式封面。
+- **行动**: 在摄取期间将所有提取的 ID3 APIC 图像调整为最大 ~1024px。
+- **原因**: 减小 DB 大小，加快查询速度，并防止 `createObjectURL` 期间的内存峰值。
+- **状态**: 目前已禁用。由于某些文件上的 `OffscreenCanvas` 存在稳定性问题，`metadata.worker.ts` 中的 `normalizeArtwork` 逻辑已被注释掉。我们需要存储原始 blob（已启用 JPEG EOI 修复）。
 
 ## 5. 重新渲染卫生
 

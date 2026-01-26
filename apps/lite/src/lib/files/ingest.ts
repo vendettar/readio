@@ -53,30 +53,6 @@ function readFileAsText(file: File): Promise<string> {
 }
 
 /**
- * Get audio duration from file (seconds)
- * Note: This requires browser environment (Audio element)
- */
-export function getAudioDuration(file: File): Promise<number | undefined> {
-  return new Promise((resolve) => {
-    const objectUrl = URL.createObjectURL(file)
-    const audio = new Audio(objectUrl)
-    audio.addEventListener('loadedmetadata', () => {
-      const seconds = audio.duration
-      URL.revokeObjectURL(objectUrl)
-      if (Number.isNaN(seconds) || !Number.isFinite(seconds)) {
-        resolve(undefined)
-        return
-      }
-      resolve(Math.round(seconds))
-    })
-    audio.addEventListener('error', () => {
-      URL.revokeObjectURL(objectUrl)
-      resolve(undefined)
-    })
-  })
-}
-
-/**
  * Result of ingesting files
  */
 export interface IngestResult {
@@ -180,8 +156,8 @@ export async function ingestFiles(params: IngestParams): Promise<IngestResult> {
       log('[Files] Metadata parsing failed, using fallbacks:', file.name, err)
     }
 
-    // Fallback to Audio element for duration if metadata didn't provide it
-    const durationSeconds = metadataDuration ?? (await getAudioDuration(file))
+    // Fallback to 0 if metadata didn't provide it (will be updated on play)
+    const durationSeconds = metadataDuration || 0
 
     // Use metadata title if available, otherwise fallback to filename without extension
     let baseName = metadataTitle || file.name.replace(/\.[^/.]+$/, '')

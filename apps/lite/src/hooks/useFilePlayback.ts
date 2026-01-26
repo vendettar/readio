@@ -18,11 +18,10 @@ export function useFilePlayback({ onComplete }: UseFilePlaybackProps = {}) {
   const handlePlay = useCallback(
     async (track: FileTrack, availableSubtitles: FileSubtitle[], subtitle?: FileSubtitle) => {
       const {
-        setAudioUrl,
+        loadAudioBlob,
         setSubtitles: setPlayerSubtitles,
         play,
         setFileTrackId,
-        setSessionId: setStoreSessionId,
       } = usePlayerStore.getState()
 
       try {
@@ -33,12 +32,12 @@ export function useFilePlayback({ onComplete }: UseFilePlaybackProps = {}) {
         }
 
         // Fetch artwork if available
-        let artworkUrl = ''
+        let artwork: Blob | string | null = null
         if (track.artworkId) {
           try {
-            const artworkBlob = await DB.getAudioBlob(track.artworkId)
-            if (artworkBlob) {
-              artworkUrl = URL.createObjectURL(artworkBlob.blob)
+            const artworkData = await DB.getAudioBlob(track.artworkId)
+            if (artworkData) {
+              artwork = artworkData.blob
             }
           } catch {
             // Best-effort: continue without artwork
@@ -65,8 +64,8 @@ export function useFilePlayback({ onComplete }: UseFilePlaybackProps = {}) {
           }
         }
 
-        const audioUrl = URL.createObjectURL(audioBlob.blob)
-        setAudioUrl(audioUrl, track.name, artworkUrl)
+        const sessionId = `local-track-${track.id}`
+        await loadAudioBlob(audioBlob.blob, track.name, artwork, sessionId)
         setPlayerSubtitles(parsedSubtitles)
 
         // Set localTrackId for session tracking
@@ -74,24 +73,18 @@ export function useFilePlayback({ onComplete }: UseFilePlaybackProps = {}) {
 
         play()
 
-        // Create/update session for Last Played tracking
-        // Use fixed session ID to prevent duplicates with useSession
-        const sessionId = `local-track-${track.id}`
-
         await DB.upsertPlaybackSession({
           id: sessionId,
           source: 'local',
           title: track.name,
           audioId: track.audioId, // Required for Last Played map
-          artworkUrl: artworkUrl || undefined, // Set artwork URL for History display
+          artworkUrl: typeof artwork === 'string' ? artwork : undefined, // History display helper
           subtitleId: subToLoad?.subtitleId || null,
           hasAudioBlob: true,
           lastPlayedAt: Date.now(),
           localTrackId: track.id,
           duration: track.durationSeconds || 0,
         })
-
-        setStoreSessionId(sessionId) // Set sessionId AFTER creating (safe)
 
         // Navigate to home page (player)
         router.navigate({ to: '/' })

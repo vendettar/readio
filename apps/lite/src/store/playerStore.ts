@@ -26,7 +26,7 @@ interface PlayerState {
   audioLoaded: boolean
   audioUrl: string | null
   audioTitle: string
-  coverArtUrl: string
+  coverArtUrl: string | Blob | null
   isPlaying: boolean
   progress: number
   duration: number
@@ -60,7 +60,7 @@ interface PlayerState {
   setAudioUrl: (
     url: string | null,
     title?: string,
-    coverArt?: string,
+    coverArt?: string | Blob | null,
     metadata?: EpisodeMetadata | null
   ) => void
   setSubtitles: (subtitles: subtitle[]) => void
@@ -76,6 +76,12 @@ interface PlayerState {
   setStatus: (status: PlayerStatus) => void
   setPlayerError: (message?: string) => void
   loadAudio: (file: File) => void
+  loadAudioBlob: (
+    blob: Blob,
+    title: string,
+    artwork?: string | Blob | null,
+    sessionId?: string | null
+  ) => Promise<void>
   loadSubtitles: (file: File) => Promise<void>
   updateProgress: (time: number) => void // Throttled progress update with DB persistence
   saveProgressNow: () => Promise<void> // Force immediate save (for unmount)
@@ -86,7 +92,7 @@ const initialState = {
   audioLoaded: false,
   audioUrl: null as string | null,
   audioTitle: '',
-  coverArtUrl: '',
+  coverArtUrl: null as string | Blob | null,
   isPlaying: false,
   progress: 0,
   duration: 0,
@@ -145,20 +151,24 @@ export const usePlayerStore = create<PlayerState>((set) => ({
   },
   setAudioUrl: (url, title = '', coverArt = '', metadata = null) =>
     set((state) => {
-      // Revoke old blob URLs
+      // CRITICAL: Revoke old blob URLs BEFORE setting new state
       state.activeBlobUrls.forEach((u) => {
-        URL.revokeObjectURL(u)
+        try {
+          URL.revokeObjectURL(u)
+        } catch {
+          // Ignore
+        }
       })
 
       const normalizedUrl = url || null
 
-      // Also track if coverArt is a blob URL (future-proofing)
+      // Also track if coverArt is a blob URL (for external URLs if any)
       const isAudioBlob = normalizedUrl ? normalizedUrl.startsWith('blob:') : false
-      const isCoverBlob = coverArt.startsWith('blob:')
+      const isCoverBlob = typeof coverArt === 'string' && coverArt.startsWith('blob:')
 
       const newBlobUrls: string[] = []
       if (isAudioBlob && normalizedUrl) newBlobUrls.push(normalizedUrl)
-      if (isCoverBlob && coverArt) newBlobUrls.push(coverArt)
+      if (isCoverBlob && coverArt) newBlobUrls.push(coverArt as string)
 
       // For external URLs (podcast episodes), reset sessionId and progress
       // This prevents old session progress from being restored for new episodes
@@ -177,11 +187,11 @@ export const usePlayerStore = create<PlayerState>((set) => ({
         // Reset session for external URLs to start fresh
         ...(shouldResetSession
           ? {
-            sessionId: null,
-            progress: 0,
-            localTrackId: null,
-            duration: normalizedUrl ? metadata?.duration || 0 : 0,
-          }
+              sessionId: null,
+              progress: 0,
+              localTrackId: null,
+              duration: normalizedUrl ? metadata?.duration || 0 : 0,
+            }
           : {}),
         // Always update duration if provided in metadata
         ...(metadata?.duration ? { duration: metadata.duration } : {}),
@@ -283,16 +293,20 @@ export const usePlayerStore = create<PlayerState>((set) => ({
     saveToDb()
 
     set((state) => {
-      // Revoke old blob URLs
+      // CRITICAL: Revoke any existing local blob URLs inside the updater to prevent race conditions
       state.activeBlobUrls.forEach((u) => {
-        URL.revokeObjectURL(u)
+        try {
+          URL.revokeObjectURL(u)
+        } catch {
+          // Ignore
+        }
       })
 
       return {
         audioUrl: url,
         audioLoaded: true,
         audioTitle: file.name,
-        coverArtUrl: '',
+        coverArtUrl: null,
         activeBlobUrls: [url],
         status: 'loading',
         isPlaying: true,
@@ -301,6 +315,38 @@ export const usePlayerStore = create<PlayerState>((set) => ({
         progress: 0,
         localTrackId: null,
         // Always clear subtitles when changing track
+        subtitles: [],
+        subtitlesLoaded: false,
+        currentIndex: -1,
+      }
+    })
+  },
+
+  loadAudioBlob: async (blob, title, artwork, sessionId = null) => {
+    const url = URL.createObjectURL(blob)
+    const newBlobUrls = [url]
+
+    set((state) => {
+      // CRITICAL: Revoke any existing local blob URLs inside the updater to prevent race conditions
+      state.activeBlobUrls.forEach((u) => {
+        try {
+          URL.revokeObjectURL(u)
+        } catch {
+          // Ignore
+        }
+      })
+
+      return {
+        audioUrl: url,
+        audioLoaded: true,
+        audioTitle: title,
+        coverArtUrl: artwork || null,
+        activeBlobUrls: newBlobUrls,
+        status: 'loading',
+        isPlaying: true,
+        sessionId: sessionId || null,
+        progress: 0,
+        localTrackId: null,
         subtitles: [],
         subtitlesLoaded: false,
         currentIndex: -1,
@@ -326,8 +372,8 @@ export const usePlayerStore = create<PlayerState>((set) => ({
             subtitleType: file.name.toLowerCase().endsWith('.vtt') ? 'vtt' : 'srt',
           })
         }
-      } catch (err) {
-        logError('[PlayerStore] Failed to save subtitle to IndexedDB:', err)
+      } catch {
+        logError('[PlayerStore] Failed to save subtitle to IndexedDB:')
       }
     }
 
@@ -367,8 +413,8 @@ export const usePlayerStore = create<PlayerState>((set) => ({
       .then(() => {
         log(`[PlayerStore] Saved progress: ${time.toFixed(1)}s`)
       })
-      .catch((err) => {
-        logError('[PlayerStore] Failed to save progress:', err)
+      .catch(() => {
+        logError('[PlayerStore] Failed to save progress:')
       })
   },
 
@@ -384,8 +430,8 @@ export const usePlayerStore = create<PlayerState>((set) => ({
         // Only update timestamp if actively playing
         ...(state.isPlaying ? { lastPlayedAt: Date.now() } : {}),
       })
-    } catch (err) {
-      logError('[PlayerStore] Failed to save progress on unmount:', err)
+    } catch {
+      logError('[PlayerStore] Failed to save progress on unmount:')
     }
   },
 
@@ -419,7 +465,7 @@ export const usePlayerStore = create<PlayerState>((set) => ({
           // Create blob URL for restored file
           const url = URL.createObjectURL(file)
 
-          let artworkUrl = ''
+          let artwork: string | Blob | null = null
           // If we have a local track ID, try to restore its artwork
           if (lastSession.localTrackId) {
             try {
@@ -427,29 +473,33 @@ export const usePlayerStore = create<PlayerState>((set) => ({
               if (track?.artworkId) {
                 const artworkBlob = await DB.getAudioBlob(track.artworkId)
                 if (artworkBlob) {
-                  artworkUrl = URL.createObjectURL(artworkBlob.blob)
+                  artwork = artworkBlob.blob
                 }
               }
-            } catch (err) {
-              logError('[PlayerStore] Failed to restore artwork for local track', err)
+            } catch {
+              logError('[PlayerStore] Failed to restore artwork for local track')
             }
           }
 
           // Update state ATOMICALLY with the restored sessionId
           set((state) => {
+            // CRITICAL: Revoke ANY existing blob URLs before setting new ones
             state.activeBlobUrls.forEach((u) => {
-              URL.revokeObjectURL(u)
+              try {
+                URL.revokeObjectURL(u)
+              } catch {
+                // Ignore
+              }
             })
 
             const newBlobUrls = [url]
-            if (artworkUrl) newBlobUrls.push(artworkUrl)
 
             return {
               sessionId: lastSession.id,
               audioUrl: url,
               audioLoaded: true,
               audioTitle: file.name,
-              coverArtUrl: artworkUrl,
+              coverArtUrl: artwork,
               activeBlobUrls: newBlobUrls,
               progress: lastSession.progress,
               status: 'paused',

@@ -18,12 +18,12 @@ Readio is an audio application.
   - Slow down UI polling/refresh intervals.
   - Resume immediately when `visibilitychange` fires.
 
-## 2. Memory Management (The Revoke Rule)
+## 2. Memory Management (The Revoke Rule) - **IMPLEMENTED** (Instruction 027)
 
 **Rule**: Every `URL.createObjectURL()` MUST have a corresponding `URL.revokeObjectURL()`.
 
-- **Audio Blobs**: Object URLs MUST be created and revoked inside the store only (e.g. `playerStore.loadAudioSource(blob)`). Components must not call `URL.createObjectURL` for audio.
-- **Image Blobs**: Components MUST create Object URLs for artwork using a hook that revokes on unmount (e.g. `useImageObjectUrl`).
+- **Audio Blobs**: Object URLs are managed **strictly inside the store** (`playerStore`). Components must NEVER call `URL.createObjectURL` for audio; they should use `loadAudio` or `loadAudioBlob` which handle revocation of previous URLs automatically before creating new ones.
+- **Image Blobs**: Components and UI elements must use the `useImageObjectUrl` hook to manage artwork Blobs. This ensures URLs are revoked automatically when the component unmounts or the Blob changes.
 - **Verification**: If memory usage increases after every song change, you have a leaked Object URL.
 
 ## 3. List Virtualization

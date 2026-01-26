@@ -1,5 +1,6 @@
 import { Play } from 'lucide-react'
 import type React from 'react'
+import { useImageObjectUrl } from '../../hooks/useImageObjectUrl'
 import { getDiscoveryArtworkUrl } from '../../lib/imageUtils'
 import { cn } from '../../lib/utils'
 import { InteractiveTitle } from '../interactive/InteractiveTitle'
@@ -10,6 +11,7 @@ interface SearchResultItemProps {
   subtitle?: React.ReactNode
   extraSubtitle?: React.ReactNode
   artworkUrl?: string
+  artworkBlob?: Blob
   onClick: () => void
   onArtworkClick?: (e: React.MouseEvent) => void
   rightIcon?: React.ElementType
@@ -22,12 +24,16 @@ export function SearchResultItem({
   subtitle,
   extraSubtitle,
   artworkUrl,
+  artworkBlob,
   onClick,
   onArtworkClick,
   rightIcon: RightIcon,
   className,
   artworkAriaLabel,
 }: SearchResultItemProps) {
+  const blobUrl = useImageObjectUrl(artworkBlob || null)
+  const effectiveSrc = blobUrl || artworkUrl
+  const resolvedArtworkUrl = getDiscoveryArtworkUrl(effectiveSrc, 100)
   if (!onArtworkClick) {
     return (
       <div
@@ -49,11 +55,7 @@ export function SearchResultItem({
           className="relative w-12 h-12 flex-shrink-0 rounded-lg overflow-hidden bg-muted z-20 hover:opacity-90 transition-opacity cursor-pointer text-left p-0 hover:bg-transparent"
           aria-label={artworkAriaLabel ?? title}
         >
-          <img
-            src={getDiscoveryArtworkUrl(artworkUrl, 100)}
-            alt=""
-            className="block w-full h-full object-cover"
-          />
+          <img src={resolvedArtworkUrl} alt="" className="block w-full h-full object-cover" />
         </Button>
 
         <div className="flex-1 min-w-0 z-20">
@@ -108,7 +110,7 @@ export function SearchResultItem({
         aria-label={artworkAriaLabel ?? title}
       >
         <img
-          src={getDiscoveryArtworkUrl(artworkUrl, 100)}
+          src={resolvedArtworkUrl}
           alt=""
           className="block w-full h-full object-cover transition-transform group-hover:scale-110"
         />

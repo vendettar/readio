@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { Play } from 'lucide-react'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
+import { useImageObjectUrl } from '../../hooks/useImageObjectUrl'
 import { getDiscoveryArtworkUrl } from '../../lib/imageUtils'
 import { cn } from '../../lib/utils'
 import { Button } from '../ui/button'
@@ -27,6 +28,7 @@ interface InteractiveArtworkProps {
   referrerPolicy?: React.ImgHTMLAttributes<HTMLImageElement>['referrerPolicy']
   fallbackSrc?: string
   layoutId?: string
+  blob?: Blob | null
 }
 
 /**
@@ -52,6 +54,7 @@ export function InteractiveArtwork({
   referrerPolicy = 'no-referrer',
   fallbackSrc,
   layoutId,
+  blob,
 }: InteractiveArtworkProps) {
   const { t } = useTranslation()
   const [hasError, setHasError] = React.useState(false)
@@ -105,13 +108,16 @@ export function InteractiveArtwork({
   )
 
   const resolvedPlayIconSize = playIconSize ?? playIconSizeMap[size]
-  const artworkUrl = getDiscoveryArtworkUrl(!hasError ? src : fallbackSrc)
+
+  const blobUrl = useImageObjectUrl(blob || null)
+  const effectiveSrc = blobUrl || src
+  const artworkUrl = getDiscoveryArtworkUrl(!hasError ? effectiveSrc : fallbackSrc)
 
   return (
     <div
       className={cn(
         'relative group/artwork overflow-hidden rounded-lg flex-shrink-0 bg-white',
-        !src && 'bg-muted shadow-sm',
+        !effectiveSrc && 'bg-muted shadow-sm',
         sizeClasses[size],
         className
       )}

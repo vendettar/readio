@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useImageObjectUrl } from '../../hooks/useImageObjectUrl'
 import { formatDuration } from '../../lib/dateUtils'
 import type { FileFolder, FileSubtitle, FileTrack } from '../../lib/dexieDb'
 import { formatFileSize } from '../../lib/formatters'
@@ -117,7 +118,7 @@ interface TrackCardProps {
   lastPlayedAt?: number
   isGlobalDragging?: boolean
   existingTrackNames?: string[]
-  artworkUrl?: string // Optional blob URL for embedded artwork
+  artworkBlob?: Blob // Optional blob for embedded artwork
   onPlay: (track: FileTrack, subtitle?: FileSubtitle) => void
   onSetActiveSubtitle: (trackId: string, subtitleId: string) => void
   onRename: (newName: string) => void
@@ -135,7 +136,7 @@ export function TrackCard({
   lastPlayedAt,
   isGlobalDragging = false,
   existingTrackNames = [],
-  artworkUrl,
+  artworkBlob,
   onPlay,
   onSetActiveSubtitle,
   onRename,
@@ -257,6 +258,8 @@ export function TrackCard({
   const MAX_SUBTITLES = 5
   const isSubtitleLimit = subtitles.length >= MAX_SUBTITLES
 
+  const blobUrl = useImageObjectUrl(artworkBlob || null)
+
   return (
     <div
       ref={setNodeRef}
@@ -274,14 +277,14 @@ export function TrackCard({
       <div className={trackCardContentVariants({ density })} {...listeners} {...attributes}>
         <div
           className={cn(
-            trackCardIconVariants({ density, hasArtwork: !!artworkUrl }),
+            trackCardIconVariants({ density, hasArtwork: !!blobUrl }),
             'relative aspect-square',
             styles.artworkMask
           )}
         >
-          {artworkUrl ? (
+          {blobUrl ? (
             <img
-              src={artworkUrl}
+              src={blobUrl}
               alt=""
               className="absolute -inset-[1px] w-[calc(100%+2px)] h-[calc(100%+2px)] max-w-none object-cover block"
             />

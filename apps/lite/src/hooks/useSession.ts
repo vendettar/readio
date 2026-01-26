@@ -82,7 +82,9 @@ export function useSession() {
             audioFilename: audioTitle,
             title: audioTitle,
             localTrackId: localTrackId || undefined,
-            artworkUrl: episodeMetadata?.artworkUrl || coverArtUrl,
+            artworkUrl:
+              episodeMetadata?.artworkUrl ||
+              (typeof coverArtUrl === 'string' ? coverArtUrl : undefined),
             description: episodeMetadata?.description,
             podcastTitle: episodeMetadata?.podcastTitle,
             podcastFeedUrl: episodeMetadata?.podcastFeedUrl,

@@ -204,6 +204,13 @@ src/
 - **异步任务卫生 (Async Hygiene)**：所有异步任务都使用 `requestId` 或 `AbortSignal` 防止过期更新。显式追踪 `setTimeout` 和 `requestAnimationFrame` 并在组件卸载时取消，防止内存泄漏。
 - **异步序列门控 (Sequence Gating)**：关键流程（如会话创建、词典查询）使用 Ref 门控防止同一异步操作的并行重入。
 
+### 资源集中管理 (ObjectURLs)
+
+应用遵循严格的 transient 浏览器资源（Blob URLs）管理规则，以防止在单页应用环境中出现内存泄漏：
+
+- **音频资源权威**：`playerStore` 是音频 ObjectURL 的**唯一**许可创建者和所有者。它维护一个 `activeBlobUrls` 数组，并确保在加载或恢复新音频源之前，显式调用 `URL.revokeObjectURL()` 释放之前追踪的所有 URL。
+- **图像资源委托**：图像 ObjectURL 在组件级别使用 `useImageObjectUrl` Hook 进行管理。该 Hook 封装了 `create` 和 `revoke` 的生命周期，将 URL 的生命周期与组件（如 `TrackCard`、`InteractiveArtwork`）的挂载状态或源 Blob 的变化绑定。
+- **严格隔离**：组件不再创建音频 URL。相反，它们将 IndexedDB 中的原始 Blob 传递给 Store Action（如 `loadAudioBlob()`）。
 
 ---
 

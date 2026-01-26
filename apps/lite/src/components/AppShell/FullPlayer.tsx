@@ -2,6 +2,7 @@ import { motion } from 'framer-motion'
 import { Loader2, Minimize2, Pause, Play, Settings2, SkipBack, SkipForward } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useImageObjectUrl } from '../../hooks/useImageObjectUrl'
 import { useMediaQuery } from '../../hooks/useMediaQuery'
 import { usePlayerGestures } from '../../hooks/usePlayerGestures'
 import { useZoom } from '../../hooks/useZoom'
@@ -49,6 +50,9 @@ export function FullPlayer() {
   const exitImmersion = useImmersionStore((s) => s.exitImmersion)
   const episodeMetadata = usePlayerStore((s) => s.episodeMetadata)
   const audioUrl = usePlayerStore((s) => s.audioUrl)
+
+  const blobUrl = useImageObjectUrl(coverArtUrl instanceof Blob ? coverArtUrl : null)
+  const effectiveCoverArtUrl = typeof coverArtUrl === 'string' ? coverArtUrl : blobUrl
 
   // Determine unique ID for the active item to use in layoutId
   const activeEpisodeId = episodeMetadata?.episodeId || audioUrl || 'active'
@@ -180,7 +184,7 @@ export function FullPlayer() {
                 {coverArtUrl ? (
                   <>
                     <img
-                      src={coverArtUrl}
+                      src={effectiveCoverArtUrl || undefined}
                       alt="Art"
                       className="absolute inset-[-4px] w-[calc(100%+8px)] h-[calc(100%+8px)] max-w-none block object-cover"
                     />
@@ -220,7 +224,7 @@ export function FullPlayer() {
                   {coverArtUrl && (
                     <>
                       <img
-                        src={coverArtUrl}
+                        src={effectiveCoverArtUrl || undefined}
                         className="absolute inset-[-4px] w-[calc(100%+8px)] h-[calc(100%+8px)] max-w-none block object-cover"
                         alt=""
                       />

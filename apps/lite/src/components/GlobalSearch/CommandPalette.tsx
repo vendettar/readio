@@ -5,6 +5,7 @@ import type React from 'react'
 import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { type LocalSearchResult, useGlobalSearch } from '../../hooks/useGlobalSearch'
+import { useImageObjectUrl } from '../../hooks/useImageObjectUrl'
 import { useNetworkStatus } from '../../hooks/useNetworkStatus'
 import { useOnClickOutside } from '../../hooks/useOnClickOutside'
 import discovery, { type Podcast as PodcastType, type SearchEpisode } from '../../lib/discovery'
@@ -32,6 +33,7 @@ export function CommandPalette() {
   const openOverlay = useSearchStore((s) => s.openOverlay)
   const closeOverlay = useSearchStore((s) => s.closeOverlay)
   const setAudioUrl = usePlayerStore((s) => s.setAudioUrl)
+  const loadAudioBlob = usePlayerStore((s) => s.loadAudioBlob)
   const play = usePlayerStore((s) => s.play)
   const setEpisodeMetadata = usePlayerStore((s) => s.setEpisodeMetadata)
   const { isOnline } = useNetworkStatus()
@@ -86,11 +88,31 @@ export function CommandPalette() {
     play()
   }
 
+  function LocalItemArtwork({ item }: { item: LocalSearchResult }) {
+    const blobUrl = useImageObjectUrl(item.artworkBlob || null)
+    const effectiveSrc = blobUrl || item.artworkUrl
+
+    return (
+      <div className="h-8 w-8 rounded overflow-hidden bg-muted flex items-center justify-center flex-shrink-0">
+        {effectiveSrc ? (
+          <img
+            src={getDiscoveryArtworkUrl(effectiveSrc, 80)}
+            alt=""
+            className="block h-full w-full object-cover"
+          />
+        ) : (
+          getLocalIcon(item.type)
+        )}
+      </div>
+    )
+  }
+
   const handleSelectLocal = (item: LocalSearchResult) => {
     closeOverlay()
     void executeLocalSearchAction(item, {
       navigate,
       setAudioUrl,
+      loadAudioBlob,
       play,
       setEpisodeMetadata,
     })
@@ -207,17 +229,7 @@ export function CommandPalette() {
                     {index === 0 && (
                       <div className="absolute top-0 left-3 right-3 h-px bg-border transition-opacity duration-200 smart-divider group-hover/search-item:opacity-0" />
                     )}
-                    <div className="h-8 w-8 rounded overflow-hidden bg-muted flex items-center justify-center flex-shrink-0">
-                      {item.artworkUrl ? (
-                        <img
-                          src={getDiscoveryArtworkUrl(item.artworkUrl, 80)}
-                          alt=""
-                          className="block h-full w-full object-cover"
-                        />
-                      ) : (
-                        getLocalIcon(item.type)
-                      )}
-                    </div>
+                    <LocalItemArtwork item={item} />
                     <div className="flex flex-col flex-1 min-w-0">
                       <span className="text-xs font-light truncate">{item.title}</span>
                       <span className="text-xxs text-muted-foreground truncate">

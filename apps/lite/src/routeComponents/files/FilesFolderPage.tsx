@@ -245,31 +245,34 @@ export default function FilesFolderPage() {
 
   const existingTrackNames = tracks?.map((t) => t.name) || []
 
-  // Artwork URL management
-  const [artworkUrls, setArtworkUrls] = useState<Record<string, string>>({})
+  // Artwork Blob management
+  const [artworkBlobs, setArtworkBlobs] = useState<Record<string, Blob>>({})
 
-  // Fetch artwork blobs and generate object URLs
+  // Fetch artwork blobs
   useEffect(() => {
     if (!tracks || tracks.length === 0) return
 
     let cancelled = false
-    const urls: Record<string, string> = {}
+    const blobs: Record<string, Blob> = {}
 
     const fetchArtworks = async () => {
       for (const track of tracks) {
         if (!track.artworkId) continue
+        // Skip if we already have it
+        if (artworkBlobs[track.id]) continue
+
         try {
           const blob = await DB.getAudioBlob(track.artworkId)
           if (cancelled) return
           if (blob) {
-            urls[track.id] = URL.createObjectURL(blob.blob)
+            blobs[track.id] = blob.blob
           }
         } catch (err) {
           logWarn('[FolderView] Failed to fetch artwork blob', err)
         }
       }
-      if (!cancelled) {
-        setArtworkUrls(urls)
+      if (!cancelled && Object.keys(blobs).length > 0) {
+        setArtworkBlobs((prev) => ({ ...prev, ...blobs }))
       }
     }
 
@@ -277,11 +280,8 @@ export default function FilesFolderPage() {
 
     return () => {
       cancelled = true
-      for (const url of Object.values(urls)) {
-        URL.revokeObjectURL(url)
-      }
     }
-  }, [tracks])
+  }, [tracks, artworkBlobs])
 
   const handleBack = useCallback(() => {
     navigate({ to: '/files' })
@@ -385,7 +385,7 @@ export default function FilesFolderPage() {
                       lastPlayedAt={track.audioId ? lastPlayedMap[track.audioId] : undefined}
                       isGlobalDragging={isDragging}
                       existingTrackNames={existingTrackNames}
-                      artworkUrl={artworkUrls[track.id]}
+                      artworkBlob={artworkBlobs[track.id]}
                       onPlay={(t, s) => handlePlay(t, subtitles, s)}
                       onSetActiveSubtitle={handleSetActiveSubtitle}
                       onRename={async (newName) => {

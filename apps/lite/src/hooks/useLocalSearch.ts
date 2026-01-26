@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatDuration } from '../lib/dateUtils'
 import {
@@ -22,6 +22,7 @@ export interface LocalSearchResult {
   title: string
   subtitle: string
   artworkUrl?: string
+  artworkBlob?: Blob
   extraSubtitle?: string
   badges: LocalSearchBadge[]
   data: Subscription | Favorite | PlaybackSession | FileTrack
@@ -71,17 +72,6 @@ export function useLocalSearch(
   const mergedLimits = { ...DEFAULT_LIMITS, ...limits }
   const { subscriptionLimit, favoriteLimit, historyLimit, fileLimit } = mergedLimits
 
-  // Cache for artwork blob URLs to prevent re-creation and flickering
-  const artworkUrlCacheRef = useRef<Map<string, string>>(new Map())
-  const lastQueryRef = useRef<string>('')
-
-  const revokeArtworkCache = useCallback(() => {
-    for (const url of artworkUrlCacheRef.current.values()) {
-      URL.revokeObjectURL(url)
-    }
-    artworkUrlCacheRef.current.clear()
-  }, [])
-
   // Reactive Store Access
   const subscriptions = useExploreStore((s) => s.subscriptions)
   const favorites = useExploreStore((s) => s.favorites)
@@ -96,23 +86,8 @@ export function useLocalSearch(
   const shouldSearchDb = enabled && debouncedQuery.length >= 2
 
   useEffect(() => {
-    if (!enabled || normalizedQuery.length < 2) {
-      revokeArtworkCache()
-    }
-  }, [enabled, normalizedQuery, revokeArtworkCache])
-
-  useEffect(() => {
-    if (lastQueryRef.current && lastQueryRef.current !== debouncedQuery) {
-      revokeArtworkCache()
-    }
-    lastQueryRef.current = debouncedQuery
-  }, [debouncedQuery, revokeArtworkCache])
-
-  useEffect(() => {
-    return () => {
-      revokeArtworkCache()
-    }
-  }, [revokeArtworkCache])
+    // DB results are already cleared in a separate effect
+  }, [])
 
   // 1. Auto-load data if missing
   useEffect(() => {
@@ -177,27 +152,10 @@ export function useLocalSearch(
   const [dbResults, setDbResults] = useState<LocalSearchResult[]>([])
   const [isLoadingDb, setIsLoadingDb] = useState(false)
 
-  // Cleanup artwork URLs on unmount to prevent memory leaks
-  useEffect(() => {
-    return () => {
-      artworkUrlCacheRef.current.forEach((url) => {
-        URL.revokeObjectURL(url)
-      })
-      artworkUrlCacheRef.current.clear()
-    }
-  }, [])
-
   useEffect(() => {
     if (!enabled || normalizedQuery.length < 2) {
       setDbResults([])
       setIsLoadingDb(false)
-      // Clear cache when search is disabled or query cleared
-      if (artworkUrlCacheRef.current.size > 0) {
-        artworkUrlCacheRef.current.forEach((url) => {
-          URL.revokeObjectURL(url)
-        })
-        artworkUrlCacheRef.current.clear()
-      }
     }
   }, [enabled, normalizedQuery])
 
@@ -261,22 +219,16 @@ export function useLocalSearch(
               : ''
             const subtitle = [sizeLabel, durationLabel].filter(Boolean).join(' • ')
 
-            // Fetch artwork blob if available, using cache to prevent flickering
-            let artworkUrl: string | undefined
+            // Fetch artwork blob if available
+            let artworkBlob: Blob | undefined
             if (track.artworkId) {
-              const cached = artworkUrlCacheRef.current.get(track.artworkId)
-              if (cached) {
-                artworkUrl = cached
-              } else {
-                try {
-                  const artworkBlob = await DB.getAudioBlob(track.artworkId)
-                  if (artworkBlob) {
-                    artworkUrl = URL.createObjectURL(artworkBlob.blob)
-                    artworkUrlCacheRef.current.set(track.artworkId, artworkUrl)
-                  }
-                } catch {
-                  // Best-effort: silently continue without artwork
+              try {
+                const blob = await DB.getAudioBlob(track.artworkId)
+                if (blob) {
+                  artworkBlob = blob.blob
                 }
+              } catch {
+                // Best-effort: silently continue without artwork
               }
             }
 
@@ -285,7 +237,7 @@ export function useLocalSearch(
               id: `file-${track.id}`,
               title: track.name || t('untitledFile'),
               subtitle,
-              artworkUrl,
+              artworkBlob,
               extraSubtitle: t('filesTitle'),
               badges: ['file'] as LocalSearchBadge[],
               data: track,
