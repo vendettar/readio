@@ -8,7 +8,6 @@ import { TooltipProvider } from './components/ui/tooltip'
 import './index.css'
 import { NetworkError } from './lib/fetchUtils'
 import './lib/i18n'
-import { toast } from './lib/toast'
 import { router } from './router'
 
 // Polyfill Buffer for browser compatibility (required by music-metadata-browser)
@@ -35,16 +34,12 @@ const queryClient = new QueryClient({
   },
   queryCache: new QueryCache({
     onError: (error) => {
-      if (error instanceof NetworkError || error.name === 'NetworkError') {
-        toast.errorKey('offline.error', {}, { id: 'offline-error' })
-      }
+      if (error instanceof NetworkError || error.name === 'NetworkError') return
     },
   }),
   mutationCache: new MutationCache({
     onError: (error) => {
-      if (error instanceof NetworkError || error.name === 'NetworkError') {
-        toast.errorKey('offline.error', {}, { id: 'offline-error' })
-      }
+      if (error instanceof NetworkError || error.name === 'NetworkError') return
     },
   }),
 })

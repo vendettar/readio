@@ -133,8 +133,10 @@ Provider is located at `src/main.tsx` (`Tooltip.Provider`).
 7. **Network Status & Offline Resilience** (`src/hooks/useNetworkStatus.ts`)
    - `useNetworkStatus()` - Debounced hook for tracking `isOnline` status.
    - **Policy**: Debounce of 1s is applied to both online and offline transitions to prevent fluttering and redundant toasts.
+   - **Caveat**: The hook uses a module-level singleton listener; if multi-window or multi-app instances are introduced, ensure per-window state stays in sync and does not leak across instances.
    - **Error Handling**: `fetchUtils.ts` throws a specific `NetworkError` when offline.
-   - **UI Pattern**: Remote-only pages (Explore) redirect to local-centric pages (Subscriptions) when offline. Remote search results are hidden in Command Palette.
+   - **Toast Source**: Offline toast is emitted only on online → offline transition at the root layout; request-level handlers should not duplicate it.
+   - **UI Pattern**: Explore collapses remote-only modules while keeping local entry points visible; remote search results are hidden in Command Palette.
 
 These helpers are widely reused as basic capabilities: ID generation, storage access, event listening, external link opening, time/size formatting, and network status tracking are uniformly provided by the above modules.
 
