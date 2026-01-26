@@ -139,7 +139,13 @@ Provider 位于 `src/main.tsx`（`Tooltip.Provider`）。
    - `formatBytes(bytes)` - 文件大小格式化
    - `formatCompactNumber(num)` - 大数字缩略（如 1.5K）
 
-这套 helpers 作为基础能力被广泛复用：ID 生成、存储访问、事件监听、外链打开与时间/文件大小格式化统一由上述模块提供。
+7. **网络状态与离线韧性** (`src/hooks/useNetworkStatus.ts`)
+   - `useNetworkStatus()` - 带有去抖功能的网络状态追踪 Hook。
+   - **策略**：在线和离线状态转换均应用 1s 去抖，防止网络瞬时波动导致 UI 闪烁或重复弹出 Toast。
+   - **错误处理**：`fetchUtils.ts` 在离线时抛出特定的 `NetworkError`。
+   - **UI 模式**：远程页面（Explore）在离线时重定向到本地中心页面（Subscriptions）；Command Palette 隐藏远程搜索结果。
+
+这套 helpers 作为基础能力被广泛复用：ID 生成、存储访问、事件监听、外链打开、时间/文件大小格式化以及网络状态追踪统一由上述模块提供。
 
 ### Zod 数据验证与边界保护
 

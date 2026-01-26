@@ -130,7 +130,13 @@ Provider is located at `src/main.tsx` (`Tooltip.Provider`).
    - `formatBytes(bytes)` - File size formatting
    - `formatCompactNumber(num)` - Large number abbreviation (e.g., 1.5K)
 
-These helpers are widely reused as basic capabilities: ID generation, storage access, event listening, external link opening, and time/size formatting are uniformly provided by the above modules.
+7. **Network Status & Offline Resilience** (`src/hooks/useNetworkStatus.ts`)
+   - `useNetworkStatus()` - Debounced hook for tracking `isOnline` status.
+   - **Policy**: Debounce of 1s is applied to both online and offline transitions to prevent fluttering and redundant toasts.
+   - **Error Handling**: `fetchUtils.ts` throws a specific `NetworkError` when offline.
+   - **UI Pattern**: Remote-only pages (Explore) redirect to local-centric pages (Subscriptions) when offline. Remote search results are hidden in Command Palette.
+
+These helpers are widely reused as basic capabilities: ID generation, storage access, event listening, external link opening, time/size formatting, and network status tracking are uniformly provided by the above modules.
 
 ### Zod Data Validation & Boundary Protection
 

@@ -8,6 +8,8 @@ import { GlobalAudioController } from '../components/AppShell/GlobalAudioControl
 import { useAppInitialization } from '../hooks/useAppInitialization'
 import { useFileHandler } from '../hooks/useFileHandler'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
+import { useNetworkStatus } from '../hooks/useNetworkStatus'
+import { toast } from '../lib/toast'
 
 // FilePickerContext to avoid document.getElementById
 const FilePickerContext = createContext<{ triggerFilePicker: () => void } | null>(null)
@@ -29,6 +31,18 @@ function RootLayout() {
 
   // Initialize app-level data (subscriptions, favorites)
   const { isReady, isHydrated } = useAppInitialization()
+
+  // Network offline toast
+  const { isOnline } = useNetworkStatus()
+  const prevOnlineRef = useRef<boolean>(true)
+
+  useEffect(() => {
+    // Show toast only when transition from online to offline
+    if (prevOnlineRef.current && !isOnline) {
+      toast.errorKey('offline.error', {}, { id: 'offline-error' })
+    }
+    prevOnlineRef.current = isOnline
+  }, [isOnline])
 
   // Sync body classes with hydration/ready state
   useEffect(() => {

@@ -1,12 +1,24 @@
 // src/components/AppShell/Sidebar.tsx
 import { Link, useRouterState } from '@tanstack/react-router'
-import { Clock, Disc, FolderOpen, LayoutGrid, Moon, Settings, Star, Sun } from 'lucide-react'
+import {
+  Clock,
+  Disc,
+  FolderOpen,
+  LayoutGrid,
+  Moon,
+  Settings,
+  Star,
+  Sun,
+  WifiOff,
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useNetworkStatus } from '../../hooks/useNetworkStatus'
 import { cn } from '../../lib/utils'
 import { useThemeStore } from '../../store/themeStore'
 import { CommandPalette } from '../GlobalSearch'
 import { Button } from '../ui/button'
 import { Logo } from '../ui/Logo'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
 
 interface SidebarProps {
   className?: string
@@ -44,6 +56,7 @@ export function Sidebar({ className = '' }: SidebarProps) {
   const { t } = useTranslation()
   const router = useRouterState()
   const currentPath = router.location.pathname
+  const { isOnline } = useNetworkStatus()
 
   return (
     <aside
@@ -54,11 +67,31 @@ export function Sidebar({ className = '' }: SidebarProps) {
     >
       {/* App Header */}
       <div className="px-6 py-8 pb-3">
-        <div className="flex items-center gap-3">
-          <div className="bg-primary/10 text-primary p-1.5 rounded-lg flex items-center justify-center">
-            <Logo size={20} />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="bg-primary/10 text-primary p-1.5 rounded-lg flex items-center justify-center">
+              <Logo size={20} />
+            </div>
+            <span className="font-bold text-xl tracking-tight text-foreground/90">Readio</span>
           </div>
-          <span className="font-bold text-xl tracking-tight text-foreground/90">Readio</span>
+
+          {!isOnline && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="text-muted-foreground/60 hover:text-destructive transition-colors cursor-help bg-destructive/5 p-1.5 rounded-lg border border-destructive/10">
+                    <WifiOff size={16} strokeWidth={2.5} />
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent
+                  side="right"
+                  className="max-w-48 text-xs font-medium bg-destructive/95 text-destructive-foreground border-destructive/20 backdrop-blur-md"
+                >
+                  {t('offline.badge')}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
         </div>
       </div>
 

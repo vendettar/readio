@@ -15,6 +15,9 @@ Search system as a global entry point, adopts a two-stage workflow:
   - All status indicators (Subscribed, Favorited, History, File) use a unified visual language: right-aligned, vertically centered, and `text-primary` color (Decision D053).
   - **Multi-State Merging**: If an item matches multiple criteria (e.g., it is both Favorited and in History), **ALL** relevant icons must be displayed side-by-side. Deduplication logic must merge metadata rather than overriding it.
   - Replaces previous "StatusBadge" chip component to reduce visual noise.
+- **Offline Behavior**:
+  - **Remote Results**: Suggestions, Podcast Results, and Episode Results are hidden when offline.
+  - **Local Only**: Only "Local Library" matches (Favorites, Subscriptions, History, Files) are shown.
 
 ### Stage 2: Results Page (Full Search Page)
 - **Trigger**: Enter key or click "View all results".
@@ -26,12 +29,11 @@ Search system as a global entry point, adopts a two-stage workflow:
 - Results grouped by content type, user relationships as metadata tags (Badges).
 - `⌘K` (meta+K) as global shortcut.
 
-### Offline Behavior (Required)
-- When `isOnline` is false, **hide remote results** and keep local results only.
-- Remote search should not execute; surface local matches without delay.
-- **Local Entry**: Show a clear "Local Only" group (Subscriptions/Favorites/History/Files) to avoid empty UI.
-- **Network Jitter**: Debounce online/offline changes and avoid repeated error toasts during rapid flaps.
-- **Cache Miss**: If remote data is unavailable while offline, keep local-only mode without retry loops.
+### Offline Behavior
+- When `isOnline` is false, **hide remote results** (Suggestions, Remote Podcasts, Episodes) and keep local results only.
+- Remote search does not execute; the UI surfaces local matches (Subscriptions, Favorites, History, Files) without delay.
+- **Network Jitter**: Debounced online/offline changes (1s) and avoid repeated error toasts during rapid flaps.
+- **Cache Miss**: If remote data is unavailable while offline, keep local-only mode without retry loops and do not show empty states for remote sections.
 
 ### Performance & Data Consistency Standards
 - **Load Order**: Any search scenario (Search Overlay, Full Search Page, custom hooks) dependent on `subscriptions` / `favorites` in `useExploreStore` must call `loadSubscriptions()` / `loadFavorites()` before access. If not loaded successfully in store, fallback to Dexie query instead of directly assuming list is ready.

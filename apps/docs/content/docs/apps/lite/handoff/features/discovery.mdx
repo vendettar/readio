@@ -19,6 +19,13 @@ title: Discovery & Explore
 | Module A: Top Shows | Horizontal Carousel | Discovery Provider (Top Charts) |
 | Module C: Top Episodes | Horizontal Grid | Discovery RSS Top Episodes (providerEpisodeId matching) |
 
+### Offline Behavior
+- **Network Check**: The page checks network status via `useNetworkStatus`.
+- **Degradation**: If offline (`!isOnline`), the user is automatically redirected to `/subscriptions` (Local Library).
+- **Hiding**: Remote charts (Top Shows, Editor's Picks) are not shown to prevent empty states or error spam.
+
+## 2. API Architecture
+
 ### Component Location
 
 - `src/routes/explore.tsx` — Page Body
@@ -39,11 +46,11 @@ title: Discovery & Explore
 - `src/hooks/useDiscoveryPodcasts.ts` — TanStack Query hooks for Explore
 - `src/hooks/usePodcastSearch.ts` — TanStack Query hook for Search
 
-### Offline Behavior (Required)
+### Offline Behavior
 - When `isOnline` is false, **hide all remote Discovery modules** (Top Charts, Editor's Picks, Top Shows, Top Episodes).
-- Provide a clear Offline badge in the sidebar/header.
-- **Local Entry**: Keep a visible "Local Library" entry point (Subscriptions/Favorites/History/Files) so users have actionable offline content.
-- **Network Jitter**: Debounce online/offline changes and avoid repeated error toasts during rapid flaps.
+- The Explore page remains accessible but **collapses remote modules** and displays a **"Local Library" section** (links to Subscriptions, Favorites, History, Files).
+- Provide a clear Offline badge (`WifiOff` icon) in the sidebar header with a tooltip.
+- **Network Jitter**: Debounced online/offline changes (1s) to avoid repeated error toasts during rapid flaps.
 - **Cache Miss**: If remote data is unavailable while offline, keep local-only mode without retry loops.
 
 ### Proxy Privacy Warning

@@ -1,8 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import discovery from '../lib/discovery'
+import { NetworkError } from '../lib/fetchUtils'
 import { getAppConfig } from '../lib/runtimeConfig'
 import { useExploreStore } from '../store/exploreStore'
+import { useNetworkStatus } from './useNetworkStatus'
 
 function useDebouncedValue<T>(value: T, delayMs: number) {
   const [debouncedValue, setDebouncedValue] = useState(value)
@@ -16,10 +18,11 @@ function useDebouncedValue<T>(value: T, delayMs: number) {
 }
 
 export function useDiscoverySearch(query: string, enabled = true) {
+  const { isOnline } = useNetworkStatus()
   const country = useExploreStore((s) => s.country) || getAppConfig().DEFAULT_COUNTRY
   const normalizedQuery = query.toLowerCase().trim()
   const debouncedQuery = useDebouncedValue(normalizedQuery, 200)
-  const shouldSearch = enabled && debouncedQuery.length >= 2
+  const shouldSearch = isOnline && enabled && debouncedQuery.length >= 2
 
   // Discovery Provider: Podcast Search (Debounced)
   const { data: podcasts = [], isLoading: isLoadingPodcasts } = useQuery({
@@ -28,6 +31,10 @@ export function useDiscoverySearch(query: string, enabled = true) {
     enabled: shouldSearch,
     staleTime: 5 * 60 * 1000,
     placeholderData: (prev) => prev,
+    retry: (failureCount, error) => {
+      if (error instanceof NetworkError || error.name === 'NetworkError') return false
+      return failureCount < 1
+    },
   })
 
   // Discovery Provider: Episode Search (Debounced)
@@ -37,6 +44,10 @@ export function useDiscoverySearch(query: string, enabled = true) {
     enabled: shouldSearch,
     staleTime: 5 * 60 * 1000,
     placeholderData: (prev) => prev,
+    retry: (failureCount, error) => {
+      if (error instanceof NetworkError || error.name === 'NetworkError') return false
+      return failureCount < 1
+    },
   })
 
   return {

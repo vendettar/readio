@@ -213,6 +213,13 @@ export interface FetchWithFallbackOptions {
 
 type FetchSource = 'direct' | 'customProxy' | 'defaultProxy'
 
+export class NetworkError extends Error {
+  constructor(message = 'No internet connection') {
+    super(message)
+    this.name = 'NetworkError'
+  }
+}
+
 export class FetchError extends Error {
   status?: number
   url: string
@@ -239,6 +246,17 @@ export async function fetchWithFallback<T = string>(
   const { signal, timeoutMs = config.TIMEOUT_MS, json = false, headers = {} } = options
   const { proxyUrl, proxyPrimary } = getCorsProxyConfig()
 
+  // Pre-fetch network check: if we are known to be offline, throw immediately.
+  // We allow localhost/127.0.0.1 to bypass this for development purposes.
+  const isLocal =
+    url.startsWith('http://localhost') ||
+    url.startsWith('http://127.0.0.1') ||
+    url.startsWith('http://0.0.0.0')
+
+  if (typeof window !== 'undefined' && !window.navigator.onLine && !isLocal) {
+    throw new NetworkError()
+  }
+
   const controller = new AbortController()
   let didTimeout = false
 
@@ -257,20 +275,27 @@ export async function fetchWithFallback<T = string>(
 
   // 1. Direct Fetch
   const fetchDirect = async (): Promise<T> => {
-    const response = await fetch(url, {
-      signal: internalSignal,
-      credentials: 'omit',
-      headers,
-    })
-    if (!response.ok) {
-      throw new FetchError(
-        `Direct fetch failed: ${response.status}`,
-        url,
-        response.status,
-        'direct'
-      )
+    try {
+      const response = await fetch(url, {
+        signal: internalSignal,
+        credentials: 'omit',
+        headers,
+      })
+      if (!response.ok) {
+        throw new FetchError(
+          `Direct fetch failed: ${response.status}`,
+          url,
+          response.status,
+          'direct'
+        )
+      }
+      return json ? response.json() : (response.text() as unknown as T)
+    } catch (e) {
+      if (e instanceof TypeError) {
+        throw new NetworkError('Network failure during direct fetch')
+      }
+      throw e
     }
-    return json ? response.json() : (response.text() as unknown as T)
   }
 
   // 2. Proxy Fetch Generic
@@ -282,20 +307,28 @@ export async function fetchWithFallback<T = string>(
       ? buildJsonWrappedProxyUrl(baseProxyUrl, url)
       : buildProxyUrl(baseProxyUrl, url)
 
-    const response = await fetch(finalProxyUrl, {
-      signal: internalSignal,
-      credentials: 'omit',
-      // We don't typically pass client headers to generic proxies like AllOrigins
-      // but some custom proxies might need them.
-      headers,
-    })
-    if (!response.ok) {
-      throw new FetchError(
-        `Proxy (${baseProxyUrl}) failed: ${response.status}`,
-        url,
-        response.status,
-        source
-      )
+    let response: Response
+    try {
+      response = await fetch(finalProxyUrl, {
+        signal: internalSignal,
+        credentials: 'omit',
+        // We don't typically pass client headers to generic proxies like AllOrigins
+        // but some custom proxies might need them.
+        headers,
+      })
+      if (!response.ok) {
+        throw new FetchError(
+          `Proxy (${baseProxyUrl}) failed: ${response.status}`,
+          url,
+          response.status,
+          source
+        )
+      }
+    } catch (e) {
+      if (e instanceof TypeError) {
+        throw new NetworkError(`Network failure during proxy fetch (${baseProxyUrl})`)
+      }
+      throw e
     }
 
     // JSON-wrapped proxies return JSON with contents field
@@ -313,6 +346,9 @@ export async function fetchWithFallback<T = string>(
           const decodedResponse = await fetch(contents)
           contents = await decodedResponse.text()
         } catch (e) {
+          if (e instanceof TypeError) {
+            throw new NetworkError('Network failure during data decoding')
+          }
           log('[fetchWithFallback] Failed to decode data: URI', e)
         }
       }
@@ -435,6 +471,14 @@ export async function fetchWithFallback<T = string>(
           log(
             `[fetchWithFallback] [Direct] 4xx status received (${error.status}), skipping proxies as requested.`
           )
+          throw error
+        }
+
+        // If it's a NetworkError, short-circuit immediately
+        if (
+          error instanceof NetworkError ||
+          (error instanceof Error && error.name === 'NetworkError')
+        ) {
           throw error
         }
 

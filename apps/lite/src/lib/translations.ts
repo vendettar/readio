@@ -380,6 +380,8 @@ export const translations = {
     ariaPlayEpisode: '播放单集',
     episodeWebpage: '单集网页',
     errorPodcastFeedNotFound: '暂时无法加载该节目内容。',
+    'offline.badge': '离线模式 - 仅本地文件可用',
+    'offline.error': '网络连接未就绪',
   },
   en: {
     dropTitleIntro: 'Drag & drop or click to add MP3 and SRT files',
@@ -752,6 +754,8 @@ export const translations = {
     ariaPlayEpisode: 'Play episode',
     episodeWebpage: 'Episode Webpage',
     errorPodcastFeedNotFound: "Unable to load this show's content.",
+    'offline.badge': 'Offline Mode - Only local files available',
+    'offline.error': 'No internet connection',
   },
   ja: {
     dropTitleIntro: 'MP3 と SRT をドラッグ＆ドロップ / クリックで追加',

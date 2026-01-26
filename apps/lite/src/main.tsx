@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider } from '@tanstack/react-router'
 import { Buffer } from 'buffer'
 import { StrictMode } from 'react'
@@ -6,7 +6,9 @@ import { createRoot } from 'react-dom/client'
 import { RootErrorBoundary } from './components/RootErrorBoundary'
 import { TooltipProvider } from './components/ui/tooltip'
 import './index.css'
+import { NetworkError } from './lib/fetchUtils'
 import './lib/i18n'
+import { toast } from './lib/toast'
 import { router } from './router'
 
 // Polyfill Buffer for browser compatibility (required by music-metadata-browser)
@@ -24,10 +26,27 @@ const queryClient = new QueryClient({
     queries: {
       staleTime: 5 * 60 * 1000, // 5 minutes
       gcTime: 30 * 60 * 1000, // 30 minutes (garbage collection)
-      retry: 1,
+      retry: (failureCount, error) => {
+        if (error instanceof NetworkError || error.name === 'NetworkError') return false
+        return failureCount < 1
+      },
       refetchOnWindowFocus: false,
     },
   },
+  queryCache: new QueryCache({
+    onError: (error) => {
+      if (error instanceof NetworkError || error.name === 'NetworkError') {
+        toast.errorKey('offline.error', {}, { id: 'offline-error' })
+      }
+    },
+  }),
+  mutationCache: new MutationCache({
+    onError: (error) => {
+      if (error instanceof NetworkError || error.name === 'NetworkError') {
+        toast.errorKey('offline.error', {}, { id: 'offline-error' })
+      }
+    },
+  }),
 })
 
 // Register E2E test harness (only in DEV or TEST)

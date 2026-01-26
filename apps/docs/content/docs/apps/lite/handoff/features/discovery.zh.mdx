@@ -39,12 +39,12 @@ title: Discovery & Explore
 - `src/hooks/useDiscoveryPodcasts.ts` — TanStack Query hooks for Explore
 - `src/hooks/usePodcastSearch.ts` — TanStack Query hook for Search
 
-### 离线行为（强制）
+### 离线行为
 - 当 `isOnline` 为 false 时，**隐藏所有远程 Discovery 模块**（Top Charts、Editor's Picks、Top Shows、Top Episodes）。
-- 在侧边栏/标题处提供清晰的离线徽章。
-- **本地入口**：必须保留清晰的“本地库入口”（Subscriptions/Favorites/History/Files），确保离线可操作。
-- **网络抖动**：对在线状态做去抖，避免快速切换导致重复提示。
-- **缓存未命中**：离线时不重试远程请求，保持本地模式。
+- Explore 页面在离线时仍可访问，但会 **折叠远程模块**，并显示 **“本地库 (Local Library)”入口**（Subscriptions, Favorites, History, Files 的快捷入口）。
+- 在侧边栏/顶部提供清晰的离线徽章（`WifiOff` 图标）及 Tooltip。
+- **网络抖动**：对在线状态转换应用 1s 去抖，避免网络不稳定时频繁弹出 Toast 提示。
+- **缓存未命中**：离线时不重试远程请求，保持本地模式，不显示空状态错误。
 
 ### 代理隐私提示
 - 使用公共代理时，在 Settings 显示明确披露，并提供非阻断提示。

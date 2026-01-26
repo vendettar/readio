@@ -4,7 +4,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { getEditorPicksForRegion } from '../constants/app'
 import discovery, { type DiscoveryPodcast } from '../lib/discovery'
+import { NetworkError } from '../lib/fetchUtils'
 import { getAppConfig } from '../lib/runtimeConfig'
+import { useNetworkStatus } from './useNetworkStatus'
 
 // ========== CONFIGURATION ==========
 const config = getAppConfig()
@@ -36,15 +38,22 @@ const QUERY_KEYS = {
  * Hook for fetching Top Podcasts (overall chart)
  */
 export function useTopPodcasts(country: string = 'us', limit: number = 25) {
+  const { isOnline } = useNetworkStatus()
+
   return useQuery({
     queryKey: QUERY_KEYS.topPodcasts(country),
     queryFn: ({ signal }) => {
       if (USE_MOCK_DATA) return Promise.resolve(MOCK_TOP_PODCASTS.slice(0, limit))
       return discovery.fetchTopPodcasts(country, limit, signal)
     },
+    enabled: isOnline,
     staleTime: 6 * 60 * 60 * 1000, // 6 hours
     gcTime: 24 * 60 * 60 * 1000, // 24 hours
-    retry: USE_MOCK_DATA ? 0 : 2,
+    retry: (failureCount, error) => {
+      if (USE_MOCK_DATA) return false
+      if (error instanceof NetworkError || error.name === 'NetworkError') return false
+      return failureCount < 2
+    },
   })
 }
 
@@ -53,6 +62,8 @@ export function useTopPodcasts(country: string = 'us', limit: number = 25) {
  * Returns empty array if region has no configured picks
  */
 export function useEditorPicks(country: string = 'us') {
+  const { isOnline } = useNetworkStatus()
+
   return useQuery({
     queryKey: QUERY_KEYS.editorPicks(country),
     queryFn: async ({ signal }) => {
@@ -62,9 +73,14 @@ export function useEditorPicks(country: string = 'us') {
       const picks = getEditorPicksForRegion(country)
       return picks ? discovery.lookupPodcastsByIds([...picks], country, signal) : []
     },
+    enabled: isOnline,
     staleTime: 6 * 60 * 60 * 1000, // 6 hours
     gcTime: 24 * 60 * 60 * 1000, // 24 hours
-    retry: USE_MOCK_DATA ? 0 : 2,
+    retry: (failureCount, error) => {
+      if (USE_MOCK_DATA) return false
+      if (error instanceof NetworkError || error.name === 'NetworkError') return false
+      return failureCount < 2
+    },
   })
 }
 
@@ -72,15 +88,22 @@ export function useEditorPicks(country: string = 'us') {
  * Hook for fetching Top Episodes
  */
 export function useTopEpisodes(country: string = 'us', limit: number = 25) {
+  const { isOnline } = useNetworkStatus()
+
   return useQuery({
     queryKey: ['topEpisodes', country],
     queryFn: ({ signal }) => {
       if (USE_MOCK_DATA) return Promise.resolve(MOCK_TOP_EPISODES.slice(0, limit))
       return discovery.fetchTopEpisodes(country, limit, signal)
     },
+    enabled: isOnline,
     staleTime: 6 * 60 * 60 * 1000, // 6 hours
     gcTime: 24 * 60 * 60 * 1000, // 24 hours
-    retry: USE_MOCK_DATA ? 0 : 2,
+    retry: (failureCount, error) => {
+      if (USE_MOCK_DATA) return false
+      if (error instanceof NetworkError || error.name === 'NetworkError') return false
+      return failureCount < 2
+    },
   })
 }
 

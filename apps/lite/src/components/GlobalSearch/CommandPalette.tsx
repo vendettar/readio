@@ -5,6 +5,7 @@ import type React from 'react'
 import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { type LocalSearchResult, useGlobalSearch } from '../../hooks/useGlobalSearch'
+import { useNetworkStatus } from '../../hooks/useNetworkStatus'
 import { useOnClickOutside } from '../../hooks/useOnClickOutside'
 import discovery, { type Podcast as PodcastType, type SearchEpisode } from '../../lib/discovery'
 import { getDiscoveryArtworkUrl } from '../../lib/imageUtils'
@@ -33,6 +34,7 @@ export function CommandPalette() {
   const setAudioUrl = usePlayerStore((s) => s.setAudioUrl)
   const play = usePlayerStore((s) => s.play)
   const setEpisodeMetadata = usePlayerStore((s) => s.setEpisodeMetadata)
+  const { isOnline } = useNetworkStatus()
   const config = getAppConfig()
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -178,7 +180,7 @@ export function CommandPalette() {
             )}
 
             {/* Suggestions - Direct matches */}
-            {podcasts.length > 0 && query.length >= 2 && (
+            {isOnline && podcasts.length > 0 && query.length >= 2 && (
               <CommandGroup>
                 {podcasts.slice(0, config.SEARCH_SUGGESTIONS_LIMIT).map((podcast) => (
                   <CommandItem
@@ -240,7 +242,7 @@ export function CommandPalette() {
             )}
 
             {/* Podcasts Results */}
-            {podcasts.length > 0 && (
+            {isOnline && podcasts.length > 0 && (
               <>
                 <CommandSeparator className="my-1" />
                 <CommandGroup heading={t('searchPodcasts')}>
@@ -274,7 +276,7 @@ export function CommandPalette() {
             )}
 
             {/* Episodes Results */}
-            {episodes.length > 0 && (
+            {isOnline && episodes.length > 0 && (
               <>
                 <CommandSeparator className="my-1" />
                 <CommandGroup heading={t('searchEpisodes')}>
