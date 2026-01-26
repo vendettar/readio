@@ -107,6 +107,7 @@ export default function FavoritesPage() {
                         playIconSize={20}
                         hoverGroup="episode"
                         size="lg"
+                        layoutId={`artwork-${favorite.episodeId}-player`}
                       />
                     ) : undefined
                   }

@@ -273,6 +273,9 @@ export default function HistoryPage() {
                           playIconSize={14}
                           hoverGroup="episode"
                           size="lg"
+                          layoutId={
+                            session.episodeId ? `artwork-${session.episodeId}-player` : undefined
+                          }
                         />
                       </div>
                     ) : undefined

@@ -4,8 +4,9 @@ title: Feature Patterns
 
 ## Motion & Spatial Metaphors
 
-- **Shared Element Transitions**: When a persistent element (like Podcast Artwork) moves from one view to another (e.g. Mini Player to Full Player), it MUST use a shared layout transition (`layoutId` in Framer Motion) to maintain spatial orientation.
-- **layoutId Uniqueness**: `layoutId` must include a view context (e.g., `miniplayer`/`fullplayer`/`list`) to avoid collisions when multiple lists render the same artwork simultaneously.
+- **Shared Element Transitions (Active)**: When a persistent element (like Podcast Artwork) moves from one view to another (e.g. Mini Player to Full Player), it MUST use a shared layout transition (`layoutId` in Framer Motion) to maintain spatial orientation.
+- **layoutId strategy**: The system uses `artwork-${id}-player`. To meet the "List -> Player" morphing requirement, both list items and the global player shared this semantic ID.
+- **Viewport Compatibility**: Inside `FullPlayer`, the `layoutId` MUST be applied conditionally (e.g., via `isDesktop`) to ensure only the active artwork node in the current layout holds the ID, preventing Framer Motion collisions.
 - **Entrance Animations**: Lists (Files, Episodes) should not appear instantly. Use the `AnimatedList` bit for a staggered fade-in + slide-up effect for items.
 - **Micro-animations**: Use the `CountUp` bit for numeric values (e.g., Storage Usage) to provide a premium, dynamic feel.
 - **App Boot**: Do not show half-loaded UI. Use a centered App Logo with a breathing animation while stores are hydrating from Dexie. Use `AnimatePresence` to fade out the loader.

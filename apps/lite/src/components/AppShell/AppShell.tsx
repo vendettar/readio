@@ -1,12 +1,9 @@
-// src/components/AppShell/AppShell.tsx
-import { lazy, type ReactNode, Suspense } from 'react'
+import type { ReactNode } from 'react'
+import { useEffect, useRef } from 'react'
 import { useImmersionStore } from '../../store/immersionStore'
+import { FullPlayer } from './FullPlayer'
 import { MiniPlayer } from './MiniPlayer'
 import { Sidebar } from './Sidebar'
-
-const LazyFullPlayer = lazy(() =>
-  import('./FullPlayer').then((mod) => ({ default: mod.FullPlayer }))
-)
 
 interface AppShellProps {
   children: ReactNode
@@ -14,17 +11,28 @@ interface AppShellProps {
 
 export function AppShell({ children }: AppShellProps) {
   const { isImmersed } = useImmersionStore()
+  const previousOverflowRef = useRef<string | null>(null)
 
-  // Full Player mode - hide everything else
-  if (isImmersed) {
-    return (
-      <Suspense fallback={<div className="fixed inset-0 bg-background" />}>
-        <LazyFullPlayer />
-      </Suspense>
-    )
-  }
+  useEffect(() => {
+    if (typeof document === 'undefined') return
+    const body = document.body
 
-  // Normal mode - Sidebar + Content + MiniPlayer
+    if (isImmersed) {
+      previousOverflowRef.current = body.style.overflow
+      body.style.overflow = 'hidden'
+    } else if (previousOverflowRef.current !== null) {
+      body.style.overflow = previousOverflowRef.current
+      previousOverflowRef.current = null
+    }
+
+    return () => {
+      if (isImmersed) {
+        body.style.overflow = previousOverflowRef.current ?? ''
+        previousOverflowRef.current = null
+      }
+    }
+  }, [isImmersed])
+
   return (
     <div className="flex h-screen bg-background text-foreground font-sans">
       <Sidebar />
@@ -36,7 +44,11 @@ export function AppShell({ children }: AppShellProps) {
         </div>
       </main>
 
+      {/* MiniPlayer always in tree for shared element transitions */}
       <MiniPlayer />
+
+      {/* Full Player Overlay */}
+      {isImmersed && <FullPlayer />}
     </div>
   )
 }

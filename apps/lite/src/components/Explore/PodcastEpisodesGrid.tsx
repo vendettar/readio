@@ -10,6 +10,7 @@ import type { DiscoveryPodcast } from '../../lib/discovery'
 import { getDiscoveryArtworkUrl } from '../../lib/imageUtils'
 import { cn } from '../../lib/utils'
 import { useExploreStore } from '../../store/exploreStore'
+import { usePlayerStore } from '../../store/playerStore'
 import { AnimatedList } from '../bits/AnimatedList'
 import { InteractiveArtwork } from '../interactive/InteractiveArtwork'
 import { InteractiveTitle } from '../interactive/InteractiveTitle'
@@ -35,6 +36,7 @@ export function PodcastEpisodesGrid({
 }: PodcastEpisodesGridProps) {
   const { t } = useTranslation()
   const favorites = useExploreStore((s) => s.favorites)
+  const activeEpisodeId = usePlayerStore((s) => s.episodeMetadata?.episodeId)
   const [openMenuId, setOpenMenuId] = React.useState<string | null>(null)
   const [processingId, setProcessingId] = React.useState<string | null>(null)
   const menuItemClassName =
@@ -119,6 +121,7 @@ export function PodcastEpisodesGrid({
                   (episode.url ? favoriteAudioUrls.has(episode.url) : false)
                 const podcastId = episode.url?.match(/\/id(\d+)/)?.[1]
                 const episodeIndex = colIndex * ROWS + rowIndex
+                const shouldUsePlayerLayout = activeEpisodeId === episode.id
 
                 return (
                   <div
@@ -144,7 +147,10 @@ export function PodcastEpisodesGrid({
                         playIconSize={14}
                         hoverGroup="item"
                         size="md"
-                        className="rounded-md"
+                        playLabel={t('ariaPlayEpisode')}
+                        layoutId={
+                          shouldUsePlayerLayout ? `artwork-${episode.id}-player` : undefined
+                        }
                       />
                     </div>
 

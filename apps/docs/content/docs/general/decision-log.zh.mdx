@@ -234,3 +234,8 @@ description: 架构决策与理由。
 - **实现**：
     - 移除了 `DB.updatePlaybackSession` 中的强制 `Date.now()`。
     - `playerStore` 的 Action（`updateProgress`、`saveProgressNow`）根据当前 `isPlaying` 状态有条件地包含 `lastPlayedAt`。
+
+## D057 — 共享元素转换 (Shared Element Transitions)
+- **决策**：使用 `layoutId` (Framer Motion) 同步全局 UI 状态（MiniPlayer <-> FullPlayer）之间的持久性 UI 元素（特别是封面图）。
+- **理由**：保持空间连续性，减少视觉上的“突跳”感，实现高端类原生的应用体验。
+- **约束**：`layoutId` 在同一个可见 tree 中必须唯一。如果移动端/桌面端布局中的多个节点追踪同一个语义对象，必须使用条件渲染（如 `isDesktop` 判断）确保同一时间只有一个节点持有该 ID。

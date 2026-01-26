@@ -120,6 +120,14 @@ src/
 
 该设计确保 `RootLayout` 在路由切换之外保持静态，播放过程中仅控制器与进度条组件更新。
 
+### 空间感：共享元素转换 (Shared Element Transitions)
+
+为了在使用 `layoutId` 进行视觉衔接的同时保证架构的清晰性，系统遵循以下规则（见决策 D057）：
+
+- **唯一性规则**：同一时间在渲染树中，具有相同 `layoutId` 的元素必须是物理上同一个逻辑对象的不同呈现。
+- **视图兼容性**：MiniPlayer 与 FullPlayer 的封面图共享 `artwork-${id}-player` ID，确保从底部胶囊到全屏封面的平滑“morph”转换。
+- **条件渲染**：在 `FullPlayer` 等包含多屏幕适配（Desktop/Mobile）的组件中，必须通过 `isDesktop` 等状态确保只有当前可见的封面占位符持有 `layoutId`，以防止 Framer Motion 布局计算冲突。
+
 ---
 
 ## 2. 路由（TanStack Router + File-Based Routing）

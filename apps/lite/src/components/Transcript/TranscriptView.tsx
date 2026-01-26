@@ -137,7 +137,7 @@ export function TranscriptView({
         id="transcript-container"
         ref={containerRef}
         data-scroll-guard="transcript"
-        className="reading-area h-full overflow-auto prose transcript-text max-w-none"
+        className="reading-area h-full overflow-auto prose transcript-text max-w-none touch-pan-y"
       >
         <Virtuoso
           key={`virtuoso-${zoomScale}`}

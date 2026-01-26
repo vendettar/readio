@@ -89,7 +89,7 @@ export function PodcastCard({
             'w-full h-full shadow-md group-hover/card:shadow-lg transition-all',
             variant === 'circular' ? 'rounded-full' : 'rounded-lg'
           )}
-          // We don't pass size here as we want it to fill the container aspect-ratio
+          layoutId={`artwork-podcast-${id}`}
         />
 
         {/* Rank Badge (Optional) */}

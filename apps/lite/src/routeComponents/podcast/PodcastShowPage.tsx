@@ -3,6 +3,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import { Link, useParams } from '@tanstack/react-router'
+import { motion } from 'framer-motion'
 import { Check, ChevronRight, Play, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -139,11 +140,13 @@ export default function PodcastShowPage() {
         <div className="flex flex-col md:flex-row gap-8 mb-10">
           {/* Artwork */}
           <div className="w-full md:w-64 flex-shrink-0">
-            <img
-              src={artworkUrl}
-              alt=""
-              className="w-full aspect-square rounded-2xl object-cover shadow-lg bg-muted"
-            />
+            <motion.div layoutId={`artwork-podcast-${id}`} className="w-full aspect-square">
+              <img
+                src={artworkUrl}
+                alt=""
+                className="w-full h-full rounded-2xl object-cover shadow-lg bg-muted"
+              />
+            </motion.div>
           </div>
 
           {/* Metadata - Use flex column with justify-between to push buttons to bottom */}

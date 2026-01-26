@@ -106,8 +106,8 @@ The application adopts the App Shell pattern, provided by `src/components/AppShe
 - **Entry Method**: Click MiniPlayer area or Expand button
 - **Exit Method**: Click Minimize button in top right of FullPlayer
 - **Behavior**:
-  - On Entry: Hide Sidebar, display FullPlayer full screen
-  - On Exit: Restore normal layout
+  - On Entry: Display FullPlayer as a full-screen overlay. The **Main Content and MiniPlayer remain mounted** in the tree (potentially hidden visually) to support shared element transitions (`layoutId`).
+  - On Exit: Close FullPlayer overlay and restore focus to MiniPlayer.
   - Uninterrupted Playback: `<audio>` element persists in `GlobalAudioController` (always mounted in `__root.tsx`)
 
 ### Performance Isolation: GlobalAudioController
@@ -119,6 +119,14 @@ To prevent the entire application from re-rendering on every audio tick (timeupd
 | GlobalAudioController | `src/components/AppShell/GlobalAudioController.tsx` | Handles `<audio>` element lifecycle, event listeners (timeupdate, play/pause, seek), volume/rate sync. Uses atomic Zustand selectors and `getState()` for actions. |
 
 This ensures `RootLayout` remains effectively static unless the route changes, while only `GlobalAudioController` and any progress-bar components re-render during playback.
+
+### Spatial Presence: Shared Element Transitions
+
+The application utilizes `layoutId` (Framer Motion) to maintain visual continuity when moving between global UI states (see Decision D057):
+
+- **Uniqueness Rule**: Within the active render tree, a `layoutId` must uniquely identify a logical object's visual representation.
+- **Context Compatibility**: The artwork for list items and the active player (Mini/Full) share the `artwork-${id}-player` ID to enable smooth "morphing."
+- **Conditional Target**: In components with responsive layouts (like `FullPlayer`), the `layoutId` is applied conditionally based on the viewport (e.g., `isDesktop`) to ensure only one active node holds the ID at any time, avoiding layout engine collisions.
 
 ---
 

@@ -69,6 +69,7 @@
     --z-mini-player: 50;
     --z-overlay: 60;
     --z-modal: 100;
+    --z-full-player: var(--z-modal);
   }
 
   @media (max-width: 640px) {

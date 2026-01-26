@@ -122,6 +122,7 @@ export default {
         'mini-player': 'var(--z-mini-player)',
         overlay: 'var(--z-overlay)',
         modal: 'var(--z-modal)',
+        'full-player': 'var(--z-full-player)',
       },
     },
   },

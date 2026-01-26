@@ -1,4 +1,5 @@
 import { Link } from '@tanstack/react-router'
+import { motion } from 'framer-motion'
 import { Play } from 'lucide-react'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
@@ -25,6 +26,7 @@ interface InteractiveArtworkProps {
   size?: 'sm' | 'md' | 'lg' | 'xl'
   referrerPolicy?: React.ImgHTMLAttributes<HTMLImageElement>['referrerPolicy']
   fallbackSrc?: string
+  layoutId?: string
 }
 
 /**
@@ -49,6 +51,7 @@ export function InteractiveArtwork({
   size = 'md',
   referrerPolicy = 'no-referrer',
   fallbackSrc,
+  layoutId,
 }: InteractiveArtworkProps) {
   const { t } = useTranslation()
   const [hasError, setHasError] = React.useState(false)
@@ -114,7 +117,41 @@ export function InteractiveArtwork({
       )}
     >
       {/* 1. Navigation Layer (Base) */}
-      {to && params ? (
+      {layoutId ? (
+        <motion.div layoutId={layoutId} className="absolute inset-0 z-0">
+          {to && params ? (
+            <Button
+              asChild
+              variant="ghost"
+              className="p-0 h-auto hover:bg-transparent block w-full h-full"
+            >
+              <Link to={to as any} params={params as any} className="block w-full h-full">
+                <img
+                  src={artworkUrl}
+                  alt={alt}
+                  referrerPolicy={referrerPolicy}
+                  onError={() => setHasError(true)}
+                  className={cn(
+                    'absolute inset-[-4px] w-[calc(100%+8px)] h-[calc(100%+8px)] max-w-none object-cover transition-transform duration-500 block',
+                    hoverScale && hoverScaleClass
+                  )}
+                />
+              </Link>
+            </Button>
+          ) : (
+            <img
+              src={artworkUrl}
+              alt={alt}
+              referrerPolicy={referrerPolicy}
+              onError={() => setHasError(true)}
+              className={cn(
+                'absolute inset-[-4px] w-[calc(100%+8px)] h-[calc(100%+8px)] max-w-none object-cover transition-transform duration-500 block',
+                hoverScale && hoverScaleClass
+              )}
+            />
+          )}
+        </motion.div>
+      ) : to && params ? (
         <Button
           asChild
           variant="ghost"

@@ -1,7 +1,7 @@
 > **⚠️ CRITICAL**: You MUST preserve the current UI/UX layout and styling. Do NOT change visual appearance unless explicitly instructed.
 > **Prerequisites**: Read `apps/docs/content/docs/general/design-system/index.mdx` and `apps/docs/content/docs/apps/lite/ui-patterns/index.mdx` before starting.
 
-# Task: Implement Shared Element Transitions
+# Task: Implement Shared Element Transitions [COMPLETED]
 
 ## Objective
 When clicking an episode or expanding the player, the artwork should morph smoothly from one location to another (Spatial Metaphor).
@@ -33,3 +33,11 @@ When clicking an episode or expanding the player, the artwork should morph smoot
 - Update `apps/docs/content/docs/apps/lite/ui-patterns/features.mdx`.
 - Update `apps/docs/content/docs/apps/lite/handoff/architecture.mdx`.
 - Update `apps/docs/content/docs/apps/lite/handoff/index.mdx` with the new status.
+
+## Completion
+- **Commands**:
+  - `pnpm --filter @readio/lite typecheck`
+  - `pnpm --filter @readio/lite lint`
+- **Reviewed by**: Readio Reviewer (QA)
+- **Completed by**: Readio Worker (Coder)
+- **Date**: 2026-01-25

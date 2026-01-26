@@ -237,3 +237,8 @@ description: Architecture decisions and rationale.
 - **Implementation**:
     - Removed forced `Date.now()` in `DB.updatePlaybackSession`.
     - `playerStore` actions (`updateProgress`, `saveProgressNow`) conditionally include `lastPlayedAt` based on the current `isPlaying` state.
+
+## D057 — Shared Element Transitions
+- **Decision**: Use `layoutId` (Framer Motion) to synchronize persistent UI elements (especially artwork) between global UI states (MiniPlayer <-> FullPlayer).
+- **Rationale**: Maintains spatial continuity, reduces visual pop-in, and achieves a high-end "native" feel.
+- **Constraint**: The `layoutId` MUST be unique within the same visible tree. Conditional rendering (e.g., `isDesktop`) must be used if multiple nodes for different layouts (Mobile/Desktop) share the same semantic ID tracking the same object.

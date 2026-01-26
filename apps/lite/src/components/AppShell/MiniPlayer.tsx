@@ -1,5 +1,7 @@
 // src/components/AppShell/MiniPlayer.tsx
 
+// src/components/AppShell/MiniPlayer.tsx
+import { motion } from 'framer-motion'
 import {
   Info,
   ListMusic,
@@ -15,7 +17,6 @@ import {
   Volume2,
   VolumeX,
 } from 'lucide-react'
-// src/components/AppShell/MiniPlayer.tsx
 import React, { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { getDiscoveryArtworkUrl } from '../../lib/imageUtils'
@@ -56,6 +57,11 @@ export function MiniPlayer() {
   const seekTo = usePlayerStore((s) => s.seekTo)
 
   const { enterImmersion } = useImmersionStore()
+  const episodeMetadata = usePlayerStore((s) => s.episodeMetadata)
+  const audioUrl = usePlayerStore((s) => s.audioUrl)
+
+  // Determine unique ID for the active item to use in layoutId
+  const activeEpisodeId = episodeMetadata?.episodeId || audioUrl || 'active'
 
   // Hover state for capsule
   const [isHovering, setIsHovering] = useState(false)
@@ -111,7 +117,7 @@ export function MiniPlayer() {
   return (
     <div
       className={cn(
-        'fixed bottom-0 right-0 bg-card border-t border-border z-30',
+        'fixed bottom-0 right-0 bg-card border-t border-border z-mini-player',
         'flex items-center justify-between px-6',
         'w-[calc(100%-var(--sidebar-width))] h-mini-player',
         isDisabled && 'opacity-50'
@@ -195,7 +201,8 @@ export function MiniPlayer() {
           aria-label={t('ariaExpandPlayer')}
         >
           {coverArtUrl ? (
-            <div
+            <motion.div
+              layoutId={`artwork-${activeEpisodeId}-player`}
               className={cn(
                 'relative w-12 h-12 rounded-md overflow-hidden bg-white shadow-md ring-1 ring-inset ring-white/10',
                 !coverArtUrl && 'bg-card'
@@ -211,7 +218,7 @@ export function MiniPlayer() {
               />
               {/* Sealer overlay */}
               <div className="absolute inset-0 rounded-md ring-1 ring-inset ring-white pointer-events-none" />
-            </div>
+            </motion.div>
           ) : (
             <div className="w-12 h-12 rounded-md bg-muted flex items-center justify-center border border-border/10">
               <Podcast size={20} className="text-muted-foreground" />

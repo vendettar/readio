@@ -1,6 +1,8 @@
+import { motion } from 'framer-motion'
 import { Minimize2, Pause, Play, Settings2, SkipBack, SkipForward } from 'lucide-react'
-import { type CSSProperties, useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useMediaQuery } from '../../hooks/useMediaQuery'
 import { usePlayerGestures } from '../../hooks/usePlayerGestures'
 import { useZoom } from '../../hooks/useZoom'
 import { reportError } from '../../lib/errorReporter'
@@ -18,13 +20,13 @@ import { Button } from '../ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { Slider } from '../ui/slider'
 import { ZoomControl } from '../ZoomControl'
-import styles from './FullPlayer.module.css'
 
 export function FullPlayer() {
   const { t } = useTranslation()
   const { zoomScale, showZoomBar, zoomIn, zoomOut, zoomReset, setShowZoomBar, scheduleHide } =
     useZoom()
   const [isFollowing, setIsFollowing] = useState(true)
+  const isDesktop = useMediaQuery('(min-width: 1280px)')
 
   // Use atomic selectors to prevent unnecessary re-renders from progress updates
   const audioLoaded = usePlayerStore((s) => s.audioLoaded)
@@ -44,6 +46,12 @@ export function FullPlayer() {
   const setPlaybackRate = usePlayerStore((s) => s.setPlaybackRate)
 
   const exitImmersion = useImmersionStore((s) => s.exitImmersion)
+  const episodeMetadata = usePlayerStore((s) => s.episodeMetadata)
+  const audioUrl = usePlayerStore((s) => s.audioUrl)
+
+  // Determine unique ID for the active item to use in layoutId
+  const activeEpisodeId = episodeMetadata?.episodeId || audioUrl || 'active'
+
   const { bind, y } = usePlayerGestures()
 
   // Find current subtitle using optimized algorithm
@@ -95,7 +103,7 @@ export function FullPlayer() {
   // If no audio loaded, show placeholder
   if (!audioLoaded) {
     return (
-      <div className="fixed inset-0 z-40 bg-background flex flex-col items-center justify-center p-12 text-center">
+      <div className="fixed inset-0 z-full-player bg-background flex flex-col items-center justify-center p-12 text-center">
         <h2 className="text-2xl font-bold text-foreground mb-2">{t('playerNotPlaying')}</h2>
         <p className="text-muted-foreground mb-6">{t('playerSelectTrack')}</p>
         <Button
@@ -112,15 +120,28 @@ export function FullPlayer() {
   }
 
   return (
-    <div
-      {...bind()}
+    <motion.div
+      onPointerDown={bind().onPointerDown}
+      onPointerMove={bind().onPointerMove}
+      onPointerUp={bind().onPointerUp}
+      onPointerCancel={bind().onPointerCancel}
+      onKeyDown={bind().onKeyDown}
+      onKeyUp={bind().onKeyUp}
+      initial={{ y: '100%' }}
+      animate={{ y: y }}
+      exit={{ y: '100%' }}
+      transition={{ type: 'spring', damping: 30, stiffness: 300, mass: 1 }}
       className={cn(
-        'fixed inset-0 z-40 bg-background/95 backdrop-blur-3xl flex flex-col will-change-transform',
-        styles.fullPlayerDrag
+        'fixed inset-0 z-full-player bg-background/95 backdrop-blur-3xl flex flex-col will-change-transform touch-none'
       )}
       data-dragging={y > 0}
-      style={{ '--player-drag-y': `${y}px` } as CSSProperties}
     >
+      <motion.div
+        className="absolute inset-0 bg-background/80 -z-10"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+      />
       {/* Drag Handle for swipe-down to close */}
       <div className="absolute top-2 left-1/2 -translate-x-1/2 w-12 h-1.5 bg-muted-foreground/20 rounded-full z-50 pointer-events-none" />
 
@@ -140,71 +161,79 @@ export function FullPlayer() {
       {/* Content Area: Split View for Desktop */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left: Artwork & Info (Fixed side on desktop) */}
-        <div className="w-96 hidden xl:flex flex-col items-center justify-center p-12 bg-muted/30 border-r border-border/50">
-          <div className="relative mb-10">
-            {/* Standard Soft outer glow */}
-            <div className="absolute inset-2 shadow-2xl shadow-black/20 rounded-2xl pointer-events-none" />
+        {isDesktop && (
+          <div className="w-96 hidden xl:flex flex-col items-center justify-center p-12 bg-muted/30 border-r border-border/50">
+            <div className="relative mb-10">
+              {/* Standard Soft outer glow */}
+              <div className="absolute inset-2 shadow-2xl shadow-black/20 rounded-2xl pointer-events-none" />
 
-            <div
-              className={cn(
-                'relative w-80 h-80 rounded-2xl overflow-hidden bg-white transition-shadow duration-500',
-                'ring-1 ring-white/10 ring-inset',
-                !coverArtUrl && 'bg-card'
-              )}
-            >
-              {coverArtUrl ? (
-                <>
-                  <img
-                    src={coverArtUrl}
-                    alt="Art"
-                    className="absolute inset-[-4px] w-[calc(100%+8px)] h-[calc(100%+8px)] max-w-none block object-cover"
-                  />
-                  {/* The 'Sealer': Standardized ring-inset overlay */}
-                  <div className="absolute inset-0 rounded-2xl ring-1 ring-inset ring-white pointer-events-none" />
-                </>
-              ) : (
-                <div className="w-full h-full bg-muted flex items-center justify-center text-muted-foreground/30">
-                  <span className="text-4xl font-serif">Readio</span>
-                </div>
-              )}
+              <motion.div
+                layoutId={isDesktop ? `artwork-${activeEpisodeId}-player` : undefined}
+                transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                className={cn(
+                  'relative w-80 h-80 rounded-2xl overflow-hidden bg-white transition-shadow duration-500',
+                  'ring-1 ring-white/10 ring-inset',
+                  !coverArtUrl && 'bg-card'
+                )}
+              >
+                {coverArtUrl ? (
+                  <>
+                    <img
+                      src={coverArtUrl}
+                      alt="Art"
+                      className="absolute inset-[-4px] w-[calc(100%+8px)] h-[calc(100%+8px)] max-w-none block object-cover"
+                    />
+                    {/* The 'Sealer': Standardized ring-inset overlay */}
+                    <div className="absolute inset-0 rounded-2xl ring-1 ring-inset ring-white pointer-events-none" />
+                  </>
+                ) : (
+                  <div className="w-full h-full bg-muted flex items-center justify-center text-muted-foreground/30">
+                    <span className="text-4xl font-serif">Readio</span>
+                  </div>
+                )}
+              </motion.div>
+            </div>
+            <div className="text-center space-y-3 max-w-xs">
+              <h2 className="text-3xl font-bold text-foreground tracking-tight leading-tight">
+                {audioTitle || t('untitled')}
+              </h2>
             </div>
           </div>
-          <div className="text-center space-y-3 max-w-xs">
-            <h2 className="text-3xl font-bold text-foreground tracking-tight leading-tight">
-              {audioTitle || t('untitled')}
-            </h2>
-          </div>
-        </div>
+        )}
 
         {/* Right (or Main): Transcript */}
         <div className="flex-1 relative overflow-hidden pb-player-footer">
           {/* Mobile Header (only visible on small screens) */}
-          <div className="xl:hidden p-8 pb-0 text-center mb-8">
-            <div className="relative mb-6">
-              <div className="absolute inset-1 shadow-lg shadow-black/10 rounded-xl pointer-events-none" />
-              <div
-                className={cn(
-                  'relative w-48 h-48 mx-auto rounded-xl overflow-hidden bg-white ring-1 ring-inset ring-white',
-                  !coverArtUrl && 'bg-muted'
-                )}
-              >
-                {coverArtUrl && (
-                  <>
-                    <img
-                      src={coverArtUrl}
-                      className="absolute inset-[-4px] w-[calc(100%+8px)] h-[calc(100%+8px)] max-w-none block object-cover"
-                      alt=""
-                    />
-                    {/* Defensive white sealer */}
-                    <div className="absolute inset-0 rounded-xl ring-1 ring-inset ring-white pointer-events-none" />
-                  </>
-                )}
+          {!isDesktop && (
+            <div className="xl:hidden p-8 pb-0 text-center mb-8">
+              <div className="relative mb-6">
+                <div className="absolute inset-1 shadow-lg shadow-black/10 rounded-xl pointer-events-none" />
+                <motion.div
+                  layoutId={!isDesktop ? `artwork-${activeEpisodeId}-player` : undefined}
+                  transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                  className={cn(
+                    'relative w-48 h-48 mx-auto rounded-xl overflow-hidden bg-white ring-1 ring-inset ring-white',
+                    !coverArtUrl && 'bg-muted'
+                  )}
+                >
+                  {coverArtUrl && (
+                    <>
+                      <img
+                        src={coverArtUrl}
+                        className="absolute inset-[-4px] w-[calc(100%+8px)] h-[calc(100%+8px)] max-w-none block object-cover"
+                        alt=""
+                      />
+                      {/* Defensive white sealer */}
+                      <div className="absolute inset-0 rounded-xl ring-1 ring-inset ring-white pointer-events-none" />
+                    </>
+                  )}
+                </motion.div>
               </div>
+              <h2 className="text-2xl font-bold text-foreground mb-1">
+                {audioTitle || t('untitled')}
+              </h2>
             </div>
-            <h2 className="text-2xl font-bold text-foreground mb-1">
-              {audioTitle || t('untitled')}
-            </h2>
-          </div>
+          )}
 
           {subtitlesLoaded ? (
             <ErrorBoundary
@@ -342,6 +371,6 @@ export function FullPlayer() {
           </div>
         </div>
       </div>
-    </div>
+    </motion.div>
   )
 }
