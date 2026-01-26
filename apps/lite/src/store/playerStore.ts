@@ -187,11 +187,11 @@ export const usePlayerStore = create<PlayerState>((set) => ({
         // Reset session for external URLs to start fresh
         ...(shouldResetSession
           ? {
-              sessionId: null,
-              progress: 0,
-              localTrackId: null,
-              duration: normalizedUrl ? metadata?.duration || 0 : 0,
-            }
+            sessionId: null,
+            progress: 0,
+            localTrackId: null,
+            duration: normalizedUrl ? metadata?.duration || 0 : 0,
+          }
           : {}),
         // Always update duration if provided in metadata
         ...(metadata?.duration ? { duration: metadata.duration } : {}),
@@ -372,8 +372,8 @@ export const usePlayerStore = create<PlayerState>((set) => ({
             subtitleType: file.name.toLowerCase().endsWith('.vtt') ? 'vtt' : 'srt',
           })
         }
-      } catch {
-        logError('[PlayerStore] Failed to save subtitle to IndexedDB:')
+      } catch (err) {
+        logError('[PlayerStore] Failed to save subtitle to IndexedDB:', err)
       }
     }
 
@@ -413,8 +413,8 @@ export const usePlayerStore = create<PlayerState>((set) => ({
       .then(() => {
         log(`[PlayerStore] Saved progress: ${time.toFixed(1)}s`)
       })
-      .catch(() => {
-        logError('[PlayerStore] Failed to save progress:')
+      .catch((err) => {
+        logError('[PlayerStore] Failed to save progress:', err)
       })
   },
 
@@ -430,8 +430,8 @@ export const usePlayerStore = create<PlayerState>((set) => ({
         // Only update timestamp if actively playing
         ...(state.isPlaying ? { lastPlayedAt: Date.now() } : {}),
       })
-    } catch {
-      logError('[PlayerStore] Failed to save progress on unmount:')
+    } catch (err) {
+      logError('[PlayerStore] Failed to save progress on unmount:', err)
     }
   },
 
@@ -476,8 +476,8 @@ export const usePlayerStore = create<PlayerState>((set) => ({
                   artwork = artworkBlob.blob
                 }
               }
-            } catch {
-              logError('[PlayerStore] Failed to restore artwork for local track')
+            } catch (err) {
+              logError('[PlayerStore] Failed to restore artwork for local track', err)
             }
           }
 

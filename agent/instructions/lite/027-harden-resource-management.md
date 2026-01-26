@@ -1,7 +1,7 @@
 > **⚠️ CRITICAL**: You MUST preserve the current UI/UX layout and styling. Do NOT change visual appearance unless explicitly instructed.
 > **Prerequisites**: Read `apps/docs/content/docs/general/design-system/index.mdx` and `apps/docs/content/docs/apps/lite/ui-patterns/index.mdx` before starting.
 
-# Task: Harden Resource Management (Memory Leaks)
+# Task: Harden Resource Management (Memory Leaks)[COMPLETED]
 
 ## Objective
 The app plays local files (Blobs). We create `URL.createObjectURL(blob)`. If we don't revoke them, we get massive memory leaks.

@@ -36,23 +36,23 @@ export function getCorsProxyConfig(): { proxyUrl: string; proxyPrimary: boolean 
 
 export type ProxyHealthResult =
   | {
-      ok: true
-      proxyUrl: string
-      proxyType: 'default' | 'custom'
-      targetUrl: string
-      elapsedMs: number
-      at: number
-    }
+    ok: true
+    proxyUrl: string
+    proxyType: 'default' | 'custom'
+    targetUrl: string
+    elapsedMs: number
+    at: number
+  }
   | {
-      ok: false
-      proxyUrl: string
-      proxyType: 'default' | 'custom'
-      targetUrl: string
-      elapsedMs: number
-      at: number
-      error: string
-      status?: number
-    }
+    ok: false
+    proxyUrl: string
+    proxyType: 'default' | 'custom'
+    targetUrl: string
+    elapsedMs: number
+    at: number
+    error: string
+    status?: number
+  }
 
 /**
  * Build proxy URL supporting three formats:
@@ -264,20 +264,27 @@ export async function fetchWithFallback<T = string>(
 
   // 1. Direct Fetch
   const fetchDirect = async (): Promise<T> => {
-    const response = await fetch(url, {
-      signal: internalSignal,
-      credentials: 'omit',
-      headers,
-    })
-    if (!response.ok) {
-      throw new FetchError(
-        `Direct fetch failed: ${response.status}`,
-        url,
-        response.status,
-        'direct'
-      )
+    try {
+      const response = await fetch(url, {
+        signal: internalSignal,
+        credentials: 'omit',
+        headers,
+      })
+      if (!response.ok) {
+        throw new FetchError(
+          `Direct fetch failed: ${response.status}`,
+          url,
+          response.status,
+          'direct'
+        )
+      }
+      return json ? response.json() : (response.text() as unknown as T)
+    } catch (e) {
+      if (e instanceof TypeError) {
+        throw new NetworkError('Network failure during direct fetch')
+      }
+      throw e
     }
-    return json ? response.json() : (response.text() as unknown as T)
   }
 
   // 2. Proxy Fetch Generic
@@ -289,80 +296,73 @@ export async function fetchWithFallback<T = string>(
       ? buildJsonWrappedProxyUrl(baseProxyUrl, url)
       : buildProxyUrl(baseProxyUrl, url)
 
-    const response = await fetch(finalProxyUrl, {
-      signal: internalSignal,
-      credentials: 'omit',
-      // We don't typically pass client headers to generic proxies like AllOrigins
-      // but some custom proxies might need them.
-      headers,
-    })
-    if (!response.ok) {
-      throw new FetchError(
-        `Proxy (${baseProxyUrl}) failed: ${response.status}`,
-        url,
-        response.status,
-        source
-      )
-    }
-
-    // JSON-wrapped proxies return JSON with contents field
-    if (isJsonWrapped) {
-      const data = await response.json()
-      let contents = data?.contents
-
-      if (contents === null || contents === undefined) {
-        throw new Error('Proxy returned empty contents (target might be blocked or too large)')
+    try {
+      const response = await fetch(finalProxyUrl, {
+        signal: internalSignal,
+        credentials: 'omit',
+        // We don't typically pass client headers to generic proxies like AllOrigins
+        // but some custom proxies might need them.
+        headers,
+      })
+      if (!response.ok) {
+        throw new FetchError(
+          `Proxy (${baseProxyUrl}) failed: ${response.status}`,
+          url,
+          response.status,
+          source
+        )
       }
 
-      // Base64 decoding (used for some encodings)
-      if (typeof contents === 'string' && contents.startsWith('data:')) {
-        try {
-          const decodedResponse = await fetch(contents)
-          contents = await decodedResponse.text()
-        } catch (e) {
-          if (e instanceof TypeError) {
-            throw new NetworkError('Network failure during data decoding')
+      // JSON-wrapped proxies return JSON with contents field
+      if (isJsonWrapped) {
+        const data = await response.json()
+        let contents = data?.contents
+
+        if (contents === null || contents === undefined) {
+          throw new Error('Proxy returned empty contents (target might be blocked or too large)')
+        }
+
+        // Base64 decoding (used for some encodings)
+        if (typeof contents === 'string' && contents.startsWith('data:')) {
+          try {
+            const decodedResponse = await fetch(contents)
+            contents = await decodedResponse.text()
+          } catch (e) {
+            if (e instanceof TypeError) {
+              throw new NetworkError('Network failure during data decoding')
+            }
+            log('[fetchWithFallback] Failed to decode data: URI', e)
+            throw e
           }
-          log('[fetchWithFallback] Failed to decode data: URI', e)
         }
+
+        if (json) {
+          if (typeof contents !== 'string') return contents as T
+          try {
+            return JSON.parse(contents) as T
+          } catch (err) {
+            log('[fetchWithFallback] Proxy response contents not valid JSON', {
+              error: err,
+              contents: contents.slice(0, 100),
+            })
+            throw new Error('Proxy returned invalid JSON content')
+          }
+        }
+        return contents as T
       }
 
+      // Custom proxy: assume it returns raw content
       if (json) {
-        if (typeof contents !== 'string') return contents as T
-        try {
-          return JSON.parse(contents) as T
-        } catch (err) {
-          log('[fetchWithFallback] Proxy response contents not valid JSON', {
-            error: err,
-            contents: contents.slice(0, 100),
-          })
-          throw new Error('Proxy returned invalid JSON content')
-        }
+        return response.json()
       }
-      return contents as T
-    }
 
-    // Custom proxy: assume it returns raw content
-    if (json) {
-      return response.json()
-    }
-
-    const textResult = await response.text()
-    if (!textResult) throw new Error(`Custom proxy (${baseProxyUrl}) returned empty response`)
-
-    // Heuristic: If we expect text (XML) but get something starting with { it might be a JSON error from proxy
-    if (!json && textResult.trim().startsWith('{')) {
-      try {
-        const parsed = JSON.parse(textResult)
-        if (parsed && (parsed.error || parsed.message)) {
-          throw new Error(`Proxy error: ${parsed.error || parsed.message}`)
-        }
-      } catch {
-        // Not valid JSON, continue
+      return (await response.text()) as unknown as T
+    } catch (e) {
+      if (e instanceof TypeError) {
+        throw new NetworkError(`Network failure during proxy fetch (${source})`)
       }
+      throw e
     }
-
-    return textResult as unknown as T
   }
 
   try {
