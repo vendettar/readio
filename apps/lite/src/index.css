@@ -196,6 +196,16 @@
   transform: scaleY(-1);
 }
 
+.transcript-text {
+  /* Override prose variables to use reading-specific typography when in transcript mode */
+  --prose-font-size: var(--reading-font-size);
+  --prose-line-height: var(--reading-line-height);
+  --prose-para-spacing: var(--reading-para-spacing);
+
+  /* Reading focus */
+  font-family: var(--font-serif, ui-serif, Georgia, Cambria, "Times New Roman", Times, serif);
+}
+
 .subtitle-text {
   font-size: var(--reading-font-size);
   line-height: var(--reading-line-height);
