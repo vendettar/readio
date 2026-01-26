@@ -25,8 +25,16 @@ The following classes are predefined in `src/index.css` and are the ONLY global 
 - `.smart-divider`: Applied to list item dividers; fades out automatically when neighbors are hovered.
 - `.scrollbar-none`: Hides scrollbars while preserving scroll functionality.
 - `.custom-scrollbar`: Applied to scrollable containers to use the stylized, non-intrusive scrollbar.
+- `.transcript-text` / `.subtitle-text`: Standardized typography for reading materials.
 
-**CSS policy:**
+## Reading Typography (The Golden Ratio)
+
+To ensure maximum focus and reduce eye fatigue, the reading area follows these strict typography rules:
+
+- **Fluid Scaling**: Zoom is achieved by modifying the `--zoom-scale` variable on the root. Typography uses `calc(BASE * var(--zoom-scale))`, ensuring sub-pixel sharp rendering.
+- **Multi-layered Base**: `14px` base for general prose; `20px` base for transcripts.
+- **Line Height (1.6)**: Controlled via `--reading-line-height` for transcripts; `1.4` for prose.
+- **Max Width**: Reading lines are constrained to a maximum of `3xl` (`768px`) to keep line lengths within the optimal 60-80 character range.
 - CSS is allowed only when absolutely necessary.
 - CSS must be component-scoped, simple, and use existing tokens only.
 - Never use deep selectors or !important.

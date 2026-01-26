@@ -6,20 +6,19 @@ title: Typography
 
 Readio is a reading tool. The quality of the reading experience is our primary competitive advantage.
 
-## 1. The Golden Ratios
+## 1. The Golden Ratios (Implemented)
 
-- **Line Height**: Default must be **1.6** for the transcript area.
-  - Why? Prevents "line skipping" while reading.
-- **Paragraph Spacing**: Use **1.2em** to **1.5em**.
-  - Why? Provides a clear visual break between dialogue turns.
-- **Line Length**: Ideal reading width is **60-80 characters** (approx 600px - 800px).
-  - Why? Longer lines cause eye fatigue.
+- **Line Height**: Fixed at **1.6** for the transcript area via `--reading-line-height`.
+- **Paragraph Spacing**: Fixed at **1.2em** via `--reading-para-spacing`.
+- **Line Length**: Container max-width is constrained to `3xl` (approx 768px) for optimal focus.
 
-## 2. Dynamic Zoom Strategy
+## 2. Dynamic Zoom Strategy (Implemented)
 
-**Rule**: Scaling must be "Fluid" (re-flowing text), not just a visual zoom.
-- **Mechanism**: Adjust the `font-size` of the container. 
-- **Constraint**: Do NOT use `transform: scale()` for the main reading area, as it creates blurry text and broken scrollbars.
+**Rule**: Scaling is "Fluid" (re-flowing text), controlled by CSS variables with **area-specific base sizes**:
+- **Mechanism**: The `--zoom-scale` variable is updated on the `:root`.
+- **Prose (Episode Info)**: Uses a `14px` base (`calc(0.875rem * var(--zoom-scale))`).
+- **Transcript (Reading)**: Uses a `20px` base (`calc(1.25rem * var(--zoom-scale))`).
+- **Constraint**: Every word remains razor-sharp as the font file itself is re-rendered at the new size.
 
 ## 3. Reading Themes (Contrast)
 

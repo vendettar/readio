@@ -101,10 +101,10 @@ export default {
             '--tw-prose-bold': 'hsl(var(--foreground))',
             '--tw-prose-bullets': 'hsl(var(--muted-foreground))',
             '--tw-prose-counters': 'hsl(var(--muted-foreground))',
-            fontSize: '0.875rem',
-            lineHeight: '1.4',
+            fontSize: 'var(--prose-font-size)',
+            lineHeight: 'var(--prose-line-height)',
             fontWeight: '300',
-            p: { marginTop: '0', marginBottom: '10px' },
+            p: { marginTop: '0', marginBottom: 'var(--prose-para-spacing)' },
             'ul, ol': { marginTop: '0', marginBottom: '10px', paddingLeft: '1.25em' },
             li: { marginTop: '0', marginBottom: '4px' },
             a: {

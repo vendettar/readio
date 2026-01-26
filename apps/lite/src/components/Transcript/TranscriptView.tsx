@@ -103,15 +103,18 @@ export function TranscriptView({
   useEffect(() => {
     // Force Virtuoso to re-measure all items when zoom scale changes
     // This prevents scroll position drift caused by CSS-calculated heights
-    if (virtuosoRef.current) {
+    if (virtuosoRef.current && zoomScale) {
       // Small delay to let CSS transitions settle
       const timer = setTimeout(() => {
         // Trigger a simple scroll to force re-measurement
         virtuosoRef.current?.scrollBy({ top: 0, behavior: 'auto' })
       }, 50)
+      // Trigger highlight refresh since bounding boxes changed
+      refreshHighlights()
+
       return () => clearTimeout(timer)
     }
-  }, [])
+  }, [zoomScale])
 
   useEffect(() => {
     return () => {
@@ -134,7 +137,7 @@ export function TranscriptView({
         id="transcript-container"
         ref={containerRef}
         data-scroll-guard="transcript"
-        className="reading-area h-full overflow-auto"
+        className="reading-area h-full overflow-auto prose transcript-text max-w-none"
       >
         <Virtuoso
           key={`virtuoso-${zoomScale}`}

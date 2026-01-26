@@ -28,10 +28,12 @@ interface ThemeState {
   theme: Theme
   accent: Accent
   readingBg: ReadingBg
+  zoomScale: number
   toggleTheme: () => void
   setTheme: (theme: Theme) => void
   setAccent: (accent: Accent) => void
   setReadingBg: (bg: ReadingBg) => void
+  setZoomScale: (scale: number) => void
 }
 
 export const useThemeStore = create<ThemeState>()(
@@ -40,6 +42,7 @@ export const useThemeStore = create<ThemeState>()(
       theme: 'light',
       accent: DEFAULT_ACCENT,
       readingBg: 'default',
+      zoomScale: 1,
 
       toggleTheme: () => {
         const newTheme = get().theme === 'light' ? 'dark' : 'light'
@@ -62,6 +65,11 @@ export const useThemeStore = create<ThemeState>()(
         set({ readingBg: bg })
         applyReadingBg(bg)
       },
+
+      setZoomScale: (scale: number) => {
+        set({ zoomScale: scale })
+        applyZoom(scale)
+      },
     }),
     {
       name: 'readio-theme',
@@ -75,6 +83,7 @@ export const useThemeStore = create<ThemeState>()(
             applyAccent(state.accent)
           }
           applyReadingBg(state.readingBg)
+          applyZoom(state.zoomScale ?? 1)
         }
       },
     }
@@ -105,6 +114,12 @@ function applyReadingBg(bg: ReadingBg) {
   document.documentElement.dataset.readingBg = bg
 }
 
+function applyZoom(scale: number) {
+  if (typeof document === 'undefined') return
+  const root = document.documentElement
+  root.style.setProperty('--zoom-scale', String(scale))
+}
+
 // Initialize theme on app load
 if (typeof window !== 'undefined') {
   const stored = getJson<{ state: ThemeState }>('readio-theme')
@@ -112,5 +127,6 @@ if (typeof window !== 'undefined') {
     applyTheme(stored.state.theme)
     applyAccent(normalizeAccent(stored.state.accent))
     applyReadingBg(stored.state.readingBg)
+    applyZoom(stored.state.zoomScale ?? 1)
   }
 }

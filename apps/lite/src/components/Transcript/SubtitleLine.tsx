@@ -30,7 +30,7 @@ export function SubtitleLine({ text, isActive, onClick }: SubtitleLineProps) {
     >
       <p
         className={`
-                    text-xl md:text-2xl font-serif leading-relaxed transition-colors duration-200 subtitle-text
+                    font-serif transition-colors duration-200 subtitle-text
                     ${isActive ? 'text-foreground font-medium' : 'text-muted-foreground'}
                 `}
       >

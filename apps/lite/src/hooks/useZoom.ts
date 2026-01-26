@@ -1,13 +1,14 @@
-// src/hooks/useZoom.ts
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { getAppConfig } from '../lib/runtimeConfig'
+import { useThemeStore } from '../store/themeStore'
 
 export function useZoom() {
   const config = getAppConfig()
   const { MIN_ZOOM, MAX_ZOOM, ZOOM_STEP, ZOOM_HIDE_DELAY_MS: HIDE_DELAY } = config
 
-  const [zoomScale, setZoomScale] = useState(1)
+  const zoomScale = useThemeStore((s) => s.zoomScale)
+  const setZoomScale = useThemeStore((s) => s.setZoomScale)
   const [showZoomBar, setShowZoomBar] = useState(false)
   const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -22,20 +23,17 @@ export function useZoom() {
 
   const updateZoom = useCallback(
     (delta: number, absoluteValue: number | null = null) => {
-      setZoomScale((prev) => {
-        let newScale: number
-        if (absoluteValue !== null) {
-          newScale = Math.min(Math.max(absoluteValue, MIN_ZOOM), MAX_ZOOM)
-        } else {
-          newScale = Math.min(Math.max(prev + delta, MIN_ZOOM), MAX_ZOOM)
-        }
-        document.body.style.setProperty('--zoom-scale', String(newScale))
-        return newScale
-      })
+      let newScale: number
+      if (absoluteValue !== null) {
+        newScale = Math.min(Math.max(absoluteValue, MIN_ZOOM), MAX_ZOOM)
+      } else {
+        newScale = Math.min(Math.max(zoomScale + delta, MIN_ZOOM), MAX_ZOOM)
+      }
+      setZoomScale(newScale)
       setShowZoomBar(true)
       scheduleHide()
     },
-    [scheduleHide, MIN_ZOOM, MAX_ZOOM]
+    [scheduleHide, MIN_ZOOM, MAX_ZOOM, zoomScale, setZoomScale]
   )
 
   const zoomIn = useCallback(() => updateZoom(ZOOM_STEP), [updateZoom, ZOOM_STEP])

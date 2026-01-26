@@ -36,6 +36,17 @@
 
     /* Reading area specific tokens */
     --zoom-scale: 1;
+    --reading-line-height: 1.6;
+    --reading-para-spacing: calc(1.2em * var(--zoom-scale));
+    --reading-font-size: calc(1.25rem * var(--zoom-scale));
+    /* 20px base */
+
+    /* Prose / Episode Page tokens */
+    --prose-line-height: 1.4;
+    --prose-para-spacing: calc(10px * var(--zoom-scale));
+    --prose-font-size: calc(0.875rem * var(--zoom-scale));
+    /* 14px base */
+
     --sel-pin-head-d: calc(10px * var(--zoom-scale));
     --sel-pin-total-h: calc(30px * var(--zoom-scale));
     --sel-pin-offset-x: calc(-8px * var(--zoom-scale));
@@ -185,13 +196,19 @@
   transform: scaleY(-1);
 }
 
+.subtitle-text {
+  font-size: var(--reading-font-size);
+  line-height: var(--reading-line-height);
+  margin-bottom: var(--reading-para-spacing);
+}
+
 .subtitle-text::selection {
   background: transparent;
 }
 
 /* Modern Highlights API */
 ::highlight(lookup-highlight) {
-  background-color: hsla(var(--primary), 0.25);
+  background-color: hsla(var(--primary), 0.1);
   color: inherit;
   text-decoration: underline;
   text-decoration-color: hsl(var(--primary));
