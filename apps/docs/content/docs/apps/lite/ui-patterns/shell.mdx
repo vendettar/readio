@@ -2,6 +2,13 @@
 title: Overlays & Shell
 ---
 
+## App Boot Sequence
+
+- **Boot Loader**: During initial application hydration (loading subscriptions, favorites, and restoring player sessions from IndexedDB), a `BootLoader` splash screen is displayed.
+- **Visuals**: Centered Logo (`readio.svg`) with a smooth "breathing" animation (opacity and scale pulses). 
+- **Transition**: Use `AnimatePresence` to fade out the loader once the `isReady` state from `useAppInitialization` is true.
+- **Constraint**: Must use `fixed inset-0 z-50 bg-background` to perfectly cover all "empty" content flashes.
+
 ## Overlays & Menus
 
 - **Dropdowns**: Use the "Premium Overlay" style (`glassmorphism`, `sideOffset={8}`, `rounded-xl`, `backdrop-blur-xl`, `backdrop-saturate-150`).

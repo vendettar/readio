@@ -1,8 +1,9 @@
 // src/routes/__root.tsx
 import { createRootRoute, Outlet } from '@tanstack/react-router'
+import { AnimatePresence } from 'framer-motion'
 import { createContext, useCallback, useContext, useEffect, useRef } from 'react'
 import { Toaster } from 'sonner'
-import { AppShell } from '../components/AppShell'
+import { AppShell, BootLoader } from '../components/AppShell'
 import { GlobalAudioController } from '../components/AppShell/GlobalAudioController'
 import { useAppInitialization } from '../hooks/useAppInitialization'
 import { useFileHandler } from '../hooks/useFileHandler'
@@ -27,12 +28,17 @@ function RootLayout() {
   useKeyboardShortcuts()
 
   // Initialize app-level data (subscriptions, favorites)
-  useAppInitialization()
+  const { isReady, isHydrated } = useAppInitialization()
 
-  // Apply ready class to body when mounted
+  // Sync body classes with hydration/ready state
   useEffect(() => {
-    document.body.classList.add('ready')
-  }, [])
+    if (isHydrated) {
+      document.body.classList.add('hydrated')
+    }
+    if (isReady) {
+      document.body.classList.add('ready')
+    }
+  }, [isHydrated, isReady])
 
   // FilePicker callback for children to trigger file selection
   const triggerFilePicker = useCallback(() => {
@@ -50,6 +56,9 @@ function RootLayout() {
         onChange={handleFileChange}
         className="hidden"
       />
+
+      <AnimatePresence>{!isReady && <BootLoader key="boot-loader" />}</AnimatePresence>
+
       {/* GlobalAudioController is isolated to prevent root layout re-renders */}
       <GlobalAudioController />
 

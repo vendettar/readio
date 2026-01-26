@@ -2,6 +2,13 @@
 title: Shell 与覆盖层
 ---
 
+## 应用启动序列 (App Boot Sequence)
+
+- **启动加载器 (Boot Loader)**：在初始应用水合（加载订阅、收藏及从 IndexedDB 恢复播放会话）期间，显示 `BootLoader` 启动屏幕。
+- **视觉效果**：居中的 Logo (`readio.svg`)，带有平滑的“呼吸”动画（不透明度和缩放脉冲）。
+- **转场**：一旦 `useAppInitialization` 的 `isReady` 状态为 true，使用 `AnimatePresence` 淡出加载器。
+- **约束**：必须使用 `fixed inset-0 z-50 bg-background` 以完美覆盖所有“空内容”闪烁。
+
 ## 覆盖层与菜单
 
 - **下拉菜单**: 使用“高级覆盖层”风格 (`glassmorphism`, `sideOffset={8}`, `rounded-xl`, `backdrop-blur-xl`, `backdrop-saturate-150`)。

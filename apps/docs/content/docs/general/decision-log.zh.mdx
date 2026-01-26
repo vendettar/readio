@@ -239,3 +239,10 @@ description: 架构决策与理由。
 - **决策**：使用 `layoutId` (Framer Motion) 同步全局 UI 状态（MiniPlayer <-> FullPlayer）之间的持久性 UI 元素（特别是封面图）。
 - **理由**：保持空间连续性，减少视觉上的“突跳”感，实现高端类原生的应用体验。
 - **约束**：`layoutId` 在同一个可见 tree 中必须唯一。如果移动端/桌面端布局中的多个节点追踪同一个语义对象，必须使用条件渲染（如 `isDesktop` 判断）确保同一时间只有一个节点持有该 ID。
+
+## D058 — 应用启动序列 (App Boot Sequence)
+- **决策**：在所有核心 IndexedDB 存储完成水合 (Hydration) 且播放器会话恢复完成之前，显示全屏 `BootLoader`（呼吸动画 Logo）。
+- **理由**：防止“水合闪烁”（空状态短暂过渡），并为冷启动提供高级的类原生应用体验。
+- **约束**：
+    - 加载器必须使用 `fixed inset-0 z-50 bg-background` 以完美覆盖内容。
+    - 必须使用 `AnimatePresence` 实现平滑淡出转场。

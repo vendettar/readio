@@ -1,8 +1,0 @@
-.fullPlayerDrag {
-  transform: translateY(var(--player-drag-y, 0px));
-  transition: transform 0.3s cubic-bezier(0.2, 0, 0, 1);
-}
-
-.fullPlayerDrag[data-dragging="true"] {
-  transition: none;
-}

@@ -242,3 +242,10 @@ description: Architecture decisions and rationale.
 - **Decision**: Use `layoutId` (Framer Motion) to synchronize persistent UI elements (especially artwork) between global UI states (MiniPlayer <-> FullPlayer).
 - **Rationale**: Maintains spatial continuity, reduces visual pop-in, and achieves a high-end "native" feel.
 - **Constraint**: The `layoutId` MUST be unique within the same visible tree. Conditional rendering (e.g., `isDesktop`) must be used if multiple nodes for different layouts (Mobile/Desktop) share the same semantic ID tracking the same object.
+
+## D058 — App Boot Sequence
+- **Decision**: Show a full-screen `BootLoader` (Breathing Logo) until all core IndexedDB stores are hydrated and the playback session is restored.
+- **Rationale**: Prevents "Hydration Flash" (empty states briefly flickering) and provides a premium, native-app feel during cold starts.
+- **Constraints**: 
+    - Loader must use `fixed inset-0 z-50 bg-background` to perfectly cover content.
+    - Transitions must use `AnimatePresence` for a smooth fade-out.
