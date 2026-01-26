@@ -46,7 +46,10 @@ export function GlobalAudioController() {
       usePlayerStore.getState().pause()
     }
     const onWaiting = () => {
-      usePlayerStore.getState().setStatus('loading')
+      const { isPlaying } = usePlayerStore.getState()
+      if (isPlaying) {
+        usePlayerStore.getState().setStatus('loading')
+      }
     }
     const onCanPlay = () => {
       const { isPlaying, status } = usePlayerStore.getState()

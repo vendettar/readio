@@ -452,7 +452,7 @@ export const usePlayerStore = create<PlayerState>((set) => ({
               coverArtUrl: artworkUrl,
               activeBlobUrls: newBlobUrls,
               progress: lastSession.progress,
-              status: 'loading',
+              status: 'paused',
               isPlaying: false,
             }
           })
@@ -468,7 +468,7 @@ export const usePlayerStore = create<PlayerState>((set) => ({
           audioTitle: lastSession.title || '',
           progress: lastSession.progress,
           coverArtUrl: lastSession.artworkUrl || '',
-          status: 'loading',
+          status: 'paused',
           isPlaying: false,
           episodeMetadata: {
             description: lastSession.description,

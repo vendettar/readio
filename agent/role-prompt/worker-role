@@ -35,6 +35,7 @@ You are the **Execution Engine** of Readio. Your purpose is to convert high-leve
 - **No Magic Values**: Extract user-facing strings, repeated constants, and config defaults to `constants/` or I18n keys, unless the instruction explicitly scopes it out.
 - **Convention First**: Adhere to established project patterns (e.g., selector usage, error handling).
 - **State Management Discipline**: Always use **Atomic Selectors** for Zustand stores (`useStore(s => s.prop)`). Never destructure the whole store (`const { a, b } = useStore()`), as it causes performance regressions.
+- **State Transition Discipline**: When adding event handlers or async side effects, ensure state transitions align with allowed user actions and cannot leave the UI in a dead-end state.
 - **Foundation Module Cross-Check**: If you modify a shared foundation module (e.g., config, fetch utilities, storage, request manager, or DB access), you MUST scan call sites and tests for mismatches and update them in the same task.
 - **Async Blocking Discipline**: When adding or updating async logic that gates navigation, rendering, or core flows, avoid blocking on redundant work. If an operation is already in progress, do not `await` duplicate work; only `await` when truly required.
 
