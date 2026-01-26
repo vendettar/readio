@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { Minimize2, Pause, Play, Settings2, SkipBack, SkipForward } from 'lucide-react'
+import { Loader2, Minimize2, Pause, Play, Settings2, SkipBack, SkipForward } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMediaQuery } from '../../hooks/useMediaQuery'
@@ -33,6 +33,7 @@ export function FullPlayer() {
   const audioTitle = usePlayerStore((s) => s.audioTitle)
   const coverArtUrl = usePlayerStore((s) => s.coverArtUrl)
   const isPlaying = usePlayerStore((s) => s.isPlaying)
+  const status = usePlayerStore((s) => s.status)
   const progress = usePlayerStore((s) => s.progress)
   const duration = usePlayerStore((s) => s.duration)
   const subtitles = usePlayerStore((s) => s.subtitles)
@@ -337,7 +338,9 @@ export function FullPlayer() {
                 onClick={togglePlayPause}
                 className="w-16 h-16 rounded-full shadow-xl shadow-muted/50"
               >
-                {isPlaying ? (
+                {status === 'loading' ? (
+                  <Loader2 size={28} className="animate-spin" />
+                ) : isPlaying ? (
                   <Pause size={28} fill="currentColor" />
                 ) : (
                   <Play size={28} fill="currentColor" className="ml-1" />

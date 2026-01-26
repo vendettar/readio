@@ -382,6 +382,7 @@ export const translations = {
     errorPodcastFeedNotFound: '暂时无法加载该节目内容。',
     'offline.badge': '离线模式 - 仅本地文件可用',
     'offline.error': '网络连接未就绪',
+    'player.autoplayBlocked': '播放被浏览器拦截。请点击播放按钮以恢复。',
   },
   en: {
     dropTitleIntro: 'Drag & drop or click to add MP3 and SRT files',
@@ -756,6 +757,7 @@ export const translations = {
     errorPodcastFeedNotFound: "Unable to load this show's content.",
     'offline.badge': 'Offline Mode - Only local files available',
     'offline.error': 'No internet connection',
+    'player.autoplayBlocked': 'Playback blocked by browser. Click play to resume.',
   },
   ja: {
     dropTitleIntro: 'MP3 と SRT をドラッグ＆ドロップ / クリックで追加',

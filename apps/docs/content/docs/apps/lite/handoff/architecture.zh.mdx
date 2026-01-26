@@ -193,7 +193,9 @@ src/
 
 系统采用健壮的、由 Store 驱动的生命周期来管理播放进度和状态：
 
-- **状态机**：`playerStore` 维护 `initializationStatus` (`idle | restoring | ready | failed`) 以防止启动时的竞态条件。
+- **状态机**：`playerStore` 维护两个独立的状态字段：
+  - `initializationStatus` (`idle | restoring | ready | failed`)：追踪应用启动和会话恢复。
+  - `status` (`idle | loading | playing | paused | error`)：严格的播放生命周期管理，防止竞态条件。
 - **单一数据源**：所有持久化操作集中在 `playerStore.ts` 中。`useSession` 和 `useFileHandler` 等 Hook 委托 Store Action 处理存储，不再直接操作数据库。
 - **节流持久化**：进度更新采用节流机制（默认 5s）以减轻 IndexedDB 写入压力。`saveProgressNow` Action 确保在组件卸载或关键事件时立即保存。
 - **时间戳完整性**：`lastPlayedAt` 时间戳仅在活跃播放期间（`isPlaying: true`）更新。这确保了后台恢复或仅 UI 的调整（暂停时跳转）不会影响 History/Files 中的时间排序（见决策 D056）。

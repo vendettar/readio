@@ -51,7 +51,13 @@ export function useTopPodcasts(country: string = 'us', limit: number = 25) {
     gcTime: 24 * 60 * 60 * 1000, // 24 hours
     retry: (failureCount, error) => {
       if (USE_MOCK_DATA) return false
-      if (error instanceof NetworkError || error.name === 'NetworkError') return false
+      // TypeError happens on true offline or severe CORS/Network issues - don't retry
+      if (
+        error instanceof NetworkError ||
+        error.name === 'NetworkError' ||
+        error instanceof TypeError
+      )
+        return false
       return failureCount < 2
     },
   })
@@ -78,7 +84,13 @@ export function useEditorPicks(country: string = 'us') {
     gcTime: 24 * 60 * 60 * 1000, // 24 hours
     retry: (failureCount, error) => {
       if (USE_MOCK_DATA) return false
-      if (error instanceof NetworkError || error.name === 'NetworkError') return false
+      // TypeError happens on true offline or severe CORS/Network issues - don't retry
+      if (
+        error instanceof NetworkError ||
+        error.name === 'NetworkError' ||
+        error instanceof TypeError
+      )
+        return false
       return failureCount < 2
     },
   })
@@ -101,7 +113,13 @@ export function useTopEpisodes(country: string = 'us', limit: number = 25) {
     gcTime: 24 * 60 * 60 * 1000, // 24 hours
     retry: (failureCount, error) => {
       if (USE_MOCK_DATA) return false
-      if (error instanceof NetworkError || error.name === 'NetworkError') return false
+      // TypeError happens on true offline or severe CORS/Network issues - don't retry
+      if (
+        error instanceof NetworkError ||
+        error.name === 'NetworkError' ||
+        error instanceof TypeError
+      )
+        return false
       return failureCount < 2
     },
   })

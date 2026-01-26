@@ -19,6 +19,8 @@ export interface EpisodeMetadata {
   episodeId?: string // Episode GUID/ID for navigation (v6)
 }
 
+export type PlayerStatus = 'idle' | 'loading' | 'playing' | 'paused' | 'error'
+
 interface PlayerState {
   // audio state
   audioLoaded: boolean
@@ -45,8 +47,9 @@ interface PlayerState {
   subtitlesLoaded: boolean
   currentIndex: number
 
-  // Lifecycle status
+  // lifecycle status
   initializationStatus: 'idle' | 'restoring' | 'ready' | 'failed'
+  status: PlayerStatus
 
   // Actions
   setProgress: (progress: number) => void
@@ -70,6 +73,8 @@ interface PlayerState {
   pause: () => void
   togglePlayPause: () => void
   reset: () => void
+  setStatus: (status: PlayerStatus) => void
+  setPlayerError: (message?: string) => void
   loadAudio: (file: File) => void
   loadSubtitles: (file: File) => Promise<void>
   updateProgress: (time: number) => void // Throttled progress update with DB persistence
@@ -96,6 +101,7 @@ const initialState = {
   subtitlesLoaded: false,
   currentIndex: -1,
   initializationStatus: 'idle' as const,
+  status: 'idle' as PlayerStatus,
 }
 
 // Persistence keys
@@ -166,14 +172,16 @@ export const usePlayerStore = create<PlayerState>((set) => ({
         coverArtUrl: coverArt,
         episodeMetadata: metadata, // Explicitly set (defaults to null for files)
         activeBlobUrls: newBlobUrls,
+        status: normalizedUrl ? 'loading' : 'idle',
+        isPlaying: !!normalizedUrl,
         // Reset session for external URLs to start fresh
         ...(shouldResetSession
           ? {
-              sessionId: null,
-              progress: 0,
-              localTrackId: null,
-              duration: normalizedUrl ? metadata?.duration || 0 : 0,
-            }
+            sessionId: null,
+            progress: 0,
+            localTrackId: null,
+            duration: normalizedUrl ? metadata?.duration || 0 : 0,
+          }
           : {}),
         // Always update duration if provided in metadata
         ...(metadata?.duration ? { duration: metadata.duration } : {}),
@@ -196,9 +204,35 @@ export const usePlayerStore = create<PlayerState>((set) => ({
     }),
   clearPendingSeek: () => set({ pendingSeek: null }),
 
-  play: () => set({ isPlaying: true }),
-  pause: () => set({ isPlaying: false }),
-  togglePlayPause: () => set((state) => ({ isPlaying: !state.isPlaying })),
+  play: () =>
+    set((state) => {
+      // Only play if we have a track and we are in an authorized state
+      if (!state.audioUrl || (state.status !== 'paused' && state.status !== 'idle')) return {}
+      return { isPlaying: true, status: 'playing' }
+    }),
+  pause: () =>
+    set((state) => {
+      // If we were loading or playing, pausing moves us to 'paused'
+      if (state.status === 'playing' || state.status === 'loading') {
+        return { isPlaying: false, status: 'paused' }
+      }
+      return { isPlaying: false }
+    }),
+  togglePlayPause: () =>
+    set((state) => {
+      if (state.isPlaying) {
+        return { isPlaying: false, status: 'paused' }
+      }
+      if (state.audioUrl && (state.status === 'paused' || state.status === 'idle')) {
+        return { isPlaying: true, status: 'playing' }
+      }
+      return {}
+    }),
+  setStatus: (status) => set({ status }),
+  setPlayerError: (message) => {
+    logError('[PlayerStore] Player Error:', message)
+    set({ status: 'error', isPlaying: false })
+  },
 
   reset: () => {
     set((state) => {
@@ -260,6 +294,8 @@ export const usePlayerStore = create<PlayerState>((set) => ({
         audioTitle: file.name,
         coverArtUrl: '',
         activeBlobUrls: [url],
+        status: 'loading',
+        isPlaying: true,
         // Reset session for NEW manual upload
         sessionId: null,
         progress: 0,
@@ -416,6 +452,8 @@ export const usePlayerStore = create<PlayerState>((set) => ({
               coverArtUrl: artworkUrl,
               activeBlobUrls: newBlobUrls,
               progress: lastSession.progress,
+              status: 'loading',
+              isPlaying: false,
             }
           })
         }
@@ -430,6 +468,8 @@ export const usePlayerStore = create<PlayerState>((set) => ({
           audioTitle: lastSession.title || '',
           progress: lastSession.progress,
           coverArtUrl: lastSession.artworkUrl || '',
+          status: 'loading',
+          isPlaying: false,
           episodeMetadata: {
             description: lastSession.description,
             podcastTitle: lastSession.podcastTitle,

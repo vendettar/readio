@@ -5,6 +5,7 @@ import { motion } from 'framer-motion'
 import {
   Info,
   ListMusic,
+  Loader2,
   Maximize2,
   Pause,
   Play,
@@ -46,6 +47,7 @@ export function MiniPlayer() {
   const audioTitle = usePlayerStore((s) => s.audioTitle)
   const coverArtUrl = usePlayerStore((s) => s.coverArtUrl)
   const isPlaying = usePlayerStore((s) => s.isPlaying)
+  const status = usePlayerStore((s) => s.status)
   const progress = usePlayerStore((s) => s.progress)
   const duration = usePlayerStore((s) => s.duration)
   const volume = usePlayerStore((s) => s.volume)
@@ -156,7 +158,9 @@ export function MiniPlayer() {
           className="h-9 w-9 text-muted-foreground hover:text-foreground"
           aria-label={t('btnPlay')}
         >
-          {isPlaying ? (
+          {status === 'loading' ? (
+            <Loader2 size={20} className="animate-spin" />
+          ) : isPlaying ? (
             <Pause size={20} fill="currentColor" />
           ) : (
             <Play size={20} fill="currentColor" className="ml-0.5" />

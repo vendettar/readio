@@ -1,7 +1,7 @@
 > **⚠️ CRITICAL**: You MUST preserve the current UI/UX layout and styling. Do NOT change visual appearance unless explicitly instructed.
 > **Prerequisites**: Read `apps/docs/content/docs/general/design-system/index.mdx` and `apps/docs/content/docs/apps/lite/ui-patterns/index.mdx` before starting.
 
-# Task: Harden Player State Machine
+# Task: Harden Player State Machine [COMPLETED]
 
 ## Objective
 The current player logic is scattered. We need to strictly define the player states to handle transitions reliably, preventing race conditions like "playing while loading".
@@ -42,7 +42,16 @@ The current player logic is scattered. We need to strictly define the player sta
 - **Lint**: Run `pnpm --filter @readio/lite lint`.
 
 ---
-## Documentation
-- Update `apps/docs/content/docs/apps/lite/handoff/features/audio-engine.mdx`.
-- Update `apps/docs/content/docs/apps/lite/handoff/architecture.mdx`.
 - Update `apps/docs/content/docs/apps/lite/handoff/index.mdx` with the new status.
+
+## Completion
+- **Status**: Completed
+- **Date**: 2026-01-26
+- **Completed by**: Antigravity
+
+## Commands
+- `pnpm --filter @readio/lite lint`
+- `pnpm --filter @readio/lite typecheck`
+
+## Reviewed by
+- Antigravity

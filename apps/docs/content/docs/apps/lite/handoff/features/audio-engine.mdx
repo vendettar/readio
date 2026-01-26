@@ -33,6 +33,13 @@ title: Audio Engine
 - **Local File Playback**: Blob URL locally mounted, `< 300MB` audio cached to IndexedDB supporting offline restoration
 - **Podcast Metadata**: `setAudioUrl` accepts EpisodeMetadata (description/podcastTitle/feedUrl/artworkUrl/publishedAt), and writes to `playerStore.episodeMetadata` for History/Favorites display
 - **Rapid Toggle Resilience**: Rapid Play/Pause or multi-track switching must converge to last action without stuck `loading` states.
+- **Player State Machine**: Status is strictly managed as `idle | loading | playing | paused | error`.
+  - **Transitions**: 
+    - Loading → (`canplay` event) → `playing` (if `isPlaying` true) or `paused`.
+    - `play()` → Set `isPlaying: true` and status to `playing`.
+    - `pause()` → Set `isPlaying: false` and status to `paused`.
+    - Errors → Set status to `error`.
+  - **Autoplay Policy**: Blocked autoplay (`NotAllowedError`) is caught in `GlobalAudioController`, fails silently to `paused` state, and shows `player.autoplayBlocked` toast.
 
 ---
 

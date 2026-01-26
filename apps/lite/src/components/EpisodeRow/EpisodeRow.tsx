@@ -8,7 +8,6 @@ import { stripHtml } from '../../lib/htmlUtils'
 import { getDiscoveryArtworkUrl } from '../../lib/imageUtils'
 import { cn } from '../../lib/utils'
 import { useExploreStore } from '../../store/exploreStore'
-import { usePlayerStore } from '../../store/playerStore'
 import { InteractiveArtwork } from '../interactive/InteractiveArtwork'
 import { InteractiveTitle } from '../interactive/InteractiveTitle'
 import { Button } from '../ui/button'
@@ -42,7 +41,6 @@ export function EpisodeRow({
   const { t } = useTranslation()
   const { addFavorite, removeFavorite, isFavorited } = useExploreStore()
   const { playEpisode } = useEpisodePlayback()
-  const activeEpisodeId = usePlayerStore((s) => s.episodeMetadata?.episodeId)
   const [isMenuOpen, setIsMenuOpen] = React.useState(false)
 
   const favorited = isFavorited(podcast.feedUrl ?? '', episode.audioUrl ?? '')
@@ -116,7 +114,6 @@ export function EpisodeRow({
   // Use episode artwork if available; otherwise show nothing (BaseEpisodeRow handles no-artwork layout)
   const effectiveArtwork = episode.artworkUrl
   const hasArtwork = !!effectiveArtwork
-  const shouldUsePlayerLayout = activeEpisodeId === episode.id
 
   // Validate podcast ID for navigation - only navigate if we have a valid ID
   const podcastId = String(podcast.providerPodcastId ?? '')
@@ -133,9 +130,9 @@ export function EpisodeRow({
             params={
               hasValidNavigation
                 ? {
-                    id: podcastId,
-                    episodeId: encodedEpisodeId,
-                  }
+                  id: podcastId,
+                  episodeId: encodedEpisodeId,
+                }
                 : undefined
             }
             onPlay={handlePlay}
@@ -144,7 +141,6 @@ export function EpisodeRow({
             hoverGroup="episode"
             size="xl"
             playLabel={t('ariaPlayEpisode')}
-            layoutId={shouldUsePlayerLayout ? `artwork-${episode.id}-player` : undefined}
           />
         ) : undefined
       }
@@ -157,9 +153,9 @@ export function EpisodeRow({
             params={
               hasValidNavigation
                 ? {
-                    id: podcastId,
-                    episodeId: encodedEpisodeId,
-                  }
+                  id: podcastId,
+                  episodeId: encodedEpisodeId,
+                }
                 : undefined
             }
             className="text-sm leading-tight flex-1"

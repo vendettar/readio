@@ -36,23 +36,23 @@ export function getCorsProxyConfig(): { proxyUrl: string; proxyPrimary: boolean 
 
 export type ProxyHealthResult =
   | {
-      ok: true
-      proxyUrl: string
-      proxyType: 'default' | 'custom'
-      targetUrl: string
-      elapsedMs: number
-      at: number
-    }
+    ok: true
+    proxyUrl: string
+    proxyType: 'default' | 'custom'
+    targetUrl: string
+    elapsedMs: number
+    at: number
+  }
   | {
-      ok: false
-      proxyUrl: string
-      proxyType: 'default' | 'custom'
-      targetUrl: string
-      elapsedMs: number
-      at: number
-      error: string
-      status?: number
-    }
+    ok: false
+    proxyUrl: string
+    proxyType: 'default' | 'custom'
+    targetUrl: string
+    elapsedMs: number
+    at: number
+    error: string
+    status?: number
+  }
 
 /**
  * Build proxy URL supporting three formats:
@@ -246,16 +246,6 @@ export async function fetchWithFallback<T = string>(
   const { signal, timeoutMs = config.TIMEOUT_MS, json = false, headers = {} } = options
   const { proxyUrl, proxyPrimary } = getCorsProxyConfig()
 
-  // Pre-fetch network check: if we are known to be offline, throw immediately.
-  // We allow localhost/127.0.0.1 to bypass this for development purposes.
-  const isLocal =
-    url.startsWith('http://localhost') ||
-    url.startsWith('http://127.0.0.1') ||
-    url.startsWith('http://0.0.0.0')
-
-  if (typeof window !== 'undefined' && !window.navigator.onLine && !isLocal) {
-    throw new NetworkError()
-  }
 
   const controller = new AbortController()
   let didTimeout = false
@@ -291,9 +281,6 @@ export async function fetchWithFallback<T = string>(
       }
       return json ? response.json() : (response.text() as unknown as T)
     } catch (e) {
-      if (e instanceof TypeError) {
-        throw new NetworkError('Network failure during direct fetch')
-      }
       throw e
     }
   }
@@ -325,9 +312,6 @@ export async function fetchWithFallback<T = string>(
         )
       }
     } catch (e) {
-      if (e instanceof TypeError) {
-        throw new NetworkError(`Network failure during proxy fetch (${baseProxyUrl})`)
-      }
       throw e
     }
 
@@ -354,11 +338,12 @@ export async function fetchWithFallback<T = string>(
       }
 
       if (json) {
+        if (typeof contents !== 'string') return contents as T
         try {
-          return (typeof contents === 'string' ? JSON.parse(contents) : contents) as T
-        } catch {
-          if (!contents) throw new Error('Empty response from proxy')
-          return contents as T
+          return JSON.parse(contents) as T
+        } catch (err) {
+          log('[fetchWithFallback] Proxy response contents not valid JSON', { error: err, contents: contents.slice(0, 100) })
+          throw new Error('Proxy returned invalid JSON content')
         }
       }
       return contents as T
@@ -474,13 +459,6 @@ export async function fetchWithFallback<T = string>(
           throw error
         }
 
-        // If it's a NetworkError, short-circuit immediately
-        if (
-          error instanceof NetworkError ||
-          (error instanceof Error && error.name === 'NetworkError')
-        ) {
-          throw error
-        }
 
         // If it's a manual abort, don't try next steps
         if (error instanceof Error && error.name === 'AbortError' && !didTimeout) {

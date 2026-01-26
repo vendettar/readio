@@ -33,6 +33,13 @@ title: Audio Engine
 - **本地文件播放**：Blob URL 临时挂载，`< 300MB` 的音频缓存到 IndexedDB 支持离线恢复
 - **播客元数据**：`setAudioUrl` 可接收 EpisodeMetadata（description/podcastTitle/feedUrl/artworkUrl/publishedAt），并写入 `playerStore.episodeMetadata` 供 History/Favorites 展示
 - **快速切换稳态**：快速 Play/Pause 或跨曲目切换时，最终必须收敛到最后一次操作，且不出现卡死 `loading`。
+- **播放器状态机**：状态严格管理为 `idle | loading | playing | paused | error`。
+  - **状态转换**：
+    - Loading → (`canplay` 事件) → `playing` (如果 `isPlaying` 为 true) 或 `paused`。
+    - `play()` → 设置 `isPlaying: true` 并将状态设为 `playing`。
+    - `pause()` → 设置 `isPlaying: false` 并将状态设为 `paused`。
+    - 错误 → 将状态设为 `error`。
+  - **自动播放策略**：被浏览器拦截的自动播放（`NotAllowedError`）会在 `GlobalAudioController` 中捕获，静默回退到 `paused` 状态，并弹出 `player.autoplayBlocked` 提示。
 
 ---
 

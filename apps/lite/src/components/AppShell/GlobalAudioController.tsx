@@ -8,6 +8,7 @@
 import { useEffect, useRef } from 'react'
 import { useSession } from '../../hooks/useSession'
 import { warn } from '../../lib/logger'
+import { toast } from '../../lib/toast'
 import { usePlayerStore } from '../../store/playerStore'
 
 export function GlobalAudioController() {
@@ -34,11 +35,27 @@ export function GlobalAudioController() {
     const onDurationChange = () => {
       usePlayerStore.getState().setDuration(audio.duration)
     }
-    const onPlay = () => usePlayerStore.getState().play()
-    const onPause = () => usePlayerStore.getState().pause()
+    const onPlay = () => {
+      usePlayerStore.getState().play()
+    }
+    const onPause = () => {
+      usePlayerStore.getState().pause()
+    }
     const onEnded = () => {
       usePlayerStore.getState().updateProgress(audio.duration || audio.currentTime)
       usePlayerStore.getState().pause()
+    }
+    const onWaiting = () => {
+      usePlayerStore.getState().setStatus('loading')
+    }
+    const onCanPlay = () => {
+      const { isPlaying, status } = usePlayerStore.getState()
+      if (status === 'loading') {
+        usePlayerStore.getState().setStatus(isPlaying ? 'playing' : 'paused')
+      }
+    }
+    const onError = () => {
+      usePlayerStore.getState().setPlayerError('Audio element error')
     }
 
     audio.addEventListener('timeupdate', onTimeUpdate)
@@ -46,6 +63,9 @@ export function GlobalAudioController() {
     audio.addEventListener('play', onPlay)
     audio.addEventListener('pause', onPause)
     audio.addEventListener('ended', onEnded)
+    audio.addEventListener('waiting', onWaiting)
+    audio.addEventListener('canplay', onCanPlay)
+    audio.addEventListener('error', onError)
 
     return () => {
       audio.removeEventListener('timeupdate', onTimeUpdate)
@@ -53,6 +73,9 @@ export function GlobalAudioController() {
       audio.removeEventListener('play', onPlay)
       audio.removeEventListener('pause', onPause)
       audio.removeEventListener('ended', onEnded)
+      audio.removeEventListener('waiting', onWaiting)
+      audio.removeEventListener('canplay', onCanPlay)
+      audio.removeEventListener('error', onError)
     }
   }, [audioUrl])
 
@@ -76,10 +99,20 @@ export function GlobalAudioController() {
     const audio = audioRef.current
     if (!audio || !audioUrl) return
 
+    const { status } = usePlayerStore.getState()
+
     if (isPlaying) {
+      if (status === 'error') return
       audio.play().catch((err) => {
+        // AbortError is normal when stopping/switching tracks rapidly
+        if (err.name === 'AbortError') return
+
         warn('[Player] play() failed', { error: err, audioUrl })
-        usePlayerStore.getState().pause()
+        // If it was a block, let the user know
+        if (err.name === 'NotAllowedError') {
+          usePlayerStore.getState().pause()
+          toast.infoKey('player.autoplayBlocked')
+        }
       })
     } else {
       audio.pause()
