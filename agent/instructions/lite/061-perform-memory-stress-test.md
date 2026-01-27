@@ -15,6 +15,7 @@ Ensure long-term stability by identifying and fixing memory leaks that occur dur
 
 ## 2. Leak Detection
 - **Action**: Use Chrome DevTools "Memory" tab or Playwright's `performance.measureUserAgentSpecificMemory`.
+- **Default Tooling**: Prefer Chrome DevTools on desktop Chrome Stable; use the Playwright memory API only as a supplemental signal.
 - **Target**: Ensure JS Heap size returns to a stable baseline after clearing all data and tabs.
 - **Output**: Store heap snapshot notes under `apps/lite/tests/stress/README.md`.
 

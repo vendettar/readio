@@ -8,6 +8,7 @@ Add a strict Content Security Policy to reduce XSS and malicious resource loadin
 
 ## 1. Define CSP
 - **Action**: Add a CSP policy via `index.html` meta tag or deployment headers.
+- **Default**: Implement the CSP as a meta tag in `apps/lite/index.html` for this task.
 - **Minimum Directives**:
   - `default-src 'self'`
   - `script-src 'self'`

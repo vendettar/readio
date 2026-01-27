@@ -20,11 +20,12 @@ Replace "hand-rolled" filename parsing with a professional binary stream parser 
 - **Target**: `apps/lite/src/lib/files/ingest.ts`.
 - **Action**: Update the metadata extraction step using a **Web Worker**.
 - **Logic**:
-  - Use `parseBlob(file)` from `music-metadata-browser` inside a Worker to avoid blocking the main thread.
-  - Prefer `common.picture` for artwork (convert to `Blob`/`ObjectURL` only when needed in UI).
+  - **Worker Default**: Implement the parser in `apps/lite/src/workers/metadata.worker.ts` and call it from ingestion.
+  - Use `parseBlob(file)` from `music-metadata-browser` inside the Worker to avoid blocking the main thread.
+  - Prefer `common.picture` for artwork, but return/store it as a `Blob` only (do not create ObjectURLs in the Worker).
   - Prefer `format.duration` if provided; fall back to `getAudioDuration` only when metadata lacks duration.
   - Fallback to filename ONLY if `common.title` is missing.
-  - **Best-Effort Mode**: If metadata parsing fails, log a warning and continue ingest using filename + duration fallback. Do not block the import or show a fatal error toast.
+  - **Best-Effort Mode**: If metadata parsing fails, log a warning in DEV only and continue ingest using filename + duration fallback. Do not block the import or show a fatal error toast.
   - Do not change the database schema version for this task.
 
 ## 3. Tests

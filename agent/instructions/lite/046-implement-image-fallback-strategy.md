@@ -9,9 +9,9 @@ Prevent "broken image" icons and empty gaps when third-party podcast covers fail
 ## 1. Refactor `InteractiveArtwork`
 - **Target**: `apps/lite/src/components/interactive/InteractiveArtwork.tsx`.
 - **State**: Add `isLoading` and `hasError` local states.
-- **Loading Phase**: Show a skeleton or a themed gradient background (`bg-muted/50`) while the image is fetching.
-- **Error Phase**: If `onError` fires, replace the image with a standard `Podcast` or `Music` icon from Lucide, centered in the container.
-- **Fallback Source**: If a default image URL is configured, use it before showing the icon.
+- **Loading Phase (Default)**: Use a simple themed placeholder background (`bg-muted/50`) while the image is fetching (no shimmer/skeleton component).
+- **Error Phase (Default)**: If `onError` fires, show the Lucide `Podcast` icon centered in the container.
+- **Fallback Source**: Use the configured fallback image (`getFallbackPodcastImage()` / runtime config) before showing the icon.
 
 ## 2. Optimized Transitions
 - **Action**: Use a simple CSS transition (`opacity-0` to `opacity-100`) when the image successfully loads to prevent "image pop".

@@ -16,7 +16,8 @@ Ensure the app remains functional even if the primary CORS proxy fails or is rat
 - **Target**: `apps/lite/src/lib/runtimeConfig.ts`.
 - **Action**: Support an array of `CORS_PROXIES`.
 - **Default**: Provide at least 2 distinct trusted proxy URLs.
- - **Rule**: Use `src/lib/storage.ts` to persist the last known working proxy.
+- **Ordering Rule**: Treat the array order as priority (index 0 is primary).
+- **Persistence Rule**: Use `src/lib/storage.ts` and persist the last known working proxy under a single key (default: `readio_last_working_proxy`).
 
 ## 2. Failover Logic
 - **Target**: `apps/lite/src/lib/fetchUtils.ts`.
@@ -28,7 +29,9 @@ Ensure the app remains functional even if the primary CORS proxy fails or is rat
 
 ## 3. Proxy Privacy Warning
 - **Rule**: When a public proxy is active, display a clear disclosure in Settings and a non-blocking in-app notice (toast or banner).
+- **Notice Default**: Use a toast and show it at most once per session.
 - **Toggle**: Provide a user-facing toggle to disable public proxies (fallback to direct-only).
+- **Toggle Default**: Proxies enabled by default; direct-only is an explicit opt-out.
 - **I18n**: Add keys for the disclosure and toggle label.
 
 ## 4. Verification

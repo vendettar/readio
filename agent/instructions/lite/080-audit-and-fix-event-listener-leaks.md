@@ -8,12 +8,14 @@ Eliminate memory leaks caused by global event listeners (window, document) that 
 
 ## 1. Implement Standard Listener Hook
 - **Target**: Ensure `apps/lite/src/hooks/useEventListener.ts` is the only way to add **window/document** listeners in React components.
+- **Default**: If the hook does not exist yet, create it and migrate call sites in the same task.
 - **Audit**: Search for manual `addEventListener` in `src/components/` and `src/hooks/`.
 
 ## 2. Refactor
 - **Action**: Replace manual listeners with the `useEventListener` hook.
 - **Check**: Ensure `removeEventListener` is called in the `useEffect` cleanup function.
   - **Exception**: Non-React modules may attach listeners only during app boot, and must expose explicit cleanup for tests.
+  - **Exception Default**: For non-React modules, require an exported `dispose()` (or equivalent) that removes all listeners.
 
 ## 3. Verification
 - **Test**: Use Chrome DevTools "Performance" tab. Record a session where you navigate rapidly between 20+ routes.

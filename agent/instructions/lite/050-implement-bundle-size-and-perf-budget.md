@@ -12,6 +12,7 @@ Establish a baseline for application performance and bundle size to prevent regr
 
 ## 2. Define CI Budgets
 - **Action**: In `apps/lite/package.json`, define a `size-limit` (if using size-limit) or a simple script to check `dist/` size.
+- **Default**: Use a simple `dist/` size check script (do not introduce `size-limit` unless already present).
 - **Budget**:
   - Main JS Entry: < 250KB (Gzipped).
   - Total Assets: < 1MB (Excluding icons/images).

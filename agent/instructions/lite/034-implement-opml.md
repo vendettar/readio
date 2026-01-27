@@ -37,6 +37,7 @@ Allow users to migrate their subscriptions from other apps.
     }
     ```
   - Use `db.subscriptions.bulkAdd(data)` or `bulkPut(data)`.
+  - **Default**: Use `bulkPut(data)` to remain idempotent across repeated imports.
   - **Dedupe**: Before insert, skip items where `feedUrl` already exists via the unique index.
 
 ## 3. UI Integration (`apps/lite/src/routeComponents/SettingsPage.tsx`)

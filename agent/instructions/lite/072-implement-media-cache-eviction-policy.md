@@ -20,10 +20,12 @@ Prevent the application from consuming all device storage by automatically remov
   - Add both runtime config keys to `public/env.js` and `src/lib/runtimeConfig.ts` schema.
 
 ## 2. Background Task
-- **Action**: Run the eviction check during app idle time or at boot (using `requestIdleCallback`).
+- **Action (Default)**: Run the eviction check at boot and schedule an additional idle-time check.
+- **Idle Fallback**: If `requestIdleCallback` is unavailable, fall back to `setTimeout` (e.g., 2s).
 
 ## 3. Retention Flag
 - **Feature**: Allow users to "Pin" certain files to prevent them from being evicted (use `pinnedAt` on `local_tracks`).
+- **Pin Policy**: Pinned items are never evicted. Set `pinnedAt = Date.now()` when pinned and `null` when unpinned.
 
 ## 4. Verification
 - **Test**: Manually populate `audioBlobs` with 1.2GB of dummy data.

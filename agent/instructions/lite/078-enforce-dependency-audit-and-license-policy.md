@@ -12,6 +12,7 @@ Secure the supply chain by ensuring all dependencies are safe and follow the pro
 
 ## 2. License Checker
 - **Action**: Install `license-checker` or a similar tool.
+- **Default**: Use `license-checker` for this task.
 - **Policy**: Allow permissive licenses only (MIT, Apache-2.0, BSD-2-Clause, BSD-3-Clause, ISC).
 - **Block**: Fail the build if any GPL/LGPL/AGPL, unknown, or unlicensed dependencies appear.
 

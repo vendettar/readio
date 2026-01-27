@@ -8,6 +8,7 @@ Ensure the app runs reliably on older devices and specific WebViews by configuri
 
 ## 1. Configure Browserslist
 - **Action**: Add a `.browserslistrc` file to the root or update `package.json`.
+- **Default**: Create a root `.browserslistrc` (do not modify `package.json` for this task).
 - **Target**: `> 0.5%, last 2 versions, not dead, iOS >= 14, Firefox ESR`.
 
 ## 2. Polyfill Strategy
@@ -17,7 +18,7 @@ Ensure the app runs reliably on older devices and specific WebViews by configuri
 
 ## 3. Verification
 - **Test**: Run `pnpm build`. Check `dist/` for legacy chunks.
-- **Check**: Use BrowserStack or an old physical device (e.g., iPhone 8) to verify the app doesn't white-screen.
+- **Default Check**: Verify legacy chunks locally from the build output. BrowserStack/device checks are optional follow-up verification.
 
 ### Quality Check
 - **Type Check**: Run `pnpm --filter @readio/lite typecheck`.

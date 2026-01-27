@@ -11,6 +11,7 @@ Prevent data corruption and inconsistent UI states by ensuring all asynchronous 
 - **Requirement**: All store actions that touch DB/network must **handle errors explicitly**.
 - **Handling**:
   - If the store exposes `status`/`isLoading`, update it on error and clear loading in `finally`.
+  - **Default**: When `status`/`isLoading` exists, treat it as the primary UX signal and avoid duplicate error toasts for expected aborts.
   - If no status exists, log with `logError` and surface a toast via `toast.*Key`.
   - For fire-and-forget async calls, use `void` and handle `.catch()` locally.
 

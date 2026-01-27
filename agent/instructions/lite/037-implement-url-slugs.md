@@ -10,11 +10,13 @@ This improves shareability and SEO while maintaining reliability.
 ## 1. Create `apps/lite/src/lib/slugUtils.ts`
 - **Function**: `generateSlug(text: string): string`.
   - Logic: Normalize text (lowercase, remove non-alphanumeric, replace spaces with hyphens).
+  - **Default**: If the normalized slug is empty, return `'episode'`.
 - **Function**: `generateSlugWithId(title: string, fullId: string): string`.
-  - Logic: `generateSlug(title) + "-" + fullId.substring(0, 8)`.
+  - Logic: `generateSlug(title) + "-" + fullId.slice(0, 8).toLowerCase()`.
   - **MANDATORY**: Always append the first 8 characters of the GUID.
 - **Function**: `extractIdFromSlug(slug: string): string`.
   - Logic: Split by the last hyphen and return the last segment (the `first8` fragment).
+  - **Default**: If no hyphen exists, return an empty string and treat it as invalid.
 
 ## 2. Update Navigation Logic
 - **Target**: `apps/lite/src/components/EpisodeRow/EpisodeRow.tsx`, `apps/lite/src/components/interactive/InteractiveArtwork.tsx`, and any other navigation entry points.

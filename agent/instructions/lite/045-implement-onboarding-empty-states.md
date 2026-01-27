@@ -12,6 +12,7 @@ Ensure a positive "First Run" experience by replacing blank screens with actiona
 - **Rule**: CTA must be a shadcn `<Button>`, not a raw `<a>` tag.
 
 ## 2. Implement View-Specific Onboarding
+- **Default**: Reuse existing layout/spacing patterns on each page; do not introduce new page-level layouts.
 - **Subscriptions Page**: If empty, show "No Subscriptions" with a CTA "Explore Podcasts" (links to `/explore`).
 - **Files Page**: If empty, show a large, prominent "Drop Area" with the text "Drag and drop your first MP3 or SRT file here to begin".
 - **Favorites/History**: If empty, explain how to add items (e.g., "Heart an episode to see it here").

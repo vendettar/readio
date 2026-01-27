@@ -19,8 +19,9 @@ Establish a production deployment path. Default target is **Vercel** for the web
 
 ## 2. Dockerfile (Optional Self-Host)
 - **Action**: Add root `Dockerfile` for static hosting.
+- **Default**: Implement the optional self-host path now (do not skip Dockerfile/nginx.conf).
 - **Runtime**: Use `nginx:alpine`.
-- **Config**: Include a custom `nginx.conf` that handles SPA routing:
+- **Config**: Add root `nginx.conf` and copy it into the image. It must handle SPA routing:
   ```nginx
   location / {
       try_files $uri $uri/ /index.html;

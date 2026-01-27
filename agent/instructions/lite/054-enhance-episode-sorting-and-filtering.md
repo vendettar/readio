@@ -15,6 +15,7 @@ Enable users to find content efficiently within large podcast shows or the subsc
 
 ## 2. State Management
 - **Action**: Use local state or TanStack Router search params to drive the filter logic.
+- **Default**: Use local component state (do not introduce new router search params in this task).
 - **Requirement**: Use `useMemo` to filter the `episodes` array to ensure smooth scrolling.
  - **Rule**: Do not mutate the source episode array; derived view only.
 

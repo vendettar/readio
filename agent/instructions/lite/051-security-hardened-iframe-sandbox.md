@@ -18,6 +18,7 @@ If the application needs to render complex third-party HTML (e.g., specific podc
 ## 2. Refactor External Rendering
 - **Action**: Audit `PodcastEpisodeDetailPage.tsx` or any RSS description area.
 - **Decision**: If the content is simple text, keep `DOMPurify`. If it contains complex embedded widgets, use `<SafeIframe />`.
+- **Default**: Prefer `DOMPurify` and do NOT introduce iframes unless a concrete widget/embed requirement is confirmed.
 
 ## 3. Verification
 - **Test**: Attempt to access `window.parent.localStorage` from inside the iframe.

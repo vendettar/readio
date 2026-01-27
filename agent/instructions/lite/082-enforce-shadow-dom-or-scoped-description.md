@@ -9,7 +9,8 @@ Prevent external RSS HTML (show-notes) from polluting the application's UI by en
 ## 1. Isolated Container
 - **Target**: `apps/lite/src/components/Transcript/DescriptionView.tsx` (or where show-notes are rendered).
 - **Strategy**: Apply a scoped CSS reset class (e.g., `.prose-isolate`) that resets inherited styles (`all: revert`) and re-applies app typography tokens locally.
-- **Fallback**: Use Shadow DOM only if scoped reset fails to prevent leakage.
+- **Default**: Implement the scoped reset strategy only.
+- **Fallback**: Use Shadow DOM only if scoped reset demonstrably fails and requires a follow-up instruction.
 
 ## 2. Refine DOMPurify
 - **Action**: Ensure `DOMPurify` explicitly strips `<style>` and `<link>` tags from the input HTML before it reaches the isolated container (`src/lib/htmlUtils.ts`).

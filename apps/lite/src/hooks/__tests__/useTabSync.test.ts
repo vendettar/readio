@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useTabSync } from '../useTabSync'
 import { usePlayerStore } from '../../store/playerStore'
+import { useTabSync } from '../useTabSync'
 
 type Listener = (event: { data: unknown }) => void
 

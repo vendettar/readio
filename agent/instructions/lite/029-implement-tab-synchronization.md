@@ -13,7 +13,7 @@ If Tab A is playing and user plays in Tab B, Tab A should pause.
   - Generate a unique `tabId` on mount using `createId()` from `apps/lite/src/lib/id.ts`.
   - Use `BroadcastChannel('readio_sync')`.
   - When `play()` is called, post `{ type: 'PLAYING', senderId: tabId }`.
-  - Listener: If message received AND `senderId !== tabId`, dispatch `PAUSE`.
+  - Listener: If message received AND `senderId !== tabId`, dispatch `PAUSE` **only when this tab is currently playing**; otherwise no-op.
   - **Fallback**: If `BroadcastChannel` is unavailable, use `storage` events with a `localStorage` key (`readio_sync`) to broadcast the same payload.
   - **Feedback Guard**: Include `timestamp` and ignore events older than 2 seconds. Ignore events originating from the current tab.
 

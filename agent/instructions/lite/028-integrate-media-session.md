@@ -94,5 +94,6 @@ Bilingual sync required for any `.zh.mdx` counterparts:
 
 ## Completion
 - Completed by: Codex
+- Reviewed by: Codex
 - Commands: pnpm --filter @readio/lite lint; pnpm --filter @readio/lite typecheck
 - Date: 2026-01-26
