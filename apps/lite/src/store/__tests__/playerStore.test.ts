@@ -1,8 +1,19 @@
-import { act, renderHook } from '@testing-library/react'
+import { act, render, renderHook } from '@testing-library/react'
 import 'fake-indexeddb/auto'
+import { createElement } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { GlobalAudioController } from '../../components/AppShell/GlobalAudioController'
 import { DB } from '../../lib/dexieDb'
 import { usePlayerStore } from '../playerStore'
+
+vi.mock('../../hooks/useImageObjectUrl', () => ({ useImageObjectUrl: () => null }))
+vi.mock('../../hooks/useMediaSession', () => ({ useMediaSession: vi.fn() }))
+vi.mock('../../hooks/usePageVisibility', () => ({ usePageVisibility: () => true }))
+vi.mock('../../hooks/useSession', () => ({
+  useSession: () => ({ restoreProgress: vi.fn() }),
+}))
+vi.mock('../../hooks/useTabSync', () => ({ useTabSync: vi.fn() }))
+vi.mock('../../lib/toast', () => ({ toast: { infoKey: vi.fn(), errorKey: vi.fn() } }))
 
 // Mock URL.createObjectURL and URL.revokeObjectURL
 // Use spyOn to safely mock without redefinition errors
@@ -107,6 +118,24 @@ describe('playerStore - Status & Control Logic', () => {
     expect(result.current.isPlaying).toBe(true)
   })
 
+  it('should transition status from loading -> playing when play() is called from paused', () => {
+    const { result } = renderHook(() => usePlayerStore())
+
+    act(() => {
+      result.current.setAudioUrl('https://example.com/audio.mp3', 'Test Episode')
+      result.current.setStatus('paused')
+    })
+
+    expect(result.current.status).toBe('paused')
+
+    act(() => {
+      result.current.play()
+    })
+
+    expect(result.current.status).toBe('playing')
+    expect(result.current.isPlaying).toBe(true)
+  })
+
   it('should ignore play() command if status is loading', () => {
     const { result } = renderHook(() => usePlayerStore())
 
@@ -145,33 +174,25 @@ describe('playerStore - Status & Control Logic', () => {
   })
 
   it('should revert to paused if autoplay is blocked', async () => {
-    const { result } = renderHook(() => usePlayerStore())
-
-    // Setup: track is loaded but paused
-    act(() => {
-      result.current.setAudioUrl('https://example.com/audio.mp3', 'Test')
-    })
-    act(() => {
-      result.current.setStatus('paused')
+    const playSpy = vi.spyOn(HTMLMediaElement.prototype, 'play').mockRejectedValue({
+      name: 'NotAllowedError',
+      message: 'Autoplay blocked',
     })
 
-    // Mock HTMLMediaElement.play to fail (simulating browser block)
-    const playSpy = vi
-      .spyOn(HTMLMediaElement.prototype, 'play')
-      .mockRejectedValue(new Error('NotAllowedError'))
+    const { rerender } = render(createElement(GlobalAudioController))
 
     await act(async () => {
-      result.current.play()
+      usePlayerStore.getState().setAudioUrl('https://example.com/audio.mp3', 'Test Track')
     })
 
-    // Simulate GlobalAudioController handling the block via setPlayerError
+    rerender(createElement(GlobalAudioController))
 
-    act(() => {
-      result.current.setPlayerError('NotAllowedError')
+    await act(async () => {
+      await Promise.resolve()
     })
 
-    expect(result.current.status).toBe('paused')
-    expect(result.current.isPlaying).toBe(false)
+    expect(usePlayerStore.getState().status).toBe('paused')
+    expect(usePlayerStore.getState().isPlaying).toBe(false)
 
     playSpy.mockRestore()
   })

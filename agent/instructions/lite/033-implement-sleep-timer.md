@@ -1,7 +1,7 @@
 > **⚠️ CRITICAL**: You MUST preserve the current UI/UX layout and styling. Do NOT change visual appearance unless explicitly instructed.
 > **Prerequisites**: Read `apps/docs/content/docs/general/design-system/index.mdx` and `apps/docs/content/docs/apps/lite/ui-patterns/index.mdx` before starting.
 
-# Task: Implement Sleep Timer [COMPLETED]
+# Task: Implement Sleep Timer
 
 ## Objective
 Allow users to stop playback automatically after a duration or at the end of an episode.

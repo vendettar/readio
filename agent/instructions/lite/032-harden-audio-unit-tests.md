@@ -42,7 +42,7 @@ The Audio Engine is the most complex part of the app. We need strict unit tests 
 - Update `apps/docs/content/docs/apps/lite/handoff/index.mdx` with the new status.
 
 ## Completion
-- **Completed by**: Antigravity
-- **Commands**: `pnpm --filter @readio/lite test:run`
-- **Date**: 2026-01-28
+- **Completed by**: Codex
+- **Commands**: `pnpm --filter @readio/lite lint`, `pnpm --filter @readio/lite typecheck`, `pnpm --filter @readio/lite test:run`
+- **Date**: 2026-01-27
 - **Reviewed by**: Readio Reviewer (QA)

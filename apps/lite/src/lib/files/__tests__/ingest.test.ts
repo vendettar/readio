@@ -22,6 +22,14 @@ class MockAudio {
     if (!this.handlers[event]) this.handlers[event] = []
     this.handlers[event].push(handler)
   }
+
+  removeAttribute(attr: string) {
+    if (attr === 'src') {
+      this.src = ''
+    }
+  }
+
+  load() {}
 }
 
 beforeAll(() => {

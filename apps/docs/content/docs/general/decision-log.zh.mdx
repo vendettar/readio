@@ -246,3 +246,20 @@ description: 架构决策与理由。
 - **约束**：
     - 加载器必须使用 `fixed inset-0 z-50 bg-background` 以完美覆盖内容。
     - 必须使用 `AnimatePresence` 实现平滑淡出转场。
+
+## D059 — 共享元素转换作用域 (Shared Element Transition Scoping)
+- **决策**：同一逻辑对象若在同页面多处出现，`layoutId` 必须加上唯一前缀（如 `sectionId`），并通过搜索参数（`fromLayoutPrefix`）传递给详情页以匹配来源。
+- **理由**：避免 Framer Motion 在重复内容中出现布局冲突，导致图像消失或交互失效的问题。
+
+## D060 — 逻辑属性迁移 (RTL 支持)
+- **决策**：将所有物理方向样式（`left/right/ml/mr/pl/pr/text-left/text-right/border-l/border-r`）迁移为逻辑方向样式（`start/end/ms/me/ps/pe/text-start/text-end/border-s/border-e`）。
+- **理由**：为 RTL 语言提供原生支持，避免重复样式和复杂覆盖，符合现代 Web 标准。
+- **约束**：方向性图标需显式使用 `className="rtl:rotate-180"` 翻转。
+
+## D061 — 睡眠定时器架构
+- **决策**：将睡眠定时器倒计时 ticker 集中在 `useSleepTimerStore`（模块级 interval）中，`GlobalAudioController` 负责响应“播完即停”事件。
+- **理由**：确保无论组件如何挂载都只有一个计时器，避免重复计时或“加速”问题，并保证倒计时状态与 Store 归属一致。计时结束后播放器应切换到 `paused` 状态。
+
+## D062 — 覆盖层 Tooltip 包装
+- **决策**：对同时具备状态反馈的 icon-only 按钮（如睡眠定时器剩余时间），统一在 `DropdownMenuTrigger` 或 `PopoverTrigger` 外包裹 `Tooltip`。
+- **理由**：遵循“仅图标按钮必须有 Tooltip”的规范，同时保留点击交互能力。

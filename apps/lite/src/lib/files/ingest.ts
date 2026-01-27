@@ -163,29 +163,43 @@ export async function ingestFiles(params: IngestParams): Promise<IngestResult> {
     // This is useful for browser-supported formats like MP3/WAV that the worker might miss.
     if (durationSeconds <= 0 && typeof Audio !== 'undefined') {
       try {
-        const audio = new Audio(URL.createObjectURL(file))
+        const objectUrl = URL.createObjectURL(file)
+        const audio = new Audio(objectUrl)
         durationSeconds = await new Promise((resolve) => {
+          let settled = false
+          let timeoutId: number | undefined
+
+          const cleanupAudio = (resolvedDuration: number) => {
+            if (settled) return
+            settled = true
+            if (timeoutId) {
+              clearTimeout(timeoutId)
+            }
+            URL.revokeObjectURL(objectUrl)
+            audio.removeAttribute('src')
+            audio.src = ''
+            audio.load()
+            resolve(resolvedDuration)
+          }
+
           audio.addEventListener(
             'loadedmetadata',
             () => {
               const d = audio.duration
-              URL.revokeObjectURL(audio.src)
-              resolve(d && Number.isFinite(d) ? d : 0)
+              cleanupAudio(d && Number.isFinite(d) ? d : 0)
             },
             { once: true }
           )
           audio.addEventListener(
             'error',
             () => {
-              URL.revokeObjectURL(audio.src)
-              resolve(0)
+              cleanupAudio(0)
             },
             { once: true }
           )
           // Safety timeout
-          setTimeout(() => {
-            URL.revokeObjectURL(audio.src)
-            resolve(0)
+          timeoutId = window.setTimeout(() => {
+            cleanupAudio(0)
           }, 2000)
         })
       } catch (err) {
