@@ -15,6 +15,7 @@ interface InteractiveArtworkProps {
   // Navigation props
   to?: string
   params?: Record<string, string>
+  search?: Record<string, unknown>
   // Action props
   onPlay?: (e: React.MouseEvent) => void
   playLabel?: string
@@ -43,6 +44,7 @@ export function InteractiveArtwork({
   className,
   to,
   params,
+  search,
   onPlay,
   playLabel,
   hoverScale = false,
@@ -131,7 +133,12 @@ export function InteractiveArtwork({
               variant="ghost"
               className="p-0 h-auto hover:bg-transparent block w-full h-full"
             >
-              <Link to={to as any} params={params as any} className="block w-full h-full">
+              <Link
+                to={to as any}
+                params={params as any}
+                search={search as any}
+                className="block w-full h-full"
+              >
                 <img
                   src={artworkUrl}
                   alt={alt}
@@ -163,7 +170,12 @@ export function InteractiveArtwork({
           variant="ghost"
           className="p-0 h-auto hover:bg-transparent block w-full h-full"
         >
-          <Link to={to as any} params={params as any} className="block w-full h-full">
+          <Link
+            to={to as any}
+            params={params as any}
+            search={search as any}
+            className="block w-full h-full"
+          >
             <img
               src={artworkUrl}
               alt={alt}

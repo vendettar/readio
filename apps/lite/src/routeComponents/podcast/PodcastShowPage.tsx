@@ -2,7 +2,7 @@
 // Premium-style podcast show page with episode list
 
 import { useQuery } from '@tanstack/react-query'
-import { Link, useParams } from '@tanstack/react-router'
+import { Link, useParams, useSearch } from '@tanstack/react-router'
 import { motion } from 'framer-motion'
 import { Check, ChevronRight, Play, Plus } from 'lucide-react'
 import { useState } from 'react'
@@ -22,6 +22,7 @@ import { useExploreStore } from '../../store/exploreStore'
 export default function PodcastShowPage() {
   const { t } = useTranslation()
   const { id } = useParams({ from: '/podcast/$id/' })
+  const { fromLayoutPrefix } = useSearch({ from: '/podcast/$id/' })
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false)
 
   // Fetch podcast metadata via Lookup API
@@ -140,7 +141,14 @@ export default function PodcastShowPage() {
         <div className="flex flex-col md:flex-row gap-8 mb-10">
           {/* Artwork */}
           <div className="w-full md:w-64 flex-shrink-0">
-            <motion.div layoutId={`artwork-podcast-${id}`} className="w-full aspect-square">
+            <motion.div
+              layoutId={
+                fromLayoutPrefix
+                  ? `artwork-podcast-${fromLayoutPrefix}-${id}`
+                  : `artwork-podcast-${id}`
+              }
+              className="w-full aspect-square"
+            >
               <img
                 src={artworkUrl}
                 alt=""

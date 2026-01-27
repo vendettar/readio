@@ -36,23 +36,23 @@ export function getCorsProxyConfig(): { proxyUrl: string; proxyPrimary: boolean 
 
 export type ProxyHealthResult =
   | {
-    ok: true
-    proxyUrl: string
-    proxyType: 'default' | 'custom'
-    targetUrl: string
-    elapsedMs: number
-    at: number
-  }
+      ok: true
+      proxyUrl: string
+      proxyType: 'default' | 'custom'
+      targetUrl: string
+      elapsedMs: number
+      at: number
+    }
   | {
-    ok: false
-    proxyUrl: string
-    proxyType: 'default' | 'custom'
-    targetUrl: string
-    elapsedMs: number
-    at: number
-    error: string
-    status?: number
-  }
+      ok: false
+      proxyUrl: string
+      proxyType: 'default' | 'custom'
+      targetUrl: string
+      elapsedMs: number
+      at: number
+      error: string
+      status?: number
+    }
 
 /**
  * Build proxy URL supporting three formats:
@@ -278,7 +278,7 @@ export async function fetchWithFallback<T = string>(
           'direct'
         )
       }
-      return json ? response.json() : (response.text() as unknown as T)
+      return json ? await response.json() : ((await response.text()) as unknown as T)
     } catch (e) {
       if (e instanceof TypeError) {
         throw new NetworkError('Network failure during direct fetch')
@@ -353,7 +353,7 @@ export async function fetchWithFallback<T = string>(
 
       // Custom proxy: assume it returns raw content
       if (json) {
-        return response.json()
+        return await response.json()
       }
 
       return (await response.text()) as unknown as T

@@ -6,6 +6,9 @@ title: 功能模式
 
 - **共享元素转换 (Active)**: 当持久元素 (如播客封面) 从一个视图移动到另一个视图 (例如 Mini Player 到 Full Player) 时，必须使用共享布局转换 (Framer Motion 中的 `layoutId`) 以保持空间方向。
 - **layoutId 策略**：系统使用 `artwork-${id}-player`。为了实现“从单集列表点击后飞向播放器”的视觉效果，列表项、MiniPlayer 和 FullPlayer 必须共享同一个带有 `-player` 后缀的 ID。
+- **重复列表处理 (Scoping)**：在包含重复类别的视图中（如 Explore 页面），如果同一节目出现在不同模块，直接共用 ID 会导致 `layoutId` 冲突（图片消失或无响应）。
+  - **解决方案**：在布局 ID 前加上模块标识符（例如 `artwork-podcast-topShows-${id}`）。
+  - **握手协议**：导航跳转时必须携带 `fromLayoutPrefix` 搜索参数，以便目标详情页能够动态获取并匹配对应的转换 ID。
 - **视口兼容性**：在 `FullPlayer` 内部，通过 `isDesktop` 条件确保 `layoutId` 仅在当前可见的图片节点上生效，防止 Framer Motion 布局计算冲突导致动画失效。
 - **入场动画**: 列表 (文件, 剧集) 不应立即出现。使用 `AnimatedList` bit 实现交错淡入 + 上滑效果。
 - **微交互**: 使用 `CountUp` bit 处理数值变化（如存储占用量），提供高级、动态的交互感。

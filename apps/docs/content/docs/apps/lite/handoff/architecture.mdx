@@ -119,6 +119,8 @@ To prevent the entire application from re-rendering on every audio tick (timeupd
 |------|------|------|
 | GlobalAudioController | `src/components/AppShell/GlobalAudioController.tsx` | Handles `<audio>` element lifecycle, event listeners (timeupdate, play/pause, seek), volume/rate sync. Uses atomic Zustand selectors and `getState()` for actions. |
 
+GlobalAudioController also integrates Media Session via `useMediaSession`, exposing OS playback controls and metadata without introducing a new playback source.
+
 This ensures `RootLayout` remains effectively static unless the route changes, while only `GlobalAudioController` and any progress-bar components re-render during playback.
 
 ### Spatial Presence: Shared Element Transitions
@@ -128,6 +130,7 @@ The application utilizes `layoutId` (Framer Motion) to maintain visual continuit
 - **Uniqueness Rule**: Within the active render tree, a `layoutId` must uniquely identify a logical object's visual representation.
 - **Context Compatibility**: The artwork for list items and the active player (Mini/Full) share the `artwork-${id}-player` ID to enable smooth "morphing."
 - **Conditional Target**: In components with responsive layouts (like `FullPlayer`), the `layoutId` is applied conditionally based on the viewport (e.g., `isDesktop`) to ensure only one active node holds the ID at any time, avoiding layout engine collisions.
+- **Scoping for Duplicate Content**: If the same logical object (e.g., a Podcast Show) appears multiple times on a single page (like in different sections of the Explore page), a unique prefix (e.g., `sectionId`) MUST be prepended to the `layoutId` to prevent collisions. Navigation to detail pages MUST pass this prefix via search parameters (`fromLayoutPrefix`) so the target page can match the specific originating element.
 
 ---
 

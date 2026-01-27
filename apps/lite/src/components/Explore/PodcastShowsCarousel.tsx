@@ -13,6 +13,7 @@ interface TopShowsCarouselProps {
   isLoading?: boolean
   onPlayLatest?: (podcast: DiscoveryPodcast) => void
   onSubscribe?: (podcast: DiscoveryPodcast) => void
+  sectionId?: string
 }
 
 export function PodcastShowsCarousel({
@@ -20,6 +21,7 @@ export function PodcastShowsCarousel({
   isLoading,
   onPlayLatest,
   onSubscribe,
+  sectionId,
 }: TopShowsCarouselProps) {
   const {
     scrollRef,
@@ -61,11 +63,13 @@ export function PodcastShowsCarousel({
       >
         {podcasts.map((podcast, index) => (
           <PodcastShowCard
-            key={podcast.id}
+            key={`${sectionId || 'default'}-${podcast.id}`}
             podcast={podcast}
             index={index}
             onPlayLatest={onPlayLatest}
             onSubscribe={onSubscribe}
+            layoutId={sectionId ? `artwork-podcast-${sectionId}-${podcast.id}` : undefined}
+            search={sectionId ? { fromLayoutPrefix: sectionId } : undefined}
           />
         ))}
       </div>

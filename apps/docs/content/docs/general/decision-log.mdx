@@ -249,3 +249,7 @@ description: Architecture decisions and rationale.
 - **Constraints**: 
     - Loader must use `fixed inset-0 z-50 bg-background` to perfectly cover content.
     - Transitions must use `AnimatePresence` for a smooth fade-out.
+
+## D059 — Shared Element Transition Scoping
+- **Decision**: If the same logical object appears multiple times on a single page, the `layoutId` MUST be scoped with a unique prefix (e.g., `sectionId`). Navigation to detail pages MUST pass this prefix via search parameters (`fromLayoutPrefix`) to enable context-aware target matching.
+- **Rationale**: Prevents Framer Motion from becoming conflicted when duplicate content exists in different UI sections, resolving bugs where images disappear or components become unclickable during transitions.

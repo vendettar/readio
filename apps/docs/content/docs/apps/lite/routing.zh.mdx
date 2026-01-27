@@ -12,7 +12,7 @@ Readio Lite 使用 **TanStack Router** 进行基于文件的路由。
 | 路由 | 模式 | 描述 |
 |---|---|---|
 | Home | `/` | 使用 `beforeLoad` 重定向到 `/files` (如果未找到会话)。 |
-| Podcast | `/podcast/$id` | 播客详情页。`$id` 是 Provider ID (例如 iTunes ID)。 |
+| Podcast | `/podcast/$id` | 播客详情页。`$id` 是 Provider ID (例如 iTunes ID)。支持 `?fromLayoutPrefix` 参数用于上下文感知的位移动画。 |
 | Episode | `/podcast/$id/episode/$episodeId` | 单集详情。见下文“Slug 策略”。 |
 | Files | `/files/*` | 本地文件浏览器。使用通配符表示文件夹路径。 |
 

@@ -346,6 +346,7 @@ export default function ExplorePage() {
                       isLoading={isLoadingPicks}
                       onPlayLatest={handlePlayLatestEpisode}
                       onSubscribe={handleSubscribePodcast}
+                      sectionId="editorsPicks"
                     />
                   </section>
                 )}
@@ -360,6 +361,7 @@ export default function ExplorePage() {
                     isLoading={isLoadingShows}
                     onPlayLatest={handlePlayLatestEpisode}
                     onSubscribe={handleSubscribePodcast}
+                    sectionId="topShows"
                   />
                 </section>
 

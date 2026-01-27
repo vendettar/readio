@@ -12,13 +12,15 @@ interface TopShowCardProps {
   index: number
   onPlayLatest?: (podcast: DiscoveryPodcast) => void
   onSubscribe?: (podcast: DiscoveryPodcast) => void
+  layoutId?: string
+  search?: Record<string, unknown>
 }
 
 /**
  * 极简、高性能的卡片组件。
  */
 export const PodcastShowCard = React.memo(
-  ({ podcast, index, onPlayLatest, onSubscribe }: TopShowCardProps) => {
+  ({ podcast, index, onPlayLatest, onSubscribe, layoutId, search }: TopShowCardProps) => {
     const { t } = useTranslation()
     const subscriptions = useExploreStore((state) => state.subscriptions)
 
@@ -38,6 +40,8 @@ export const PodcastShowCard = React.memo(
         rank={index + 1}
         className="flex-shrink-0 w-[var(--item-width)] snap-start"
         onPlay={onPlayLatest ? () => onPlayLatest(podcast) : undefined}
+        layoutId={layoutId}
+        search={search}
         menuItems={[
           {
             label: subscribed ? t('unsubscribe') : t('subscribe'),

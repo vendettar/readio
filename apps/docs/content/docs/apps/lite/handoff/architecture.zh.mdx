@@ -119,6 +119,8 @@ src/
 |------|------|------|
 | GlobalAudioController | `src/components/AppShell/GlobalAudioController.tsx` | 处理 `<audio>` 生命周期、事件监听（timeupdate、play/pause、seek）、音量/速率同步。使用精确 Zustand 选择器与 `getState()` 调用。 |
 
+GlobalAudioController 通过 `useMediaSession` 集成媒体会话，向系统暴露播放控制与元数据，不引入新的播放来源。
+
 该设计确保 `RootLayout` 在路由切换之外保持静态，播放过程中仅控制器与进度条组件更新。
 
 ### 空间感：共享元素转换 (Shared Element Transitions)
@@ -128,6 +130,7 @@ src/
 - **唯一性规则**：同一时间在渲染树中，具有相同 `layoutId` 的元素必须是物理上同一个逻辑对象的不同呈现。
 - **视图兼容性**：MiniPlayer 与 FullPlayer 的封面图共享 `artwork-${id}-player` ID，确保从底部胶囊到全屏封面的平滑“morph”转换。
 - **条件渲染**：在 `FullPlayer` 等包含多屏幕适配（Desktop/Mobile）的组件中，必须通过 `isDesktop` 等状态确保只有当前可见的封面占位符持有 `layoutId`，以防止 Framer Motion 布局计算冲突。
+- **重复内容作用域 (Scoping)**：如果同一个逻辑对象（如某个播客）在同一页面中多次出现（例如在 Explore 页面的不同模块中），必须在 `layoutId` 前加上唯一的标识符前缀（如 `sectionId`）以防止冲突。跳转到详情页时，必须通过搜索参数 (`fromLayoutPrefix`) 传递此前缀，以便目标页面能匹配对应的起始元素。
 
 ---
 

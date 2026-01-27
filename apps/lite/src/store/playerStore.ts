@@ -187,11 +187,11 @@ export const usePlayerStore = create<PlayerState>((set) => ({
         // Reset session for external URLs to start fresh
         ...(shouldResetSession
           ? {
-            sessionId: null,
-            progress: 0,
-            localTrackId: null,
-            duration: normalizedUrl ? metadata?.duration || 0 : 0,
-          }
+              sessionId: null,
+              progress: 0,
+              localTrackId: null,
+              duration: normalizedUrl ? metadata?.duration || 0 : 0,
+            }
           : {}),
         // Always update duration if provided in metadata
         ...(metadata?.duration ? { duration: metadata.duration } : {}),

@@ -30,12 +30,16 @@ interface PodcastCardProps {
   to?: string
   /** TanStack Router Link params */
   params?: Record<string, string>
+  /** TanStack Router Link search params */
+  search?: Record<string, unknown>
   /** Class name for the outer container */
   className?: string
   /** Artwork size for Provider URL formatting (Apple). Defaults to 400. */
   imageSize?: number
   /** Whether the artwork should be rounded-full (as in TopChannelCard) */
   variant?: 'standard' | 'circular'
+  /** Custom layoutId for shared element transitions. If provided, overrides the default. */
+  layoutId?: string
 }
 
 /**
@@ -53,9 +57,11 @@ export function PodcastCard({
   menuItems,
   to = '/podcast/$id',
   params = { id },
+  search,
   className,
   imageSize = 400,
   variant = 'standard',
+  layoutId,
 }: PodcastCardProps) {
   const { t } = useTranslation()
   const [isMenuOpen, setIsMenuOpen] = React.useState(false)
@@ -80,6 +86,7 @@ export function PodcastCard({
           src={getDiscoveryArtworkUrl(artworkUrl, imageSize)}
           to={onClick ? undefined : to}
           params={onClick ? undefined : params}
+          search={onClick ? undefined : search}
           onPlay={onPlay}
           playPosition="bottom-left"
           playButtonSize="sm"
@@ -89,7 +96,7 @@ export function PodcastCard({
             'w-full h-full shadow-md group-hover/card:shadow-lg transition-all',
             variant === 'circular' ? 'rounded-full' : 'rounded-lg'
           )}
-          layoutId={`artwork-podcast-${id}`}
+          layoutId={layoutId || `artwork-podcast-${id}`}
         />
 
         {/* Rank Badge (Optional) */}
@@ -156,6 +163,7 @@ export function PodcastCard({
             onClick={onClick}
             to={to}
             params={params}
+            search={search}
             className={cn(
               'font-semibold',
               variant === 'circular' ? 'text-xs font-bold uppercase tracking-wider' : 'text-sm'

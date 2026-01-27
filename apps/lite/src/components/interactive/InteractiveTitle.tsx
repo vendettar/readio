@@ -7,6 +7,7 @@ interface InteractiveTitleProps {
   title: string
   to?: string
   params?: Record<string, string>
+  search?: Record<string, unknown>
   onClick?: (e: React.MouseEvent) => void
   className?: string
   buttonClassName?: string
@@ -34,6 +35,7 @@ export function InteractiveTitle({
   title,
   to,
   params,
+  search,
   onClick,
   className,
   buttonClassName,
@@ -73,7 +75,12 @@ export function InteractiveTitle({
           buttonClassName
         )}
       >
-        <Link to={to as any} params={params as any} className={cn('transition-all', className)}>
+        <Link
+          to={to as any}
+          params={params as any}
+          search={search as any}
+          className={cn('transition-all', className)}
+        >
           <span className={cn(clampClass, 'overflow-hidden')}>
             <span className="group-hover/episode:underline group-hover/item:underline group-hover/card:underline hover:underline">
               {title}

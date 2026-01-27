@@ -6,6 +6,9 @@ title: Feature Patterns
 
 - **Shared Element Transitions (Active)**: When a persistent element (like Podcast Artwork) moves from one view to another (e.g. Mini Player to Full Player), it MUST use a shared layout transition (`layoutId` in Framer Motion) to maintain spatial orientation.
 - **layoutId strategy**: The system uses `artwork-${id}-player`. To meet the "List -> Player" morphing requirement, both list items and the global player shared this semantic ID.
+- **Duplicate Lists (Scoping)**: In views with repetitive categories (e.g., Explore Page), using the same ID across different sections causes `layoutId` contention, leading to blank images or broken interactions.
+  - **Solution**: Prepend the section name to the layout ID (e.g., `artwork-podcast-topShows-${id}`).
+  - **Handshake**: Navigation must pass a `fromLayoutPrefix` search parameter so the target page can derive the exact matching transition ID.
 - **Viewport Compatibility**: Inside `FullPlayer`, the `layoutId` MUST be applied conditionally (e.g., via `isDesktop`) to ensure only the active artwork node in the current layout holds the ID, preventing Framer Motion collisions.
 - **Entrance Animations**: Lists (Files, Episodes) should not appear instantly. Use the `AnimatedList` bit for a staggered fade-in + slide-up effect for items.
 - **Micro-animations**: Use the `CountUp` bit for numeric values (e.g., Storage Usage) to provide a premium, dynamic feel.

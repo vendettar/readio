@@ -12,7 +12,7 @@ This document defines the URL structure, navigation patterns, and Slug strategy.
 | Route | Pattern | Description |
 |---|---|---|
 | Home | `/` | Uses `beforeLoad` to redirect to `/files` if no session found. |
-| Podcast | `/podcast/$id` | Podcast Show page. `$id` is the Provider ID (e.g. iTunes ID). |
+| Podcast | `/podcast/$id` | Podcast Show page. `$id` is the Provider ID (e.g. iTunes ID). Supports `?fromLayoutPrefix` for context-aware transitions. |
 | Episode | `/podcast/$id/episode/$episodeId` | Episode Detail. See "Slug Strategy" below. |
 | Files | `/files/*` | Local file browser. Uses wildcard for folder paths. |
 

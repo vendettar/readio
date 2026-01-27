@@ -5,11 +5,15 @@
  * It should be mounted once at the root level and remain persistent across routes.
  */
 
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useImageObjectUrl } from '../../hooks/useImageObjectUrl'
+import { useMediaSession } from '../../hooks/useMediaSession'
 import { useSession } from '../../hooks/useSession'
 import { warn } from '../../lib/logger'
 import { toast } from '../../lib/toast'
 import { usePlayerStore } from '../../store/playerStore'
+
+const TRACK_SKIP_SECONDS = 10
 
 export function GlobalAudioController() {
   const audioRef = useRef<HTMLAudioElement>(null)
@@ -17,10 +21,84 @@ export function GlobalAudioController() {
 
   // Use atomic selectors to avoid subscribing to rapidly changing state
   const audioUrl = usePlayerStore((s) => s.audioUrl)
+  const audioTitle = usePlayerStore((s) => s.audioTitle)
+  const coverArtUrl = usePlayerStore((s) => s.coverArtUrl)
+  const episodeMetadata = usePlayerStore((s) => s.episodeMetadata)
   const isPlaying = usePlayerStore((s) => s.isPlaying)
   const volume = usePlayerStore((s) => s.volume)
   const playbackRate = usePlayerStore((s) => s.playbackRate)
   const pendingSeek = usePlayerStore((s) => s.pendingSeek)
+
+  const coverArtBlobUrl = useImageObjectUrl(coverArtUrl instanceof Blob ? coverArtUrl : null)
+  const artworkUrl = typeof coverArtUrl === 'string' ? coverArtUrl : coverArtBlobUrl
+
+  const currentTrack = useMemo(() => {
+    if (!audioUrl) return null
+    return {
+      audioUrl,
+      title: audioTitle || '',
+      artist: episodeMetadata?.podcastTitle,
+      artworkUrl: artworkUrl ?? null,
+    }
+  }, [audioTitle, artworkUrl, audioUrl, episodeMetadata?.podcastTitle])
+
+  const handlePlay = useCallback(() => {
+    usePlayerStore.getState().play()
+  }, [])
+
+  const handlePause = useCallback(() => {
+    usePlayerStore.getState().pause()
+  }, [])
+
+  const handlePrev = useCallback(() => {
+    const { currentIndex, subtitles, progress, duration, seekTo } = usePlayerStore.getState()
+    if (currentIndex > 0 && subtitles[currentIndex - 1]) {
+      seekTo(subtitles[currentIndex - 1].start)
+      return
+    }
+
+    const target = Math.max(0, Math.min(duration || 0, progress - TRACK_SKIP_SECONDS))
+    if (duration > 0 || target === 0) seekTo(target)
+  }, [])
+
+  const handleNext = useCallback(() => {
+    const { currentIndex, subtitles, progress, duration, seekTo } = usePlayerStore.getState()
+    if (currentIndex >= 0 && currentIndex < subtitles.length - 1 && subtitles[currentIndex + 1]) {
+      seekTo(subtitles[currentIndex + 1].start)
+      return
+    }
+
+    const target = Math.max(0, Math.min(duration || 0, progress + TRACK_SKIP_SECONDS))
+    if (duration > 0) seekTo(target)
+  }, [])
+
+  const handleSeekRelative = useCallback((deltaSeconds: number) => {
+    const { progress, duration, seekTo } = usePlayerStore.getState()
+    if (!duration) return
+    const target = Math.max(0, Math.min(duration, progress + deltaSeconds))
+    seekTo(target)
+  }, [])
+
+  const handleSeek = useCallback((timeSeconds: number) => {
+    const { duration, seekTo } = usePlayerStore.getState()
+    if (!duration || !Number.isFinite(timeSeconds)) return
+    const target = Math.max(0, Math.min(duration, timeSeconds))
+    seekTo(target)
+  }, [])
+
+  const mediaSessionActions = useMemo(
+    () => ({
+      play: handlePlay,
+      pause: handlePause,
+      prev: handlePrev,
+      next: handleNext,
+      seekRelative: handleSeekRelative,
+      seek: handleSeek,
+    }),
+    [handleNext, handlePause, handlePlay, handlePrev, handleSeek, handleSeekRelative]
+  )
+
+  useMediaSession(currentTrack, mediaSessionActions)
 
   // Audio event handlers - persistent across routes
   // Use getState() for store actions to avoid subscription

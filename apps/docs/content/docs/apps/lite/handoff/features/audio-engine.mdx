@@ -27,6 +27,7 @@ title: Audio Engine
 ### Player Basic Capabilities
 
 - **Audio Playback**: HTML5 `<audio>` element mounted in `__root.tsx`, persisted across routes
+- **Media Session**: `useMediaSession` in `GlobalAudioController` updates `navigator.mediaSession` metadata (title/podcast title/artwork) and wires OS actions (play/pause/prev/next/seek).
 - **Playback Rate Control**: 0.8x ~ 2.0x, managed by `playerStore.playbackRate`, persisted to localStorage via `storage.ts`'s `setJson`. FullPlayer reads store state and provides rate switch button.
 - **Volume Control**: 0-1 range, persisted to localStorage via `storage.ts` (`usePlayerStore`)
 - **Progress Control**: Slider directly calls `seekTo()` interface, unified seek after user drag ends

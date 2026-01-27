@@ -27,6 +27,7 @@ title: Audio Engine
 ### 播放器基础能力
 
 - **音频播放**：HTML5 `<audio>` 元素在 `__root.tsx` 中挂载，跨路由持久化
+- **媒体会话**：`GlobalAudioController` 中的 `useMediaSession` 更新 `navigator.mediaSession` 元数据（标题/播客标题/封面）并注册系统控制动作（播放/暂停/上一条/下一条/快退/快进/跳转）。
 - **播放速率控制**: 0.8x ~ 2.0x，通过 `playerStore.playbackRate` 管理，持久化通过 `storage.ts` 的 `setJson` 写入 localStorage。FullPlayer 读取 store 状态并提供速率切换按钮。
 - **音量控制**：0-1 范围，通过 `storage.ts` 持久化到 localStorage（`usePlayerStore`）
 - **进度控制**：Slider 直接调用 `seekTo()` 接口，用户拖拽结束后统一 seek
