@@ -41,6 +41,12 @@ title: Audio Engine
     - `pause()` → Set `isPlaying: false` and status to `paused`.
     - Errors → Set status to `error`.
   - **Autoplay Policy**: Blocked autoplay (`NotAllowedError`) is caught in `GlobalAudioController`, fails silently to `paused` state, and shows `player.autoplayBlocked` toast.
+- **Unit Testing**: Strict tests in `playerStore.test.ts` and `GlobalAudioController.test.tsx` ensure regression-free status transitions and resource cleanup (revoking object URLs).
+- **Sleep Timer**: 
+  - Managed by `useSleepTimerStore` and `useSleepTimer` hook.
+  - Options: 15m, 30m, End of Episode.
+  - Ticker logic is encapsulated within `useSleepTimerStore` to ensure a consistent singleton countdown across all components.
+  - Reverts to `paused` state upon expiration.
 
 ---
 

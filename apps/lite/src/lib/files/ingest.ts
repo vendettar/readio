@@ -157,7 +157,41 @@ export async function ingestFiles(params: IngestParams): Promise<IngestResult> {
     }
 
     // Fallback to 0 if metadata didn't provide it (will be updated on play)
-    const durationSeconds = metadataDuration || 0
+    let durationSeconds = metadataDuration || 0
+
+    // CRITICAL FIX: If metadata worker failed to get duration, try Audio element fallback
+    // This is useful for browser-supported formats like MP3/WAV that the worker might miss.
+    if (durationSeconds <= 0 && typeof Audio !== 'undefined') {
+      try {
+        const audio = new Audio(URL.createObjectURL(file))
+        durationSeconds = await new Promise((resolve) => {
+          audio.addEventListener(
+            'loadedmetadata',
+            () => {
+              const d = audio.duration
+              URL.revokeObjectURL(audio.src)
+              resolve(d && Number.isFinite(d) ? d : 0)
+            },
+            { once: true }
+          )
+          audio.addEventListener(
+            'error',
+            () => {
+              URL.revokeObjectURL(audio.src)
+              resolve(0)
+            },
+            { once: true }
+          )
+          // Safety timeout
+          setTimeout(() => {
+            URL.revokeObjectURL(audio.src)
+            resolve(0)
+          }, 2000)
+        })
+      } catch (err) {
+        log('[Files] Audio element duration fallback failed:', err)
+      }
+    }
 
     // Use metadata title if available, otherwise fallback to filename without extension
     let baseName = metadataTitle || file.name.replace(/\.[^/.]+$/, '')

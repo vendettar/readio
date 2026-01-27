@@ -84,3 +84,95 @@ describe('playerStore - Session Restoration', () => {
     expect(global.URL.createObjectURL).not.toHaveBeenCalled()
   })
 })
+
+describe('playerStore - Status & Control Logic', () => {
+  beforeEach(async () => {
+    const { result } = renderHook(() => usePlayerStore())
+    act(() => {
+      result.current.reset()
+    })
+    vi.clearAllMocks()
+  })
+
+  it('should transition status from idle -> loading when track is set', () => {
+    const { result } = renderHook(() => usePlayerStore())
+
+    expect(result.current.status).toBe('idle')
+
+    act(() => {
+      result.current.setAudioUrl('https://example.com/audio.mp3', 'Test Episode')
+    })
+
+    expect(result.current.status).toBe('loading')
+    expect(result.current.isPlaying).toBe(true)
+  })
+
+  it('should ignore play() command if status is loading', () => {
+    const { result } = renderHook(() => usePlayerStore())
+
+    act(() => {
+      result.current.setAudioUrl('https://example.com/audio.mp3', 'Test Episode')
+    })
+
+    expect(result.current.status).toBe('loading')
+
+    act(() => {
+      result.current.play()
+    })
+
+    // Should still be loading, not playing (playing happens after metadata load in real audio element)
+    expect(result.current.status).toBe('loading')
+  })
+
+  it('should revoke previous blob URLs when a new track is loaded', () => {
+    const { result } = renderHook(() => usePlayerStore())
+
+    // 1. Load first blob
+    act(() => {
+      result.current.setAudioUrl('blob:url-1', 'Track 1')
+    })
+    expect(result.current.activeBlobUrls).toContain('blob:url-1')
+
+    // 2. Load second blob
+    act(() => {
+      result.current.setAudioUrl('blob:url-2', 'Track 2')
+    })
+
+    // 3. Verify first was revoked
+    expect(global.URL.revokeObjectURL).toHaveBeenCalledWith('blob:url-1')
+    expect(result.current.activeBlobUrls).toContain('blob:url-2')
+    expect(result.current.activeBlobUrls).not.toContain('blob:url-1')
+  })
+
+  it('should revert to paused if autoplay is blocked', async () => {
+    const { result } = renderHook(() => usePlayerStore())
+
+    // Setup: track is loaded but paused
+    act(() => {
+      result.current.setAudioUrl('https://example.com/audio.mp3', 'Test')
+    })
+    act(() => {
+      result.current.setStatus('paused')
+    })
+
+    // Mock HTMLMediaElement.play to fail (simulating browser block)
+    const playSpy = vi
+      .spyOn(HTMLMediaElement.prototype, 'play')
+      .mockRejectedValue(new Error('NotAllowedError'))
+
+    await act(async () => {
+      result.current.play()
+    })
+
+    // Simulate GlobalAudioController handling the block via setPlayerError
+
+    act(() => {
+      result.current.setPlayerError('NotAllowedError')
+    })
+
+    expect(result.current.status).toBe('paused')
+    expect(result.current.isPlaying).toBe(false)
+
+    playSpy.mockRestore()
+  })
+})

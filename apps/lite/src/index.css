@@ -70,6 +70,7 @@
     --z-overlay: 60;
     --z-modal: 100;
     --z-full-player: var(--z-modal);
+    --z-menu: 150;
   }
 
   @media (max-width: 640px) {

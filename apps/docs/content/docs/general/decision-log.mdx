@@ -258,3 +258,11 @@ description: Architecture decisions and rationale.
 - **Decision**: Migrate all physical CSS properties (`left`, `right`, `ml`, `mr`, `pl`, `pr`, `text-left`, `text-right`, `border-l`, `border-r`) to their logical equivalents (`start`, `end`, `ms`, `me`, `ps`, `pe`, `text-start`, `text-end`, `border-s`, `border-e`).
 - **Rationale**: Enables seamless support for Right-to-Left (RTL) languages (e.g., Arabic, Hebrew) without duplicating CSS rules or using complex overrides. Aligns with modern web standards and improves future accessibility.
 - **Constraint**: Directional icons must be explicitly flipped using `className="rtl:rotate-180"` where appropriate.
+
+## D061 — Sleep Timer Architecture
+- **Decision**: Centralize the sleep timer countdown ticker in `GlobalAudioController.tsx`, while maintaining the state in a unified `useSleepTimerStore`.
+- **Rationale**: Ensures the countdown persists across page navigation (since the controller is persistent) and prevents redundant counters or "speeding up" bugs when multiple hook instances are used in different components. The player should revert to a `paused` state when the timer expires.
+
+## D062 — Tooltip Wrapping for Overlays
+- **Decision**: Standardize wrapping `DropdownMenuTrigger` or `PopoverTrigger` with `Tooltip` for icon-only buttons that also provide transient state feedback (e.g., remaining sleep timer time). 
+- **Rationale**: Adheres to the "Icon-only buttons MUST have a Tooltip" rule while allowing rich interaction on click.

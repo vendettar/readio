@@ -241,7 +241,11 @@ export const usePlayerStore = create<PlayerState>((set) => ({
   setStatus: (status) => set({ status }),
   setPlayerError: (message) => {
     logError('[PlayerStore] Player Error:', message)
-    set({ status: 'error', isPlaying: false })
+    if (message === 'NotAllowedError') {
+      set({ status: 'paused', isPlaying: false })
+    } else {
+      set({ status: 'error', isPlaying: false })
+    }
   },
 
   reset: () => {

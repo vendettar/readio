@@ -26,7 +26,7 @@ const DropdownMenuContent = React.forwardRef<
         onClick?.(event)
       }}
       className={cn(
-        'z-50 min-w-[8rem] overflow-hidden rounded-xl border border-border/50 bg-popover/95 backdrop-blur-xl backdrop-saturate-150 p-0 text-popover-foreground shadow-2xl',
+        'z-menu min-w-[8rem] overflow-hidden rounded-xl border border-border/50 bg-popover/95 backdrop-blur-xl backdrop-saturate-150 p-0 text-popover-foreground shadow-2xl',
         'data-[state=open]:animate-in data-[state=closed]:animate-out',
         'data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
         'data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',

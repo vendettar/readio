@@ -41,6 +41,12 @@ title: Audio Engine
     - `pause()` → 设置 `isPlaying: false` 并将状态设为 `paused`。
     - 错误 → 将状态设为 `error`。
   - **自动播放策略**：被浏览器拦截的自动播放（`NotAllowedError`）会在 `GlobalAudioController` 中捕获，静默回退到 `paused` 状态，并弹出 `player.autoplayBlocked` 提示。
+- **单元测试**：在 `playerStore.test.ts` 和 `GlobalAudioController.test.tsx` 中有严格测试，确保状态转换和资源清理（撤销 Object URL）无回归。
+- **睡眠定时器**：
+  - 由 `useSleepTimerStore` 和 `useSleepTimer` 钩子管理。
+  - 选项：15分钟、30分钟、单集结束。
+  - 倒计时逻辑封装在 `useSleepTimerStore` 中，以确保跨组件的单例计时器一致性。
+  - 计时结束或单集播放结束后自动回退到 `paused` 状态。
 
 ---
 

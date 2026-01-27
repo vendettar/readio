@@ -383,6 +383,11 @@ export const translations = {
     'offline.badge': '离线模式 - 仅本地文件可用',
     'offline.error': '网络连接未就绪',
     'player.autoplayBlocked': '播放被浏览器拦截。请点击播放按钮以恢复。',
+    'timer.15m': '15 分钟',
+    'timer.30m': '30 分钟',
+    'timer.endOfEpisode': '单集结束时',
+    'timer.cancel': '取消定时器',
+    'timer.remaining': '剩余 {{time}}',
   },
   en: {
     dropTitleIntro: 'Drag & drop or click to add MP3 and SRT files',
@@ -758,6 +763,11 @@ export const translations = {
     'offline.badge': 'Offline Mode - Only local files available',
     'offline.error': 'No internet connection',
     'player.autoplayBlocked': 'Playback blocked by browser. Click play to resume.',
+    'timer.15m': '15 minutes',
+    'timer.30m': '30 minutes',
+    'timer.endOfEpisode': 'End of Episode',
+    'timer.cancel': 'Cancel Timer',
+    'timer.remaining': '{{time}} remaining',
   },
   ja: {
     dropTitleIntro: 'MP3 と SRT をドラッグ＆ドロップ / クリックで追加',
@@ -1128,6 +1138,13 @@ export const translations = {
     ariaPlayEpisode: 'エピソードを再生',
     episodeWebpage: '単集ウェブページ',
     errorPodcastFeedNotFound: 'この番組の内容を読み込めませんでした。',
+    'player.autoplayBlocked':
+      'ブラウザによって再生がブロックされました。再生ボタンをクリックして再開してください。',
+    'timer.15m': '15分',
+    'timer.30m': '30分',
+    'timer.endOfEpisode': 'エピソード終了時',
+    'timer.cancel': 'タイマーをキャンセル',
+    'timer.remaining': '残り {{time}}',
   },
   ko: {
     dropTitleIntro: 'MP3 · SRT를 드래그하거나 클릭해서 추가',
@@ -1494,6 +1511,13 @@ export const translations = {
     ariaPlayEpisode: '에피소드 재생',
     episodeWebpage: '에피소드 웹페이지',
     errorPodcastFeedNotFound: '프로그램 내용을 불러올 수 없습니다.',
+    'player.autoplayBlocked':
+      '브라우저에서 재생이 차단되었습니다. 재생 버튼을 클릭해서 다시 시도하세요.',
+    'timer.15m': '15분',
+    'timer.30m': '30분',
+    'timer.endOfEpisode': '에피소드 종료 시',
+    'timer.cancel': '타이머 취소',
+    'timer.remaining': '{{time}} 남음',
   },
   de: {
     dropTitleIntro: 'MP3 und SRT per Drag & Drop oder Klick hinzufügen',
@@ -1868,6 +1892,13 @@ export const translations = {
     ariaPlayEpisode: 'Folge abspielen',
     episodeWebpage: 'Episoden-Webseite',
     errorPodcastFeedNotFound: 'Inhalt der Sendung konnte nicht geladen werden.',
+    'player.autoplayBlocked':
+      'Wiedergabe durch Browser blockiert. Klicken Sie auf Play, um fortzufahren.',
+    'timer.15m': '15 Minuten',
+    'timer.30m': '30 Minuten',
+    'timer.endOfEpisode': 'Ende der Episode',
+    'timer.cancel': 'Timer abbrechen',
+    'timer.remaining': 'Noch {{time}}',
   },
   es: {
     dropTitleIntro: 'Arrastra o haz clic para subir archivos MP3 y SRT',
@@ -2237,5 +2268,12 @@ export const translations = {
     ariaPlayEpisode: 'Reproducir episodio',
     episodeWebpage: 'Página web del episodio',
     errorPodcastFeedNotFound: 'No se ha podido cargar el contenido de este programa.',
+    'player.autoplayBlocked':
+      'Reproducción bloqueada por el navegador. Haz clic en reproducir para reanudar.',
+    'timer.15m': '15 minutos',
+    'timer.30m': '30 minutos',
+    'timer.endOfEpisode': 'Fin del episodio',
+    'timer.cancel': 'Cancelar temporizador',
+    'timer.remaining': 'Quedan {{time}}',
   },
 } as const

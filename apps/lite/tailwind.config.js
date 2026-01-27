@@ -123,6 +123,7 @@ export default {
         overlay: 'var(--z-overlay)',
         modal: 'var(--z-modal)',
         'full-player': 'var(--z-full-player)',
+        menu: 'var(--z-menu)',
       },
     },
   },

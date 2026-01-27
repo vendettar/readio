@@ -14,6 +14,7 @@ import { useTabSync } from '../../hooks/useTabSync'
 import { warn } from '../../lib/logger'
 import { toast } from '../../lib/toast'
 import { usePlayerStore } from '../../store/playerStore'
+import { useSleepTimerStore } from '../../store/sleepTimerStore'
 
 const TRACK_SKIP_SECONDS = 10
 
@@ -131,6 +132,11 @@ export function GlobalAudioController() {
     const onEnded = () => {
       usePlayerStore.getState().updateProgress(audio.duration || audio.currentTime)
       usePlayerStore.getState().pause()
+
+      // Reset sleep timer if it was set to end of episode
+      if (useSleepTimerStore.getState().isEndOfEpisode) {
+        useSleepTimerStore.getState().reset()
+      }
     }
     const onWaiting = () => {
       const { isPlaying } = usePlayerStore.getState()
@@ -193,17 +199,20 @@ export function GlobalAudioController() {
 
     if (isPlaying) {
       if (status === 'error') return
-      audio.play().catch((err) => {
-        // AbortError is normal when stopping/switching tracks rapidly
-        if (err.name === 'AbortError') return
+      const playPromise = audio.play()
+      if (playPromise !== undefined) {
+        playPromise.catch((err) => {
+          // AbortError is normal when stopping/switching tracks rapidly
+          if (err.name === 'AbortError') return
 
-        warn('[Player] play() failed', { error: err, audioUrl })
-        // If it was a block, let the user know
-        if (err.name === 'NotAllowedError') {
-          usePlayerStore.getState().pause()
-          toast.infoKey('player.autoplayBlocked')
-        }
-      })
+          warn('[Player] play() failed', { error: err, audioUrl })
+          // If it was a block, let the user know
+          if (err.name === 'NotAllowedError') {
+            usePlayerStore.getState().pause()
+            toast.infoKey('player.autoplayBlocked')
+          }
+        })
+      }
     } else {
       audio.pause()
     }

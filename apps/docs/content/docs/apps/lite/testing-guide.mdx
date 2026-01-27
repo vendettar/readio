@@ -38,19 +38,19 @@ beforeEach(() => {
 })
 ```
 
-## 3. Audio & Hardware Testing (The Mock Rule)
-
-**Problem**: JSDOM does not implement `HTMLAudioElement.play()` or `pause()`. They throw errors.
-
-**Rule**: Always use the global audio mock defined in `setup.ts`.
-- **Spying**: Use `vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue()` to verify that an action triggers a hardware call.
-- **Events**: Manually trigger events to test store feedback loops:
-  ```ts
   const audio = document.querySelector('audio')!;
-  audio.currentTime = 10;
-  audio.dispatchEvent(new Event('timeupdate'));
+  Object.defineProperty(audio, 'currentTime', { get: () => 10, configurable: true });
+  fireEvent.timeUpdate(audio);
   // Verify store.progress is now 10.
   ```
+
+## 4. Hardware Mocks (Audio Engine)
+
+Tests in `apps/lite/src/store/__tests__/playerStore.test.ts` and `apps/lite/src/components/AppShell/__tests__/GlobalAudioController.test.tsx` cover:
+- **Status Enum Transitions**: `idle` -> `loading` -> `playing` | `paused`.
+- **Resource Management**: Verification that `URL.revokeObjectURL` is called when switching tracks.
+- **Autoplay Blocks**: Ensuring store reverts to correctly handled state if `audio.play()` rejects.
+- **Feedback Loops**: Verifying that events from the `<audio>` element (timeupdate, durationchange) correctly update the centralized store.
 
 ## 4. Time-Based Tests
 

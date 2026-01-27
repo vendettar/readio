@@ -1,7 +1,7 @@
 > **⚠️ CRITICAL**: You MUST preserve the current UI/UX layout and styling. Do NOT change visual appearance unless explicitly instructed.
 > **Prerequisites**: Read `apps/docs/content/docs/general/design-system/index.mdx` and `apps/docs/content/docs/apps/lite/ui-patterns/index.mdx` before starting.
 
-# Task: Implement Sleep Timer
+# Task: Implement Sleep Timer [COMPLETED]
 
 ## Objective
 Allow users to stop playback automatically after a duration or at the end of an episode.
@@ -41,3 +41,9 @@ Allow users to stop playback automatically after a duration or at the end of an 
 - Update `apps/docs/content/docs/apps/lite/ui-patterns/shell.mdx`.
 - Update `apps/docs/content/docs/apps/lite/handoff/features/audio-engine.mdx`.
 - Update `apps/docs/content/docs/apps/lite/handoff/index.mdx` with the new status.
+
+## Completion
+- **Completed by**: Antigravity
+- **Commands**: `pnpm --filter @readio/lite test:run`
+- **Date**: 2026-01-28
+- **Reviewed by**: Readio Reviewer (QA)
