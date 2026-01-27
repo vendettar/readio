@@ -39,8 +39,9 @@ export function GlobalAudioController() {
       title: audioTitle || '',
       artist: episodeMetadata?.podcastTitle,
       artworkUrl: artworkUrl ?? null,
+      artworkType: coverArtUrl instanceof Blob ? coverArtUrl.type : undefined,
     }
-  }, [audioTitle, artworkUrl, audioUrl, episodeMetadata?.podcastTitle])
+  }, [audioTitle, artworkUrl, audioUrl, episodeMetadata?.podcastTitle, coverArtUrl])
 
   const handlePlay = useCallback(() => {
     usePlayerStore.getState().play()

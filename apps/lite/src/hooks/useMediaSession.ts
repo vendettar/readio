@@ -5,6 +5,7 @@ type MediaSessionTrack = {
   title: string
   artist?: string
   artworkUrl?: string | null
+  artworkType?: string
 }
 
 type MediaSessionActions = {
@@ -35,6 +36,23 @@ function setHandler(action: MediaSessionAction, handler: MediaSessionActionHandl
   }
 }
 
+function getMimeTypeFromUrl(url: string): string | undefined {
+  const extension = url.split(/[#?]/)[0].split('.').pop()?.toLowerCase()
+  switch (extension) {
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg'
+    case 'png':
+      return 'image/png'
+    case 'webp':
+      return 'image/webp'
+    case 'gif':
+      return 'image/gif'
+    default:
+      return undefined
+  }
+}
+
 export function useMediaSession(
   currentTrack: MediaSessionTrack | null,
   actions: MediaSessionActions,
@@ -53,7 +71,7 @@ export function useMediaSession(
           {
             src: currentTrack.artworkUrl,
             sizes: '512x512',
-            type: 'image/jpeg', // Most podcast artworks are JPEGs
+            type: currentTrack.artworkType || getMimeTypeFromUrl(currentTrack.artworkUrl),
           },
         ]
       : undefined
