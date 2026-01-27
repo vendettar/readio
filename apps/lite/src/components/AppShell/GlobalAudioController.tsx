@@ -98,7 +98,12 @@ export function GlobalAudioController() {
     [handleNext, handlePause, handlePlay, handlePrev, handleSeek, handleSeekRelative]
   )
 
-  useMediaSession(currentTrack, mediaSessionActions)
+  const playbackStatus = useMemo(() => {
+    if (!audioUrl) return 'none'
+    return isPlaying ? 'playing' : 'paused'
+  }, [audioUrl, isPlaying])
+
+  useMediaSession(currentTrack, mediaSessionActions, playbackStatus)
 
   // Audio event handlers - persistent across routes
   // Use getState() for store actions to avoid subscription

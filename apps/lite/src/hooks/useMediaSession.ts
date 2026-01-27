@@ -37,7 +37,8 @@ function setHandler(action: MediaSessionAction, handler: MediaSessionActionHandl
 
 export function useMediaSession(
   currentTrack: MediaSessionTrack | null,
-  actions: MediaSessionActions
+  actions: MediaSessionActions,
+  playbackStatus?: 'playing' | 'paused' | 'none'
 ) {
   useEffect(() => {
     if (!canUseMediaSession()) return
@@ -51,6 +52,8 @@ export function useMediaSession(
       ? [
           {
             src: currentTrack.artworkUrl,
+            sizes: '512x512',
+            type: 'image/jpeg', // Most podcast artworks are JPEGs
           },
         ]
       : undefined
@@ -63,6 +66,11 @@ export function useMediaSession(
       })
     }
   }, [currentTrack])
+
+  useEffect(() => {
+    if (!canUseMediaSession()) return
+    navigator.mediaSession.playbackState = playbackStatus || 'none'
+  }, [playbackStatus])
 
   useEffect(() => {
     if (!canUseMediaSession()) return
