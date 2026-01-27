@@ -124,7 +124,7 @@ export function MiniPlayer() {
   return (
     <div
       className={cn(
-        'fixed bottom-0 right-0 bg-card border-t border-border z-mini-player',
+        'fixed bottom-0 end-0 bg-card border-t border-border z-mini-player',
         'flex items-center justify-between px-6',
         'w-[calc(100%-var(--sidebar-width))] h-mini-player',
         isDisabled && 'opacity-50'
@@ -151,7 +151,7 @@ export function MiniPlayer() {
           className="h-8 w-8 text-muted-foreground hover:text-foreground"
           aria-label={t('btnPrev')}
         >
-          <SkipBack size={16} fill="currentColor" />
+          <SkipBack size={16} fill="currentColor" className="rtl:rotate-180" />
         </Button>
 
         {/* Play/Pause */}
@@ -168,7 +168,7 @@ export function MiniPlayer() {
           ) : isPlaying ? (
             <Pause size={20} fill="currentColor" />
           ) : (
-            <Play size={20} fill="currentColor" className="ml-0.5" />
+            <Play size={20} fill="currentColor" className="ms-0.5" />
           )}
         </Button>
 
@@ -181,7 +181,7 @@ export function MiniPlayer() {
           className="h-8 w-8 text-muted-foreground hover:text-foreground"
           aria-label={t('btnNext')}
         >
-          <SkipForward size={16} fill="currentColor" />
+          <SkipForward size={16} fill="currentColor" className="rtl:rotate-180" />
         </Button>
 
         {/* Repeat/Loop */}
@@ -289,7 +289,7 @@ export function MiniPlayer() {
       {/* Right Section: Volume + Utilities */}
       <div className="flex items-center gap-1 sm:gap-2">
         {/* Volume Control */}
-        <div className="hidden lg:flex items-center gap-2 mr-3">
+        <div className="hidden lg:flex items-center gap-2 me-3">
           {/* Clickable volume icon - toggles mute */}
           <Button
             variant="ghost"

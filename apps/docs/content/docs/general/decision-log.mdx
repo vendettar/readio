@@ -253,3 +253,8 @@ description: Architecture decisions and rationale.
 ## D059 — Shared Element Transition Scoping
 - **Decision**: If the same logical object appears multiple times on a single page, the `layoutId` MUST be scoped with a unique prefix (e.g., `sectionId`). Navigation to detail pages MUST pass this prefix via search parameters (`fromLayoutPrefix`) to enable context-aware target matching.
 - **Rationale**: Prevents Framer Motion from becoming conflicted when duplicate content exists in different UI sections, resolving bugs where images disappear or components become unclickable during transitions.
+
+## D060 — Logical Properties Migration (RTL Support)
+- **Decision**: Migrate all physical CSS properties (`left`, `right`, `ml`, `mr`, `pl`, `pr`, `text-left`, `text-right`, `border-l`, `border-r`) to their logical equivalents (`start`, `end`, `ms`, `me`, `ps`, `pe`, `text-start`, `text-end`, `border-s`, `border-e`).
+- **Rationale**: Enables seamless support for Right-to-Left (RTL) languages (e.g., Arabic, Hebrew) without duplicating CSS rules or using complex overrides. Aligns with modern web standards and improves future accessibility.
+- **Constraint**: Directional icons must be explicitly flipped using `className="rtl:rotate-180"` where appropriate.

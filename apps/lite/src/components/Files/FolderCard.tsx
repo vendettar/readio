@@ -210,7 +210,7 @@ export function FolderCard({
         <div
           className={cn(
             'absolute text-muted-foreground',
-            isCompact ? 'top-1 left-1.5' : 'top-2 left-2'
+            isCompact ? 'top-1 start-1.5' : 'top-2 start-2'
           )}
         >
           <Pin size={12} className="rotate-45" />
@@ -271,7 +271,7 @@ export function FolderCard({
                     <X size={10} strokeWidth={3} />
                     <span>{t('folderNameConflict')}</span>
                     {/* Arrow */}
-                    <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-destructive rotate-45" />
+                    <div className="absolute -bottom-1 start-1/2 -translate-x-1/2 w-2 h-2 bg-destructive rotate-45" />
                   </div>
                 </PopoverContent>
               </Popover>
@@ -318,7 +318,7 @@ export function FolderCard({
       {!isDragging && (
         <div
           className={cn(
-            'absolute top-1 right-1 transition-opacity z-20',
+            'absolute top-1 end-1 transition-opacity z-20',
             isMenuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
           )}
         >

@@ -130,7 +130,7 @@ export function FolderOverflowMenu({
                 handleMenuOpenChange(false)
               }}
             >
-              {isPinned ? <PinOff className="mr-2 h-4 w-4" /> : <Pin className="mr-2 h-4 w-4" />}
+              {isPinned ? <PinOff className="me-2 h-4 w-4" /> : <Pin className="me-2 h-4 w-4" />}
               <span>{isPinned ? t('folderUnpin') : t('folderPinToTop')}</span>
             </DropdownMenuItem>
 
@@ -142,7 +142,7 @@ export function FolderOverflowMenu({
                 handleMenuOpenChange(false)
               }}
             >
-              <Pencil className="mr-2 h-4 w-4" />
+              <Pencil className="me-2 h-4 w-4" />
               <span>{t('folderRename')}</span>
             </DropdownMenuItem>
 
@@ -159,7 +159,7 @@ export function FolderOverflowMenu({
                 setStep('confirm')
               }}
             >
-              <Trash2 className="mr-2 h-4 w-4" />
+              <Trash2 className="me-2 h-4 w-4" />
               <span>{t('folderDelete')}</span>
             </DropdownMenuItem>
           </div>

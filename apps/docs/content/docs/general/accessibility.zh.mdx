@@ -53,6 +53,18 @@ Readio 必须对每个人都可用。
 - 确保文本在背景下可读。
 - 小心使用 Tailwind 的 `text-muted-foreground`——确保它不会太微弱。
 
+## 6. RTL 支持与逻辑属性
+
+Readio 支持从右到左 (RTL) 的语言。
+- **逻辑属性**: 始终使用逻辑属性而不是物理属性。
+  - ❌ `ml-`, `mr-` -> ✅ `ms-`, `me-` (Margin Start/End)
+  - ❌ `pl-`, `pr-` -> ✅ `ps-`, `pe-` (Padding Start/End)
+  - ❌ `left-`, `right-` -> ✅ `start-`, `end-`
+  - ❌ `text-left`, `text-right` -> ✅ `text-start`, `text-end`
+- **图标翻转**: 指向性的图标 (箭头、折叠、跳过) 在 RTL 下应当翻转。
+  - 使用 `className="rtl:rotate-180"`。
+- **测试**: 在 `html` 标签上添加 `dir="rtl"` 以验证布局。
+
 ---
 
 ## 计划中（待执行）

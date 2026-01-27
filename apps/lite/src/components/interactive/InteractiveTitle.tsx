@@ -51,7 +51,7 @@ export function InteractiveTitle({
         variant="text"
         onClick={onClick}
         className={cn(
-          'p-0 h-auto text-left font-semibold inline-flex items-start whitespace-normal justify-start self-start',
+          'p-0 h-auto text-start font-semibold inline-flex items-start whitespace-normal justify-start self-start',
           buttonClassName,
           className
         )}
@@ -71,7 +71,7 @@ export function InteractiveTitle({
         asChild
         variant="text"
         className={cn(
-          'p-0 h-auto text-left font-semibold inline-flex items-start whitespace-normal justify-start self-start',
+          'p-0 h-auto text-start font-semibold inline-flex items-start whitespace-normal justify-start self-start',
           buttonClassName
         )}
       >
@@ -94,7 +94,7 @@ export function InteractiveTitle({
   return (
     <span
       className={cn(
-        'text-left font-semibold inline-flex items-start whitespace-normal justify-start self-start',
+        'text-start font-semibold inline-flex items-start whitespace-normal justify-start self-start',
         className
       )}
     >

@@ -104,7 +104,7 @@ export function EpisodeRow({
           }}
           className="text-sm font-medium focus:bg-primary focus:text-primary-foreground whitespace-nowrap cursor-pointer"
         >
-          <Star size={14} className={cn('mr-2', favorited && 'fill-current')} />
+          <Star size={14} className={cn('me-2', favorited && 'fill-current')} />
           {favorited ? t('favoritesRemove') : t('favoritesAdd')}
         </DropdownMenuItem>
       </OverflowMenu>

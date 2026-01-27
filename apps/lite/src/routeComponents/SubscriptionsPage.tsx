@@ -59,7 +59,7 @@ export default function SubscriptionsPage() {
             action={
               <Button asChild onClick={() => navigate({ to: '/explore' })}>
                 <Link to="/explore">
-                  <Compass className="w-4 h-4 mr-2" />
+                  <Compass className="w-4 h-4 me-2" />
                   {t('navExplore')}
                 </Link>
               </Button>

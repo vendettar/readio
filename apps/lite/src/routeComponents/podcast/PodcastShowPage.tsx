@@ -185,14 +185,14 @@ export default function PodcastShowPage() {
                     {cleanDescription}
                   </div>
                   {!isDescriptionExpanded && shouldTruncateDescription && (
-                    <div className="absolute bottom-0 right-0 flex items-end">
+                    <div className="absolute bottom-0 end-0 flex items-end">
                       {/* Precision fade effect only on the last line before "MORE" - Matches background */}
-                      <div className="w-16 h-5 bg-gradient-to-r from-transparent via-background/80 to-background" />
+                      <div className="w-16 h-5 bg-gradient-to-e from-transparent via-background/80 to-background" />
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => setIsDescriptionExpanded(true)}
-                        className="text-xs text-primary hover:underline font-bold h-auto p-0 bg-background pr-0.5 tracking-tight uppercase hover:bg-transparent"
+                        className="text-xs text-primary hover:underline font-bold h-auto p-0 bg-background pe-0.5 tracking-tight uppercase hover:bg-transparent"
                       >
                         {t('showMore')}
                       </Button>
@@ -212,7 +212,7 @@ export default function PodcastShowPage() {
             </div>
 
             {/* Primary Interactions - Aligned to bottom */}
-            <div className="flex items-end gap-3 pt-6 pr-4">
+            <div className="flex items-end gap-3 pt-6 pe-4">
               {feed?.episodes?.[0] && (
                 <Button
                   onClick={() => playEpisode(feed.episodes[0], podcast)}
@@ -227,7 +227,7 @@ export default function PodcastShowPage() {
                 variant="ghost"
                 onClick={handleSubscribe}
                 className={cn(
-                  'h-8 rounded-full text-primary font-bold text-xs active:scale-95 bg-muted/70 hover:bg-muted transition-all duration-300 ease-out overflow-hidden ml-auto',
+                  'h-8 rounded-full text-primary font-bold text-xs active:scale-95 bg-muted/70 hover:bg-muted transition-all duration-300 ease-out overflow-hidden ms-auto',
                   isSubscribed ? 'w-8 p-0' : 'px-3'
                 )}
                 aria-label={isSubscribed ? t('unsubscribe') : t('subscribe')}
@@ -283,7 +283,7 @@ export default function PodcastShowPage() {
                   <h2 className="text-xl font-bold">{t('episodesTitle')}</h2>
                   <ChevronRight
                     size={20}
-                    className="text-muted-foreground group-hover:text-foreground transition-colors"
+                    className="text-muted-foreground group-hover:text-foreground transition-colors rtl:rotate-180"
                   />
                 </Link>
               </Button>

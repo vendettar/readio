@@ -67,7 +67,7 @@ export function PodcastCard({
   const [isMenuOpen, setIsMenuOpen] = React.useState(false)
 
   const containerClasses = cn(
-    'group/card relative flex flex-col items-start text-left h-auto p-0 bg-transparent hover:bg-transparent shadow-none w-full',
+    'group/card relative flex flex-col items-start text-start h-auto p-0 bg-transparent hover:bg-transparent shadow-none w-full',
     variant === 'circular' ? 'items-center text-center' : '',
     className
   )
@@ -88,7 +88,7 @@ export function PodcastCard({
           params={onClick ? undefined : params}
           search={onClick ? undefined : search}
           onPlay={onPlay}
-          playPosition="bottom-left"
+          playPosition="bottom-start"
           playButtonSize="sm"
           playIconSize={16}
           hoverGroup="card"
@@ -103,7 +103,7 @@ export function PodcastCard({
         {rank !== undefined && (
           <div
             className={cn(
-              'absolute bottom-2 left-2 w-7 h-7 bg-background/80 text-foreground backdrop-blur-md rounded-lg flex items-center justify-center border border-border/50 group-hover/card:opacity-0 group-hover/card:invisible transition-all duration-300 pointer-events-none shadow-sm z-30',
+              'absolute bottom-2 start-2 w-7 h-7 bg-background/80 text-foreground backdrop-blur-md rounded-lg flex items-center justify-center border border-border/50 group-hover/card:opacity-0 group-hover/card:invisible transition-all duration-300 pointer-events-none shadow-sm z-30',
               variant === 'circular' && 'hidden'
             )}
           >
@@ -115,7 +115,7 @@ export function PodcastCard({
         {menuItems && menuItems.length > 0 && (
           <div
             className={cn(
-              'absolute bottom-3 right-3 transition-all duration-300 z-30',
+              'absolute bottom-3 end-3 transition-all duration-300 z-30',
               isMenuOpen ||
                 'opacity-0 group-hover/card:opacity-100 translate-y-2 group-hover/card:translate-y-0',
               isMenuOpen && 'opacity-100 translate-y-0'
@@ -142,7 +142,7 @@ export function PodcastCard({
                       'text-destructive focus:text-destructive focus:bg-destructive/10'
                   )}
                 >
-                  {item.icon && <span className="mr-2 opacity-80">{item.icon}</span>}
+                  {item.icon && <span className="me-2 opacity-80">{item.icon}</span>}
                   <span className="font-medium">{item.label}</span>
                 </DropdownMenuItem>
               ))}

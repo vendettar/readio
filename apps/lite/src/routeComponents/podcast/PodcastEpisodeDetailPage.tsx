@@ -161,7 +161,7 @@ export default function PodcastEpisodeDetailPage() {
             <div className="hidden md:block h-14" aria-hidden="true" />
 
             {/* 2. Center Group: Perfectly centered relative to image on desktop */}
-            <div className="flex flex-col justify-center text-left">
+            <div className="flex flex-col justify-center text-start">
               {/* Line 1: Small Caps Metadata */}
               <div className="flex flex-wrap items-center gap-1.5 text-xxs font-bold tracking-widest text-muted-foreground uppercase mb-1.5">
                 {relativeTime && <span>{relativeTime}</span>}
@@ -212,7 +212,7 @@ export default function PodcastEpisodeDetailPage() {
             </div>
 
             {/* 3. Bottom Actions - Anchored to bottom of image */}
-            <div className="flex items-end gap-3 pt-6 pr-4 h-14">
+            <div className="flex items-end gap-3 pt-6 pe-4 h-14">
               <Button
                 onClick={handlePlayEpisode}
                 className="rounded-md bg-primary hover:opacity-90 text-primary-foreground px-5 h-8 font-bold text-xs flex items-center gap-1.5 shadow-none transition-all active:scale-95"
@@ -225,7 +225,7 @@ export default function PodcastEpisodeDetailPage() {
                 variant="ghost"
                 onClick={handleToggleFavorite}
                 className={cn(
-                  'h-8 rounded-full text-primary font-bold text-xs active:scale-95 bg-muted/70 hover:bg-muted transition-all duration-300 ease-out overflow-hidden ml-auto',
+                  'h-8 rounded-full text-primary font-bold text-xs active:scale-95 bg-muted/70 hover:bg-muted transition-all duration-300 ease-out overflow-hidden ms-auto',
                   favorited ? 'w-8 p-0' : 'px-3'
                 )}
                 aria-label={favorited ? t('ariaRemoveFavorite') : t('ariaAddFavorite')}
@@ -276,7 +276,7 @@ export default function PodcastEpisodeDetailPage() {
                   if (episode.transcriptUrl) openExternal(episode.transcriptUrl)
                 }}
               >
-                <FileText size={14} className="mr-1.5" />
+                <FileText size={14} className="me-1.5" />
                 {t('viewTranscript')}
               </Button>
             )}
@@ -289,7 +289,7 @@ export default function PodcastEpisodeDetailPage() {
                   if (episode.chaptersUrl) openExternal(episode.chaptersUrl)
                 }}
               >
-                <List size={14} className="mr-1.5" />
+                <List size={14} className="me-1.5" />
                 {t('viewChapters')}
               </Button>
             )}
@@ -299,7 +299,7 @@ export default function PodcastEpisodeDetailPage() {
         {/* Description Section */}
         {sanitizedDescription && (
           <section className="w-full">
-            <div className="h-px bg-border mb-6 mr-4" />
+            <div className="h-px bg-border mb-6 me-4" />
             <div className="relative max-w-xl">
               <div
                 className="prose dark:prose-invert max-w-none whitespace-pre-line"
@@ -313,7 +313,7 @@ export default function PodcastEpisodeDetailPage() {
         {/* Episode Webpage Link Section */}
         {episode.link && (
           <section className="w-full mt-8">
-            <div className="h-px bg-border mb-6 mr-4" />
+            <div className="h-px bg-border mb-6 me-4" />
             <div className="max-w-xl group/link">
               <Button
                 variant="link"

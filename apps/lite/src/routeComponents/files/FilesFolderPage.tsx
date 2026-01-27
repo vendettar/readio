@@ -311,7 +311,7 @@ export default function FilesFolderPage() {
                 variant="ghost"
                 onClick={handleBack}
                 disabled={isDragging}
-                className="gap-2 text-muted-foreground hover:text-foreground -ml-3"
+                className="gap-2 text-muted-foreground hover:text-foreground -ms-3"
               >
                 <Home size={18} />
                 <span>{t('filesBackToRoot')}</span>

@@ -20,7 +20,7 @@ interface InteractiveArtworkProps {
   onPlay?: (e: React.MouseEvent) => void
   playLabel?: string
   hoverScale?: boolean
-  playPosition?: 'center' | 'bottom-left'
+  playPosition?: 'center' | 'bottom-start'
   playButtonSize?: 'sm' | 'md' | 'lg'
   playIconSize?: number
   hoverGroup?: 'episode' | 'item' | 'session' | 'card'
@@ -221,7 +221,7 @@ export function InteractiveArtwork({
             )}
             aria-label={playLabel || t('ariaPlayEpisode')}
           >
-            <Play size={resolvedPlayIconSize} className="fill-current ml-0.5" />
+            <Play size={resolvedPlayIconSize} className="fill-current ms-0.5" />
           </Button>
         </div>
       )}

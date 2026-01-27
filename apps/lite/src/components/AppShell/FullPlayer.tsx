@@ -152,10 +152,10 @@ export function FullPlayer() {
         exit={{ opacity: 0 }}
       />
       {/* Drag Handle for swipe-down to close */}
-      <div className="absolute top-2 left-1/2 -translate-x-1/2 w-12 h-1.5 bg-muted-foreground/20 rounded-full z-50 pointer-events-none" />
+      <div className="absolute top-2 start-1/2 -translate-x-1/2 w-12 h-1.5 bg-muted-foreground/20 rounded-full z-50 pointer-events-none" />
 
       {/* Minimize Button */}
-      <div className="absolute top-4 right-4 z-50">
+      <div className="absolute top-4 end-4 z-50">
         <Button
           variant="ghost"
           size="icon"
@@ -171,7 +171,7 @@ export function FullPlayer() {
       <div className="flex-1 flex overflow-hidden">
         {/* Left: Artwork & Info (Fixed side on desktop) */}
         {isDesktop && (
-          <div className="w-96 hidden xl:flex flex-col items-center justify-center p-12 bg-muted/30 border-r border-border/50">
+          <div className="w-96 hidden xl:flex flex-col items-center justify-center p-12 bg-muted/30 border-e border-border/50">
             <div className="relative mb-10">
               {/* Standard Soft outer glow */}
               <div className="absolute inset-2 shadow-2xl shadow-black/20 rounded-2xl pointer-events-none" />
@@ -296,11 +296,11 @@ export function FullPlayer() {
       </div>
 
       {/* Player Controls Footer */}
-      <div className="absolute bottom-0 left-0 right-0 bg-background/60 backdrop-blur-xl backdrop-saturate-150 border-t border-border/50 px-8 py-6 z-20">
+      <div className="absolute bottom-0 start-0 end-0 bg-background/60 backdrop-blur-xl backdrop-saturate-150 border-t border-border/50 px-8 py-6 z-20">
         <div className="max-w-4xl mx-auto">
           {/* Seek Bar */}
           <div className="flex items-center gap-4 mb-6 group">
-            <span className="text-xs text-muted-foreground tabular-nums w-12 text-right font-medium">
+            <span className="text-xs text-muted-foreground tabular-nums w-12 text-end font-medium">
               {formatTimeLabel(progress)}
             </span>
             <div className="flex-1 relative h-5 flex items-center cursor-pointer">
@@ -341,7 +341,7 @@ export function FullPlayer() {
                 aria-label={t('skipBack10s')}
                 title={t('skipBack10s')}
               >
-                <SkipBack size={28} strokeWidth={1} />
+                <SkipBack size={28} strokeWidth={1} className="rtl:rotate-180" />
               </Button>
               <Button
                 size="icon"
@@ -357,7 +357,7 @@ export function FullPlayer() {
                 ) : isPlaying ? (
                   <Pause size={28} fill="currentColor" />
                 ) : (
-                  <Play size={28} fill="currentColor" className="ml-1" />
+                  <Play size={28} fill="currentColor" className="ms-1" />
                 )}
               </Button>
               <Button
@@ -368,7 +368,7 @@ export function FullPlayer() {
                 aria-label={t('skipForward10s')}
                 title={t('skipForward10s')}
               >
-                <SkipForward size={28} strokeWidth={1} />
+                <SkipForward size={28} strokeWidth={1} className="rtl:rotate-180" />
               </Button>
             </div>
 

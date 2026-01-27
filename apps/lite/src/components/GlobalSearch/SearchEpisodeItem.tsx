@@ -186,7 +186,7 @@ export function SearchEpisodeItem({ episode, onPlay }: SearchEpisodeItemProps) {
               <Star
                 size={14}
                 className={cn(
-                  'mr-2',
+                  'me-2',
                   favorited && 'fill-current',
                   isSaving && 'animate-pulse opacity-50'
                 )}

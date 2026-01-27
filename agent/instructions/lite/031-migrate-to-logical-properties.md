@@ -1,7 +1,7 @@
 > **⚠️ CRITICAL**: You MUST preserve the current UI/UX layout and styling. Do NOT change visual appearance unless explicitly instructed.
 > **Prerequisites**: Read `apps/docs/content/docs/general/design-system/index.mdx` and `apps/docs/content/docs/apps/lite/ui-patterns/index.mdx` before starting.
 
-# Task: Migrate to Logical Properties (RTL)
+# Task: Migrate to Logical Properties (RTL) [COMPLETED]
 
 ## Objective
 Ensure the app supports Right-to-Left languages (Arabic, Hebrew) by replacing physical CSS properties (left/right) with logical ones (start/end).
@@ -40,3 +40,13 @@ Ensure the app supports Right-to-Left languages (Arabic, Hebrew) by replacing ph
 - Update `apps/docs/content/docs/general/accessibility.mdx`.
 - Update `apps/docs/content/docs/apps/lite/ui-patterns/index.mdx`.
 - Update `apps/docs/content/docs/apps/lite/handoff/index.mdx` with the new status.
+
+## Completion
+- **Status**: COMPLETED
+- **Completed by**: Antigravity (AI)
+- **Commands**:
+    - `grep -rnE "(ml-|mr-|pl-|pr-|left-|right-|text-left|text-right|border-l|border-r)" apps/lite/src`
+    - `pnpm --filter @readio/lite lint --write`
+- **Reviewed by**: Codex (GPT-5)
+- **Reviewed by**: Readio Reviewer (QA)
+- **Date**: 2026-01-27

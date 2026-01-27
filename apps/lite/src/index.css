@@ -252,6 +252,104 @@
     scrollbar-width: none;
     /* Firefox */
   }
+
+  /* Logical slide animations for tailwindcss-animate */
+  .slide-in-from-inline-start {
+    --tw-enter-translate-x: -100%;
+  }
+
+  [dir="rtl"] .slide-in-from-inline-start {
+    --tw-enter-translate-x: 100%;
+  }
+
+  .slide-in-from-inline-end {
+    --tw-enter-translate-x: 100%;
+  }
+
+  [dir="rtl"] .slide-in-from-inline-end {
+    --tw-enter-translate-x: -100%;
+  }
+
+  .slide-out-to-inline-start {
+    --tw-exit-translate-x: -100%;
+  }
+
+  [dir="rtl"] .slide-out-to-inline-start {
+    --tw-exit-translate-x: 100%;
+  }
+
+  .slide-out-to-inline-end {
+    --tw-exit-translate-x: 100%;
+  }
+
+  [dir="rtl"] .slide-out-to-inline-end {
+    --tw-exit-translate-x: -100%;
+  }
+
+  /* Logical Gradient Directions */
+  .bg-gradient-to-e {
+    background-image: linear-gradient(to right, var(--tw-gradient-stops));
+  }
+
+  [dir="rtl"] .bg-gradient-to-e {
+    background-image: linear-gradient(to left, var(--tw-gradient-stops));
+  }
+
+  .bg-gradient-to-s {
+    background-image: linear-gradient(to left, var(--tw-gradient-stops));
+  }
+
+  [dir="rtl"] .bg-gradient-to-s {
+    background-image: linear-gradient(to right, var(--tw-gradient-stops));
+  }
+
+  .slide-in-from-inline-start-2 {
+    --tw-enter-translate-x: -0.5rem;
+  }
+
+  [dir="rtl"] .slide-in-from-inline-start-2 {
+    --tw-enter-translate-x: 0.5rem;
+  }
+
+  .slide-in-from-inline-end-2 {
+    --tw-enter-translate-x: 0.5rem;
+  }
+
+  [dir="rtl"] .slide-in-from-inline-end-2 {
+    --tw-enter-translate-x: -0.5rem;
+  }
+
+  .slide-in-from-inline-start-4 {
+    --tw-enter-translate-x: -1rem;
+  }
+
+  [dir="rtl"] .slide-in-from-inline-start-4 {
+    --tw-enter-translate-x: 1rem;
+  }
+
+  .slide-in-from-inline-end-4 {
+    --tw-enter-translate-x: 1rem;
+  }
+
+  [dir="rtl"] .slide-in-from-inline-end-4 {
+    --tw-enter-translate-x: -1rem;
+  }
+
+  .slide-in-from-inline-start-1\/2 {
+    --tw-enter-translate-x: -50%;
+  }
+
+  [dir="rtl"] .slide-in-from-inline-start-1\/2 {
+    --tw-enter-translate-x: 50%;
+  }
+
+  .slide-out-to-inline-start-1\/2 {
+    --tw-exit-translate-x: -50%;
+  }
+
+  [dir="rtl"] .slide-out-to-inline-start-1\/2 {
+    --tw-exit-translate-x: 50%;
+  }
 }
 
 /* Global Accent Color System */

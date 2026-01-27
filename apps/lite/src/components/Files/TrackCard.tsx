@@ -333,7 +333,7 @@ export function TrackCard({
                       <X size={10} strokeWidth={3} />
                       <span>{t('trackNameConflict')}</span>
                       {/* Arrow */}
-                      <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-destructive rotate-45" />
+                      <div className="absolute -bottom-1 start-1/2 -translate-x-1/2 w-2 h-2 bg-destructive rotate-45" />
                     </div>
                   </PopoverContent>
                 </Popover>
@@ -385,7 +385,7 @@ export function TrackCard({
         </div>
 
         <div className="flex items-center gap-3 relative" onClick={(e) => e.stopPropagation()}>
-          <div className="flex items-center gap-4 text-muted-foreground mr-12 sm:mr-16 md:mr-24">
+          <div className="flex items-center gap-4 text-muted-foreground me-12 sm:me-16 md:me-24">
             <div className="flex items-center gap-2 text-xs sm:text-sm font-medium tabular-nums whitespace-nowrap">
               <Package size={16} />
               <span>{sizeLabel}</span>

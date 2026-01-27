@@ -31,7 +31,7 @@ export function LanguageSwitcher() {
             key={item.locale}
             type="button"
             className={cn(
-              'rounded-md p-2 text-left text-sm transition-colors',
+              'rounded-md p-2 text-start text-sm transition-colors',
               item.locale === locale
                 ? 'bg-fd-primary/10 text-fd-primary'
                 : 'hover:bg-fd-accent hover:text-fd-accent-foreground'

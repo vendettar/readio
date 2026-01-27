@@ -126,7 +126,7 @@ export function PodcastEpisodesGrid({
                 return (
                   <div
                     className={cn(
-                      'relative flex gap-0 py-3 px-0 h-24 w-full group/item transition-colors justify-start items-stretch text-left whitespace-normal overflow-hidden'
+                      'relative flex gap-0 py-3 px-0 h-24 w-full group/item transition-colors justify-start items-stretch text-start whitespace-normal overflow-hidden'
                     )}
                   >
                     {/* Artwork with Navigation & Play */}
@@ -154,9 +154,9 @@ export function PodcastEpisodesGrid({
                       />
                     </div>
 
-                    <div className="flex-1 min-w-0 flex flex-col z-20 relative pt-1 pl-10">
+                    <div className="flex-1 min-w-0 flex flex-col z-20 relative pt-1 ps-10">
                       {/* Rank: Absolutely centered in the 40px padding gutter */}
-                      <span className="absolute left-0 top-1 w-10 text-sm font-medium text-foreground/70 tabular-nums leading-5 text-center pointer-events-none">
+                      <span className="absolute start-0 top-1 w-10 text-sm font-medium text-foreground/70 tabular-nums leading-5 text-center pointer-events-none">
                         {episodeIndex + 1}
                       </span>
 
@@ -174,8 +174,8 @@ export function PodcastEpisodesGrid({
                         className="text-sm font-medium leading-5"
                       />
 
-                      {/* Row 2+: Metadata (Inherits pl-10 alignment) */}
-                      <div className="pr-2 flex flex-col gap-0 mt-0">
+                      {/* Row 2+: Metadata (Inherits ps-10 alignment) */}
+                      <div className="pe-2 flex flex-col gap-0 mt-0">
                         <span className="text-xs text-foreground/70 truncate font-normal pointer-events-none">
                           {episode.artistName}
                         </span>
@@ -190,22 +190,22 @@ export function PodcastEpisodesGrid({
 
                     {/* Separator: aligns from image left to content right (last dot) */}
                     {rowIndex < ROWS - 1 && (
-                      <div className="absolute bottom-0 left-0 right-0 h-px bg-border/70 z-40" />
+                      <div className="absolute bottom-0 start-0 end-0 h-px bg-border/70 z-40" />
                     )}
 
                     {/* Hover actions with fade effect */}
                     <div
                       className={cn(
-                        'absolute right-0 inset-y-0 flex transition-opacity duration-200 z-30',
+                        'absolute end-0 inset-y-0 flex transition-opacity duration-200 z-30',
                         openMenuId === episode.id
                           ? 'opacity-100'
                           : 'opacity-0 group-hover/item:opacity-100'
                       )}
                     >
                       {/* Gradient fade */}
-                      <div className="w-12 bg-gradient-to-r from-transparent to-background" />
+                      <div className="w-12 bg-gradient-to-e from-transparent to-background" />
                       {/* Solid background covering all text to the right */}
-                      <div className="bg-background flex items-center gap-1 pr-2 pl-2">
+                      <div className="bg-background flex items-center gap-1 pe-2 ps-2">
                         <Button
                           variant="ghost"
                           size="icon"
@@ -249,7 +249,7 @@ export function PodcastEpisodesGrid({
                             }}
                             className={menuItemClassName}
                           >
-                            <Play size={14} className="mr-2 fill-current" />
+                            <Play size={14} className="me-2 fill-current" />
                             {t('playerPlay')}
                           </DropdownMenuItem>
                           {podcastId && (
@@ -261,7 +261,7 @@ export function PodcastEpisodesGrid({
                                   episodeId: encodeURIComponent(episode.id),
                                 }}
                               >
-                                <Info size={14} className="mr-2" />
+                                <Info size={14} className="me-2" />
                                 {t('details')}
                               </Link>
                             </DropdownMenuItem>
@@ -274,7 +274,7 @@ export function PodcastEpisodesGrid({
                                   id: podcastId,
                                 }}
                               >
-                                <RadioTower size={14} className="mr-2" />
+                                <RadioTower size={14} className="me-2" />
                                 {t('podcastLabel')}
                               </Link>
                             </DropdownMenuItem>
@@ -286,7 +286,7 @@ export function PodcastEpisodesGrid({
                             }}
                             className={menuItemClassName}
                           >
-                            <LinkIcon size={14} className="mr-2" />
+                            <LinkIcon size={14} className="me-2" />
                             {t('copyLink')}
                           </DropdownMenuItem>
                         </OverflowMenu>

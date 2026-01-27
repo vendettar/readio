@@ -28,11 +28,11 @@ export function ZoomControl({
 
   return (
     <div
-      className="fixed bottom-24 right-8 z-50 flex items-center gap-2 p-1 bg-popover/80 backdrop-blur-md border rounded-full shadow-lg animate-in fade-in slide-in-from-right-4"
+      className="fixed bottom-24 end-8 z-50 flex items-center gap-2 p-1 bg-popover/80 backdrop-blur-md border rounded-full shadow-lg animate-in fade-in slide-in-from-inline-end-4"
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
     >
-      <span className="px-3 text-xs font-bold tabular-nums text-muted-foreground mr-1">
+      <span className="px-3 text-xs font-bold tabular-nums text-muted-foreground me-1">
         {Math.round(zoomScale * 100)}%
       </span>
       <Button

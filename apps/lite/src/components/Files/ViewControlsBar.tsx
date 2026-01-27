@@ -59,7 +59,7 @@ export function ViewControlsBar({
               variant={density === 'compact' ? 'secondary' : 'ghost'}
               size="icon"
               className={cn(
-                'rounded-none border-l border-border h-8 w-8',
+                'rounded-none border-s border-border h-8 w-8',
                 density === 'compact' && 'bg-secondary'
               )}
               onClick={() => onDensityChange('compact')}

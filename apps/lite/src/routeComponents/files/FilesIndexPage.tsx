@@ -536,7 +536,7 @@ export default function FilesIndexPage() {
                       description={currentFolderId !== null ? undefined : t('filesEmptyBody')}
                       action={
                         <Button onClick={() => audioInputRef.current?.click()}>
-                          <Upload className="w-4 h-4 mr-2" />
+                          <Upload className="w-4 h-4 me-2" />
                           {t('filesUpload')}
                         </Button>
                       }

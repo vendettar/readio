@@ -285,7 +285,7 @@ export default function SettingsPage() {
                           key={item.id}
                           className="p-3 flex items-center justify-between hover:bg-muted/50 transition-colors"
                         >
-                          <div className="min-w-0 flex-1 pr-4">
+                          <div className="min-w-0 flex-1 pe-4">
                             <div className="text-sm font-medium truncate">{item.title}</div>
                             <div className="text-xs text-muted-foreground flex gap-2 mt-0.5">
                               <span>{formatTimestamp(item.lastPlayedAt, language)}</span>

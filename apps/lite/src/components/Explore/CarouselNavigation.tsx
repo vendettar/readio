@@ -34,7 +34,7 @@ export function CarouselNavigation({
         <div
           className={cn(
             'absolute top-0 bottom-0 z-40 flex items-center justify-center',
-            '-left-6 sm:-left-12 w-6 sm:w-12 pointer-events-auto cursor-default'
+            '-start-6 sm:-start-12 w-6 sm:w-12 pointer-events-auto cursor-default'
           )}
         >
           <div className="w-full h-full relative group/nav">
@@ -43,7 +43,7 @@ export function CarouselNavigation({
               size="icon"
               onClick={() => onScroll('left')}
               className={cn(
-                'absolute -translate-y-1/2 left-0 right-0 mx-auto',
+                'absolute -translate-y-1/2 start-0 end-0 mx-auto',
                 'w-8 rounded-lg shadow-xl transition-all duration-300',
                 'bg-card/80 backdrop-blur-xl opacity-0 scale-90',
                 'group-hover/nav:scale-105 group-hover/nav:opacity-100 border border-border/70 active:scale-95',
@@ -54,7 +54,11 @@ export function CarouselNavigation({
               )}
               aria-label={t('ariaScrollLeft')}
             >
-              <ChevronLeft size={20} className="text-foreground/70" strokeWidth={3} />
+              <ChevronLeft
+                size={20}
+                className="text-foreground/70 rtl:rotate-180"
+                strokeWidth={3}
+              />
             </Button>
           </div>
         </div>
@@ -65,7 +69,7 @@ export function CarouselNavigation({
         <div
           className={cn(
             'absolute top-0 bottom-0 z-40 flex items-center justify-center',
-            '-right-6 sm:-right-12 w-6 sm:w-12 pointer-events-auto cursor-default'
+            '-end-6 sm:-end-12 w-6 sm:w-12 pointer-events-auto cursor-default'
           )}
         >
           <div className="w-full h-full relative group/nav">
@@ -74,7 +78,7 @@ export function CarouselNavigation({
               size="icon"
               onClick={() => onScroll('right')}
               className={cn(
-                'absolute -translate-y-1/2 left-0 right-0 mx-auto',
+                'absolute -translate-y-1/2 start-0 end-0 mx-auto',
                 'w-8 rounded-lg shadow-xl transition-all duration-300',
                 'bg-card/80 backdrop-blur-xl opacity-0 scale-90',
                 'group-hover/nav:scale-105 group-hover/nav:opacity-100 border border-border/70 active:scale-95',
@@ -85,7 +89,11 @@ export function CarouselNavigation({
               )}
               aria-label={t('ariaScrollRight')}
             >
-              <ChevronRight size={20} className="text-foreground/70" strokeWidth={3} />
+              <ChevronRight
+                size={20}
+                className="text-foreground/70 rtl:rotate-180"
+                strokeWidth={3}
+              />
             </Button>
           </div>
         </div>

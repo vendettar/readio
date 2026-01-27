@@ -78,7 +78,7 @@ export function BaseEpisodeRow({
 }: BaseEpisodeRowProps) {
   return (
     <div
-      className={cn('group/episode relative pr-4 smart-divider-group', className)}
+      className={cn('group/episode relative pe-4 smart-divider-group', className)}
       data-testid="episode-row"
     >
       {/* 
@@ -89,7 +89,7 @@ export function BaseEpisodeRow({
       */}
       <div
         className={cn(
-          'absolute inset-y-0 -left-page-gutter right-0 rounded-lg bg-accent/50 opacity-0 group-hover/episode:opacity-100 transition-opacity duration-300 pointer-events-none z-0'
+          'absolute inset-y-0 -start-page-gutter end-0 rounded-lg bg-accent/50 opacity-0 group-hover/episode:opacity-100 transition-opacity duration-300 pointer-events-none z-0'
         )}
       />
 
@@ -98,7 +98,7 @@ export function BaseEpisodeRow({
         {artwork && <div className="relative flex-shrink-0 z-20">{artwork}</div>}
 
         <div className="flex-1 min-w-0 flex items-center justify-between">
-          <div className="flex-1 min-w-0 pr-12 py-1">
+          <div className="flex-1 min-w-0 pe-12 py-1">
             {/* Subtitle Line (e.g. Podcast Title • Date) */}
             {subtitle && (
               <div className="text-xs text-muted-foreground/80 mb-0.5 line-clamp-1 font-normal tracking-tight">
@@ -130,7 +130,7 @@ export function BaseEpisodeRow({
           {/* Right Side Actions & Post-Title Meta (e.g. Duration) */}
           <div className="flex items-center flex-shrink-0 gap-12">
             {meta && (
-              <span className="text-xs text-muted-foreground font-medium whitespace-nowrap w-20 text-left">
+              <span className="text-xs text-muted-foreground font-medium whitespace-nowrap w-20 text-end">
                 {meta}
               </span>
             )}
@@ -152,7 +152,7 @@ export function BaseEpisodeRow({
       {showDivider && (
         <div
           className={cn(
-            'absolute bottom-0 left-0 right-4 h-px bg-border/50 transition-opacity duration-200 smart-divider',
+            'absolute bottom-0 start-0 end-4 h-px bg-border/50 transition-opacity duration-200 smart-divider',
             'group-hover/episode:opacity-0', // Hide self on hover
             isLast && 'hidden'
           )}

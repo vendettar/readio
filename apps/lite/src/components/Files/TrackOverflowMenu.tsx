@@ -138,7 +138,7 @@ export function TrackOverflowMenu({
                 setIsMenuOpen(false)
               }}
             >
-              <Pencil className="mr-2 h-4 w-4" />
+              <Pencil className="me-2 h-4 w-4" />
               <span>{t('trackRename')}</span>
             </DropdownMenuItem>
             <DropdownMenuItem
@@ -150,7 +150,7 @@ export function TrackOverflowMenu({
                 setStep('move')
               }}
             >
-              <Inbox className="mr-2 h-4 w-4" />
+              <Inbox className="me-2 h-4 w-4" />
               <span>{t('filesMoveToFolder')}</span>
             </DropdownMenuItem>
 
@@ -167,7 +167,7 @@ export function TrackOverflowMenu({
                 setStep('confirm')
               }}
             >
-              <Trash2 className="mr-2 h-4 w-4" />
+              <Trash2 className="me-2 h-4 w-4" />
               <span>{t('filesDeleteTrack')}</span>
             </DropdownMenuItem>
           </div>
@@ -196,7 +196,7 @@ export function TrackOverflowMenu({
                     setStep('menu')
                   }}
                 >
-                  <ChevronLeft className="mr-1 h-4 w-4" />
+                  <ChevronLeft className="me-1 h-4 w-4 rtl:rotate-180" />
                   <span className="text-xs font-medium">{t('commonBack')}</span>
                 </Button>
               </div>
@@ -211,7 +211,7 @@ export function TrackOverflowMenu({
                       handleMove(null)
                     }}
                   >
-                    <Home className="mr-2 h-4 w-4" />
+                    <Home className="me-2 h-4 w-4" />
                     <span>{t('filesBackToRoot')}</span>
                   </DropdownMenuItem>
                 )}
@@ -228,7 +228,7 @@ export function TrackOverflowMenu({
                         handleMove(folder.id)
                       }}
                     >
-                      <Folder className="mr-2 h-4 w-4" />
+                      <Folder className="me-2 h-4 w-4" />
                       <span className="truncate">{folder.name}</span>
                     </DropdownMenuItem>
                   ))}

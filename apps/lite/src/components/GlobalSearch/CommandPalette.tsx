@@ -150,7 +150,7 @@ export function CommandPalette() {
         >
           <Search
             className={cn(
-              'mr-2 h-4 w-4 text-muted-foreground transition-colors',
+              'me-2 h-4 w-4 text-muted-foreground transition-colors',
               isOverlayOpen && 'text-primary'
             )}
           />
@@ -171,7 +171,7 @@ export function CommandPalette() {
           />
 
           {!isOverlayOpen && !query && (
-            <kbd className="pointer-events-none hidden h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-xxs font-medium opacity-100 sm:flex ml-2">
+            <kbd className="pointer-events-none hidden h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-xxs font-medium opacity-100 sm:flex ms-2">
               <span className="text-xs text-muted-foreground/50">⌘</span>
               <span className="text-muted-foreground/70">K</span>
             </kbd>
@@ -181,7 +181,7 @@ export function CommandPalette() {
         {/* Floating Results Panel */}
         <div
           className={cn(
-            'absolute left-4 w-search-palette max-w-search-palette top-full -mt-4 z-overlay overflow-hidden rounded-xl border border-border/50 bg-popover/95 backdrop-blur-xl backdrop-saturate-150 shadow-2xl transition-all duration-200 origin-top',
+            'absolute start-4 w-search-palette max-w-search-palette top-full -mt-4 z-overlay overflow-hidden rounded-xl border border-border/50 bg-popover/95 backdrop-blur-xl backdrop-saturate-150 shadow-2xl transition-all duration-200 origin-top',
             isOverlayOpen
               ? 'opacity-100 translate-y-2 scale-100 pointer-events-auto'
               : 'opacity-0 translate-y-1 scale-95 pointer-events-none'
@@ -210,7 +210,7 @@ export function CommandPalette() {
                     onSelect={() => handleSelectPodcast(podcast)}
                     className="flex items-center py-1 px-3 rounded-md hover:bg-accent cursor-pointer"
                   >
-                    <Search className="mr-2 h-3.5 w-3.5 text-muted-foreground" strokeWidth={2.5} />
+                    <Search className="me-2 h-3.5 w-3.5 text-muted-foreground" strokeWidth={2.5} />
                     <span className="text-xs truncate">{podcast.collectionName}</span>
                   </CommandItem>
                 ))}
@@ -227,7 +227,7 @@ export function CommandPalette() {
                     className="relative py-1.5 px-3 rounded-md flex items-center gap-3 hover:bg-accent cursor-pointer smart-divider-group group/search-item"
                   >
                     {index === 0 && (
-                      <div className="absolute top-0 left-3 right-3 h-px bg-border transition-opacity duration-200 smart-divider group-hover/search-item:opacity-0" />
+                      <div className="absolute top-0 start-3 end-3 h-px bg-border transition-opacity duration-200 smart-divider group-hover/search-item:opacity-0" />
                     )}
                     <LocalItemArtwork item={item} />
                     <div className="flex flex-col flex-1 min-w-0">
@@ -237,7 +237,7 @@ export function CommandPalette() {
                       </span>
                     </div>
 
-                    <div className="flex gap-1.5 flex-shrink-0 items-center ml-2">
+                    <div className="flex gap-1.5 flex-shrink-0 items-center ms-2">
                       {item.badges.map((badge) => (
                         <span key={badge} className="text-primary transition-colors">
                           {badge === 'subscription' && <LayoutGrid className="h-3 w-3" />}
@@ -247,7 +247,7 @@ export function CommandPalette() {
                         </span>
                       ))}
                     </div>
-                    <div className="absolute bottom-0 left-3 right-3 h-px bg-border transition-opacity duration-200 smart-divider group-hover/search-item:opacity-0" />
+                    <div className="absolute bottom-0 start-3 end-3 h-px bg-border transition-opacity duration-200 smart-divider group-hover/search-item:opacity-0" />
                   </CommandItem>
                 ))}
               </CommandGroup>
@@ -265,7 +265,7 @@ export function CommandPalette() {
                       className="relative py-1.5 px-3 rounded-md flex items-center gap-3 hover:bg-accent cursor-pointer smart-divider-group group/search-item"
                     >
                       {index === 0 && (
-                        <div className="absolute top-0 left-3 right-3 h-px bg-border transition-opacity duration-200 smart-divider group-hover/search-item:opacity-0" />
+                        <div className="absolute top-0 start-3 end-3 h-px bg-border transition-opacity duration-200 smart-divider group-hover/search-item:opacity-0" />
                       )}
                       <img
                         src={getDiscoveryArtworkUrl(podcast.artworkUrl100, 80)}
@@ -280,7 +280,7 @@ export function CommandPalette() {
                           {podcast.artistName}
                         </span>
                       </div>
-                      <div className="absolute bottom-0 left-3 right-3 h-px bg-border transition-opacity duration-200 smart-divider group-hover/search-item:opacity-0" />
+                      <div className="absolute bottom-0 start-3 end-3 h-px bg-border transition-opacity duration-200 smart-divider group-hover/search-item:opacity-0" />
                     </CommandItem>
                   ))}
                 </CommandGroup>
@@ -299,7 +299,7 @@ export function CommandPalette() {
                       className="relative py-1.5 px-3 rounded-md flex items-center gap-3 hover:bg-accent cursor-pointer smart-divider-group group/search-item"
                     >
                       {index === 0 && (
-                        <div className="absolute top-0 left-3 right-3 h-px bg-border transition-opacity duration-200 smart-divider group-hover/search-item:opacity-0" />
+                        <div className="absolute top-0 start-3 end-3 h-px bg-border transition-opacity duration-200 smart-divider group-hover/search-item:opacity-0" />
                       )}
                       <img
                         src={getDiscoveryArtworkUrl(episode.artworkUrl100, 80)}
@@ -312,7 +312,7 @@ export function CommandPalette() {
                           {episode.collectionName}
                         </span>
                       </div>
-                      <div className="absolute bottom-0 left-3 right-3 h-px bg-border transition-opacity duration-200 smart-divider group-hover/search-item:opacity-0" />
+                      <div className="absolute bottom-0 start-3 end-3 h-px bg-border transition-opacity duration-200 smart-divider group-hover/search-item:opacity-0" />
                     </CommandItem>
                   ))}
                 </CommandGroup>
@@ -329,7 +329,7 @@ export function CommandPalette() {
                     className="justify-center text-primary py-0.5 font-medium rounded-md hover:bg-accent cursor-pointer"
                   >
                     {t('searchViewAll')}
-                    <ArrowRight className="ml-2 h-4 w-4" />
+                    <ArrowRight className="ms-2 h-4 w-4 rtl:rotate-180" />
                   </CommandItem>
                 </>
               )}

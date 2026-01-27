@@ -33,7 +33,7 @@ export function ContextMenu({ state, onCopy, onSearch, onLookup, onClose }: Cont
         }}
       >
         <Button variant="ghost" className="justify-start px-3 py-2 h-auto text-sm" onClick={onCopy}>
-          <Copy size={16} className="opacity-70 mr-2" />
+          <Copy size={16} className="opacity-70 me-2" />
           {t('copyLine')}
         </Button>
         <Button
@@ -41,7 +41,7 @@ export function ContextMenu({ state, onCopy, onSearch, onLookup, onClose }: Cont
           className="justify-start px-3 py-2 h-auto text-sm"
           onClick={onSearch}
         >
-          <Search size={16} className="opacity-70 mr-2" />
+          <Search size={16} className="opacity-70 me-2" />
           {t('searchWeb')}
         </Button>
         {isEligibleForLookup && (
@@ -50,7 +50,7 @@ export function ContextMenu({ state, onCopy, onSearch, onLookup, onClose }: Cont
             className="justify-start px-3 py-2 h-auto text-sm font-medium text-primary"
             onClick={onLookup}
           >
-            <Book size={16} className="opacity-70 mr-2" />
+            <Book size={16} className="opacity-70 me-2" />
             {t('lookUp')}
           </Button>
         )}
@@ -142,7 +142,7 @@ function DictContent({ entry }: { entry: DictEntry }) {
               <li key={defIdx} className="text-sm space-y-1">
                 <div className="leading-relaxed">{def.definition}</div>
                 {def.example && (
-                  <div className="text-xs italic text-muted-foreground bg-muted/30 p-2 rounded-md border-l-2 border-primary/20">
+                  <div className="text-xs italic text-muted-foreground bg-muted/30 p-2 rounded-md border-s-2 border-primary/20">
                     "{def.example}"
                   </div>
                 )}
@@ -168,7 +168,7 @@ export function WordHoverOverlay({ rects, isPressed }: WordHoverOverlayProps) {
       {rects.map((rect, idx) => (
         <div
           key={idx}
-          className={`absolute rounded bg-primary/20 transition-all duration-75 ${isPressed ? 'bg-primary/40' : ''} left-[var(--x)] top-[var(--y)] w-[var(--w)] h-[var(--h)]`}
+          className={`absolute rounded bg-primary/20 transition-all duration-75 ${isPressed ? 'bg-primary/40' : ''} start-[var(--x)] top-[var(--y)] w-[var(--w)] h-[var(--h)]`}
           style={
             {
               '--x': `${rect.left - 2}px`,

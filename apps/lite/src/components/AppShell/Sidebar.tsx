@@ -61,7 +61,7 @@ export function Sidebar({ className = '' }: SidebarProps) {
   return (
     <aside
       className={cn(
-        'w-sidebar h-screen bg-background/80 backdrop-blur-xl backdrop-saturate-150 border-r border-border/50 flex flex-col flex-shrink-0 relative z-sidebar',
+        'w-sidebar h-screen bg-background/80 backdrop-blur-xl backdrop-saturate-150 border-e border-border/50 flex flex-col flex-shrink-0 relative z-sidebar',
         className
       )}
     >
@@ -72,7 +72,9 @@ export function Sidebar({ className = '' }: SidebarProps) {
             <div className="bg-primary/10 text-primary p-1.5 rounded-lg flex items-center justify-center">
               <Logo size={20} />
             </div>
-            <span className="font-bold text-xl tracking-tight text-foreground/90">Readio</span>
+            <span className="font-bold text-xl tracking-tight text-foreground/90 text-start">
+              Readio
+            </span>
           </div>
 
           {!isOnline && (
@@ -101,7 +103,7 @@ export function Sidebar({ className = '' }: SidebarProps) {
       <nav className="flex-1 px-4 space-y-8 overflow-y-auto">
         {/* Section: Discover */}
         <div className="space-y-1">
-          <div className="px-3 mb-2 text-xs font-bold text-muted-foreground uppercase tracking-widest">
+          <div className="px-3 mb-2 text-xs font-bold text-muted-foreground uppercase tracking-widest text-start">
             {t('sidebarDiscover')}
           </div>
           <SidebarItem
@@ -114,7 +116,7 @@ export function Sidebar({ className = '' }: SidebarProps) {
 
         {/* Section: Library */}
         <div className="space-y-1">
-          <div className="px-3 mb-2 text-xs font-bold text-muted-foreground uppercase tracking-widest">
+          <div className="px-3 mb-2 text-xs font-bold text-muted-foreground uppercase tracking-widest text-start">
             {t('sidebarLibrary')}
           </div>
           <SidebarItem

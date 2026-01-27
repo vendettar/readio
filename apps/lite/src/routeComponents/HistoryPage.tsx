@@ -211,7 +211,7 @@ export default function HistoryPage() {
             action={
               <Button asChild onClick={() => navigate({ to: '/explore' })}>
                 <Link to="/explore">
-                  <Compass className="w-4 h-4 mr-2" />
+                  <Compass className="w-4 h-4 me-2" />
                   {t('navExplore')}
                 </Link>
               </Button>
@@ -343,7 +343,7 @@ export default function HistoryPage() {
                           onSelect={() => handleDeleteSession(session.id)}
                           className="text-destructive focus:text-destructive focus:bg-destructive/10 cursor-pointer whitespace-nowrap"
                         >
-                          <Trash2 size={16} className="mr-2" />
+                          <Trash2 size={16} className="me-2" />
                           {t('commonDelete')}
                         </DropdownMenuItem>
                       </OverflowMenu>

@@ -53,6 +53,18 @@ Don't just use `<div>` for everything.
 - Ensure text is readable against backgrounds.
 - Use Tailwind's `text-muted-foreground` carefully—ensure it's not too faint.
 
+## 6. RTL Support & Logical Properties
+
+Readio supports Right-to-Left (RTL) languages.
+- **Logical Properties**: Always use logical properties instead of physical ones.
+  - ❌ `ml-`, `mr-` -> ✅ `ms-`, `me-` (Margin Start/End)
+  - ❌ `pl-`, `pr-` -> ✅ `ps-`, `pe-` (Padding Start/End)
+  - ❌ `left-`, `right-` -> ✅ `start-`, `end-`
+  - ❌ `text-left`, `text-right` -> ✅ `text-start`, `text-end`
+- **Icon Flipping**: Directional icons (arrows, chevrons, skips) should be flipped in RTL.
+  - Use `className="rtl:rotate-180"`.
+- **Testing**: Add `dir="rtl"` to the `html` tag to verify layouts.
+
 ---
 
 ## Planned (Pending Execution)

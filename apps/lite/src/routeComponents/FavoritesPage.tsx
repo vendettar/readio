@@ -66,7 +66,7 @@ export default function FavoritesPage() {
             action={
               <Button asChild onClick={() => navigate({ to: '/explore' })}>
                 <Link to="/explore">
-                  <Compass className="w-4 h-4 mr-2" />
+                  <Compass className="w-4 h-4 me-2" />
                   {t('navExplore')}
                 </Link>
               </Button>
@@ -178,7 +178,7 @@ export default function FavoritesPage() {
                           onSelect={() => handleRemoveFavorite(favorite.key)}
                           className="text-destructive focus:text-destructive focus:bg-destructive/10 whitespace-nowrap cursor-pointer"
                         >
-                          <Star size={14} className="mr-2" />
+                          <Star size={14} className="me-2" />
                           {t('removeFavorite')}
                         </DropdownMenuItem>
                       </OverflowMenu>
