@@ -123,6 +123,12 @@ GlobalAudioController also integrates Media Session via `useMediaSession`, expos
 
 This ensures `RootLayout` remains effectively static unless the route changes, while only `GlobalAudioController` and any progress-bar components re-render during playback.
 
+### Background Performance (Page Visibility)
+
+- `usePageVisibility` (`src/hooks/usePageVisibility.ts`) tracks `document.visibilitychange`.
+- `GlobalAudioController` throttles `updateProgress` to **≤ 1/sec** when hidden, while continuing audio processing.
+- `FullPlayer` pauses CSS and Framer Motion animations when hidden (no unmount).
+
 ### Spatial Presence: Shared Element Transitions
 
 The application utilizes `layoutId` (Framer Motion) to maintain visual continuity when moving between global UI states (see Decision D057):

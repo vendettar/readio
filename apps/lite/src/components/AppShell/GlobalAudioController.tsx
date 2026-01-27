@@ -8,6 +8,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useImageObjectUrl } from '../../hooks/useImageObjectUrl'
 import { useMediaSession } from '../../hooks/useMediaSession'
+import { usePageVisibility } from '../../hooks/usePageVisibility'
 import { useSession } from '../../hooks/useSession'
 import { useTabSync } from '../../hooks/useTabSync'
 import { warn } from '../../lib/logger'
@@ -18,6 +19,9 @@ const TRACK_SKIP_SECONDS = 10
 
 export function GlobalAudioController() {
   const audioRef = useRef<HTMLAudioElement>(null)
+  const isVisible = usePageVisibility()
+  const isVisibleRef = useRef(isVisible)
+  const lastProgressUpdateRef = useRef(0)
   const { restoreProgress } = useSession()
 
   // Use atomic selectors to avoid subscribing to rapidly changing state
@@ -93,6 +97,13 @@ export function GlobalAudioController() {
 
   useMediaSession(currentTrack, mediaSessionActions, playbackStatus)
 
+  useEffect(() => {
+    isVisibleRef.current = isVisible
+    if (isVisible) {
+      lastProgressUpdateRef.current = 0
+    }
+  }, [isVisible])
+
   // Audio event handlers - persistent across routes
   // Use getState() for store actions to avoid subscription
   // biome-ignore lint/correctness/useExhaustiveDependencies: Re-attach listeners when audio source changes
@@ -101,6 +112,11 @@ export function GlobalAudioController() {
     if (!audio) return
 
     const onTimeUpdate = () => {
+      const now = Date.now()
+      if (!isVisibleRef.current) {
+        if (now - lastProgressUpdateRef.current < 1000) return
+      }
+      lastProgressUpdateRef.current = now
       usePlayerStore.getState().updateProgress(audio.currentTime)
     }
     const onDurationChange = () => {

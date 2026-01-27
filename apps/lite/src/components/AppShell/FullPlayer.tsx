@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useImageObjectUrl } from '../../hooks/useImageObjectUrl'
 import { useMediaQuery } from '../../hooks/useMediaQuery'
+import { usePageVisibility } from '../../hooks/usePageVisibility'
 import { usePlayerGestures } from '../../hooks/usePlayerGestures'
 import { useZoom } from '../../hooks/useZoom'
 import { reportError } from '../../lib/errorReporter'
@@ -21,6 +22,7 @@ import { Button } from '../ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { Slider } from '../ui/slider'
 import { ZoomControl } from '../ZoomControl'
+import styles from './FullPlayer.module.css'
 
 export function FullPlayer() {
   const { t } = useTranslation()
@@ -28,6 +30,7 @@ export function FullPlayer() {
     useZoom()
   const [isFollowing, setIsFollowing] = useState(true)
   const isDesktop = useMediaQuery('(min-width: 1280px)')
+  const isVisible = usePageVisibility()
 
   // Use atomic selectors to prevent unnecessary re-renders from progress updates
   const audioLoaded = usePlayerStore((s) => s.audioLoaded)
@@ -133,18 +136,19 @@ export function FullPlayer() {
       onKeyDown={bind().onKeyDown}
       onKeyUp={bind().onKeyUp}
       initial={{ y: '100%' }}
-      animate={{ y: y }}
+      animate={isVisible ? { y: y } : false}
       exit={{ y: '100%' }}
       transition={{ type: 'spring', damping: 30, stiffness: 300, mass: 1 }}
       className={cn(
         'fixed inset-0 z-full-player bg-background/95 backdrop-blur-3xl flex flex-col will-change-transform touch-none'
       )}
       data-dragging={y > 0}
+      data-hidden={!isVisible}
     >
       <motion.div
         className="absolute inset-0 bg-background/80 -z-10"
         initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
+        animate={isVisible ? { opacity: 1 } : false}
         exit={{ opacity: 0 }}
       />
       {/* Drag Handle for swipe-down to close */}
@@ -175,6 +179,7 @@ export function FullPlayer() {
               <motion.div
                 layoutId={isDesktop ? `artwork-${activeEpisodeId}-player` : undefined}
                 transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                animate={isVisible ? undefined : false}
                 className={cn(
                   'relative w-80 h-80 rounded-2xl overflow-hidden bg-white transition-shadow duration-500',
                   'ring-1 ring-white/10 ring-inset',
@@ -216,6 +221,7 @@ export function FullPlayer() {
                 <motion.div
                   layoutId={!isDesktop ? `artwork-${activeEpisodeId}-player` : undefined}
                   transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+                  animate={isVisible ? undefined : false}
                   className={cn(
                     'relative w-48 h-48 mx-auto rounded-xl overflow-hidden bg-white ring-1 ring-inset ring-white',
                     !coverArtUrl && 'bg-muted'
@@ -343,7 +349,11 @@ export function FullPlayer() {
                 className="w-16 h-16 rounded-full shadow-xl shadow-muted/50"
               >
                 {status === 'loading' ? (
-                  <Loader2 size={28} className="animate-spin" />
+                  <Loader2
+                    size={28}
+                    className={cn('animate-spin', styles.animationPaused)}
+                    data-hidden={!isVisible}
+                  />
                 ) : isPlaying ? (
                   <Pause size={28} fill="currentColor" />
                 ) : (

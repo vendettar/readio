@@ -17,6 +17,8 @@ Readio is an audio application.
   - Stop updating the Transcript active line highlighting if the tab is hidden.
   - Slow down UI polling/refresh intervals.
   - Resume immediately when `visibilitychange` fires.
+  - Use `usePageVisibility` to throttle `GlobalAudioController` progress updates to **≤ 1/sec** when hidden.
+  - Pause CSS and Framer Motion animations in `FullPlayer` while hidden (do not unmount).
 
 ## 2. Memory Management (The Revoke Rule) - **IMPLEMENTED** (Instruction 027)
 

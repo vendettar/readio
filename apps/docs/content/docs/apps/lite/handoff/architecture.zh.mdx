@@ -123,6 +123,12 @@ GlobalAudioController 通过 `useMediaSession` 集成媒体会话，向系统暴
 
 该设计确保 `RootLayout` 在路由切换之外保持静态，播放过程中仅控制器与进度条组件更新。
 
+### 后台性能（页面可见性）
+
+- `usePageVisibility`（`src/hooks/usePageVisibility.ts`）监听 `document.visibilitychange`。
+- `GlobalAudioController` 在隐藏时将 `updateProgress` 节流到 **≤ 1 秒/次**，同时继续处理音频事件。
+- `FullPlayer` 在隐藏时暂停 CSS 与 Framer Motion 动画（不卸载）。
+
 ### 空间感：共享元素转换 (Shared Element Transitions)
 
 为了在使用 `layoutId` 进行视觉衔接的同时保证架构的清晰性，系统遵循以下规则（见决策 D057）：

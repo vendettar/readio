@@ -17,6 +17,8 @@ Readio 是一个音频应用程序。
   - 如果标签页被隐藏，停止更新逐字稿活动行高亮。
   - 减慢 UI 轮询/刷新间隔。
   - 当 `visibilitychange` 触发时立即恢复。
+  - 使用 `usePageVisibility` 在隐藏时将 `GlobalAudioController` 的进度更新节流到 **≤ 1 秒/次**。
+  - 隐藏时暂停 `FullPlayer` 的 CSS 与 Framer Motion 动画（不卸载组件）。
 
 ## 2. 内存管理 (撤销规则) - **已实现** (指令 027)
 

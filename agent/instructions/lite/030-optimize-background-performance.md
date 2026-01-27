@@ -1,7 +1,7 @@
 > **⚠️ CRITICAL**: You MUST preserve the current UI/UX layout and styling. Do NOT change visual appearance unless explicitly instructed.
 > **Prerequisites**: Read `apps/docs/content/docs/general/design-system/index.mdx` and `apps/docs/content/docs/apps/lite/ui-patterns/index.mdx` before starting.
 
-# Task: Optimize Background Performance
+# Task: Optimize Background Performance [COMPLETED]
 
 ## Objective
 When the app is in the background (tab hidden or minimized), we should stop expensive UI updates (visualizers, progress bars) to save battery, while keeping Audio running.
@@ -37,3 +37,8 @@ When the app is in the background (tab hidden or minimized), we should stop expe
 - Update `apps/docs/content/docs/apps/lite/performance.mdx`.
 - Update `apps/docs/content/docs/apps/lite/handoff/architecture.mdx`.
 - Update `apps/docs/content/docs/apps/lite/handoff/index.mdx` with the new status.
+
+## Completion
+- Completed by: Codex
+- Commands: `pnpm --filter @readio/lite typecheck` (failed: pnpm not found), `pnpm --filter @readio/lite lint` (failed: pnpm not found)
+- Date: 2026-01-27
