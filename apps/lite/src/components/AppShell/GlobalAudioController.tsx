@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { useImageObjectUrl } from '../../hooks/useImageObjectUrl'
 import { useMediaSession } from '../../hooks/useMediaSession'
 import { useSession } from '../../hooks/useSession'
+import { useTabSync } from '../../hooks/useTabSync'
 import { warn } from '../../lib/logger'
 import { toast } from '../../lib/toast'
 import { usePlayerStore } from '../../store/playerStore'
@@ -31,6 +32,8 @@ export function GlobalAudioController() {
 
   const coverArtBlobUrl = useImageObjectUrl(coverArtUrl instanceof Blob ? coverArtUrl : null)
   const artworkUrl = typeof coverArtUrl === 'string' ? coverArtUrl : coverArtBlobUrl
+
+  useTabSync()
 
   const currentTrack = useMemo(() => {
     if (!audioUrl) return null
@@ -73,30 +76,14 @@ export function GlobalAudioController() {
     if (duration > 0) seekTo(target)
   }, [])
 
-  const handleSeekRelative = useCallback((deltaSeconds: number) => {
-    const { progress, duration, seekTo } = usePlayerStore.getState()
-    if (!duration) return
-    const target = Math.max(0, Math.min(duration, progress + deltaSeconds))
-    seekTo(target)
-  }, [])
-
-  const handleSeek = useCallback((timeSeconds: number) => {
-    const { duration, seekTo } = usePlayerStore.getState()
-    if (!duration || !Number.isFinite(timeSeconds)) return
-    const target = Math.max(0, Math.min(duration, timeSeconds))
-    seekTo(target)
-  }, [])
-
   const mediaSessionActions = useMemo(
     () => ({
       play: handlePlay,
       pause: handlePause,
       prev: handlePrev,
       next: handleNext,
-      seekRelative: handleSeekRelative,
-      seek: handleSeek,
     }),
-    [handleNext, handlePause, handlePlay, handlePrev, handleSeek, handleSeekRelative]
+    [handleNext, handlePause, handlePlay, handlePrev]
   )
 
   const playbackStatus = useMemo(() => {

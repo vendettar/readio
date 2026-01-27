@@ -4,3 +4,4 @@
 
 export const STORAGE_KEY_LANGUAGE = 'readio-lite:language'
 export const STORAGE_KEY_LEGACY_LANGUAGE = 'language'
+export const STORAGE_KEY_TAB_SYNC = 'readio_sync'

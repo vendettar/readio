@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { usePlayerStore } from '../store/playerStore'
 
 type MediaSessionTrack = {
   audioUrl: string
@@ -13,8 +14,6 @@ type MediaSessionActions = {
   pause: () => void
   prev: () => void
   next: () => void
-  seekRelative: (deltaSeconds: number) => void
-  seek: (timeSeconds: number) => void
 }
 
 const SEEK_BACK_SECONDS = -10
@@ -51,6 +50,10 @@ function getMimeTypeFromUrl(url: string): string | undefined {
     default:
       return undefined
   }
+}
+
+function clampToDuration(timeSeconds: number, duration: number): number {
+  return Math.max(0, Math.min(duration, timeSeconds))
 }
 
 export function useMediaSession(
@@ -108,12 +111,24 @@ export function useMediaSession(
     setHandler('pause', actions.pause)
     setHandler('previoustrack', actions.prev)
     setHandler('nexttrack', actions.next)
-    setHandler('seekbackward', () => actions.seekRelative(SEEK_BACK_SECONDS))
-    setHandler('seekforward', () => actions.seekRelative(SEEK_FORWARD_SECONDS))
+    setHandler('seekbackward', () => {
+      const { progress, duration, seekTo } = usePlayerStore.getState()
+      if (!duration) return
+      const target = clampToDuration(progress + SEEK_BACK_SECONDS, duration)
+      seekTo(target)
+    })
+    setHandler('seekforward', () => {
+      const { progress, duration, seekTo } = usePlayerStore.getState()
+      if (!duration) return
+      const target = clampToDuration(progress + SEEK_FORWARD_SECONDS, duration)
+      seekTo(target)
+    })
     setHandler('seekto', (details) => {
       const seekTime = details?.seekTime
       if (typeof seekTime !== 'number' || Number.isNaN(seekTime)) return
-      actions.seek(seekTime)
+      const { duration, seekTo } = usePlayerStore.getState()
+      if (!duration) return
+      seekTo(clampToDuration(seekTime, duration))
     })
 
     return () => {

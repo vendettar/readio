@@ -147,7 +147,11 @@ Provider 位于 `src/main.tsx`（`Tooltip.Provider`）。
    - **Toast 来源**：离线 Toast 仅在根布局的在线→离线转换时触发，请求级错误处理不应重复提示。
    - **UI 模式**：Explore 在离线时折叠远程模块并保留本地入口；Command Palette 隐藏远程搜索结果。
 
-这套 helpers 作为基础能力被广泛复用：ID 生成、存储访问、事件监听、外链打开、时间/文件大小格式化以及网络状态追踪统一由上述模块提供。
+8. **标签页同步** (`src/hooks/useTabSync.ts`)
+   - `useTabSync()` - 通过 `BroadcastChannel` + `localStorage` 回退实现单例播放。
+   - **防护**：忽略同标签与过期事件，仅在当前标签处于播放中时触发暂停。
+
+这套 helpers 作为基础能力被广泛复用：ID 生成、存储访问、事件监听、外链打开、时间/文件大小格式化、网络状态追踪与标签页同步统一由上述模块提供。
 
 ### Zod 数据验证与边界保护
 

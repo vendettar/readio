@@ -138,7 +138,11 @@ Provider is located at `src/main.tsx` (`Tooltip.Provider`).
    - **Toast Source**: Offline toast is emitted only on online → offline transition at the root layout; request-level handlers should not duplicate it.
    - **UI Pattern**: Explore collapses remote-only modules while keeping local entry points visible; remote search results are hidden in Command Palette.
 
-These helpers are widely reused as basic capabilities: ID generation, storage access, event listening, external link opening, time/size formatting, and network status tracking are uniformly provided by the above modules.
+8. **Tab Synchronization** (`src/hooks/useTabSync.ts`)
+   - `useTabSync()` - Ensures singleton playback across tabs via `BroadcastChannel` with a `localStorage` fallback.
+   - **Guardrails**: Ignores same-tab and stale events, and only pauses when the receiving tab is actively playing.
+
+These helpers are widely reused as basic capabilities: ID generation, storage access, event listening, external link opening, time/size formatting, network status tracking, and tab synchronization are uniformly provided by the above modules.
 
 ### Zod Data Validation & Boundary Protection
 

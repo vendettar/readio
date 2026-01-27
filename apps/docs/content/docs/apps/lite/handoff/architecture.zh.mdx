@@ -188,8 +188,10 @@ GlobalAudioController 通过 `useMediaSession` 集成媒体会话，向系统暴
 
 ### 标签页同步（单例播放）
 
-- 使用 `BroadcastChannel('readio_sync')`，消息包含 `senderId` 与 `timestamp`。
+- 通过 `useTabSync`（`src/hooks/useTabSync.ts`）实现，并挂载在 `GlobalAudioController`。
+- 使用 `BroadcastChannel('readio_sync')`，在开始播放时发送包含 `senderId` 与 `timestamp` 的消息。
 - 忽略当前标签发送的消息，忽略超过 2 秒的旧消息。
+- 仅当当前标签处于播放中（`isPlaying === true`）时才触发暂停。
 - 当 `BroadcastChannel` 不可用时，使用 `localStorage` 的 `storage` 事件作为回退。
 
 ### 持久化与恢复（播放器生命周期）

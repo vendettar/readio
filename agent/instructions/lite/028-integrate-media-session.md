@@ -1,7 +1,7 @@
 > **⚠️ CRITICAL**: You MUST preserve the current UI/UX layout and styling. Do NOT change visual appearance unless explicitly instructed.
 > **Prerequisites**: Read `apps/docs/content/docs/general/design-system/index.mdx` and `apps/docs/content/docs/apps/lite/ui-patterns/index.mdx` before starting.
 
-# Task: Integrate Media Session API [COMPLETED]
+# Task: Integrate Media Session API
 
 ## Objective
 Allow the user to control playback from the OS Lock Screen, Control Center, or Hardware Keys.
