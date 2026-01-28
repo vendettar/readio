@@ -1,10 +1,19 @@
 import { z } from 'zod'
+import type {
+  Favorite,
+  FileFolder,
+  FileSubtitle,
+  FileTrack,
+  PlaybackSession,
+  Setting,
+  Subscription,
+} from './dexieDb'
 import { db } from './dexieDb'
 import { log, error as logError } from './logger'
 
 const VAULT_VERSION = 1
 
-const playbackSessionSchema = z
+const playbackSessionSchema: z.ZodType<PlaybackSession> = z
   .object({
     id: z.string(),
     source: z.enum(['local', 'explore']),
@@ -29,9 +38,9 @@ const playbackSessionSchema = z
     publishedAt: z.number().optional(),
     episodeId: z.string().optional(),
   })
-  .passthrough()
+  .loose()
 
-const subscriptionSchema = z
+const subscriptionSchema: z.ZodType<Subscription> = z
   .object({
     id: z.string(),
     feedUrl: z.string(),
@@ -41,9 +50,9 @@ const subscriptionSchema = z
     addedAt: z.number(),
     providerPodcastId: z.string().optional(),
   })
-  .passthrough()
+  .loose()
 
-const favoriteSchema = z
+const favoriteSchema: z.ZodType<Favorite> = z
   .object({
     id: z.string(),
     key: z.string(),
@@ -59,29 +68,29 @@ const favoriteSchema = z
     episodeArtworkUrl: z.string().optional(),
     episodeId: z.string().optional(),
   })
-  .passthrough()
+  .loose()
 
-const settingSchema = z
+const settingSchema: z.ZodType<Setting> = z
   .object({
     key: z.string(),
     value: z.string(),
     updatedAt: z.number(),
   })
-  .passthrough()
+  .loose()
 
-const folderSchema = z
+const folderSchema: z.ZodType<FileFolder> = z
   .object({
     id: z.string(),
     name: z.string(),
     createdAt: z.number(),
     pinnedAt: z.number().optional(),
   })
-  .passthrough()
+  .loose()
 
-const localTrackSchema = z
+const localTrackSchema: z.ZodType<FileTrack> = z
   .object({
     id: z.string(),
-    folderId: z.string().nullable().optional(),
+    folderId: z.union([z.string(), z.null(), z.undefined()]),
     name: z.string(),
     audioId: z.string(),
     sizeBytes: z.number(),
@@ -90,16 +99,16 @@ const localTrackSchema = z
     activeSubtitleId: z.string().optional(),
     artworkId: z.string().optional(),
   })
-  .passthrough()
+  .loose()
 
-const localSubtitleSchema = z
+const localSubtitleSchema: z.ZodType<FileSubtitle> = z
   .object({
     id: z.string(),
     trackId: z.string(),
     name: z.string(),
     subtitleId: z.string(),
   })
-  .passthrough()
+  .loose()
 
 /**
  * Zod schema for the entire Personal Vault JSON structure.
@@ -180,7 +189,18 @@ export async function importVault(json: unknown): Promise<void> {
 
       // 2. Ingest new data
       await db.folders.bulkAdd(vault.data.folders)
-      await db.local_tracks.bulkAdd(vault.data.local_tracks)
+      const localTracks: FileTrack[] = vault.data.local_tracks.map((track) => ({
+        id: track.id,
+        folderId: track.folderId ?? null,
+        name: track.name,
+        audioId: track.audioId,
+        sizeBytes: track.sizeBytes,
+        durationSeconds: track.durationSeconds,
+        createdAt: track.createdAt,
+        activeSubtitleId: track.activeSubtitleId,
+        artworkId: track.artworkId,
+      }))
+      await db.local_tracks.bulkAdd(localTracks)
       await db.local_subtitles.bulkAdd(vault.data.local_subtitles)
       await db.subscriptions.bulkAdd(vault.data.subscriptions)
       await db.favorites.bulkAdd(vault.data.favorites)

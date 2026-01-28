@@ -116,6 +116,9 @@ export default function SettingsPage() {
     const file = e.target.files?.[0]
     if (!file) return
 
+    // Pre-emptively clear input to allow selecting the same file again
+    if (vaultInputRef.current) vaultInputRef.current.value = ''
+
     openConfirm({
       title: t('settingsVaultConfirmTitle'),
       description: t('settingsVaultConfirmDesc'),
@@ -131,12 +134,7 @@ export default function SettingsPage() {
           reload() // Refresh settings data
         } catch (_err) {
           toast.errorKey('toastVaultImportFailed')
-        } finally {
-          if (vaultInputRef.current) vaultInputRef.current.value = ''
         }
-      },
-      onCancel: () => {
-        if (vaultInputRef.current) vaultInputRef.current.value = ''
       },
     })
   }

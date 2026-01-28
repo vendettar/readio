@@ -1,0 +1,11 @@
+{
+  "buildCommand": "pnpm --filter @readio/lite build",
+  "outputDirectory": "apps/lite/dist",
+  "installCommand": "pnpm install",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

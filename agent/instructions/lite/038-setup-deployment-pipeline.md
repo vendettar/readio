@@ -1,7 +1,7 @@
 > **⚠️ CRITICAL**: You MUST preserve the current UI/UX layout and styling. Do NOT change visual appearance unless explicitly instructed.
 > **Prerequisites**: Read `apps/docs/content/docs/general/design-system/index.mdx` and `apps/docs/content/docs/apps/lite/ui-patterns/index.mdx` before starting.
 
-# Task: Setup Deployment Pipeline
+# Task: Setup Deployment Pipeline [COMPLETED]
 
 ## Objective
 Establish a production deployment path. Default target is **Vercel** for the web app. Provide a **Dockerfile** for optional self-hosting. Document required environment variables and build steps.
@@ -49,3 +49,13 @@ Establish a production deployment path. Default target is **Vercel** for the web
 - Update `apps/docs/content/docs/general/decision-log.mdx` (mark D005 as implemented).
 - Update `apps/docs/content/docs/general/feature-backlog.mdx` (remove or mark the item as completed).
 - Update `apps/docs/content/docs/apps/lite/handoff/index.mdx` with the new status.
+
+## Completion
+Completed by: Readio Worker
+Commands: pnpm --filter @readio/lite build && pnpm --filter @readio/lite lint && pnpm --filter @readio/lite typecheck
+Date: 2026-01-28
+
+### Verification Logs
+- **Build**: `pnpm --filter @readio/lite build` → `dist/index.html (1.37 kB)`, `dist/assets/index-DiBIayd5.js (973.09 kB)`. [PASS]
+- **Type Check**: `pnpm --filter @readio/lite typecheck` → `tsc --noEmit` [PASS]
+- **Lint**: `pnpm --filter @readio/lite lint` → `biome check .` [PASS]

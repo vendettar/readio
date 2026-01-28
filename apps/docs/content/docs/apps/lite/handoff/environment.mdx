@@ -37,8 +37,28 @@ Readio is configured as a high-quality PWA:
 - **iOS Hardening**: `index.html` includes Apple-specific meta tags (`apple-mobile-web-app-capable`, `apple-touch-icon`).
 - **Native Sharing**: `src/components/Player/ShareButton.tsx` integrates with `navigator.share` API for native sharing on mobile, with clipboard fallback for desktop.
 
+### Deployment [Implemented]
+
+Readio supports automated deployment via Vercel and manual self-hosting via Docker.
+
+#### Vercel (Default)
+- **Configuration**: `vercel.json` at repo root.
+- **Build Command**: `pnpm --filter @readio/lite build`
+- **Output Directory**: `apps/lite/dist`
+- **SPA Routing**: Mandatory rewrite rule redirects all paths to `index.html`.
+- **Environment Variables**:
+  - `READIO_DB_NAME`: (Optional) Override default IndexedDB name.
+  - `READIO_RSS_FEED_BASE_URL`: (Optional) Base URL for RSS proxy.
+  - `READIO_DISCOVERY_SEARCH_URL`: (Optional) iTunes search API endpoint.
+
+#### Docker (Self-Host)
+- **Image**: `Dockerfile` at repo root using `nginx:alpine`.
+- **Nginx Config**: `nginx.conf` handles SPA routing via `try_files`.
+- **Build Steps**:
+  1. `docker build -t readio-lite .`
+  2. `docker run -p 8080:80 readio-lite`
+
 ### Planned (Pending Execution)
-- Deployment pipeline for Vercel/Docker (Instruction 038).
 - CI pipeline via GitHub Actions (Instruction 044).
 - PWA update lifecycle handling (Instruction 043).
 - PWA audio range cache (Instruction 060).

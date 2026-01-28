@@ -37,8 +37,28 @@ Readio 已配置为高质量 PWA：
 - **iOS 加固**：`index.html` 包含 Apple 相关 meta（`apple-mobile-web-app-capable`、`apple-touch-icon`）。
 - **原生分享**：`src/components/Player/ShareButton.tsx` 使用 `navigator.share`，桌面端使用剪贴板回退。
 
+### 部署 [已实现]
+
+Readio 支持通过 Vercel 进行自动化部署，并支持通过 Docker 进行手动私有化部署。
+
+#### Vercel (默认)
+- **配置**: 仓库根目录下的 `vercel.json`。
+- **构建命令**: `pnpm --filter @readio/lite build`
+- **输出目录**: `apps/lite/dist`
+- **SPA 路由**: 强制重写规则将所有路径重定向至 `index.html`。
+- **环境变量**:
+  - `READIO_DB_NAME`: (可选) 覆盖默认 IndexedDB 名称。
+  - `READIO_RSS_FEED_BASE_URL`: (可选) RSS 代理基础 URL。
+  - `READIO_DISCOVERY_SEARCH_URL`: (可选) iTunes 搜索 API 端点。
+
+#### Docker (私有化部署)
+- **镜像**: 仓库根目录下的 `Dockerfile`，使用 `nginx:alpine`。
+- **Nginx 配置**: `nginx.conf` 通过 `try_files` 处理 SPA 路由。
+- **构建步骤**:
+  1. `docker build -t readio-lite .`
+  2. `docker run -p 8080:80 readio-lite`
+
 ### 计划中（待执行）
-- 部署流水线（Vercel/Docker，指令 038）。
 - CI 流水线（GitHub Actions，指令 044）。
 - PWA 更新生命周期（指令 043）。
 - PWA 音频 Range 缓存（指令 060）。

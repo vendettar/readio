@@ -139,7 +139,7 @@ function setCache<T>(key: string, data: T): void {
 }
 
 function parseOrNull<T>(
-  schema: z.ZodType<T>,
+  schema: z.ZodSchema<T>,
   data: unknown,
   tag: string,
   rawItem?: unknown
@@ -330,12 +330,14 @@ function parseRssXml(xmlText: string): ParsedFeed {
         chaptersUrl,
       }
 
-      return parseOrNull(EpisodeSchema, episodeData, 'episode in RSS', item)
+      // biome-ignore lint/suspicious/noExplicitAny: necessary for Zod monorepo compatibility
+      return parseOrNull(EpisodeSchema as any, episodeData, 'episode in RSS', item)
     })
     .filter((e): e is Episode => e !== null)
 
   const feedData = { title, description, artworkUrl, episodes: initialEpisodes }
-  const feed = parseOrNull(ParsedFeedSchema, feedData, 'feed schema')
+  // biome-ignore lint/suspicious/noExplicitAny: necessary for Zod monorepo compatibility
+  const feed = parseOrNull<ParsedFeed>(ParsedFeedSchema as any, feedData, 'feed schema')
   if (!feed) {
     throw new Error('Invalid feed schema')
   }
@@ -368,7 +370,8 @@ function mapRssResult(item: RawAppleItem): DiscoveryPodcast | null {
         })
       : [],
   }
-  return parseOrNull(DiscoveryPodcastSchema, data, 'RSS podcast', item)
+  // biome-ignore lint/suspicious/noExplicitAny: necessary for Zod monorepo compatibility
+  return parseOrNull(DiscoveryPodcastSchema as any, data, 'RSS podcast', item)
 }
 
 function mapRssEpisodeResult(item: RawAppleItem): DiscoveryPodcast | null {
@@ -383,7 +386,8 @@ function mapRssEpisodeResult(item: RawAppleItem): DiscoveryPodcast | null {
     releaseDate: item.releaseDate,
     duration: item.duration,
   }
-  return parseOrNull(DiscoveryPodcastSchema, data, 'RSS episode', item)
+  // biome-ignore lint/suspicious/noExplicitAny: necessary for Zod monorepo compatibility
+  return parseOrNull(DiscoveryPodcastSchema as any, data, 'RSS episode', item)
 }
 
 function mapSearchResult(item: RawAppleItem): Podcast | null {
@@ -400,7 +404,8 @@ function mapSearchResult(item: RawAppleItem): Podcast | null {
     primaryGenreName: item.primaryGenreName,
     trackCount: item.trackCount,
   }
-  return parseOrNull(PodcastSchema, data, 'provider podcast', item)
+  // biome-ignore lint/suspicious/noExplicitAny: necessary for Zod monorepo compatibility
+  return parseOrNull(PodcastSchema as any, data, 'provider podcast', item)
 }
 
 function mapSearchEpisodeResult(item: RawAppleItem): SearchEpisode | null {
@@ -423,7 +428,8 @@ function mapSearchEpisodeResult(item: RawAppleItem): SearchEpisode | null {
     shortDescription: item.shortDescription,
     feedUrl: item.feedUrl,
   }
-  return parseOrNull(SearchEpisodeSchema, data, 'provider episode', item)
+  // biome-ignore lint/suspicious/noExplicitAny: necessary for Zod monorepo compatibility
+  return parseOrNull(SearchEpisodeSchema as any, data, 'provider episode', item)
 }
 
 function mapLookupResult(item: RawAppleItem): DiscoveryPodcast | null {
@@ -450,7 +456,8 @@ function mapLookupResult(item: RawAppleItem): DiscoveryPodcast | null {
       : [],
     feedUrl: item.feedUrl,
   }
-  return parseOrNull(DiscoveryPodcastSchema, data, 'lookup result', item)
+  // biome-ignore lint/suspicious/noExplicitAny: necessary for Zod monorepo compatibility
+  return parseOrNull(DiscoveryPodcastSchema as any, data, 'lookup result', item)
 }
 
 export function mapSearchToEpisode(search: SearchEpisode): Episode | null {
@@ -467,7 +474,8 @@ export function mapSearchToEpisode(search: SearchEpisode): Episode | null {
     artistName: search.artistName,
     feedUrl: search.feedUrl,
   }
-  return parseOrNull(EpisodeSchema, data, 'mapped from provider search')
+  // biome-ignore lint/suspicious/noExplicitAny: necessary for Zod monorepo compatibility
+  return parseOrNull(EpisodeSchema as any, data, 'mapped from provider search')
 }
 
 // ========== Apple Provider Implementation ==========
