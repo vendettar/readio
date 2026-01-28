@@ -75,7 +75,7 @@ export function PodcastCard({
   const overlayRadius = variant === 'circular' ? 'rounded-full' : 'rounded-lg'
 
   return (
-    <div className={containerClasses}>
+    <div className={containerClasses} data-testid="podcast-card">
       <div
         className={cn(
           'relative aspect-square w-full',

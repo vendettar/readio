@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url'
 import { expect, type Page, test } from '@playwright/test'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const FIXTURES_DIR = path.join(__dirname, 'fixtures')
+const FIXTURES_DIR = path.join(__dirname, '../fixtures')
 const TEST_AUDIO = path.join(FIXTURES_DIR, 'test-audio.mp3')
 const TEST_SUBTITLE = path.join(FIXTURES_DIR, 'test-audio.srt')
 const TEST_VTT = path.join(FIXTURES_DIR, 'test-audio.vtt')

@@ -262,6 +262,11 @@ Follows the five architecture consistency principles defined in `apps/docs/conte
    - **`AnimatedList`**: Standard container for entrance animations. Uses a **data-driven API** (`items`, `renderItem`, `getKey`) to ensure stable keys and prevent layout flickering. Uses Framer Motion's `AnimatePresence` and `staggerChildren` to create a premium staggered slide-up effect.
    - **`CountUp`**: Animated number component. Uses `useSpring` for smooth numeric transitions. Used primarily for statistics and usage values (e.g., Settings storage info).
 
+8. **Legal Pages** (`src/routeComponents/legal/`)
+   - Standardized layout for Privacy Policy and Terms of Service.
+   - Uses `prose` classes for consistent content styling.
+   - Entry points available in Settings Page.
+
 ### App Initialization
 
 Global data loading (Favorites, Subscriptions) is centralized in the `useAppInitialization()` hook at the root route:

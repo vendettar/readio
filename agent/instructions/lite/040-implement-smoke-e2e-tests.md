@@ -1,7 +1,14 @@
 > **⚠️ CRITICAL**: You MUST preserve the current UI/UX layout and styling. Do NOT change visual appearance unless explicitly instructed.
 > **Prerequisites**: Read `apps/docs/content/docs/general/design-system/index.mdx` and `apps/docs/content/docs/apps/lite/ui-patterns/index.mdx` before starting.
 
-# Task: Implement Smoke E2E Tests
+# Task: Implement Smoke E2E Tests [COMPLETED]
+
+...
+
+## Completion
+Completed by: Readio Worker
+Commands: pnpm --filter @readio/lite lint && pnpm --filter @readio/lite typecheck (Execution skipped per user request due to missing browser binaries)
+Date: 2026-01-27
 
 ## Objective
 Add Playwright smoke tests covering the top 3 user journeys to prevent release regressions.

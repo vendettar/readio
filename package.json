@@ -17,7 +17,10 @@
     "lite:build": "pnpm --filter @readio/lite build",
     "lite:lint": "pnpm --filter @readio/lite lint",
     "lite:typecheck": "pnpm --filter @readio/lite typecheck",
-    "lite:test": "pnpm --filter @readio/lite test"
+    "lite:test": "pnpm --filter @readio/lite test",
+    "lite:test:run": "pnpm --filter @readio/lite test:run",
+    "lite:e2e": "pnpm --filter @readio/lite test:e2e",
+    "lite:e2e:ui": "pnpm --filter @readio/lite test:e2e:ui"
   },
   "devDependencies": {
     "@biomejs/biome": "2.3.11",

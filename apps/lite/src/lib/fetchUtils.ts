@@ -209,6 +209,8 @@ export interface FetchWithFallbackOptions {
   headers?: Record<string, string>
   /** If true, skip proxy fallback if the direct fetch returns a 4xx error */
   skipProxyOn4xx?: boolean
+  /** If true, skip direct fetch and use proxies only */
+  forceProxy?: boolean
 }
 
 type FetchSource = 'direct' | 'customProxy' | 'defaultProxy'
@@ -243,7 +245,7 @@ export async function fetchWithFallback<T = string>(
   options: FetchWithFallbackOptions = {}
 ): Promise<T> {
   const config = getAppConfig()
-  const { signal, timeoutMs = config.TIMEOUT_MS, json = false, headers = {} } = options
+  const { signal, timeoutMs = config.TIMEOUT_MS, json = false, headers = {}, forceProxy } = options
   const { proxyUrl, proxyPrimary } = getCorsProxyConfig()
 
   const controller = new AbortController()
@@ -380,8 +382,10 @@ export async function fetchWithFallback<T = string>(
     type Attempt = { name: string; fn: () => Promise<T> }
     const attempts: Attempt[] = []
 
-    // 1. Direct
-    attempts.push({ name: 'Direct', fn: fetchDirect })
+    // 1. Direct (unless forceProxy)
+    if (!forceProxy) {
+      attempts.push({ name: 'Direct', fn: fetchDirect })
+    }
 
     const addCustomProxyAttempt = () => {
       if (customProxy) {

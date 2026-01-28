@@ -67,6 +67,22 @@ beforeEach(() => {
 
 ---
 
+## 6. E2E 冒烟测试 (Playwright) [已实现]
+
+Playwright 冒烟测试覆盖了前 3 个用户流程，以防止发布回归。
+
+- **测试位置**: `apps/lite/tests/e2e/`
+- **静态资源**: `apps/lite/tests/fixtures/` (小型 MP3/SRT/VTT 文件)
+- **运行**: `pnpm --filter @readio/lite test:e2e`
+- **开发服务器**: `pnpm --filter @readio/lite dev:e2e` (Playwright 配置自动使用)
+
+**冒烟覆盖范围**:
+1. 首页 → 上传 → 播放
+2. 订阅 → 列表渲染
+3. 文件 → 播放带字幕的音轨
+
+---
+
 ## 计划中（待执行）
 
 - **MSW 网络 Mock**：用 MSW 替代手写 mock（指令 058）。

@@ -15,6 +15,7 @@ This document defines the URL structure, navigation patterns, and Slug strategy.
 | Podcast | `/podcast/$id` | Podcast Show page. `$id` is the Provider ID (e.g. iTunes ID). Supports `?fromLayoutPrefix` for context-aware transitions. |
 | Episode | `/podcast/$id/episode/$episodeId` | Episode Detail. See "Slug Strategy" below. |
 | Files | `/files/*` | Local file browser. Uses wildcard for folder paths. |
+| Legal | `/legal/privacy`, `/legal/terms` | Privacy Policy and Terms of Service. |
 
 ## 2. Slug Strategy (Hybrid ID)
 
@@ -47,5 +48,4 @@ Since Readio Lite is a client-side app without a database lookup for slugs, we u
 
 ## Planned (Pending Execution)
 
-- **Legal Routes**: `/legal/privacy` and `/legal/terms` (Instruction 039).
 - **Episode Sort/Filter Params**: Query params for sort/filter state (Instruction 054).

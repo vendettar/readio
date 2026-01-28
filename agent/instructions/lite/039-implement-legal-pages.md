@@ -1,7 +1,19 @@
 > **⚠️ CRITICAL**: You MUST preserve the current UI/UX layout and styling. Do NOT change visual appearance unless explicitly instructed.
 > **Prerequisites**: Read `apps/docs/content/docs/general/design-system/index.mdx` and `apps/docs/content/docs/apps/lite/ui-patterns/index.mdx` before starting.
 
-# Task: Implement Legal Pages
+# Task: Implement Legal Pages [COMPLETED]
+
+...
+
+## Completion
+Completed by: Readio Worker
+Commands: pnpm --filter @readio/lite build && pnpm --filter @readio/lite typecheck && pnpm --filter @readio/lite lint
+Date: 2026-01-27
+
+### Verification Logs
+- **Build**: `pnpm --filter @readio/lite build` → `/legal/privacy` and `/legal/terms` routes added and built. [PASS]
+- **Type Check**: `pnpm --filter @readio/lite typecheck` → `tsc --noEmit` [PASS]
+- **Lint**: `pnpm --filter @readio/lite lint` → `biome check .` [PASS]
 
 ## Objective
 Add Privacy Policy and Terms of Service pages for production compliance. Provide routes and a Settings entry point.

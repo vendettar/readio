@@ -26,15 +26,15 @@ description: Architecture decisions and rationale.
 - **Decision**: Primary deployment is Vercel; Docker is supported for self‑hosting.
 - **Rationale**: Fast web deployment with a portable fallback.
 
-## D006 — Legal Pages Required
+## D006 — Legal Pages Required [Implemented]
 - **Decision**: Privacy Policy and Terms of Service are mandatory for production.
 - **Rationale**: Store compliance and user trust.
 
-## D007 — Smoke E2E Tests
+## D007 — Smoke E2E Tests [Implemented]
 - **Decision**: Maintain Playwright smoke tests for core user journeys before release.
 - **Rationale**: Prevent end‑to‑end regressions that unit tests miss.
 
-## D008 — Strict CSP
+## D008 — Strict CSP [Implemented]
 - **Decision**: Enforce a strict Content Security Policy for all web deployments.
 - **Rationale**: Reduce XSS and untrusted resource loading risk.
 

@@ -15,9 +15,11 @@ Readio is committed to user data sovereignty and absolute security.
 - **Tool**: Use `DOMPurify` (via the wrapper `src/lib/htmlUtils.ts`).
 - **Policy**: Only safe tags (formatting, links) are allowed. Scripts, frames, and tracking pixels are stripped.
 
-## 1.1 Planned: Content Security Policy (CSP)
-- **Status**: Planned via Instruction 041.
-- **Goal**: Enforce strict CSP headers to limit script, media, and image sources.
+## 1.1 Content Security Policy (CSP) [Implemented]
+- **Status**: Implemented via Instruction 041.
+- **Goal**: Enforce strict CSP meta tags to limit script, media, and image sources.
+- **Policy**: `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https:; font-src 'self' data: https:; frame-ancestors 'none'; base-uri 'self';`
+- **Flexibility**: `https:` is explicitly allowed for `connect-src` and `img-src` to support user-configured custom CORS proxies and various podcast artwork CDNs.
 
 ## 1.2 Planned: Iframe Sandbox
 - **Status**: Planned via Instruction 051.

@@ -67,6 +67,22 @@ Tests in `apps/lite/src/store/__tests__/playerStore.test.ts` and `apps/lite/src/
 
 ---
 
+## 6. E2E Smoke Tests (Playwright) [Implemented]
+
+Playwright smoke tests cover the top 3 user journeys to prevent release regressions.
+
+- **Test Location**: `apps/lite/tests/e2e/`
+- **Fixtures**: `apps/lite/tests/fixtures/` (small MP3/SRT/VTT files)
+- **Run**: `pnpm --filter @readio/lite test:e2e`
+- **Dev Server**: `pnpm --filter @readio/lite dev:e2e` (auto-used by Playwright config)
+
+**Smoke Coverage**:
+1. Home → Upload → Play
+2. Subscriptions → List
+3. Files → Playback with subtitles
+
+---
+
 ## Planned (Pending Execution)
 
 - **MSW Network Mocks**: Replace manual mocks with MSW handlers for iTunes/RSS (Instruction 058).

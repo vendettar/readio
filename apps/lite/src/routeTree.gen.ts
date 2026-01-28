@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as SubscriptionsRouteImport } from './routes/subscriptions'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SearchRouteImport } from './routes/search'
+import { Route as LegalRouteImport } from './routes/legal'
 import { Route as HistoryRouteImport } from './routes/history'
 import { Route as FilesRouteImport } from './routes/files'
 import { Route as FavoritesRouteImport } from './routes/favorites'
@@ -19,6 +20,8 @@ import { Route as ExploreRouteImport } from './routes/explore'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as FilesIndexRouteImport } from './routes/files/index'
 import { Route as PodcastIdRouteImport } from './routes/podcast/$id'
+import { Route as LegalTermsRouteImport } from './routes/legal/terms'
+import { Route as LegalPrivacyRouteImport } from './routes/legal/privacy'
 import { Route as PodcastIdIndexRouteImport } from './routes/podcast/$id/index'
 import { Route as PodcastIdEpisodesRouteImport } from './routes/podcast/$id/episodes'
 import { Route as FilesFolderFolderIdRouteImport } from './routes/files/folder/$folderId'
@@ -37,6 +40,11 @@ const SettingsRoute = SettingsRouteImport.update({
 const SearchRoute = SearchRouteImport.update({
   id: '/search',
   path: '/search',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LegalRoute = LegalRouteImport.update({
+  id: '/legal',
+  path: '/legal',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HistoryRoute = HistoryRouteImport.update({
@@ -74,6 +82,16 @@ const PodcastIdRoute = PodcastIdRouteImport.update({
   path: '/podcast/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LegalTermsRoute = LegalTermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
+  getParentRoute: () => LegalRoute,
+} as any)
+const LegalPrivacyRoute = LegalPrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => LegalRoute,
+} as any)
 const PodcastIdIndexRoute = PodcastIdIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -102,9 +120,12 @@ export interface FileRoutesByFullPath {
   '/favorites': typeof FavoritesRoute
   '/files': typeof FilesRouteWithChildren
   '/history': typeof HistoryRoute
+  '/legal': typeof LegalRouteWithChildren
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/subscriptions': typeof SubscriptionsRoute
+  '/legal/privacy': typeof LegalPrivacyRoute
+  '/legal/terms': typeof LegalTermsRoute
   '/podcast/$id': typeof PodcastIdRouteWithChildren
   '/files/': typeof FilesIndexRoute
   '/files/folder/$folderId': typeof FilesFolderFolderIdRoute
@@ -117,9 +138,12 @@ export interface FileRoutesByTo {
   '/explore': typeof ExploreRoute
   '/favorites': typeof FavoritesRoute
   '/history': typeof HistoryRoute
+  '/legal': typeof LegalRouteWithChildren
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/subscriptions': typeof SubscriptionsRoute
+  '/legal/privacy': typeof LegalPrivacyRoute
+  '/legal/terms': typeof LegalTermsRoute
   '/files': typeof FilesIndexRoute
   '/files/folder/$folderId': typeof FilesFolderFolderIdRoute
   '/podcast/$id/episodes': typeof PodcastIdEpisodesRoute
@@ -133,9 +157,12 @@ export interface FileRoutesById {
   '/favorites': typeof FavoritesRoute
   '/files': typeof FilesRouteWithChildren
   '/history': typeof HistoryRoute
+  '/legal': typeof LegalRouteWithChildren
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/subscriptions': typeof SubscriptionsRoute
+  '/legal/privacy': typeof LegalPrivacyRoute
+  '/legal/terms': typeof LegalTermsRoute
   '/podcast/$id': typeof PodcastIdRouteWithChildren
   '/files/': typeof FilesIndexRoute
   '/files/folder/$folderId': typeof FilesFolderFolderIdRoute
@@ -151,9 +178,12 @@ export interface FileRouteTypes {
     | '/favorites'
     | '/files'
     | '/history'
+    | '/legal'
     | '/search'
     | '/settings'
     | '/subscriptions'
+    | '/legal/privacy'
+    | '/legal/terms'
     | '/podcast/$id'
     | '/files/'
     | '/files/folder/$folderId'
@@ -166,9 +196,12 @@ export interface FileRouteTypes {
     | '/explore'
     | '/favorites'
     | '/history'
+    | '/legal'
     | '/search'
     | '/settings'
     | '/subscriptions'
+    | '/legal/privacy'
+    | '/legal/terms'
     | '/files'
     | '/files/folder/$folderId'
     | '/podcast/$id/episodes'
@@ -181,9 +214,12 @@ export interface FileRouteTypes {
     | '/favorites'
     | '/files'
     | '/history'
+    | '/legal'
     | '/search'
     | '/settings'
     | '/subscriptions'
+    | '/legal/privacy'
+    | '/legal/terms'
     | '/podcast/$id'
     | '/files/'
     | '/files/folder/$folderId'
@@ -198,6 +234,7 @@ export interface RootRouteChildren {
   FavoritesRoute: typeof FavoritesRoute
   FilesRoute: typeof FilesRouteWithChildren
   HistoryRoute: typeof HistoryRoute
+  LegalRoute: typeof LegalRouteWithChildren
   SearchRoute: typeof SearchRoute
   SettingsRoute: typeof SettingsRoute
   SubscriptionsRoute: typeof SubscriptionsRoute
@@ -225,6 +262,13 @@ declare module '@tanstack/react-router' {
       path: '/search'
       fullPath: '/search'
       preLoaderRoute: typeof SearchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/legal': {
+      id: '/legal'
+      path: '/legal'
+      fullPath: '/legal'
+      preLoaderRoute: typeof LegalRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/history': {
@@ -276,6 +320,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PodcastIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/legal/terms': {
+      id: '/legal/terms'
+      path: '/terms'
+      fullPath: '/legal/terms'
+      preLoaderRoute: typeof LegalTermsRouteImport
+      parentRoute: typeof LegalRoute
+    }
+    '/legal/privacy': {
+      id: '/legal/privacy'
+      path: '/privacy'
+      fullPath: '/legal/privacy'
+      preLoaderRoute: typeof LegalPrivacyRouteImport
+      parentRoute: typeof LegalRoute
+    }
     '/podcast/$id/': {
       id: '/podcast/$id/'
       path: '/'
@@ -319,6 +377,18 @@ const FilesRouteChildren: FilesRouteChildren = {
 
 const FilesRouteWithChildren = FilesRoute._addFileChildren(FilesRouteChildren)
 
+interface LegalRouteChildren {
+  LegalPrivacyRoute: typeof LegalPrivacyRoute
+  LegalTermsRoute: typeof LegalTermsRoute
+}
+
+const LegalRouteChildren: LegalRouteChildren = {
+  LegalPrivacyRoute: LegalPrivacyRoute,
+  LegalTermsRoute: LegalTermsRoute,
+}
+
+const LegalRouteWithChildren = LegalRoute._addFileChildren(LegalRouteChildren)
+
 interface PodcastIdRouteChildren {
   PodcastIdEpisodesRoute: typeof PodcastIdEpisodesRoute
   PodcastIdIndexRoute: typeof PodcastIdIndexRoute
@@ -341,6 +411,7 @@ const rootRouteChildren: RootRouteChildren = {
   FavoritesRoute: FavoritesRoute,
   FilesRoute: FilesRouteWithChildren,
   HistoryRoute: HistoryRoute,
+  LegalRoute: LegalRouteWithChildren,
   SearchRoute: SearchRoute,
   SettingsRoute: SettingsRoute,
   SubscriptionsRoute: SubscriptionsRoute,

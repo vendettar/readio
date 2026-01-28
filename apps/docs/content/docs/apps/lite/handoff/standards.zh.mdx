@@ -276,6 +276,12 @@ Provider 位于 `src/main.tsx`（`Tooltip.Provider`）。
    - **`AnimatedList`**: 入场动画的标准容器。采用**数据驱动 API** (`items`, `renderItem`, `getKey`) 以确保稳定的 Key 并防止布局抖动。使用 Framer Motion 的 `AnimatePresence` 和 `staggerChildren` 创建高级的交错上滑效果。
    - **`CountUp`**: 数字动画组件。使用 `useSpring` 实现平滑的数值过渡。主要用于统计和用量数值（如 Settings 存储信息）。
 
+8. **法律页面 (Legal Pages)** (`src/routeComponents/legal/`)
+   - 隐私政策与服务条款的标准布局。
+   - 使用 `prose` 类保持内容样式的统一。
+   - 入口位于设置页面。
+
+
 ### App Initialization（应用初始化）
 
 全局数据加载（收藏、订阅）集中到根路由的 `useAppInitialization()` 钩子：

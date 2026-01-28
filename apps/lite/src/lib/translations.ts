@@ -172,6 +172,29 @@ export const translations = {
     settingsApiKeys: 'API 密钥',
     settingsApiKeysDesc: '用于将来的功能（如云同步）',
     settingsOpenAiKey: 'OpenAI Key（可选）',
+    settingsLegal: '法律',
+    settingsPrivacyPolicy: '隐私政策',
+    settingsTermsOfService: '服务条款',
+    privacyTitle: '隐私政策',
+    termsTitle: '服务条款',
+    legalLastUpdated: '最后更新：{{date}}',
+    legalDataCollectionTitle: '数据收集',
+    legalDataCollectionBody: 'Readio 不收集个人身份信息。所有处理均在本地设备中完成。',
+    legalStorageTitle: '本地存储',
+    privacyIntro: 'Readio 尊重您的隐私。本政策解释了我们如何处理您的数据。',
+    privacyDataLocal:
+      '所有音频文件、字幕和播放历史记录都通过 IndexedDB 本地存储在您的浏览器中。我们不会将这些数据上传到我们的服务器。',
+    privacyThirdParty:
+      '为了获取播客元数据和封面，应用可能会向 iTunes API 发送请求。如果您配置了代理，请求将通过代理服务器。',
+    legalThirdPartyTitle: '第三方服务',
+    legalOfflineTitle: '离线行为',
+    legalOfflineBody: '应用在离线时只使用本地缓存内容，不会发起网络请求。',
+    legalContactTitle: '联系方式',
+    legalContactBody: '如有问题或请求，请通过应用内提供的官方渠道联系我们。',
+    termsIntro: '欢迎使用 Readio。通过访问此应用，您同意受这些条款的约束。',
+    termsUsage:
+      'Readio 是一个用于个人、非商业用途的播客播放器。您对您上传或通过此应用访问的内容负全部责任。',
+    termsNoWarranty: '本应用“按原样”提供，没有任何形式的明示或暗示保证。',
     settingsMigration: '迁移',
     settingsMigrationDesc: '使用 OPML 导入或导出订阅。导入会合并现有订阅（去重，不删除）。',
     settingsImportOpml: '导入 OPML',
@@ -569,6 +592,33 @@ export const translations = {
     settingsApiKeys: 'API Keys',
     settingsApiKeysDesc: 'For future features like cloud sync',
     settingsOpenAiKey: 'OpenAI Key (Optional)',
+    settingsLegal: 'Legal',
+    settingsPrivacyPolicy: 'Privacy Policy',
+    settingsTermsOfService: 'Terms of Service',
+    privacyTitle: 'Privacy Policy',
+    termsTitle: 'Terms of Service',
+    legalLastUpdated: 'Last updated: {{date}}',
+    legalDataCollectionTitle: 'Data Collection',
+    legalDataCollectionBody:
+      'Readio does not collect personal data. All processing happens locally.',
+    legalStorageTitle: 'Local Storage',
+    privacyIntro: 'Readio respects your privacy. This policy explains how we handle your data.',
+    privacyDataLocal:
+      'All audio files, subtitles, and playback history are stored locally in your browser via IndexedDB. We do not upload this data to our servers.',
+    privacyThirdParty:
+      'To fetch podcast metadata and artwork, the app may send requests to the iTunes API. If you configure a proxy, requests will pass through the proxy server.',
+    legalThirdPartyTitle: 'Third-Party Services',
+    legalOfflineTitle: 'Offline Behavior',
+    legalOfflineBody:
+      'When offline, the app only uses cached local content and does not make network requests.',
+    legalContactTitle: 'Contact',
+    legalContactBody:
+      'For questions or requests, contact us through the official channels listed in the app.',
+    termsIntro: 'Welcome to Readio. By accessing this app, you agree to be bound by these terms.',
+    termsUsage:
+      'Readio is a podcast player for personal, non-commercial use. You are solely responsible for the content you upload or access through this app.',
+    termsNoWarranty:
+      'The app is provided "as is" without warranties of any kind, either express or implied.',
     settingsMigration: 'Migration',
     settingsMigrationDesc:
       'Import or export subscriptions via OPML. Import merges existing subscriptions (dedupe, no deletes).',
@@ -976,6 +1026,33 @@ export const translations = {
     settingsApiKeys: 'API キー',
     settingsApiKeysDesc: '将来の機能（クラウド同期など）用',
     settingsOpenAiKey: 'OpenAI Key（任意）',
+    settingsLegal: 'Legal',
+    settingsPrivacyPolicy: 'Privacy Policy',
+    settingsTermsOfService: 'Terms of Service',
+    privacyTitle: 'Privacy Policy',
+    termsTitle: 'Terms of Service',
+    legalLastUpdated: 'Last updated: {{date}}',
+    legalDataCollectionTitle: 'Data Collection',
+    legalDataCollectionBody:
+      'Readio does not collect personal data. All processing happens locally.',
+    legalStorageTitle: 'Local Storage',
+    privacyIntro: 'Readio respects your privacy. This policy explains how we handle your data.',
+    privacyDataLocal:
+      'All audio files, subtitles, and playback history are stored locally in your browser via IndexedDB. We do not upload this data to our servers.',
+    privacyThirdParty:
+      'To fetch podcast metadata and artwork, the app may send requests to the iTunes API. If you configure a proxy, requests will pass through the proxy server.',
+    legalThirdPartyTitle: 'Third-Party Services',
+    legalOfflineTitle: 'Offline Behavior',
+    legalOfflineBody:
+      'When offline, the app only uses cached local content and does not make network requests.',
+    legalContactTitle: 'Contact',
+    legalContactBody:
+      'For questions or requests, contact us through the official channels listed in the app.',
+    termsIntro: 'Welcome to Readio. By accessing this app, you agree to be bound by these terms.',
+    termsUsage:
+      'Readio is a podcast player for personal, non-commercial use. You are solely responsible for the content you upload or access through this app.',
+    termsNoWarranty:
+      'The app is provided "as is" without warranties of any kind, either express or implied.',
     settingsMigration: '移行',
     settingsMigrationDesc:
       'OPML形式を使用して購読をインポートまたはエクスポートします。インポートすると既存の購読にマージされます（重複排除、削除なし）。',
@@ -1374,6 +1451,33 @@ export const translations = {
     settingsApiKeys: 'API 키',
     settingsApiKeysDesc: '클라우드 동기화 등 미래 기능용',
     settingsOpenAiKey: 'OpenAI Key (선택)',
+    settingsLegal: 'Legal',
+    settingsPrivacyPolicy: 'Privacy Policy',
+    settingsTermsOfService: 'Terms of Service',
+    privacyTitle: 'Privacy Policy',
+    termsTitle: 'Terms of Service',
+    legalLastUpdated: 'Last updated: {{date}}',
+    legalDataCollectionTitle: 'Data Collection',
+    legalDataCollectionBody:
+      'Readio does not collect personal data. All processing happens locally.',
+    legalStorageTitle: 'Local Storage',
+    privacyIntro: 'Readio respects your privacy. This policy explains how we handle your data.',
+    privacyDataLocal:
+      'All audio files, subtitles, and playback history are stored locally in your browser via IndexedDB. We do not upload this data to our servers.',
+    privacyThirdParty:
+      'To fetch podcast metadata and artwork, the app may send requests to the iTunes API. If you configure a proxy, requests will pass through the proxy server.',
+    legalThirdPartyTitle: 'Third-Party Services',
+    legalOfflineTitle: 'Offline Behavior',
+    legalOfflineBody:
+      'When offline, the app only uses cached local content and does not make network requests.',
+    legalContactTitle: 'Contact',
+    legalContactBody:
+      'For questions or requests, contact us through the official channels listed in the app.',
+    termsIntro: 'Welcome to Readio. By accessing this app, you agree to be bound by these terms.',
+    termsUsage:
+      'Readio is a podcast player for personal, non-commercial use. You are solely responsible for the content you upload or access through this app.',
+    termsNoWarranty:
+      'The app is provided "as is" without warranties of any kind, either express or implied.',
     settingsMigration: '마이그레이션',
     settingsMigrationDesc:
       'OPML 형식을 사용하여 구독을 가져오거나 내보냅니다. 가져오기 시 기존 구독과 병합됩니다(중복 제거, 삭제 없음).',
@@ -2176,6 +2280,33 @@ export const translations = {
     settingsApiKeys: 'Claves de API',
     settingsApiKeysDesc: 'Para funciones futuras como sincronización en la nube',
     settingsOpenAiKey: 'Clave de OpenAI (Opcional)',
+    settingsLegal: 'Legal',
+    settingsPrivacyPolicy: 'Privacy Policy',
+    settingsTermsOfService: 'Terms of Service',
+    privacyTitle: 'Privacy Policy',
+    termsTitle: 'Terms of Service',
+    legalLastUpdated: 'Last updated: {{date}}',
+    legalDataCollectionTitle: 'Data Collection',
+    legalDataCollectionBody:
+      'Readio does not collect personal data. All processing happens locally.',
+    legalStorageTitle: 'Local Storage',
+    privacyIntro: 'Readio respects your privacy. This policy explains how we handle your data.',
+    privacyDataLocal:
+      'All audio files, subtitles, and playback history are stored locally in your browser via IndexedDB. We do not upload this data to our servers.',
+    privacyThirdParty:
+      'To fetch podcast metadata and artwork, the app may send requests to the iTunes API. If you configure a proxy, requests will pass through the proxy server.',
+    legalThirdPartyTitle: 'Third-Party Services',
+    legalOfflineTitle: 'Offline Behavior',
+    legalOfflineBody:
+      'When offline, the app only uses cached local content and does not make network requests.',
+    legalContactTitle: 'Contact',
+    legalContactBody:
+      'For questions or requests, contact us through the official channels listed in the app.',
+    termsIntro: 'Welcome to Readio. By accessing this app, you agree to be bound by these terms.',
+    termsUsage:
+      'Readio is a podcast player for personal, non-commercial use. You are solely responsible for the content you upload or access through this app.',
+    termsNoWarranty:
+      'The app is provided "as is" without warranties of any kind, either express or implied.',
     settingsMigration: 'Migración',
     settingsMigrationDesc:
       'Importe o exporte suscripciones en formato OPML. Al importar se fusionan con las existentes (deduplicación, sin eliminaciones).',

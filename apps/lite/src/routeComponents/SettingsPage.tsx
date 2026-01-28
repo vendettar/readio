@@ -1,4 +1,5 @@
-import { Download, Eraser, Info, Shield, Trash2, Upload } from 'lucide-react'
+import { Link } from '@tanstack/react-router'
+import { Download, Eraser, ExternalLink, Info, Shield, Trash2, Upload } from 'lucide-react'
 import type { CSSProperties } from 'react'
 import { useRef } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -383,6 +384,27 @@ export default function SettingsPage() {
                     />
                   </form>
                 </Form>
+              </CardContent>
+            </Card>
+
+            {/* Legal Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">{t('settingsLegal')}</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                <Button variant="ghost" className="w-full justify-between" asChild>
+                  <Link to="/legal/privacy">
+                    {t('settingsPrivacyPolicy')}
+                    <ExternalLink size={14} className="text-muted-foreground" />
+                  </Link>
+                </Button>
+                <Button variant="ghost" className="w-full justify-between" asChild>
+                  <Link to="/legal/terms">
+                    {t('settingsTermsOfService')}
+                    <ExternalLink size={14} className="text-muted-foreground" />
+                  </Link>
+                </Button>
               </CardContent>
             </Card>
           </div>

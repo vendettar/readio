@@ -605,7 +605,10 @@ const appleProviderImplementation: DiscoveryProvider = {
       const cached = getJsonWithTtl<ParsedFeed>(nsKey('feed-v2', feedUrl), cacheTtl)
       if (cached) return cached
 
-      const xmlText = await fetchTextWithFallback(feedUrl, { signal: signal || fetchSignal })
+      const xmlText = await fetchTextWithFallback(feedUrl, {
+        signal: signal || fetchSignal,
+        forceProxy: true,
+      })
       const result = parseRssXml(xmlText)
 
       setJsonWithTtl(nsKey('feed-v2', feedUrl), result)

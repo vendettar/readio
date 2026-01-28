@@ -15,9 +15,11 @@ Readio 致力于用户数据主权和绝对安全。
 - **工具**: 使用 `DOMPurify` (通过包装器 `src/lib/htmlUtils.ts`)。
 - **策略**: 仅允许安全标签 (格式化, 链接)。脚本、iframe 和跟踪像素会被剥离。
 
-## 1.1 计划中：内容安全策略 (CSP)
-- **状态**：指令 041 计划中。
-- **目标**：通过严格 CSP 限制脚本、媒体与图片来源。
+## 1.1 内容安全策略 (CSP) [已实现]
+- **状态**：通过指令 041 已实现。
+- **目标**：通过严格 CSP meta 标签限制脚本、媒体与图片来源。
+- **策略**：`default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https:; font-src 'self' data: https:; frame-ancestors 'none'; base-uri 'self';`
+- **灵活性**：显式允许 `connect-src` 和 `img-src` 使用 `https:` 协议，以支持用户配置的自定义 CORS 代理以及各种播客封面 CDN。
 
 ## 1.2 计划中：Iframe 沙箱
 - **状态**：指令 051 计划中。
