@@ -8,12 +8,20 @@ const TEST_AUDIO = path.join(FIXTURES_DIR, 'test-audio.mp3')
 const TEST_SUBTITLE = path.join(FIXTURES_DIR, 'test-audio.srt')
 
 /**
+ * Helper to wait for the test harness to be available on window
+ */
+async function waitForTestHarness(page: Page) {
+  await page.waitForFunction(() => !!window.__READIO_TEST__)
+}
+
+/**
  * Helper to seed database with mock subscriptions
  */
 async function seedSubscriptions(page: Page) {
+  await waitForTestHarness(page)
   await page.evaluate(async () => {
     const db = window.__READIO_TEST__?.db
-    if (!db) return
+    if (!db) throw new Error('Test harness DB not found')
 
     await db.addSubscription({
       feedUrl: 'https://example.com/rss',
@@ -29,6 +37,7 @@ test.describe('App Smoke Tests', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/')
     // Ensure we start with a clean state
+    await waitForTestHarness(page)
     await page.evaluate(async () => {
       await window.__READIO_TEST__?.clearAppData()
     })

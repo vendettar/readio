@@ -35,7 +35,7 @@ description: 架构决策与理由。
 - **理由**：防止单测无法覆盖的端到端回归。
 
 ## D008 — 严格 CSP [已实现]
-- **决策**：所有 Web 部署强制执行严格的 Content Security Policy。
+- **决策**：所有 Web 部署通过 **HTTP 响应头（服务器/边缘层）** 强制执行严格的 Content Security Policy。
 - **理由**：降低 XSS 与不可信资源加载风险。
 
 ## D009 — 数据保留策略

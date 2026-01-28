@@ -121,6 +121,7 @@ Data Flow: Show Page first uses Lookup API to get metadata, then uses feedUrl to
 - **Parsing Rule**: OPML can contain nested `<outline>` nodes. Parsing must be recursive and collect all `xmlUrl` entries.
 - **Dedupe**: Import must skip existing `feedUrl` entries via unique index before insert.
 - **Merge Semantics**: OPML import **merges** subscriptions (dedupe-only, no deletions).
+- **Settings Export**: Settings must load subscriptions before export to avoid empty exports when Explore hasn't been opened.
 
 ---
 

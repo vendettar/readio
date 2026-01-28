@@ -42,9 +42,13 @@ Readio is configured as a high-quality PWA:
 Readio supports automated deployment via Vercel and manual self-hosting via Docker.
 
 #### Content Security Policy (CSP)
-A strict CSP is implemented via a `<meta>` tag in `index.html`.
+Readio enforces CSP at the **server/edge layer** using HTTP response headers (not via `<meta>` tags).
 - **Directives**: `default-src 'self'`, `script-src 'self'`, `style-src 'self' 'unsafe-inline'`, `img-src 'self' data: blob: https:`, `media-src 'self' blob: https:`, `connect-src 'self' https:`, `font-src 'self' data: https:`, `frame-ancestors 'none'`, `base-uri 'self'`.
 - **Note**: `unsafe-inline` is allowed for styles to support dynamic theme colors and UI library animations. `https:` is allowed in `connect-src` and `img-src` to support user-configured custom proxies and remote artwork.
+
+Implementation targets:
+- **Vercel**: `vercel.json` sets the `Content-Security-Policy` header.
+- **Docker (Nginx)**: `nginx.conf` sets the `Content-Security-Policy` header via `add_header ... always;`.
 
 #### Vercel (Default)
 - **Configuration**: `vercel.json` at repo root.

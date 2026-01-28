@@ -19,8 +19,11 @@ Date: 2026-01-27
 Add a strict Content Security Policy to reduce XSS and malicious resource loading risk when rendering external RSS content.
 
 ## 1. Define CSP
-- **Action**: Add a CSP policy via `index.html` meta tag or deployment headers.
-- **Default**: Implement the CSP as a meta tag in `apps/lite/index.html` for this task.
+- **Action**: Add a CSP policy via **HTTP response headers** (server/edge).
+- **Default**: Implement CSP as headers for both primary deployments:
+  - **Vercel**: `vercel.json` `headers`.
+  - **Docker (Nginx)**: `nginx.conf` `add_header ... always;`.
+- **Forbidden**: Do NOT implement CSP via `apps/lite/index.html` `<meta http-equiv="Content-Security-Policy">`. It is not an equivalent control surface (notably for directives like `frame-ancestors`).
 - **Minimum Directives**:
   - `default-src 'self'`
   - `script-src 'self'`
@@ -42,6 +45,7 @@ Add a strict Content Security Policy to reduce XSS and malicious resource loadin
 ## 3. Verification
 - **Test**: App loads and plays remote podcasts.
 - **Check**: CSP violations are zero in browser console.
+ - **Check**: `Content-Security-Policy` is present as an HTTP response header for HTML and route responses (not only as a `<meta>` tag).
 
 ### Quality Check
 - **Type Check**: Run `pnpm --filter @readio/lite typecheck`.

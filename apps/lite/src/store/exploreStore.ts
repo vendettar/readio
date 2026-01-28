@@ -97,6 +97,7 @@ interface ExploreState {
 
   // Subscriptions
   loadSubscriptions: () => Promise<void>
+  refreshSubscriptions: () => Promise<void>
   subscribe: (podcast: Podcast) => Promise<void>
   bulkSubscribe: (podcasts: MinimalSubscription[]) => Promise<void>
   unsubscribe: (feedUrl: string) => Promise<void>
@@ -104,6 +105,7 @@ interface ExploreState {
 
   // Favorites
   loadFavorites: () => Promise<void>
+  refreshFavorites: () => Promise<void>
   addFavorite: (podcast: Podcast, episode: Episode) => Promise<void>
   removeFavorite: (key: string) => Promise<void>
   isFavorited: (feedUrl: string, audioUrl: string) => boolean
@@ -257,6 +259,15 @@ export const useExploreStore = create<ExploreState>((set, get) => ({
       set({ subscriptionsLoaded: true })
     }
   },
+  refreshSubscriptions: async () => {
+    try {
+      const subs = await DB.getAllSubscriptions()
+      set({ subscriptions: subs, subscriptionsLoaded: true })
+    } catch (error) {
+      logError('[ExploreStore] Failed to refresh subscriptions:', error)
+      set({ subscriptionsLoaded: true })
+    }
+  },
   subscribe: async (podcast) => {
     const subData = {
       feedUrl: podcast.feedUrl ?? '',
@@ -337,6 +348,15 @@ export const useExploreStore = create<ExploreState>((set, get) => ({
       set({ favorites: favs, favoritesLoaded: true })
     } catch (error) {
       logError('[ExploreStore] Failed to load favorites:', error)
+      set({ favoritesLoaded: true })
+    }
+  },
+  refreshFavorites: async () => {
+    try {
+      const favs = await DB.getAllFavorites()
+      set({ favorites: favs, favoritesLoaded: true })
+    } catch (error) {
+      logError('[ExploreStore] Failed to refresh favorites:', error)
       set({ favoritesLoaded: true })
     }
   },

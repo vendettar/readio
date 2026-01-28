@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { Download, Eraser, ExternalLink, Info, Shield, Trash2, Upload } from 'lucide-react'
 import type { CSSProperties } from 'react'
-import { useRef } from 'react'
+import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { CountUp } from '../components/bits/CountUp'
@@ -42,10 +42,19 @@ export default function SettingsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const bulkSubscribe = useExploreStore((s) => s.bulkSubscribe)
   const subscriptions = useExploreStore((s) => s.subscriptions)
+  const loadSubscriptions = useExploreStore((s) => s.loadSubscriptions)
+  const loadFavorites = useExploreStore((s) => s.loadFavorites)
+  const refreshSubscriptions = useExploreStore((s) => s.refreshSubscriptions)
+  const refreshFavorites = useExploreStore((s) => s.refreshFavorites)
 
   const handleImportOpml = () => {
     fileInputRef.current?.click()
   }
+
+  useEffect(() => {
+    loadSubscriptions()
+    loadFavorites()
+  }, [loadFavorites, loadSubscriptions])
 
   const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -133,6 +142,8 @@ export default function SettingsPage() {
           await importVault(json)
           toast.successKey('toastVaultImportSuccess')
           reload() // Refresh settings data
+          refreshSubscriptions()
+          refreshFavorites()
         } catch (_err) {
           toast.errorKey('toastVaultImportFailed')
         }

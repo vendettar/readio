@@ -209,6 +209,7 @@ Content
 - **Import Safety**: Confirm dialog is mandatory before overwriting.
 - **Validation**: Zod schema validation before any write; import runs inside a Dexie transaction.
 - **Warning**: Import is destructive and **not reversible**.
+- **Post-Import Sync**: After import, refresh in-memory subscriptions/favorites caches so Settings reflects the new vault contents.
 - **Breadcrumbs**: No breadcrumbs. Navigation relies on "Back to All Files".
 
 **Component Location**: `src/components/LocalFiles/FolderCard.tsx`, `src/components/LocalFiles/FolderOverflowMenu.tsx`

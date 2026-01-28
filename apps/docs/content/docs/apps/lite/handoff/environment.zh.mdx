@@ -42,9 +42,13 @@ Readio 已配置为高质量 PWA：
 Readio 支持通过 Vercel 进行自动化部署，并支持通过 Docker 进行手动私有化部署。
 
 #### 内容安全策略 (CSP)
-通过 `index.html` 中的 `<meta>` 标签实现严格的 CSP：
+Readio 通过 **服务器/边缘层** 的 HTTP 响应头强制 CSP（不使用 `index.html` 中的 `<meta>` 标签）：
 - **指令**: `default-src 'self'`, `script-src 'self'`, `style-src 'self' 'unsafe-inline'`, `img-src 'self' data: blob: https:`, `media-src 'self' blob: https:`, `connect-src 'self' https:`, `font-src 'self' data: https:`, `frame-ancestors 'none'`, `base-uri 'self'`。
 - **说明**: 允许 `unsafe-inline` 样式以支持动态主题颜色和 UI 组件库动画。允许 `connect-src` 和 `img-src` 使用 `https:` 协议，以支持用户配置的自定义代理和远程封面。
+
+落地位置：
+- **Vercel**：在 `vercel.json` 中设置 `Content-Security-Policy` 响应头。
+- **Docker (Nginx)**：在 `nginx.conf` 中通过 `add_header ... always;` 设置 `Content-Security-Policy` 响应头。
 
 #### Vercel (默认)
 - **配置**: 仓库根目录下的 `vercel.json`。

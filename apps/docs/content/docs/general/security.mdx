@@ -17,9 +17,13 @@ Readio is committed to user data sovereignty and absolute security.
 
 ## 1.1 Content Security Policy (CSP) [Implemented]
 - **Status**: Implemented via Instruction 041.
-- **Goal**: Enforce strict CSP meta tags to limit script, media, and image sources.
+- **Goal**: Enforce strict CSP via **HTTP response headers** (server/edge), to limit script, media, and image sources.
 - **Policy**: `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https:; font-src 'self' data: https:; frame-ancestors 'none'; base-uri 'self';`
 - **Flexibility**: `https:` is explicitly allowed for `connect-src` and `img-src` to support user-configured custom CORS proxies and various podcast artwork CDNs.
+- **Implementation**:
+  - **Vercel**: `vercel.json` sets `Content-Security-Policy` via response headers.
+  - **Docker (Nginx)**: `nginx.conf` sets `Content-Security-Policy` via `add_header ... always;`.
+  - **Forbidden**: Do **not** enforce CSP via an `index.html` `<meta http-equiv="Content-Security-Policy">` tag. It is not an equivalent control surface (notably for `frame-ancestors`).
 
 ## 1.2 Planned: Iframe Sandbox
 - **Status**: Planned via Instruction 051.
