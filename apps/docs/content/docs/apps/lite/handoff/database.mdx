@@ -37,10 +37,19 @@ Reset strategy allows db clearing/rebuilding, does not include migration compati
 - **Reset Method**: `clearAllData()` uses table-level clearing instead of deleting the database, keeping the DB instance available.
 **Dexie Version Policy**: Only retains single version (v1) definition, no history version or upgrade path maintenance. Future schema changes directly clear and rebuild; do not increment version number.
 
-### Personal Vault (Metadata Export)
+### Personal Vault (Metadata Export/Import) [Implemented]
 - **Format**: Single JSON object with `version` and `exportedAt` at the top level.
-- **Scope**: Metadata tables only (no blobs).
-- **Import Rule**: Reject unknown versions.
+- **Scope**: Metadata tables only (folders, tracks, subscriptions, favorites, history, settings). No audio/subtitle blobs.
+- **Validation**: Uses Zod schema validation during import.
+- **Logic**: Transactions ensure atomicity; overwrites existing metadata upon import.
+- **MANDATORY**: Users MUST confirm via dialog before importing as it overwrites current state.
+- **Warning**: Import is destructive and **not reversible**.
+
+### OPML Import/Export [Implemented]
+- **Import**: Parses OPML recursively (`outline` nodes), extracts `xmlUrl` + `title`.
+- **Dedupe**: Skips feeds that already exist by `feedUrl` unique index.
+- **Storage**: Inserts subscriptions with UUID primary keys.
+- **Export**: Generates OPML with escaped XML attributes for `title` and `xmlUrl`.
 
 ---
 

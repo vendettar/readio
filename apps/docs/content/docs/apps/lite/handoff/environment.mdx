@@ -30,6 +30,13 @@ The following libraries form the **Phase 1 Baseline** — they are pre-installed
 | **Animation** | `framer-motion` | Production-grade animations. |
 | **Hotkeys** | `react-hotkeys-hook`, `@use-gesture/react` | Keyboard shortcuts and gesture handling. |
 
+### PWA & Native Sharing [Implemented]
+
+Readio is configured as a high-quality PWA:
+- **Manifest**: `public/manifest.json` defines standalone display, theme colors, and icons.
+- **iOS Hardening**: `index.html` includes Apple-specific meta tags (`apple-mobile-web-app-capable`, `apple-touch-icon`).
+- **Native Sharing**: `src/components/Player/ShareButton.tsx` integrates with `navigator.share` API for native sharing on mobile, with clipboard fallback for desktop.
+
 ### Planned (Pending Execution)
 - Deployment pipeline for Vercel/Docker (Instruction 038).
 - CI pipeline via GitHub Actions (Instruction 044).

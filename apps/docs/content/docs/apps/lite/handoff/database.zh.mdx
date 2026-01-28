@@ -37,10 +37,19 @@ title: Database & Persistence
 - **清理方式**：`clearAllData()` 使用表级清空而非删除数据库，保持 DB 实例可用。
 **Dexie 版本策略**：仅保留单一版本（v1）定义，不维护历史版本或升级路径。未来 schema 变更直接清库重建；不要递增 version 号。
 
-### Personal Vault（元数据导出）
+### Personal Vault（元数据导出/导入）[已实现]
 - **格式**：顶层包含 `version` 与 `exportedAt`。
-- **范围**：仅导出元数据表（不包含 blob）。
-- **导入规则**：拒绝未知版本。
+- **范围**：仅元数据表（folders、tracks、subscriptions、favorites、history、settings），不包含音频/字幕 blob。
+- **校验**：导入时使用 Zod 校验结构。
+- **逻辑**：事务内执行，导入会覆盖现有元数据。
+- **必须**：导入前要求用户确认（对话框）。
+- **警告**：导入是破坏性的，**不可回滚**。
+
+### OPML 导入/导出 [已实现]
+- **导入**：递归解析 OPML（`outline` 节点），提取 `xmlUrl` + `title`。
+- **去重**：根据 `feedUrl` 唯一索引跳过已存在订阅。
+- **存储**：写入订阅使用 UUID 主键。
+- **导出**：生成 OPML 时对 `title` 与 `xmlUrl` 做 XML 属性转义。
 
 ---
 

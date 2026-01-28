@@ -240,6 +240,17 @@ Readio 的确认交互基于 shadcn/Radix primitives：
 - Folder 删除：3-dot 菜单内二步确认（同一 `DropdownMenuContent` + `inert`，避免嵌套 overlay 的 ARIA 冲突）
 - **单步删除例外**：对于“移除收藏”（Favorites）和“删除播放历史”（History）这种非核心、低风险且频繁的操作，直接在 3-dot 菜单中执行单步删除，不强制二步确认。
 
+---
+
+## 4. Personal Vault（完整元数据导出/导入）
+
+- **入口**：Settings → Personal Vault（导出/导入）。
+- **范围**：仅元数据表（folders、local tracks/subtitles、subscriptions、favorites、playback sessions、settings），不包含音频/字幕 blob。
+- **格式**：单一 JSON，包含 `version` 与 `exportedAt`。
+- **导入安全**：覆盖前必须确认对话框。
+- **校验**：写入前使用 Zod 校验；导入在 Dexie 事务内完成。
+- **警告**：导入是破坏性的，**不可回滚**。
+
 
 ### Folder View Route
 

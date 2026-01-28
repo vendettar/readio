@@ -1,7 +1,7 @@
 > **⚠️ CRITICAL**: You MUST preserve the current UI/UX layout and styling. Do NOT change visual appearance unless explicitly instructed.
 > **Prerequisites**: Read `apps/docs/content/docs/general/design-system/index.mdx` and `apps/docs/content/docs/apps/lite/ui-patterns/index.mdx` before starting.
 
-# Task: Harden PWA Metadata & Sharing
+# Task: Harden PWA Metadata & Sharing [COMPLETED]
 
 ## Objective
 Ensure the app is correctly recognized as a high-quality PWA across all platforms (iOS, Android, Windows) and supports native sharing.
@@ -43,3 +43,9 @@ Ensure the app is correctly recognized as a high-quality PWA across all platform
 - Update `apps/docs/content/docs/apps/lite/handoff/environment.mdx`.
 - Update `apps/docs/content/docs/apps/lite/apple-api.mdx` (if iOS-specific behavior changes).
 - Update `apps/docs/content/docs/apps/lite/handoff/index.mdx` with the new status.
+
+## Completion
+Completed by: Readio Worker
+Reviewed by: Readio Reviewer (QA)
+Commands: pnpm --filter @readio/lite typecheck && pnpm --filter @readio/lite lint
+Date: 2026-01-27

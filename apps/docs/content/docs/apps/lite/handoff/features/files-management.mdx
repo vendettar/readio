@@ -198,6 +198,17 @@ Content
 **Folder Structure (Strict)**: 
 - **Single-Level**: Folders cannot be nested. Folders sit at root. Files can be in Root or Folder.
 - **Drag & Drop**: Folders cannot be dragged into folders. Files drag-and-drop into folders.
+
+---
+
+## 4. Personal Vault (Full Metadata Export/Import)
+
+- **Entry**: Settings → Personal Vault (Export/Import).
+- **Scope**: Metadata tables only (folders, local tracks/subtitles, subscriptions, favorites, playback sessions, settings). No audio/subtitle blobs.
+- **Format**: Single JSON with `version` and `exportedAt`.
+- **Import Safety**: Confirm dialog is mandatory before overwriting.
+- **Validation**: Zod schema validation before any write; import runs inside a Dexie transaction.
+- **Warning**: Import is destructive and **not reversible**.
 - **Breadcrumbs**: No breadcrumbs. Navigation relies on "Back to All Files".
 
 **Component Location**: `src/components/LocalFiles/FolderCard.tsx`, `src/components/LocalFiles/FolderOverflowMenu.tsx`

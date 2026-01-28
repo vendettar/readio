@@ -6,6 +6,17 @@ title: Apple Discovery API
 
 本文档提供 Readio 项目中使用的 Apple/iTunes API 参考，作为 Discovery Provider 的实现。每部分包括描述、API URL 和用于测试的 `curl` 命令。
 
+---
+
+## PWA 与 iOS 集成（应用元数据 + 分享）
+
+- **Manifest**：`apps/lite/public/manifest.json` 定义名称、主题/背景色、显示模式、启动 URL 与图标。
+- **iOS Meta 标签**：`apps/lite/index.html` 包含：
+  - `apple-mobile-web-app-capable`
+  - `apple-mobile-web-app-status-bar-style`
+  - `apple-touch-icon`
+- **原生分享**：`apps/lite/src/components/Player/ShareButton.tsx` 使用 `navigator.share` 传入标题与 URL，桌面端回退为剪贴板复制。
+
 ## 1. 热门榜单 (Apple Podcasts RSS API)
 
 这些 API 用于获取不同地区的最受欢迎内容。

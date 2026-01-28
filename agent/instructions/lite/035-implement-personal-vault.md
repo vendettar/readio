@@ -1,7 +1,7 @@
 > **⚠️ CRITICAL**: You MUST preserve the current UI/UX layout and styling. Do NOT change visual appearance unless explicitly instructed.
 > **Prerequisites**: Read `apps/docs/content/docs/general/design-system/index.mdx` and `apps/docs/content/docs/apps/lite/ui-patterns/index.mdx` before starting.
 
-# Task: Feature - Personal Vault (Full Data Export)
+# Task: Feature - Personal Vault (Full Data Export) [COMPLETED]
 
 ## Objective
 Allow users to backup and restore their entire application metadata (Subscriptions, Favorites, History, Folders). 
@@ -39,3 +39,9 @@ Allow users to backup and restore their entire application metadata (Subscriptio
 - Update `apps/docs/content/docs/apps/lite/handoff/database.mdx`.
 - Update `apps/docs/content/docs/apps/lite/handoff/features/files-management.mdx`.
 - Update `apps/docs/content/docs/apps/lite/handoff/index.mdx` with the new status.
+
+## Completion
+Completed by: Readio Worker
+Reviewed by: Readio Reviewer (QA)
+Commands: pnpm --filter @readio/lite typecheck && pnpm --filter @readio/lite lint
+Date: 2026-01-27

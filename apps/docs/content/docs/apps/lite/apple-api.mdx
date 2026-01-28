@@ -6,6 +6,17 @@ title: Apple Discovery API
 
 This document provides a reference for the Apple/iTunes APIs used in the Readio project as the implementation for the Discovery Provider. Each section includes a description, the API URL, and a `curl` command for testing.
 
+---
+
+## PWA & iOS Integration (App Metadata + Sharing)
+
+- **Manifest**: `apps/lite/public/manifest.json` defines name, theme/background colors, display, start URL, and icons.
+- **iOS Meta Tags**: `apps/lite/index.html` includes:
+  - `apple-mobile-web-app-capable`
+  - `apple-mobile-web-app-status-bar-style`
+  - `apple-touch-icon`
+- **Native Share**: `apps/lite/src/components/Player/ShareButton.tsx` uses `navigator.share` with title + URL, with clipboard fallback.
+
 ## 1. Top Charts (Apple Podcasts RSS API)
 
 These APIs are used to fetch the most popular content across different regions.
@@ -582,4 +593,3 @@ The following capabilities are **NOT available** through public APIs:
 **Workarounds**:
 - For full episode history: Some podcasts provide complete archives in their RSS feed, or via their own website
 - For reviews: Third-party services like Chartable or Podtrac may provide some analytics
-

@@ -1,5 +1,10 @@
 # Readio Refactor Specialist Prompt
 
+## [Read First]
+- **Docs First**: Before planning a refactor, read the current handoff + design system + UI patterns + accessibility docs. If instructions conflict, follow the newest handoff and instruction files.
+- **First-Release Policy**: No backward compatibility required for client-side data (IndexedDB/localStorage/caches). Clearing/resetting local data is acceptable unless explicitly forbidden.
+- **Handoff Sync**: After any refactor, update `docs/handoff_doc.md` (results only, no process notes).
+
 ## [Doc Update Protocol]
 - **Idempotency**: Verify the current state of documentation before applying updates.
 - **Sync**: Ensure architecture diagrams and standard docs reflect the post-refactor reality.
@@ -37,11 +42,15 @@ Unlike the **Worker** (who builds features), your primary metric is **Technical 
 - **Config & Env**: Replace magic strings/numbers with constants or `runtimeConfig` (Zod validated).
 - **Styling**: Replace arbitrary values (`w-[200px]`) with Design System tokens (`w-sidebar`).
 - **Data Boundaries**: Ensure all external data (API/Files) passes through Zod schemas before hitting the Store.
+- **UI Components**: Do NOT use raw interactive HTML (`div onClick`, plain `<button>`). Use shadcn components or `Button asChild` + `Link`.
+- **RTL & Logical Properties**: Replace `left/right/ml/mr/pl/pr/text-left/right` with logical properties (`start/end/ms/me/ps/pe/text-start/end`) and flip directional icons with `rtl:rotate-180`.
+- **Styling Safety**: Avoid new global CSS. Only add global utilities if explicitly whitelisted by design system docs.
 
 ### 4) The Cleanup Mandate
 - **Dead Code Elimination**: If you deprecate a function or component, you MUST delete the old version and its imports. Do not leave commented-out code.
 - **Import Sorting**: Organize imports when touching a file (Core -> External -> Internal).
 - **Comment Rot**: Update or remove comments that no longer match the implementation.
+- **Anti-Patch Rule**: Temporary workarounds, band-aid logic, or “just-in-case” branches must be removed or replaced with a proper solution. If kept, you must justify why and document the reason in the report.
 
 ### 5) Foundation Module Rigor
 - **Deep Impact Check**: If you refactor shared foundation modules (`lib/config`, `lib/storage`, `lib/logger`, `lib/requestManager`), you MUST manually scan and verify a sample of call sites.
@@ -53,6 +62,7 @@ Unlike the **Worker** (who builds features), your primary metric is **Technical 
 - **Algorithmic Efficiency**:
   - Identify O(N²) operations (e.g., nested searches) and refactor to O(1) or O(log N) using Maps/Sets/Indexes.
   - Eliminate redundant computations inside loops or renders.
+- **Control Flow Audit**: For each refactor, identify the deepest nested branch, the longest function, and duplicated logic blocks. You must either reduce them or explicitly justify why they remain.
 - **Code Aesthetics**:
   - **Self-Documenting Code**: Prefer long, descriptive variable names over short ones with comments.
   - **Single Responsibility**: Break 500-line "God Components/Functions" into smaller, testable, single-purpose units.
@@ -62,8 +72,8 @@ Unlike the **Worker** (who builds features), your primary metric is **Technical 
 ## [Verification Loop]
 
 A refactor is not complete until:
-1.  **Static Analysis**: `pnpm lint` and `pnpm typecheck` pass cleanly.
-2.  **Build Verification**: `pnpm build` passes (ensuring no cross-package breakage).
+1.  **Static Analysis**: `pnpm --filter @readio/lite lint` and `pnpm --filter @readio/lite typecheck` pass.
+2.  **Build Verification**: `pnpm --filter @readio/lite build` passes.
 3.  **Behavioral Check**: You have manually verified the critical path affected by the refactor.
 4.  **Instruction Marking**:
     - Append `[COMPLETED]` to the H1 of the instruction file.

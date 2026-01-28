@@ -30,6 +30,13 @@ title: Development Environment
 | **动画** | `framer-motion` | 生产级动画库。 |
 | **热键** | `react-hotkeys-hook`, `@use-gesture/react` | 键盘快捷键与手势处理。 |
 
+### PWA 与原生分享 [已实现]
+
+Readio 已配置为高质量 PWA：
+- **Manifest**：`public/manifest.json` 定义 standalone 展示、主题色与图标。
+- **iOS 加固**：`index.html` 包含 Apple 相关 meta（`apple-mobile-web-app-capable`、`apple-touch-icon`）。
+- **原生分享**：`src/components/Player/ShareButton.tsx` 使用 `navigator.share`，桌面端使用剪贴板回退。
+
 ### 计划中（待执行）
 - 部署流水线（Vercel/Docker，指令 038）。
 - CI 流水线（GitHub Actions，指令 044）。

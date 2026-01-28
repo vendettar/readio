@@ -15,6 +15,7 @@ import { useImmersionStore } from '../../store/immersionStore'
 import { usePlayerStore } from '../../store/playerStore'
 import { ErrorBoundary } from '../ErrorBoundary'
 import { FollowButton } from '../FollowButton'
+import { ShareButton } from '../Player/ShareButton'
 import { SleepTimerButton } from '../Player/SleepTimerButton'
 import { ReadingBgControl } from '../ReadingBgControl'
 import { TranscriptView } from '../Transcript'
@@ -375,6 +376,7 @@ export function FullPlayer() {
 
             {/* Right: Settings & Timer */}
             <div className="w-1/3 flex items-center justify-end gap-2">
+              <ShareButton title={audioTitle} url={window.location.href} />
               <SleepTimerButton />
               <Popover>
                 <PopoverTrigger asChild>

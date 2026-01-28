@@ -1,5 +1,6 @@
-import { Eraser, Info, Trash2 } from 'lucide-react'
+import { Download, Eraser, Info, Shield, Trash2, Upload } from 'lucide-react'
 import type { CSSProperties } from 'react'
+import { useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { CountUp } from '../components/bits/CountUp'
@@ -22,7 +23,11 @@ import { useSettingsData } from '../hooks/useSettingsData'
 import { useSettingsForm } from '../hooks/useSettingsForm'
 import { useStorageMaintenance } from '../hooks/useStorageMaintenance'
 import { formatBytes, formatFileSizeStructured, formatTimestamp } from '../lib/formatters'
+import { generateOpml, parseOpml } from '../lib/opmlParser'
+import { toast } from '../lib/toast'
 import { type Language, languageNativeNames } from '../lib/translations'
+import { exportVault, importVault } from '../lib/vault'
+import { useExploreStore } from '../store/exploreStore'
 import { ACCENT_OPTIONS, useThemeStore } from '../store/themeStore'
 
 export default function SettingsPage() {
@@ -31,6 +36,110 @@ export default function SettingsPage() {
   const setLanguage = (lang: string) => i18n.changeLanguage(lang)
   const languages = languageNativeNames
   const { accent, setAccent } = useThemeStore()
+
+  // OPML
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const bulkSubscribe = useExploreStore((s) => s.bulkSubscribe)
+  const subscriptions = useExploreStore((s) => s.subscriptions)
+
+  const handleImportOpml = () => {
+    fileInputRef.current?.click()
+  }
+
+  const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    try {
+      const text = await file.text()
+      const podcasts = parseOpml(text)
+      if (podcasts.length === 0) {
+        toast.errorKey('toastOpmlEmpty')
+        return
+      }
+      await bulkSubscribe(podcasts)
+      toast.successKey('toastOpmlImportSuccess')
+    } catch (_err) {
+      toast.errorKey('toastOpmlImportFailed')
+    } finally {
+      e.target.value = ''
+    }
+  }
+
+  const handleExportOpml = () => {
+    if (subscriptions.length === 0) {
+      toast.errorKey('toastOpmlExportEmpty')
+      return
+    }
+
+    try {
+      const opml = generateOpml(subscriptions)
+      const blob = new Blob([opml], { type: 'text/xml' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `readio-subscriptions-${new Date().toISOString().split('T')[0]}.opml`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (_err) {
+      toast.errorKey('toastOpmlExportFailed')
+    }
+  }
+
+  // Vault
+  const vaultInputRef = useRef<HTMLInputElement>(null)
+
+  const handleExportVault = async () => {
+    try {
+      const vault = await exportVault()
+      const blob = new Blob([JSON.stringify(vault, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `readio-vault-${new Date().toISOString().split('T')[0]}.json`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (_err) {
+      toast.errorKey('toastVaultExportFailed')
+    }
+  }
+
+  const handleImportVault = () => {
+    vaultInputRef.current?.click()
+  }
+
+  const onVaultFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    openConfirm({
+      title: t('settingsVaultConfirmTitle'),
+      description: t('settingsVaultConfirmDesc'),
+      confirmLabel: t('settingsImportVault'),
+      cancelLabel: t('commonCancel'),
+      variant: 'destructive',
+      onConfirm: async () => {
+        try {
+          const text = await file.text()
+          const json = JSON.parse(text)
+          await importVault(json)
+          toast.successKey('toastVaultImportSuccess')
+          reload() // Refresh settings data
+        } catch (_err) {
+          toast.errorKey('toastVaultImportFailed')
+        } finally {
+          if (vaultInputRef.current) vaultInputRef.current.value = ''
+        }
+      },
+      onCancel: () => {
+        if (vaultInputRef.current) vaultInputRef.current.value = ''
+      },
+    })
+  }
 
   // Settings form with validation
   const { form, onSubmit, handleFieldBlur } = useSettingsForm()
@@ -154,6 +263,63 @@ export default function SettingsPage() {
                   <Label htmlFor="auto-scroll" className="cursor-pointer">
                     {t('settingsAutoScroll')}
                   </Label>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Migration Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">{t('settingsMigration')}</CardTitle>
+                <CardDescription>{t('settingsMigrationDesc')}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={onFileChange}
+                  accept=".opml,.xml,text/xml"
+                  className="hidden"
+                />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Button variant="outline" onClick={handleImportOpml} className="flex gap-2">
+                    <Upload size={16} />
+                    {t('settingsImportOpml')}
+                  </Button>
+                  <Button variant="outline" onClick={handleExportOpml} className="flex gap-2">
+                    <Download size={16} />
+                    {t('settingsExportOpml')}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Personal Vault Card */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <Shield size={18} className="text-primary" />
+                  <CardTitle className="text-lg">{t('settingsVault')}</CardTitle>
+                </div>
+                <CardDescription>{t('settingsVaultDesc')}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <input
+                  type="file"
+                  ref={vaultInputRef}
+                  onChange={onVaultFileChange}
+                  accept=".json,application/json"
+                  className="hidden"
+                />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <Button variant="outline" onClick={handleImportVault} className="flex gap-2">
+                    <Upload size={16} />
+                    {t('settingsImportVault')}
+                  </Button>
+                  <Button variant="outline" onClick={handleExportVault} className="flex gap-2">
+                    <Download size={16} />
+                    {t('settingsExportVault')}
+                  </Button>
                 </div>
               </CardContent>
             </Card>

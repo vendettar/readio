@@ -1,9 +1,11 @@
 // src/store/exploreStore.ts
 import { create } from 'zustand'
 import type { Favorite, Subscription } from '../lib/dexieDb'
-import { DB } from '../lib/dexieDb'
+import { DB, db } from '../lib/dexieDb'
 import discovery, { type Episode, type ParsedFeed, type Podcast } from '../lib/discovery'
+import { createId } from '../lib/id'
 import { logError } from '../lib/logger'
+import type { MinimalSubscription } from '../lib/opmlParser'
 import { abortRequestsWithPrefix } from '../lib/requestManager'
 import { getAppConfig } from '../lib/runtimeConfig'
 import { toast } from '../lib/toast'
@@ -96,6 +98,7 @@ interface ExploreState {
   // Subscriptions
   loadSubscriptions: () => Promise<void>
   subscribe: (podcast: Podcast) => Promise<void>
+  bulkSubscribe: (podcasts: MinimalSubscription[]) => Promise<void>
   unsubscribe: (feedUrl: string) => Promise<void>
   isSubscribed: (feedUrl: string) => boolean
 
@@ -276,6 +279,41 @@ export const useExploreStore = create<ExploreState>((set, get) => ({
       set({ subscriptions: [newSub, ...get().subscriptions] })
     } catch (error) {
       handleDbWriteError('subscribe', 'toastSubscribeFailed', error)
+    }
+  },
+  bulkSubscribe: async (podcasts) => {
+    try {
+      const feedUrls = podcasts.map((p) => p.xmlUrl).filter(Boolean)
+      if (feedUrls.length === 0) return
+
+      const existingLoaded = get().subscriptionsLoaded
+      await db.transaction('rw', db.subscriptions, async () => {
+        const existing = await db.subscriptions.where('feedUrl').anyOf(feedUrls).toArray()
+        const existingUrls = new Set(existing.map((s) => s.feedUrl))
+        const now = Date.now()
+
+        const newSubs: Subscription[] = podcasts
+          .filter((p) => !existingUrls.has(p.xmlUrl))
+          .map((p) => ({
+            id: createId(),
+            feedUrl: p.xmlUrl,
+            title: p.title,
+            author: 'Imported',
+            artworkUrl: '',
+            addedAt: now,
+            providerPodcastId: undefined,
+          }))
+
+        if (newSubs.length > 0) {
+          await db.subscriptions.bulkPut(newSubs)
+        }
+      })
+      if (existingLoaded) {
+        const subs = await DB.getAllSubscriptions()
+        set({ subscriptions: subs, subscriptionsLoaded: true })
+      }
+    } catch (error) {
+      handleDbWriteError('bulk subscribe', 'toastSubscribeFailed', error)
     }
   },
   unsubscribe: async (feedUrl) => {
