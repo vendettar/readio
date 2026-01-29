@@ -46,6 +46,8 @@ title: Logic Flow & Engineering
 | **User Error** | Operation failure | Toast / Empty State (i18n) |
 | **System Error** | Parse failure | `console.warn/error` (silent) |
 
+**Toast i18n rule**: User-facing toasts MUST use `toast.*Key(...)`. Do not surface arbitrary exception strings to users; log details and show a stable i18n key.
+
 ## Type-Safe I18n
 - **Rule**: All translations must use **`react-i18next`**.
 - **Typing**: `t()` function must be type-checked against English keys (see `i18n-guide.md`).

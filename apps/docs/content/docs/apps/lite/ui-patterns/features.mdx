@@ -14,6 +14,13 @@ title: Feature Patterns
 - **Micro-animations**: Use the `CountUp` bit for numeric values (e.g., Storage Usage) to provide a premium, dynamic feel.
 - **App Boot**: Do not show half-loaded UI. Use a centered App Logo with a breathing animation while stores are hydrating from Dexie. Use `AnimatePresence` to fade out the loader.
 
+## Image Fallback Strategy [Implemented]
+
+- **Loading State**: Displays a themed placeholder (`bg-muted/50`) during image fetch.
+- **Error Handling**: Automatically replaces broken images with a Lucide `Podcast` icon.
+- **Transitions**: Smoothly fades artwork in (`opacity-0` to `opacity-100`) once loaded to prevent layout jars.
+- **Local Files**: Supports embedded artwork from IDB blobs with the same fallback logic.
+
 ## List Row Interactions
 
 - **Hover Layer**: Use `bg-accent/50` for the background highlight of list rows and cards.
@@ -22,6 +29,13 @@ title: Feature Patterns
 - **Action Visibility**: Interactive buttons (Play, Favorite, Menu) should typically appear or increase in opacity on row hover.
 
 - **Overlay Content**: Display a prominent "Drop to upload" message with an animated icon (e.g. bouncing Upload icon) to confirm active state.
+
+## Empty States & Onboarding [Implemented]
+
+- **Guiding the User**: Replace blank screens with the `<EmptyState />` component.
+- **Components**: Use a high-quality Lucide icon, a bold title, and a descriptive subtitle to explain how to populate the view.
+- **Call to Action (CTA)**: Always provide a primary action button (e.g., "Discover Podcasts" for Subscriptions, or "Add Audio" for Files) to guide the next step.
+- **Drop Zone Prominence**: For the Files library when empty, use a larger, dashed-border container to explicitly invite drag-and-drop actions.
 
 ## Search & Command Palette
 
@@ -44,11 +58,6 @@ title: Feature Patterns
 
 
 ## Planned (Pending Execution)
-
-- **Onboarding Empty States**: First-run guidance for Subscriptions, Files, Favorites, History (Instruction 045).
-- **Image Fallback Strategy**: 
-  - RSS Episodes/Podcasts: Loading skeleton + fallback icon for broken artwork (Instruction 046).
-  - **Local Files**: If metadata contains embedded artwork, display it. Otherwise, use the `FileAudio` lucide icon inside a `bg-muted` square with `shadow-inner`.
 
 - **Offline Content Badges**: Visual indicator for locally cached content + cleanup actions (Instruction 053).
 - **Episode Sorting/Filtering UI**: Controls for sort/filter in episode lists (Instruction 054).

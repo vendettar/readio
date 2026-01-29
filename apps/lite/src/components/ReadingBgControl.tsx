@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import { cn } from '@/lib/utils'
 import { type ReadingBg, useThemeStore } from '../store/themeStore'
 import { Button } from './ui/button'
 import { Label } from './ui/label'
@@ -27,7 +28,7 @@ export function ReadingBgControl() {
             className="h-9 text-xs flex items-center justify-start gap-2"
             onClick={() => setReadingBg(b.id as ReadingBg)}
           >
-            <div className={`w-3 h-3 rounded-full border ${b.bg}`} />
+            <div className={cn('w-3 h-3 rounded-full border', b.bg)} />
             {b.label}
           </Button>
         ))}

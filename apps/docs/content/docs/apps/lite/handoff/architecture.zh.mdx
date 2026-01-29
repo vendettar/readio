@@ -215,6 +215,14 @@ GlobalAudioController 通过 `useMediaSession` 集成媒体会话，向系统暴
 - **异步任务卫生 (Async Hygiene)**：所有异步任务都使用 `requestId` 或 `AbortSignal` 防止过期更新。显式追踪 `setTimeout` 和 `requestAnimationFrame` 并在组件卸载时取消，防止内存泄漏。
 - **异步序列门控 (Sequence Gating)**：关键流程（如会话创建、词典查询）使用 Ref 门控防止同一异步操作的并行重入。
 
+### 启动时维护 (Data Retention) [已实现]
+
+为保持性能并防止元数据存储无限制增长，应用在启动序列中执行一项非阻塞维护任务（见 `useAppInitialization`）。
+
+- **任务**：`prunePlaybackHistory` (`src/lib/retention.ts`)
+- **策略**：保留最新的 **1000** 条会话 **或** 最近 **6 个月** 的记录，以限制更严格（更小）者为准。
+- **实现**：使用分批删除策略（如每批 100 条），批次间有微小延迟，以确保主线程在初始加载期间保持对用户交互的响应。
+
 ### 资源集中管理 (ObjectURLs)
 
 应用遵循严格的 transient 浏览器资源（Blob URLs）管理规则，以防止在单页应用环境中出现内存泄漏：

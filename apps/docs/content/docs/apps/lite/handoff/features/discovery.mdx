@@ -116,10 +116,12 @@ Data Flow: Show Page first uses Lookup API to get metadata, then uses feedUrl to
 - Use `exploreStore.subscribe()` / `unsubscribe()` manage subscription state
 - Subscribe button state judged by `feedUrl` deduplication index (`subscriptions.some(s => s.feedUrl === podcast.feedUrl)`), not using entity identity
 
-### OPML Import/Export
+### OPML Import/Export [Implemented]
 
 - **Parsing Rule**: OPML can contain nested `<outline>` nodes. Parsing must be recursive and collect all `xmlUrl` entries.
+- **Integrity**: Validates uniqueness of `xmlUrl` within the OPML file to prevent duplicate imports (Instruction 049).
 - **Dedupe**: Import must skip existing `feedUrl` entries via unique index before insert.
+- **OPML Dedupe**: Duplicate `xmlUrl` entries inside the OPML file are deduped (do not fail import).
 - **Merge Semantics**: OPML import **merges** subscriptions (dedupe-only, no deletions).
 - **Settings Export**: Settings must load subscriptions before export to avoid empty exports when Explore hasn't been opened.
 
@@ -127,7 +129,6 @@ Data Flow: Show Page first uses Lookup API to get metadata, then uses feedUrl to
 
 ## Planned (Pending Execution)
 
-- **Import Integrity Checks**: Validate IDs and references after import (Instruction 049).
 - **Offline Availability Badges**: Mark cached episodes/shows (Instruction 053).
 - **Content Attribution**: Show ownership disclaimer and complaint link (Instruction 055).
 - **Proxy Failover**: Automatic proxy rotation on 429/5xx (Instruction 062).

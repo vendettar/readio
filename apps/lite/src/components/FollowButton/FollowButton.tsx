@@ -1,5 +1,6 @@
 // src/components/FollowButton/FollowButton.tsx
 import { useTranslation } from 'react-i18next'
+import { cn } from '@/lib/utils'
 import { Button } from '../ui/button'
 
 interface FollowButtonProps {
@@ -15,7 +16,7 @@ export function FollowButton({ isPlaying, isVisible, onClick }: FollowButtonProp
   return (
     <Button
       variant="ghost"
-      className={`follow-current-btn visible ${isPlaying ? 'playing' : ''}`}
+      className={cn('follow-current-btn visible', isPlaying && 'playing')}
       onClick={onClick}
     >
       <svg className="wave-icon" viewBox="0 0 64 24" width="48" height="18" fill="currentColor">

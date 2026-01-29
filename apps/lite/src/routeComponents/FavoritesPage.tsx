@@ -1,4 +1,4 @@
-import { Link, useNavigate } from '@tanstack/react-router'
+import { Link } from '@tanstack/react-router'
 import { Compass, MoreHorizontal, Star } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -18,14 +18,10 @@ import type { Favorite } from '../lib/dexieDb'
 import { stripHtml } from '../lib/htmlUtils'
 import { getDiscoveryArtworkUrl } from '../lib/imageUtils'
 import { useExploreStore } from '../store/exploreStore'
-import { usePlayerStore } from '../store/playerStore'
 
 export default function FavoritesPage() {
   const { t } = useTranslation()
-  const navigate = useNavigate()
-
   const { favorites, favoritesLoaded, removeFavorite } = useExploreStore()
-  const activeEpisodeId = usePlayerStore((s) => s.episodeMetadata?.episodeId)
   const { playFavorite } = useEpisodePlayback()
   const [isInitialLoading, setIsInitialLoading] = useState(!favoritesLoaded)
 
@@ -61,13 +57,13 @@ export default function FavoritesPage() {
         {!isInitialLoading && favorites.length === 0 && (
           <EmptyState
             icon={Star}
-            title={t('favoritesEmpty')}
-            description={t('favoritesEmptyDesc')}
+            title={t('onboarding.favorites.title')}
+            description={t('onboarding.favorites.desc')}
             action={
-              <Button asChild onClick={() => navigate({ to: '/explore' })}>
+              <Button asChild>
                 <Link to="/explore">
                   <Compass className="w-4 h-4 me-2" />
-                  {t('navExplore')}
+                  {t('onboarding.subscriptions.cta')}
                 </Link>
               </Button>
             }
@@ -105,15 +101,9 @@ export default function FavoritesPage() {
                         to={navigationTo}
                         params={navigationParams}
                         onPlay={() => playFavorite(favorite)}
-                        playButtonSize="md"
                         playIconSize={20}
                         hoverGroup="episode"
                         size="lg"
-                        layoutId={
-                          activeEpisodeId === favorite.episodeId
-                            ? `artwork-${favorite.episodeId}-player`
-                            : undefined
-                        }
                       />
                     ) : undefined
                   }

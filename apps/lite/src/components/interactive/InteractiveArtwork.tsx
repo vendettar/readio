@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
-import { motion } from 'framer-motion'
-import { Play } from 'lucide-react'
+// framer-motion removed
+import { Play, Podcast } from 'lucide-react'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { useImageObjectUrl } from '../../hooks/useImageObjectUrl'
@@ -20,15 +20,12 @@ interface InteractiveArtworkProps {
   onPlay?: (e: React.MouseEvent) => void
   playLabel?: string
   hoverScale?: boolean
-  playPosition?: 'center' | 'bottom-start'
-  playButtonSize?: 'sm' | 'md' | 'lg'
   playIconSize?: number
   hoverGroup?: 'episode' | 'item' | 'session' | 'card'
   // Size variants if needed
   size?: 'sm' | 'md' | 'lg' | 'xl'
   referrerPolicy?: React.ImgHTMLAttributes<HTMLImageElement>['referrerPolicy']
   fallbackSrc?: string
-  layoutId?: string
   blob?: Blob | null
 }
 
@@ -48,14 +45,11 @@ export function InteractiveArtwork({
   onPlay,
   playLabel,
   hoverScale = false,
-  playPosition = 'center',
-  playButtonSize = 'md',
   playIconSize,
   hoverGroup,
   size = 'md',
   referrerPolicy = 'no-referrer',
   fallbackSrc,
-  layoutId,
   blob,
 }: InteractiveArtworkProps) {
   const { t } = useTranslation()
@@ -65,19 +59,6 @@ export function InteractiveArtwork({
     md: 'w-16 h-16',
     lg: 'w-20 h-20',
     xl: 'w-24 h-24',
-  }
-
-  const playIconSizeMap = {
-    sm: 12,
-    md: 14,
-    lg: 16,
-    xl: 20,
-  }
-
-  const playButtonSizeClasses = {
-    sm: 'w-8 h-8',
-    md: 'w-10 h-10',
-    lg: 'w-12 h-12',
   }
 
   const hoverOpacityClassMap = {
@@ -94,81 +75,94 @@ export function InteractiveArtwork({
     card: 'group-hover/card:scale-110',
   }
 
-  const hoverOpacityClass = hoverGroup
-    ? hoverOpacityClassMap[hoverGroup]
-    : 'group-hover/artwork:opacity-100'
-  const hoverScaleClass = hoverGroup
-    ? hoverScaleClassMap[hoverGroup]
-    : 'group-hover/artwork:scale-110'
-
-  const overlayClassName = cn(
-    'absolute inset-0 bg-foreground/20 opacity-0 transition-opacity duration-200 pointer-events-none',
-    hoverOpacityClass,
-    playPosition === 'center'
-      ? 'flex items-center justify-center'
-      : 'flex items-end justify-start p-2'
+  const hoverOpacityClass = cn(
+    hoverGroup && hoverOpacityClassMap[hoverGroup],
+    'group-hover/artwork:opacity-100'
+  )
+  const hoverScaleClass = cn(
+    hoverGroup && hoverScaleClassMap[hoverGroup],
+    'group-hover/artwork:scale-110'
   )
 
-  const resolvedPlayIconSize = playIconSize ?? playIconSizeMap[size]
+  const overlayClassName = cn(
+    'absolute inset-0 bg-foreground/20 opacity-0 transition-opacity duration-200 pointer-events-none z-40 flex items-center justify-center',
+    hoverOpacityClass
+  )
+
+  const resolvedPlayIconSize = playIconSize || 24
 
   const blobUrl = useImageObjectUrl(blob || null)
   const effectiveSrc = blobUrl || src
-  const artworkUrl = getDiscoveryArtworkUrl(!hasError ? effectiveSrc : fallbackSrc)
+  const [isLoading, setIsLoading] = React.useState(!!(effectiveSrc || fallbackSrc))
+  const [fallbackError, setFallbackError] = React.useState(false)
+
+  // Reset loading state if source changes
+  React.useEffect(() => {
+    setIsLoading(!!(effectiveSrc || fallbackSrc))
+    setHasError(false)
+    setFallbackError(false)
+  }, [effectiveSrc, fallbackSrc])
+
+  const primaryUrl = effectiveSrc ? getDiscoveryArtworkUrl(effectiveSrc) : undefined
+  const fallbackUrl = fallbackSrc ? getDiscoveryArtworkUrl(fallbackSrc) : undefined
+  const useFallback = (hasError || !effectiveSrc) && !!fallbackUrl && !fallbackError
+  const imageSrc = useFallback ? fallbackUrl : primaryUrl
+
+  const renderImage = () => {
+    if (!imageSrc) return null
+
+    return (
+      <img
+        src={imageSrc}
+        alt={alt}
+        referrerPolicy={referrerPolicy}
+        onLoad={() => setIsLoading(false)}
+        onError={() => {
+          setIsLoading(false)
+          if (useFallback) {
+            setFallbackError(true)
+          } else {
+            setHasError(true)
+          }
+        }}
+        className={cn(
+          'absolute inset-[-4px] w-[calc(100%+8px)] h-[calc(100%+8px)] max-w-none object-cover block transition-all duration-500',
+          isLoading ? 'opacity-0 scale-95' : 'opacity-100 scale-100',
+          hoverScale && !isLoading && hoverScaleClass
+        )}
+      />
+    )
+  }
+
+  const renderPlaceholder = () => {
+    if (!isLoading && imageSrc && !fallbackError && !(hasError && !fallbackUrl)) return null
+
+    return (
+      <div className="absolute inset-0 flex items-center justify-center bg-muted/50 animate-in fade-in duration-300">
+        {(!imageSrc || (hasError && !fallbackUrl) || fallbackError) && (
+          <Podcast
+            className="text-muted-foreground/40 transition-transform duration-300"
+            size={size === 'sm' ? 20 : size === 'md' ? 24 : size === 'lg' ? 32 : 40}
+          />
+        )}
+      </div>
+    )
+  }
 
   return (
     <div
       className={cn(
-        'relative group/artwork overflow-hidden rounded-lg flex-shrink-0 bg-white',
-        !effectiveSrc && 'bg-muted shadow-sm',
+        'relative group/artwork overflow-hidden rounded-lg flex-shrink-0 bg-muted/30',
         sizeClasses[size],
         className
       )}
     >
-      {/* 1. Navigation Layer (Base) */}
-      {layoutId ? (
-        <motion.div layoutId={layoutId} className="absolute inset-0 z-0">
-          {to && params ? (
-            <Button
-              asChild
-              variant="ghost"
-              className="p-0 h-auto hover:bg-transparent block w-full h-full"
-            >
-              <Link
-                to={to as any}
-                params={params as any}
-                search={search as any}
-                className="block w-full h-full"
-              >
-                <img
-                  src={artworkUrl}
-                  alt={alt}
-                  referrerPolicy={referrerPolicy}
-                  onError={() => setHasError(true)}
-                  className={cn(
-                    'absolute inset-[-4px] w-[calc(100%+8px)] h-[calc(100%+8px)] max-w-none object-cover transition-transform duration-500 block',
-                    hoverScale && hoverScaleClass
-                  )}
-                />
-              </Link>
-            </Button>
-          ) : (
-            <img
-              src={artworkUrl}
-              alt={alt}
-              referrerPolicy={referrerPolicy}
-              onError={() => setHasError(true)}
-              className={cn(
-                'absolute inset-[-4px] w-[calc(100%+8px)] h-[calc(100%+8px)] max-w-none object-cover transition-transform duration-500 block',
-                hoverScale && hoverScaleClass
-              )}
-            />
-          )}
-        </motion.div>
-      ) : to && params ? (
+      {/* 1. Image Layer */}
+      {to && params ? (
         <Button
           asChild
           variant="ghost"
-          className="p-0 h-auto hover:bg-transparent block w-full h-full"
+          className="p-0 h-auto hover:bg-transparent block w-full h-full relative z-10"
         >
           <Link
             to={to as any}
@@ -176,29 +170,15 @@ export function InteractiveArtwork({
             search={search as any}
             className="block w-full h-full"
           >
-            <img
-              src={artworkUrl}
-              alt={alt}
-              referrerPolicy={referrerPolicy}
-              onError={() => setHasError(true)}
-              className={cn(
-                'absolute inset-[-4px] w-[calc(100%+8px)] h-[calc(100%+8px)] max-w-none object-cover transition-transform duration-500 block',
-                hoverScale && hoverScaleClass
-              )}
-            />
+            {renderImage()}
+            {renderPlaceholder()}
           </Link>
         </Button>
       ) : (
-        <img
-          src={artworkUrl}
-          alt={alt}
-          referrerPolicy={referrerPolicy}
-          onError={() => setHasError(true)}
-          className={cn(
-            'absolute inset-[-4px] w-[calc(100%+8px)] h-[calc(100%+8px)] max-w-none object-cover transition-transform duration-500 block',
-            hoverScale && hoverScaleClass
-          )}
-        />
+        <div className="w-full h-full relative">
+          {renderImage()}
+          {renderPlaceholder()}
+        </div>
       )}
 
       {/* Edge Artifact Sealer */}
@@ -216,8 +196,10 @@ export function InteractiveArtwork({
               onPlay(e)
             }}
             className={cn(
-              'rounded-full bg-background/90 hover:bg-primary text-primary hover:text-primary-foreground shadow-lg backdrop-blur-sm flex items-center justify-center transition-colors pointer-events-auto',
-              playButtonSizeClasses[playButtonSize]
+              'rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center transition-colors duration-300 pointer-events-auto',
+              'hover:bg-primary/90',
+              'w-1/2 h-1/2',
+              '[&_svg]:w-1/2 [&_svg]:h-1/2'
             )}
             aria-label={playLabel || t('ariaPlayEpisode')}
           >

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { verifyOpmlIntegrity } from './integrity'
 import { warn } from './logger'
 
 export const opmlItemSchema = z.object({
@@ -59,7 +60,21 @@ export function parseOpml(xmlString: string): MinimalSubscription[] {
     }
   }
 
-  return subscriptions
+  const integrity = verifyOpmlIntegrity(subscriptions)
+  if (!integrity.isValid) {
+    throw new Error(integrity.error || 'OPML integrity check failed')
+  }
+
+  // Deduplicate by xmlUrl while preserving first-seen order
+  const seen = new Set<string>()
+  const deduped: MinimalSubscription[] = []
+  for (const item of subscriptions) {
+    if (seen.has(item.xmlUrl)) continue
+    seen.add(item.xmlUrl)
+    deduped.push(item)
+  }
+
+  return deduped
 }
 
 /**

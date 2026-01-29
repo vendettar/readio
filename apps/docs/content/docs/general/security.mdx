@@ -38,10 +38,11 @@ Readio is committed to user data sovereignty and absolute security.
 - **Disclosure**: Warn users in the UI when a request is routed through a public proxy.
 - **Sensitive Data**: Never pass authentication headers, API keys, or cookies through public proxies.
 
-### B. Error Reporting Privacy
-**Rule**: Do NOT collect Personally Identifiable Information (PII).
-- **Forbidden**: Do not log filenames, local file paths, podcast titles, or user queries.
-- **Allowed**: Generic error codes, browser version, and anonymized stack traces (paths must be stripped of local usernames).
+### B. Error Reporting Privacy [Implemented]
+**Rule**: Do NOT collect or export Personally Identifiable Information (PII).
+- **Redaction**: All diagnostic logs are passed through a `redact()` filter before being stored in the buffer or exported. 
+- **Forbidden**: Logged strings must strip file names, local file paths (e.g., `/Users/username/`), and user emails. 
+- **Allowed**: Generic error messages, browser version, and anonymized stack traces (all paths stripped of local usernames).
 
 ## 3. External Links
 **Rule**: Use `src/lib/openExternal.ts` for all external navigation.

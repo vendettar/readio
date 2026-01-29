@@ -139,7 +139,7 @@ export function CommandPalette() {
   }
 
   return (
-    <div ref={containerRef} className="relative w-full px-4 pb-4">
+    <div ref={containerRef} className="relative w-full px-4 pb-2">
       <Command shouldFilter={false} className="overflow-visible bg-transparent h-auto rounded-md">
         {/* The Search Box - acts as common input and cmdk input */}
         <div
@@ -161,6 +161,7 @@ export function CommandPalette() {
             value={query}
             onFocus={() => openOverlay()}
             onValueChange={setQuery}
+            aria-label={t('searchPlaceholderGlobal')}
             onKeyDown={(event: React.KeyboardEvent) => {
               if (event.key === 'Escape') {
                 closeOverlay()

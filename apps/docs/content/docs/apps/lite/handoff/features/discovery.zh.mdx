@@ -113,6 +113,7 @@ title: Discovery & Explore
 
 - **解析规则**：OPML 可嵌套 `<outline>`，必须递归解析并收集所有 `xmlUrl`。
 - **去重**：导入前通过唯一索引检查 `feedUrl`，已存在则跳过。
+- **OPML 去重**：OPML 文件内重复的 `xmlUrl` 会去重处理（不因重复而失败）。
 - **合并语义**：OPML 导入会**合并**订阅（仅去重，不删除）。
 - **设置页导出**：Settings 在导出前必须加载订阅，避免未打开 Explore 时导出为空。
 

@@ -8,6 +8,7 @@ import { TooltipProvider } from './components/ui/tooltip'
 import './index.css'
 import { NetworkError } from './lib/fetchUtils'
 import './lib/i18n'
+import { logError } from './lib/logger'
 import { router } from './router'
 
 // Polyfill Buffer for browser compatibility (required by music-metadata-browser)
@@ -15,6 +16,15 @@ import { router } from './router'
 // but generally better at top.
 if (typeof window !== 'undefined') {
   window.Buffer = window.Buffer || Buffer
+
+  // Global Error Handlers for diagnostic logging
+  window.addEventListener('error', (event) => {
+    logError('[Global] Uncaught Error:', event.error || event.message)
+  })
+
+  window.addEventListener('unhandledrejection', (event) => {
+    logError('[Global] Unhandled Rejection:', event.reason)
+  })
 }
 
 // Note: legacy interactions.css and theme-tokens.css are being consolidated/removed

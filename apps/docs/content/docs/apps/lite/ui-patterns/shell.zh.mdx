@@ -32,6 +32,18 @@ title: Shell 与覆盖层
 
 ---
 
+## className 组合（Tailwind）
+
+- **标准**：对条件/动态 `className` 组合，统一使用 `src/lib/utils.ts` 的 `cn(...)`。
+- **原因**：`cn` 会安全忽略 `undefined` / `null` 条件，并自动合并 Tailwind 工具类冲突（`tailwind-merge`）。
+- **禁止**：当存在条件时，避免用模板字符串拼接 `className`；使用 `cn` 以保证写法一致且便于重构。
+- **示例**：
+  ```tsx
+  import { cn } from '@/lib/utils'
+
+  <div className={cn('rounded-xl', isActive && 'bg-primary/10', className)} />
+  ```
+
 ## 反馈与通知 (Toast)
 
 - **标准**: 通过集中式辅助函数 `src/lib/toast.ts` 使用 **Sonner**。
@@ -39,6 +51,8 @@ title: Shell 与覆盖层
 - **禁止**: **不要** 为通知创建自定义 `fixed` 覆盖层 div。
 - **异步模式**: 对异步操作 (如文件处理) 使用 `toast.promise` 以给予即时反馈。
 - **关键规则**：使用 `toast.*Key`（如 `toast.successKey('key', { var })`）支持国际化。key → 文案转换**必须**在 `src/lib/toast.ts` 内通过 `i18next.t` 完成，不允许在调用点直接调用翻译函数。
+  - **禁止**：业务代码中不要使用 `toast.success/info/error/warning(...)` 直接传入原始字符串或动态错误信息。必须使用 `toast.*Key(...)`，并在 `src/lib/translations.ts` 中维护 key。
+  - **动态错误**：捕获到未知异常时，应记录日志（Local Logger），并展示稳定的 i18n toast key（UI 不展示任意异常字符串）。
 - **用法**:
   ```tsx
   import { toast } from '@/lib/toast'

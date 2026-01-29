@@ -30,6 +30,13 @@ To prevent accidental overwrites of existing playback sessions when re‑creatin
 
 **Timestamp Logic**: `DB.updatePlaybackSession` does NOT automatically update `lastPlayedAt`. The timestamp is only updated by the Store when the player is in an active `isPlaying` state. This ensures that opening the app (restoration) or seeking while paused does not "pollute" the history by bumping the session to the top of the list.
 
+### Retention Policy [Implemented]
+
+To prevent unbounded IndexedDB growth, all playback history is subject to an automatic retention policy:
+- **Limits**: Most recent **1000** sessions OR **last 6 months**, whichever is more restrictive.
+- **Trigger**: Maintenance runs in a background task during app boot (see `retention.ts`).
+- **Batching**: Deletions are processed in small batches to preserve UI responsiveness.
+
 ### Reset Strategy
 
 Reset strategy allows db clearing/rebuilding, does not include migration compatibility layer.
@@ -41,12 +48,18 @@ Reset strategy allows db clearing/rebuilding, does not include migration compati
 - **Format**: Single JSON object with `version` and `exportedAt` at the top level.
 - **Scope**: Metadata tables only (folders, tracks, subscriptions, favorites, history, settings). No audio/subtitle blobs.
 - **Validation**: Uses Zod schema validation during import.
+- **Integrity Check**: Performs business-level validation (Instruction 049):
+  - **Dangling References**: Ensures subtitles point to existing tracks and tracks point to existing folders.
+  - **UUID Uniqueness**: Prevents duplicate IDs within the imported dataset.
+  - **Timestamp Sanity**: Rejects future timestamps (allowing for small clock skew).
+  - **Deduplication**: Ensures no duplicate `feedUrl` or `key` entries within the dataset.
 - **Logic**: Transactions ensure atomicity; overwrites existing metadata upon import.
 - **MANDATORY**: Users MUST confirm via dialog before importing as it overwrites current state.
 - **Warning**: Import is destructive and **not reversible**.
 
 ### OPML Import/Export [Implemented]
 - **Import**: Parses OPML recursively (`outline` nodes), extracts `xmlUrl` + `title`.
+- **Integrity**: Validates uniqueness of `xmlUrl` within the OPML file.
 - **Dedupe**: Skips feeds that already exist by `feedUrl` unique index.
 - **Storage**: Inserts subscriptions with UUID primary keys.
 - **Export**: Generates OPML with escaped XML attributes for `title` and `xmlUrl`.
@@ -55,7 +68,6 @@ Reset strategy allows db clearing/rebuilding, does not include migration compati
 
 ## Planned (Pending Execution)
 
-- **Import Integrity Checks**: Validate IDs and references post-parse (Instruction 049).
 - **Offline Cache Cleanup**: Remove unreferenced blobs safely (Instruction 053).
 - **Media Cache Eviction**: LRU trim policy for audio blobs (Instruction 072).
 - **Storage Quota Monitoring**: Surface browser quota usage in Settings (Instruction 074).

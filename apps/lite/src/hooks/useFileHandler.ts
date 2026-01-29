@@ -8,6 +8,7 @@ import {
   isValidSubtitleFile,
 } from '../lib/schemas/files'
 import { toast } from '../lib/toast'
+import type { TranslationKey } from '../lib/translations'
 import { usePlayerStore } from '../store/playerStore'
 
 export function useFileHandler() {
@@ -34,8 +35,8 @@ export function useFileHandler() {
               loadAudio(file)
               continue
             }
-            const message = result.error.issues[0]?.message
-            if (message) toast.error(message)
+            const messageKey = result.error.issues[0]?.message as TranslationKey | undefined
+            if (messageKey) toast.errorKey(messageKey)
             else toast.errorKey('toastFileValidationError')
             continue
           }
@@ -48,8 +49,8 @@ export function useFileHandler() {
               await loadSubtitles(file)
               continue
             }
-            const message = result.error.issues[0]?.message
-            if (message) toast.error(message)
+            const messageKey = result.error.issues[0]?.message as TranslationKey | undefined
+            if (messageKey) toast.errorKey(messageKey)
             else toast.errorKey('toastFileValidationError')
             continue
           }

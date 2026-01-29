@@ -87,11 +87,20 @@ Readio is an audio application.
 - **Why**: This triggers a Table Scan (O(N)), reading all records into memory.
 - **Fix**: Use IndexedDB indexes and `.startsWithIgnoreCase()` or `.equals()` on indexed fields.
 
+## 11. Bundle Size & Performance Budget [Implemented]
+
+To ensure the application remains lightweight and fast (Instruction 050):
+- **Bundle Analysis**: `rollup-plugin-visualizer` is integrated into the build process, generating a `stats.html` on every build.
+- **Size Budgets**:
+  - **Main JS Entry**: Should remain under ~250KB (Gzipped) / ~800KB (Raw).
+  - **Total Assets**: Should remain under ~1MB (Gzipped) / ~2MB (Raw).
+- **Enforcement**: Build-time budgets are checked via `npm run check-size`.
+- **Core Web Vitals**: Real-user metrics (LCP, FID, CLS) are monitored via `useReportWebVitals` and logged to the local diagnostic logger in production.
+
 ---
 
 ## Planned (Pending Execution)
 
-- **Bundle Size Budget**: Enforce gzipped size budgets in CI (Instruction 050).
 - **PWA Audio Range Cache**: Offline seek with 206 support (Instruction 060).
 - **Memory Stress Test**: Long-session profiling and heap checks (Instruction 061).
 - **Async Race Audit**: Last-action-wins enforcement (Instruction 068).

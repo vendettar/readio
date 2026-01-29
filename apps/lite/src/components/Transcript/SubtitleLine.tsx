@@ -1,5 +1,6 @@
 // src/components/Transcript/SubtitleLine.tsx
 import { useCallback } from 'react'
+import { cn } from '@/lib/utils'
 
 interface SubtitleLineProps {
   start: number
@@ -23,16 +24,16 @@ export function SubtitleLine({ text, isActive, onClick }: SubtitleLineProps) {
   return (
     <div
       onClick={handleClick}
-      className={`
-                p-6 rounded-2xl transition-all duration-300 cursor-pointer group select-text subtitle-line
-                ${isActive ? 'bg-primary/10 shadow-sm' : 'hover:bg-muted/50'}
-            `}
+      className={cn(
+        'p-6 rounded-2xl transition-all duration-300 cursor-pointer group select-text subtitle-line',
+        isActive ? 'bg-primary/10 shadow-sm' : 'hover:bg-muted/50'
+      )}
     >
       <p
-        className={`
-                    font-serif transition-colors duration-200 subtitle-text
-                    ${isActive ? 'text-foreground font-medium' : 'text-muted-foreground'}
-                `}
+        className={cn(
+          'font-serif transition-colors duration-200 subtitle-text',
+          isActive ? 'text-foreground font-medium' : 'text-muted-foreground'
+        )}
       >
         {text}
       </p>

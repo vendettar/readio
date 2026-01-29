@@ -84,17 +84,36 @@ SVG 资源：
 Provider 位于 `src/routes/__root.tsx`（`<Toaster />`），配合 `src/lib/toast.ts` 命令式 API。
 **关键规则**：使用 `toast.*Key`（如 `toast.successKey('key', { var })`）支持国际化。key → 文案转换**必须**在 `src/lib/toast.ts` 内通过 `i18next.t` 完成，不允许在调用点直接调用翻译函数。
 
+#### PWA 更新通知
+当有新的 PWA 版本可用时，应用会显示一个**无限时长**的 Toast，并带有一个“立即刷新”的操作按钮。这由 `usePwaUpdate` hook 管理，该 hook 使用了 `vite-plugin-pwa` 提供的 `needRefresh` 状态。
+
+#### 新手引导与空状态
+空白页面被 `<EmptyState />` 组件取代，该组件提供：
+- 大型视觉图标。
+- 醒目的标题和描述性次要文本。
+- 引导用户下一步操作的主调用按钮（CTA）（例如，“发现播客”或“添加音频”）。
+
+#### 资源加载与兜底
+- **图片兜底策略**：损坏的封面 URL 会自动被替换为居中的 Lucide `Podcast` 图标，并带有主题化的占位背景。
+- **懒加载**：图片使用原生 `loading="lazy"` 或适当的 Framer Motion 入场动画。
+
 #### Tooltip
 
 Provider 位于 `src/main.tsx`（`Tooltip.Provider`）。
+
+### 无障碍标准 (Immersive & Inclusive) [已实现]
+
+应用遵循严格的无障碍标准，确保屏幕阅读器和键盘用户的使用体验（指令 048）：
+- **语义化 HTML**：所有交互元素均使用语义化标签或正确的 `aria-role` 定义。
+- **ARIA 标签**：为所有仅图标按钮（播放、暂停、收藏、设置）及导航区域应用描述性的 `aria-label` 或 `aria-labelledby`。
+- **键盘导航**：焦点管理遵循视觉流向，确保侧边栏、播放器和命令面板具备逻辑性的 Tab 顺序。
+- **交互边界**：通过 `InteractiveArtwork` 和 `InteractiveTitle` 等标准化组件防止嵌套交互元素（如链接内嵌套按钮），解决关键的 A11y 警告。
+- **外部链接**：所有外部链接均标记有 `target="_blank" rel="noopener noreferrer"` 以及描述性的屏幕阅读器文本。
 
 ---
 
 ## 计划中（待执行）
 
-- **新手引导空状态**（指令 045）。
-- **图片兜底策略**（指令 046）。
-- **无障碍审计**（指令 048）。
 - **Iframe 沙箱策略**（指令 051）。
 - **反馈入口**（指令 052）。
 - **MSW 测试标准**（指令 058）。

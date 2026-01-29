@@ -14,6 +14,7 @@ import {
   SUBTITLE_EXTENSIONS,
 } from '../../lib/schemas/files'
 import { toast } from '../../lib/toast'
+import type { TranslationKey } from '../../lib/translations'
 import { cn } from '../../lib/utils'
 
 interface FileDropZoneProps {
@@ -58,8 +59,8 @@ export function FileDropZone({
           if (result.success) {
             validFiles.push(file)
           } else {
-            const message = result.error.issues[0]?.message
-            if (message) toast.error(message)
+            const messageKey = result.error.issues[0]?.message as TranslationKey | undefined
+            if (messageKey) toast.errorKey(messageKey)
             else toast.errorKey('toastFileValidationError')
           }
         } else if (isValidSubtitleFile(file)) {
@@ -67,8 +68,8 @@ export function FileDropZone({
           if (result.success) {
             validFiles.push(file)
           } else {
-            const message = result.error.issues[0]?.message
-            if (message) toast.error(message)
+            const messageKey = result.error.issues[0]?.message as TranslationKey | undefined
+            if (messageKey) toast.errorKey(messageKey)
             else toast.errorKey('toastFileValidationError')
           }
         } else {

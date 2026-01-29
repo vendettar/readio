@@ -531,15 +531,23 @@ export default function FilesIndexPage() {
                     <EmptyState
                       icon={Upload}
                       title={
-                        currentFolderId !== null ? t('filesEmptyFolder') : t('filesEmptyHeadline')
+                        currentFolderId !== null
+                          ? t('filesEmptyFolder')
+                          : t('onboarding.files.title')
                       }
-                      description={currentFolderId !== null ? undefined : t('filesEmptyBody')}
+                      description={
+                        currentFolderId !== null ? undefined : t('onboarding.files.desc')
+                      }
                       action={
                         <Button onClick={() => audioInputRef.current?.click()}>
                           <Upload className="w-4 h-4 me-2" />
-                          {t('filesUpload')}
+                          {t('onboarding.files.cta')}
                         </Button>
                       }
+                      className={cn(
+                        currentFolderId === null &&
+                          'py-32 border-2 border-dashed border-border/50 rounded-3xl bg-muted/20'
+                      )}
                     />
                   )
                 )}

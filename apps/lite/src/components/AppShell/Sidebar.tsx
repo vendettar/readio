@@ -38,14 +38,14 @@ function SidebarItem({ to, icon: Icon, label, isActive }: SidebarItemProps) {
       className={cn(
         'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer',
         isActive
-          ? 'bg-primary/10 text-primary font-bold'
-          : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+          ? 'bg-primary/10 text-primary font-bold shadow-sm'
+          : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
       )}
     >
       <Icon
         size={20}
         strokeWidth={isActive ? 2.5 : 2}
-        className={isActive ? 'text-primary' : 'text-muted-foreground'}
+        className={cn('transition-colors', isActive ? 'text-primary' : 'text-muted-foreground')}
       />
       {label}
     </Link>
@@ -61,7 +61,7 @@ export function Sidebar({ className = '' }: SidebarProps) {
   return (
     <aside
       className={cn(
-        'w-sidebar h-screen bg-background/80 backdrop-blur-xl backdrop-saturate-150 border-e border-border/50 flex flex-col flex-shrink-0 relative z-sidebar',
+        'w-sidebar h-screen bg-background border-e border-border flex flex-col flex-shrink-0 relative z-sidebar',
         className
       )}
     >
@@ -100,55 +100,45 @@ export function Sidebar({ className = '' }: SidebarProps) {
       {/* Global Search */}
       <CommandPalette />
 
-      <nav className="flex-1 px-4 space-y-8 overflow-y-auto">
-        {/* Section: Discover */}
+      <nav className="flex-1 px-4 space-y-8 overflow-y-auto" aria-label={t('ariaMainNavigation')}>
+        {/* Discover Section */}
         <div className="space-y-1">
-          <div className="px-3 mb-2 text-xs font-bold text-muted-foreground uppercase tracking-widest text-start">
+          <h2 className="px-3 text-xs font-bold text-muted-foreground uppercase tracking-widest mb-2">
             {t('sidebarDiscover')}
-          </div>
+          </h2>
           <SidebarItem
             to="/explore"
             icon={Disc}
-            label={t('navExplore')}
-            isActive={currentPath === '/explore'}
+            label={t('sidebarExplore')}
+            isActive={currentPath.startsWith('/explore')}
           />
         </div>
 
-        {/* Section: Library */}
+        {/* Library Section */}
         <div className="space-y-1">
-          <div className="px-3 mb-2 text-xs font-bold text-muted-foreground uppercase tracking-widest text-start">
+          <h2 className="px-3 text-xs font-bold text-muted-foreground uppercase tracking-widest mb-2">
             {t('sidebarLibrary')}
-          </div>
-          <SidebarItem
-            to="/subscriptions"
-            icon={LayoutGrid}
-            label={t('sidebarSubscriptions')}
-            isActive={currentPath === '/subscriptions'}
-          />
-          <SidebarItem
-            to="/favorites"
-            icon={Star}
-            label={t('sidebarFavorites')}
-            isActive={currentPath === '/favorites'}
-          />
-          <SidebarItem
-            to="/history"
-            icon={Clock}
-            label={t('sidebarHistory')}
-            isActive={currentPath === '/history'}
-          />
-          <SidebarItem
-            to="/files"
-            icon={FolderOpen}
-            label={t('navFiles')}
-            isActive={currentPath.startsWith('/files')}
-          />
+          </h2>
+          {[
+            { to: '/subscriptions', icon: LayoutGrid, label: t('sidebarSubscriptions') },
+            { to: '/favorites', icon: Star, label: t('sidebarFavorites') },
+            { to: '/history', icon: Clock, label: t('sidebarHistory') },
+            { to: '/files', icon: FolderOpen, label: t('navFiles') },
+          ].map((item) => (
+            <SidebarItem
+              key={item.to}
+              to={item.to}
+              icon={item.icon}
+              label={item.label}
+              isActive={currentPath.startsWith(item.to)}
+            />
+          ))}
         </div>
       </nav>
 
-      {/* Bottom: Settings row with theme toggle */}
-      <div className="mt-auto border-t border-border px-4 py-4">
-        <div className="flex items-center gap-4">
+      {/* Bottom Actions */}
+      <div className="p-3 border-t border-border/50 space-y-2">
+        <div className="flex items-center gap-2">
           <Link
             to="/settings"
             className={cn(

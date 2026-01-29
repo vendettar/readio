@@ -38,8 +38,6 @@ interface PodcastCardProps {
   imageSize?: number
   /** Whether the artwork should be rounded-full (as in TopChannelCard) */
   variant?: 'standard' | 'circular'
-  /** Custom layoutId for shared element transitions. If provided, overrides the default. */
-  layoutId?: string
 }
 
 /**
@@ -61,52 +59,38 @@ export function PodcastCard({
   className,
   imageSize = 400,
   variant = 'standard',
-  layoutId,
 }: PodcastCardProps) {
   const { t } = useTranslation()
   const [isMenuOpen, setIsMenuOpen] = React.useState(false)
 
   const containerClasses = cn(
     'group/card relative flex flex-col items-start text-start h-auto p-0 bg-transparent hover:bg-transparent shadow-none w-full',
-    variant === 'circular' ? 'items-center text-center' : '',
+    variant === 'circular' && 'items-center text-center',
     className
   )
 
-  const overlayRadius = variant === 'circular' ? 'rounded-full' : 'rounded-lg'
+  const radiusClass = variant === 'circular' ? 'rounded-full' : 'rounded-lg'
 
   return (
     <div className={containerClasses} data-testid="podcast-card">
-      <div
-        className={cn(
-          'relative aspect-square w-full',
-          variant === 'circular' ? 'rounded-full' : 'rounded-lg'
-        )}
-      >
+      <div className={cn('relative aspect-square w-full', radiusClass)}>
         <InteractiveArtwork
           src={getDiscoveryArtworkUrl(artworkUrl, imageSize)}
           to={onClick ? undefined : to}
           params={onClick ? undefined : params}
           search={onClick ? undefined : search}
           onPlay={onPlay}
-          playPosition="bottom-start"
-          playButtonSize="sm"
           playIconSize={16}
           hoverGroup="card"
           className={cn(
             'w-full h-full shadow-md group-hover/card:shadow-lg transition-all',
-            variant === 'circular' ? 'rounded-full' : 'rounded-lg'
+            radiusClass
           )}
-          layoutId={layoutId || `artwork-podcast-${id}`}
         />
 
         {/* Rank Badge (Optional) */}
-        {rank !== undefined && (
-          <div
-            className={cn(
-              'absolute bottom-2 start-2 w-7 h-7 bg-background/80 text-foreground backdrop-blur-md rounded-lg flex items-center justify-center border border-border/50 group-hover/card:opacity-0 group-hover/card:invisible transition-all duration-300 pointer-events-none shadow-sm z-30',
-              variant === 'circular' && 'hidden'
-            )}
-          >
+        {rank !== undefined && variant !== 'circular' && (
+          <div className="absolute bottom-2 start-2 w-7 h-7 bg-background/80 text-foreground backdrop-blur-md rounded-lg flex items-center justify-center border border-border/50 group-hover/card:opacity-0 group-hover/card:invisible transition-all duration-300 pointer-events-none shadow-sm z-30">
             <span className="text-xs font-bold tabular-nums">{rank}</span>
           </div>
         )}
@@ -184,11 +168,10 @@ export function PodcastCard({
         )}
       </div>
 
-      {/* Hover Background Overlay - Visual Only */}
       <div
         className={cn(
           'absolute inset-0 z-0 opacity-0 group-hover/card:bg-accent/50 transition-colors pointer-events-none',
-          overlayRadius
+          radiusClass
         )}
       />
     </div>

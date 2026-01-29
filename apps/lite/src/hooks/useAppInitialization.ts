@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useExploreStore } from '../store/exploreStore'
 import { usePlayerStore } from '../store/playerStore'
 
@@ -12,9 +12,9 @@ export function useAppInitialization() {
   const loadFavorites = useExploreStore((s) => s.loadFavorites)
   const subscriptionsLoaded = useExploreStore((s) => s.subscriptionsLoaded)
   const favoritesLoaded = useExploreStore((s) => s.favoritesLoaded)
-
   const restoreSession = usePlayerStore((s) => s.restoreSession)
   const playerStatus = usePlayerStore((s) => s.initializationStatus)
+  const isPruned = useRef(false)
 
   useEffect(() => {
     // 1. Load explore data
@@ -28,6 +28,14 @@ export function useAppInitialization() {
     // 2. Restore playback session
     if (playerStatus === 'idle') {
       restoreSession()
+    }
+
+    // 3. Background maintenance
+    if (!isPruned.current) {
+      isPruned.current = true
+      import('../lib/retention').then(({ prunePlaybackHistory }) => {
+        prunePlaybackHistory()
+      })
     }
   }, [
     subscriptionsLoaded,

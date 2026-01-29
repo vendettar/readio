@@ -2,6 +2,7 @@ import { Book, Copy, Search, X } from 'lucide-react'
 import type { CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { DictEntry, SelectionState } from '../../lib/selection'
+import { cn } from '../../lib/utils'
 import { Button } from '../ui/button'
 
 interface ContextMenuProps {
@@ -168,7 +169,10 @@ export function WordHoverOverlay({ rects, isPressed }: WordHoverOverlayProps) {
       {rects.map((rect, idx) => (
         <div
           key={idx}
-          className={`absolute rounded bg-primary/20 transition-all duration-75 ${isPressed ? 'bg-primary/40' : ''} start-[var(--x)] top-[var(--y)] w-[var(--w)] h-[var(--h)]`}
+          className={cn(
+            'absolute rounded bg-primary/20 transition-all duration-75 start-[var(--x)] top-[var(--y)] w-[var(--w)] h-[var(--h)]',
+            isPressed && 'bg-primary/40'
+          )}
           style={
             {
               '--x': `${rect.left - 2}px`,

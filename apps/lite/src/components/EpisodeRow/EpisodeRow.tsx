@@ -136,7 +136,6 @@ export function EpisodeRow({
                 : undefined
             }
             onPlay={handlePlay}
-            playButtonSize="sm"
             playIconSize={16}
             hoverGroup="episode"
             size="xl"

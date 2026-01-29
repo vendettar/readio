@@ -21,6 +21,5 @@ export function translate(key: TranslationKey, options?: Record<string, string |
   }
 
   // Use i18next.t for consistency and power
-  // @ts-expect-error - i18next type system is too rigid for generic wrappers
   return i18n.t(key, options)
 }

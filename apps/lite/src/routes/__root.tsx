@@ -9,6 +9,8 @@ import { useAppInitialization } from '../hooks/useAppInitialization'
 import { useFileHandler } from '../hooks/useFileHandler'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import { useNetworkStatus } from '../hooks/useNetworkStatus'
+import { useReportWebVitals } from '../hooks/usePerformance'
+import { usePwaUpdate } from '../hooks/usePwaUpdate'
 import { toast } from '../lib/toast'
 
 // FilePickerContext to avoid document.getElementById
@@ -28,6 +30,12 @@ function RootLayout() {
 
   // Initialize global keyboard shortcuts
   useKeyboardShortcuts()
+
+  // Initialize PWA update lifecycle
+  usePwaUpdate()
+
+  // Initialize performance metrics report
+  useReportWebVitals()
 
   // Initialize app-level data (subscriptions, favorites)
   const { isReady, isHydrated } = useAppInitialization()

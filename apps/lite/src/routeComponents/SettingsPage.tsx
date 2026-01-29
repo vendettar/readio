@@ -24,6 +24,7 @@ import { useSettingsData } from '../hooks/useSettingsData'
 import { useSettingsForm } from '../hooks/useSettingsForm'
 import { useStorageMaintenance } from '../hooks/useStorageMaintenance'
 import { formatBytes, formatFileSizeStructured, formatTimestamp } from '../lib/formatters'
+import { getLogs } from '../lib/logger'
 import { generateOpml, parseOpml } from '../lib/opmlParser'
 import { toast } from '../lib/toast'
 import { type Language, languageNativeNames } from '../lib/translations'
@@ -149,6 +150,28 @@ export default function SettingsPage() {
         }
       },
     })
+  }
+
+  const handleDownloadLogs = () => {
+    const logs = getLogs()
+    if (logs.length === 0) {
+      toast.infoKey('settings.logsEmpty')
+      return
+    }
+
+    try {
+      const blob = new Blob([JSON.stringify(logs, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `readio-logs-${new Date().toISOString().split('T')[0]}.json`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    } catch (_err) {
+      toast.errorKey('settings.logsDownloadFailed')
+    }
   }
 
   // Settings form with validation
@@ -395,6 +418,28 @@ export default function SettingsPage() {
                     />
                   </form>
                 </Form>
+              </CardContent>
+            </Card>
+
+            {/* Diagnostics Card */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center gap-2">
+                  <Info size={18} className="text-primary" />
+                  <CardTitle className="text-lg">{t('settings.diagnosticsTitle')}</CardTitle>
+                </div>
+                <CardDescription>{t('settings.diagnosticsDesc')}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button
+                  variant="outline"
+                  onClick={handleDownloadLogs}
+                  className="flex gap-2 w-full sm:w-auto"
+                  aria-label={t('settings.downloadLogs')}
+                >
+                  <Download size={16} />
+                  {t('settings.downloadLogs')}
+                </Button>
               </CardContent>
             </Card>
 

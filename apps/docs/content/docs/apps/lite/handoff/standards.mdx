@@ -75,17 +75,36 @@ Icon sources are unified and consistent in style; UI operation SVG files should 
 Provider is located at `src/routes/__root.tsx` (`<Toaster />`), working with `src/lib/toast.ts` imperative API.
 **Key Rule**: Use `toast.*Key` (e.g., `toast.successKey('key', { var })`) for i18n support. Key → text translation MUST happen inside `src/lib/toast.ts` via `i18next.t`; call sites should never call translation functions inside toast arguments.
 
+#### PWA Update Notification
+When a new PWA version is available, the app shows an **infinite duration** toast with an action button to "Refresh now". This is managed by the `usePwaUpdate` hook, which uses the `needRefresh` state from `vite-plugin-pwa`.
+
+#### Onboarding & Empty States
+Blank screens are replaced with the `<EmptyState />` component which provides:
+- A large visual icon.
+- A prominent title and descriptive secondary text.
+- A primary Call-to-Action (CTA) button to guide the user (e.g., "Discover Podcasts" or "Add Audio").
+
+#### Asset Loading & Fallbacks
+- **Image Fallback Policy**: Broken artwork URLs are automatically replaced by a Lucide `Podcast` icon centered in a themed placeholder.
+- **Lazy Loading**: Images use native `loading="lazy"` or Framer Motion entrance animations where appropriate.
+
 #### Tooltip
 
 Provider is located at `src/main.tsx` (`Tooltip.Provider`).
+
+### Accessibility (Immersive & Inclusive) [Implemented]
+
+The application follows a strict accessibility standard to ensure usability for screen readers and keyboard users (Instruction 048):
+- **Semantic HTML**: All interactive elements use semantic tags or proper `aria-role` definitions.
+- **ARIA Labels**: Descriptive `aria-label` or `aria-labelledby` are applied to all icon-only buttons (Play, Pause, Favorite, Settings) and navigation sections.
+- **Keyboard Navigation**: Focus management follows the visual flow, ensuring logical tab order across the sidebar, players, and command palette.
+- **Interactive Boundaries**: Standardized components like `InteractiveArtwork` and `InteractiveTitle` prevent nested interactive elements (e.g., button within a link), resolving critical A11y warnings.
+- **External Links**: All external links are marked with `target="_blank" rel="noopener noreferrer"` and descriptive screen reader text.
 
 ---
 
 ## Planned (Pending Execution)
 
-- **Onboarding Empty States** (Instruction 045).
-- **Image Fallback Policy** (Instruction 046).
-- **Accessibility Audit** (Instruction 048).
 - **Iframe Sandbox Policy** (Instruction 051).
 - **Feedback Entry Points** (Instruction 052).
 - **MSW Testing Standards** (Instruction 058).

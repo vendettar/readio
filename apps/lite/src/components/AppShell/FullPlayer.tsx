@@ -328,6 +328,7 @@ export function FullPlayer() {
                 variant="ghost"
                 onClick={handlePlaybackRateClick}
                 className="text-xs font-bold tracking-widest uppercase"
+                aria-label={t('ariaPlaybackSpeed')}
               >
                 {playbackRate}x
               </Button>
@@ -349,6 +350,7 @@ export function FullPlayer() {
                 size="icon"
                 onClick={togglePlayPause}
                 className="w-16 h-16 rounded-full shadow-xl shadow-muted/50"
+                aria-label={isPlaying ? t('ariaPause') : t('ariaPlay')}
               >
                 {status === 'loading' ? (
                   <Loader2
@@ -380,7 +382,7 @@ export function FullPlayer() {
               <SleepTimerButton />
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button variant="ghost" size="icon">
+                  <Button variant="ghost" size="icon" aria-label={t('ariaSettings')}>
                     <Settings2 size={20} strokeWidth={1.5} />
                   </Button>
                 </PopoverTrigger>

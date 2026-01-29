@@ -8,7 +8,6 @@ import { logError } from '../../lib/logger'
 import { toast } from '../../lib/toast'
 import { cn } from '../../lib/utils'
 import { useExploreStore } from '../../store/exploreStore'
-import { usePlayerStore } from '../../store/playerStore'
 import { BaseEpisodeRow, GutterPlayButton } from '../EpisodeRow'
 import { InteractiveArtwork } from '../interactive/InteractiveArtwork'
 import { InteractiveTitle } from '../interactive/InteractiveTitle'
@@ -24,7 +23,6 @@ interface SearchEpisodeItemProps {
 export function SearchEpisodeItem({ episode, onPlay }: SearchEpisodeItemProps) {
   const { t } = useTranslation()
   const { favorites, addFavorite, removeFavorite } = useExploreStore()
-  const activeEpisodeId = usePlayerStore((s) => s.episodeMetadata?.episodeId)
 
   const [isSaving, setIsSaving] = React.useState(false)
   const [isMenuOpen, setIsMenuOpen] = React.useState(false)
@@ -93,7 +91,6 @@ export function SearchEpisodeItem({ episode, onPlay }: SearchEpisodeItemProps) {
   const podcastArtwork = episode.artworkUrl600 || episode.artworkUrl100
 
   const hasArtwork = !!(episode.artworkUrl600 || episode.artworkUrl100)
-  const shouldUsePlayerLayout = activeEpisodeId === rawEpisodeId
 
   return (
     <BaseEpisodeRow
@@ -112,11 +109,9 @@ export function SearchEpisodeItem({ episode, onPlay }: SearchEpisodeItemProps) {
                 : undefined
             }
             onPlay={onPlay}
-            playButtonSize="md"
             playIconSize={20}
             hoverGroup="episode"
             size="xl"
-            layoutId={shouldUsePlayerLayout ? `artwork-${rawEpisodeId}-player` : undefined}
           />
         ) : undefined
       }

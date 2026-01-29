@@ -215,6 +215,14 @@ The system uses a robust, store-driven lifecycle for maintaining playback progre
 - **Async Task Hygiene**: All async tasks are gated against stale updates using `requestId` or `AbortSignal`. Timers and `requestAnimationFrame` calls are explicitly tracked and cancelled on unmount to prevent memory leaks and state updates on unmounted components.
 - **Async Sequence Gating**: Critical flows (e.g., session creation, dictionary lookup) use ref-based guards to prevent parallel re-entrancy of the same async operation.
 
+### Boot-Time Maintenance (Data Retention) [Implemented]
+
+To maintain performance and prevent unbounded storage growth of metadata, the app executes a non-blocking maintenance task during the boot sequence (see `useAppInitialization`).
+
+- **Task**: `prunePlaybackHistory` (`src/lib/retention.ts`)
+- **Policy**: Keep the most recent **1000** sessions OR **last 6 months**, whichever is more restrictive.
+- **Implementation**: Uses a batch-delete strategy (e.g., chunks of 100) with small delays between batches to ensure the main thread remains responsive for user interaction during initial load.
+
 ### Centralized Resource Management (ObjectURLs)
 
 The application follows strict rules for managing transient browser resources (Blob URLs) to prevent memory leaks in a single-page environment:
@@ -222,6 +230,15 @@ The application follows strict rules for managing transient browser resources (B
 - **Audio Resource Authority**: The `playerStore` is the **only** permitted creator and owner of Audio ObjectURLs. It maintains an `activeBlobUrls` array and ensures that before a new audio source is loaded or restored, all previously tracked URLs are explicitly revoked via `URL.revokeObjectURL()`.
 - **Image Resource Delegation**: Image ObjectURLs are managed at the component level using the `useImageObjectUrl` hook. This hook encapsulates the `create` and `revoke` lifecycle, tying the lifetime of the URL to the mounting of the component (e.g., `TrackCard`, `InteractiveArtwork`) or the presence of the source Blob.
 - **Strict Separation**: Components never create audio URLs. Instead, they pass raw Blobs from IndexedDB to store actions like `loadAudioBlob()`.
+
+### Supportability: Diagnostic Logging [Implemented]
+
+To facilitate remote troubleshooting of PWA "black boxes", the app maintains a lightweight diagnostic subsystem:
+- **Authority**: `src/lib/logger.ts` encapsulates all logging logic.
+- **Buffer**: A 100-entry in-memory FIFO buffer captures Errors, Warnings, and essential Info.
+- **Global Collection**: `main.tsx` registers window-level listeners for unhandled errors and promise rejections, routing them to the internal buffer.
+- **Privacy Enforcement**: A strict `redact()` function filters all incoming strings, replacing local file paths, usernames, and emails with generic tags before they reach the buffer.
+- **Support Flow**: Users can export this buffer as a `.json` file from the Settings page to share with developers.
 
 ---
 
@@ -307,7 +324,6 @@ After refactoring store subscriptions:
 
 ## Planned (Pending Execution)
 
-- **Local Error Logger**: Downloadable diagnostics logs (Instruction 047).
 - **DB Access Guard**: Prevent direct DB imports from UI (Instruction 057).
 - **Atomic Write Safeguards**: Boot-time repair and transactional writes (Instruction 067).
 

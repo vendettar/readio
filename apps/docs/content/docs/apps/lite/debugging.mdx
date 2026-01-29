@@ -62,6 +62,14 @@ When API data looks wrong, don't guess.
 - The store middleware is enabled in development.
 - Use Redux DevTools extension to time-travel debug state changes.
 
+### Diagnostic Logs [Implemented]
+As PWAs run in restricted environments, remote debugging is difficult. Users can assist by exporting technical logs:
+- **Location**: Settings > Diagnostic Tools.
+- **Data**: Contains the last 100 entries of errors, warnings, and info logs.
+- **Privacy**: All PII (user paths, file names, emails) is automatically redacted before the log is saved to the buffer.
+- **Export**: Generates a `.json` file containing timestamps, levels, and (where applicable) stack traces.
+- **Note**: Global `error` / `unhandledrejection` listeners are registered in `main.tsx`. This is safe for a single SPA instance. If we ever embed multiple app instances (micro‑frontend), add a single‑instance guard to avoid duplicate listeners.
+
 ### Dexie Inspector
 - Use the browser's "Application -> IndexedDB" tab.
 - **Tip**: If schema changes cause issues, clear the DB manually here.
@@ -85,8 +93,6 @@ When API data looks wrong, don't guess.
 ---
 
 ## Planned (Pending Execution)
-
-- **Local Error Logger**: Downloadable diagnostics log with PII redaction (Instruction 047).
 
 ## 6. Case Studies & Known Issues
 

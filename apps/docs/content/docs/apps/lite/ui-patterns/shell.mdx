@@ -32,6 +32,18 @@ title: Overlays & Shell
 
 ---
 
+## ClassName Composition (Tailwind)
+
+- **Standard**: Use `cn(...)` from `src/lib/utils.ts` for conditional / dynamic `className` composition.
+- **Why**: `cn` safely ignores `undefined` / `null` conditions and merges Tailwind utility conflicts (`tailwind-merge`).
+- **Forbidden**: Avoid template-literal `className` strings when conditions are involved; use `cn` so patterns stay consistent and refactors are safe.
+- **Example**:
+  ```tsx
+  import { cn } from '@/lib/utils'
+
+  <div className={cn('rounded-xl', isActive && 'bg-primary/10', className)} />
+  ```
+
 ## Feedback & Notifications (Toast)
 
 - **Standard**: Use **Sonner** via the centralized helper `src/lib/toast.ts`.
@@ -39,6 +51,8 @@ title: Overlays & Shell
 - **Forbidden**: Do NOT create custom `fixed` overlay divs for notifications.
 - **Async Pattern**: Use `toast.promise` for async actions (like file processing) to give immediate feedback.
 - **Key Rule**: Use `toast.*Key` (e.g., `toast.successKey('key', { var })`) for i18n support. Key → text translation MUST happen inside `src/lib/toast.ts` via `i18next.t`; call sites should never call translation functions inside toast arguments.
+  - **Forbidden**: Do not call `toast.success/info/error/warning(...)` with raw strings or dynamic error messages in app code. Use `toast.*Key(...)` and add/maintain keys in `src/lib/translations.ts`.
+  - **Dynamic Errors**: If you catch an exception with an unknown message, log it (Local Logger) and show a stable i18n toast key (no arbitrary exception strings in UI).
 - **Usage**:
   ```tsx
   import { toast } from '@/lib/toast'

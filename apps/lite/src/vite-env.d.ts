@@ -1,14 +1,5 @@
 /// <reference types="vite/client" />
-
-interface Window {
-  __READIO_TEST__?: {
-    router: any
-    queryClient: any
-    db: any
-    rawDb: any
-    clearAppData: () => Promise<void>
-  }
-}
+/// <reference types="vite-plugin-pwa/react" />
 
 // SVG module declarations
 declare module '*.svg' {

@@ -9,6 +9,7 @@ import type {
   Subscription,
 } from './dexieDb'
 import { db } from './dexieDb'
+import { verifyVaultIntegrity } from './integrity'
 import { log, error as logError } from './logger'
 
 const VAULT_VERSION = 1
@@ -165,6 +166,13 @@ export async function importVault(json: unknown): Promise<void> {
   }
 
   const vault = result.data
+
+  // Perform business-level integrity check
+  const integrity = verifyVaultIntegrity(vault)
+  if (!integrity.isValid) {
+    logError('[Vault] Integrity check failed:', integrity.error)
+    throw new Error(integrity.error || 'Data integrity check failed')
+  }
 
   await db.transaction(
     'rw',

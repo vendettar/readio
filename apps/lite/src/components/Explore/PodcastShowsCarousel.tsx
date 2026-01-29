@@ -68,7 +68,6 @@ export function PodcastShowsCarousel({
             index={index}
             onPlayLatest={onPlayLatest}
             onSubscribe={onSubscribe}
-            layoutId={sectionId ? `artwork-podcast-${sectionId}-${podcast.id}` : undefined}
             search={sectionId ? { fromLayoutPrefix: sectionId } : undefined}
           />
         ))}

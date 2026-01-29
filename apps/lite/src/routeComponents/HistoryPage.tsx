@@ -29,7 +29,6 @@ export default function HistoryPage() {
   const startPlayback = usePlayerStore((s) => s.play)
   const setSessionId = usePlayerStore((s) => s.setSessionId)
   const setFileTrackId = usePlayerStore((s) => s.setFileTrackId)
-  const activeEpisodeId = usePlayerStore((s) => s.episodeMetadata?.episodeId)
 
   const subscriptionMap = useSubscriptionMap()
 
@@ -206,13 +205,13 @@ export default function HistoryPage() {
         {!isLoading && sessions.length === 0 && (
           <EmptyState
             icon={Clock}
-            title={t('historyEmpty')}
-            description={t('historyEmptyDesc')}
+            title={t('onboarding.history.title')}
+            description={t('onboarding.history.desc')}
             action={
-              <Button asChild onClick={() => navigate({ to: '/explore' })}>
+              <Button asChild>
                 <Link to="/explore">
                   <Compass className="w-4 h-4 me-2" />
-                  {t('navExplore')}
+                  {t('onboarding.subscriptions.cta')}
                 </Link>
               </Button>
             }
@@ -254,15 +253,9 @@ export default function HistoryPage() {
                           to={navigationTo}
                           params={navigationParams}
                           onPlay={() => handlePlaySession(session)}
-                          playButtonSize="sm"
                           playIconSize={14}
                           hoverGroup="episode"
                           size="lg"
-                          layoutId={
-                            activeEpisodeId === session.episodeId
-                              ? `artwork-${session.episodeId}-player`
-                              : undefined
-                          }
                         />
                       </div>
                     ) : undefined

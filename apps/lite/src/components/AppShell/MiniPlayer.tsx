@@ -138,6 +138,7 @@ export function MiniPlayer() {
           size="icon"
           disabled={isDisabled}
           className="h-8 w-8 text-xs text-muted-foreground hover:text-foreground font-medium"
+          aria-label={t('ariaPlaybackSpeed')}
         >
           1×
         </Button>
@@ -161,7 +162,7 @@ export function MiniPlayer() {
           onClick={togglePlayPause}
           disabled={isDisabled}
           className="h-9 w-9 text-muted-foreground hover:text-foreground"
-          aria-label={t('btnPlay')}
+          aria-label={isPlaying ? t('ariaPause') : t('ariaPlay')}
         >
           {status === 'loading' ? (
             <Loader2 size={20} className="animate-spin" />
@@ -337,7 +338,7 @@ export function MiniPlayer() {
           onClick={enterImmersion}
           disabled={isDisabled}
           className="h-8 w-8 text-muted-foreground hover:text-foreground"
-          aria-label={t('miniPlayerExpand')}
+          aria-label={t('ariaOpenQueue')}
         >
           <ListMusic size={18} />
         </Button>

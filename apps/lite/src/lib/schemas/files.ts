@@ -1,6 +1,6 @@
 // src/lib/schemas/files.ts
 import { z } from 'zod'
-import { translate } from '../i18nUtils'
+import type { TranslationKey } from '../translations'
 
 // Size limits
 export const MAX_AUDIO_SIZE_BYTES = 500 * 1024 * 1024 // 500MB
@@ -31,15 +31,17 @@ export function isValidSubtitleFile(file: File): boolean {
 
 /**
  * Audio File Validation Schema Factory
- * Creates schema with current locale error messages
+ * IMPORTANT:
+ * - Zod error messages MUST be translation keys (not translated strings).
+ * - Call sites should surface errors via toast.*Key() to keep i18n centralized.
  */
 export function createAudioFileSchema() {
   return browserFileSchema
     .refine((file) => file.size <= MAX_AUDIO_SIZE_BYTES, {
-      message: translate('validationFileTooLarge'),
+      message: 'validationFileTooLarge' satisfies TranslationKey,
     })
     .refine((file) => isValidAudioFile(file), {
-      message: translate('validationInvalidAudioFormat'),
+      message: 'validationInvalidAudioFormat' satisfies TranslationKey,
     })
 }
 
@@ -49,9 +51,9 @@ export function createAudioFileSchema() {
 export function createSubtitleFileSchema() {
   return browserFileSchema
     .refine((file) => file.size <= MAX_SUBTITLE_SIZE_BYTES, {
-      message: translate('validationFileTooLarge'),
+      message: 'validationFileTooLarge' satisfies TranslationKey,
     })
     .refine((file) => isValidSubtitleFile(file), {
-      message: translate('validationInvalidSubtitleFormat'),
+      message: 'validationInvalidSubtitleFormat' satisfies TranslationKey,
     })
 }

@@ -54,13 +54,13 @@ export default function SubscriptionsPage() {
         {!isInitialLoading && subscriptions.length === 0 && (
           <EmptyState
             icon={LayoutGrid}
-            title={t('subscriptionsEmpty')}
-            description={t('subscriptionsEmptyDesc')}
+            title={t('onboarding.subscriptions.title')}
+            description={t('onboarding.subscriptions.desc')}
             action={
-              <Button asChild onClick={() => navigate({ to: '/explore' })}>
+              <Button asChild>
                 <Link to="/explore">
                   <Compass className="w-4 h-4 me-2" />
-                  {t('navExplore')}
+                  {t('onboarding.subscriptions.cta')}
                 </Link>
               </Button>
             }

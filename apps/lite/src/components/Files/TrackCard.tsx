@@ -346,6 +346,7 @@ export function TrackCard({
                   handleConfirmRename()
                 }}
                 className="h-8 w-8"
+                aria-label={t('confirmFilename')}
               >
                 <Check size={14} />
               </Button>
@@ -358,6 +359,7 @@ export function TrackCard({
                   handleCancelRename()
                 }}
                 className="h-8 w-8"
+                aria-label={t('cancel')}
               >
                 <X size={14} />
               </Button>

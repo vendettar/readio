@@ -38,24 +38,24 @@ description: Architecture decisions and rationale.
 - **Decision**: Enforce a strict Content Security Policy for all web deployments, via **HTTP response headers** (server/edge).
 - **Rationale**: Reduce XSS and untrusted resource loading risk.
 
-## D009 — Data Retention Policy
+## D009 — Data Retention Policy [Implemented]
 - **Decision**: Prune playback history to a bounded window (time + count).
 - **Rationale**: Prevent long‑term IndexedDB bloat and performance degradation.
 
-## D010 — PWA Update Lifecycle
+## D010 — PWA Update Lifecycle [Implemented]
 - **Decision**: Notify users when a new PWA version is available and allow refresh.
 - **Rationale**: Avoid stale clients and ensure users receive fixes.
 
-## D011 — CI Pipeline
+## D011 — CI Pipeline [Implemented]
 - **Decision**: Enforce lint/typecheck/tests on every PR via CI.
 - **Rationale**: Prevent regressions from bypassing local checks.
 
-## D012 — Import Integrity Checks
-- **Decision**: Validate imports for ID collisions and broken references before writing to DB.
+## D012 — Import Integrity Checks [Implemented]
+- **Decision**: Validate imports for ID collisions and broken references before writing to DB (Instruction 049).
 - **Rationale**: Prevent silent corruption during Vault/OPML import.
 
-## D013 — Bundle Size Budget
-- **Decision**: Enforce bundle size budgets in CI.
+## D013 — Bundle Size Budget [Implemented]
+- **Decision**: Enforce bundle size budgets in CI (Instruction 050).
 - **Rationale**: Prevent performance regressions from dependency bloat.
 
 ## D014 — Iframe Sandbox Policy
@@ -266,3 +266,12 @@ description: Architecture decisions and rationale.
 ## D062 — Tooltip Wrapping for Overlays
 - **Decision**: Standardize wrapping `DropdownMenuTrigger` or `PopoverTrigger` with `Tooltip` for icon-only buttons that also provide transient state feedback (e.g., remaining sleep timer time). 
 - **Rationale**: Adheres to the "Icon-only buttons MUST have a Tooltip" rule while allowing rich interaction on click.
+
+## D063 — Image Fallback Strategy [Implemented]
+- **Decision**: All artwork/images MUST use a standard fallback mechanism: themed skeleton (`bg-muted/50`) during loading, and a fallback icon (`Podcast` or `Disc`) on error. Transition between states MUST use a smooth fade. (Instruction 046)
+- **Rationale**: Prevents "broken image" icons from degrading the premium aesthetic and ensures layout stability during content ingestion.
+
+## D064 — Onboarding & Empty States [Implemented]
+- **Decision**: All empty library/list views MUST use a standardized `EmptyState` pattern: centered orientation, high-quality icon, clear descriptive text, and a primary CTA button. (Instruction 045)
+- **Rationale**: Reduces user abandonment by providing clear guidance on how to populate the application and ensuring the first-run experience is intentional.
+
