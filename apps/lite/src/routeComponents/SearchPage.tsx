@@ -1,5 +1,5 @@
 import { useNavigate, useSearch } from '@tanstack/react-router'
-import { CircleMinus, CirclePlus, Library, Mic2, Podcast, Search } from 'lucide-react'
+import { Library, Mic2, Podcast, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { SearchEpisodeItem } from '../components/GlobalSearch/SearchEpisodeItem'
 import { SearchResultItem } from '../components/GlobalSearch/SearchResultItem'
@@ -10,11 +10,9 @@ import { EmptyState } from '../components/ui/empty-state'
 import { LoadingPage } from '../components/ui/loading-spinner'
 import { useEpisodePlayback } from '../hooks/useEpisodePlayback'
 import { type LocalSearchResult, useGlobalSearch } from '../hooks/useGlobalSearch'
-
 import discovery, { type SearchEpisode } from '../lib/discovery'
 import { executeLocalSearchAction } from '../lib/localSearchActions'
 import { toast } from '../lib/toast'
-import { useExploreStore } from '../store/exploreStore'
 import { usePlayerStore } from '../store/playerStore'
 
 export default function SearchPage() {
@@ -25,9 +23,6 @@ export default function SearchPage() {
   const loadAudioBlob = usePlayerStore((s) => s.loadAudioBlob)
   const play = usePlayerStore((s) => s.play)
   const setEpisodeMetadata = usePlayerStore((s) => s.setEpisodeMetadata)
-  const subscribe = useExploreStore((s) => s.subscribe)
-  const unsubscribe = useExploreStore((s) => s.unsubscribe)
-  const isSubscribed = useExploreStore((s) => s.isSubscribed)
 
   // Search results
   const { playSearchEpisode } = useEpisodePlayback()
@@ -141,7 +136,6 @@ export default function SearchPage() {
                 </h2>
                 <PodcastGrid>
                   {podcasts.map((podcast) => {
-                    const subscribed = podcast.feedUrl ? isSubscribed(podcast.feedUrl) : false
                     return (
                       <PodcastCard
                         key={podcast.providerPodcastId}
@@ -155,20 +149,6 @@ export default function SearchPage() {
                             params: { id: String(podcast.providerPodcastId) },
                           })
                         }
-                        menuItems={[
-                          {
-                            label: subscribed ? t('unsubscribe') : t('subscribe'),
-                            icon: subscribed ? <CircleMinus size={14} /> : <CirclePlus size={14} />,
-                            onClick: () => {
-                              if (subscribed) {
-                                if (podcast.feedUrl) unsubscribe(podcast.feedUrl)
-                              } else {
-                                subscribe(podcast)
-                              }
-                            },
-                            variant: subscribed ? 'destructive' : 'default',
-                          },
-                        ]}
                       />
                     )
                   })}

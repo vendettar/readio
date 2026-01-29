@@ -108,7 +108,7 @@ interface ExploreState {
   refreshFavorites: () => Promise<void>
   addFavorite: (podcast: Podcast, episode: Episode) => Promise<void>
   removeFavorite: (key: string) => Promise<void>
-  isFavorited: (feedUrl: string, audioUrl: string) => boolean
+  isFavorited: (feedUrl: string, audioUrl: string, id?: string, providerId?: string) => boolean
 }
 
 const SETTING_KEY_COUNTRY = 'explore_country'
@@ -376,6 +376,7 @@ export const useExploreStore = create<ExploreState>((set, get) => ({
       description: episode.description,
       episodeArtworkUrl: episode.artworkUrl,
       episodeId: episode.id,
+      providerEpisodeId: episode.providerEpisodeId,
     }
     try {
       // Check if already favorited (deduplication via key)
@@ -401,8 +402,24 @@ export const useExploreStore = create<ExploreState>((set, get) => ({
       handleDbWriteError('remove favorite', 'toastRemoveFavoriteFailed', error)
     }
   },
-  isFavorited: (feedUrl, audioUrl) => {
+  isFavorited: (feedUrl, audioUrl, id?: string, providerId?: string) => {
+    // 1. Precise Key Match (Primary)
     const key = `${feedUrl}::${audioUrl}`
-    return get().favorites.some((f) => f.key === key)
+    if (get().favorites.some((f) => f.key === key)) return true
+
+    // 2. ID Match (For results from Discovery APIs before we have audioUrl)
+    if (id || providerId) {
+      return get().favorites.some((f) => {
+        const idMatch =
+          id && (String(f.episodeId) === String(id) || String(f.providerEpisodeId) === String(id))
+        const pIdMatch =
+          providerId &&
+          (String(f.providerEpisodeId) === String(providerId) ||
+            String(f.episodeId) === String(providerId))
+        return idMatch || pIdMatch
+      })
+    }
+
+    return false
   },
 }))

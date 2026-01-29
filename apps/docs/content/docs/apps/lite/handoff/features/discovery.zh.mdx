@@ -71,7 +71,6 @@ title: Discovery & Explore
 ### i18n Keys
 - `exploreTitle`, `exploreSubtitle`, `editorPicksTitle`
 - `topShowsTitle`, `topSubscriberShowsTitle`, `topEpisodesTitle`, `topChannelsTitle`
-- `subscribe`, `subscribed`, `unsubscribe`
 
 ---
 
@@ -106,6 +105,7 @@ title: Discovery & Explore
 
 ### 订阅逻辑
 
+- **上下文**：订阅操作仅能在**播客详情页 (Podcast Show Page)** 执行。Explore 页面不再提供直接订阅操作。
 - 使用 `exploreStore.subscribe()` / `unsubscribe()` 管理订阅状态
 - 订阅按钮状态通过 `feedUrl` 去重索引判断（`subscriptions.some(s => s.feedUrl === podcast.feedUrl)`），不作为实体身份
 
@@ -179,24 +179,6 @@ title: Discovery & Explore
 - Provider API 的 `episodeGuid` 与 RSS feed 的 `<guid>` 可能有细微差异
 - 部分旧 episode 可能已从 RSS feed 中移除，但 iTunes 仍有记录
 - 保证用户分享的链接即使指向旧 episode 也能正常访问
-
-#### 场景二：Top Episodes 收藏
-
-**文件**: `src/routes/explore.tsx` - `handleToggleFavoriteEpisode()`
-
-**问题**:
-- RSS Charts API 返回的 `DiscoveryPodcast` 对象只有基础信息，没有 `audioUrl`
-- Provider Lookup API 不支持直接用 episode `providerEpisodeId` 查找单个 episode（`id` 参数只接受 podcast `providerPodcastId`）
-
-**解决方案 - 两步 fallback**:
-
-1. **STEP 1 - iTunes Podcast Episodes**: 使用 `lookupPodcastEpisodes(podcastId, 'us', 50)` 获取 podcast 的 episode 列表
-   - 通过 `providerEpisodeId` 或标题模糊匹配找到目标 episode
-   - 获取完整 episode 数据（包括 `episodeUrl`）
-
-2. **STEP 2 - RSS Feed Fallback**: 如果 iTunes 找不到（episode 可能超出 limit 范围），尝试从 RSS Feed 匹配
-   - 通过标题模糊匹配（支持子串匹配）
-   - 从 RSS 获取 `audioUrl` 和其他元数据
 
 #### ⚠️ API Episode 数量限制（重要发现）
 

@@ -11,18 +11,10 @@ import { PodcastShowCard } from './PodcastShowCard'
 interface TopShowsCarouselProps {
   podcasts: DiscoveryPodcast[]
   isLoading?: boolean
-  onPlayLatest?: (podcast: DiscoveryPodcast) => void
-  onSubscribe?: (podcast: DiscoveryPodcast) => void
   sectionId?: string
 }
 
-export function PodcastShowsCarousel({
-  podcasts,
-  isLoading,
-  onPlayLatest,
-  onSubscribe,
-  sectionId,
-}: TopShowsCarouselProps) {
+export function PodcastShowsCarousel({ podcasts, isLoading, sectionId }: TopShowsCarouselProps) {
   const {
     scrollRef,
     visibleCount,
@@ -66,8 +58,6 @@ export function PodcastShowsCarousel({
             key={`${sectionId || 'default'}-${podcast.id}`}
             podcast={podcast}
             index={index}
-            onPlayLatest={onPlayLatest}
-            onSubscribe={onSubscribe}
             search={sectionId ? { fromLayoutPrefix: sectionId } : undefined}
           />
         ))}

@@ -24,35 +24,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'prompt',
       injectRegister: 'auto',
-      manifestFilename: 'manifest.json',
-      manifest: {
-        name: 'Readio Lite',
-        short_name: 'Readio',
-        description: 'Premium Podcast Player with transcripts',
-        theme_color: '#2563EB', // Blue from standards
-        background_color: '#FFFFFF',
-        display: 'standalone',
-        orientation: 'portrait',
-        scope: '/',
-        start_url: '/',
-        icons: [
-          {
-            src: '/readio.png',
-            sizes: '192x192',
-            type: 'image/png',
-          },
-          {
-            src: '/readio.png',
-            sizes: '512x512',
-            type: 'image/png',
-          },
-          {
-            src: '/readio-new.png',
-            sizes: '512x512',
-            type: 'image/png',
-          },
-        ],
-      },
+      manifest: false, // Use public/manifest.json
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         // Explicitly avoid terser for SW if possible or ensure it passes
@@ -84,6 +56,20 @@ export default defineConfig({
               cacheableResponse: {
                 statuses: [0, 200],
               },
+            },
+          },
+          {
+            // Audio files: NetworkOnly ensures we use browser http cache & range requests correctly
+            // Service Worker interception often breaks seeking/streaming performance for large files
+            urlPattern: /\.(?:mp3|m4a|aac|ogg|wav)$/i,
+            handler: 'NetworkOnly',
+            options: {
+              cacheName: 'audio-cache-network-only',
+              expiration: {
+                maxEntries: 50,
+                maxAgeSeconds: 60 * 60 * 24, // 1 day
+              },
+              rangeRequests: true,
             },
           },
         ],

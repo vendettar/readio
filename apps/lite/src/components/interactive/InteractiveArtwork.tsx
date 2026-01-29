@@ -20,6 +20,8 @@ interface InteractiveArtworkProps {
   onPlay?: (e: React.MouseEvent) => void
   playLabel?: string
   hoverScale?: boolean
+  playPosition?: 'center' | 'bottom-start'
+  playButtonSize?: 'sm' | 'md' | 'lg' | 'xl'
   playIconSize?: number
   hoverGroup?: 'episode' | 'item' | 'session' | 'card'
   // Size variants if needed
@@ -45,6 +47,8 @@ export function InteractiveArtwork({
   onPlay,
   playLabel,
   hoverScale = false,
+  playPosition = 'center',
+  playButtonSize,
   playIconSize,
   hoverGroup,
   size = 'md',
@@ -59,6 +63,13 @@ export function InteractiveArtwork({
     md: 'w-16 h-16',
     lg: 'w-20 h-20',
     xl: 'w-24 h-24',
+  }
+
+  const staticPlayButtonSizeClasses = {
+    sm: 'w-8 h-8',
+    md: 'w-10 h-10',
+    lg: 'w-12 h-12',
+    xl: 'w-14 h-14',
   }
 
   const hoverOpacityClassMap = {
@@ -85,8 +96,12 @@ export function InteractiveArtwork({
   )
 
   const overlayClassName = cn(
-    'absolute inset-0 bg-foreground/20 opacity-0 transition-opacity duration-200 pointer-events-none z-40 flex items-center justify-center',
-    hoverOpacityClass
+    'absolute inset-0 opacity-0 transition-opacity duration-200 pointer-events-none z-40',
+    playPosition === 'center' && 'bg-foreground/20', // Only dim background for center play
+    hoverOpacityClass,
+    playPosition === 'center'
+      ? 'flex items-center justify-center'
+      : 'flex items-end justify-start p-3'
   )
 
   const resolvedPlayIconSize = playIconSize || 24
@@ -196,10 +211,27 @@ export function InteractiveArtwork({
               onPlay(e)
             }}
             className={cn(
-              'rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center transition-colors duration-300 pointer-events-auto',
-              'hover:bg-primary/90',
-              'w-1/2 h-1/2',
-              '[&_svg]:w-1/2 [&_svg]:h-1/2'
+              'rounded-full shadow-lg flex items-center justify-center transition-all duration-300 pointer-events-auto',
+              // 1. Center Mode (Episode List): Solid Primary, Large, Scale Hover
+              playPosition === 'center' && [
+                'bg-primary text-primary-foreground hover:bg-primary/90',
+                'w-1/2 h-1/2 [&_svg]:w-1/2 [&_svg]:h-1/2',
+              ],
+
+              // 2. Corner Mode (Grid Card): Glassmorphism to match 3-dot menu
+              playPosition !== 'center' && [
+                'bg-background/60 backdrop-blur-md text-foreground', // Default glass
+                'hover:bg-primary hover:text-primary-foreground', // Hover: Brand Accent Color
+                playButtonSize
+                  ? staticPlayButtonSizeClasses[playButtonSize]
+                  : staticPlayButtonSizeClasses.sm,
+                // Entrance Animation (matches PodcastCard menu)
+                // Use the passed hoverGroup (e.g., 'card') to trigger animation from parent hover
+                'translate-y-2 opacity-0 transition-all duration-300',
+                hoverGroup
+                  ? `group-hover/${hoverGroup}:translate-y-0 group-hover/${hoverGroup}:opacity-100`
+                  : 'group-hover/artwork:translate-y-0 group-hover/artwork:opacity-100',
+              ]
             )}
             aria-label={playLabel || t('ariaPlayEpisode')}
           >

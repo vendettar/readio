@@ -78,7 +78,6 @@ title: Discovery & Explore
 ### i18n Keys
 - `exploreTitle`, `exploreSubtitle`, `editorPicksTitle`
 - `topShowsTitle`, `topSubscriberShowsTitle`, `topEpisodesTitle`, `topChannelsTitle`
-- `subscribe`, `subscribed`, `unsubscribe`
 
 ---
 
@@ -113,6 +112,7 @@ Data Flow: Show Page first uses Lookup API to get metadata, then uses feedUrl to
 
 ### Subscription Logic
 
+- **Context**: Subscriptions can ONLY be managed via the **Podcast Show Page**. The Explore page does not provide direct subscription actions.
 - Use `exploreStore.subscribe()` / `unsubscribe()` manage subscription state
 - Subscribe button state judged by `feedUrl` deduplication index (`subscriptions.some(s => s.feedUrl === podcast.feedUrl)`), not using entity identity
 
@@ -186,24 +186,6 @@ Due to data format differences between iTunes API and RSS Feed, episode matching
 - `episodeGuid` from Provider API and `<guid>` from RSS feed might have subtle differences
 - Some old episodes might be removed from RSS feed, but iTunes still has record
 - Ensure links shared by users are accessible even pointing to old episodes
-
-#### Scenario 2: Top Episodes Favorite
-
-**File**: `src/routes/explore.tsx` - `handleToggleFavoriteEpisode()`
-
-**Problem**:
-- `DiscoveryPodcast` object returned by RSS Charts API has only basic info, no `audioUrl`
-- Provider Lookup API does not support looking up single episode directly by `providerEpisodeId` (`id` param only accepts podcast `providerPodcastId`)
-
-**Solution - Two-step fallback**:
-
-1. **STEP 1 - iTunes Podcast Episodes**: Use `lookupPodcastEpisodes(podcastId, 'us', 50)` to get podcast's episode list
-   - Find target episode via `providerEpisodeId` or title fuzzy match
-   - Get full episode data (including `episodeUrl`)
-
-2. **STEP 2 - RSS Feed Fallback**: If iTunes doesn't find (episode might be out of limit range), try matching from RSS Feed
-   - Via title fuzzy match (supports substring match)
-   - Get `audioUrl` and other metadata from RSS
 
 #### ⚠️ API Episode Quantity Limit (Important Findings)
 

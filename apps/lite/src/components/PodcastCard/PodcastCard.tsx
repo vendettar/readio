@@ -1,18 +1,7 @@
-import React from 'react'
-import { useTranslation } from 'react-i18next'
 import { getDiscoveryArtworkUrl } from '@/lib/imageUtils'
 import { cn } from '@/lib/utils'
 import { InteractiveArtwork } from '../interactive/InteractiveArtwork'
 import { InteractiveTitle } from '../interactive/InteractiveTitle'
-import { DropdownMenuItem } from '../ui/dropdown-menu'
-import { OverflowMenu } from '../ui/overflow-menu'
-
-export interface PodcastCardMenuItem {
-  label: string
-  icon?: React.ReactNode
-  onClick: () => void
-  variant?: 'default' | 'destructive'
-}
 
 interface PodcastCardProps {
   id: string
@@ -22,10 +11,6 @@ interface PodcastCardProps {
   rank?: number
   /** Optional click handler. If provided, used instead of Link */
   onClick?: () => void
-  /** Optional play action */
-  onPlay?: (e: React.MouseEvent) => void
-  /** Optional menu items for the more button dropdown */
-  menuItems?: PodcastCardMenuItem[]
   /** TanStack Router Link path. Defaults to /podcast/$id */
   to?: string
   /** TanStack Router Link params */
@@ -51,8 +36,6 @@ export function PodcastCard({
   artworkUrl,
   rank,
   onClick,
-  onPlay,
-  menuItems,
   to = '/podcast/$id',
   params = { id },
   search,
@@ -60,9 +43,6 @@ export function PodcastCard({
   imageSize = 400,
   variant = 'standard',
 }: PodcastCardProps) {
-  const { t } = useTranslation()
-  const [isMenuOpen, setIsMenuOpen] = React.useState(false)
-
   const containerClasses = cn(
     'group/card relative flex flex-col items-start text-start h-auto p-0 bg-transparent hover:bg-transparent shadow-none w-full',
     variant === 'circular' && 'items-center text-center',
@@ -79,8 +59,6 @@ export function PodcastCard({
           to={onClick ? undefined : to}
           params={onClick ? undefined : params}
           search={onClick ? undefined : search}
-          onPlay={onPlay}
-          playIconSize={16}
           hoverGroup="card"
           className={cn(
             'w-full h-full shadow-md group-hover/card:shadow-lg transition-all',
@@ -92,45 +70,6 @@ export function PodcastCard({
         {rank !== undefined && variant !== 'circular' && (
           <div className="absolute bottom-2 start-2 w-7 h-7 bg-background/80 text-foreground backdrop-blur-md rounded-lg flex items-center justify-center border border-border/50 group-hover/card:opacity-0 group-hover/card:invisible transition-all duration-300 pointer-events-none shadow-sm z-30">
             <span className="text-xs font-bold tabular-nums">{rank}</span>
-          </div>
-        )}
-
-        {/* More Menu (Special case since it's a dropdown) */}
-        {menuItems && menuItems.length > 0 && (
-          <div
-            className={cn(
-              'absolute bottom-3 end-3 transition-all duration-300 z-30',
-              isMenuOpen ||
-                'opacity-0 group-hover/card:opacity-100 translate-y-2 group-hover/card:translate-y-0',
-              isMenuOpen && 'opacity-100 translate-y-0'
-            )}
-          >
-            <OverflowMenu
-              open={isMenuOpen}
-              onOpenChange={setIsMenuOpen}
-              triggerAriaLabel={t('ariaMoreActions') || 'More Actions'}
-              stopPropagation
-              triggerClassName="w-8 h-8 rounded-full bg-background/90 text-foreground hover:bg-primary hover:text-primary-foreground shadow-xl backdrop-blur-sm border-0 transition-all ring-0 focus-visible:ring-0"
-              iconSize={16}
-              collisionPadding={16}
-              contentClassName="min-w-44 rounded-xl shadow-2xl p-0 border border-border/50 bg-popover/95 backdrop-blur-xl"
-            >
-              {menuItems.map((item, index) => (
-                <DropdownMenuItem
-                  key={index}
-                  onSelect={() => {
-                    item.onClick()
-                  }}
-                  className={cn(
-                    item.variant === 'destructive' &&
-                      'text-destructive focus:text-destructive focus:bg-destructive/10'
-                  )}
-                >
-                  {item.icon && <span className="me-2 opacity-80">{item.icon}</span>}
-                  <span className="font-medium">{item.label}</span>
-                </DropdownMenuItem>
-              ))}
-            </OverflowMenu>
           </div>
         )}
       </div>

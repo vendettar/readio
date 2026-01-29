@@ -151,7 +151,34 @@ export function GlobalAudioController() {
       }
     }
     const onError = () => {
-      usePlayerStore.getState().setPlayerError('Audio element error')
+      const err = audio.error
+      let message = 'Audio element error'
+
+      if (err) {
+        switch (err.code) {
+          case MediaError.MEDIA_ERR_ABORTED:
+            message = 'Playback aborted by user'
+            break
+          case MediaError.MEDIA_ERR_NETWORK:
+            message = 'Network error: Failed to fetch audio'
+            break
+          case MediaError.MEDIA_ERR_DECODE:
+            message = 'Playback error: Audio decoding failed'
+            break
+          case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
+            message = 'Playback error: Format not supported or source unavailable'
+            break
+          default:
+            message = `Playback error: ${err.message || 'Unknown error'}`
+        }
+        // Log detailed error for debugging
+        console.warn('[GlobalAudioController] Audio Error Details:', {
+          code: err.code,
+          message: err.message,
+          src: audio.src,
+        })
+      }
+      usePlayerStore.getState().setPlayerError(message)
     }
 
     audio.addEventListener('timeupdate', onTimeUpdate)

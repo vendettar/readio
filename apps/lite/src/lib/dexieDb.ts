@@ -91,6 +91,7 @@ export interface Favorite {
   duration?: number // Duration in seconds
   episodeArtworkUrl?: string // Episode-specific artwork
   episodeId?: string // Episode GUID/ID for navigation (v6)
+  providerEpisodeId?: string // Platform-specific ID (e.g. Apple Track ID) for robust matching
 }
 
 export interface Setting {
@@ -153,7 +154,7 @@ class ReadioDB extends Dexie {
       audioBlobs: 'id, storedAt',
       subtitles: 'id, storedAt',
       subscriptions: 'id, &feedUrl, addedAt, providerPodcastId', // &feedUrl = unique index
-      favorites: 'id, &key, addedAt, episodeId', // &key = unique index
+      favorites: 'id, &key, addedAt, episodeId, providerEpisodeId', // &key = unique index
       settings: 'key',
       folders: 'id, name, createdAt', // UUID, no auto-increment
       local_tracks: 'id, name, folderId, createdAt', // UUID, no auto-increment

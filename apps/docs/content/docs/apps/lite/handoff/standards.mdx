@@ -248,8 +248,7 @@ Follows the five architecture consistency principles defined in `apps/docs/conte
    - **Position Rules**: Default `center`; Podcast cards use `bottom-left`; Top Episodes grid keeps `center`.
    - **Trigger Rules**: In episode lists, the play button should appear with the row hover (not just when hovering the cover).
    - **Trigger Binding**: Bind hover trigger to parent list row/card (e.g., `episode`/`item`/`session`/`card`) via `hoverGroup`.
-   - **Play Button Visibility**: Only show play button when caller passes `onPlay`; cards without playback capability must not show play button (to avoid misleading).
-   - **Explore Exception**: Explore's Top Shows / Top Subscriber / Editor's Picks can pull RSS and play the latest episode via `onPlayLatest`, so play buttons are allowed; Top Episodes is a single episode list, playback entry goes through `onPlay`.
+    - **Play Button Visibility**: Only show play button when caller passes `onPlay`; cards or grids without direct playback capability (e.g., all Explore page modules) must not show play button to avoid misleading users. Navigation only modules should prioritize clarify and direct access to detail pages.
 
 5. **EpisodeRow & BaseEpisodeRow** (`src/components/EpisodeRow/`)
    - **BaseEpisodeRow**: Pure Presentation Component.

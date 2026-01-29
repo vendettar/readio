@@ -1,53 +1,26 @@
 // src/components/Explore/PodcastEpisodesGrid.tsx
 
-import { Link } from '@tanstack/react-router'
-import { Info, Link as LinkIcon, Play, RadioTower, Star } from 'lucide-react'
-import React from 'react'
+import type React from 'react'
 import { useTranslation } from 'react-i18next'
 import { CAROUSEL_DEFAULTS } from '../../constants/layout'
 import { useCarouselLayout } from '../../hooks/useCarouselLayout'
 import type { DiscoveryPodcast } from '../../lib/discovery'
 import { getDiscoveryArtworkUrl } from '../../lib/imageUtils'
 import { cn } from '../../lib/utils'
-import { useExploreStore } from '../../store/exploreStore'
 import { AnimatedList } from '../bits/AnimatedList'
 import { InteractiveArtwork } from '../interactive/InteractiveArtwork'
 import { InteractiveTitle } from '../interactive/InteractiveTitle'
-import { Button } from '../ui/button'
-import { DropdownMenuItem } from '../ui/dropdown-menu'
-import { OverflowMenu } from '../ui/overflow-menu'
 import { CarouselNavigation } from './CarouselNavigation'
 
 interface PodcastEpisodesGridProps {
   episodes: DiscoveryPodcast[]
-  onPlay?: (episode: DiscoveryPodcast) => void
-  onFavorite?: (episode: DiscoveryPodcast) => Promise<void> | void
   isLoading?: boolean
 }
 
 const ROWS = 3
 
-export function PodcastEpisodesGrid({
-  episodes,
-  onPlay,
-  onFavorite,
-  isLoading,
-}: PodcastEpisodesGridProps) {
+export function PodcastEpisodesGrid({ episodes, isLoading }: PodcastEpisodesGridProps) {
   const { t } = useTranslation()
-  const favorites = useExploreStore((s) => s.favorites)
-  const [openMenuId, setOpenMenuId] = React.useState<string | null>(null)
-  const [processingId, setProcessingId] = React.useState<string | null>(null)
-  const menuItemClassName =
-    'text-sm font-medium focus:bg-primary focus:text-primary-foreground whitespace-nowrap cursor-pointer'
-  const favoritedIds = React.useMemo(
-    () => new Set(favorites.map((f) => f.episodeId).filter(Boolean) as string[]),
-    [favorites]
-  )
-
-  const favoriteAudioUrls = React.useMemo(
-    () => new Set(favorites.map((favorite) => favorite.audioUrl).filter(Boolean) as string[]),
-    [favorites]
-  )
 
   const {
     scrollRef,
@@ -114,9 +87,6 @@ export function PodcastEpisodesGrid({
               staggerDelay={0.08}
               className="gap-4"
               renderItem={(episode, rowIndex) => {
-                const favorited =
-                  favoritedIds.has(episode.id) ||
-                  (episode.url ? favoriteAudioUrls.has(episode.url) : false)
                 const podcastId = episode.url?.match(/\/id(\d+)/)?.[1]
                 const episodeIndex = colIndex * ROWS + rowIndex
 
@@ -139,7 +109,6 @@ export function PodcastEpisodesGrid({
                               }
                             : undefined
                         }
-                        onPlay={() => onPlay?.(episode)}
                         playIconSize={14}
                         hoverGroup="item"
                         size="md"
@@ -181,111 +150,10 @@ export function PodcastEpisodesGrid({
                       </div>
                     </div>
 
-                    {/* Separator: aligns from image left to content right (last dot) */}
+                    {/* Separator: aligns from image left to content right */}
                     {rowIndex < ROWS - 1 && (
                       <div className="absolute bottom-0 start-0 end-0 h-px bg-border/70 z-40" />
                     )}
-
-                    {/* Hover actions with fade effect */}
-                    <div
-                      className={cn(
-                        'absolute end-0 inset-y-0 flex transition-opacity duration-200 z-30',
-                        openMenuId === episode.id
-                          ? 'opacity-100'
-                          : 'opacity-0 group-hover/item:opacity-100'
-                      )}
-                    >
-                      {/* Gradient fade */}
-                      <div className="w-12 bg-gradient-to-e from-transparent to-background" />
-                      {/* Solid background covering all text to the right */}
-                      <div className="bg-background flex items-center gap-1 pe-2 ps-2">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={async (e) => {
-                            e.stopPropagation()
-                            setProcessingId(episode.id)
-                            try {
-                              await onFavorite?.(episode)
-                            } finally {
-                              setProcessingId(null)
-                            }
-                          }}
-                          className={cn(
-                            'w-8 h-8 transition-colors hover:bg-transparent',
-                            favorited ? 'text-primary' : 'text-muted-foreground hover:text-primary'
-                          )}
-                          aria-label={favorited ? t('unfavorite') : t('favorite')}
-                        >
-                          <Star
-                            size={16}
-                            className={cn(
-                              'stroke-2',
-                              favorited && 'fill-current',
-                              processingId === episode.id && 'animate-pulse opacity-50'
-                            )}
-                          />
-                        </Button>
-
-                        <OverflowMenu
-                          open={openMenuId === episode.id}
-                          onOpenChange={(open) => setOpenMenuId(open ? episode.id : null)}
-                          triggerAriaLabel={t('ariaMoreActions')}
-                          stopPropagation
-                          triggerClassName="w-8 h-8 rounded-full text-muted-foreground hover:text-primary hover:bg-accent transition-all"
-                          iconSize={16}
-                          contentClassName="min-w-44 rounded-xl shadow-2xl border border-border/50 bg-popover/95 backdrop-blur-xl p-0"
-                        >
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              onPlay?.(episode)
-                            }}
-                            className={menuItemClassName}
-                          >
-                            <Play size={14} className="me-2 fill-current" />
-                            {t('playerPlay')}
-                          </DropdownMenuItem>
-                          {podcastId && (
-                            <DropdownMenuItem asChild className={menuItemClassName}>
-                              <Link
-                                to="/podcast/$id/episode/$episodeId"
-                                params={{
-                                  id: podcastId,
-                                  episodeId: encodeURIComponent(episode.id),
-                                }}
-                              >
-                                <Info size={14} className="me-2" />
-                                {t('details')}
-                              </Link>
-                            </DropdownMenuItem>
-                          )}
-                          {podcastId && (
-                            <DropdownMenuItem asChild className={menuItemClassName}>
-                              <Link
-                                to="/podcast/$id"
-                                params={{
-                                  id: podcastId,
-                                }}
-                              >
-                                <RadioTower size={14} className="me-2" />
-                                {t('podcastLabel')}
-                              </Link>
-                            </DropdownMenuItem>
-                          )}
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              if (episode.url) navigator.clipboard.writeText(episode.url)
-                            }}
-                            className={menuItemClassName}
-                          >
-                            <LinkIcon size={14} className="me-2" />
-                            {t('copyLink')}
-                          </DropdownMenuItem>
-                        </OverflowMenu>
-                      </div>
-                    </div>
                   </div>
                 )
               }}

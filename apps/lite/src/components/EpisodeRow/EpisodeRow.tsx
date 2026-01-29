@@ -43,7 +43,12 @@ export function EpisodeRow({
   const { playEpisode } = useEpisodePlayback()
   const [isMenuOpen, setIsMenuOpen] = React.useState(false)
 
-  const favorited = isFavorited(podcast.feedUrl ?? '', episode.audioUrl ?? '')
+  const favorited = isFavorited(
+    podcast.feedUrl ?? '',
+    episode.audioUrl ?? '',
+    episode.id,
+    episode.providerEpisodeId
+  )
   const encodedEpisodeId = encodeURIComponent(String(episode.id))
 
   // Use custom onPlay if provided, otherwise default to context playback
@@ -78,7 +83,8 @@ export function EpisodeRow({
         size="icon"
         onClick={handleToggleFavorite}
         className={cn(
-          'w-8 h-8 text-primary hover:bg-transparent hover:text-primary transition-opacity duration-200 relative z-20'
+          'w-8 h-8 text-primary hover:bg-transparent hover:text-primary transition-opacity duration-200 relative z-20',
+          !favorited && 'opacity-0 group-hover/episode:opacity-100' // Only show on hover if not favorited
         )}
         aria-label={favorited ? t('ariaRemoveFavorite') : t('ariaAddFavorite')}
       >
