@@ -3,7 +3,8 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
-      "@readio/core": ["../../packages/core/src/index.ts"]
+      "@readio/core": ["../../packages/core/src/index.ts"],
+      "@readio/ui": ["../../packages/ui/src/index.tsx"]
     }
   },
   "files": [],
@@ -13,6 +14,9 @@
     },
     {
       "path": "./tsconfig.node.json"
+    },
+    {
+      "path": "../../packages/ui"
     }
   ]
 }
