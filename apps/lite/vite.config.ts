@@ -18,7 +18,10 @@ const visualizerPlugin = visualizer({
 const enablePwaDev = process.env.PWA_DEV === '1'
 const devHostAll = process.env.VITE_DEV_HOST_ALL === '1'
 
+const base = process.env.VITE_BASE_PATH || '/'
+
 export default defineConfig({
+  base,
   server: devHostAll ? { host: '0.0.0.0' } : undefined,
   plugins: [
     TanStackRouterVite({
@@ -42,16 +45,16 @@ export default defineConfig({
         background_color: '#FFFFFF',
         display: 'standalone',
         orientation: 'portrait',
-        scope: '/',
-        start_url: '/',
+        scope: './',
+        start_url: './',
         icons: [
           {
-            src: '/readio.png',
+            src: 'readio.png',
             sizes: '192x192',
             type: 'image/png',
           },
           {
-            src: '/readio.png',
+            src: 'readio.png',
             sizes: '512x512',
             type: 'image/png',
           },

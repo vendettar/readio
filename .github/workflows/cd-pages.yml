@@ -42,6 +42,8 @@ jobs:
 
       - name: Build Lite frontend
         run: pnpm -C apps/lite build
+        env:
+          VITE_BASE_PATH: /readio/
 
       - name: Setup Github Pages
         uses: actions/configure-pages@v5
