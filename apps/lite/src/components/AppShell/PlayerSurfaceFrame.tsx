@@ -200,9 +200,13 @@ export function PlayerSurfaceFrame({ mode }: { mode: Exclude<SurfaceMode, 'mini'
     if (!root) return
 
     const active = document.activeElement
-    if (active instanceof HTMLElement && !root.contains(active)) {
-      previousFocusedElementRef.current = active
-    }
+    previousFocusedElementRef.current =
+      active instanceof HTMLElement &&
+      active !== document.body &&
+      active !== document.documentElement &&
+      !root.contains(active)
+        ? active
+        : null
 
     // Modal full player: temporarily hide siblings from assistive tech and sequential focus.
     const parent = root.parentElement

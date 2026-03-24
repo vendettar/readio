@@ -3,7 +3,6 @@ import { type ReactNode, useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { usePlayerStore } from '../../../store/playerStore'
 import { usePlayerSurfaceStore } from '../../../store/playerSurfaceStore'
-import { useTranscriptStore } from '../../../store/transcriptStore'
 import { PlayerSurfaceFrame } from '../PlayerSurfaceFrame'
 
 // Minimal Mocks
@@ -298,29 +297,19 @@ describe('PlayerSurfaceFrame - Dismiss Interactions', () => {
     externalButton.remove()
   })
 
-  it('Full Mode: exit restores focus to docked expand trigger origin', async () => {
-    usePlayerSurfaceStore.setState({ mode: 'docked' })
-    useTranscriptStore.setState({
-      subtitlesLoaded: true,
-      subtitles: [{ start: 0, end: 1, text: 'origin' }],
-      transcriptIngestionStatus: 'idle',
-    })
-    const { rerender } = render(<PlayerSurfaceFrame mode="docked" />)
+  it('Full Mode: exit falls back to docked minimize trigger when no opener exists', async () => {
+    const { rerender } = render(<PlayerSurfaceFrame mode="full" />)
+    const fullMinimizeBtn = screen.getByLabelText('ariaMinimize')
 
-    const expandBtn = screen.getByLabelText('ariaOpenQueue')
-    expandBtn.focus()
-    fireEvent.click(expandBtn)
-
-    rerender(<PlayerSurfaceFrame mode="full" />)
-    const minimizeBtn = screen.getByLabelText('ariaMinimize')
     await waitFor(() => {
-      expect(document.activeElement).toBe(minimizeBtn)
+      expect(document.activeElement).toBe(fullMinimizeBtn)
     })
 
     rerender(<PlayerSurfaceFrame mode="docked" />)
-    const remountedExpandBtn = screen.getByLabelText('ariaOpenQueue')
+
+    const dockedMinimizeBtn = screen.getByLabelText('ariaMinimize')
     await waitFor(() => {
-      expect(document.activeElement).toBe(remountedExpandBtn)
+      expect(document.activeElement).toBe(dockedMinimizeBtn)
     })
   })
 })

@@ -48,8 +48,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build Lite off-server
-        run: pnpm -C apps/lite build
+      - name: Build Cloud UI off-server
+        run: pnpm --filter @readio/cloud-ui build
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -59,15 +59,15 @@ jobs:
       - name: Build Cloud Linux binary
         run: |
           mkdir -p release
-          cd apps/cloud
-          # Explicit cross-compile instead of reusing apps/cloud/package.json build,
+          cd apps/cloud-api
+          # Explicit cross-compile instead of reusing apps/cloud-api/package.json build,
           # because that script writes to /tmp/readio-cloud and does not enforce Linux output.
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o "$GITHUB_WORKSPACE/release/readio-cloud" .
 
       - name: Stage release assets
         run: |
           mkdir -p release/dist
-          rsync -a apps/lite/dist/ release/dist/
+          rsync -a apps/cloud-ui/dist/ release/dist/
 
       - name: Write SSH known hosts
         run: |
@@ -101,4 +101,4 @@ jobs:
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -p "$SSH_PORT" \
             "$SSH_USER@$SSH_HOST" \
-            "set -euo pipefail; ln -sfn '$REMOTE_RELEASE_DIR' '$REMOTE_CURRENT_DIR'; sudo systemctl restart '$SERVICE_NAME'; sudo systemctl is-active --quiet '$SERVICE_NAME'; test -x '$REMOTE_CURRENT_DIR/readio-cloud'; test -d '$REMOTE_CURRENT_DIR/dist'; curl -fsS 'http://127.0.0.1:${APP_PORT}/healthz' >/dev/null"
+          "set -euo pipefail; ln -sfn '$REMOTE_RELEASE_DIR' '$REMOTE_CURRENT_DIR'; sudo systemctl restart '$SERVICE_NAME'; sudo systemctl is-active --quiet '$SERVICE_NAME'; test -x '$REMOTE_CURRENT_DIR/readio-cloud'; test -d '$REMOTE_CURRENT_DIR/dist'; curl -fsS 'http://127.0.0.1:${APP_PORT}/healthz' >/dev/null"

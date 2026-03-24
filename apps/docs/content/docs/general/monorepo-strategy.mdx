@@ -4,26 +4,34 @@ title: Monorepo Strategy
 
 # Monorepo Strategy & Future Apps
 
-Readio is designed to evolve from a single PWA into a multi-platform ecosystem.
-This document outlines the current role of `apps/cloud` and the longer-term direction for `apps/native`.
+Readio is designed to operate as a multi-app ecosystem.
+This document outlines the current Cloud topology and the longer-term direction for `apps/native`.
 
 ## 1. Apps Overview
 
 | App | Path | Type | Status | Goal |
 |---|---|---|---|---|
 | **Lite** | `apps/lite` | SPA/PWA | 🟢 Live | Zero-dependency, offline-first player. |
-| **Cloud** | `apps/cloud` | Backend scaffold | ⚪ Scaffold only | Serve `apps/lite/dist`, proxy RSS, and bootstrap SQLite. |
+| **Cloud API (Current Scaffold)** | `apps/cloud-api` | Backend scaffold | ⚪ Scaffold only | Current Go scaffold: same-origin backend for Cloud web app, serving discovery/search/feed gateway, caching, and SQLite-backed services. |
+| **Cloud API (Historical Scaffold Location)** | `apps/cloud` | Backend scaffold | ⚪ Historical | Previous location of the Cloud Go scaffold before the repository move to `apps/cloud-api`. |
+| **Cloud UI (Current App)** | `apps/cloud-ui` | Web frontend | ⚪ Live | Cloud-only frontend that talks only to `apps/cloud-api` through same-origin APIs and does not expose Lite's CORS proxy model. |
 | **Native** | `apps/native` | Mobile | ⚪ Scaffold only | iOS/Android wrapper via Capacitor. |
 
 ---
 
-## 2. Cloud Strategy (The Backend)
+## 2. Cloud Strategy
 
-**Role**: Optional enhancement. The app must work perfectly without it.
+**Role**: Optional enhancement. `apps/lite` must work perfectly without Cloud.
 
 ### Frontend Reuse Strategy (Critical Agent Architecture)
-- **Current Scaffold**: `apps/cloud` is a pure Go `net/http` backend. It directly serves the built `apps/lite/dist` static output. No duplicate frontend code should be written in this phase.
-- **Future Direction**: If Cloud later grows into a separate web product with multi-user auth or social features, shared presentation logic should move into `packages/ui`, and a standalone `apps/cloud-web` frontend can consume those components. `apps/lite` must remain a zero-dependency offline PWA.
+- **Current Topology**: `apps/cloud-api` is a pure Go `net/http` backend and `apps/cloud-ui` is the Cloud frontend. Cloud currently operates as two app boundaries:
+  - `apps/cloud-api` for Go backend services
+  - `apps/cloud-ui` for the Cloud frontend
+- **Shared UI Rule**: `apps/lite` and `apps/cloud-ui` may share presentation components via `packages/ui`, but they must not share the same networking model.
+- **Networking Boundary Rule**:
+  - `apps/lite`: browser-backed networking, optional CORS proxy
+  - `apps/cloud-ui`: same-origin backend-owned networking through `apps/cloud-api`
+- **Do not** model Lite and Cloud as one web app with a build-time or runtime mode switch.
 
 ### Planned Features (P2/P3)
 - **Data Sync**: Sync subscriptions and progress across devices.
@@ -31,7 +39,10 @@ This document outlines the current role of `apps/cloud` and the longer-term dire
 - **Social**: Comments and "Podcast Clubs".
 
 ### Tech Stack
-- **Framework**: Go `net/http` for the current scaffold.
+- **Framework**:
+  - Current scaffold: Go `net/http` in `apps/cloud-api`
+  - Current backend: Go `net/http` in `apps/cloud-api`
+  - Current frontend: standalone web frontend in `apps/cloud-ui`
 - **Database**: SQLite for the current scaffold; PostgreSQL remains a future SaaS direction only.
 - **Auth**: JWT-based auth remains a future direction only.
 
@@ -55,11 +66,13 @@ This document outlines the current role of `apps/cloud` and the longer-term dire
 
 ## 4. Shared Packages (`packages/`)
 
-To support this evolution, we must move logic out of `apps/lite` into shared packages.
+To support this evolution, we must move only the correct kinds of logic out of `apps/lite` into shared packages.
 
 - **`packages/core`**: Shared domain schemas and logic used by apps.
-- **`packages/ui`**: UI package placeholder (directory exists; implementation pending).
+- **`packages/ui`**: Shared presentation components for `apps/lite` and `apps/cloud-ui`; this is a real shared presentation package and must stay networking-agnostic.
 - **`packages/config`**: Shared tooling/config SSOT placeholder (directory exists; implementation pending).
+
+Do not move Lite's browser-direct networking assumptions into shared packages.
  
 ---
  

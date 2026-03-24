@@ -1,4 +1,5 @@
 import type React from 'react'
+
 import { cn } from '../../lib/utils'
 
 interface PageHeaderProps {
@@ -38,12 +39,11 @@ export function PageHeader({
   return (
     <header className={cn('mb-10', className)}>
       {beforeTitle && <div className="mb-4">{beforeTitle}</div>}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-5">
-        {/* Title Block */}
+      <div className="flex flex-col gap-5 justify-between sm:flex-row sm:items-end">
         <div className="min-w-0 flex-1">
           <h1
             className={cn(
-              'text-3xl sm:text-4xl font-bold tracking-tight text-foreground line-clamp-2 break-words',
+              'text-3xl font-bold tracking-tight break-words text-foreground line-clamp-2 sm:text-4xl',
               titleClassName
             )}
           >
@@ -52,7 +52,7 @@ export function PageHeader({
           {subtitle && (
             <p
               className={cn(
-                'mt-2 text-base sm:text-lg text-muted-foreground font-medium line-clamp-2 break-words',
+                'mt-2 text-base font-medium break-words text-muted-foreground line-clamp-2 sm:text-lg',
                 subtitleClassName
               )}
             >
@@ -61,8 +61,7 @@ export function PageHeader({
           )}
         </div>
 
-        {/* Action Rail - wraps below title on mobile */}
-        {actions && <div className="flex items-center gap-3 shrink-0 flex-wrap">{actions}</div>}
+        {actions && <div className="flex shrink-0 flex-wrap items-center gap-3">{actions}</div>}
       </div>
 
       {/* Support Meta - sits below title/subtitle row */}
