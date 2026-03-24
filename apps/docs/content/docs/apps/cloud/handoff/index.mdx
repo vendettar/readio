@@ -61,8 +61,9 @@ Architecture rule:
 
 ## 6. Boundaries
 
-- Do not describe a separate Cloud web frontend as already implemented.
+- Do not describe the current Cloud frontend as a fully complete product surface; it exists, but it is still constrained by the current scaffold-phase contracts.
 - Do not describe the current `apps/cloud-api` scaffold as the final Cloud topology.
 - Do not imply that future Cloud UI should continue using Lite's browser-direct discovery or user-configured CORS proxy model.
+- Do not imply that `apps/cloud-ui` can depend on `apps/lite`; shared UI must flow through `packages/ui`.
 - Do not claim schema, sync, auth, or multi-user SaaS behavior in this scaffold stage.
 - Keep future Cloud evolution in docs that are explicitly labeled as future direction.

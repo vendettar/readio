@@ -1,4 +1,4 @@
 {
   "title": "Cloud App (SaaS)",
-  "pages": ["README", "deployment"]
+  "pages": ["README", "api-surface", "deployment"]
 }

@@ -155,17 +155,24 @@ Each step corresponds to a specific Instruction file in `agent/instructions/lite
 ---
 
 ## 10. Cloud Scaffold Stream (Reviewed)
-**Goal**: Stand up a self-hosted Cloud entry point without replacing the Lite product logic.
+**Goal**: Stand up a self-hosted Cloud product boundary with a dedicated Cloud frontend and a same-origin Go backend.
 
 - [x] **001a**: Go app scaffold, workspace wiring, and server lifecycle.
-- [x] **001b**: Static serving contract for `apps/lite/dist`, including direct file serving and SPA fallback.
+- [x] **001b**: Static serving contract for `apps/cloud-ui/dist`, including direct file serving and SPA fallback.
 - [x] **001c**: RSS proxy contract with SSRF-safe, redirect-safe, bounded fetch behavior.
 - [x] **001e**: SQLite bootstrap contract and startup/shutdown lifecycle.
 - [x] **001f**: Integration wiring and handoff verification.
 - [x] **001d**: Doc sync and SSOT alignment, completed only after reviewer approval.
+- [x] **003a**: Same-origin search vertical slice.
+- [x] **003b**: Same-origin feed parsing vertical slice.
+- [x] **003c**: Cloud UI route and app shell.
+- [x] **003d**: First shared UI extraction.
+- [x] **003e**: Repository move to `apps/cloud-api`.
+- [x] **003f**: Cloud CD cutover to `cloud-ui + cloud-api`.
+- [x] **003g**: Shared UI primitive standardization for Tailwind + shadcn-compatible controls.
 
 **Placement**: Cloud instructions live in `agent/instructions/cloud/`.
-**Current status**: the Cloud scaffold stream is reviewed and documented here; it covers backend scaffold, static reuse, proxy boundaries, SQLite bootstrap, integration proof, and docs sync only.
+**Current status**: the Cloud stream now covers the dedicated Cloud frontend (`apps/cloud-ui`), the Go backend (`apps/cloud-api`), same-origin discovery/search/feed ownership, SQLite bootstrap, shared primitive standardization, deployment cutover, and docs sync.
 
 ---
 

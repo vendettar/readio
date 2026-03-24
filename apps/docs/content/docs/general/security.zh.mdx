@@ -58,6 +58,21 @@ Readio 致力于用户数据主权和绝对安全。
 - 验证配置认证头时认证值必须存在。
 - 保持 `credentials: 'omit'`。
 
+### A.2. Lite 与 Cloud 的网络边界
+`apps/lite` 与 `apps/cloud-ui` 不共享同一套 networking model。
+
+- `apps/lite`
+  - 可以使用浏览器直连抓取与代理回退
+  - 可以暴露用户可配置的 CORS 代理能力
+- `apps/cloud-ui`
+  - 必须使用 `apps/cloud-api` 提供的同源后端 API
+  - 不应暴露用户可配置的 CORS 代理模型
+  - 不应在浏览器中直接请求 Apple discovery 端点
+
+安全含义：
+- 代理加固规则对 Lite 仍然关键
+- Cloud 中的上游抓取安全、超时策略、SSRF 防护与错误映射由后端持有
+
 ### B. 错误报告隐私
 **规则**: 不要收集个人身份信息 (PII)。
 - **禁止**: 不要记录文件名、本地文件路径、播客标题或用户查询。

@@ -60,6 +60,21 @@ Readio is committed to user data sovereignty and absolute security.
 - Validate that proxy auth value is present when auth header is configured.
 - Keep `credentials: 'omit'` for proxy fetches.
 
+### A.2. Lite vs Cloud Networking Boundary
+`apps/lite` and `apps/cloud-ui` do not share the same networking model.
+
+- `apps/lite`
+  - may use browser-direct fetch and proxy fallback
+  - may expose user-configured CORS proxy controls
+- `apps/cloud-ui`
+  - must use same-origin backend APIs owned by `apps/cloud-api`
+  - must not present a user-configured CORS proxy model
+  - must not call Apple discovery endpoints directly from the browser
+
+Security implication:
+- proxy hardening rules remain critical for Lite
+- upstream fetch security, timeout policy, SSRF protection, and error mapping are backend-owned in Cloud
+
 ### B. Error Reporting Privacy [Implemented]
 **Rule**: Do NOT collect or export Personally Identifiable Information (PII).
 - **Redaction**: All diagnostic logs are passed through a `redact()` filter before being stored in the buffer or exported. 

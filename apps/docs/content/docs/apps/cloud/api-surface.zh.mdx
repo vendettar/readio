@@ -1,0 +1,79 @@
+---
+title: Cloud API 面
+description: Cloud Web App 当前由后端持有的同源 API 面。
+---
+
+# Cloud API 面
+
+本页记录当前由 `apps/cloud-api` 提供、并由 Cloud Web App 实际使用的后端 API 面。
+
+这里只描述当前已实现契约。
+不描述未来的认证、同步或多用户 SaaS 层。
+
+## 1. 所有权规则
+
+`apps/cloud-ui` 必须使用 `apps/cloud-api` 提供的同源后端 API。
+
+它不应：
+- 在浏览器中直接请求 Apple discovery 端点
+- 延续 Lite 的浏览器直连 networking model
+- 暴露 Lite 风格、用户可配置的 CORS proxy 心智模型
+
+## 2. 健康检查与静态运行时
+
+- `GET /healthz`
+  - 用于部署后的基础健康检查
+
+- 非 API 前端资源服务
+  - `apps/cloud-api` 直接提供构建后的 `apps/cloud-ui/dist`
+  - 非 API 路由仅在不存在同名文件时回退到 `index.html`
+
+## 3. Discovery 端点
+
+### Top Lists
+- `GET /api/v1/discovery/top-podcasts?country=us&limit=20`
+- `GET /api/v1/discovery/top-episodes?country=us&limit=20`
+
+### Search
+- `GET /api/v1/discovery/search/podcasts?term=...&country=us&limit=20`
+- `GET /api/v1/discovery/search/episodes?term=...&country=us&limit=20`
+
+### Lookup
+- `GET /api/v1/discovery/lookup/podcast?id=...&country=us`
+- `GET /api/v1/discovery/lookup/podcast-episodes?id=...&country=us&limit=100`
+
+### Feed
+- `GET /api/v1/discovery/feed?url=...`
+
+## 4. RSS 代理面
+
+- `GET /api/proxy?url=...`
+
+当前用途：
+- 作为脚手架阶段后端契约中的有界 RSS 抓取代理
+
+当前约束：
+- 在拨号前校验目标地址
+- 拒绝私网、回环、链路本地与 metadata 风格目标
+- fail-closed 的重定向行为
+- 有界超时
+- 基础内存限流
+
+这个代理面由后端持有。
+它不是 Lite 风格的、用户可配置的公共 CORS 代理设置。
+
+## 5. 错误所有权
+
+Cloud UI 应把这些 API 视为后端持有的接口面。
+
+这意味着：
+- discovery/search/feed 失败应被呈现为 backend/API failure
+- Cloud UI 不应把这些错误描述成浏览器 CORS failure
+- 面向 Apple 的抓取、上游错误映射与安全边界都属于 `apps/cloud-api`
+
+## 6. 边界
+
+- 不要把 `apps/cloud-ui` 描述成直接请求 Apple 端点。
+- 不要把 Cloud 描述成复用 `apps/lite/dist`。
+- 不要暗示 Cloud UI 依赖 `apps/lite`。
+- 不要把本页描述成最终长期 SaaS API 面。

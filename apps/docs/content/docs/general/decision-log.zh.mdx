@@ -793,17 +793,19 @@ description: 架构决策与其背后的理由。
     - `apps/lite/src/lib/locales/ja.ts`
     - `apps/lite/src/lib/locales/ko.ts`
 
-## D116 — Cloud 脚手架使用 Go `net/http`、SQLite 启动，并复用 Lite Dist [已实施]
+## D116 — Cloud 使用 Go `net/http`、SQLite 启动，并提供独立 Cloud UI 工件 [已实施]
 - **决策**：
-  - 当前 Cloud 脚手架阶段在 `apps/cloud` 中使用纯 Go 的 `net/http` 后端。
-  - 在这一阶段，`apps/cloud` 直接提供构建后的 `apps/lite/dist` 前端产物。
+  - 当前 Cloud 运行时在 `apps/cloud-api` 中使用纯 Go 的 `net/http` 后端。
+  - `apps/cloud-api` 直接提供构建后的 `apps/cloud-ui/dist` 前端产物。
   - SQLite 是 Cloud 当前的数据库启动目标，用于自托管和本地可移植性。
-  - 早先的 Spring Boot / Hono 方向不属于当前脚手架契约，不能再作为本阶段已实现的 Cloud 后端来描述。
+  - `apps/cloud-ui` 与 `apps/lite` 是两个独立 webapp；它们可以通过 `packages/ui` 共享展示原子，但不能共享同一套 networking model。
+  - 早先的 Spring Boot / Hono 方向不属于当前已实现的 Cloud 契约，不能再作为现行后端栈描述。
 - **理由**：
-  - 这个脚手架故意保持最小化，必须继续保持可移植、可审查、易于自托管。
-  - 复用 `apps/lite/dist` 可以避免重复前端工作，同时让 Cloud 后端只提供当前契约。
+  - Cloud 运行时必须持有同源 discovery/search/feed 网络边界，不能继续依赖 Lite 的浏览器直连 CORS 模型。
+  - 使用独立的 `apps/cloud-ui` 工件能把 Cloud 产品边界写实，也让部署合同与仓库拓扑保持一致。
   - 纯 Go 服务加 SQLite 可以保持启动路径无 CGO，并降低部署摩擦。
 - **风险说明**：
-  - 文档不能暗示当前已经存在单独的 Cloud Web 前端。
+  - 文档不能再把 Cloud 描述成 `apps/cloud-api` 加复用 Lite 静态产物。
+  - 文档不能暗示 `apps/cloud-ui` 可以直接依赖 `apps/lite`。
   - 文档不能声称脚手架阶段尚未具备的同步、认证或 schema 层。
-  - Cloud 的长期演进可以改变技术栈，但当前阶段契约必须保持明确且收敛。
+  - Cloud 的长期演进仍可改变技术栈，但当前双工件契约必须保持明确且收敛。
