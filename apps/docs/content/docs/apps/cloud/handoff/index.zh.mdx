@@ -61,8 +61,9 @@ title: Cloud 交接
 
 ## 6. 边界
 
-- 不要把单独的 Cloud Web 前端描述为已经实现。
+- 不要把当前 Cloud 前端描述成已经完全完成的产品表面；它已经存在，但仍受当前脚手架阶段契约约束。
 - 不要把当前 `apps/cloud-api` 脚手架描述成最终的 Cloud 拓扑。
 - 不要暗示未来 Cloud UI 仍应继续使用 Lite 的浏览器直连 discovery 或用户可配置的 CORS proxy 模型。
+- 不要暗示 `apps/cloud-ui` 可以依赖 `apps/lite`；共享 UI 必须通过 `packages/ui` 提供。
 - 不要在这一阶段声称已经具备 schema、同步、认证或多用户 SaaS 行为。
 - 未来 Cloud 演进应放在明确标记为 future direction 的文档里。

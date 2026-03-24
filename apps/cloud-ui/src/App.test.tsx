@@ -136,6 +136,49 @@ test.afterEach(() => {
   document.body.innerHTML = ''
 })
 
+test('App renders shared Button and Input primitives from @readio/ui', async () => {
+  const podcasts = createDeferred<Response>()
+  const episodes = createDeferred<Response>()
+
+  const fetchMock = async (input: RequestInfo | URL) => {
+    const url = String(input)
+
+    if (url === DISCOVERY_ENDPOINTS.topPodcasts) return podcasts.promise
+    if (url === DISCOVERY_ENDPOINTS.topEpisodes) return episodes.promise
+
+    throw new Error(`Unexpected URL: ${url}`)
+  }
+
+  const session = await renderApp(fetchMock)
+  try {
+    await act(async () => {
+      podcasts.resolve(jsonResponse({ results: [] }))
+      episodes.resolve(jsonResponse({ results: [] }))
+      await flush()
+    })
+
+    const homeNavButton = Array.from(session.container.querySelectorAll('button')).find(
+      (candidate) => candidate.textContent?.trim() === 'Search'
+    )
+    assert.ok(homeNavButton, 'expected shared nav button')
+    assert.match(homeNavButton.className, /inline-flex/)
+    assert.match(homeNavButton.className, /cloud-shell__nav-button/)
+    assert.doesNotMatch(homeNavButton.className, /ui-button/)
+
+    await act(async () => {
+      clickNav(session.container, 'Search')
+      await flush()
+    })
+
+    const searchInput = findInput(session.container, 'Search term')
+    assert.match(searchInput.className, /border-input/)
+    assert.match(searchInput.className, /focus-visible:ring-1/)
+    assert.doesNotMatch(searchInput.className, /ui-input/)
+  } finally {
+    await session.restore()
+  }
+})
+
 test('App shell navigates between home search feed and detail page shells', async () => {
   const podcasts = createDeferred<Response>()
   const episodes = createDeferred<Response>()

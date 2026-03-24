@@ -1,0 +1,79 @@
+---
+title: Cloud API Surface
+description: Current same-origin backend API surface for the Cloud web app.
+---
+
+# Cloud API Surface
+
+This page describes the currently implemented backend API surface owned by `apps/cloud-api`.
+
+It documents the active contract only.
+It does not describe future auth, sync, or multi-user SaaS layers.
+
+## 1. Ownership Rule
+
+`apps/cloud-ui` must use same-origin backend APIs owned by `apps/cloud-api`.
+
+It must not:
+- fetch Apple discovery endpoints directly from the browser
+- rely on Lite's browser-direct networking model
+- expose Lite's user-configured CORS proxy mental model
+
+## 2. Health and Static Runtime
+
+- `GET /healthz`
+  - basic runtime health endpoint for deployment smoke checks
+
+- non-API frontend asset serving
+  - `apps/cloud-api` serves the built `apps/cloud-ui/dist` artifact
+  - non-API routes fall back to `index.html` only when a direct file does not exist
+
+## 3. Discovery Endpoints
+
+### Top Lists
+- `GET /api/v1/discovery/top-podcasts?country=us&limit=20`
+- `GET /api/v1/discovery/top-episodes?country=us&limit=20`
+
+### Search
+- `GET /api/v1/discovery/search/podcasts?term=...&country=us&limit=20`
+- `GET /api/v1/discovery/search/episodes?term=...&country=us&limit=20`
+
+### Lookup
+- `GET /api/v1/discovery/lookup/podcast?id=...&country=us`
+- `GET /api/v1/discovery/lookup/podcast-episodes?id=...&country=us&limit=100`
+
+### Feed
+- `GET /api/v1/discovery/feed?url=...`
+
+## 4. RSS Proxy Surface
+
+- `GET /api/proxy?url=...`
+
+Current purpose:
+- bounded RSS fetch proxy for the scaffold-phase backend contract
+
+Current constraints:
+- validates target before dialing
+- rejects private, loopback, link-local, and metadata-style targets
+- fail-closed redirect behavior
+- bounded timeout
+- basic in-memory rate limiting
+
+This proxy surface is backend-owned.
+It is not a user-configured Lite-style public CORS proxy setting.
+
+## 5. Error Ownership
+
+Cloud UI should treat these APIs as backend-owned surfaces.
+
+That means:
+- discovery/search/feed failures are reported as backend/API failures
+- Cloud UI should not present them as browser CORS failures
+- Apple-facing fetch behavior and upstream error mapping belong to `apps/cloud-api`
+
+## 6. Boundaries
+
+- Do not describe `apps/cloud-ui` as directly calling Apple endpoints.
+- Do not describe Cloud as reusing `apps/lite/dist`.
+- Do not imply that Cloud UI depends on `apps/lite`.
+- Do not describe this page as the final long-term SaaS API surface.

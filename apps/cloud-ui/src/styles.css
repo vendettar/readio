@@ -1,3 +1,6 @@
+@import "tailwindcss";
+@source "../../packages/ui/src/**/*.{ts,tsx}";
+
 :root {
   color: #111827;
   background:
@@ -34,20 +37,17 @@ code {
   font-size: 0.92em;
 }
 
-.ui-shell,
 .cloud-shell {
   min-height: 100vh;
   padding: 32px 20px 48px;
 }
 
-.ui-shell__header,
 .cloud-shell__header,
 .cloud-shell__main {
   width: min(1080px, 100%);
   margin: 0 auto;
 }
 
-.ui-shell__header,
 .cloud-shell__header {
   display: flex;
   align-items: flex-start;
@@ -56,34 +56,6 @@ code {
   margin-bottom: 24px;
 }
 
-.ui-shell__header-copy {
-  display: grid;
-  gap: 8px;
-}
-
-.ui-shell__eyebrow {
-  margin: 0;
-  color: #0369a1;
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.ui-shell__title {
-  margin: 0;
-  color: #0f172a;
-  font-size: clamp(2rem, 4vw, 3.2rem);
-  line-height: 1.05;
-}
-
-.ui-shell__description {
-  margin: 0;
-  max-width: 58ch;
-  color: #475569;
-}
-
-.ui-shell__actions,
 .cloud-shell__header-actions {
   display: flex;
   flex-direction: column;
@@ -144,37 +116,10 @@ code {
   opacity: 0.5;
 }
 
-.ui-page-panel,
 .cloud-page {
   display: grid;
   gap: 16px;
   margin-bottom: 18px;
-}
-
-.ui-page-panel__kicker {
-  margin: 0;
-  color: #1d4ed8;
-  font-size: 0.76rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.ui-page-panel__title {
-  margin: 0;
-  color: #0f172a;
-  font-size: 1.45rem;
-}
-
-.ui-page-panel__description {
-  margin: 0;
-  max-width: 52ch;
-  color: #475569;
-}
-
-.ui-page-panel__body {
-  display: grid;
-  gap: 16px;
 }
 
 .cloud-card {

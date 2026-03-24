@@ -150,17 +150,24 @@ title: 技术路线图
 - [x] **089c**: 统一 Full/Docked 面板转场（单表面连续形变）。
 
 ## 10. Cloud 骨架流（已审阅）
-**目标**：建立自托管的 Cloud 入口，同时不替换 Lite 产品逻辑。
+**目标**：建立带有独立 Cloud 前端和同源 Go 后端的自托管 Cloud 产品边界。
 
 - [x] **001a**: Go 应用骨架、工作区接线与服务生命周期。
-- [x] **001b**: `apps/lite/dist` 的静态服务契约，包括直接文件服务与 SPA 回退。
+- [x] **001b**: `apps/cloud-ui/dist` 的静态服务契约，包括直接文件服务与 SPA 回退。
 - [x] **001c**: RSS 代理契约，包含 SSRF 安全、重定向安全与有界抓取行为。
 - [x] **001e**: SQLite 启动引导契约以及启动/关闭生命周期。
 - [x] **001f**: 集成接线与交付验证。
 - [x] **001d**: 文档同步与 SSOT 对齐，仅在审阅批准后完成。
+- [x] **003a**: 同源搜索纵向切片。
+- [x] **003b**: 同源 feed 解析纵向切片。
+- [x] **003c**: Cloud UI 路由与应用外壳。
+- [x] **003d**: 第一批共享 UI 提取。
+- [x] **003e**: 仓库迁移到 `apps/cloud-api`。
+- [x] **003f**: 切换到 `cloud-ui + cloud-api` 的 Cloud CD。
+- [x] **003g**: 面向 Tailwind + shadcn-compatible 控件的共享 UI 原子标准化。
 
 **位置**：Cloud 指令位于 `agent/instructions/cloud/`。
-**当前状态**：Cloud 骨架流已审阅并在此记录；仅覆盖后端骨架、静态复用、代理边界、SQLite 启动引导、集成证明与文档同步。
+**当前状态**：Cloud 流已覆盖独立的 Cloud 前端（`apps/cloud-ui`）、Go 后端（`apps/cloud-api`）、同源 discovery/search/feed 网络、SQLite 启动引导、共享 UI 原子标准化、部署切换与文档同步。
 
 ---
 

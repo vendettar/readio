@@ -931,17 +931,19 @@ description: Architecture decisions and rationale.
     - `apps/lite/src/lib/locales/ja.ts`
     - `apps/lite/src/lib/locales/ko.ts`
 
-## D116 — Cloud Scaffold Uses Go `net/http`, SQLite Bootstrap, and Lite Dist Reuse [Implemented]
+## D116 — Cloud Uses Go `net/http`, SQLite Bootstrap, and a Dedicated Cloud UI Artifact [Implemented]
 - **Decision**:
-  - The current Cloud scaffold phase uses a pure Go `net/http` backend in `apps/cloud`.
-  - `apps/cloud` serves the built `apps/lite/dist` output directly for the frontend surface in this phase.
+  - The current Cloud runtime uses a pure Go `net/http` backend in `apps/cloud-api`.
+  - `apps/cloud-api` serves the built `apps/cloud-ui/dist` output directly for the frontend surface.
   - SQLite is the current database bootstrap target for Cloud self-hosting and local portability.
-  - The earlier Spring Boot / Hono direction is not the current scaffold contract and must not be described as the implemented Cloud backend for this phase.
+  - `apps/cloud-ui` and `apps/lite` are separate web apps that may share presentation primitives through `packages/ui`, but they must not share the same networking model.
+  - The earlier Spring Boot / Hono direction is not the current implemented Cloud contract and must not be described as the active backend stack.
 - **Rationale**:
-  - The scaffold is intentionally minimal and must stay portable, reviewable, and easy to self-host.
-  - Reusing `apps/lite/dist` avoids duplicate frontend work while the Cloud backend only provides the current contracts.
+  - The Cloud runtime must own same-origin discovery/search/feed networking without depending on Lite's browser-direct CORS model.
+  - A dedicated `apps/cloud-ui` artifact makes the Cloud product boundary explicit and keeps deployment aligned with the actual app topology.
   - A pure Go server plus SQLite keeps the bootstrap path free of CGO and reduces deployment friction.
 - **Risk Notes**:
-  - Documentation must not imply that a separate Cloud web frontend exists yet.
+  - Documentation must not describe Cloud as `apps/cloud-api` plus reused Lite static output.
+  - Documentation must not imply that `apps/cloud-ui` can import from `apps/lite`.
   - Documentation must not claim sync, auth, or schema layers that are not part of the scaffold phase.
-  - Future Cloud evolution can change the long-term stack, but the current phase contract must remain explicit and narrow.
+  - Future Cloud evolution can still change the long-term stack, but the current dual-artifact contract must remain explicit and narrow.

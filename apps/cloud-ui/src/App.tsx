@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { AppHeader, AppShell, PagePanel } from '@readio/ui'
+import { AppHeader, AppShell, Button, Input, PagePanel } from '@readio/ui'
 
 export const DISCOVERY_COUNTRY = 'us'
 export const DISCOVERY_LOOKUP_LIMIT = 100
@@ -206,7 +206,7 @@ function normalizeDiscoveryItems(payload: unknown): DiscoveryItem[] {
           typeof candidate.providerEpisodeId === 'string' && candidate.providerEpisodeId.trim()
             ? candidate.providerEpisodeId.trim()
             : undefined,
-      }
+      } as DiscoveryItem
     })
     .filter((item): item is DiscoveryItem => item !== null)
 }
@@ -313,7 +313,7 @@ function normalizePodcastEpisodes(payload: unknown): PodcastEpisode[] {
             extractString(candidate.collectionId)
           ) || undefined,
         providerEpisodeId: id,
-      }
+      } as PodcastEpisode
     })
     .filter((item): item is PodcastEpisode => item !== null)
 }
@@ -378,7 +378,7 @@ function normalizeDiscoveryFeed(
             link: extractString(episodeCandidate.link) || undefined,
             audioUrl: extractString(episodeCandidate.audioUrl) || undefined,
             publishedAt: extractString(episodeCandidate.publishedAt) || undefined,
-          }
+          } as DiscoveryFeedEpisode
         })
         .filter((episode): episode is DiscoveryFeedEpisode => episode !== null)
     : []
@@ -499,18 +499,17 @@ function ShellNav({
   return (
     <nav className="cloud-shell__nav" aria-label="Cloud pages">
       {items.map((item) => (
-        <button
+        <Button
           key={item.page}
-          type="button"
-          className={
-            page === item.page ? 'cloud-shell__nav-button cloud-shell__nav-button--active' : 'cloud-shell__nav-button'
-          }
+          variant={page === item.page ? 'outline' : 'ghost'}
+          size="sm"
+          className="cloud-shell__nav-button"
           aria-current={page === item.page ? 'page' : undefined}
           disabled={item.disabled}
           onClick={() => onNavigate(item.page)}
         >
           {item.label}
-        </button>
+        </Button>
       ))}
     </nav>
   )
@@ -551,13 +550,13 @@ export function DiscoverySectionView({
                 {item.artistName ? <span className="cloud-list__meta">{item.artistName}</span> : null}
               </div>
               {onItemSelect ? (
-                <button
-                  type="button"
-                  className="cloud-list__action"
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => onItemSelect(item)}
                 >
                   {actionLabel}
-                </button>
+                </Button>
               ) : null}
             </li>
           ))}
@@ -703,7 +702,7 @@ function SearchSection({
         setState({
           status: 'error',
           term: '',
-          message: error.message,
+          message: (error as Error).message,
         })
         return
       }
@@ -722,18 +721,17 @@ function SearchSection({
           Search term
         </label>
         <div className="cloud-search__row">
-          <input
+          <Input
             id="cloud-search-term"
             name="term"
             type="search"
             value={rawTerm}
             onChange={(event) => setRawTerm(event.target.value)}
             placeholder="Search for a podcast or episode"
-            className="cloud-search__input"
           />
-          <button type="submit" className="cloud-search__submit">
+          <Button type="submit">
             Search
-          </button>
+          </Button>
         </div>
       </form>
 
@@ -856,7 +854,7 @@ function FeedSection() {
         setState({
           status: 'error',
           sourceUrl: '',
-          message: error.message,
+          message: (error as Error).message,
         })
         return
       }
@@ -875,18 +873,17 @@ function FeedSection() {
           Feed URL
         </label>
         <div className="cloud-search__row">
-          <input
+          <Input
             id="cloud-feed-url"
             name="url"
             type="url"
             value={rawUrl}
             onChange={(event) => setRawUrl(event.target.value)}
             placeholder="https://example.com/feed.xml"
-            className="cloud-search__input"
           />
-          <button type="submit" className="cloud-search__submit">
+          <Button type="submit">
             Load feed
-          </button>
+          </Button>
         </div>
       </form>
 
@@ -1144,9 +1141,9 @@ function PodcastDetailSection({
           <p className="cloud-card__kicker">Podcast detail</p>
           <h2 className="cloud-card__title">{selectedPodcast.name}</h2>
         </div>
-        <button type="button" className="cloud-list__action" onClick={onClearSelection}>
+        <Button type="button" variant="outline" size="sm" onClick={onClearSelection}>
           Back to list
-        </button>
+        </Button>
       </div>
 
       {state.status === 'loading' ? (
