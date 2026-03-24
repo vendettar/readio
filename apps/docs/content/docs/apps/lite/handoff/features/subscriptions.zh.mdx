@@ -1,0 +1,35 @@
+---
+title: 订阅列表
+---
+
+## 1. 范围与归属
+
+- 路由：`/subscriptions`。
+- 主界面：`src/routeComponents/SubscriptionsPage.tsx`（注：当前通常在侧边栏或探索页集成，若存在独立页以此为准）。
+- 数据访问权威：`src/store/exploreStore.ts`（数据持久化于 IndexedDB 的 `subscriptions` 表）。
+
+## 2. 订阅契约
+
+订阅系统管理用户对远程播客节目的关注状态：
+
+- **唯一性标识**：以 `feedUrl` 作为主键。
+- **元数据同步**：订阅记录保存了播客的标题、封面、作者以及 ID（`providerPodcastId`）。
+- **来源**：
+  - **手动订阅**：在播客详情页点击“Subscribe”。
+  - **OPML 导入**：通过设置页面批量导入。
+
+## 3. 渲染与优化
+
+- **Orchestration**：页面负责订阅列表的加载与过滤。
+- **Grid/List 布局**：根据 View Density 设置，订阅列表可以表现为紧凑行或舒适网格。
+- **Memoization**：订阅项组件通常使用 `memo` 保护，防止因播放器状态更新导致的全局重绘。
+
+## 4. 关键交互
+
+- **跳转详情**：点击订阅项必须导航至规范化的节目详情页 `/$country/podcast/$id`。
+- **状态同步**：当用户在详情页取消订阅时，全局所有展示该节目的组件（Explore, Subscriptions）必须实时响应。
+
+## 5. OPML 集成
+
+- 订阅数据支持通过 OPML 格式导出，备份于用户的 Personal Vault 中。
+- 导入 OPML 时遵循 **Merge (合并)** 策略：仅补充缺失的 `feedUrl`，不删除现有订阅。

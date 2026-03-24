@@ -1,0 +1,32 @@
+---
+title: Additional Standards
+---
+
+# Additional Standards
+
+## `location.state` Boundary (Instruction 116f)
+
+- `location.state` is **UI-transition-only** metadata.
+- Allowed: visual transition context (for example `fromLayoutPrefix`).
+- Forbidden: business correctness identity (`country`, `podcastId`, `episodeId`, `feedUrl`, `audioUrl`, `providerEpisodeId`, `sessionId`).
+
+Why this rule exists:
+- Browser refresh/direct-open/share URLs do not preserve `location.state`.
+- Business correctness must remain deterministic and URL-driven.
+
+## Feed URL Normalization Placement (Instruction 116f)
+
+- Run `normalizeFeedUrl` at ingestion/write boundaries only.
+- Query key and render paths must consume already-normalized feed URLs.
+- Do not add `new URL()` or `normalizeFeedUrl` in hot render loops.
+
+## ReadingContent Transition Perf Guard (Instruction 116f)
+
+- `docked <-> full` surface transitions use a baseline budget of `120ms`.
+- Over-budget transitions should be logged in dev mode for regression detection.
+
+## Guard / Country / Search Semantics (Instruction 116g)
+
+- Route guard uses AST-aware checks for `location.state` business-field access and blocks destructuring/alias/optional-chain bypass patterns.
+- `useSession` must validate `countryAtSave` through `normalizeCountryParam`; unsupported countries are treated as invalid and rejected for explore-session persistence.
+- Search episode “open detail” actions must use open-detail semantics in prop names and aria labels (not play semantics).

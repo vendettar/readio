@@ -1,0 +1,169 @@
+---
+title: Deepgram ASR
+description: Deepgram 原生 ASR 传输实现说明（Readio Lite）
+---
+
+# Deepgram ASR API 开发指南
+
+## 概述
+Deepgram 在 Readio 中走 **native transport**，实现模块为：
+- `apps/lite/src/lib/asr/providers/deepgramCompatible.ts`
+
+该链路不复用 OpenAI-compatible 表单协议，直接使用 Deepgram 原生 endpoint 与响应结构。
+
+## API 端点与鉴权
+
+- 转写：`POST https://api.deepgram.com/v1/listen`
+- Key 校验：`GET https://api.deepgram.com/v1/projects`
+- 鉴权：`Authorization: Token <DEEPGRAM_API_KEY>`（前缀固定 `Token`）
+
+## 模型支持 (Model Options)
+
+Readio 当前在 registry 中的 allowlist：
+- `nova-3`
+- `nova-2`
+- `nova`
+- `base`
+- `whisper`
+
+## 请求规范
+
+Readio 实现只使用 **二进制直传**（Raw Blob），不走 URL JSON 模式。
+
+### 转写请求（Readio 实际实现）
+
+**Method**
+- `POST`
+
+**Header**
+- `Authorization: Token <API_KEY>`
+- `Content-Type: <blob.type>`；若为空则回退 `audio/mpeg`
+
+**Body**
+- 原始音频 `Blob`（非 `FormData`）
+
+**固定 Query 参数**
+- `model=<modelId>`
+- `smart_format=true`
+- `punctuate=true`
+- `paragraphs=true`
+- `diarize=false`
+
+### Key 校验请求
+
+`verifyDeepgramKey` 语义：
+- `200` => `true`
+- `401` => `false`
+- 其他非 2xx => 抛出 `ASRClientError`（沿用统一错误码体系）
+
+## 响应解析
+
+核心读取路径：
+- transcript: `results.channels[0].alternatives[0].transcript`
+- words: `results.channels[0].alternatives[0].words[]`
+- sentence 分句: `results.channels[0].alternatives[0].paragraphs.paragraphs[].sentences[]`
+
+典型结构：
+```json
+{
+  "results": {
+    "channels": [
+      {
+        "alternatives": [
+          {
+            "transcript": "...",
+            "confidence": 0.99,
+            "words": [
+              {
+                "word": "Hello",
+                "start": 0.0,
+                "end": 0.5,
+                "confidence": 0.99
+              }
+              // ...
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+## 真实返回案例（节选）
+
+以下节选来自真实 Deepgram `listen` 响应，关键点是：同时包含 `words` 与 `paragraphs.paragraphs[].sentences[]`。
+
+```json
+{
+  "metadata": {
+    "request_id": "cb0f41f5-11d2-414d-9ea2-898fbe36b0ce",
+    "created": "2026-03-05T16:18:57.813Z",
+    "duration": 132.67587,
+    "channels": 1,
+    "model_info": {
+      "c6481769-89cd-447f-be27-1e6e9dac3616": {
+        "name": "medium-whisper"
+      }
+    }
+  },
+  "results": {
+    "channels": [
+      {
+        "alternatives": [
+          {
+            "transcript": "Mammals, there will never be another whale like that. Keiko was good at performing...",
+            "words": [
+              { "word": "mammals", "start": 0.06, "end": 0.38, "punctuated_word": "Mammals," },
+              { "word": "there", "start": 0.38, "end": 0.52, "punctuated_word": "there" }
+            ],
+            "paragraphs": {
+              "paragraphs": [
+                {
+                  "sentences": [
+                    {
+                      "text": "Mammals, there will never be another whale like that.",
+                      "start": 0.06,
+                      "end": 2.82
+                    },
+                    {
+                      "text": "Keiko was good at performing, beloved by the crowds at the Mexican amusement park...",
+                      "start": 4.24,
+                      "end": 12.759999
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+### Readio 解析策略（锁定）
+1. 若 `paragraphs.paragraphs[].sentences[]` 有效：优先按 sentence 生成多条 cue（逐句切分）。
+2. 若 sentence 不可用但 `words` 有效：生成单条 cue，范围 `[firstWord.start, lastWord.end]`，并附带 `words`。
+3. 若 `words` 不可用但 `transcript` 有值：走 transcript-only fallback cue（不抛错）。
+4. 若三者都不可用：fail-closed，抛 `ASRClientError(code='service_unavailable')`。
+
+### duration 规则
+- sentence 路径：`durationSeconds = lastSentence.end`
+- 有效 `words`：`durationSeconds = lastWord.end`
+- transcript-only fallback：`durationSeconds = undefined`
+- 不从 synthetic fallback cue 推导 duration
+
+## 错误映射与日志约束
+
+- 状态码映射：
+  - `401 -> unauthorized`
+  - `413 -> payload_too_large`
+  - `429 -> rate_limited`（带 retry-after 解析）
+  - `>=500 -> service_unavailable`（带 retry-after 解析）
+  - 其他非 2xx -> `client_error`
+- 网络错误：
+  - `AbortError -> aborted`
+  - `TypeError -> network_error`
+- 诊断日志不得输出完整 transcript/payload 正文。

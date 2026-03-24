@@ -1,0 +1,46 @@
+---
+title: State Management
+---
+
+## React & Hooks
+
+- **Focus Management**:
+  - Use `autoFocus` prop and library callbacks (`onCloseAutoFocus`).
+  - Do not use `setTimeout` hacks.
+
+- **Effect Dependencies**:
+  - Be exhaustive with `useEffect` dependencies.
+  - Handle "late binding" for refs (e.g., Audio element) correctly.
+
+- **Zustand & Persistence**:
+  - Keep store logic pure and typed.
+  - **Atomic Selectors**: Use atomic selectors (`const value = useStore(s => s.value)`) to prevent unnecessary re-renders. Component-wide destructuring (`const { a, b } = useStore()`) is strictly prohibited in high-frequency paths.
+  - **High-Frequency Isolation**: Components displaying real-time data (e.g., `progress`, `duration`, `currentTime`) MUST be isolated into small, stable leaf components to avoid re-rendering large UI sub-trees.
+  - **Multi-Select**: Use `useShallow` from `zustand/shallow` when multiple dependent fields are required in a single hook call.
+  - **Persistence**: Prefer explicit `loadFromDB()` / `saveToDB()` actions (using `src/lib/dexieDb.ts`) over `zustand/persist`.
+  - **Dexie Versioning**: Use a single schema version only. If schema changes, reset local data.
+
+## Form Handling (Standard)
+- **Rule**: Do NOT use manual `useState` for complex forms or settings.
+- **Library**: **`react-hook-form`** + **`zod`**.
+- **Usage**: Use Shadcn's `<Form>` components to wrap the logic. Ensure all inputs are registered.
+
+## Shared Cache Policy
+- **Rule**: Cache read/write must use unified `storage` utilities (`getJsonWithTtl`).
+
+## Anti-Patterns (Right vs Wrong)
+
+### Form State
+❌ **Wrong**: Manual state
+```tsx
+const [name, setName] = useState('')
+<input value={name} onChange={e => setName(e.target.value)} />
+```
+✅ **Right**: React Hook Form
+```tsx
+const form = useForm({ defaultValues: { name: '' } })
+<FormField control={form.control} name="name" render={({ field }) => <Input {...field} />} />
+```
+
+---
+

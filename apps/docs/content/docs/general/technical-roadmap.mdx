@@ -1,0 +1,234 @@
+---
+title: Technical Roadmap
+---
+
+# Technical Roadmap & Architecture Evolution
+
+This document tracks the **technical evolution** of the codebase.
+Each step corresponds to a specific Instruction file in `agent/instructions/lite/`, `agent/instructions/cloud/`, or their `completed/` / `archive/` subdirectories.
+
+---
+
+## 1. Phase 1: Environment & Infra (The Foundation)
+**Goal**: Ensure a stable, consistent, and standardized development environment.
+
+- [x] **001**: Setup Dependencies (Enforce `date-fns`, ban `lodash`).
+- [x] **002**: Standardize `src/libs` to `src/lib` (Completed).
+- [x] **003**: Harden DevOps (Node engines, strict scripts).
+- [x] **004**: Tailwind Config (Register layout tokens).
+- [x] **004a**: Migrate Layout Tokens (Replace `[var(...)]` with semantic classes).
+- [x] **005**: Prepare Standard Libs (Batch install i18next, dropzone, sonner, etc.).
+  - [x] **005e**: Harden Operational Error Handling.
+  - [x] **005f**: Align Network Fetching & Cache Controls.
+  - [x] **005g**: Storage Serialization Hardening.
+
+---
+
+## 2. Phase 2: Core Architecture Refactor (The Surgery)
+**Goal**: Fix critical architectural flaws (Data consistency, Perf) before building features.
+
+- [x] **006**: Standardize DB IDs (Migrate `++id` to `UUID`).
+- [x] **007**: Refactor Persistence (Fix "Dual-Write" bug).
+- [x] **007b**: Harden Session Upsert (Prevent Progress Loss).
+- [x] **008**: Fix Root Performance (Isolate Audio rendering).
+- [x] **009**: Refactor Routing (Fix redirect logic).
+- [x] **010**: Optimize Search Data (Add Dexie Indexes).
+- [x] **011**: Type-Safe I18n Transition (Prepare for i18next).
+- [x] **012**: Extract Common Components (DRY).
+- [x] **081**: Optimize Zustand Selectors (Performance).
+
+---
+
+## 3. Phase 3: Standardization (The Industrialization)
+**Goal**: Replace "hand-rolled" logic with industry-standard libraries.
+
+- [x] **013**: Standardize I18n (Migrate to `react-i18next`).
+- [x] **014**: Standardize Forms (`react-hook-form` + `zod`).
+- [x] **015**: Standardize File Drop (`react-dropzone`).
+
+---
+
+## 4. Phase 4: UX & Aesthetic Upgrade (The Vibe)
+**Goal**: Elevate the look and feel to "Premium/Apple-like".
+
+- [x] **016**: Upgrade UI Design (Glassmorphism, Semantic Colors).
+- [x] **017**: Install Sonner (Replace Radix Toast).
+- [x] **018**: Refactor Search UI (Migrate to `cmdk`).
+- [x] **019**: Enhance Interactions (Hotkeys & Gestures).
+- [x] **020**: Cleanup Magic Values (Remove `z-[999]`, hardcoded colors).
+- [x] **021**: Integrate React Bits (Animations).
+- [x] **022**: Optimize Typography (1.6 line-height, Fluid Zoom).
+- [x] **024**: App Boot Sequence (Logo animation).
+
+---
+
+## 5. Phase 5: Resilience & Features (The Product)
+**Goal**: Robustness in the real world (Offline, Battery, Privacy).
+
+- [x] **025**: Implement Offline Mode.
+- [x] **026**: Harden Player State Machine.
+- [x] **027**: Harden Resource Management (Revoke Object URLs).
+- [x] **028**: Integrate Media Session API (OS Sync).
+- [x] **029**: Tab Synchronization (Singleton Playback).
+- [x] **030**: Background Performance (Battery Saver).
+- [x] **031**: Logical Properties (RTL Support).
+- [x] **032**: Harden Audio Unit Tests.
+- [x] **033**: Feature: Sleep Timer (P0).
+- [x] **034**: Feature: OPML Import/Export (P0).
+- [x] **035**: Feature: Personal Vault (Full Data Export).
+- [x] **036**: Harden PWA Metadata (iOS Icons).
+- [x] **037**: Implement URL Slugs (Pretty Links).
+
+---
+
+## 6. Phase 6: Production Readiness (The Launch)
+**Goal**: Polish the app for public release and compliance.
+
+- [x] **038**: Setup Deployment Pipeline (Vercel/Docker).
+- [x] **039**: Implement Legal Pages (Privacy/Terms).
+- [x] **040**: Implement Smoke E2E Tests (Playwright).
+- [x] **041**: Implement Strict CSP (Security).
+- [x] **045**: Onboarding & Empty States (UX).
+- [x] **046**: Image Fallback Strategy (Aesthetics).
+- [ ] **052**: User Feedback Loop (Retention).
+- [ ] **055**: Content Disclaimer & Attribution (Legal).
+
+---
+
+## 7. Phase 7: Engineering Excellence (The Future)
+**Goal**: Harden the architecture for multi-developer collaboration.
+
+- [x] **042**: Data Retention Policy (Performance).
+- [x] **043**: PWA Update Lifecycle (UX).
+- [x] **044**: Setup CI Pipeline (Automation).
+- [x] **047**: Local Error Logger (Supportability).
+- [x] **048**: Accessibility Standards (Compliance).
+- [x] **049**: Data Integrity on Import (Reliability).
+- [x] **050**: Bundle Size & Perf Budget (Monitoring).
+- [x] **116**: Country-Scoped Podcast Routing + Canonical URL Contract Unification (116a-116e).
+- [x] **083**: Normalize Test File Placement (Standardization).
+- [x] **051**: Iframe & HTML Sandbox (Security).
+- [ ] **053**: Offline Content Management (Utility).
+- [ ] **054**: Advanced Sorting & Filtering (Utility).
+- [x] **056**: Multilingual Typography (Quality).
+- [x] **057**: Direct DB Access Guard (Anti-corruption).
+- [x] **058**: MSW for Testing (Robustness).
+- [ ] **059**: Architecture Manifesto (Culture).
+
+---
+
+## 8. Phase 8: Industrial Hardening (The Fortress)
+**Goal**: Absolute reliability under extreme conditions.
+
+- [x] **060**: PWA Audio Streaming Cache (Range Requests).
+- [x] **061**: Memory Stress Test (Long Sessions).
+- [ ] **062**: Proxy Failover Mechanism (Resilience).
+- [x] **063**: I18n Coverage Audit (Automation).
+- [x] **064**: IndexedDB Migration Engine (Versioning).
+- [ ] **065**: Browser Support Matrix (Polyfills).
+- [x] **066**: Harden Turborepo Cache Config (CI Sync).
+- [x] **067**: Atomic Write Safeguards (Reliability).
+- [x] **068**: Audit & Fix Async Race Conditions (UI Integrity).
+
+---
+
+## 9. Phase 9: Enterprise Grade (The Pinnacle)
+**Goal**: Elite-tier performance, security, and compliance.
+
+- [x] **069**: Robust Metadata Parser (Functionality).
+- [x] **070**: Skeleton UI System (UX).
+- [x] **071**: Global Overlay Manager (Architecture).
+- [ ] **072**: Media Cache Eviction Policy (Maintenance).
+- [x] **073**: Network Backoff & Circuit Breaker (Resilience).
+- [x] **074**: Storage Quota Monitoring (UX).
+- [x] **075**: Intl API Upgrade (Quality).
+- [x] **076**: Granular Error Boundaries (Fault Tolerance).
+- [x] **077**: Lighthouse CI Budget (Automated QA).
+- [x] **078**: Dependency Audit & License Policy (Compliance).
+- [x] **079**: Audit & Fix Floating Promises (Integrity).
+- [x] **080**: Audit & Fix Event Listener Leaks (Memory).
+
+- [x] **082**: Enforce CSS Isolation (Security).
+- [x] **089b**: Global Docked Transcript Surface Mode (Mini extension, route-independent).
+- [x] **089c**: Unify Full/Docked Surface Motion (single-surface continuous morph).
+
+---
+
+## 10. Cloud Scaffold Stream (Reviewed)
+**Goal**: Stand up a self-hosted Cloud entry point without replacing the Lite product logic.
+
+- [x] **001a**: Go app scaffold, workspace wiring, and server lifecycle.
+- [x] **001b**: Static serving contract for `apps/lite/dist`, including direct file serving and SPA fallback.
+- [x] **001c**: RSS proxy contract with SSRF-safe, redirect-safe, bounded fetch behavior.
+- [x] **001e**: SQLite bootstrap contract and startup/shutdown lifecycle.
+- [x] **001f**: Integration wiring and handoff verification.
+- [x] **001d**: Doc sync and SSOT alignment, completed only after reviewer approval.
+
+**Placement**: Cloud instructions live in `agent/instructions/cloud/`.
+**Current status**: the Cloud scaffold stream is reviewed and documented here; it covers backend scaffold, static reuse, proxy boundaries, SQLite bootstrap, integration proof, and docs sync only.
+
+---
+
+## 11. Phase 11: Modularization & Stability (The Refinement)
+**Goal**: Decouple monolithic components and stores for long-term maintainability.
+
+- [x] **100**: Modularize I18n Optimization.
+- [x] **101**: Extract Premium UI Components.
+- [x] **102**: Unified Episode Row System.
+- [x] **103**: Modularize Settings Page.
+- [x] **104**: Modularize Files Page.
+- [x] **105**: Refactor Maintenance UI.
+- [x] **106**: Unify Playback Controls.
+- [x] **107**: Introduce Repository Boundary for Store Persistence.
+- [x] **108**: Split Fetch/Config Internals.
+- [x] **110**: Modularize I18n Lazy Loading (Superseded by 100).
+- [x] **111**: Multilingual Transcript Tokenization Core.
+- [x] **111b**: Transcript Tokenization Integration.
+- [x] **112**: Modernize Settings UI.
+- [x] **113**: Refactor Audio Controller.
+- [x] **113b**: Media Session and Autoplay Retry Refactor.
+- [x] **114**: Accessibility and Keyboard Nav.
+- [x] **115**: Advanced Media Service Worker.
+- [x] **115a**: Foreground Lightweight Audio Prefetch.
+- [x] **123**: Online ASR API Integration (Groq/Whisper).
+- [x] **124**: Fundamental Offline Downloads (Manual Storage).
+- [x] **125**: Background ASR Transcription (Sequential Queue & Fingerprinting).
+- [x] **128**: Align Downloads Density (UI Consistency).
+- [x] **134a**: Pause On Dictionary Lookup - Behavior Hardening.
+- [x] **134b**: Pause On Dictionary Lookup - Positioning Hardening.
+- [x] **136**: Refined Playback Pause Interaction (completed in instruction lifecycle; handoff index currently details this stream under 134a/134b entries).
+- [x] **137a**: Runtime Config Secret Guard.
+- [x] **137b**: Session + Library State Hardening.
+- [x] **137c**: Discovery + Session Identity Fixes.
+- [ ] **137d**: Docs Locale + Metadata Hardening (functional fixes landed; required `apps/docs build` verification still blocked by production build hang).
+- [x] **137e**: Transcript Keyboard Accessibility Hardening.
+- [x] **137f**: Top-Episode Route ID Contract.
+- [x] **137g**: Files Folder Subtitle Grouping.
+- [x] **137h**: DB Guard Fail-Closed.
+- [x] **137i**: Repo Verification Pipeline Hardening.
+- [x] **137j**: Doc SSOT Drift Reconciliation.
+
+---
+
+## 12. Future Phase: "Hybrid Backend" (v2.0)
+**Goal**: Optional cloud sync for power users.
+
+### Architectural Change
+```mermaid
+graph TD
+    A[Vite Client] -->|REST| B[Spring Boot API]
+    A -->|Direct| C[IndexedDB (Offline Cache)]
+    B --> D[PostgreSQL]
+```
+
+### Key Modules
+1. **Auth**: JWT-based stateless auth.
+2. **Sync Engine**: "Last Write Wins" sync strategy.
+3. **CORS Proxy**: Self-hosted proxy.
+
+---
+
+## 11. SSR Strategy (Decision Log)
+
+**Verdict**: **No SSR needed for App.**
+- The core app is an authenticated/local dashboard. SEO is irrelevant.

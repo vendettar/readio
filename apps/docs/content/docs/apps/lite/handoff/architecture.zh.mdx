@@ -1,0 +1,91 @@
+---
+title: 核心架构 (Core Architecture)
+---
+
+## 1. 目录结构
+
+```
+src/
+├── routes/              # TanStack Router 路由定义（基于文件）
+│   ├── __root.tsx       # 全局布局（AppShell、GlobalAudioController、Toast）
+│   └── ...
+├── routeComponents/     # 页面组件（支持路由级懒加载）
+├── components/          # UI 组件库
+│   ├── AppShell/        # 框架布局组件
+│   ├── GlobalSearch/    # 搜索相关（CommandPalette 等）
+│   ├── Files/           # 文件管理分区
+│   ├── Settings/        # 设置分区
+│   ├── Transcript/      # 字幕视图
+│   └── interactive/     # 交互原语（InteractiveTitle/Artwork）
+├── hooks/               # 共享业务逻辑
+├── lib/                 # 核心工具与 Provider 实现
+│   ├── dexieDb.ts       # 数据库封装
+│   ├── discovery/       # 播客发现逻辑
+│   ├── repositories/    # 持久化边界适配层（Phase 1）
+│   ├── networking/      # 网络内部模块（proxy/breaker/timeout）
+│   └── locales/         # i18n 语言包（en/zh/ja/ko/de/es）
+└── store/               # Zustand 状态管理
+```
+
+## 2. 系统核心设计
+
+### App Shell 模式
+应用采用 App Shell 架构，确保导航与播放器的持久性。侧边栏（Sidebar）负责导航与搜索入口，底部播放器（MiniPlayer）常驻并提供全局控制。
+
+### 播放器表面模式 (Player Surfaces)
+系统支持三种播放状态展示模式，且切换时不中断播放：
+- **Mini**：底部紧凑胶囊，适合浏览内容。
+- **Docked**：半屏分栏模式，支持侧边字幕阅读。
+- **Full**：全屏沉浸模式，展示大封面与完整字幕视图。
+模式切换利用 `PlayerSurfaceFrame` 的单一实例配合共享元素过渡（Shared Element Transitions）实现平滑变形。
+
+### 存储与持久化 (IndexedDB)
+- **尽力而为模型**：使用浏览器 IndexedDB 存储元数据与音频缓存。
+- **存储保障**：执行 85%/95% 磁盘占用拦截策略，并强制 10GB 的音频二进制缓存上限。
+- **事务安全**：文件导入等关键写入操作封装在原子的 `db.transaction()` 中。
+- **Repository 边界（Phase 1）**：`exploreStore`、`historyStore`、`playerStore`、`filesStore` 已通过 `LibraryRepository`/`PlaybackRepository`/`FilesRepository` 访问持久层，不再在这些 store 中直接导入 `DB`。
+
+### 性能隔离机制
+- **GlobalAudioController**：将 `<audio>` 事件监听从 React 渲染树中隔离，通过 `getState()` 直接操作 Store，避免 `timeupdate` 导致的高频重渲染。
+- **音频内部 Hook 化**：
+  - `useAudioElementSync`：负责 `src/volume/playbackRate` 的同步。
+  - `useAudioElementEvents`：负责音频事件注册与清理，并保持既有状态迁移语义不变。
+  - `useAutoplayRetry`：隔离 `play()` 失败后的 autoplay 重试状态机。
+  - `lib/audioErrors.ts`：统一媒体错误分类到 i18n 文案映射。
+- **原子选择器 (Atomic Selectors)**：强制组件仅订阅所需的单一 Store 字段，最小化重绘范围。
+
+## 3. 路由与交互规范
+
+### 路由导航
+- **TanStack Router**：采用基于文件的路由系统，支持规范的 `beforeLoad` 重定向与数据预加载。
+- **按需加载**：所有页面及重型组件（如 `TranscriptView`）均执行 Lazy Load。
+
+### 交互原语 (Primitives)
+- **交互标题与封面**：统一使用 `InteractiveTitle` 和 `InteractiveArtwork`，封装了悬停预览、播放动作及路由跳转逻辑。
+- **可展开描述**：`ExpandableDescription` 提供统一的 HTML/纯文本渲染及展开交互。
+
+### 字幕交互架构
+- **单一权威**：每个字幕视图由唯一的 `useSelection` 实例管理查词逻辑。
+- **组件驱动**：单词点击是查词与菜单的唯一入口，支持原生选区优先权。
+
+## 4. 架构硬化 (Hardening)
+
+### 异步与竞态防护
+- **Request ID**：关键异步流使用单调递增 ID 校验，确保旧请求结果不会覆盖最新状态。
+- **Signal 取消**：所有网络请求与 Store 写入操作均响应 `AbortSignal` 信号。
+
+### 维护与自愈
+- **保留政策**：自动保留最近 1000 条或 6 个月内的播放历史。
+- **完整性自愈**：启动时通过 `runIntegrityCheck` 自动标记损坏的 Blob 引用并修复孤儿文件夹关系。
+
+### 跨标签同步
+- 通过 `BroadcastChannel` 监听 `readio_sync` 通道，实现多标签页间的播放状态同步与单例播放限制。
+
+## 5. 技术栈概览
+
+- **核心**：React 19, TypeScript, Vite
+- **路由**：TanStack Router
+- **状态**：Zustand, TanStack Query
+- **数据库**：Dexie (IndexedDB)
+- **样式**：Tailwind CSS, Framer Motion
+- **测试**：Vitest, Playwright

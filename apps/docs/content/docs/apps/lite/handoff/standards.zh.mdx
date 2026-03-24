@@ -1,0 +1,71 @@
+---
+title: 开发标准与规范
+---
+
+## 1. 视觉规范 (UI/UX)
+
+### 令牌化布局
+- 严禁使用像素级硬编码（如 `w-[420px]`）。
+- 必须使用 Tailwind 标准令牌（如 `max-w-md`）。
+- 颜色引用必须符合语义化（如 `text-primary`, `bg-muted`）。
+
+### 交互一致性
+- **Interactive Primitives**：所有标题跳转必须使用 `InteractiveTitle`，封面交互必须使用 `InteractiveArtwork`。
+- **播放控件原语**：Mini 与 Full surface 控件必须复用 `src/components/Player/controls/` 下的 `PlaybackSpeedButton`、`TransportPlayPauseButton`、`TransportSkipButton`；行为回调保持在 shell 组件层。
+- **确认交互**：破坏性操作（删除、抹除）必须提供二步确认流程。
+- **删除覆盖范围**：该规则适用于所有删除/移除入口（包括字幕条目的删除按钮），不只限于顶层菜单。
+- **按钮类型**：所有交互按钮必须显式声明 `type="button"`，以防止意外的表单提交及页面刷新。
+- **加载态**：列表加载必须提供骨架屏 (Skeleton) 占位，避免布局跳闪。
+- **Overflow 菜单图标**：所有三点菜单选项都必须带图标，且统一为“文字在左、图标在右”。
+
+## 2. 状态管理 (Zustand)
+
+### 原子选择器准则
+- **强制约束**：禁止解构整个 Store（如 `const { ... } = useStore()`）。
+- **正确做法**：必须为每个字段使用独立的原子选择器，以隔离重渲染影响。
+- **性能验证**：对于高频更新组件（如进度条），必须通过 Profiler 验证渲染频率。
+
+### 只读访问
+- 在 Action 或异步回调内部，优先使用 `useStore.getState()` 获取快照，避免不必要的 Hook 订阅。
+
+## 3. 异步卫生 (Async Hygiene)
+
+### 竞态防护
+- 所有的异步数据加载（Session 恢复、搜索、解析）必须具备 Request ID 或版本校验机制。
+- 只有与当前 `activeId` 匹配的异步结果才允许回写 Store。
+
+### 信号取消
+- 所有的 `fetch` 请求及持久化 Hook 必须接收并响应 `AbortSignal`。
+- 路由切换时，旧有的请求必须被物理中止。
+
+## 4. 架构隔离与安全
+
+### 数据库访问隔离
+- **禁止跨层**：UI 组件禁止直接导入 `dexieDb`。
+- **类型安全**：仅允许从 `lib/db/types.ts` 导入实体定义。
+- **持久化路径**：所有的写操作必须经由 Store Action 封装，禁止 UI 层直接操作数据库事务。
+
+### 资源生命周期
+- **内存安全**：所有的 `ObjectURL` 创建必须配对 `revoke` 逻辑。
+- **Hook 封装**：优先使用 `useImageObjectUrl` 等封装好的生命周期管理 Hook。
+
+## 5. 国际化 (i18n)
+
+### 安全切换
+- 语言切换必须通过 `changeLanguageSafely` 触发。
+- 禁止在资源未就绪时强制应用语言，以防止界面出现 Key 泄露。
+- 所有的翻译 Key 必须经过类型检查，严禁使用未定义的字符串。
+
+## 6. 无障碍基线（Instruction 114）
+
+- **浮层键盘契约**：
+  - Command Palette 输入框暴露 `aria-expanded` 与 `aria-controls`。
+  - `Esc` 在输入框与结果面板上下文都可确定性关闭 Command Palette。
+  - 选词菜单（`WordContextMenu`、`RangeActionMenu`）支持 `ArrowUp` / `ArrowDown` / `Home` / `End` 导航与 `Esc` 关闭。
+- **菜单/对话框语义**：
+  - 选词动作菜单使用 `role="menu"` / `role="menuitem"` (WordContextMenu) 或 `role="toolbar"` (RangeActionMenu)。
+  - 词典查询浮层使用 `role="dialog"` 与 `aria-modal`。
+  - 所有选词浮层（Surface）均使用 **Radix UI** 原语及 **Floating UI** 实现稳健的定位与交互。
+- **播放器控件 ARIA**：
+  - Mini/Full 播放进度滑条统一暴露 `ariaPlaybackProgress`。
+  - Mini 音量滑条暴露 `ariaVolumeSlider`。

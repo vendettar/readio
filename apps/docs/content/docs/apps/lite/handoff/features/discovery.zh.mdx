@@ -1,0 +1,60 @@
+---
+title: 播客发现 (Explore)
+---
+
+## 1. 范围与原则
+
+- 路由：`/explore`、`/$country/podcast/$id` 及 `/$country/podcast/$id/episode/$episodeId`。
+- 定位：播客发现中心，保持克制、安静、阅读优先的设计风格。
+- 架构模式：编排页 + 模块化分区组件。
+
+## 2. 页面架构 (Explore)
+
+探索页由多个发现模块组合而成，具备离线自动降级功能：
+
+- **精选推荐 (Editor's Picks)**：固定 ID 的精品播客网格。
+- **榜单轮播 (Top Shows)**：动态获取的地区流行节目。
+- **热门单集 (Top Episodes)**：基于 Provider 排行榜的单集网格。
+- **CarouselShell**：统一的轮播外壳，负责处理滚动、导航及响应式布局。
+
+## 3. 详情页规范 (Podcast Show Page)
+
+### 数据流契约
+1. **Lookup**：使用 `lookupPodcastFull` 获取播客元数据。
+2. **RSS Feed**：通过 `fetchPodcastFeed` 提取单集列表、字幕及章节元数据。
+3. **SSOT**：所有数据请求严格基于路由参数中的 `$country`。
+
+### 核心交互
+- **订阅逻辑**：订阅操作仅限播客详情页执行。使用 `feedUrl` 作为唯一索引管理状态。
+- **播客源限制提示 (Limited Feed Notice)**：当检测到 RSS 提供的单集数量显著少于商店元数据（少于 80% 或差值 > 20）时，在列表末尾渲染提示块。该提示块位于模拟的单集槽位中心（高度 160px，上下左右居中），确保视觉平衡。
+- **可展开描述**：支持 HTML 与 Plain Text 两种模式，并具备渲染缓存以优化滚动性能。
+- **视觉风格一致性**：所有检索入口必须使用标准化的图标尺寸（如 Search 使用 `h-4`）。
+
+## 4. 单集详情页规范 (Episode Detail Page)
+
+### 最大化信息展示
+- **定位**：单集页是播客发现链路的最终层级。
+- **描述展示策略**：单集页描述必须始终全量展示。通过在 `ExpandableDescription` 中禁用折叠功能（`isExpandable={false}`），确保用户进入页面即可看到所有文字信息。
+- **交互聚焦**：播放、收藏等核心操作固定在 Hero 区域，确保交互即时性。
+
+## 5. 单集解析契约 (Episode Resolution)
+
+由于数据源差异，单集详情页采用确定性的多级匹配策略：
+1. 优先按 ShortId token 匹配 RSS GUID。
+2. 若冲突则叠加标题 Slug 匹配。
+3. RSS 未命中时调用 Provider Lookup API 回退。
+
+## 6. 缓存与同步 (TanStack Query)
+
+### 存储矩阵
+- **远程数据**：React Query 内存 -> IndexedDB 运行时缓存（`runtime_cache`）-> 网络。
+- **缓存周期**：首页数据 24h；搜索结果 30m；单集回退 12h。
+- **静默更新**：后台校验成功后，通过 `setQueryData` 局部刷新 UI，无需刷新页面。
+
+### 容量管理
+- Discovery/feed 运行时缓存采用 60 条键上限。
+- 采用硬保留窗口机制（TTL * 4），防止关键兜底缓存被驱逐。
+
+## 7. 测试覆盖
+- 渲染稳定性：`CarouselShell.test.tsx`。
+- 单集解析逻辑：`useEpisodeResolution.test.ts`。

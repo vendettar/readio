@@ -1,0 +1,120 @@
+---
+title: Cloud Deployment Guide
+description: Operational guide for the Cloud CD workflow and remote release layout.
+---
+
+# Cloud Deployment Guide
+
+This guide matches `.github/workflows/cd-cloud.yml` and documents the deployment contract only.
+It does not provision the VPS, nginx, TLS, firewall rules, or `systemd`.
+
+## 1. What the workflow builds
+
+- Build Lite off-server with `pnpm -C apps/lite build`.
+- Build Cloud as a Linux binary with `CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o readio-cloud .` from `apps/cloud`.
+- Stage only the release artifacts: the `readio-cloud` binary and `apps/lite/dist`.
+- Cross-compilation is deliberate and required because `apps/cloud/package.json` uses `go build -o /tmp/readio-cloud .` for the local scaffold, which is not sufficient for the Linux CD contract.
+
+## 2. Required GitHub configuration
+
+Use the protected `cloud-production` GitHub Environment for deploy secrets and optional approval.
+
+Secrets:
+
+- `CLOUD_SSH_HOST`
+- `CLOUD_SSH_PORT`
+- `CLOUD_SSH_USER`
+- `CLOUD_SSH_PRIVATE_KEY`
+- `CLOUD_SSH_KNOWN_HOSTS`
+
+Variables:
+
+- `CLOUD_SERVICE_NAME` with default `readio-cloud`
+- `CLOUD_PORT` with default `8080`
+
+SSH security rules:
+
+- Provide host identity material through `CLOUD_SSH_KNOWN_HOSTS`.
+- Keep `StrictHostKeyChecking=yes`.
+- Do not treat `StrictHostKeyChecking=no` as an acceptable documented path.
+
+## 2a. Required remote prerequisites
+
+Before the workflow can succeed, the target VPS must already provide:
+
+- a Linux user matching `CLOUD_SSH_USER`
+- SSH access for that user with the uploaded private key
+- `rsync` installed on the VPS
+- `curl` installed on the VPS for the health probe
+- `systemd` with an existing service whose name matches `CLOUD_SERVICE_NAME`
+- permission for the SSH user to restart and inspect that service
+  - either the SSH user directly owns the service
+  - or the SSH user has non-interactive permission to run the required `systemctl` commands
+
+The deployment guide assumes those prerequisites already exist. If any are missing, the workflow can build successfully and still fail during publish or smoke verification.
+
+## 3. Remote directory layout
+
+The workflow expects this layout on the VPS:
+
+- `/opt/readio/shared/data/` for persistent SQLite data
+- `/opt/readio/releases/<git-sha>/` for release artifacts
+- `/opt/readio/current` as the runtime pointer
+
+Runtime contract:
+
+- the service should execute the binary from the `current` release path or use `WorkingDirectory=/opt/readio/current`
+- the Cloud app must be able to resolve the colocated `dist/` directory from the active release
+- the SQLite database path must stay under `/opt/readio/shared/data/` (or another shared persistent path outside release directories)
+
+Each release directory contains:
+
+- `readio-cloud`
+- `dist/`
+
+The workflow creates the remote directories before transfer and never wipes the parent deployment tree, so the SQLite `data/` directory is preserved.
+
+## 4. Publish flow
+
+The deployment is release-scoped and atomic at the pointer level:
+
+1. Build Lite and Cloud on the GitHub runner.
+2. Stage artifacts locally under `release/`.
+3. Create the remote release directory for the current commit SHA.
+4. Transfer only `release/` into `/opt/readio/releases/<git-sha>/`.
+5. Switch `/opt/readio/current` to the new release with `ln -sfn`.
+6. Restart the service named by `CLOUD_SERVICE_NAME` with the default `readio-cloud`.
+7. Verify the service is active.
+8. Verify the deployed binary and static asset directory exist.
+9. Probe `http://127.0.0.1:${CLOUD_PORT}` with the default `8080` on the VPS at `/healthz`.
+
+This is not an in-place overwrite deploy. The workflow never deletes persistent data first and does not copy build artifacts directly into the live runtime path.
+
+## 5. Restart and smoke verification
+
+The workflow uses the service name from `CLOUD_SERVICE_NAME` and checks:
+
+- `systemctl is-active --quiet <service>`
+- the `readio-cloud` binary exists in the current release
+- the `dist/` directory exists in the current release
+- `curl -fsS http://127.0.0.1:${CLOUD_PORT}/healthz`
+
+Use the same checks manually after a deployment if you need to validate the runtime state.
+
+## 6. Rollback
+
+Rollback is manual and release-based:
+
+1. Keep the previous release directory on disk.
+2. Point `/opt/readio/current` back to the previous release with `ln -sfn`.
+3. Restart the service again.
+4. Re-run the same smoke probe.
+
+If the previous release is missing, you must restore it from another known-good release directory. The workflow does not rebuild rollback artifacts.
+
+## 7. Operational boundaries
+
+- This workflow assumes the VPS already exists.
+- It does not install or manage `systemd`.
+- It does not configure nginx, TLS, or firewall rules.
+- It does not deploy SQLite schema, sync, auth, or multi-node features.

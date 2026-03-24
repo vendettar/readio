@@ -1,0 +1,31 @@
+---
+title: 主题与视觉系统 (Theming)
+---
+
+## 1. 动态主题架构
+
+Readio Lite 采用基于 CSS 变量的动态主题系统，其核心状态由 `themeStore.ts` 驱动。
+
+- **核心变量**：主题色由 `--primary` 变量定义，它通过 React 根组件动态注入内联样式。
+- **色彩空间**：利用 Tailwind CSS v4 的 OKLCH 或 HSL 空间，确保主题色在不同明度下的感知一致性。
+
+## 2. 视觉契约 (Visual Contracts)
+
+### 品牌资产规范
+- **封面图 (Artwork)**：
+  - **圆角**：统一使用 `rounded-xl` (12px)。
+  - **阴影**：使用特定的 `shadow-2xl` 或自定义的悬浮阴影，增强层级感。
+- **占位符**：当封面图缺失时，必须渲染 `GutterPlayButton` 或带背景色的图标占位符，严禁出现布局塌陷。
+
+### 暗黑模式适配
+- **策略**：基于 CSS 选择器 `.dark` 实现。
+- **变量覆盖**：在 `globals.css` 中定义了基础背景色 (`--background`) 和文字色 (`--foreground`) 的暗黑版本。
+- **自动感应**：系统默认感应用户 OS 偏好，并在设置中支持手动切换。
+
+## 3. 性能优化 (Render Boundaries)
+
+- **变量注入**：主题色变量仅在 `AppShell` 或 `__root` 级别注入一次，避免子组件内联计算。
+- **原子订阅**：UI 组件通过 `useThemeStore(s => s.accent)` 订阅，确保切换主题时仅触发必要的重绘。
+
+## 4. 扩展指南
+若需增加新主题色，必须在 `themeStore.ts` 的 `ACCENT_OPTIONS` 中注册，并确保该颜色符合 WCAG AA 级以上的对比度要求。

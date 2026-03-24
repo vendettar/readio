@@ -1,0 +1,44 @@
+---
+title: Search System
+---
+
+## 1. Scope and Architecture
+
+The search system is the global entry point for content retrieval, utilizing a two-stage workflow:
+
+- **Command Palette**: A quick-entry tool embedded in the sidebar (`Cmd+K`), based on a Popover-anchored architecture. It has a width of `sidebar-width * 1.5` (approx 390px, responsive clamped) and a maximum height of `75vh`.
+- **Search Page**: A comprehensive results page at the route `/search?q=query`.
+
+## 2. Visual and Interaction Standards
+
+### List Item Rendering
+- **Active State**: Selected items use a solid `bg-primary` background.
+- **Border Merging**: Items use a `-mt-px` margin combined with a `z-10` layer to visually cover the previous item's divider, creating a unified selection area.
+- **Icon Standardization**: All retrieval icons (e.g., Search magnifying glass) must use a standardized `h-4 w-4` size to ensure visual alignment with the input field and other list items.
+- **Suggestion Deduplication**: Quick suggestions in the Command Palette are deduplicated by title (`collectionName`) to maintain a clean retrieval interface.
+- **Highlighting Strategy**: Highlighting supports multi-word matching. Individual words from the query are matched non-contiguously (e.g., query "the interview" will highlight both words in "The TED Interview").
+- **Status Badges**: A right-aligned icon system displays Subscribed, Favorited, Played, and Local statuses. Multiple statuses are shown side-by-side with merged metadata.
+
+### Single Navigation Principle
+- List items must not be wrapped entirely in a `Link` or `Button`.
+- Navigation is restricted to the Title (`InteractiveTitle`) and Artwork (`Button asChild`).
+- Description areas must not trigger any interaction or navigation.
+- For Search Episodes rows, the circular play affordance always triggers direct playback; title/artwork continue to route to episode detail.
+- **Search episode hard rule**: in Search Page episode rows, title/artwork must navigate to episode detail (`/$country/podcast/$id/episode/$episodeId`), while the circular play affordance must trigger direct playback.
+
+## 3. Performance and Data Standards
+
+### Query Optimization
+- **No Table Scans**: All searches must be index-based and throttled.
+- **Real-time Sync**: Result components subscribe to global store states, ensuring that status badges refresh instantly upon user action.
+- **Concurrency Guard**: Implements 200ms debouncing and `requestId` validation to prevent stale request callbacks.
+
+### Offline and Robustness
+- **Offline Mode**: Automatically hides remote suggestions when disconnected, showing only local library matches.
+- **Metadata Completion**: If an episode lacks a `feedUrl`, the favorite action triggers an asynchronous lookup to complete the record.
+
+## 4. Testing
+- Normalized URL Validation: `SearchEpisodeItem.urlHygiene.test.tsx`.
+- Palette Interaction: `CommandPalette.test.tsx`.
+- Search episode playback orchestration: `SearchPage.test.tsx` must assert episode play callback calls `playSearchEpisode`.
+- Search episode navigation fallback guard: `EpisodeListItem.test.tsx` must assert title click with route does not fall back to `onPlay`.

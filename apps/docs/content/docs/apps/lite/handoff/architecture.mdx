@@ -1,0 +1,96 @@
+---
+title: Core Architecture
+---
+
+## 1. Directory Structure
+
+```
+src/
+├── routes/              # File-based routing definitions
+├── routeComponents/     # Page components (split via lazyRouteComponent)
+├── components/          # UI Component Library
+│   ├── AppShell/        # Layout & Shell components
+│   ├── GlobalSearch/    # CommandPalette and Search results
+│   ├── Files/           # Files management sections
+│   ├── Settings/        # Modular settings cards
+│   ├── Transcript/      # Subtitle and Word views
+│   └── interactive/     # Interaction primitives
+├── hooks/               # Shared business logic
+├── lib/                 # Core utilities & Provider implementations
+│   ├── dexieDb.ts       # Database encapsulation
+│   ├── discovery/       # Podcast discovery logic
+│   ├── repositories/    # Persistence boundary adapters (Phase 1)
+│   ├── networking/      # Fetch internals (proxy URL, breaker, timeout)
+│   └── locales/         # i18n language chunks (en/zh/ja/ko/de/es)
+└── store/               # Zustand state management
+```
+
+## 2. Core Design Patterns
+
+### App Shell & Immersion
+The application utilizes an App Shell to maintain continuous playback and navigation.
+- **Player Surfaces**: A unified three-state model (`mini | docked | full`) manages how the player is presented.
+- **Shared Transitions**: Seamless morphing between surfaces is achieved using Framer Motion `layoutId` and a single `PlayerSurfaceFrame` instance.
+- **Persistence**: Playback continues uninterrupted across route changes as the `<audio>` element is mounted at the root layout.
+
+### Storage & Persistence (IndexedDB)
+- **Best-Effort Model**: Relies on browser-managed IndexedDB for metadata and audio caches.
+- **Guardrails**: Enforces an 85%/95% disk usage blocker and a 10GB binary cache limit.
+- **Integrity**: `runIntegrityCheck` scans for corrupted blob references and orphaned folder relationships at startup and upon manual trigger.
+- **Repository Boundary (Phase 1)**: `exploreStore`, `historyStore`, `playerStore`, and `filesStore` now persist through `LibraryRepository`/`PlaybackRepository`/`FilesRepository` instead of direct `DB` imports.
+
+### Performance Isolation
+- **GlobalAudioController**: Segregates high-frequency `<audio>` events from the React render tree.
+- **Hookized Audio Internals**:
+  - `useAudioElementSync`: `src/volume/playbackRate` synchronization.
+  - `useAudioElementEvents`: audio event registration and cleanup with stable store transition semantics.
+  - `useAutoplayRetry`: isolated autoplay-retry state machine for `play()` failure handling.
+  - `lib/audioErrors.ts`: shared media-error classification utility for i18n message mapping.
+- **Atomic Selectors**: Mandatory use of targeted Zustand selectors ensures that components (e.g., MiniPlayer) only re-render when their specific data fields change.
+
+## 3. Routing & Navigation
+
+- **TanStack Router**: Implements file-based routing with robust `beforeLoad` redirection and prefetching.
+- **Safe State Management**: Async flows use monotonically increasing Request IDs to prevent stale data overrides.
+- **Cancellation**: Query functions pass through `AbortSignal` to cancel outdated network I/O during rapid navigation.
+
+## 4. Interaction Contracts
+
+### Unified Rendering System
+- **Episode Rows**: All lists (Search, Favorites, History) use the unified `EpisodeListItem` and `episodeRowModel`.
+- **Memoization**: List items are wrapped in `React.memo` to eliminate redundant renders in long-scrolling views.
+
+### Transcript Interactions
+- **Selection Authority**: A single `useSelection` instance manages lookups and context menus per view.
+- **Priority**: Native text selection takes precedence over individual word click menus.
+
+## 5. Network Layer & Resilience
+
+The application centralizes all external requests through `lib/fetchUtils.ts` (`fetchWithFallback`).
+
+- **Proxy Fallback Architecture**:
+  - Automatically falls back from direct `fetch` to a configured CORS proxy upon network failure or CORS block.
+  - Minimal configuration: only `CORS_PROXY_URL` and auth values are required.
+  - Uses a POST-only contract for custom proxies to ensure payload integrity.
+- **Retry Mechanism**:
+  - Implements automatic retries with a 3-second delay for 5xx and 429 status codes.
+- **Streaming & Raw Access**:
+  - Supports `raw: true` to return the native `Response` object, enabling streaming downloads via `ReadableStream` and `TransformStream`.
+  - Used by `downloadService.ts` to pipe audio data directly to IndexedDB without memory-intensive buffering.
+
+## 6. System Hardening
+
+- **Retention Policy**: Automatically prunes playback history beyond 1,000 items or 6 months.
+- **Tab Sync**: Uses `BroadcastChannel` to coordinate playback states across multiple open browser tabs.
+- **Error Boundaries**: Provides granular isolation between core app functions and individual UI components.
+
+## 6. Tech Stack
+
+| Category | Technology |
+|------|------|
+| Framework | React 19 + TypeScript + Vite |
+| Routing | TanStack Router |
+| State | Zustand + TanStack Query |
+| Persistence | Dexie (IndexedDB) |
+| Styling | Tailwind CSS + Framer Motion |
+| Testing | Vitest + Playwright |

@@ -1,0 +1,49 @@
+---
+title: Favorites
+---
+
+## 1. Scope and Ownership
+
+- Route: `/favorites`.
+- Main Interface: `src/routeComponents/FavoritesPage.tsx`.
+- Data Authority: `src/store/exploreStore.ts` (Favorites data is persisted in the `favorites` table of IndexedDB).
+- Rendering Contract: Unified usage of `EpisodeListItem` + `episodeRowModel.fromFavorite`.
+
+## 2. Data Model and Uniqueness
+
+Favorite records use a `key` as a unique identifier, constructed as follows:
+- **Key Format**: `${feedUrl}::${audioUrl}`.
+- **Metadata Includes**:
+  - Podcast Info: `feedUrl`, `podcastTitle`, `artworkUrl`, `providerPodcastId`, `countryAtSave`.
+  - Episode Info: `title`, `audioUrl`, `duration`, `publishedAt`, `episodeId`, `providerEpisodeId`.
+
+## 3. Rendering and Interaction Optimization
+
+To ensure a smooth experience with long lists, the Favorites page implements the following optimizations:
+
+### Separation of Orchestration and Rendering
+- **FavoritesPage (Orchestrator)**:
+  - Responsible for fetching full favorites data from `exploreStore`.
+  - Uses `useMemo` to construct the `favoriteRows` view model array, ensuring reference stability during redrawing not caused by data changes.
+  - Unified handling of `playFavorite` and `removeFavorite` callbacks.
+- **EpisodeListItem (Memoized)**:
+  - Each list item is wrapped in `React.memo`.
+  - Redrawing is triggered only when the corresponding `model` data or action callbacks change.
+
+### Favorite Actions (useEpisodeRowFavoriteAction)
+- The "Unfavorite" action within the Favorites page is passed via the `favorite` prop of `EpisodeListItem`.
+- Clicking the "Star" button directly triggers `removeFavorite(key)`, with real-time UI response (Optimistic UI experience).
+
+## 4. Detail Page Deep Linking
+
+Favorite items support jumping to the episode detail page, following this contract:
+- **Path**: `/$country/podcast/$id/episode/$episodeId`.
+- **Requirements**: Must have `countryAtSave` and `providerPodcastId`.
+- **Fallback Behavior**: If routing metadata is missing, clicking the title will fall back to direct playback, and the detail link will not be shown.
+
+## 5. Performance and Testing
+
+- **Empty State**: When `favorites.length === 0`, the `EmptyState` component is rendered to guide users to the Explore page.
+- **Test Coverage**:
+  - Rendering Correctness: `src/routeComponents/__tests__/FavoritesPage.row-render.test.tsx`.
+  - URL Hygiene: `src/routeComponents/__tests__/FavoritesPage.urlHygiene.test.tsx`.

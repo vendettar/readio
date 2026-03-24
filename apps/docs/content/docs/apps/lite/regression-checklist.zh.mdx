@@ -1,0 +1,149 @@
+---
+title: 回归清单
+---
+
+# Readio (React 重写) 回归检查清单 (可复用)
+
+> 目的：在进行重大更改 (UI/IA 重设计, 旧代码清理, 路由调整, 字幕/选择重构, 缓存/DB 修改) 时，使用此清单进行“全量回归自查”，以避免遗漏细节。
+> 原则：基于 **实际当前代码** 和 `apps/docs/content/docs/general/technical-roadmap.mdx`；过时的项目应及时更新/删除。
+
+---
+
+## 0) 项目核心约束 (每次对齐)
+
+- [ ] **首发心态: 无向后兼容旧数据** (IndexedDB / localStorage / 缓存可以清除并重建；不要引入迁移层)。
+- [ ] **每次更改后更新 `apps/docs/content/docs/apps/lite/handoff/index.mdx`** (仅描述实际当前状态；无过程说明)。
+- [ ] **用户消息不得暴露技术术语** (CORS, HTTP 状态码, 堆栈跟踪去控制台/日志；UI 仅使用自然语言)。
+- [ ] UI: 使用 Tailwind + shadcn/ui tokens；不要发明新 token (见 `apps/docs/content/docs/general/design-system/index.mdx`)。
+- [ ] 逐字稿: **每个单词必须保持可见** (必须多行换行；无 `ellipsis/nowrap` 截断)。
+
+---
+
+## 1) App Shell / IA (UI 结构回归)
+
+当前 UI 遵循 App Shell 模式：
+- `src/components/AppShell/AppShell.tsx`
+- `src/components/AppShell/Sidebar.tsx`
+- `src/components/AppShell/MiniPlayer.tsx`
+- `src/components/AppShell/PlayerSurfaceFrame.tsx`
+- `src/components/AppShell/ReadingContent.tsx`
+
+检查点：
+- [ ] 侧边栏分组与路由匹配：
+  - Browse: `/explore`
+  - Library: `/subscriptions`, `/favorites`, `/history`, `/files`
+- [ ] 侧边栏活动状态与 URL 匹配 (`useLocation().pathname`)。
+- [ ] 当 **audioLoaded** 为 true 时，MiniPlayer 保持存在 (正常模式)，点击主体进入沉浸模式 (非按钮区域)。
+- [ ] Mini/Full Player 只用选择器订阅 store 字段；避免对高频字段（progress/time/scroll/drag）进行全量订阅。
+- [ ] 沉浸模式由 `src/store/playerSurfaceStore.ts` 控制 (状态驱动)；当进入全屏时，`PlayerSurfaceFrame` 以 `mode='full'` 渲染。
+- [ ] Full 模式可以正确退出 (`toDocked()` 或 `toMini()`)，返回 docked 或 mini 状态。
+- [ ] 在 `docked <-> full` 切换过程中，`ReadingContent` 必须保持挂载，以维持逐字稿位置和状态。
+
+---
+
+## 2) 路由 & 持久播放器架构 (高风险)
+
+背景：路由/UI shell 更改是 `<audio>` 卸载或搜索逻辑损坏的最常见原因。
+
+- [ ] `<audio>` 必须在 `src/routes/__root.tsx` 中保持挂载 (路由更改不得中断播放)。
+- [ ] 搜索/进度条逻辑必须使用 store (避免直接 DOM 查询)。
+  - `onSeek` → `store.seekTo()` → `store.pendingSeek` → `__root.tsx` effect 更新 `audio.currentTime`。
+  - 禁止：`document.querySelector(...)` 或将 `audioRef` 传递给深层组件以直接修改 `currentTime`。
+- [ ] 后退/前进：浏览器导航在不同路由之间正常工作 (例如，在 Sidebar 链接之间跳转)。
+- [ ] Media Session 处理器：`src/hooks/useMediaSession.ts`、`src/components/AppShell/GlobalAudioController.tsx`。
+
+---
+
+## 3) 逐字稿：虚拟列表 + 多行可见性 (核心体验)
+
+背景：固定高度虚拟列表强制截断，违反产品要求；缩放/高亮/选择经常与视口渲染冲突。
+
+- [ ] 逐字稿虚拟列表使用 **`react-virtuoso` 动态高度**：`src/components/Transcript/TranscriptView.tsx`。
+- [ ] 多行可见性：无文本截断 (逐字稿文本上无 `text-overflow: ellipsis` 或 `white-space: nowrap`)。
+- [ ] 跟随模式锚定到中心：`scrollToIndex({ align: 'center' })`。
+- [ ] 用户手动滚动退出跟随模式 (避免“程序滚动误报”)。
+- [ ] 缩放更改 (`zoomScale` / `--zoom-scale`) 不会导致虚拟列表测量漂移。
+- [ ] 查词高亮：当视口更改时，高亮显示正确刷新且无闪烁 (rAF 批处理)。
+
+快速回归点：
+- [ ] 1000+ 字幕行的平滑滚动。
+- [ ] 长文本从不截断；每个单词都可见。
+- [ ] 播放期间自动滚动工作 (居中)，手动滚动暂停跟随。
+- [ ] 视图缩放或变化后，选区、词典浮层和高亮位置保持正确。
+- [ ] **选区与菜单防回归**:
+  - [ ] 容器级 `mousedown` 拦截双击选词行为 (`e.detail >= 2`)。
+  - [ ] 单词与划词菜单使用稳定的**几何中心锚点**。
+  - [ ] 行内空白右键使用 **pointer-origin (点击点) 锚点**。
+  - [ ] 所有菜单均为 **non-modal**（无全屏阻挡，支持点击穿透吸收）。
+  - [ ] 菜单优先使用 **top placement** 以避免遮挡下方正在阅读的字幕。
+  - [ ] **Surface 切换隔离**：在不同单词间右键切换菜单时，播放状态保持静止，无声音漏出。
+  - [ ] **Focus 恢复规则**：在 Dismiss（左键点外部/Esc/关闭按钮）时恢复 focus 到单词，但在 Switch（单词间右键连续点击）时正确跳过 focus 恢复。
+  - [ ] 鼠标在字幕行文字之间的空白处双击时**绝不能**出现系统蓝底文字选中框（即 `capture: true` `e.preventDefault()` 必须生效防止原生拦截）。
+
+---
+
+## 4) IndexedDB / Dexie (清理策略 + 测试稳定性)
+
+背景：发生过删除 DB 导致实例失效或跨测试污染的问题。
+
+- [ ] 使用 Dexie 标准化 DB：`src/lib/dexieDb.ts` (默认 DB 名：`readio`，清库时可通过 `READIO_DB_NAME` 覆盖)。
+- [ ] `DB.clearAllData()` 必须是表级清理 (事务 + `table.clear()`)；不要使用 `db.delete()`。
+- [ ] 测试隔离：`fake-indexeddb` + 每个测试套件前清除 DB。
+- [ ] `src/lib/__tests__/dbOperations.test.ts` 专注于“可清除数据”阶段的初始化和 CRUD 断言 (无数据持久性断言)。
+
+快速回归点：
+- [ ] 页面刷新后播放进度恢复 (会话恢复)。
+- [ ] DB 擦除后上传和播放正常工作。
+
+---
+
+## 5) i18n (轻量级 t(key) 模式)
+
+- [ ] 新/修改的 UI 文本必须使用 `t(key)`（使用 `useTranslation()`，基于 react-i18next）。
+- [ ] 新键必须添加到 `src/lib/translations.ts` 中的所有支持语言。
+- [ ] UI 不包含技术术语。
+
+---
+
+## 6) 网络 & CORS 代理 (直接/代理回退 + 运行时配置)
+
+- [ ] 通过 `src/lib/fetchUtils.ts` 统一获取 (直接 ↔ 代理回退，支持 `proxyPrimary`)。
+- [ ] 提供默认 `public/env.js` 以避免 404 (`index.html` 加载它)。
+- [ ] 支持 `window.__READIO_ENV__`：
+  - `READIO_CORS_PROXY_URL`
+- [ ] 离线状态：`src/hooks/useNetworkStatus.ts`、`src/routeComponents/ExplorePage.tsx`、`src/components/GlobalSearch/CommandPalette.tsx`、`src/components/AppShell/Sidebar.tsx`。
+
+---
+
+## 7) 可观测性 / 错误隔离
+
+- [ ] 通过 `src/lib/logger.ts` 全局日志记录 (`error` 总是输出；其他级别仅在 DEV 中)。
+- [ ] RootErrorBoundary 在生产中不泄漏技术细节。
+- [ ] 关键部分崩溃不会导致整个应用程序崩溃 (例如，Transcript 崩溃不应导致全局白屏)。
+
+---
+
+## 8) 构建 & 打包 (建议)
+
+- [ ] `pnpm build` 通过。
+- [ ] `ANALYZE=1 pnpm build` 生成 `stats.html` (仅本地分析；不要提交)。
+
+---
+
+## 9) 清洁代码回归 (清理后验证)
+
+- [ ] `src/main.tsx` 仅导入仍在使用的全局样式 (当前：`src/index.css`)。
+- [ ] 组件删除后无未引用的导出或 index barrel 残留。
+- [ ] CSS 删除后无损坏的 className 引用导致 UI 回归 (特别是在 Transcript/Selection 中)。
+
+---
+
+## 10) 冒烟测试 (每次重大更改后必需)
+
+- [ ] `pnpm --filter @readio/lite test:run` (验证 `SelectionUI.positioning.test.tsx` 与 `useSelectionEvents.no-geometric-lookup.test.ts`)
+- [ ] `pnpm build`
+- [ ] 手动测试:
+  - [ ] 5 个主要侧边栏路由正确打开：`/explore`, `/subscriptions`, `/favorites`, `/history`, `/files`。
+  - [ ] 播放器：播放不受路由/沉浸更改的中断。
+  - [ ] 逐字稿：多行可见性 + 跟随 + 选择查词 + 高亮。
+  - [ ] ASR：测试生成首个本地音频的字幕；快速连续点击触发验证时，正确呈现错误状态/限流视觉提示（防爆器），且在无网/断网时正确呈现无侵入的失败视觉兜底。

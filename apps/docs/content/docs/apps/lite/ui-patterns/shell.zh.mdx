@@ -1,0 +1,126 @@
+---
+title: Shell 与覆盖层
+---
+
+## 应用启动序列 (App Boot Sequence)
+
+- **启动加载器 (Boot Loader)**：在初始应用水合（加载订阅、收藏及从 IndexedDB 恢复播放会话）期间，显示 `BootLoader` 启动屏幕。
+- **视觉效果**：居中的 Logo (`readio.svg`)，带有平滑的“呼吸”动画（不透明度和缩放脉冲）。
+- **转场**：一旦 `useAppInitialization` 的 `isReady` 状态为 true，使用 `AnimatePresence` 淡出加载器。
+- **约束**：必须使用 `fixed inset-0 z-50 bg-background` 以完美覆盖所有“空内容”闪烁。
+
+## Page Shell & Header 契约
+
+Page Shell 和 Route Header 遵循严格的结构契约，以确保所有库路由（Explore, Search, Favorites, History, Files, Downloads, Settings）的一致性。
+
+### 1. 结构与布局
+所有顶级路由必须包裹在 `<PageShell>` 组件中：
+- **最大宽度**: `max-w-content` (105rem)。
+- **水平内边距**: `px-page`（随视口变化）。
+- **垂直节奏**: `pt-page` 顶部内边距和宽大的 `pb-32` 底部间距，以避开迷你播放器。
+- **滚动**：全局 `AppShell` 拥有主要的垂直滚动容器 (`overflow-y-auto`)。`PageShell` 不引入嵌套滚动。
+
+### 2. 页头契约 (Header Contract)
+每个路由必须使用 `<PageHeader>` 组件作为其入口。
+
+**页头区域**:
+- **Before Title (标题前)**: 用于嵌套路由的可选面包屑或返回按钮。顶级库根目录禁止使用。
+- **Title Block (标题块)**: 主要 `h1` (标题) 和次要 `p` (副标题)。
+- **Action Rail (操作栏)**: 用于上下文相关的首要操作（如“添加音频”、“新建文件夹”）。在移动端视口下堆叠在标题下方。
+- **Support Meta (辅助信息)**: 标签、计数或状态标签（如结果数、语言指示器）。必须位于主标题行下方。
+
+### 3. 文本溢出策略
+为了处理动态内容（如搜索查询、文件夹名称），页头强制执行显式溢出规则：
+- **主标题**: 限制为 **2 行** (`line-clamp-2`) 并带有省略号。
+- **副标题**: 限制为 **2 行** (`line-clamp-2`)。
+- **动态内容**: 包含用户字符串的标题（如搜索查询）必须用引号括起来以示清晰。
+
+### 4. 实现示例
+```tsx
+import { PageShell, PageHeader } from '@/components/layout'
+
+export default function MyRoute() {
+  return (
+    <PageShell>
+      <PageHeader 
+        title="我的路由" 
+        subtitle="路由描述"
+        actions={<Button>操作</Button>}
+      />
+      {/* 页面内容 */}
+    </PageShell>
+  )
+}
+```
+
+## 覆盖层与菜单
+
+- **下拉菜单**: 使用“高级覆盖层”风格 (`glassmorphism`, `sideOffset={8}`, `rounded-xl`, `backdrop-blur-xl`, `backdrop-saturate-150`)。
+- **内联操作**: 当操作触发内联编辑 (例如，重命名) 时，在 `DropdownMenu` 上使用 `modal={false}` 以防止焦点锁定问题。
+- **多步菜单**: 在菜单内容 **内部** 实现确认步骤 (面板-网格模式)，而不是在顶部打开新的 Dialog。
+- **禁止全局覆盖层 Store**：`isOpen` 状态保持在组件内部，通过共享 z-index tokens 统一分层，不建立全局模态状态。
+
+### 三点操作菜单（Overflow Menus）
+- **组件选择**：操作列表必须用 `DropdownMenu`。仅展示富内容/信息时使用 `Popover`。
+- **定位规范**：所有三点菜单必须使用 `sideOffset={8}` 与 `collisionPadding={16}`。
+- **模态模式**：若动作触发内联编辑（重命名、内联输入），使用 `modal={false}`。
+- **事件隔离**：菜单触发器与内容需 `stopPropagation`，避免影响行/卡片点击。
+- **选项图标规则**：三点菜单中的每个选项都必须有图标。
+- **图标位置规则**：三点菜单选项统一“文字在左、图标在右”（`justify-between`）。
+- **危险动作规则**：所有删除/移除类动作（包含字幕条目删除）都必须进行二次确认。
+- **Overflow Hidden**：仅允许用于多面板滑动菜单（如 menu → confirm），单面板菜单禁止使用。
+- **默认封装**：标准场景优先使用 `src/components/ui/overflow-menu.tsx` 以保持一致性。
+
+### 表面决策树 (哪个组件?)
+- **它是关键确认吗?** (删除, 擦除) -> **`AlertDialog`** (必须要求显式操作)。
+- **它是复杂的表单/内容吗?** (设置, 编辑详情) -> **`Dialog`** (模态, 屏幕居中)。
+- **它是上下文相关的吗?** (操作菜单, 过滤器) -> **`DropdownMenu`** 或 **`Popover`** (锚定到触发器)。
+- **它是瞬时信息吗?** (悬停信息) -> **`Tooltip`**。
+
+---
+
+## className 组合（Tailwind）
+
+- **标准**：对条件/动态 `className` 组合，统一使用 `src/lib/utils.ts` 的 `cn(...)`。
+- **原因**：`cn` 会安全忽略 `undefined` / `null` 条件，并自动合并 Tailwind 工具类冲突（`tailwind-merge`）。
+- **禁止**：当存在条件时，避免用模板字符串拼接 `className`；使用 `cn` 以保证写法一致且便于重构。
+- **示例**：
+  ```tsx
+  import { cn } from '@/lib/utils'
+
+  <div className={cn('rounded-xl', isActive && 'bg-primary/10', className)} />
+  ```
+
+## 反馈与通知 (Toast)
+
+- **标准**: 通过集中式辅助函数 `src/lib/toast.ts` 使用 **Sonner**。
+  - **为什么**: Sonner 比 Radix Toast 提供更好的堆叠、Promise 和视觉效果。
+- **禁止**: **不要** 为通知创建自定义 `fixed` 覆盖层 div。
+- **异步模式**: 对异步操作 (如文件处理) 使用 `toast.promise` 以给予即时反馈。
+- **关键规则**：使用 `toast.*Key`（如 `toast.successKey('key', { var })`）支持国际化。key → 文案转换**必须**在 `src/lib/toast.ts` 内通过 `i18next.t` 完成，不允许在调用点直接调用翻译函数。
+  - **禁止**：业务代码中不要使用 `toast.success/info/error/warning(...)` 直接传入原始字符串或动态错误信息。必须使用 `toast.*Key(...)`，并在 `src/lib/translations.ts` 中维护 key。
+  - **动态错误**：捕获到未知异常时，应记录日志（Local Logger），并展示稳定的 i18n toast key（UI 不展示任意异常字符串）。
+- **用法**:
+  ```tsx
+  import { toast } from '@/lib/toast'
+  // ✅ Correct
+  toast.successKey('saved')
+  toast.errorKey('failed')
+  ```
+
+---
+
+## 工具提示 (Tooltips)
+
+- **规则**: 所有仅图标按钮必须具有 Tooltip。
+- **实现**: 使用 shadcn `Tooltip` 原语。
+- **禁止**: **不要** 使用原生 HTML `title="..."` 属性 (它很难看且不可访问)。
+- **延迟**: 使用标准延迟 (默认) 以避免 UI 闪烁。
+- **示例**：`SleepTimerButton` 使用 `Tooltip` 包裹 `DropdownMenuTrigger`，在悬停时展示倒计时，在点击时展示定时选项。
+
+---
+
+## 计划中（待执行）
+
+- **反馈入口**：Settings 内的 Issue/邮件反馈入口（指令 052）。
+- **覆盖层分层标准化**：Portal + z-index tokens 审计（指令 071）。

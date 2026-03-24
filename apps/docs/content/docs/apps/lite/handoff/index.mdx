@@ -1,0 +1,181 @@
+---
+title: Project Overview
+---
+
+# Readio Development Overview / Handoff Documentation
+
+For the incoming development team: Introduction to code functional boundaries, key modules, algorithms & caching strategies, persistence & testing methods, and common troubleshooting entry points.
+
+> React 19 + TS + Vite SPA
+
+---
+
+## 0. Documentation Map
+
+When updating the handoff documentation after completing a task, please choose the most appropriate file to update based on the task type:
+
+- **Environment/Build/Dependencies/PWA**: `handoff/environment.mdx`
+- **UI Components/Interaction Standards/CSS/Tokens**: `handoff/standards.mdx`
+- **Global State/Routing Architecture/Performance Strategies**: `handoff/architecture.mdx`
+- **Database Schema/Persistence/Dexie Logic**: `handoff/database.mdx`
+- **Internationalization (I18n)**: `handoff/i18n.mdx`
+- **Specific Feature Modules**:
+  - Audio Engine: `handoff/features/audio-engine.mdx`
+  - Transcript/Selection: `handoff/features/transcript-reading.mdx`
+  - File Processing/Folders: `handoff/features/files-management.mdx`
+  - Playback History/Detail Routing: `handoff/features/history.mdx`
+  - Search Logic/Two-Stage Workflow: `handoff/features/search.mdx`
+  - Podcast Discovery/Provider Architecture: `handoff/features/discovery.mdx`
+- **Global Principles**:
+  - Design System: `apps/docs/content/docs/general/design-system/index.mdx`
+  - Decision Log: `apps/docs/content/docs/general/decision-log.mdx`
+  - Glossary: `apps/docs/content/docs/general/glossary.mdx`
+
+- **Single Source Rule**: `handoff/index.mdx` is the only entry point. Other handoff files are extensions and must not duplicate global rules.
+- **Instruction 124 Support**: All fundamental offline download mechanisms (persistence, identity resolution, streaming) must strictly match the contracts documented in `handoff/features/audio-engine.mdx`.
+
+---
+
+## 1. Delivery Agreement
+
+Release Strategy: No migration compatibility layer for IndexedDB / localStorage. Changes to storage structure or caching logic should handle via clearing/rebuilding the database.
+Audit Scope Rules: By default, review only recent changes; perform a full repository audit only if explicitly requested.
+DB Reset Rule: Do NOT change the default DB name in source. Use `READIO_DB_NAME` override or `clearAllData()` for resets.
+
+### Planned (Pending Execution)
+- Docs locale/metadata production-build verification tail (Instruction 137d): locale-aware markdown/OG/source/search fixes have landed, but the required `apps/docs build` verification remains open because Next/Turbopack production compile still hangs.
+- Prepare Standard Libs (Instruction 005).
+- User feedback loop (Instruction 052).
+- Offline content visualization (Instruction 053).
+- Episode sorting & filtering (Instruction 054).
+- Content attribution & disclaimer (Instruction 055).
+- Contributing & manifesto (Instruction 059).
+- PWA audio range cache (Instruction 060).
+- Proxy failover mechanism (Instruction 062).
+- IndexedDB migrations (Instruction 064).
+- Browser support matrix (Instruction 065).
+- Overlay layering standardization (Instruction 071).
+- Media cache eviction policy (Instruction 072).
+
+### Completed
+- Setup standard dependencies (Instruction 001).
+- Harden DevOps & Tooling (Instruction 003).
+- Tailwind Config Layout (Instruction 004).
+- Migrate legacy CSS variable patterns (Instruction 004a).
+- Prepare Standard Libraries (Instruction 005).
+- Standardize DB Primary Keys (UUID) (Instruction 006).
+- Refactor Persistence Logic (Single Source of Truth) (Instruction 007).
+- Session Hardening (Upsert logic) (Instruction 007b).
+- Global docked transcript surface mode (Instruction 089b).
+- Unify full/docked surface motion (Instruction 089c).
+- Fix Root Layout Performance (GlobalAudioController isolation) (Instruction 008).
+- Refactor Routing Logic (Enforce beforeLoad redirects) (Instruction 009).
+- Country-scoped podcast routes + canonical path-only URL contract unification (Instruction 116a-116e).
+- Harden Operational Error Handling (Instruction 005e).
+- Align Network Fetching & Cache Controls (Instruction 005f).
+- Storage Serialization Hardening (Instruction 005g).
+- Optimize Search Algorithms (Data Layer Indexes) (Instruction 010).
+- Async Task Hygiene (Cleanup & Gating) (Instruction 009b).
+- Type-Safe I18n Transition (Instruction 011).
+- Extract Common UI Components (DRY) (Instruction 012).
+- Standardize I18n Framework (Instruction 013).
+- Standardize Forms (Zod + Hook Form) (Instruction 014).
+- Standardize File Drop (react-dropzone) (Instruction 015).
+- Upgrade UI Design System (Glassmorphism) (Instruction 016).
+- Install Sonner (Toast) (Instruction 017).
+- Refactor Search UI (cmdk) (Instruction 018).
+- Enhance Interactions (Hotkeys & Gestures) (Instruction 019).
+- Cleanup Magic Values & Hardcoded Assets (Instruction 020).
+- Refactor Episode Resolution & Search Hooks (Instruction 020b).
+- Integrate Robust Metadata Parser (Instruction 069).
+- Integrate React Bits (Animations) (Instruction 021).
+- Implement Structured File Size Formatter (Instruction 021b).
+- Optimize Reading Typography (Golden Ratio & Fluid Zoom) (Instruction 022).
+- Implement App Boot Sequence (Instruction 024).
+- Implement Offline Mode (Instruction 025).
+- Harden Player State Machine (Instruction 026).
+- Optimize ObjectURL Lifecycles (Prevention of Memory Leaks) (Instruction 027).
+- Integrate Media Session API (Instruction 028).
+- Implement Tab Synchronization (Instruction 029).
+- Optimize Background Performance (Instruction 030).
+- Migrate to Logical Properties (RTL) (Instruction 031).
+- Implement OPML Import/Export (Instruction 034).
+- Implement Personal Vault (Full Metadata Export) (Instruction 035).
+- Harden PWA Metadata & Native Sharing (Instruction 036).
+- Setup Deployment Pipeline (Vercel/Docker) (Instruction 038).
+- Implement Strict CSP (Instruction 041).
+- Implement Legal Pages (Privacy/Terms) (Instruction 039).
+- Implement Smoke E2E Tests (Instruction 040).
+- Implement Data Retention Policy (Instruction 042).
+- Manage PWA Update Lifecycle (Instruction 043).
+- Setup CI Pipeline (Instruction 044).
+- Implement Onboarding & Empty States (Instruction 045).
+- Implement Image Fallback Strategy (Instruction 046).
+- Implement Local Error Logger (Instruction 047).
+- Implement Accessibility Standard (Instruction 048).
+- Verify Data Integrity on Import (Instruction 049).
+- Implement Bundle Size & Perf Budget (Instruction 050).
+- Implement Iframe Sandbox Policy (Instruction 051).
+- Standardize Multilingual Typography (Instruction 056).
+- Prevent Direct DB Access Guard (Instruction 057).
+- Implement MSW for Network Tests (Instruction 058).
+- Perform Memory Stress Test (Instruction 061).
+- Implement I18n Coverage Audit (Instruction 063).
+- Harden Turborepo Cache Config (Instruction 066).
+- Implement Atomic Write Safeguards (Instruction 067).
+- Audit Async Race Conditions & Implement Guards (Instruction 068).
+- Implementation of skeleton UI system (Instruction 070).
+- Standardize Explore Country & Skeleton Carousel Width (Instruction 071-cleanup).
+- Implement Network Backoff & Circuit Breaker (Instruction 073).
+- Implement storage quota monitoring (Instruction 074).
+- Intl API upgrade (Instruction 075).
+- Granular error boundaries (Instruction 076).
+- Add Lighthouse CI Budget (Instruction 077).
+- Enforce Dependency Audit & License Policy (Instruction 078).
+- Normalize test file placement (Instruction 083).
+- Floating promise audit (Instruction 079).
+- Event listener leak audit (Instruction 080).
+- Zustand selector optimization (Instruction 081).
+- RSS HTML CSS isolation (Instruction 082).
+- General Hardening & Fixes (Instruction 084).
+- Split settings and credentials storage strategy (Instruction 122).
+- Online ASR API integration (Groq) with track-level cancellation and raw ASR persistence (Instruction 123).
+- exploreStore country hydration flags now have test-only reset hook to avoid module-state leakage in tests/HMR-like flows.
+- Shared `TransportPlayPauseButton` now hard-disables interactions while loading, and full player control path explicitly passes `disabled={status === 'loading' || !audioLoaded}`.
+- Runtime config access in `useDiscoveryPodcasts`, `i18n`, and `exploreStore` now uses runtime getter calls (no module-scope config snapshots in those files).
+- **Fundamental Offline Downloads (Instruction 124)**: Implemented stream-to-disk persistence, proxy-resilient downloads, 10GB manual storage cap, and identity resolution via `originalAudioUrl`.
+- **Background ASR Transcription (Instruction 125)**: Added sequential MP3 chunking for large files (>20MB), a priority global queue mechanism for rate limits, and SHA-256 fingerprinting for deduplication.
+- **Align Downloads Density (Instruction 128)**: Implemented `ViewControlsBar` and card spacing consistency between `Downloads` and `Files` pages.
+- **Pause On Dictionary Lookup - Behavior Hardening (Instruction 134a)**: Dictionary lookup pause now reads the latest settings snapshot, pauses once per lookup action, and excludes non-lookup selection actions from playback side effects.
+- **Pause On Dictionary Lookup - Positioning Hardening (Instruction 134b)**: Dictionary overlay placement now uses viewport-based clamped coordinates with an `8px` anchor gap while preserving the `document.body` portal boundary.
+- Review remediation: runtime config secret guard (Instruction 137a).
+- Review remediation: session/library state hardening (Instruction 137b).
+- Review remediation: discovery/session identity fixes (Instruction 137c).
+- Review remediation: transcript keyboard accessibility hardening (Instruction 137e).
+- Review remediation: top-episode route ID contract hardening (Instruction 137f).
+- Review remediation: files folder subtitle grouping (Instruction 137g).
+- Review remediation: DB guard fail-closed (Instruction 137h).
+- Review remediation: repo verification pipeline hardening (Instruction 137i).
+- Review remediation: doc SSOT drift reconciliation (Instruction 137j).
+
+---
+
+## 2. What the Project Does (Product/Functional Overview)
+
+Readio is an in-browser podcast player supporting:
+- **Files**: Drag and drop MP3 + SRT subtitle files for playback and reading, with folder management support.
+- **Explore**: Global search, podcast search, podcast subscription, and episode favoriting.
+- **Subtitle Following**: Subtitles automatically scroll and highlight during playback.
+- **Selection & Lookup**: Select subtitle text to query dictionaries/web search.
+- **Dictionary Pause Setting**: Settings now expose `pauseOnDictionaryLookup` across all supported locales, with fail-closed default `true`.
+- **Global Search**: Top sidebar search, supporting secondary modes (History, Discover, Local) and playback status badges.
+
+Main Entry Points (Routes):
+- `/` - Main Player Page (Subtitle Reading)
+- `/search` - Global Search Results Page
+- `/explore` - Explore Page (Find Podcasts)
+- `/subscriptions` - Subscriptions List
+- `/favorites` - Favorite Episodes
+- `/history` - Playback History
+- `/files` - Files Page (Audio/Subtitle management, Folder support, Drag & Drop)
+- `/settings` - Settings Page

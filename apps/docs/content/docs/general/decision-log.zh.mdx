@@ -1,0 +1,809 @@
+---
+title: 架构决策记录
+description: 架构决策与其背后的理由。
+---
+
+# 架构决策记录
+
+## D001 — 全表使用 UUID 主键
+- **决策**: 所有表使用 UUID 作为主键；自然键（如 `feedUrl`, `key`）仅作为唯一索引。
+- **理由**: 全局唯一性，同步就绪，稳定的身份标识。
+- **影响**: 架构更改需要重置数据库（首发版策略）。
+
+## D002 — 直接使用 I18n
+- **决策**: 组件直接使用 `react-i18next` 的 `useTranslation()`；不使用 `useI18n` 适配器。
+- **理由**: API 标准化，层级更少，上手更清晰。
+
+## D003 — 离线策略 A
+- **决策**: 离线通过时隐藏远程 Discovery 和远程搜索结果；保留本地内容并显示离线徽章。
+- **理由**: 用户体验可预测，避免网络调用失败。
+
+## D004 — ObjectURL 所有权
+- **决策**: 音频 Object URL 由 Store 拥有；图片 Object URL 由组件拥有并在卸载时清理。
+- **理由**: 防止音频内存泄漏，同时保留封面的 UI 灵活性。
+
+## D005 — 部署目标 [已实施]
+- **决策**: 主要部署在 Vercel；支持 Docker 自托管。
+- **理由**: 快速 Web 部署，具备便携的后备方案。
+
+## D006 — 必需的法律页面 [已实施]
+- **决策**: 隐私政策和服务条款是生产环境必需的。
+- **理由**: 商店合规性和用户信任。
+
+## D007 — 冒烟端到端测试 [已实施]
+- **决策**: 发布前维护针对核心用户旅程的 Playwright 冒烟测试。
+- **理由**: 防止单元测试遗漏的端到端回归。
+
+## D008 — 严格 CSP [已实施]
+- **决策**: 对于所有 Web 部署，通过 **HTTP 响应头** (server/edge) 强制执行严格的内容安全策略。
+- **理由**: 降低 XSS 和不受信任资源加载的风险。
+
+## D009 — 数据保留策略 [已实施]
+- **决策**: 将播放历史记录修剪到有限的窗口（时间 + 数量）。
+- **理由**: 防止长期 IndexedDB 膨胀和性能下降。
+
+## D010 — PWA 更新生命周期 [已实施]
+- **决策**: 当有新 PWA 版本可用时通知用户并允许刷新。
+- **理由**: 避免客户端过时，确保用户获得修复。
+
+## D011 — CI 流水线 [已实施]
+- **决策**: 在每次 PR 上通过 CI 强制执行 lint/typecheck/tests。
+- **理由**: 防止回归绕过本地检查。
+
+## D012 — 导入完整性检查 [已实施]
+- **决策**: 在写入 DB 之前验证导入的 ID 冲突和损坏的引用（指令 049）。
+- **理由**: 防止 Vault/OPML 导入期间的静默损坏。
+
+## D013 — 包大小预算 [已实施]
+- **决策**: 在 CI 中强制执行包大小预算（指令 050）。
+- **理由**: 防止依赖膨胀导致性能回归。
+
+## D014 — Iframe 沙箱策略
+- **决策**: 需要时，对不受信任的富文本 HTML 使用严格的 iframe 沙箱。
+- **理由**: 将不受信任的内容隔离在 DOMPurify 之外。
+
+## D015 — 反馈循环
+- **决策**: 提供应用内的错误报告和技术支持联系链接。
+- **理由**: 闭合产品反馈循环。
+
+## D016 — 离线内容可见性
+- **决策**: 显示离线可用性徽章并提供缓存清理工具。
+- **理由**: 使离线行为透明且可管理。
+
+## D017 — 剧集排序与过滤
+- **决策**: 为剧集列表提供排序/过滤控制。
+- **理由**: 提高大规模数据的可发现性。
+
+## D018 — 内容归属
+- **决策**: 显示 RSS 内容的归属和版权投诉入口。
+- **理由**: 减少法律风险并明确内容所有权。
+
+## D019 — 多语言排版 [已实施]
+- **决策**: 通过 `:root[lang]` 选择器使用特定语言的字体栈。
+- **理由**: 确保跨脚本（拉丁语、中日韩）的渲染一致性。
+- **实施**: 在 `index.css` 中配置特定语言的字体栈，并开启 optimizeLegibility 渲染。
+
+## D020 — DB 访问防护 [已实施]
+- **决策**: 通过 lint 规则防止 UI 组件直接访问 DB。
+- **理由**: 强制执行架构边界并维护 Store 优先的持久化。
+- **实施**: `pnpm lint:db-guard` 脚本检查组件中是否有 DB 导入。
+
+## D021 — 网络测试使用 MSW [已实施]
+- **决策**: 在测试中使用 MSW 模拟外部 API。
+- **理由**: 稳定且确定性的测试运行。
+- **实施**: `src/__tests__/setup.ts` 和 `handlers.ts` 拦截请求。
+
+## D022 — 贡献与宣言
+- **决策**: 记录指令驱动的工作流和架构宣言。
+- **理由**: 减少入职摩擦并保持规则一致。
+
+## D023 — PWA 音频范围缓存 [已实施]
+- **决策**: 在 SW 媒体缓存中支持范围请求 (206) 以进行离线搜索。
+- **理由**: 启用大型音频文件的离线拖拽。
+
+## D024 — 内存压力测试 [已实施]
+- **决策**: 维护长会话内存压力测试以检测泄漏。
+- **理由**: 防止长时间播放后移动设备崩溃。
+- **实施**: `apps/lite/tests/stress/memory.test.ts` (Playwright)。
+
+## D025 — 代理故障转移
+- **决策**: 支持代理列表，并在 429/5xx 时自动故障转移。
+- **理由**: 保持发现功能在代理失败时的弹性。
+
+## D026 — I18n 覆盖率审核 [已实施]
+- **决策**: 在构建时强制执行所有语言的翻译键对齐。
+- **理由**: 防止非英语区域设置中出现缺失键的回归。
+- **实施**: `apps/lite/scripts/audit-i18n.ts` 将所有语言与 `en` 进行比较，并集成到 CI 中（指令 063）。
+
+## D027 — IndexedDB 迁移
+- **决策**: 从仅重置策略迁移到版本化迁移。
+- **理由**: 在生产环境中保留用户数据。
+
+## D028 — 浏览器支持矩阵
+- **决策**: 定义 browserslist 和遗留 polyfill 策略。
+- **理由**: 避免在旧设备/WebView 上出现白屏。
+
+## D029 — Turborepo 缓存加固 [已实施]
+- **决策**: 为 Turbo 管道明确输入/输出。
+- **理由**: 确保缓存正确性和快速 CI。
+- **实施**: `turbo.json` 定义明确的 `inputs`（源文件、配置）和 `outputs`（`dist/**`、`stats.html`）。跟踪全局依赖项（`.npmrc`、`pnpm-workspace.yaml`）。测试文件不包括在构建输入中（指令 066）。
+
+## D030 — 原子写入与自愈 [已实施]
+- **决策**: 复杂的写入（导入、删除）必须是事务性的；启动过程检查完整性。
+- **理由**: 如果浏览器在文件导入期间崩溃，防止出现“半写入”状态。
+- **实施**: 在 `db.transaction` 中包装 `ingestFiles` 和 `deleteFolder`。在 `useAppInitialization` 中添加 `runIntegrityCheck` 以标记孤立的（无 blob）轨道（指令 067）。
+
+## D031 — 异步竞争条件防护 [已实施]
+- **决策**: 使用 requestId/AbortController 确保最后动作优先。
+- **理由**: 避免快速交互下的播放/UI 不同步。
+- **实施**: 向 `playerStore` 和 `exploreStore` 添加 `loadRequestId`；在 `fetchUtils.ts` 中针对同一资源请求实施自动中止。
+- **规则文档**: `apps/docs/content/docs/apps/lite/coding-standards/logic-flow.mdx`（部分：异步交互安全）。
+
+## D032 — 健壮的元数据解析器（阶段 1）
+- **决策**: 使用 `music-metadata` 进行 ID3/M4A 解析。
+- **理由**: 用二进制流解析替换基于文件名的启发式方法，以提取高质量的元数据（封面、标题、专辑、艺术家、时长）。
+- **封面策略**: 提取嵌入的封面，作为 Blob 存储在 Dexie 中，并在 UI 中通过临时 `ObjectURL` 提供服务。
+- **实施**: 在专用 Web Worker (`src/workers/metadata.worker.ts`) 中运行，以防止在大型文件导入期间阻塞主线程。在 `main.tsx` 中应用了 Buffer polyfill。
+
+## D033 — 骨架屏 UI 系统 [已实施]
+- **决策**: 为关键界面（PodcastCard、EpisodeRow、ExploreHero）标准化基于微光的骨架屏。
+- **理由**: 减少布局偏移并提高内容加载期间的感知性能。
+- **实施**: `ui/skeleton.tsx` 中的基础 `Skeleton` 组件使用 `animate-shimmer`。特定的骨架屏镜像内容组件的布局尺寸。
+
+## D034 — 浮层层级标准化
+- **决策**: 标准化 Portal 使用和 z-index token，无需全局模态框 Store。
+- **理由**: 防止堆叠错误，同时保持本地状态完整。
+
+## D035 — 媒体缓存驱逐
+- **决策**: 强制执行基于 LRU 的音频 blob 用于配置限制的修剪。
+- **理由**: 防止不受控制的存储增长。
+
+## D036 — 网络回退与熔断 [已实施]
+- **决策**: 添加指数回退和每个代理的熔断器。
+- **理由**: 避免重试风暴并提高代理弹性。
+- **实施**: 
+    - `fetchUtils.ts` 中的 `withRetry` 助手具有指数回退（1s、2s、4s、8s）和抖动。
+    - `CircuitBreaker` 状态管理在连续 5 次失败后阻止失败的代理 30 秒。
+    - 5xx 或网络级错误自动重试；4xx 跳过。
+
+## D037 — 存储配额监控
+- **决策**: 在设置中显示配额使用情况和警告。
+- **理由**: 在存储耗尽之前让用户可见。
+
+## D038 — Intl API 升级
+- **决策**: 使用 Intl API 处理日期、数字和相对时间。
+- **理由**: 提高本地化正确性并减少手动格式错误。
+
+## D039 — 细粒度错误边界 [已实施]
+- **决策**: 为关键 UI 节点添加组件级错误边界。
+- **理由**: 防止单个组件崩溃导致整个页面瘫痪。
+- **实施**:
+    - `ComponentErrorBoundary` 类组件处理 `getDerivedStateFromError` 和 `componentDidCatch`。
+    - 集成 `logError` 进行诊断。
+    - 包装 `TranscriptView`、`EpisodeRow` 和 `Sidebar` 以进行局部故障隔离。
+    - 添加 i18n 支持的本地化回退 UI 和重试机制。（指令 076）
+
+## D040 — Lighthouse CI 预算
+- **决策**: 在 CI 中强制执行 Lighthouse 分数预算。
+- **理由**: 防止性能和可访问性回归。
+
+## D041 — 依赖审计与许可策略
+- **决策**: 在 CI 中强制执行漏洞和许可检查。
+- **理由**: 降低供应链和合规风险。
+
+## D042 — 浮动 Promise 审计
+- **决策**: 要求对异步 Store 操作进行显式错误处理。
+- **理由**: 防止静默失败和状态不一致。
+
+## D043 — 事件监听器泄漏审计
+- **决策**: 通过共享 Hook 标准化全局监听器管理。
+- **理由**: 避免长时间会话下的内存泄漏。
+
+## D044 — Zustand 选择器优化
+- **决策**: 强制执行原子选择器和 `useShallow` 进行多选。
+- **理由**: 减少不必要的重新渲染。
+
+## D045 — RSS 内容 CSS 隔离
+- **决策**: 通过作用域重置（Shadow DOM 回退）隔离节目说明 CSS。
+- **理由**: 防止不受信任的 HTML 污染 UI。
+
+## D046 — 文件验证策略
+- **决策**: 分层方法以兼顾性能和安全性。
+  - **Web (Lite)**: 仅 MIME 类型和扩展名验证（注重用户体验）。
+  - **后端**: 深度内容验证（Magic Numbers、完全解析）。
+  - **原生**: 基于解码器的验证或轻量级头部嗅探。
+- **理由**: 保持客户端逻辑快速轻量，同时将密集检查推迟到安全环境。
+
+## D047 — UI 模式变更门禁
+- **决策**: 凡是对 `ui-patterns/*.mdx` 进行修改并引入新的标准化交互（例如标准表单、文件拖放区），必须记录在决策日志中。
+- **理由**: 确保架构一致性并在整个项目中维护 UI 标准化的单一来源（指令 012-015）。
+
+## D048 — 标准化文件拖放区
+- **决策**: 所有文件上传界面必须使用基于 `react-dropzone` 的 `FileDropZone` 组件，并进行基于 Zod 的验证。
+- **理由**: 提供一致的视觉反馈（玻璃拟态）、集中的错误处理和整个应用程序中的类型安全验证（指令 015）。
+
+## D049 — 高级玻璃视觉效果
+- **决策**: 核心结构表面（侧边栏、播放器页脚、浮层）必须使用高级玻璃材质（`backdrop-blur-xl`、`backdrop-saturate-150` 和 `bg-background/80` 或 `bg-popover/95`）。
+- **理由**: 获得高质量、类似原生的美感，适应内容和主题，同时保持可读性（指令 016）。
+
+## D050 — 列表行交互
+- **决策**: 所有列表项和卡片必须使用 `bg-accent/50` 作为悬停状态，并使用 `border-border/50` 进行分隔，采用“智能分隔线”逻辑（指令 016）。
+- **理由**: 保持不同列表类型的视觉一致性，并为交互式行创建集中、悬浮的效果。
+
+## D051 — 现代 Toast 通知 (Sonner)
+- **决策**: 用 `sonner` 替换 Radix Toast 用于所有通知反馈。
+- **理由**: Sonner 提供卓越的开发体验（命令式 API）、更好的视觉堆叠、内置 Promise 支持以及原生的动画手感（指令 017）。
+
+## D052 — 命令面板搜索 (cmdk)
+- **决策**: 用基于 `cmdk` 的内联侧边栏 `CommandPalette` 替换自定义浮动搜索浮层。
+- **理由**: 提供一致的键盘导航、改进的可访问性以及现代的“内联侧边栏搜索体验”，全局通用（指令 018）。
+- **实现细节更新**: 保持侧边栏内联输入体验不变，但将结果面板壳层标准化为 `Popover` Portal（`PopoverAnchor` + `PopoverContent`），并统一通过 store 驱动的 `onOpenChange(false)` / `closeOverlay()` 关闭路径。
+
+## D053 — 标准化徽章系统
+- **决策**: 列表和命令面板中的所有状态指示器（订阅、收藏、历史、文件、稍后收听）必须使用统一的视觉语言：右对齐、垂直居中且颜色为 `text-primary`。
+- **理由**: 确保视觉一致性，并通过在整个应用程序中为“状态”元数据建立可预测的位置和颜色来减少认知负荷。
+
+## D055 — 标准化 Bits 动画
+- **决策**: 在 `src/components/bits/` 中引入一套标准化的、高质量的动画组件 (Bits)，从 `AnimatedList` 和 `CountUp` 开始。
+- **理由**: 用流畅、高级的动效模式 (Framer Motion) 提升应用程序的“氛围”和感知质量，同时确保可重用性和架构一致性（指令 021）。
+- **实施**:
+    - `AnimatedList`: 列表和网格的交错进入动画。
+    - `CountUp`: 用于统计数据和用量值的平滑弹簧式数字过渡。
+
+## D056 — 有条件的“最后播放”时间戳更新
+- **决策**: `PlaybackSession` 中的 `lastPlayedAt` 时间戳仅在 `isPlaying` 为真时更新。
+- **理由**: 防止会话恢复（例如重新打开标签页）或在暂停时手动搜索错误地将项目顶到“最近”列表的顶部。“最后播放”应语义上代表内容的主动消费。
+- **实施**:
+    - 删除了 `DB.updatePlaybackSession` 中强制的 `Date.now()`。
+    - `playerStore` 动作（`updateProgress`, `saveProgressNow`）根据当前 `isPlaying` 状态有条件地包含 `lastPlayedAt`。
+
+## D057 — 共享元素过渡
+- **决策**: 使用 `layoutId` (Framer Motion) 在全局 UI 状态（MiniPlayer ↔ FullPlayer）之间同步持久 UI 元素（特别是封面）。
+- **理由**: 保持空间连续性，减少视觉突变，并获得高端“原生”手感。
+- **约束**: `layoutId` 在同一个可见树中必须唯一。如果不同布局（移动/桌面）的多个节点共享跟踪同一对象的语义 ID，则必须使用条件渲染（例如 `isDesktop`）。
+
+## D058 — 应用启动序列
+- **决策**: 显示全屏 `BootLoader`（呼吸 Logo），直到所有核心 IndexedDB 存储水合且播放会话恢复。
+- **理由**: 防止“水合闪烁”（空状态短暂闪烁），并在冷启动期间提供高级的原生应用手感。
+- **约束**: 
+    - Loader 必须使用 `fixed inset-0 z-50 bg-background` 完美覆盖内容。
+    - 过渡必须使用 `AnimatePresence` 进行平滑淡出。
+
+## D059 — 共享元素过渡作用域
+- **决策**: 当同一逻辑对象在单页中出现多次时，`layoutId` 必须通过唯一前缀（如 `sectionId`）进行作用域隔离，避免冲突。
+- **状态更新（传输层已被 D080 覆盖）**: `fromLayoutPrefix` 仍是转场元数据键，但仅允许通过类型化 `location.state` 传递，不再进入 URL `search`。
+- **理由**: 既要避免 Framer Motion 在重复内容场景中的冲突，也要保证转场元数据不污染可分享的规范化 URL。
+
+## D060 — 逻辑属性迁移 (RTL 支持)
+- **决策**: 将所有物理 CSS 属性 (`left`, `right`, `ml`, `mr`, `pl`, `pr`, `text-left`, `text-right`, `border-l`, `border-r`) 迁移到逻辑等效项 (`start`, `end`, `ms`, `me`, `ps`, `pe`, `text-start`, `text-end`, `border-s`, `border-e`)。
+- **理由**: 无需复制 CSS 规则或使用复杂的覆盖即可无缝支持从右到左 (RTL) 语言（例如阿拉伯语、希伯来语）。符合现代 Web 标准并改善未来的可访问性。
+- **约束**: 在适当的情况下，必须使用 `className="rtl:rotate-180"` 显式翻转方向图标。
+
+## D061 — Store 持久化 Repository 边界（Phase 1）[已实施]
+- **决策**: 为 `exploreStore`、`historyStore`、`playerStore`、`filesStore` 引入 `LibraryRepository`、`PlaybackRepository`、`FilesRepository` 作为持久层边界。
+- **理由**: 在不改变 store API/行为的前提下，降低 store 对 Dexie 直连耦合。
+- **实施**:
+  - 目标 store 已迁移为 repository 调用。
+  - 新增 repository 契约测试与 store repository-boundary 测试。
+  - Dexie schema/version 与 `DB` 导出保持不变。
+
+## D062 — Fetch/Runtime Config 内部模块拆分（Phase 1）[已实施]
+- **决策**: 保持 `fetchUtils.ts`、`runtimeConfig.ts` 对外入口不变，将内部策略逻辑拆分到专用模块。
+- **理由**: 降低关键文件复杂度，在不破坏外部契约时提升可维护性与可测试性。
+- **实施**:
+  - 新增 `lib/networking/proxyUrl.ts`、`lib/networking/circuitBreaker.ts`、`lib/networking/timeouts.ts`。
+  - 新增 `runtimeConfig.defaults.ts` 与 `runtimeConfig.schema.ts`。
+  - 保持代理回退顺序、熔断策略、超时行为、env key 契约与 fallback 解析语义不变。
+
+## D061 — 睡眠定时器架构
+- **决策**: 将睡眠定时器倒计时器集中在 `useSleepTimerStore`（模块级间隔）内，而 `GlobalAudioController` 仍负责响应剧集结束事件。
+- **理由**: 无论组件挂载模式如何，都保证只有一个计时器，避免重复计时器，并将倒计时状态与其拥有的 Store 并置。当计时器到期时，播放器应恢复到 `paused` 状态。
+
+## D062 — 浮层的 Tooltip 包装
+- **决策**: 标准化将 `DropdownMenuTrigger` 或 `PopoverTrigger` 包装在 `Tooltip` 中，用于仅图标按钮，并提供瞬态状态反馈（例如剩余睡眠定时器时间）。
+- **理由**: 遵守“仅图标按钮必须具有 Tooltip”规则，同时允许单击时的丰富交互。
+
+## D063 — 图片回退策略 [已实施]
+- **决策**: 所有封面/图片必须使用标准回退机制：加载期间使用主题骨架 (`bg-muted/50`)，出错时使用回退图标 (`Podcast` 或 `Disc`)。状态之间的过渡必须使用平滑淡入淡出。（指令 046）
+- **理由**: 防止“破碎的图像”图标降低高级美感，并确保内容导入期间的布局稳定性。
+
+## D064 — 入职与空状态 [已实施]
+- **决策**: 所有空库/列表视图必须使用标准化 `EmptyState` 模式：居中方向、高质量图标、清晰的描述性文本和主 CTA 按钮。（指令 045）
+- **理由**: 通过提供关于如何填充应用程序的清晰指导并确保首次运行体验是有意为之，从而减少用户流失。
+
+## D065 — UseEventListener Ref 处理
+- **决策**: `useEventListener` 必须接收 `RefObject` 本身，而不是 `ref.current`。Hook 负责在其 effect 内部访问 `.current`。
+- **理由**: 确保即使 ref 最初为 null 也能正确附加监听器（P1 修复）。
+
+## D066 — Prose 隔离策略
+- **决策**: 在需要样式隔离的内容周围使用带有 `.prose-isolate` 的包装 `div`，而不是将其直接应用于内容容器。
+- **理由**: 防止 `all: revert` 剥离内容容器本身所需的实用程序类（例如 `whitespace-pre-line`）。
+
+## D067 — 浮动 Promise 防护
+- **决策**: Store 中的所有“即发即弃”异步调用必须使用 `.catch(logError)` 或 `void` 运算符。
+- **理由**: 防止未处理的 Promise 拒绝并确保记录错误（指令 079）。
+
+## D068 — Store 选择器强制执行
+- **决策**: 所有 Zustand Store 使用必须使用原子选择器。
+- **理由**: 防止大量不必要的重新渲染。通过 `lint:selectors` CI 检查强制执行。
+
+## D069 — 标签页同步
+- **决策**: 使用 `BroadcastChannel`（带有 `localStorage` 回退）协调跨标签页的播放。一次只有一个标签页播放。
+- **理由**: 防止音频重叠（指令 029）。
+
+## D070 — CORS Proxy 架构与故障排除 [2.0 重构]
+- **决策**: 
+    1. **接口标准**: 强制要求所有 CORS 代理使用 Raw/Passthrough 模式（返回原始 Content-Type 和 Body），废弃特定于 AllOrigins 的 JSON 包裹模式。
+    2. **配置**: 此标准允许通过简单的 URL 模版（`{url}`）无缝支持 Cloudflare Worker、Nginx 反代等任何标准代理。
+    3. **可靠性**: 在客户端 Fetch 逻辑中**禁用**熔断器（Circuit Breaker）和全局请求去重（`abortPrevious`）。
+- **理由**: 
+    - **通用性**: 消除对特定公共代理（`api.allorigins.win`）的硬编码依赖。
+    - **客户端弹性**: 在单用户浏览器环境中，网络状态瞬息万变。熔断器的“预判失败”逻辑和全局去重的“后浪杀前浪”逻辑会导致部分请求（如 Top Episodes 在 Top Shows 失败后）被错误地跳过或取消。必须强制对每个配置的代理进行**穷尽式重试**，以确保数据加载的绝对可靠性。
+
+## D071 — Library 详情国家上下文（`countryAtSave`）
+- **决策**: 在 library/remote 写入（`Subscription`、`Favorite`、播客来源 `PlaybackSession`）中持久化归一化 `countryAtSave`，并以其生成 Library 场景的规范化 `/$country/...` 链接。
+- **状态更新（解析权威已被 D082 + D080 覆盖）**: 播客内容路由国家解析仅以路径参数 `$country` 为权威；内容页不再做全局/默认国家回退。
+- **写入防护**: remote/library 写入若无法解析 `countryAtSave` 必须拒绝持久化（local track session 例外）。
+- **理由**: 地区切换只影响 Discovery；已保存内容通过规范化路径保持确定性国家上下文，并遵循首发无回填策略。
+
+## D072 — Discovery SWR 缓存语义
+- **决策**: Discovery Provider 缓存升级为 SWR + stale-if-error 语义，并按 API 拆分 TTL（榜单/详情/feed 为 24h，节目列表回退查询为 12h，搜索为 30m）；TTL 到期后缓存条目仍可作为 stale 读取，只有网络成功才覆盖缓存。
+- **理由**: 在网络波动场景下保证连续可用，避免 stale 存在时退化为空态。后台 revalidate 成功必须通过精确 `queryClient.setQueryData` 直推当前页面；存储清理需遵守 stale-safe 硬保留规则，显式维护入口统一为 `runDiscoveryCacheMaintenance()`。
+
+## D073 — 播客 Transcript 自动导入缓存
+- **决策**: 播客 transcript 自动导入采用异步非阻塞模式，不等待网络即可开始播放。读取顺序为：运行时缓存语义（`fresh | stale | miss`）-> IndexedDB `remote_transcripts` -> 网络请求；只有 `fetch + parse` 成功才覆盖缓存。
+- **理由**: 在不影响音频控制响应的前提下保持 read-along 连续性；当网络失败时可继续使用 stale 缓存，避免重验证失败导致可用数据丢失。
+- **守卫**: 本地手动字幕优先；远程 transcript 应用必须通过播放上下文校验（`loadRequestId` + `audioUrl`），防止旧异步响应覆盖当前曲目。
+
+## D074 — Transcript 原子查词权威与 Span 安全高亮
+- **决策**:
+  - 保持原子 transcript 渲染（`SubtitleLine` 分词 + `Word` 交互 token），并且每个 `TranscriptView` 只允许一个查词状态权威（`useSelection(containerRef)`）。
+  - 通过 `data-lookup-word="true"` 标记词元点击，并要求 `mouseup` fallback 对该标记目标跳过查词，消除一次点击多次请求。
+  - 将字幕高亮匹配升级为遍历 `.subtitle-text` 下全部 text node，不再假设 `element.firstChild` 必为文本节点。
+- **理由**: 消除单击重复查词请求，保持 selection/lookup 状态转换可预测，并确保 transcript span 化后字典词高亮依旧正确。
+
+## D075 — 全局 Docked Transcript 面板模式 [已实施]
+- **决策**:
+  - 在 `src/store/playerSurfaceStore.ts` 引入全局播放器表面状态机（`mini | docked | full`）。
+  - 播放具备 transcript 上下文时默认进入 `docked`；无 transcript 上下文时默认进入 `mini`。
+  - 表面切换保持路由无关且非模态：收起/恢复/进入 full 不触发路由跳转。
+  - Full 入口受可播放上下文约束；退出 full 时有 transcript 上下文则返回 `docked`，否则返回 `mini`。
+- **理由**: 让 transcript 阅读区作为播放器的跨路由扩展持续可用，同时保持 Sidebar/页面交互不被模态化或路由切换打断。
+- **实施**:
+  - `AppShell` 以 `DockedPlayer` 扩展现有标准阅读区（不新增右侧阅读面板）。
+  - `MiniPlayer` 提供 docked 恢复与 full 入口，并带上下文守卫。
+  - 播放入口路径（`useEpisodePlayback`、`useFilePlayback`、`HistoryPage`）统一设置可播放上下文与默认表面状态。
+
+## D076 — 组件驱动的 Transcript 单词交互
+- **决策**:
+  - `Word` 组件成为单词查词与单词右键菜单的唯一触发源。
+  - 在 `useSelectionActions` 增加专用 `openWordMenu(word, x, y)` action 处理单词菜单状态迁移。
+  - 从 `useSelectionEvents` 移除几何命中与 click-delay fallback 查词，仅保留原生选区菜单路由与容器级关闭行为。
+  - 固定上下文优先级：当原生选区非折叠时，选区菜单优先，同一事件跳过单词菜单 dispatch。
+- **理由**: 消除虚拟列表场景下的重复交互路径，降低高频鼠标事件热点开销，并确保 selection/lookup 状态始终由单一 `TranscriptView` 权威管理。
+
+## D077 — Transcript 右键双路径菜单契约
+- **决策**:
+  - Transcript 右键保留确定性的双路径行为：
+    - 存在选中文本 -> 以 `menuMode: 'word'` 打开菜单
+    - 无选区且命中 `.subtitle-line` -> 回退为行级菜单 `menuMode: 'line'`
+  - `Word` 组件仍是单词右键菜单（`openWordMenu`）的显式触发源；几何坐标命中式单词查词保持移除状态。
+- **理由**: 在不回退到几何命中查词路径的前提下，恢复行级右键体验，并维持组件驱动的单词交互一致性。
+
+## D078 — Full/Docked 播放面板统一转场 [已实施]
+- **决策**:
+  - 用单一 `PlayerSurfaceFrame` + 统一布局标识（`PLAYER_SURFACE_LAYOUT_ID`）替代分离的 `DockedPlayer`/`FullPlayer` 叠层。
+  - 将 docked/full 固定为同一阅读面板的两种布局状态，并保持模式切换与路由解耦。
+  - 将 transcript 自动跟随状态上提到共享 frame 作用域，确保 docked/full 形变期间查词与 Follow 按钮可见性一致。
+- **理由**: 消除“先关闭再弹起”的双阶段视觉感知，形成连续单表面转场，同时保持 transcript 行为与控制能力不回归。
+- **实施**:
+  - `AppShell` 对 `docked | full` 仅渲染一套 surface frame 拓扑。
+  - 共享阅读核心提取为 `ReadingContent`。
+  - 移除 `DockedPlayer.tsx` 与 `FullPlayer.tsx`，统一到单 frame 架构（指令 089c）。
+
+## D079 — Full 面板关闭交互（Custom Motion）[已更新]
+- **决策**:
+  - 在 `PlayerSurfaceFrame` 中用自定义 Motion 壳层替代 `Drawer`（`vaul`）。
+  - Full 模式覆盖全屏（含侧边栏区域）并保持单一统一壳层。
+  - 关闭动作改为显式触发（最小化按钮或 `Esc` 快捷键）；不提供 backdrop 点击关闭。
+- **理由**: `Drawer` 在该场景下造成侧边栏层级与焦点管理不稳定。自定义 Motion 更符合 `Mini -> Docked -> Full` 的连续形变架构，且交互边界更可控。
+- **实施**:
+  - 删除 `src/components/ui/drawer.tsx` 与 `vaul` 依赖。
+  - 移除 `PlayerSurfaceFrame.tsx` 中的 backdrop 点击关闭路径；保留确定性退出契约（可恢复时 `toDocked`，否则 `toMini`）。
+
+## D080 — 内容 URL 契约收口 + 转场元数据迁移 [已实施]
+- **决策**：
+  - 所有应用内内容入口（Explore/Search/全局搜索/Library）统一输出规范化纯路径播客路由，不再附带正确性查询提示。
+  - `/$country/podcast/*` 路由的 search 契约不再定义旧的 library 提示字段（`source/feedUrl/audioUrl/providerEpisodeId/sessionId`），也不再定义 `fromLayoutPrefix`。
+  - 旧查询提示在 search 校验阶段采用“容忍并剥离”（非严格拒绝）策略。
+  - `fromLayoutPrefix` 仅作为共享转场的可选元数据，通过类型化 `location.state` 传递，不进入 URL `search`。
+  - `useEpisodeResolution` 不再接收 context 查询提示，解析正确性仅依赖路由参数与 slug token。
+- **理由**：消除 URL 契约漂移，防止路由正确性隐式依赖查询参数，并确保共享转场元数据不污染可分享的 canonical 链接。
+
+## D081 — 搜索面板实心选中态对比度契约 [已实施]
+- **决策**：
+  - Command Palette / 搜索 Overlay 的活动行（hover + 键盘选中）统一使用实心 `bg-primary` 高亮，不再使用半透明强调层。
+  - 活动行采用分隔线合并契约（`-mt-px` + `z-10`），将相邻分隔线视觉上并为一个连续选中块。
+- **理由**：在玻璃态浮层背景下提供更稳定的高对比焦点反馈，保证鼠标与键盘选中状态清晰一致。
+
+## D082 — 路由国家单一权威 + Feed 键策略 + shortId8 固定契约 + 旧路由下线 [已实施]
+- **决策**：播客内容路由统一为 `/$country/podcast/*`，内容解析国家仅由路由参数决定。
+- **决策**：Feed 缓存键改为仅使用规范化 URL（命名空间 `feed`），不再包含国家段。
+- **决策**：单集 slug 后缀固定为精确 `shortId8`（`toShortId8Token` + 8 位严格解析）。
+- **决策**：旧版 `/podcast/*` 路由下线，并通过 CI 静态防护脚本阻止回归。
+- **理由**：消除隐式国家回退，避免缓存碎片，保证 slug 匹配确定性，并通过静态规则持续防回归。
+- **实施**：
+  - `apps/lite/src/routes/$country/**` 与父级校验 `apps/lite/src/routes/$country.tsx`
+  - 路由构造器 `apps/lite/src/lib/routes/podcastRoutes.ts`
+  - Feed 键规范化 `apps/lite/src/lib/discovery/providers/apple.ts`
+  - shortId8 工具 `apps/lite/src/lib/slugUtils.ts`
+  - 防护脚本：`apps/lite/scripts/check-route-country-guards.js`、`apps/lite/scripts/check-legacy-podcast-route-ban.js`
+
+## D083 — Region-Unavailable 分类收口 + Podcast 查询契约统一 [已实施]
+- **决策**：
+  - `regionUnavailable` 仅作为业务态，不得兜底掩盖请求/运行时失败。
+  - 播客内容页与解析 Hook 必须共享统一查询契约：
+    - lookup：`['podcast', 'lookup', podcastId, country]`
+    - feed：`['podcast', 'feed', normalizedFeedUrl]`
+    - provider episodes：`['podcast', 'provider-episodes', podcastId, country]`
+  - 播客内容页的 page-level queryFn 必须将 React Query `signal` 透传给 discovery 调用。
+- **理由**：防止用户可见的错误误分类，消除入口间缓存键漂移，并保证切换路由国家时旧请求可取消/忽略、不会 stale 覆写。
+- **实施**：
+  - 契约模块：`apps/lite/src/lib/discovery/podcastQueryContract.ts`
+  - 应用位置：`apps/lite/src/hooks/useEpisodeResolution.ts`、`apps/lite/src/routeComponents/podcast/PodcastShowPage.tsx`、`apps/lite/src/routeComponents/podcast/PodcastEpisodesPage.tsx`、`apps/lite/src/routeComponents/podcast/PodcastEpisodeDetailPage.tsx`
+  - 回归测试：
+    - `apps/lite/src/hooks/__tests__/useEpisodeResolution.cancellation.test.tsx`
+    - `apps/lite/src/routeComponents/podcast/__tests__/PodcastRouteErrorClassification.test.tsx`
+
+## D084 — 路由 State 边界与 Feed 规范化放置 [已实施]
+- **决策**:
+  - `location.state` 仅用于 UI 转场元数据，禁止承载业务正确性身份字段。
+  - Feed URL 规范化在 ingestion/写入边界执行；render/query 热路径只消费已规范化 feed URL。
+- **理由**:
+  - `location.state` 在刷新、直开、分享链接场景不具备持久性。
+  - 将规范化移出热路径可避免重复 URL 解析开销，并保持 feed 缓存键稳定。
+- **实施**:
+  - 扩展 route guard，阻断 `location.state` 业务字段误用和热路径 `normalizeFeedUrl` / `new URL()` 回归。
+  - 新增 feed 规范化边界工具（`src/lib/discovery/feedUrl.ts`），并应用到 provider 映射与持久化写入路径。
+  - 为 `docked <-> full` 切换增加 ReadingContent 性能预算守卫（`120ms`）。
+
+## D085 — Route Guard AST 升级 + Session Country Allowlist + Search 打开详情语义 [已实施]
+- **决策**:
+  - Route-country 守卫脚本升级为 AST 级检测，覆盖 `location.state` 业务字段读取的解构、别名、可选链绕过形式。
+  - `useSession` 的 `countryAtSave` 校验与路由国家契约同源（`normalizeCountryParam`）；explore session 遇到不支持国家值时拒绝持久化。
+  - Search 单集项交互语义统一为“打开详情”（props 命名 + aria 文案），保留现有 canonical 跳转行为。
+- **理由**:
+  - 仅靠正则的脚本校验存在语义绕过风险。
+  - 持久化 country 值必须与路由国家契约一致，避免坏链接与后续流程阻断。
+  - 无障碍文案和事件语义应与真实行为一致（打开详情而非播放）。
+
+## D086 — 播放命令权威统一 [已实施]
+- **决策**:
+  - `src/hooks/usePlayerController.ts` 作为播放控制语义的单一命令权威。
+  - `GlobalAudioController` 的 media-session `prev/next`、`MiniPlayer` 的 skip 按钮、`PlayerSurfaceFrame` 的 skip/rate 动作全部委托到该共享 controller。
+  - 快进快退步长常量统一为 `SKIP_SECONDS = 10`。
+- **理由**:
+  - 消除重复控制逻辑，避免硬件键与 UI 控件语义漂移。
+  - 保证“字幕邻近跳转 + 回退时间跳转”在所有表面一致。
+- **实施**:
+  - 新增 `usePlayerController`，提供 `togglePlayPause`、`skipBackward`、`skipForward`、`prevSmart`、`nextSmart`、`jumpToSubtitle`、`cyclePlaybackRate`。
+  - 接线更新：
+    - `apps/lite/src/components/AppShell/GlobalAudioController.tsx`
+    - `apps/lite/src/components/AppShell/MiniPlayer.tsx`
+    - `apps/lite/src/components/AppShell/PlayerSurfaceFrame.tsx`
+    - `apps/lite/src/components/AppShell/ReadingContent.tsx`
+
+## D087 — Remote 播放元数据与编排统一 [已实施]
+- **决策**：
+  - 新增 `apps/lite/src/lib/player/episodeMetadata.ts`，作为 feed/search/favorite/history remote 播放 payload 的单一映射层。
+  - 新增 `apps/lite/src/lib/player/remotePlayback.ts`，作为 remote 播放动作接线单一层（`setAudioUrl`、`play`、transcript ingest、可选 history resume 绑定）。
+  - 保持 `useSession` 作为 remote playback session 持久化唯一 owner；不新增 remote session 直接 DB 写入路径。
+  - 删除冗余 metadata 二次写入（当 `setAudioUrl(..., metadata)` 已完整携带元数据时）。
+- **理由**：
+  - 消除 hook/组件间重复 metadata 字面量，降低播放入口语义漂移风险。
+  - 在不改变行为的前提下提高 remote 播放链路的可验证性与可维护性。
+- **实施**：
+  - 接入调用点：
+    - `apps/lite/src/hooks/useEpisodePlayback.ts`
+    - `apps/lite/src/lib/localSearchActions.ts`
+    - `apps/lite/src/routeComponents/podcast/PodcastEpisodeDetailPage.tsx`
+    - `apps/lite/src/routeComponents/HistoryPage.tsx`
+
+## D088 — i18n 模块化语言加载与安全切换 [已实施]
+- **决策**：
+  - 翻译资源拆分为 `apps/lite/src/lib/locales/` 下的按语言 TypeScript 模块。
+  - `apps/lite/src/lib/translations.ts` 保持为类型化契约中心（`Language`、`TranslationSchema`、`localeLoaders`、`baseEnglishTranslations`），不再承载单体翻译字典。
+  - `apps/lite/src/lib/i18n.ts` 仅以 English 作为初始资源，非 `en` 语言通过 `ensureLocaleLoaded` 按需懒加载。
+  - 语言切换统一走 `changeLanguageSafely`（先加载后切换 + latest-wins 防竞态）。
+  - i18n 审计脚本通过共享 loader 注册表加载语言，并对缺失键与多余键都判定失败。
+- **理由**：
+  - 降低首包体积，同时保留严格的 key 类型约束。
+  - 避免快速切换语言时异步请求乱序覆盖。
+  - 统一运行时和审计工具的语言加载契约，减少漂移风险。
+- **实施**：
+  - `apps/lite/src/lib/locales/{en,zh,ja,ko,de,es}.ts`
+  - `apps/lite/src/lib/translations.ts`
+  - `apps/lite/src/lib/i18n.ts`
+  - `apps/lite/src/routeComponents/SettingsPage.tsx`
+  - `apps/lite/scripts/audit-i18n.ts`
+  - 测试：
+    - `apps/lite/src/lib/__tests__/i18nLocaleLoader.test.ts`
+    - `apps/lite/src/lib/__tests__/i18nChangeLanguageSafely.test.ts`
+
+## D089 — 完整性维护在 Settings 的一等化 [已实施]
+- **决策**：
+  - 保持 `useAppInitialization` 的启动时维护逻辑不变。
+  - 通过 `MaintenanceSettingsSection` + `useIntegrityMaintenance` 将完整性维护提升为 Settings 的显式能力。
+  - `runIntegrityCheck` 升级为始终 resolve 的类型化报告契约：
+    - `IntegrityCheckReport = { checkedAt, missingAudioBlob, danglingFolderRef, danglingTrackRef, totalRepairs }`。
+  - 手动扫描动作采用 single-flight 语义，并将结果映射为确定性 toast（`已修复` / `无问题`）；仅在契约外异常时走兜底错误 toast。
+- **理由**：
+  - 让自愈行为可见、可用户触发，同时不引入新存储结构或后台调度器。
+  - 取消对“预期扫描失败”的 rejection 控制流依赖。
+  - 保持破坏性存储操作与维护扫描逻辑隔离。
+- **实施**：
+  - `apps/lite/src/lib/retention.ts`
+  - `apps/lite/src/hooks/useIntegrityMaintenance.ts`
+  - `apps/lite/src/components/Settings/sections/MaintenanceSettingsSection.tsx`
+  - `apps/lite/src/routeComponents/SettingsPage.tsx`
+  - `apps/lite/src/lib/locales/{en,zh,ja,ko,de,es}.ts`
+  - 测试：
+    - `apps/lite/src/lib/retention.test.ts`
+    - `apps/lite/src/hooks/__tests__/useIntegrityMaintenance.test.ts`
+    - `apps/lite/src/components/Settings/__tests__/MaintenanceSettingsSection.test.tsx`
+    - `apps/lite/src/routeComponents/__tests__/SettingsPage.test.tsx`
+
+## D090 — 单集行模型与行容器统一 [已实施]
+- **决策**：
+  - 在 `apps/lite/src/components/EpisodeRow/episodeRowModel.ts` 引入统一单集行映射层。
+  - 在 `apps/lite/src/components/EpisodeRow/useEpisodeRowFavoriteAction.ts` 引入统一收藏交互 Hook。
+  - 在 `apps/lite/src/components/EpisodeRow/EpisodeListItem.tsx` 引入统一行容器，并继续以 `BaseEpisodeRow` 作为展示基元。
+  - 保持播放归属在调用方；Podcast/Search/Favorites/History 的 `onPlay` 语义不下沉到行容器。
+  - Favorites/History 的 `bottomMeta` 格式化继续由路由组件持有。
+- **理由**：
+  - 消除 Podcast、Search、Favorites、History 之间重复的行映射和交互接线。
+  - 在保持视觉与回退行为稳定的前提下，降低多入口语义漂移风险。
+- **实施**：
+  - 新增：
+    - `apps/lite/src/components/EpisodeRow/episodeRowModel.ts`
+    - `apps/lite/src/components/EpisodeRow/useEpisodeRowFavoriteAction.ts`
+    - `apps/lite/src/components/EpisodeRow/EpisodeListItem.tsx`
+  - 重构调用点：
+    - `apps/lite/src/components/EpisodeRow/EpisodeRow.tsx`
+    - `apps/lite/src/components/GlobalSearch/SearchEpisodeItem.tsx`
+    - `apps/lite/src/routeComponents/FavoritesPage.tsx`
+    - `apps/lite/src/routeComponents/HistoryPage.tsx`
+  - 回归覆盖：
+    - `apps/lite/src/components/EpisodeRow/__tests__/episodeRowModel.test.ts`
+    - `apps/lite/src/components/EpisodeRow/__tests__/useEpisodeRowFavoriteAction.test.tsx`
+    - `apps/lite/src/components/EpisodeRow/__tests__/EpisodeListItem.test.tsx`
+    - `apps/lite/src/routeComponents/__tests__/HistoryPage.row-render.test.tsx`
+    - `apps/lite/src/routeComponents/__tests__/FavoritesPage.row-render.test.tsx`
+
+## D091 — 多语言转录分词核心（Phase 1）[已实施]
+- **决策**：
+  - 引入 `apps/lite/src/lib/text/tokenizeWithLocale.ts` 作为语言感知分词核心。
+  - 运行时可用时使用 `Intl.Segmenter`（`granularity: 'word'`），并按 locale 进行内存级分词器缓存。
+  - 保留确定性正则回退（`tokenizeFallback`），且两条路径都必须保留分隔符 token。
+  - Phase 1 不改动转录 UI 接线，仅升级分词内核。
+- **理由**：
+  - 提升 CJK 与混合语言文本的分词边界准确性。
+  - 保持现有 token 契约，避免渲染与交互行为漂移。
+  - 通过分阶段推进，降低分词核心升级与 UI/性能改造耦合风险。
+- **实施**：
+  - 新增：
+    - `apps/lite/src/lib/text/tokenizeWithLocale.ts`
+    - `apps/lite/src/lib/text/__tests__/tokenizeWithLocale.test.ts`
+  - 重构对外入口：
+    - `apps/lite/src/lib/text/index.ts`（稳定 API 桥接）
+  - 回归覆盖：
+    - 英文空白/标点
+    - 中/日/韩分词
+    - 混合语言句子
+    - `Intl.Segmenter` 不可用回退路径
+
+## D092 — GlobalAudioController 内部 Hook 化（Phase 1）[已实施]
+- **决策**：
+  - 将音频元素同步逻辑抽取到 `apps/lite/src/hooks/useAudioElementSync.ts`。
+  - 将音频事件绑定逻辑抽取到 `apps/lite/src/hooks/useAudioElementEvents.ts`。
+  - `GlobalAudioController` 保持为编排壳层，继续承载 media-session 接线与 autoplay retry 流程。
+- **理由**：
+  - 在不改变对外行为前提下降低控制器复杂度。
+  - 让事件与同步逻辑可独立测试、可维护性更高。
+  - 在保持生命周期与 store 状态迁移语义稳定的同时，为 phase-2 的 media-session/autoplay 结构调整预留边界。
+- **实施**：
+  - 新增：
+    - `apps/lite/src/hooks/useAudioElementSync.ts`
+    - `apps/lite/src/hooks/useAudioElementEvents.ts`
+    - `apps/lite/src/hooks/__tests__/useAudioElementSync.test.tsx`
+    - `apps/lite/src/hooks/__tests__/useAudioElementEvents.test.tsx`
+  - 重构：
+    - `apps/lite/src/components/AppShell/GlobalAudioController.tsx`
+  - 回归对齐：
+    - `apps/lite/src/components/AppShell/__tests__/GlobalAudioController.test.tsx`
+
+## D093 — 无障碍基线加固 [已实施]
+- **决策**: 为 Command Palette、选词菜单和播放器滑条建立统一的键盘/ARIA 基线契约。
+- **理由**: 在不改变业务功能的前提下，消除高频键盘陷阱和缺失语义问题。
+- **实施**:
+  - Command Palette 输入框补充 `aria-expanded` / `aria-controls`，并支持输入框与面板上下文 `Esc` 关闭。
+  - 选词菜单支持 `ArrowUp` / `ArrowDown` / `Home` / `End` 导航和 `Esc` 关闭，并补齐 menu 语义角色。
+  - 查询浮层使用 `role="dialog"` + `aria-modal`，并支持 `Esc` 关闭。
+  - Mini/Full 进度滑条与 Mini 音量滑条补齐显式 ARIA 标签。
+
+## D094 — Service Worker 音频缓存加固 [已实施]
+- **决策**: 拆分 runtime cache 命名空间并固化 range-aware 音频缓存策略。
+- **理由**: 提升离线拖动进度可靠性，同时保证缓存规模可控、可审计。
+- **实施**:
+  - 新增独立策略模块：`src/lib/pwa/runtimeCaching.ts`。
+  - `readio-audio-v2`：`StaleWhileRevalidate`、`rangeRequests: true`、状态 `[200, 206]`、带上限保留。
+  - `readio-api-v1`：`NetworkFirst` 的 API/feed 缓存分区，带显式保留上限。
+  - 新增策略单测，并在 handoff 环境文档中补充离线验证清单。
+
+
+## 2026-02-27: 合并 local_tracks 和 podcast_downloads 表
+- **背景**: `local_tracks` (用户上传) 和 `podcast_downloads` (播客下载) 拥有相同的持久化需求，但双表实现导致了多态外键问题（例如 `PlaybackSession.localTrackId` 必须判断来源）。
+- **决策**: 将两者合并为单一的 `tracks` 表，使用 `sourceType` 区分来源 (单表继承模型)。
+- **理由**: 消除多态关联，简化了数据库查询和联级删除逻辑（特别是对字幕和音频Blob的引用计数保护）。
+- **风险情况**: 通常具有高迁移风险，但在当前的“无历史数据迁移负担”的前期测试阶段，成本为零。
+- **注意**: 现有早期测试用户的数据库会被重建。
+
+## D102 — “无字幕播放”采用显式菜单动作 [已实施]
+- **决策**: 保持默认播放行为不变，仅在 overflow 菜单提供 `无字幕播放` 显式动作。
+- **理由**:
+  - 避免全局开关对既有播放路径产生隐式行为漂移
+  - 将“跳过字幕/ASR”约束为单次请求级别，完全由用户显式触发
+- **架构**:
+  - 在 `src/lib/player/remotePlayback.ts` 集中定义播放模式契约（`default` / `stream_without_transcript`）
+  - 通过同一决策点统一控制 ASR 阻塞下载与自动字幕注入分支
+  - 通过 `resolveRemoteStreamTargetUrl` 统一远程地址优先级，避免页面层拼接
+- **风险控制**:
+  - stream-only 分支在设置最终音源前强制 `resetTranscript`，避免旧字幕残留
+  - 继续复用 epoch latest-request-wins 机制，降低快速切换下的竞态死锁风险
+
+## D104 — 三点菜单选项图标对齐规范 [已实施]
+- **决策**：
+  - 所有三点（overflow）菜单选项必须带图标。
+  - 图标统一放在选项最右侧（文字在左、图标在右）。
+- **理由**：
+  - 统一 Downloads、History、Favorites、Search、Files 等页面的菜单视觉扫描路径。
+  - 在多语言文案长度不一致的情况下，保持图标锚点稳定，提升可读性与一致性。
+- **实施**：
+  - 菜单项统一采用 `justify-between`，并为每个选项补齐右侧图标。
+  - 同步更新设计与交接标准文档：
+    - `apps/docs/content/docs/apps/lite/ui-patterns/shell.zh.mdx`
+    - `apps/docs/content/docs/apps/lite/handoff/standards.zh.mdx`
+  - 在 `apps/lite/src/components/**` 与 `apps/lite/src/routeComponents/**` 的三点菜单入口落实该规范。
+
+## D105 — 危险删除动作二次确认覆盖（含字幕条目）[已实施]
+- **决策**：
+  - 所有删除/移除动作都必须经过显式二次确认。
+  - 该规则覆盖 Files/Downloads 卡片内的字幕条目删除按钮，不仅限于顶层菜单删除。
+- **理由**：
+  - 字幕属于高价值用户数据，密集行内操作中误删风险较高。
+  - 统一危险动作契约可避免新增删除入口时出现规则漏网与回归。
+- **实施**：
+  - 为字幕行删除接入确认流程：
+    - `apps/lite/src/components/Files/TrackCardSubtitles.tsx`
+    - `apps/lite/src/components/Downloads/DownloadTrackCard.tsx`
+  - 在以下文档中固化规则：
+    - `apps/docs/content/docs/apps/lite/ui-patterns/shell.zh.mdx`
+    - `apps/docs/content/docs/apps/lite/handoff/standards.zh.mdx`
+
+## D111 — Page Shell 与 Header 契约 [已实施]
+- **决策**：标准化所有库路由（Explore, Search, Favorites, History, Files, Downloads, Settings），使用统一的 `<PageShell>` 布局和 `<PageHeader>` 组件契约。
+- **理由**：确保结构一致性、可预测的垂直节奏（避开迷你播放器冲突）以及统一的页头行为（移动端堆叠、文本溢出策略）。
+- **实施**：
+  - `<PageShell>`：强制执行 `max-w-content`、`px-page` 和 `pb-32` 底部间距。依靠 `AppShell` 进行全局垂直滚动，以避免嵌套滚动条问题并简化子组件的粘性定位。
+  - `<PageHeader>`：提供标准化的插槽（`title`, `subtitle`, `actions`, `meta`, `beforeTitle`），并内置 `line-clamp-2` 和 `min-w-0` 溢出保护。
+  - 停用路由特定的本地页头（如 `FilesPageHeader`）。
+
+## D112 — 音频身份与仓库拓扑文档 SSOT 收敛 [已实施]
+- **决策**：
+  - 在中英文文档统一 `localTrackId` 契约：它是通用回放音轨绑定 ID，可同时表示用户上传轨道与已下载播客轨道。
+  - `stream_without_transcript` 仍是唯一显式清空绑定的路径（`setPlaybackTrackId(null)`）。
+  - 仓库结构文档仅允许引用当前真实存在的路径（`packages/core`、`packages/ui`、`packages/config`；`apps/cloud`/`apps/native` 标记为脚手架目录）。
+- **理由**：
+  - 消除中英文交接文档中 ASR 身份锚定与持久化行为的冲突描述。
+  - 避免 README 与 monorepo 文档路径失真导致的新成员接入或自动化执行错误。
+- **实施**：
+  - 更新音频引擎双语契约：
+    - `apps/docs/content/docs/apps/lite/handoff/features/audio-engine.mdx`
+    - `apps/docs/content/docs/apps/lite/handoff/features/audio-engine.zh.mdx`
+  - 更新仓库结构相关文档：
+    - `README.md`
+    - `apps/docs/README.md`
+    - `apps/docs/content/docs/general/monorepo-strategy.mdx`
+    - `apps/docs/content/docs/general/monorepo-strategy.zh.mdx`
+
+## D113 — Docs 本地化 Metadata 必须保持结构一致；搜索分词限制需显式记录 [已实施]
+- **决策**：
+  - 文档 markdown 导出、OG 图片 URL、source link 必须保留当前 locale 结构，禁止回退为丢失 locale 的路径。
+  - 在当前技术栈版本下，docs 搜索继续使用显式 `localeMap`，并将 `en` 与 `zh` 都映射到 Orama `english` stemming。
+  - 该搜索行为必须被记录为“当前 tokenizer 能力受限”，不得表述成“已原生支持中文搜索分词”。
+- **理由**：
+  - 生成链路中的 locale 丢失会直接导致 404 和错误分享链接。
+  - 当前仓库内的 Fumadocs/Orama 版本没有可验证的原生中文 tokenizer，假装问题已彻底解决会造成错误文档承诺。
+  - 显式 locale 映射比依赖默认值更安全，可避免未来升级时搜索行为静默漂移。
+- **风险说明**：
+  - 在引入真正受支持的中文 tokenizer 之前，中文搜索质量仍受英文 stemming 策略限制。
+  - docs app 的生产构建验证仍是独立阻塞项，此决策不意味着 `apps/docs build` 已通过。
+- **实施**：
+  - locale-aware metadata 与链接：
+    - `apps/docs/app/[lang]/docs/[[...slug]]/page.tsx`
+    - `apps/docs/lib/source.ts`
+    - `apps/docs/next.config.mjs`
+    - `apps/docs/app/[lang]/layout.tsx`
+    - `apps/docs/app/[lang]/og/docs/[...slug]/route.tsx`
+  - 搜索 locale 映射：
+    - `apps/docs/app/api/search/route.ts`
+
+## D114 — 默认仓库验证路径必须覆盖共享包构建与 Lite 架构守卫 [已实施]
+- **决策**：
+  - 根级 `pnpm lint` 除 workspace lint 外，必须串联高价值的 Lite guard scripts。
+  - 根级 `pnpm typecheck` 必须显式包含 `@readio/core` 的 build 义务，不能再依赖间接覆盖。
+  - `@readio/core` 需要声明自己的 `typecheck` 与 `build` 脚本，作为一等验证入口。
+- **理由**：
+  - 如果根级绿灯不覆盖仓库真正依赖的架构防腐检查，贡献者日常流程就会出现“看起来全绿、实际上漏检”的结构性漏洞。
+  - 共享包的正确性不应依赖消费端应用的偶然编译副作用。
+- **风险说明**：
+  - 根级验证现在更严格，可能暴露开发环境中原本潜伏的问题；这是刻意的质量门提升。
+  - docs 生产构建仍未纳入“全绿”结论，直到单独的 build hang 被解决。
+- **实施**：
+  - 根级验证脚本：
+    - `package.json`
+  - 共享包验证义务：
+    - `packages/core/package.json`
+
+## D115 — 英语专用词典运行时契约与语言归一化可用性 [已实施]
+- **决策**：
+  - 运行时词典配置当前仅支持英语，必须使用显式契约 `EN_DICTIONARY_API_URL` / `READIO_EN_DICTIONARY_API_URL`，不能继续使用面向所有语言的通用词典 key 命名。
+  - 查词可用性必须基于归一化后的基础语言判断，而不是直接依赖原始 locale 字符串；区域形式如 `en-US` 需先归一化为 `en`。
+  - 若归一化后的语言当前未配置，查词必须进入专用的 `lookupDictionaryNotConfigured` 状态。
+  - 该“未配置语言”状态必须与 `lookupNotFound`、`errorNetwork` 严格区分。
+  - 未来按语言 / 区域扩展词典能力仍只是架构方向，当前文档与产品行为不得暗示这项能力已经实现。
+- **理由**：
+  - 当前活动词典后端只服务英语，继续使用通用命名或通用 UX 表述都不符合事实。
+  - 在可用性判断前先做语言归一化，可以避免把已支持的英语区域变体误判为不支持。
+  - 未配置语言查词反映的是能力/配置边界，而不是一次英语词典请求失败，因此必须有独立的用户可见状态，且不能继承成功语义。
+- **风险说明**：
+  - 未配置语言查词不得走入英语 fetch/cache 路径。
+  - 关闭未配置语言的查词浮层时，不得像成功返回定义那样触发延迟的同词页面高亮。
+  - 未来增加语言时，应显式扩展 availability mapping，而不是弱化当前“仅英语”契约表述。
+- **实施**：
+  - 运行时配置重命名：
+    - `apps/lite/src/lib/runtimeConfig.defaults.ts`
+    - `apps/lite/src/lib/runtimeConfig.schema.ts`
+    - `apps/lite/src/lib/runtimeConfig.ts`
+    - `apps/lite/public/env.js`
+  - 词典调用方对齐：
+    - `apps/lite/src/lib/selection/api.ts`
+    - `apps/lite/src/lib/__tests__/runtimeConfig.schema-parity.test.ts`
+  - 语言感知查词语义：
+    - `apps/lite/src/components/Transcript/TranscriptView.tsx`
+    - `apps/lite/src/hooks/useSelection.ts`
+    - `apps/lite/src/hooks/selection/useSelectionActions.ts`
+    - `apps/lite/src/hooks/__tests__/useSelection.test.ts`
+    - `apps/lite/src/hooks/selection/__tests__/useSelectionActions.test.ts`
+  - 查词状态文案对齐：
+    - `apps/lite/src/lib/locales/en.ts`
+    - `apps/lite/src/lib/locales/zh.ts`
+    - `apps/lite/src/lib/locales/de.ts`
+    - `apps/lite/src/lib/locales/es.ts`
+    - `apps/lite/src/lib/locales/ja.ts`
+    - `apps/lite/src/lib/locales/ko.ts`
+
+## D116 — Cloud 脚手架使用 Go `net/http`、SQLite 启动，并复用 Lite Dist [已实施]
+- **决策**：
+  - 当前 Cloud 脚手架阶段在 `apps/cloud` 中使用纯 Go 的 `net/http` 后端。
+  - 在这一阶段，`apps/cloud` 直接提供构建后的 `apps/lite/dist` 前端产物。
+  - SQLite 是 Cloud 当前的数据库启动目标，用于自托管和本地可移植性。
+  - 早先的 Spring Boot / Hono 方向不属于当前脚手架契约，不能再作为本阶段已实现的 Cloud 后端来描述。
+- **理由**：
+  - 这个脚手架故意保持最小化，必须继续保持可移植、可审查、易于自托管。
+  - 复用 `apps/lite/dist` 可以避免重复前端工作，同时让 Cloud 后端只提供当前契约。
+  - 纯 Go 服务加 SQLite 可以保持启动路径无 CGO，并降低部署摩擦。
+- **风险说明**：
+  - 文档不能暗示当前已经存在单独的 Cloud Web 前端。
+  - 文档不能声称脚手架阶段尚未具备的同步、认证或 schema 层。
+  - Cloud 的长期演进可以改变技术栈，但当前阶段契约必须保持明确且收敛。

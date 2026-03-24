@@ -1,0 +1,292 @@
+---
+title: Audio Engine & Sync
+---
+
+## 1. Scope and Responsibilities
+
+The audio engine manages the lifecycle of all audio streams, state synchronization, and offline metadata persistence within the application.
+
+- **Core Component**: `src/components/AppShell/GlobalAudioController.tsx`.
+- **State Management**: `src/store/playerStore.ts`.
+- **Persistence Contract**: Playback progress and sessions are stored in the IndexedDB table `playback_sessions`. Duration values are standardized as `durationSeconds` (integer).
+
+## 2. Playback Lifecycle
+
+The system utilizes different drivers based on the audio source:
+
+### Remote Podcast Playback
+- **Session Injection**: Every remote playback start generates or reuses a `playback_sessions` record.
+- **Metadata Fallback**: If an episode lacks a `feedUrl`, the system triggers a lookup to complete metadata. Failure to complete metadata prevents session persistence.
+
+### Local File Playback
+- **Blob Retrieval**: Binary data is extracted from the `audioBlobs` table to generate an `ObjectUrl`.
+- **Memory Management**: The engine must explicitly call `URL.revokeObjectURL` upon track switching or unmounting to prevent memory leaks.
+
+## 3. Synchronization Contracts
+
+- **Tab Sync**: Uses `BroadcastChannel` (Channel: `readio_tab_sync`) to synchronize play/pause states and progress across multiple browser tabs.
+- **MediaSession API**: Integrates with system-level controls (notification bar, lock screen) supporting skip, play/pause, and seek (±15s).
+- **Heartbeat Persistence**: Progress is persisted to the database every 5 seconds during playback to ensure recovery after unexpected shutdowns.
+- **Dictionary Lookup Pause Contract (Instruction 134a)**:
+  - Lookup-triggered pause is gated by `pauseOnDictionaryLookup` from the latest `getSettingsSnapshot()` read at action time.
+  - Each user-triggered lookup pauses playback at most once.
+  - Non-lookup selection actions (`copy`, `search web`, plain menu open/close) never call `pause()`.
+- **Playback Controls Primitive Contract (Instruction 106)**:
+  - Shared primitives live under `src/components/Player/controls/`:
+    - `PlaybackSpeedButton`
+    - `TransportPlayPauseButton`
+    - `TransportSkipButton`
+  - `MiniPlayer` and full surface footer both consume these primitives while keeping behavior callbacks in shell components.
+  - Playback-rate cycle is unified to `[0.8, 1.0, 1.25, 1.5, 2.0]` via shared controller logic.
+  - Skip semantics remain unchanged:
+    - Full surface: strict ±10s seek.
+    - MiniPlayer: subtitle-jump smart skip with ±10s fallback.
+
+## 4. Data Integrity and Retention
+
+The system implements the following automated policies to maintain database health:
+
+### Retention Policy
+- **Limit**: Keeps only the most recent 1,000 records in `playback_sessions`.
+- **Trigger**: Runs during app initialization and manual maintenance scans.
+
+### Integrity Checks
+- **Blob Verification**: Validates that tracks and podcast downloads have valid binary references; missing blobs result in a "Corrupted" tag and automatic flagging for repair.
+- **Self-Healing**: The sanitizer automatically sweeps `podcast_downloads` and `local_tracks` to ensure physical storage matches DB metadata.
+- **Orphan Repair**: Moves tracks pointing to deleted folders back to the root directory.
+- **Garbage Collection**: Automatically purges subtitle records without valid track references.
+
+## 5. Error Handling
+
+- **Network Errors**: Implements automatic retries for 429/5xx status codes.
+- **Parsing Failures**: Clear error classification states are triggered when RSS or metadata parsing fails.
+- **Silent Failures**: Playback continues even if non-essential assets like cover art fail to load.
+
+## 6. Transcript Tokenization Core (Instruction 111)
+
+- **Core Module**: `src/lib/text/tokenizeWithLocale.ts`.
+- **Authority Contract**:
+  - `tokenizeWithLocale(text, language)` uses `Intl.Segmenter` (`granularity: 'word'`) when available.
+  - `tokenizeFallback(text)` remains deterministic and preserves delimiter tokens.
+- **Compatibility Boundary**:
+  - Public tokenizer API remains stable at `src/lib/text` (directory entry).
+  - This phase changes tokenizer internals only; transcript interaction wiring remains unchanged.
+
+## 7. GlobalAudioController Internal Hookization (Instruction 113)
+
+- **Coordinator Shell**: `GlobalAudioController` now coordinates focused internal hooks and keeps autoplay/media-session orchestration in-place.
+- **Extracted Sync Hook**: `src/hooks/useAudioElementSync.ts`
+  - Syncs `<audio>` element `src`, `volume`, and `playbackRate`.
+- **Extracted Events Hook**: `src/hooks/useAudioElementEvents.ts`
+  - Owns `timeupdate`, `durationchange`, `play/pause`, `ended`, `waiting`, `playing`, `canplay`, `error`, and one-shot `loadedmetadata` bindings.
+- **Behavior Contract**:
+  - Event-to-store transitions remain unchanged (`loading/playing/paused/error` semantics preserved).
+  - Media session path and autoplay retry path remain in `GlobalAudioController` for phase separation.
+
+## 8. Media Session + Autoplay Retry Isolation (Instruction 113b)
+
+- **Autoplay Retry Hook**: `src/hooks/useAutoplayRetry.ts`
+  - Owns `play()` retry flow and timeout lifecycle.
+  - Preserves existing semantics:
+    - `NotSupportedError`: one retry after `audio.load()` and 500ms delay.
+    - `NotAllowedError`: pause store state and show `player.autoplayBlocked` toast.
+- **Audio Error Utility**: `src/lib/audioErrors.ts`
+  - Centralizes media-error to i18n-message mapping (`player.errorAborted/network/decode/src/generic`).
+- **Controller Role**:
+  - `GlobalAudioController` remains the coordinator shell and composes:
+    - `useAudioElementSync`
+    - `useAudioElementEvents`
+    - `useAutoplayRetry`
+
+## 9. Foreground Lightweight Audio Prefetch (Instruction 115a)
+
+- **Scope**: Foreground-only remote audio prefetch during active playback (`http(s)` sources only).
+- **Coordinator Path**:
+  - `GlobalAudioController` composes `useForegroundAudioPrefetch`.
+  - `useForegroundAudioPrefetch` delegates scheduling to `src/lib/audioPrefetch.ts`.
+- **Trigger + Hysteresis**:
+  - Arm trigger: prefetch considered only when buffered-ahead drops below `20s`.
+  - Re-arm gate: after one attempt, scheduler re-arms only when buffered-ahead recovers to at least `25s`.
+  - Design intent: `20s/25s` is an intentional anti-flap window to avoid request oscillation near threshold, not a defect.
+- **Sizing + Clamp**:
+  - Bytes target is derived from rolling bitrate estimate and window seconds.
+  - Baseline window: `30s`; `3g` window: `15s`.
+  - Clamped bounds: `256KB` to `2MB`.
+  - Fallback bitrate: `64KB/s` when sample window is missing/invalid.
+- **Concurrency + Rate Control**:
+  - Max inflight prefetch: `1`.
+  - Interval floor: `9s`.
+  - Failure backoff (same source): `9s -> 18s -> 36s` (capped).
+  - Inflight dedupe key: `sourceId:rangeStart:rangeEnd`.
+- **Network-Aware Degradation**:
+  - Disable prefetch on `navigator.connection.saveData === true` or `effectiveType === '2g'`.
+  - Use reduced window on `3g`; `4g`/`wifi`/unknown keep baseline window.
+  - If `navigator.connection` is unavailable, scheduler falls back to unknown-network baseline (no runtime error).
+- **Range Contract**:
+  - Request header is forward-only `Range: bytes=start-end`, where `start` is computed ahead of buffered tail.
+  - `206` + valid `Content-Range` is the only success path.
+  - `200`/no-range support is treated as non-prefetch-eligible and ignored silently (no full-file fallback).
+- **Lifecycle Safety**:
+  - On source switch/unmount, inflight prefetch is aborted and scheduler gates reset.
+  - Stale responses from old sources are discarded and do not mutate active-source scheduler state.
+
+## 10. Online ASR Integration (Instruction 123 / 126 / 133)
+
+- **Provider Scope**: ASR providers are registry-driven (`groq`, `qwen`, `deepgram`) and model availability is provider-scoped.
+- **Provider Architecture**:
+  - Runtime dispatch goes through `lib/asr/registry.ts` with provider-specific transports:
+    - OpenAI-compatible: `lib/asr/providers/openaiCompatible.ts` (e.g. Groq)
+    - Qwen chat-completions: `lib/asr/providers/qwenCompatible.ts`
+    - Deepgram native: `lib/asr/providers/deepgramCompatible.ts`
+  - New OpenAI-compatible providers should be added as registry entries by default; create a dedicated adapter file only when protocol/response differs.
+- **Model Catalog Governance (Instruction 126)**:
+  - Runtime model catalog is a local static allowlist in `lib/asr/registry.ts` (manual governance).
+  - `/models` provider API responses are used for key verification only, not as dynamic model SSOT.
+- **Runtime Provider Toggles (Instruction 133)**:
+  - Runtime env keys:
+    - `READIO_ENABLED_ASR_PROVIDERS`
+    - `READIO_DISABLED_ASR_PROVIDERS`
+  - Semantics:
+    - `enabled`: `'' | '*' | 'all'` means all providers.
+    - `disabled`: blacklist subtraction applies after whitelist.
+    - blacklist precedence is fixed and deterministic.
+    - unknown provider IDs fail config field validation (fail-closed fallback).
+    - no silent all-open fallback: invalid toggle env never broadens provider availability.
+  - Toggle resolution is centralized in `lib/asr/providerToggles.ts`.
+  - Disabled providers are hidden in Settings and blocked at runtime entry points (`transcribeAudioWithRetry`, `verifyAsrKey`) with fail-closed `client_error`.
+- **Settings Contract**:
+  - `asrProvider`
+  - `asrModel` (allowlist mode)
+  - `asrUseCustomModel: boolean`
+  - `asrCustomModelId: string` (custom mode)
+  - ASR API key is read from `credentials` table first, runtime env fallback second.
+- **Validation + Normalization Contract (Instruction 126)**:
+  - provider must be selected before model.
+  - model must belong to the selected provider allowlist unless custom mode is explicitly enabled.
+  - persisted invalid provider/model combinations are normalized fail-closed at read/write/runtime boundaries (no legacy migration/backfill path in first-release policy).
+- **Key Precedence**:
+  - IndexedDB `credentials` is authoritative once user-saved.
+  - Runtime `READIO_ASR_API_KEY` is fallback only when DB is empty.
+- **Trigger Paths**:
+  - Remote episodes: `autoIngestEpisodeTranscript` attempts podcast transcript URL first; on miss/fail, it falls back to online ASR when provider/model/key are configured.
+  - **Playback Stream Blocking (Download before Play)**: By design, if no remote transcript URL is available and ASR provider/model/key are configured, audio streaming is intercepted by the offline download guard (`enforceAsrDownloadBlocking`). The track must be 100% locally downloaded into IndexedDB before `<audio>` receives the payload, preventing concurrent network conflicts and ensuring deterministic tracking.
+  - Local files: full player no-transcript state exposes `Generate Subtitles (ASR)` button.
+- **Identity Anchoring (`localTrackId`)**:
+  - When playback source resolves to a local blob-backed track (user upload or podcast download), player state is anchored via `setPlaybackTrackId(trackId)`.
+  - In `stream_without_transcript` mode, binding is explicitly cleared via `setPlaybackTrackId(null)` to avoid stale subtitle coupling.
+  - `playerStore.localTrackId` is a generic playback track binding and may reference either local uploads or downloaded podcast track IDs.
+- **Concurrency + Execution Contract**:
+  - `transcriptStore.transcriptIngestionStatus` includes `transcribing`.
+  - `transcriptStore.abortAsrController` stores the active request controller.
+  - **Sequential Processing**: All ASR tasks are routed through a global FIFO queue (`ASRQueue`) with **concurrency = 1**. This prevents API rate limiting (429).
+  - **Priority Injection**: "Manual" triggers (user-initiated) use `enqueuePriority` to jump to the front of the queue, ensuring responsive subtitle generation for the current track.
+  - On track switch, in-flight ASR is aborted immediately via `AbortController`.
+- **Large File Support (Chunking)**:
+  - Files are automatically split into MP3-frame-aligned chunks using `mp3Chunker.ts`.
+  - Chunks are transcribed sequentially and merged; timestamps are adjusted to maintain alignment.
+  - **Progressive Rendering (JIT Preview)**: As each chunk successfully transcribes, the `transcribeAudioWithRetry` pipeline yields intermediate `ASRCue[]` results via an `onProgress` callback. The `playerStore` holds these in an ephemeral `partialAsrCues` state, allowing the UI to instantly render a growing live transcript without waiting for the entire file.
+  - **Atomic Committals**: The persistent IndexedDB storage (`subtitles` and `remote_transcripts` tables) is *only* written to when 100% of the chunks complete successfully. Upon total success, an atomic swap clears the volatile `partialAsrCues` memory and loads the permanent DB record. If any chunk hits a fatal error (like a 429 quota limit), the volatile memory is simply wiped, ensuring no half-corrupted transcripts pollute the offline database.
+- **Fingerprinting & Deduplication**:
+  - Uses SHA-256 to generate a unique fingerprint: `localTrackId | audioId | size | model | downloadedAt`.
+  - Triggers a cache lookup in `subtitles` and `remote_transcripts` before hitting the API.
+  - Reuses transcripts across different source URLs if the audio content is identical. (Instruction 125)
+- **Persistence Contract**:
+  - If `localTrackId` is present, ASR output writes a new `subtitles` row and linked `local_subtitles` row for that track (including downloaded podcasts).
+  - If `localTrackId` is absent, ASR output is stored in `remote_transcripts` keyed by normalized audio URL + `asrFingerprint`.
+  - `rawAsrData` stores serialized `ASRCue[]` (word-level payload) for both paths.
+  - **Audio Fetch Caching (Retry Optimization)**: Before querying the network for a Blob to transcribe, `fetchTrackAudioBlob` queries the `podcast_downloads` table by normalized URL. This eliminates redundant network data usage when ASR fails mid-flight and the user hits retry, instantly sourcing the previous auto-saved media file from IndexedDB.
+- **Cache Key Rules**:
+  - Podcast ASR key normalizes URL to `https`, lower-case host, strips trailing slash and tracking params (`utm_*`, `fbclid`, etc.).
+  - Fingerprint lookup serves as the secondary, content-based identity link.
+- **Error Tier Behavior**:
+  - `401`: toast key-invalid + auto-navigate to `/settings#asr`.
+  - `429`: single retry with bounded wait policy (max 1 retry), failing into a visual error state without toasts.
+  - `5xx`: one retry after 3s, failing into a visual error state without toasts.
+  - Network error: no toast (silent degradation), status `failed`.
+  - User abort: no toast, status reset to `idle`.
+- **ASR Quota & Config Hardening**:
+  - **Dual-Threshold Slicing**: Audio is chunked whenever it exceeds `ASR_MAX_BLOB_BYTES` (10MB) OR its expected duration exceeds 15 minutes (900s). For dense files, the slice size is dynamically reduced to target ~10 minute chunks to prevent quota loss on 5xx failures.
+  - **Progressive Chunk Ramp (Instruction 130)**:
+    - When duration metadata is valid and source is frame-safe MP3, chunk planning is duration-driven and front-loaded (`5s -> 10s -> 20s -> 60s`) before converging to steady `600s` chunks.
+    - A bounded call-budget guard is mandatory: `baselineCalls = ceil(duration/600)`, `maxExtraCalls = min(4, max(2, ceil(baselineCalls * 0.5)))`, and `hardCallBudget = min(24, baselineCalls + maxExtraCalls)`.
+    - Short-audio bypass is mandatory: `expectedDurationSeconds <= 90` uses a single-chunk plan.
+    - If duration is missing/invalid, source is non-frame-safe, or `baselineCalls >= ABSOLUTE_MAX_CALLS` (`24`), ASR must skip ramp generation and fall back to the legacy byte-only steady split path.
+    - Fallback reason is explicit and deterministic at cap-boundary: `baseline_at_cap`.
+    - If the first progressive split result exceeds `hardCallBudget`, ASR performs one deterministic convergence retry with scaled per-chunk byte targets; only a second over-budget result falls back to legacy with reason `split_result_exceeds_budget`.
+    - MP3 boundary detection uses strict MPEG header validation plus two-frame confirmation, and boundary selection uses nearest valid offset within a bounded window with non-final minimum chunk-size guards to avoid false-sync over-fragmentation.
+  - **ASPH Rate Limit Parsing**: `extractRetryAfterMs` reads standard `Retry-After` headers, body texts containing `try again in X.Xs`, and implicitly detects Groq `"Limit (ASPH)"` hourly quota exhaustion. It enforces a 61-minute backoff fallback for ASPH limits.
+  - **Strict Backoff Policy**: 429 rate limit is only retried once if the wait is `<= 15s`. 5xx server errors are retried once only if the estimated chunk limit is `<= 600s`. Any error indicating a wait `> 60s` triggers an immediate terminal failure.
+  - **Cooldown Window**: `startOnlineASRForTrack` enforces a memory-based provider cooldown lock. While the cooldown is active, `playerStore.transcriptIngestionStatus` rapidly transitions to `failed` to prevent further network calls.
+  - **Configuration Safety (2026-02-27)**: `needsAsrDownloadBlocking` now explicitly checks `isAsrConfigured()` (verifying provider and model settings) before initiating a blocking download. This prevents users without ASR keys from being forced to download full audio files unnecessarily. Automatic ASR triggers (`auto`) now fail silently to `IDLE` state when unconfigured, while manual triggers show `FAILED` with a descriptive error.
+- **Post-Review Refinements (2026-02-19)**:
+  - `verifyKey` / `verifyAsrKey` accept optional `AbortSignal` so in-flight verification can be cancelled on unmount.
+  - `formatSrtTimestamp` fixed to handle millisecond rollovers correctly.
+  - `startOnlineASRForTrack` refactored with unified `try/catch/finally` for robust state cleanup on any exception.
+  - Removed legacy `migrateCredentialsFromLocalStorage` path; system now strictly follows "fail-closed" security for credential loading.
+  - Implemented epoch-guarded writes for both Settings and Credentials to prevent race conditions during `wipeAll` operations.
+  - `parseRawAsrCues` validates individual `words` items instead of blind-casting from DB.
+  - `navigateToSettingsAsrSection` documents its reliance on native `popstate` events (router fragility note).
+  - `asrFileTooLarge` i18n strings updated from "25MB" to "20MB" to match the actual `ASR_MAX_BLOB_BYTES` enforcement limit.
+## 11. Fundamental Offline Downloads (Instruction 124)
+
+- **Storage Target**: Remote podcast episodes are persisted in `audioBlobs` with metadata in the dedicated `podcast_downloads` table. This ensures isolation from user-uploaded files in `local_tracks`.
+- **Memory Safety**:
+  - Downloads use a streaming pipeline (via `fetchWithFallback` + `TransformStream`) to pipe response chunks directly to IndexedDB.
+  - No full-file buffering; avoids OOM errors on resources-constrained mobile browsers.
+- **Network Resilience**:
+  - All download requests (both `HEAD` sizing and `GET` payload) use the `fetchWithFallback` layer.
+  - Inherits app-wide proxy fallback and automatic retry policies for cross-origin or unstable podcast feeds.
+  - **Custom Proxy Contract**: Transport to custom proxies is always `POST` to ensure compatibility with methods like `HEAD` that cannot carry a body in native `fetch`, with the intended upstream method passed in the JSON payload.
+- **Storage Capacity Policy**:
+  - **Limit**: Strictly enforced based on `MAX_AUDIO_CACHE_GB` (default 10GB).
+  - **Pre-flight**: Performs an HTTP `HEAD` request to check `Content-Length`. If `usage + incoming > cap`, the download is blocked early.
+  - **Physical Quota**: Blocks download if `navigator.storage.estimate()` indicates zero or negative remaining space. For unknown-size downloads, a conservative **5MB critical low threshold** is applied to prevent system instability.
+  - **Tolerant Overflow**: If `Content-Length` is missing, the download is allowed once. Subsequent starts are blocked if the usage remains over cap.
+  - **Manual Cleanup**: No auto-eviction; users must manually delete tracks to free space once the limit is reached.
+- **Identity & Playback Resolution**:
+  - **Bridge Variable**: `episodeMetadata.originalAudioUrl` acts as the stable identity link between a network-only episode and its local download.
+  - **Sanitization**: Deleting a downloaded track (`podcast_downloads`) triggers an automatic cleanup of `playback_sessions.localTrackId` to prevent stale reference errors during history playback.
+- **State Feedback & Progress UI**:
+  - `useEpisodeStatus` hook surfaces four states: `idle`, `downloading`, `downloaded`, and `failed`.
+  - It subscribes to a dedicated Zustand store (`useDownloadProgressStore`) to expose real-time `progress` (0-100) and `speedBytesPerSecond` for active downloads.
+  - The UI (e.g., `EpisodeDetailDownloadButton`, `PlayerDownloadAction`) renders a circular SVG progress indicator based on `status.progress`, replacing indeterminate spinners for better user feedback on large files.
+  - Offline mode enforces strict playability: remote-only items are disabled, while local items remain playable.
+- **Global Search Integration**: Downloads are indexed as a distinct `download` result type in the local search hook, separating them from playback history for clearer navigation.
+
+## 12. Performance & Lifecycle Optimizations
+
+- **Promise Coalescing (Concurrency Control)**:
+  - Idempotent, one-shot loading operations (e.g., `loadSubscriptions`, `loadFavorites`, `loadSessions`, `loadFolders`) use a shared inflight promise to prevent redundant parallel network/DB requests during initial mount or rapid navigation.
+- **Rerender Mitigation (List Views)**:
+  - Hooks exposing actions (e.g., `useEpisodePlayback`) read state dynamically via `useStore.getState()` instead of subscribing to global variables like `country` and memoize returned functions (`useCallback` / `useMemo`).
+  - This design breaks the reactivity chain and prevents expensive O(N) rerenders in highly optimized list views (like Subscriptions/Favorites) when unrelated global state changes.
+- **`loadedmetadata` Lifecycle Bug Fix**:
+  - `useAudioElementEvents` binds native `<audio>` events. Removing the inline `{ once: true }` option from the `loadedmetadata` event listener prevents React from continuously tearing down and recreating the native listener on every playback status update. This also correctly restores playback progress across multiple remote tracks in a single session.
+- **Live Download Status Sync**:
+  - `subscribeToDownloads` is used in list components (`DownloadsPage`) and detail components to reactively re-fetch data/status specifically when background downloads successfully finish or are removed, preventing stale visual state without manual refreshes.
+- **Deduplication of IDB Queries**:
+  - List item components now share a single `useEpisodeStatus` result with descendant atomic UI elements (like `DownloadEpisodeButton`), halving the number of queries to the IndexedDB table for rendering lists offline.
+
+## 13. Audio Fetching Stability (Post-Review Refinements)
+
+- **Tracking URL Unwrapping**:
+  - **Context**: Standard podcast hosting services often wrap audio files in nested tracking redirects (e.g., Podtrac, Chartable). These domains are frequently blocked by browser extensions or restricted networks (causing `ERR_CONNECTION_CLOSED`).
+  - **Solution**: Implemented `unwrapPodcastTrackingUrl()` in `urlUtils.ts`. It recursively strips known tracking prefixes to expose the direct CDN source.
+  - **Integration**: This normalization is applied globally before audio playback, background downloads, and ASR audio fetching.
+
+## 14. Stream-Only Playback Mode Contract (Instruction 129)
+
+- **Mode Contract**: `src/lib/player/remotePlayback.ts` now exposes a typed request-scoped playback mode:
+  - `default`
+  - `stream_without_transcript`
+- **Single Decision Point**: `playRemotePayload` and `playHistorySessionWithDeps` are the only authoritative branches that decide:
+  - whether ASR-blocking download is allowed
+  - whether `autoIngestEpisodeTranscript` executes
+- **Stream-Only Semantics**:
+  - first resolves local downloaded source via `resolvePlaybackSource`; only when no local blob exists does it resolve an HTTP(S) remote stream target from `resolveRemoteStreamTargetUrl` (shared precedence: `sourceUrlNormalized` -> `audioUrl`)
+  - skips ASR-blocking download
+  - skips `autoIngestEpisodeTranscript`
+  - clears transcript state via `useTranscriptStore.getState().resetTranscript()` before final source assignment
+  - clears playback track binding (`setPlaybackTrackId(null)`) for that request to avoid stale local subtitle coupling
+  - keeps normal progress/session restore behavior while suppressing subtitle attachment
+- **Default Path Stability**: existing default play behavior remains unchanged for all legacy play buttons.

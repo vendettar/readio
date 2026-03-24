@@ -1,0 +1,31 @@
+---
+title: Theming & Visual System
+---
+
+## 1. Dynamic Theming Architecture
+
+Readio Lite utilizes a dynamic theming system based on CSS variables, driven by the `themeStore.ts`.
+
+- **Core Variable**: The primary color is defined by the `--primary` variable, injected via inline styles at the root layout.
+- **Color Space**: Leverages Tailwind CSS v4 to ensure consistent luminance across different color palettes.
+
+## 2. Visual Contracts
+
+### Asset Specifications
+- **Artwork**:
+  - **Border Radius**: Consistently uses `rounded-xl` (12px).
+  - **Shadows**: Employs `shadow-2xl` or custom elevation shadows to create depth.
+- **Placeholders**: If artwork is missing, a `GutterPlayButton` or a colored icon placeholder must be rendered to prevent layout collapse.
+
+### Dark Mode Adaptation
+- **Strategy**: Implemented via the `.dark` CSS selector.
+- **Variable Overrides**: Base colors like `--background` and `--foreground` have dark-mode definitions in `globals.css`.
+- **System Preference**: The app respects OS-level preferences by default while allowing manual overrides in Settings.
+
+## 3. Performance Guidelines
+
+- **Single Injection**: Theme variables are injected at the root level to prevent redundant recalculations in children.
+- **Atomic Subscriptions**: Components subscribe to `useThemeStore(s => s.accent)` to ensure theme switches only trigger necessary re-renders.
+
+## 4. Extension Guide
+To add a new accent color, it must be registered within `ACCENT_OPTIONS` in `themeStore.ts` and verified against WCAG AA contrast standards.

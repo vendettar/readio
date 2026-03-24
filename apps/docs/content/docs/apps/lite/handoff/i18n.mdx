@@ -1,0 +1,40 @@
+---
+title: Internationalization (i18n)
+---
+
+## 1. Architectural Design
+
+The application utilizes a **Typed Lazy Loading** architecture to balance strict type safety with initial load performance.
+
+- **Storage Location**: `src/lib/locales/`.
+- **Modularity**: Each supported language has its own independent TypeScript module (e.g., `en.ts`, `zh.ts`).
+- **Loading Strategy**:
+  - **Base Language**: English (`en`) serves as the base schema and is eagerly loaded.
+  - **On-Demand**: Non-default languages are loaded asynchronously via dynamic `import()` when selected by the user.
+
+## 2. Safe Switching Contract
+
+To prevent race conditions and "Key leaking" during asynchronous loads, the following contracts are enforced:
+
+- **changeLanguageSafely**: The exclusive API for triggering language changes.
+- **Concurrency Deduplication**: Multiple simultaneous requests for the same language are merged into a single in-flight promise.
+- **Request Versioning**: Uses monotonically increasing version IDs to ensure only the latest user selection is applied upon resolution.
+- **Graceful Fallback**: If a locale chunk fails to load, the system automatically reverts to English and logs the error.
+
+## 3. Type Safety & Development
+
+- **Source of Truth**: The structure of `en.ts` defines the global `TranslationSchema`.
+- **IDE Support**: Full autocomplete for `t()` keys and `TranslationKey` types via i18next module augmentation.
+- **Audit Script**: The `audit-i18n.ts` tool ensures key parity across all modular locale files.
+
+## 4. Contextual Synchronization
+
+- **DOM Sync**: The `<html lang="...">` attribute is updated automatically to support language-specific CSS font stacks.
+- **Formatting**: Date, time, and number formatters reactively respond to changes in `i18n.language`.
+
+## 5. Transcript Locale Tokenization Contract (Instruction 111)
+
+- Locale is now a first-class input to transcript tokenization via `tokenizeWithLocale(text, language)`.
+- Locale normalization supports region forms (for example `en-US`) before segmenter cache lookup.
+- `Intl.Segmenter` is runtime feature-detected; unsupported runtimes fall back to deterministic regex tokenization.
+- Delimiter token preservation is required to keep transcript rendering parity for punctuation and whitespace.

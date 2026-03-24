@@ -1,0 +1,151 @@
+---
+title: Groq ASR
+description: Groq ASR API 接入开发文档及 OpenAI 兼容性说明
+---
+
+# Groq ASR API 开发指南
+
+## 概述
+Groq 提供兼容 OpenAI Whisper 标准协议的超高速音频转写 API。与需要封装为 Base64 或公网 URL 的闭源非标准端点不同，它是一套完全基于原生的**文件表单上传 (`multipart/form-data`)** 方案。
+在 Readio 中，这套协议由驱动底层的 `src/lib/asr/providers/openaiCompatible.ts` 统一承载和调用。
+
+## API 端点参数
+- **鉴权端点 (用于校验 API Key)**: `GET https://api.groq.com/openai/v1/models`
+- **转写端点 (用于打轴识别)**: `POST https://api.groq.com/openai/v1/audio/transcriptions`
+
+## 请求规范 (转写)
+
+### Header
+- `Authorization`: `Bearer $GROQ_API_KEY`
+- `Content-Type`: `multipart/form-data` (交由 `fetch` 及 `FormData` 自动生成 Boundary)
+
+### Body (`FormData`)
+
+| 字段 | 类型 | 说明 |
+| :--- | :--- | :--- |
+| `file` | `Blob` (File) | 输入的**音频数据二进体切片**。Groq 支持的提取文件后缀包含 `mp3, wav, flac, ogg, webm, mp4, m4a` 等，但传输形态必须是 Raw Blob。 |
+| `model` | `string` | 欲加载的模型标识，例如 `whisper-large-v3` 或 `whisper-large-v3-turbo`。 |
+| `response_format` | `string` | 响应格式。Readio **强制设定为 `verbose_json`** 以便精确获取 `cues` 时间戳（包含段落级或单词级偏移量）。 |
+| `temperature` | `number` / `string` | 常态设定为 `0` 来保证识别行为具备最高的一致性，防止幻觉生成。 |
+| `timestamp_granularities[]` | `string[]` | **仅 Groq 路径追加**，固定发送 `segment` 与 `word` 两个值，显式请求单词级时间戳（`segments[].words`）。 |
+
+> 注意：`timestamp_granularities[]` 当前仅在 `providerConfig.id === 'groq'` 时发送。其它 OpenAI-compatible provider 可能不支持该参数，强行发送可能触发 400。
+
+---
+
+## 响应解析 (verbose_json)
+
+由于设定了 `response_format="verbose_json"`，其返回结构的典型形态如下，前端需将 `segments` 中的起止边界转换为 Readio 专有的字幕时间戳 `ASRCue`：
+
+```json
+{
+    "task": "transcribe",
+    "language": "English",
+    "duration": 7.49,
+    "text": " We gave Times employees a preview of Crossplay from New York Times Games. And here's what they had to say. I can finally play without the pressure.",
+    "segments": [
+        {
+            "id": 0,
+            "seek": 0,
+            "start": 0,
+            "end": 4.54,
+            "text": " We gave Times employees a preview of Crossplay from New York Times Games.",
+            "tokens": [
+                50365,
+                492,
+                2729,
+                11366,
+                6619,
+                257,
+                14281,
+                295,
+                11623,
+                2858,
+                490,
+                1873,
+                3609,
+                11366,
+                12761,
+                13,
+                50592
+            ],
+            "temperature": 0,
+            "avg_logprob": -0.343943,
+            "compression_ratio": 1.195122,
+            "no_speech_prob": 0.12789766
+        },
+        {
+            "id": 1,
+            "seek": 0,
+            "start": 4.82,
+            "end": 5.84,
+            "text": " And here's what they had to say.",
+            "tokens": [
+                50606,
+                400,
+                510,
+                311,
+                437,
+                436,
+                632,
+                281,
+                584,
+                13,
+                50657
+            ],
+            "temperature": 0,
+            "avg_logprob": -0.343943,
+            "compression_ratio": 1.195122,
+            "no_speech_prob": 0.12789766
+        },
+        {
+            "id": 2,
+            "seek": 0,
+            "start": 5.96,
+            "end": 7.5,
+            "text": " I can finally play without the pressure.",
+            "tokens": [
+                50663,
+                286,
+                393,
+                2721,
+                862,
+                1553,
+                264,
+                3321,
+                13,
+                50740
+            ],
+            "temperature": 0,
+            "avg_logprob": -0.343943,
+            "compression_ratio": 1.195122,
+            "no_speech_prob": 0.12789766
+        }
+    ],
+    "x_groq": {
+        "id": "req_01kjwb7xdze1xvxfz3trt5r2zs"
+    }
+}
+```
+
+### 接入 Readio 的开发要点
+这个真实的返回结构对代码编写有以下三个重要指导意义：
+1. **时间戳精度与补丁 (Chunk Merge)**：返回的 `segments` 包含了 `start` 和 `end`（单位秒）。如果音频因为过大而被**切片 (Chunking)**，后续组装时代码需要依赖外层提供的基准偏移量（Base Offset）逐段累加，以生成 `ASRCue[]`。
+2. **`duration` 字段的作用**：这里最外层的 `duration: 7.49` 提供了服务端视角的物理时长。如果在切片并重聚的逻辑 `mergeAsrCues` 中，可以通过这段时长作为下一个片段起始时间的修正或累加基准。
+3. **Groq 特定元数据**：如返回末尾的 `x_groq` 字段及 `id` 可以作为诊断标识记录在日志监控中。
+
+
+---
+
+## 注意事项 & 边界处理 (Rate limits & Errors)
+
+### 1. 独有的 ASPH 限流机制 
+Groq 的限流不同于其他请求次数的限制策略。如果在一个时间周期（比如每小时内）你上报的音频切片**物理总时长超标**，会触发特有的 `ASPH` (Audio Seconds Per Hour) 上限异常。
+*   表现为：拦截并发并返回 HTTP `429 Too Many Requests`。
+*   文案匹配：接口错误文案中通常带有 `limit (asph)` 的字眼。
+*   处理建议：由于这种封禁是按小时封锁计费池，应用端必须切入长阻断休眠队列（如触发抛出 60 分钟强制隔离挂起），防范系统被循环死锁拖垮。
+
+### 2. 退避时间补偿 (Retry-After)
+在并发压力大时，Groq：
+*   **A**：会下发标准的 `retry-after` HTTP 头信息。
+*   **B**：如果在文本层发现了诸如 `"Please try again in X.Xs"` 的语义响应。系统需要提供相应的 RegEx 正则匹配手段，将预估的 X 浮点数截留下来作为退避依据。

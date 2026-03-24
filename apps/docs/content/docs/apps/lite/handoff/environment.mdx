@@ -1,0 +1,102 @@
+---
+title: Environment & Deployment
+---
+
+## 1. Engine Requirements
+
+To ensure toolchain consistency, the following versions are enforced via `package.json`:
+- **Node.js**: `>=20.0.0`
+- **pnpm**: `>=10.28.0`
+
+## 2. CI/CD & Quality Assurance
+
+### CI Pipeline
+GitHub Actions executes automatically on every push or Pull Request:
+- **Linting**: Biome (Lint & Format) validation.
+- **Typechecking**: Full TypeScript integrity verification.
+- **Automated Testing**: Vitest unit tests and Playwright E2E smoke tests.
+- **Performance Budgets**: Lighthouse CI enforces Performance (≥90) and Accessibility (≥95) scores.
+
+### Deployment Options
+- **Vercel (Default)**: Configuration via `vercel.json` handles SPA rewrites and CSP headers.
+- **Docker**: Provides an `nginx:alpine` based image for self-hosted environments.
+
+## 3. PWA & Caching Standards
+
+The application operates as a high-quality PWA with the following configurations:
+- **Manifest**: Dynamically generated via `vite-plugin-pwa` with `vite.config.ts` as the single source of truth.
+- **Update Strategy**: Uses `prompt` mode; users are notified via Toast to refresh when new versions are detected.
+- **Range Requests**: Supports HTTP Range (206) for media, enabling seeking in offline mode.
+- **Cache Partitioning**:
+  - `readio-audio-v2`: remote audio (`.mp3/.m4a/.aac/.ogg/.wav`) with `StaleWhileRevalidate`, `rangeRequests: true`, cacheable statuses `[200, 206]`, bounded to `maxEntries: 50`, `maxAge: 7 days`.
+  - `readio-api-v1`: discovery/feed requests with `NetworkFirst`, bounded to `maxEntries: 80`, `maxAge: 24 hours`.
+  - Font caches remain isolated (`google-fonts-cache`, `gstatic-fonts-cache`).
+- **Cache Strategy**: Local `blob:` URLs are explicitly excluded from PWA runtime caching.
+
+### Offline Verification Checklist (Instruction 115)
+- Open DevTools Application tab and confirm cache namespaces include `readio-audio-v2` and `readio-api-v1`.
+- Play a remote episode online, seek at least once, then go offline.
+- Reload the app in offline mode and verify cached episode playback still starts.
+- Seek forward/backward while offline and verify progress jump succeeds without full restart.
+- Add enough distinct episodes to exceed entry limits and confirm old audio entries are evicted from `readio-audio-v2`.
+
+## 4. Runtime Configuration
+
+A dynamic configuration mechanism (`public/env.js`) allows parameter adjustment without recompilation.
+
+### Core Configuration Keys
+- **CORS Proxy Failover**: A three-tier hierarchy: `Direct -> Custom Proxy -> Default Proxy`.
+- **Timeouts**: Independent controls for direct (5s) and proxy (10s) attempts.
+- **Storage Limits**: `READIO_MAX_AUDIO_CACHE_GB` (10GB) and `READIO_MAX_AUDIO_SIZE_MB` (300MB).
+- **Localization Defaults**: `READIO_DEFAULT_LANGUAGE` and `READIO_DEFAULT_PODCAST_CONTENT_COUNTRY`.
+- **English Dictionary Endpoint**: `READIO_EN_DICTIONARY_API_URL` is the browser-runtime env key for the currently configured English-only dictionary backend.
+- **Credential Fallback Keys**: `READIO_ASR_API_KEY` and `READIO_OPENAI_API_KEY` are browser runtime fallback fields only. True upstream provider secrets must never be exposed here.
+
+### Runtime Config Module Contract (Phase 1)
+- Public API remains stable: `getAppConfig()` and `isRuntimeConfigReady()` in `runtimeConfig.ts`.
+- Internal extraction:
+  - `runtimeConfig.defaults.ts` stores default constants.
+  - `runtimeConfig.schema.ts` stores Zod schema and env-key mapping.
+- Dictionary runtime contract:
+  - Internal config field: `EN_DICTIONARY_API_URL`
+  - Browser env key: `READIO_EN_DICTIONARY_API_URL`
+  - This contract currently describes an English-only backend, not a generic multi-language dictionary service.
+- Secret guard behavior (fail-closed):
+  - Browser runtime config rejects known upstream-secret formats for `READIO_ASR_API_KEY` / `READIO_OPENAI_API_KEY`.
+  - Rejected prefixes include: `sk-`, `sk-proj-`, `gsk_`, `gsk-`.
+  - Rejected values are ignored at runtime (treated as empty).
+
+### Proxy Protocol Contract
+Custom proxies must adhere to these technical specs:
+- **Method**: Must always use `POST`.
+- **Authentication**: Credentials passed via the `x-proxy-token` header.
+- **Data Format**: Must return raw content (no JSON wrapping).
+- **Internal networking split**: `fetchUtils.ts` remains the public facade while proxy URL helpers, circuit-breaker state, and timeout/abort wiring live in `lib/networking/`.
+
+## 5. Content Security Policy (CSP)
+
+CSP is enforced via server-level response headers:
+- **Directives**: `default-src 'self'`, `style-src 'self' 'unsafe-inline'` (to support dynamic themes).
+- **Permissions**: `connect-src` and `img-src` allow `https:` to support remote podcast assets and custom proxies.
+
+## 6. Deployment Security Modes
+
+The application supports two distinct security modes for handling sensitive credentials (API Keys). The mode is determined by the deployment environment:
+
+### Mode A: Public Lite (BYOK)
+- **Target**: Public internet, multi-tenant (e.g., Vercel, Netlify, GitHub Pages).
+- **Rule**: **Strict BYOK (Bring Your Own Key)**.
+- **Mechanism**: Use Instruction 122/123 flows where users manually input keys in Settings.
+- **Restriction**: NEVER inject API keys via build-time or runtime environment variables in this mode. Keys injected here are visible to all visitors.
+
+### Mode B: Self-Host Docker (Private Instance)
+- **Target**: Private network (LAN, VPN) or password-protected single-tenant instance.
+- **Rule**: Browser-runtime fallback injection is allowed only for non-secret/public-style values.
+- **Mechanism**: `READIO_ASR_API_KEY` and `READIO_OPENAI_API_KEY` can be set in `env.js` for convenience, but known upstream-secret formats are rejected fail-closed.
+- **Risk**: Any browser-visible value remains readable via DevTools. Real upstream provider secrets are never a valid browser-runtime configuration.
+
+### Conclusion (Handoff)
+- **Public Multi-Tenant**: Must use BYOK.
+- **Private Single-Tenant**: Can use browser-runtime fallback only for non-secret/public-style values.
+- **All Modes**: True upstream provider secrets must not be exposed through browser runtime config.
+- **Hybrid**: Not supported.

@@ -1,0 +1,88 @@
+---
+title: Settings
+---
+
+## 1. Scope and Ownership
+
+- Route: `/settings`.
+- Main Interface: `src/routeComponents/SettingsPage.tsx`.
+- Architecture Pattern: Orchestration Page + Modular Sections.
+- Component Location: `src/components/Settings/sections/`.
+
+## 2. Modular Design
+
+To improve performance and maintainability, the settings page adopts a "Separation of Orchestration and Rendering" pattern:
+
+- **SettingsPage (Orchestrator)**:
+  - Responsible for state distribution via atomic selectors.
+  - Handles complex async logic (e.g., safe i18n switching, data import/export).
+  - Manages global dialog states (e.g., destructive action confirmations).
+- **Sections (Sub-modules)**:
+  - Optimized with `React.memo` to redraw only when their own Props change.
+  - Receives scalar data and callbacks wrapped in `useCallback` via explicit Props.
+
+### Core Sections List:
+- **Appearance**: Accent color switching.
+- **General**: Interface language (safe i18n switch) and content region settings.
+- **Maintenance**: Manual trigger for data integrity checks and repairs.
+- **Storage**: Database quota management, cache clearing, and session erasure.
+- **Vault/Migration**: Handling Vault data backup and restoration.
+- **API Keys & Diagnostics**: Key configuration and log downloading.
+
+## 3. Safe i18n Switching Contract
+
+The settings page is the exclusive entry point for language switching and must adhere to the following contract to prevent race conditions and flickering during async loading:
+
+- **changeLanguageSafely**: All switches must invoke this API.
+- **Request Versioning**: Utilizes `requestVersion` to ensure only the latest selection is applied.
+- **Lazy Loading**: Locales other than English are loaded on-demand via dynamic `import()` and injected into the i18next instance.
+
+## 4. Integrity Maintenance
+
+The settings page provides explicit data maintenance capabilities, with core responsibilities including:
+
+- **Scan & Repair**: Scans the local database via `runIntegrityCheck`.
+- **Maintenance Scope**:
+  - Repair tracks missing audio Blobs (mark as Corrupted).
+  - Handle orphaned tracks whose parent folders no longer exist (move to root).
+  - Clean up stale subtitle records pointing to non-existent tracks.
+- **Deterministic Reporting**: Returns an `IntegrityCheckReport` recording the check time and repair counts.
+
+## 5. Storage Management and Destructive Actions
+
+- **Confirmation Flow**: All destructive operations (e.g., Wipe All Data) must pass through `useConfirmDialog` for secondary confirmation.
+- **Quota Display**: Real-time reflection of IndexedDB usage and quota status.
+- **Erasure Logic**:
+  - `Wipe All`: Clears all database tables and caches.
+  - `Clear Cache`: Clears only the binary track cache while preserving metadata and progress.
+- **Data & Privacy Disclosure (New UI Block)**:
+  - Settings > Storage includes a persistent disclosure card for local-mode constraints.
+  - Required messages:
+    - Data is stored on the current device only.
+    - No account-based automatic cross-device sync.
+    - Browser/site cleanup may permanently remove local data.
+    - Local storage is convenience-first, not guaranteed long-term archive.
+  - Purpose: make local-only and potential data-loss semantics explicit in-product (not just in docs).
+
+## 6. Performance Optimization and Testing
+
+- **Render Control**: Utilizes atomic selectors and `memo` throughout to ensure that changing a single config (e.g., API Key) does not trigger redrawing of other sections (e.g., Appearance).
+- **Test Coverage**:
+  - Section render stability: `src/components/Settings/__tests__/SectionMemoBehavior.test.tsx`.
+  - Business logic verification: `src/routeComponents/__tests__/SettingsPage.test.tsx`.
+  - Maintenance hook tests: `src/hooks/__tests__/useIntegrityMaintenance.test.ts`.
+
+## 7. UI Modernization (Instruction 112)
+
+- **Layout Upgrade (Page Shell & Header Contract)**:
+  - The settings route follows the standardized structural contract:
+    - Wrapped in `<PageShell>` for consistent padding and max-width.
+    - Uses `<PageHeader>` with the card-style header template.
+    - Meta slot used for status indicators (Language, Content Region, Session count).
+    - Refined two-column desktop layout with a sticky storage rail on wide screens.
+- **Section Card Visual Contract**:
+  - `SettingsSectionCard` now provides a stronger visual hierarchy (subtle gradient top border, tighter title/description rhythm, elevated card surface).
+  - No section API contract changed (`title`, `description`, `icon`, `children`, `contentClassName` preserved).
+- **Behavior Guarantee**:
+  - Settings interactions, callbacks, and destructive flows are unchanged.
+  - Modernization is presentation-only; persistence, routing, i18n switch flow, and maintenance logic remain intact.

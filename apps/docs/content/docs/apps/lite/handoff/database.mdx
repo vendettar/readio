@@ -1,0 +1,92 @@
+---
+title: Database & Persistence
+---
+
+## 1. Storage Architecture
+
+The application uses a **hybrid persistence model**:
+
+- **IndexedDB** (via Dexie.js): local metadata, runtime caches, and large binary assets (audio, subtitles).
+- **localStorage**: non-sensitive lightweight settings only (`readio-user-settings`).
+- **IndexedDB `credentials` table**: sensitive provider API keys (for example `provider_openai_key`, `provider_groq_key`).
+
+- **Database Name**: `readio-lite`.
+- **Storage Model**: Best-effort. The app does not request persistent storage permissions; data may be evicted by the browser under extreme disk pressure.
+- **Transaction Integrity**: All cross-table operations (e.g., track movement, cascaded deletion) are executed within `db.transaction('rw', ...)`.
+
+## 2. Database Schema
+
+| Store | Primary Key | Unique Indexes | Purpose |
+|-------|-------------|---------|------|
+| **sessions** | `id` (UUID) | — | Playback sessions, storing progress, metadata snapshots, and nullable `localTrackId`. |
+| **audioBlobs** | `id` (UUID) | — | Raw audio binary data. |
+| **subtitles** | `id` (UUID) | — | Raw subtitle text content. |
+| **remote_transcripts**| `id` (derived)| `&url` | Remote podcast transcript cache. |
+| **folders** | `id` (UUID) | — | Containers for user-uploaded tracks. |
+| **tracks** | `id` (UUID) | — | User-uploaded tracks (Source: Files page) linked to `audioBlobs`. |
+| **tracks**| `id` (UUID) | `[sourceFeedUrl+sourceUrlNormalized]` | Podcast episode downloads (Source: Discover/Episode page) linked to `audioBlobs`. |
+| **local_subtitles** | `id` (UUID) | — | Local library subtitles linked to `subtitles`. |
+| **subscriptions** | `id` (UUID) | `&feedUrl` | Subscribed podcast shows. |
+| **favorites** | `id` (UUID) | `&key` | Favorited episodes (Key: `feedUrl::audioUrl`). |
+| **settings** | `key` | — | Global settings (language, region, theme). |
+| **credentials** | `key` | — | Provider credentials (sensitive values stored separately from non-sensitive settings). |
+| **runtime_cache** | `key` | `namespace`, `[namespace+at]` | Discovery/recommended/dictionary cache records with TTL metadata. |
+
+## 3. Persistence Contracts
+
+### Repository Boundary (Phase 1)
+- `LibraryRepository`: subscriptions/favorites and explore country setting persistence.
+- `PlaybackRepository`: playback sessions, audio blobs, subtitle blobs.
+- `FilesRepository`: folders/tracks/local subtitles and files-related settings.
+- Scope: boundary extraction only; Dexie schema, table names, and migration policy remain unchanged.
+
+### Write Coalescing
+- Same-key concurrent store writes are coalesced to one in-flight task in `exploreStore`, `filesStore`, and `historyStore`.
+- Caller cancellation is caller-scoped: `AbortSignal` short-circuits only that caller path, while shared DB writes continue.
+- Local state updates/toasts are gated by active (non-aborted) callers to avoid post-unmount updates when all callers have canceled.
+
+### Uniqueness & Identity
+- **Entity Identity**: All business entities must use UUIDs as primary keys.
+- **Deduplication**: `feedUrl` and composite `key` fields are for index lookups only and must not be used as entity identities or UI keys.
+
+### Session Hardening
+- **Upsert Logic**: Updates merge fields and preserve existing `progress` and `lastPlayedAt` unless explicitly provided.
+- **Timestamp Integrity**: `lastPlayedAt` is only updated during active playback to prevent polluting history sorting during simple session restoration.
+
+### Data Retention
+- **Limits**: `playback_sessions` automatically retains the 1,000 most recent items or 6 months of history.
+- **Execution**: Pruning runs in batches during startup and manual maintenance scans.
+- **Root Folder Query Contract (Instruction 130)**: Queries for the root folder (`folderId === null`) must prioritize compound indexes (e.g., `[sourceType+folderId+createdAt]`) with a `null` value in the key. Fallback to full-spectrum scanning is only permitted if the engine throws a `DataError` or similar null-compound-key quirk.
+- **Runtime Cache**: Discovery and feed cache entries are persisted in IndexedDB (`runtime_cache`) with memory-first reads and bounded retention rules.
+- **Wipe All Semantics**: “Wipe All” clears IndexedDB data (including `credentials`), runtime memory caches, and localStorage settings/legacy credential key if present.
+
+### Credential Storage Contract
+- **Canonical keys**: `provider_<vendor>_key` (snake_case), validated by `CREDENTIAL_KEY_PATTERN`.
+- **Read precedence (startup/settings hydration)**:
+  1. IndexedDB `credentials` table
+  2. One-time legacy localStorage migration source (`readio-user-credentials`)
+  3. Runtime env defaults (`READIO_OPENAI_API_KEY`, `READIO_GROQ_API_KEY`)
+  4. Empty string
+- **Write boundary**: all credential CRUD goes through `lib/db/credentialsRepository.ts`.
+- **Value normalization**: credential values are trimmed on write to prevent accidental whitespace in API keys.
+- **Atomic writes**: multi-key credential writes use one transaction (`setCredentials` all-or-nothing).
+- **Wipe race guard**: wipe flow bumps credential write epoch and blocks stale pre-wipe async writes from restoring secrets. `clearAllCredentials()` bumps the in-memory epoch first, then `clearAllData()` clears all tables (including credentials again) for completeness.
+- **Epoch scope**: the write epoch is per-tab (in-memory). Cross-tab consistency relies on `reload()` after wipe; `BroadcastChannel` is deferred as YAGNI for single-user PWA.
+
+## 4. Storage Guardrails
+
+### Quota Monitoring
+- **Real-time Estimation**: Monitors IndexedDB usage via `navigator.storage.estimate()`.
+- **Interception Thresholds**: Blocks file ingestion if disk usage > 85% or projected usage > 95%.
+- **Capacity Caps**: Enforces a global 10GB limit for binary audio data (config: `MAX_AUDIO_CACHE_GB`).
+- **Policy (124)**: Manual cleanup only. Pre-flight `HEAD` check blocks known-size overflows; unknown-size allows tolerant overflow once before blocking subsequent starts.
+
+### Self-Healing (Integrity)
+- **Orphan Repair**: `runIntegrityCheck` marks tracks missing Blobs as `isCorrupted` and moves tracks from deleted folders back to the root.
+
+## 5. Migration & Export
+
+- **Schema Versioning**: Only the current active schema version is maintained; no legacy migration or backfilling logic is provided.
+- **Legacy Credential Migration**: `migrateCredentialsFromLocalStorage()` runs on app initialization. Successful write removes the legacy key; malformed payloads are dropped; failed IndexedDB writes keep the legacy key for retry.
+- **Personal Vault**: Metadata-only export in JSON format (excludes binary Blobs and excludes credential-like keys).
+- **OPML Integration**: Standard OPML support using merge semantics for imports.

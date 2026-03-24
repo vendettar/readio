@@ -1,0 +1,62 @@
+---
+title: ASR Technical Pipeline
+description: Deep dive into the Automatic Speech Recognition engineering, covering sequential processing, chunking strategies, and timeline drift prevention.
+---
+
+The Readio Automatic Speech Recognition (ASR) system handles converting both local and downloaded remote audio files into timestamped transcripts using the Groq Whisper API. To bypass API payload limits and rate restrictions while ensuring a seamless user experience, the system employs an advanced queueing and piece-wise rendering strategy.
+
+## Architecture & Lifecycle
+
+When a user initiates playback (where no cached transcript exists and the setting is enabled), the system triggers the ASR pipeline.
+
+**Core Workflow (Sequential Processing):**
+1. **Trigger:** `autoIngestEpisodeTranscript` or `autoIngestLocalTranscript` kicks off the process.
+2. **Audio Chunking:** The audio `Blob` is sliced into smaller segments (chunks) using `splitMp3Blob` to fit within Groq's 25MB file size limit.
+3. **Queueing:** All chunks are added sequentially to a global, concurrency-limited `ASRQueue` (max concurrent: 1) to prevent `HTTP 429 Too Many Requests` errors from the AI provider.
+4. **JIT (Just-In-Time) Preview:** 
+   - We **do not** wait for the entire 50-minute audio file to finish transcribing.
+   - As each chunk successfully returns from the API, its results are immediately written to the in-memory Zustand store (`playerStore.partialAsrCues`).
+   - This allows users to start seeing subtitles for the first few minutes of playback while the rest of the file is still transcribing in the background.
+5. **Atomic Persistence:** 
+   - The results are kept strictly in-memory during the transcribing process.
+   - Only when **all chunks** successfully resolve are the aggregated results atomically written to IndexedDB.
+   - **Identity Anchoring:** If a `localTrackId` (Identity Anchor) is present in the player store (set via `setPlaybackTrackId` during download/load), the result is saved to the `subtitles` table and linked to that track. This ensures it appears consistently in the "Downloads" UI. Otherwise, it is saved to `remote_transcripts` as an URL-indexed LRU cache.
+   - If the app is closed mid-way, no partial data is saved to DB, ensuring state integrity. The next playback will re-trigger the missing chunks.
+
+---
+
+## The Chunking & Drift Prevention Mechanism
+
+A major challenge with chunking audio for ASR is preventing **text-timeline drift**. If an audio file is split arbitrarily into 5 parts, the API will return timestamps relative to *that specific part*. Reassembling them requires absolute precision to match the original unbroken audio timeline.
+
+Readio solves this through **Physical Offset vs. Logical Offset decoupling**.
+
+### 1. Physical Slicing via Frame Alignment
+We do not slice MP3 files randomly by bytes (e.g., cutting exactly at the 10MB mark). A random slice might sever a compressed MP3 audio frame, causing decoder popping noises or confusing the Whisper model at the chunk boundaries.
+
+Instead, the `splitMp3Blob` utility algorithmically scans for MP3 **Sync Words** (`0xFF 0xFB` or similar) to ensure every chunk starts and ends on a **complete, valid audio frame boundary**.
+
+Because each frame represents a mathematically constant number of audio samples (usually 1152 samples for MPEG-1 Layer III), we can calculate the exact duration of each chunk without relying on variable bitrates or system timers.
+
+### 2. Time Shifting (Logical Offset)
+When the Groq API processes Chunk #2, it returns an array of `ASRCue` objects where the first word might start at `00:00.500`. 
+
+To map this back to the global timeline, `mergeAsrCues` applies a mathematically precise Time Shift:
+```text
+AbsoluteTime = RelativeTime (from API) + startTimeOffset (of Chunk)
+```
+
+**Preventing Accumulated Drift:**
+The `startTimeOffset` of any chunk is precisely the sum of the physical, frame-aligned durations of all preceding chunks.
+By basing our time shifts on *discrete sample counts* rather than estimations or JavaScript timers, we eliminate the risk of cumulative precision errors. Even on a 3-hour podcast split into 20 chunks, the final transcript perfectly aligns with the audio track.
+
+---
+
+## State Synchronization
+When building UI elements that rely on the transcript state (like the `TranscriptView` or `ReadingContent`), components should subscribe to the following `playerStore` states:
+
+- `transcriptIngestionStatus`: Use this to show spinners (`LOADING`), progress bars (`PROCESSING`), or errors (`FAILED`).
+- `partialAsrCues`: The live array of cues being built incrementally. This will seamlessly transition into the final DB-backed array when ingestion finishes. 
+
+**Note on Resuming Playback:**
+If a user switches away from a remote podcast while it is downloading (`enforceAsrDownloadBlocking`), the previous playback request is mathematically aborted via an `Epoch Guard` (`bumpPlaybackEpoch()`). This ensures the background ASR logic cannot inject subtitles into the wrong playback session.

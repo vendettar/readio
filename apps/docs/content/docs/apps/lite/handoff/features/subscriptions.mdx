@@ -1,0 +1,35 @@
+---
+title: Subscriptions
+---
+
+## 1. Scope and Ownership
+
+- Route: `/subscriptions`.
+- Main Interface: `src/routeComponents/SubscriptionsPage.tsx` (Note: Often integrated in the sidebar or Explore page).
+- Data Authority: `src/store/exploreStore.ts` (Data is persisted in the `subscriptions` table of IndexedDB).
+
+## 2. Subscription Contract
+
+The subscription system manages the user's following status for remote podcast shows:
+
+- **Uniqueness Identifier**: Uses `feedUrl` as the primary key.
+- **Metadata Synchronization**: Subscription records save the podcast's title, artwork, artist, and ID (`providerPodcastId`).
+- **Sources**:
+  - **Manual Subscription**: Clicking "Subscribe" on the podcast show page.
+  - **OPML Import**: Batch import via the settings page.
+
+## 3. Rendering and Optimization
+
+- **Orchestration**: The page is responsible for loading and filtering the subscription list.
+- **Grid/List Layout**: Depending on the View Density setting, the subscription list can appear as compact rows or comfortable grids.
+- **Memoization**: Subscription item components are typically protected by `memo` to prevent global redrawing caused by player state updates.
+
+## 4. Key Interactions
+
+- **Jump to Details**: Clicking a subscription item must navigate to the canonical show page `/$country/podcast/$id`.
+- **State Sync**: When a user unsubscribes on the show page, all components displaying that show (Explore, Subscriptions) must respond in real-time.
+
+## 5. OPML Integration
+
+- Subscription data supports export via OPML format, backed up in the user's Personal Vault.
+- OPML import follows a **Merge** strategy: only missing `feedUrl`s are added, and existing subscriptions are not deleted.
