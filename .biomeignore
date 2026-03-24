@@ -8,3 +8,4 @@ node_modules/**
 eslint.config.js
 ./eslint.config.js
 /eslint.config.js
+apps/lite/stats.html

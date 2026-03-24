@@ -1,81 +1,83 @@
-# Readio
+# Readio Monorepo
 
-**Readio** is a modern, local-first web application for audio playback and language learning. It seamlessly integrates podcast discovery with local file management, offering a unique "read-while-listening" experience through synchronized transcripts.
+**Readio** is a modern, local-first web application for audio playback and language learning. This repository is a monorepo containing multiple applications and shared packages.
 
-## ✨ Features
+## 🏗️ Monorepo Structure
 
-- **🎧 Hybrid Audio Engine**: Plays both online podcasts (via RSS/iTunes) and local audio files (MP3).
-- **📜 Transcript Sync**: First-class support for `.srt` subtitles and JSON-based transcripts, keeping text perfectly synced with audio.
-- **📂 Local-First Library**: Manage your audio collection locally using IndexedDB (via Dexie.js). No account required.
-- **🔍 Global Search**: Unified search experience for finding podcasts online and filtering local library content simultaneously.
-- **🌍 Multi-Language Support**: Fully localized interface (i18n) supporting multiple languages.
-- **🎨 Modern UI**: Beautiful, responsive interface built with Tailwind CSS and shadcn/ui components.
-
-## 🛠️ Tech Stack
-
-- **Framework**: [React](https://react.dev/) + [Vite](https://vitejs.dev/)
-- **Language**: [TypeScript](https://www.typescriptlang.org/)
-- **Routing**: [TanStack Router](https://tanstack.com/router) (File-based routing)
-- **State Management**: [Zustand](https://github.com/pmndrs/zustand)
-- **Data Fetching**: [TanStack Query](https://tanstack.com/query)
-- **Persistence**: [Dexie.js](https://dexie.org/) (IndexedDB wrapper)
-- **Styling**: [Tailwind CSS](https://tailwindcss.com/) + [shadcn/ui](https://ui.shadcn.com/)
-- **Testing**: [Vitest](https://vitest.dev/) (Unit) + [Playwright](https://playwright.dev/) (E2E)
+- **apps/**
+  - `lite`: (@readio/lite) The core React + Vite application (the original Readio project).
+  - `docs`: The documentation site built with Fumadocs (Next.js).
+  - `cloud`: Scaffold directory for the planned cloud app.
+  - `native`: Scaffold directory for the planned native app.
+- **packages/**
+  - `core`: (@readio/core) Shared business logic, Zod schemas, and types.
+  - `ui`: Placeholder directory for shared UI components.
+  - `config`: Placeholder directory for shared engineering configurations.
 
 ## 🚀 Getting Started
 
 ### Prerequisites
 
-- Node.js (v18 or higher)
-- npm or pnpm
+- [Node.js](https://nodejs.org/) (v20 or higher recommended)
+- [pnpm](https://pnpm.io/) (v10 or higher required for workspace support)
 
 ### Installation
 
 1.  **Clone the repository**
     ```bash
-    git clone https://github.com/your-username/readio.git
+    git clone <your-readio-repo-url>
     cd readio
     ```
 
 2.  **Install dependencies**
     ```bash
-    npm install
-    # or
     pnpm install
     ```
 
-3.  **Start the development server**
+### Development
+
+You can run applications individually or all at once using [Turborepo](https://turbo.build/).
+
+-   **Start Readio Lite (Primary App)**
     ```bash
-    npm run dev
+    # Run from root
+    pnpm --filter @readio/lite dev
     ```
-    The app will run at `http://localhost:5173`.
 
-## 🏗️ Project Structure
+-   **Start Documentation**
+    ```bash
+    # Run from root
+    pnpm -C apps/docs dev
+    ```
 
-```
-src/
-├── components/        # Shared UI components (shadcn, AppShell, etc.)
-├── routeComponents/   # Page components (UI implementation for routes)
-├── routes/            # Route definitions (TanStack Router config)
-├── hooks/             # Custom React hooks
-├── lib/               # Utility functions (cn, etc.)
-├── libs/              # Core business logic (DB, API, Parsers)
-├── store/             # Global state stores (Zustand)
-└── constants/         # App constants
-docs/                  # Architecture & Design documentation
-```
+-   **Start All Applications**
+    ```bash
+    pnpm dev
+    ```
 
-## 📖 Documentation
+### Build & Utility Tasks
 
-Detailed documentation is available in the `docs/` directory:
+-   **Build Everything**
+    ```bash
+    pnpm build
+    ```
 
-- [**Best Practices**](docs/best_practice.md): Coding standards and architectural guidelines.
-- [**Design System**](docs/design_system.md): UI/UX rules and styling guide.
-- [**Technology Roadmap**](docs/technology_roadmap.md): Future plans and technical decisions.
+-   **Lint & Format**
+    ```bash
+    pnpm lint     # Run all checks
+    pnpm format   # Fix formatting and import sorting
+    ```
 
-## 🤝 Contributing
+## 🛠️ Tech Stack (Lite App)
 
-Contributions are welcome! Please read `docs/front-vibe-coding-charter.md` before submitting a Pull Request to ensure alignment with our coding standards.
+- **Framework**: [React](https://react.dev/) + [Vite](https://vitejs.dev/)
+- **Routing**: [TanStack Router](https://tanstack.com/router)
+- **State**: [Zustand](https://github.com/pmndrs/zustand)
+- **Data Fetching**: [TanStack Query](https://tanstack.com/query)
+- **Persistence**: [Dexie.js](https://dexie.org/)
+- **Styling**: [Tailwind CSS](https://tailwindcss.com/) + [shadcn/ui](https://ui.shadcn.com/)
+- **Orchestration**: [Turborepo](https://turbo.build/)
+
 
 ## 📄 License
 

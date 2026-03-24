@@ -287,7 +287,7 @@ export function CommandPalette() {
               />
 
               <CommandInput
-                ref={inputRef}
+                ref={inputRef as unknown as React.Ref<never>}
                 data-testid="command-input"
                 hideIcon
                 wrapperClassName="flex-1 border-none px-0 h-full"
