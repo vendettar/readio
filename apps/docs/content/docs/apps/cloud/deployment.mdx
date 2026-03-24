@@ -74,6 +74,76 @@ Each release directory contains:
 
 The workflow creates the remote directories before transfer and never wipes the parent deployment tree, so the SQLite `data/` directory is preserved.
 
+## 3a. VPS bootstrap for a fresh host
+
+If you are preparing a new VPS, create the release directories, install the `systemd` unit, and grant the deploy user non-interactive permission to restart and inspect the Cloud service.
+
+Use the current runtime contract only:
+
+- `READIO_CLOUD_UI_DIST_DIR`
+- `READIO_CLOUD_DB_PATH`
+
+Do not keep using legacy names such as `READIO_LITE_DIST_DIR` or `READIO_DATA_DIR` in the Cloud service definition.
+
+Example bootstrap script:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+DEPLOY_USER="$(id -un)"
+DEPLOY_GROUP="$(id -gn)"
+SYSTEMCTL_BIN="$(command -v systemctl)"
+SERVICE_NAME="readio-cloud"
+REMOTE_ROOT="/opt/readio"
+RELEASES_DIR="$REMOTE_ROOT/releases"
+SHARED_DATA_DIR="$REMOTE_ROOT/shared/data"
+CURRENT_DIR="$REMOTE_ROOT/current"
+DB_PATH="$SHARED_DATA_DIR/readio.db"
+
+sudo mkdir -p "$RELEASES_DIR"
+sudo mkdir -p "$SHARED_DATA_DIR"
+sudo chown -R "$DEPLOY_USER:$DEPLOY_GROUP" "$REMOTE_ROOT"
+
+sudo tee "/etc/systemd/system/${SERVICE_NAME}.service" >/dev/null <<EOF
+[Unit]
+Description=Readio Cloud Backend
+After=network.target
+
+[Service]
+Type=simple
+User=$DEPLOY_USER
+WorkingDirectory=$CURRENT_DIR
+ExecStart=$CURRENT_DIR/readio-cloud
+Restart=always
+
+Environment=READIO_PORT=8080
+Environment=READIO_CLOUD_UI_DIST_DIR=$CURRENT_DIR/dist
+Environment=READIO_CLOUD_DB_PATH=$DB_PATH
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo tee "/etc/sudoers.d/readio-cloud-cd" >/dev/null <<EOF
+$DEPLOY_USER ALL=(root) NOPASSWD: $SYSTEMCTL_BIN restart $SERVICE_NAME, $SYSTEMCTL_BIN is-active $SERVICE_NAME
+EOF
+sudo chmod 440 /etc/sudoers.d/readio-cloud-cd
+
+sudo "$SYSTEMCTL_BIN" daemon-reload
+sudo "$SYSTEMCTL_BIN" enable "$SERVICE_NAME"
+```
+
+Important details:
+
+- The service uses `WorkingDirectory=/opt/readio/current`.
+- The binary path is `/opt/readio/current/readio-cloud`.
+- The static Cloud UI assets are served from `/opt/readio/current/dist`.
+- The SQLite file stays outside release directories, for example `/opt/readio/shared/data/readio.db`.
+- The workflow already uses `sudo -n`, so the deploy user must be able to run both `systemctl restart` and `systemctl is-active` without a password prompt.
+
+If the VPS sudoers entry only allows `systemctl restart readio-cloud` and does not also allow `systemctl is-active readio-cloud`, the non-interactive smoke step will still fail in GitHub Actions.
+
 ## 4. Publish flow
 
 The deployment is release-scoped and atomic at the pointer level:
@@ -101,6 +171,14 @@ The workflow uses the service name from `CLOUD_SERVICE_NAME` and checks:
 - `curl -fsS http://127.0.0.1:${CLOUD_PORT}/healthz`
 
 Use the same checks manually after a deployment if you need to validate the runtime state.
+
+Recommended post-bootstrap validation on the VPS:
+
+```bash
+sudo -n "$(command -v systemctl)" restart readio-cloud
+sudo -n "$(command -v systemctl)" is-active --quiet readio-cloud
+curl -fsS http://127.0.0.1:8080/healthz
+```
 
 ## 6. Rollback
 

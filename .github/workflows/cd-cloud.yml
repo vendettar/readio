@@ -91,6 +91,16 @@ jobs:
             release/ \
             "$SSH_USER@$SSH_HOST:$REMOTE_RELEASE_DIR/"
 
+      - name: Debug remote sudo
+        run: |
+          ssh -i ~/.ssh/id_ed25519 \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -p "$SSH_PORT" \
+            "$SSH_USER@$SSH_HOST" \
+            'id -un && sudo -l && sudo -n /usr/bin/systemctl restart readio-cloud && sudo -n /usr/bin/systemctl is-active --quiet readio-cloud'
+
       - name: Publish release and smoke test
         run: |
           ssh -i ~/.ssh/id_ed25519 \
@@ -99,4 +109,4 @@ jobs:
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -p "$SSH_PORT" \
             "$SSH_USER@$SSH_HOST" \
-          "set -euo pipefail; ln -sfn '$REMOTE_RELEASE_DIR' '$REMOTE_CURRENT_DIR'; sudo -n systemctl restart '$SERVICE_NAME'; sudo -n systemctl is-active --quiet '$SERVICE_NAME'; test -x '$REMOTE_CURRENT_DIR/readio-cloud'; test -d '$REMOTE_CURRENT_DIR/dist'; curl -fsS 'http://127.0.0.1:${APP_PORT}/healthz' >/dev/null"
+          "set -euo pipefail; ln -sfn '$REMOTE_RELEASE_DIR' '$REMOTE_CURRENT_DIR'; sudo -n /usr/bin/systemctl restart '$SERVICE_NAME'; sudo -n /usr/bin/systemctl is-active --quiet '$SERVICE_NAME'; test -x '$REMOTE_CURRENT_DIR/readio-cloud'; test -d '$REMOTE_CURRENT_DIR/dist'; curl -fsS 'http://127.0.0.1:${APP_PORT}/healthz' >/dev/null"

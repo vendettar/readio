@@ -74,6 +74,76 @@ SSH 安全规则：
 
 工作流会先创建远程目录再传输，且不会清空部署根目录，因此 SQLite 的 `data/` 会被保留。
 
+## 3a. 新 VPS 的 bootstrap 参考
+
+如果你是在准备一台新的 VPS，需要先创建发布目录、安装 `systemd` 单元，并给部署用户授予可非交互式重启和检查 Cloud 服务的权限。
+
+Cloud 运行时应只使用当前合同中的环境变量名：
+
+- `READIO_CLOUD_UI_DIST_DIR`
+- `READIO_CLOUD_DB_PATH`
+
+不要在 Cloud 服务定义中继续使用已经过时的 `READIO_LITE_DIST_DIR` 或 `READIO_DATA_DIR`。
+
+参考 bootstrap 脚本：
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+DEPLOY_USER="$(id -un)"
+DEPLOY_GROUP="$(id -gn)"
+SYSTEMCTL_BIN="$(command -v systemctl)"
+SERVICE_NAME="readio-cloud"
+REMOTE_ROOT="/opt/readio"
+RELEASES_DIR="$REMOTE_ROOT/releases"
+SHARED_DATA_DIR="$REMOTE_ROOT/shared/data"
+CURRENT_DIR="$REMOTE_ROOT/current"
+DB_PATH="$SHARED_DATA_DIR/readio.db"
+
+sudo mkdir -p "$RELEASES_DIR"
+sudo mkdir -p "$SHARED_DATA_DIR"
+sudo chown -R "$DEPLOY_USER:$DEPLOY_GROUP" "$REMOTE_ROOT"
+
+sudo tee "/etc/systemd/system/${SERVICE_NAME}.service" >/dev/null <<EOF
+[Unit]
+Description=Readio Cloud Backend
+After=network.target
+
+[Service]
+Type=simple
+User=$DEPLOY_USER
+WorkingDirectory=$CURRENT_DIR
+ExecStart=$CURRENT_DIR/readio-cloud
+Restart=always
+
+Environment=READIO_PORT=8080
+Environment=READIO_CLOUD_UI_DIST_DIR=$CURRENT_DIR/dist
+Environment=READIO_CLOUD_DB_PATH=$DB_PATH
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo tee "/etc/sudoers.d/readio-cloud-cd" >/dev/null <<EOF
+$DEPLOY_USER ALL=(root) NOPASSWD: $SYSTEMCTL_BIN restart $SERVICE_NAME, $SYSTEMCTL_BIN is-active $SERVICE_NAME
+EOF
+sudo chmod 440 /etc/sudoers.d/readio-cloud-cd
+
+sudo "$SYSTEMCTL_BIN" daemon-reload
+sudo "$SYSTEMCTL_BIN" enable "$SERVICE_NAME"
+```
+
+关键点：
+
+- 服务使用 `WorkingDirectory=/opt/readio/current`。
+- 二进制路径是 `/opt/readio/current/readio-cloud`。
+- Cloud UI 静态产物从 `/opt/readio/current/dist` 提供。
+- SQLite 文件应放在发布目录之外，例如 `/opt/readio/shared/data/readio.db`。
+- 工作流已经使用 `sudo -n`，因此部署用户必须能在不输入密码的情况下执行 `systemctl restart` 和 `systemctl is-active`。
+
+如果 sudoers 只放行了 `systemctl restart readio-cloud`，却没有同时放行 `systemctl is-active readio-cloud`，那么 GitHub Actions 中的非交互 smoke step 仍然会失败。
+
 ## 4. 发布流程
 
 部署采用按版本号分段的发布方式，并且仅在指针层面保持原子性：
@@ -101,6 +171,14 @@ SSH 安全规则：
 - `curl -fsS http://127.0.0.1:${CLOUD_PORT}/healthz`
 
 如果需要手动验证运行时状态，也应使用同样的检查。
+
+推荐在 VPS 上执行的 post-bootstrap 校验：
+
+```bash
+sudo -n "$(command -v systemctl)" restart readio-cloud
+sudo -n "$(command -v systemctl)" is-active --quiet readio-cloud
+curl -fsS http://127.0.0.1:8080/healthz
+```
 
 ## 6. 回滚
 
