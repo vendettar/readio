@@ -1,0 +1,25 @@
+{
+  "name": "@readio/cloud-ui",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Cloud frontend scaffold placeholder for Readio",
+  "scripts": {
+    "dev": "vite",
+    "build": "pnpm --filter @readio/ui build && vite build",
+    "test": "pnpm --filter @readio/ui build && node ./scripts/cloud-ui-test-runner.mjs",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@readio/ui": "workspace:*",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.10",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.2",
+    "typescript": "~5.9.3",
+    "vite": "^7.3.1"
+  }
+}

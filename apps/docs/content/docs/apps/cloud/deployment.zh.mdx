@@ -10,10 +10,10 @@ description: Cloud CD 工作流与远程发布布局的运维说明。
 
 ## 1. 工作流构建内容
 
-- 使用 `pnpm -C apps/lite build` 在服务器外构建 Lite。
-- 使用 `apps/cloud` 中的 `CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o readio-cloud .` 构建 Linux 二进制。
-- 只暂存发布产物：`readio-cloud` 二进制和 `apps/lite/dist`。
-- 这里明确要求交叉编译，因为 `apps/cloud/package.json` 的本地脚手架脚本是 `go build -o /tmp/readio-cloud .`，不能满足 Linux CD 契约。
+- 使用 `pnpm --filter @readio/cloud-ui build` 在服务器外构建 Cloud UI。
+- 使用 `apps/cloud-api` 中的 `CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o readio-cloud .` 构建 Linux 二进制。
+- 只暂存发布产物：`readio-cloud` 二进制和 `apps/cloud-ui/dist`。
+- 这里明确要求交叉编译，因为 `apps/cloud-api/package.json` 的本地脚手架脚本是 `go build -o /tmp/readio-cloud .`，不能满足 Linux CD 契约。
 
 ## 2. 必需的 GitHub 配置
 
@@ -64,7 +64,7 @@ SSH 安全规则：
 运行时契约：
 
 - 服务应从 `current` 指向的发布目录执行二进制，或在 `systemd` 中使用 `WorkingDirectory=/opt/readio/current`
-- Cloud 应用必须能从当前激活发布目录解析同目录下的 `dist/`
+- Cloud API 必须能从当前激活发布目录解析同目录下的 `dist/`
 - SQLite 数据库路径必须保持在 `/opt/readio/shared/data/` 下，或其他位于发布目录之外的共享持久路径中
 
 每个发布目录包含：
@@ -79,6 +79,7 @@ SSH 安全规则：
 部署采用按版本号分段的发布方式，并且仅在指针层面保持原子性：
 
 1. 在 GitHub runner 上构建 Lite 和 Cloud。
+1. 在 GitHub runner 上构建 Cloud UI 和 Cloud API。
 2. 将产物先暂存到本地 `release/`。
 3. 为当前提交 SHA 创建远程发布目录。
 4. 只把 `release/` 传到 `/opt/readio/releases/<git-sha>/`。
@@ -117,4 +118,5 @@ SSH 安全规则：
 - 该工作流假设 VPS 已经存在。
 - 它不负责安装或管理 `systemd`。
 - 它不负责配置 nginx、TLS 或防火墙。
+- 它不允许 Cloud 前端直接访问 Apple；后端负责 Apple 相关网络请求与错误映射。
 - 它不部署 SQLite schema、同步、认证或多节点能力。

@@ -5,36 +5,64 @@ title: Cloud 交接
 # Cloud 交接
 
 本文档是 Cloud 脚手架阶段的当前入口。
-它只记录已实现的后端契约，并且必须与 `apps/cloud` 的实际代码保持一致。
+它只记录已实现的后端契约，并且必须与 `apps/cloud-api` 的实际代码保持一致。
+
+## 0. 当前脚手架与目标拓扑
+
+当前现实：
+
+- `apps/cloud-api` 是当前的 Go 脚手架。
+- 它当前直接提供构建后的前端资源，并持有一个范围有限的脚手架阶段后端契约。
+
+目标拓扑：
+
+- `apps/cloud-api`：Go 后端
+- `apps/cloud-ui`：Cloud 前端
+
+架构规则：
+
+- `apps/lite` 与 `apps/cloud-ui` 是两个独立 webapp。
+- 它们可以共享展示组件与 schema 契约，但不能共享同一套 networking model。
+- Cloud 前端最终应收敛到 same-origin、backend-owned 的 discovery API，不应长期延续 Lite 的浏览器直连 / CORS proxy 心智模型。
 
 ## 1. 当前目的
 
-- 直接提供 `apps/lite/dist` 构建后的前端产物。
+- 直接提供 `apps/cloud-ui/dist` 构建后的前端产物。
 - 暴露当前脚手架阶段的 `/api/proxy` RSS 代理契约。
+- 负责 Cloud UI 的同源 discovery/search/feed 网络与后端错误映射。
 - 启动 SQLite 作为 Cloud 后端脚手架的持久化基础，并保持生命周期清晰。
 
-## 2. 静态服务策略
+## 2. 发布布局
 
-- `apps/cloud` 直接提供 Lite 的构建输出。
+- 发布产物是双工件：
+  - `apps/cloud-ui/dist`：前端资源包
+  - `apps/cloud-api`：Go API 二进制
+- 工作流会把 Cloud UI 的构建输出暂存到发布目录内的 `dist/`。
+- `apps/cloud-api` 直接提供 Cloud UI 的构建输出。
+
+## 3. 静态服务策略
+
 - 非 API 路由仅在不存在同名文件时回退到 `index.html`。
 - 已存在的文件，包括无扩展名资源，都会被直接提供。
 - `/api/*` 路由由 API 处理器独占，不能回退到 SPA shell。
 
-## 3. RSS 代理契约
+## 4. RSS 代理契约
 
 - `GET /api/proxy?url=...` 是当前代理入口。
 - 代理在拨号前会校验目标地址，并拒绝私网、回环、链路本地或 metadata 风格目标。
 - 请求路径是 fail-closed 的：它使用已验证的固定目标集，并且不会通过重定向跳入不允许的目标。
 - 代理使用自定义 user agent，限制上游请求超时，并保留基础的内存限流。
 
-## 4. SQLite 启动状态
+## 5. SQLite 启动状态
 
 - SQLite 是 Cloud 当前的持久化启动目标。
 - 启动路径会创建父目录、打开数据库、执行初始化 PRAGMA，并在关闭时清理干净。
 - 这一阶段不定义 schema、迁移、同步或认证层。
 
-## 5. 边界
+## 6. 边界
 
 - 不要把单独的 Cloud Web 前端描述为已经实现。
+- 不要把当前 `apps/cloud-api` 脚手架描述成最终的 Cloud 拓扑。
+- 不要暗示未来 Cloud UI 仍应继续使用 Lite 的浏览器直连 discovery 或用户可配置的 CORS proxy 模型。
 - 不要在这一阶段声称已经具备 schema、同步、认证或多用户 SaaS 行为。
 - 未来 Cloud 演进应放在明确标记为 future direction 的文档里。

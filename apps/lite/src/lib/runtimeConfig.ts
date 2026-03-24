@@ -52,7 +52,7 @@ let cachedFromRuntimeEnv = false
 export { DEFAULTS }
 export type { AppConfig }
 
-const UPSTREAM_SECRET_PREFIXES = ['sk-proj-', 'sk-'] as const
+const UPSTREAM_SECRET_PREFIXES = ['sk-proj-', 'sk-', 'gsk_', 'gsk-'] as const
 
 function hasUpstreamSecretPrefix(value: string): boolean {
   const normalized = value.trim().toLowerCase()

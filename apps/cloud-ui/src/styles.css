@@ -1,0 +1,253 @@
+:root {
+  color: #111827;
+  background:
+    radial-gradient(circle at top, rgba(14, 165, 233, 0.14), transparent 38%),
+    linear-gradient(180deg, #f4f7fb 0%, #eef3f8 100%);
+  font-family:
+    "IBM Plex Sans", "Avenir Next", "Segoe UI", sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  min-height: 100vh;
+}
+
+code {
+  font-family:
+    "IBM Plex Mono", "SFMono-Regular", "SF Mono", Consolas, monospace;
+  font-size: 0.92em;
+}
+
+.ui-shell,
+.cloud-shell {
+  min-height: 100vh;
+  padding: 32px 20px 48px;
+}
+
+.ui-shell__header,
+.cloud-shell__header,
+.cloud-shell__main {
+  width: min(1080px, 100%);
+  margin: 0 auto;
+}
+
+.ui-shell__header,
+.cloud-shell__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.ui-shell__header-copy {
+  display: grid;
+  gap: 8px;
+}
+
+.ui-shell__eyebrow {
+  margin: 0;
+  color: #0369a1;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.ui-shell__title {
+  margin: 0;
+  color: #0f172a;
+  font-size: clamp(2rem, 4vw, 3.2rem);
+  line-height: 1.05;
+}
+
+.ui-shell__description {
+  margin: 0;
+  max-width: 58ch;
+  color: #475569;
+}
+
+.ui-shell__actions,
+.cloud-shell__header-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.cloud-shell__badge {
+  flex-shrink: 0;
+  border: 1px solid rgba(3, 105, 161, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  padding: 10px 14px;
+  color: #075985;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: lowercase;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+}
+
+.cloud-shell__nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.cloud-shell__nav-button {
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.78);
+  padding: 9px 14px;
+  color: #334155;
+  font: inherit;
+  font-weight: 700;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+.cloud-shell__nav-button:hover:not(:disabled) {
+  border-color: rgba(14, 165, 233, 0.45);
+  background: rgba(240, 249, 255, 0.95);
+  color: #075985;
+  transform: translateY(-1px);
+}
+
+.cloud-shell__nav-button--active {
+  border-color: rgba(14, 165, 233, 0.6);
+  background: linear-gradient(180deg, rgba(14, 165, 233, 0.16), rgba(14, 165, 233, 0.08));
+  color: #075985;
+}
+
+.cloud-shell__nav-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.ui-page-panel,
+.cloud-page {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.ui-page-panel__kicker {
+  margin: 0;
+  color: #1d4ed8;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ui-page-panel__title {
+  margin: 0;
+  color: #0f172a;
+  font-size: 1.45rem;
+}
+
+.ui-page-panel__description {
+  margin: 0;
+  max-width: 52ch;
+  color: #475569;
+}
+
+.ui-page-panel__body {
+  display: grid;
+  gap: 16px;
+}
+
+.cloud-card {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.8);
+  padding: 22px;
+  box-shadow: 0 18px 60px rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(10px);
+}
+
+.cloud-card--hero {
+  margin-bottom: 18px;
+  padding: 28px;
+}
+
+.cloud-card__kicker {
+  margin: 0 0 8px;
+  color: #1d4ed8;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.cloud-card__title {
+  margin: 0 0 10px;
+  color: #0f172a;
+  font-size: 1.15rem;
+}
+
+.cloud-card__body {
+  margin: 0;
+  color: #334155;
+  max-width: 65ch;
+}
+
+.cloud-grid {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.cloud-page__content {
+  display: grid;
+  gap: 18px;
+}
+
+@media (max-width: 900px) {
+  .cloud-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .cloud-shell {
+    padding: 24px 16px 36px;
+  }
+
+  .cloud-shell__header {
+    flex-direction: column;
+  }
+
+  .cloud-shell__header-actions {
+    align-items: flex-start;
+  }
+
+  .cloud-page__header {
+    flex-direction: column;
+  }
+
+  .cloud-card,
+  .cloud-card--hero {
+    padding: 20px;
+  }
+}

@@ -1,6 +1,7 @@
 {
   "name": "@readio/cloud",
   "private": true,
+  "description": "Current Go scaffold backend for Readio Cloud.",
   "scripts": {
     "dev": "go run main.go",
     "build": "go build -o /tmp/readio-cloud ."

@@ -1,7 +1,7 @@
 # Instruction: 002 - Cloud CD Pipeline [COMPLETED]
 
 ## Goal
-Establish a Continuous Deployment (CD) pipeline using GitHub Actions to automatically build and deploy the Readio Cloud monolith (Go Backend + Static Lite UI) to a remote VPS. This ensures the 1C1G server is protected from heavy build loads (Node/Vite OOM risks) by strictly adhering to an "Off-Server Compilation" strategy.
+Establish a Continuous Deployment (CD) pipeline using GitHub Actions to automatically build and deploy the current Readio Cloud scaffold to a remote VPS. In the current scaffold phase, this means a Go backend plus a static frontend artifact built from `apps/lite`. This protects the 1C1G server from heavy build loads (Node/Vite OOM risks) by strictly adhering to an "Off-Server Compilation" strategy.
 
 ## Scope
 
@@ -18,6 +18,7 @@ Establish a Continuous Deployment (CD) pipeline using GitHub Actions to automati
 - Modifying the existing `.github/workflows/ci.yml` (CI must remain independent).
 - Infrastructure-as-code (IaC) provisioning of the actual VPS or Nginx/Cloudflare settings.
 - Frontend logic rewiring or DB schemas.
+- Splitting Cloud into `apps/cloud-api` and `apps/cloud-ui` as part of this instruction.
 
 ## Non-Goals
 - This instruction does not bootstrap the server from zero. It assumes the VPS already exists and can accept SSH-based deployments.
@@ -42,6 +43,7 @@ Establish a Continuous Deployment (CD) pipeline using GitHub Actions to automati
 - `apps/lite` already has a real build entry and may be invoked via `pnpm -C apps/lite build` or an equivalent repo-level wrapper.
 - `apps/cloud/package.json` already has a `build` script. Prefer repository-real commands over ad hoc undocumented shell sequences.
 - `apps/docs/content/docs/apps/cloud/deployment.mdx` does **not** currently exist. This task should treat it as a new documentation artifact to create.
+- This instruction is **scaffold-phase CD**, not the final Cloud topology. If the repository later adopts `apps/cloud-api` + `apps/cloud-ui`, the workflow, deployment docs, and smoke checks must be revised rather than assuming this completed instruction remains the final contract.
 
 ## Required Pipeline Contract
 
@@ -55,6 +57,14 @@ Establish a Continuous Deployment (CD) pipeline using GitHub Actions to automati
 - Run a repository-real Cloud build command in `apps/cloud`.
   - Preferred build contract: `CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o readio-cloud .`
   - If the workflow reuses the package script, it must still preserve the Linux cross-compilation contract.
+
+Scaffold-phase note:
+
+- This build contract is valid only while Cloud is still represented by the current `apps/cloud` scaffold serving a static frontend artifact.
+- If Cloud later moves to `apps/cloud-api` + `apps/cloud-ui`, the build phase must split into:
+  - build `apps/cloud-ui`
+  - build `apps/cloud-api`
+  - publish both artifacts together
 
 ### 1a. Trigger / Environment / Concurrency Policy
 - The workflow must not rely on an ambiguous default production trigger.
@@ -70,6 +80,11 @@ Establish a Continuous Deployment (CD) pipeline using GitHub Actions to automati
 - Define the target deployment path convention.
 - Transfer ONLY the `readio-cloud` binary and the `apps/lite/dist` folder.
 - **CRITICAL RULE**: Do not wipe the deployment directory on the VPS before transfer, as this would destroy the production SQLite `.db` file.
+
+Scaffold-phase boundary:
+
+- This artifact contract reflects the current scaffold only.
+- Do not rewrite repository docs to imply that future Cloud UI should permanently ship as `apps/lite/dist`.
 
 ### 2a. Remote Directory Contract
 - The instruction must define an explicit target layout rather than a vague `/opt/readio` mention.
@@ -146,6 +161,13 @@ Establish a Continuous Deployment (CD) pipeline using GitHub Actions to automati
 ### Changed-Zone Files (Must Review)
 - `.github/workflows/cd-cloud.yml` (or equivalent named workflow)
 - `apps/docs/content/docs/apps/cloud/deployment.mdx` (new file; instructions on how users must configure VPS directories, Systemd, smoke checks, rollback, and GitHub Secrets/Environment to accept this workflow).
+
+### Future Follow-Up (Not Covered by 002)
+- If Cloud topology is later split into `apps/cloud-api` + `apps/cloud-ui`, a new follow-up instruction must update:
+  - `.github/workflows/cd-cloud.yml`
+  - deployment docs
+  - smoke verification
+  - remote directory layout if artifact boundaries change
 
 ## Completion
 - **Completed by**: Codex
