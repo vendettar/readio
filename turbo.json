@@ -1,0 +1,62 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": [".npmrc", "pnpm-workspace.yaml"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "src/**",
+        "**/*.go",
+        "go.mod",
+        "go.sum",
+        "public/**",
+        "index.html",
+        "package.json",
+        "tsconfig.json",
+        "tsconfig.*.json",
+        "vite.config.ts",
+        "tailwind.config.*",
+        "postcss.config.*",
+        "!src/**/*.test.ts",
+        "!src/**/*.test.tsx",
+        "!src/**/*.spec.ts",
+        "!src/**/*.spec.tsx",
+        "!**/__tests__/**",
+        "!**/*_test.go"
+      ],
+      "outputs": ["dist/**", ".next/**", "stats.html"]
+    },
+    "typecheck": {
+      "dependsOn": ["^typecheck"],
+      "inputs": ["src/**", "scripts/**/*.ts", "package.json", "tsconfig.json", "tsconfig.*.json"],
+      "outputs": []
+    },
+    "lint": {
+      "inputs": ["src/**", "scripts/**", "package.json", "biome.json", "../../biome.json"],
+      "outputs": []
+    },
+    "format": {
+      "cache": false
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "inputs": [
+        "src/**",
+        "package.json",
+        "tsconfig.json",
+        "vitest.config.*",
+        "playwright.config.*"
+      ],
+      "outputs": []
+    },
+    "test:run": {
+      "dependsOn": ["^build"],
+      "inputs": ["src/**", "package.json", "tsconfig.json", "vitest.config.*"],
+      "outputs": []
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    }
+  }
+}
