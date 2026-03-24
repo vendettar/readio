@@ -1,0 +1,71 @@
+---
+title: I18n 指南
+---
+
+# 国际化 (I18n) 指南
+
+Readio 使用 **react-i18next**，这是 React 本地化的行业标准。
+这确保了对复数、命名空间以及与 React 生态系统深度集成的支持。
+
+## 1. 设置与配置
+
+配置位于 `src/lib/i18n.ts`。
+它使用 `i18next-browser-languagedetector` 来记住用户偏好。
+
+## 2. 在组件中使用
+
+使用 `useTranslation` hook 访问 `t` 函数。
+
+```tsx
+import { useTranslation } from 'react-i18next'
+
+function MyComponent() {
+  const { t } = useTranslation()
+  
+  return <span>{t('settings')}</span>
+}
+```
+
+## 3. 类型安全 (强制)
+
+我们强制对翻译键进行严格类型检查。
+`t` 函数将仅接受存在于英语 (`en`) 语言环境中的键。
+
+### 必须实现
+- **Module Augmentation**：使用 i18next module augmentation，使 `t()` 只接受有效 key。
+- **唯一来源**：`src/lib/translations.ts` 为唯一 key 列表。
+- **规则**：禁止将 key 强转为 `any`/`string`/`TranslationKey`，缺失就补 key。
+
+## 4. 复数
+
+**不要** 对复数使用三元运算符。使用 i18next 的内置支持。
+
+- **JSON**: `{ "episode_count": "{count} Episode", "episode_count_plural": "{count} Episodes" }`
+- **Code**: `t('episode_count', { count: 5 })`
+
+## 5. 添加新键
+
+1.  打开 `src/lib/translations.ts`。
+2.  将键添加到 `en` 对象。
+3.  将键添加到 `zh` 或其他支持的语言。
+4.  `TranslationKey` 类型将自动更新。
+
+## 6. 覆盖审计
+
+为了防止因缺失 key 导致的 UI 回归，我们在构建过程中运行覆盖审计脚本。
+
+```bash
+# 在 apps/lite 目录下运行
+pnpm i18n:check
+
+# 或在项目根目录下运行
+pnpm --filter @readio/lite i18n:check
+```
+
+该脚本 (`apps/lite/scripts/audit-i18n.ts`) 将所有语言与 `en` 进行比较。如果存在缺失的 key，构建将失败。
+
+---
+
+## 计划中（待执行）
+
+- **Intl 格式化升级**：日期/数字格式化迁移到 Intl API（指令 075）。

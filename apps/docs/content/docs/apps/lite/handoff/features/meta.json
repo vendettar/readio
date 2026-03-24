@@ -1,0 +1,17 @@
+{
+  "title": "Core Features",
+  "pages": [
+    "audio-engine",
+    "transcript-reading",
+    "episode-resolution",
+    "files-management",
+    "history",
+    "favorites",
+    "subscriptions",
+    "settings",
+    "theming",
+    "search",
+    "discovery",
+    "asr-pipeline"
+  ]
+}

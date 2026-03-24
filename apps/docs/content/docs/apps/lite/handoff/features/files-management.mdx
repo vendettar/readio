@@ -1,0 +1,97 @@
+---
+title: Files Management
+---
+
+## 1. Scope and Ownership
+
+- Routes: `/files` and `/files/folder/$folderId`.
+- Main Interface: `src/routeComponents/files/FilesIndexPage.tsx`.
+- Architecture: Orchestration Page + Modular Sections.
+- Data Persistence: IndexedDB tables `local_tracks` (user uploads), `podcast_downloads` (podcast cache), `local_folders`, `local_subtitles`, `audioBlobs`.
+- **Logic Isolation**: User-uploaded files (Files page) and downloaded podcast episodes (Downloads page) are stored in separate tables to ensure data isolation and prevent UI overlap.
+
+## 2. Page Architecture
+
+The `FilesIndexPage` manages drag-and-drop (DnD) contexts and business logic orchestration. Specific rendering is handled by dedicated section components:
+
+- **PageHeader**: Standardized header providing breadcrumbs, titles, and creation triggers (Add Audio, New Folder).
+- **FoldersGridSection**: Renders folder grids with density support.
+- **TracksListSection**: Renders track lists and empty states.
+- **NewFolderCard**: Inline component for folder creation.
+- **FileDragPreview**: Unified drag-follow preview.
+
+Core logic is driven by specific hooks: `useFilesData` (data flow), `useFileDragDrop` (moving tracks), and `useFileProcessing` (ingestion).
+
+## 3. File Processing (Ingestion API)
+
+### Metadata Parsing
+- Uses Web Workers to run `music-metadata` asynchronously, ensuring a smooth UI.
+- Prioritizes embedded metadata (title, duration), falling back to filenames if parsing fails.
+
+### Automatic Logic
+- **Auto-Rename**: Appends an `(N)` suffix if a file with the same name exists in the target folder.
+- **Subtitle Matching**: Automatically pairs subtitles with tracks based on name prefixes during batch imports.
+
+### Storage Guardrails
+- **Capacity Blocker**: Prevents downloads/imports if disk usage is nearly full or would exceed system limits.
+- **Manual Audio Cache Limit**: Enforces a strict `MAX_AUDIO_CACHE_GB` (10GB) limit for downloaded track data. No auto-eviction is performed; users are prompted to manually delete tracks to free space. (Instruction 124)
+
+## 4. Interaction Standards
+
+### Ingestion Entry Points & Validation
+- **Global Drag & Drop (react-dropzone)**: Supports dropping files anywhere on the page. Real-time validation: Audio < 500MB (mp3, m4a, wav, ogg, flac, aac, webm); Subtitles < 5MB (.srt, .vtt).
+- **Restricted Button Selection (Native Picker)**:
+    - **"Add Audio"**: Strictly limits the system file picker to audio formats (`audio/*` and specific extensions), removing subtitle selection.
+    - **"Add Subtitle"**: Strictly limits choice to `.srt` and `.vtt`, preventing cross-functional selection errors.
+
+### View Density
+- Supports `comfortable` and `compact` modes.
+- States are persisted in the database and applied globally.
+
+### Menus and Security
+- **Explicit Two-Step Confirmation**: Deletion of tracks and folders is protected by a standard `ConfirmAlertDialog` to prevent accidental data loss. (Instruction 124)
+- **Rename Validation**: Uses `trim()` and case-insensitive checks. Conflict alerts are shown via inline bubbles.
+
+## 5. Integrity and Maintenance
+
+- **Automated Scanning**: Executes at startup to repair corrupted Blob references or orphaned tracks.
+- **Manual Maintenance**: Users can trigger a full scan and view reports from the Settings page.
+
+## 6. Downloads Subtitle Version Management (Instruction 125b)
+
+Downloaded podcast episodes can accumulate multiple subtitle versions (e.g., successive ASR runs with different models, or manual uploads). The system provides progressive disclosure: lightweight summaries on list cards, and detailed management in a side sheet.
+
+### Data Contract
+- Each subtitle version is stored in `local_subtitles` with version metadata: `sourceKind`, `provider`, `model`, `language`, `createdAt`, `status`.
+- A single active subtitle per download is tracked via `PodcastDownload.activeSubtitleId`.
+- Concurrency control: `PodcastDownload.manualPinnedAt` prevents background ASR from overwriting a user's manual subtitle choice.
+
+### Repository Layer
+- `DownloadsRepository` (`src/lib/repositories/DownloadsRepository.ts`) is the single source of truth for all subtitle version operations.
+- Key operations: `getSubtitleVersionSummary`, `setActiveSubtitle`, `deleteSubtitleVersion` (with automatic fallback), `exportSubtitleVersion`, `exportAllSubtitleVersions`.
+- All mutations are atomic (Dexie transactions). Deletion of the active version triggers automatic fallback to the most recent ready version.
+
+### UI Pattern
+- **List cards**: Reuses the visual style of the `TrackCard` component (similar to the Files page) but strictly adapted for podcast downloads. Avoids the expanded subtitle list, instead using a lightweight `SubtitleSummaryBadge` (showing version count or "Subtitle available") — clickable to open the detail sheet. This achieves a unified look without the heavy footprint of the full Files manager.
+- **Detail sheet** (`SubtitleVersionSheet`): Lists all versions with metadata, supports switching active, single/batch export (ZIP for multi), and deletion with confirmation.
+- Single-version scenarios auto-degrade to simpler UI (no "Set as active" button, direct SRT export instead of ZIP).
+
+## 7. Overflow Stream-Only Action (Instruction 129)
+
+- **Files Track Menu**:
+  - Latest product decision: Files page does **not** provide `Play without transcript`.
+  - `TrackOverflowMenu` and `TrackCard` must not expose this entry on Files surfaces.
+  - Files page 3-dot menu provides `Generate subtitles` / `Regenerate subtitles`:
+    - `Generate subtitles` when the track has no subtitle versions.
+    - `Regenerate subtitles` when one or more subtitle versions already exist.
+  - Retranscribe persistence follows provider+model upsert rules:
+    - same provider+model overwrites the existing ASR version;
+    - different provider or model appends a new version.
+  - Card-triggered transcribe/retranscribe uses the steady legacy chunk policy (10MB / 600s) and intentionally disables progressive 5/10/20 ramp, because this path is not gating live reading startup.
+- **Downloads Cards**:
+  - `DownloadTrackCard` now includes a 3-dot overflow menu.
+  - The menu hosts `Play without transcript` (when online + remote source available) and remove-download actions.
+  - Playback path for this action is local-first: if the episode is already downloaded, it reuses local blob audio and only suppresses subtitle binding.
+  - This local-first behavior is progress-agnostic: even if playback progress is non-zero, clicking `Play without transcript` must resume from local session state and must not fetch/resolve a streaming URL.
+  - **Country Snapshot Contract (Required)**: Every download write must persist a normalized `countryAtSave` value. Missing/invalid country causes write rejection (`invalid_country`) and no track row is created.
+  - **Episode Route Contract (No Global Fallback)**: Episode-title routing in Downloads must only use the record snapshot (`countryAtSave` + provider IDs). Do not fallback to `globalCountry` at click time.

@@ -1,0 +1,89 @@
+---
+title: Qwen3 ASR (千问)
+description: 阿里云千问 Qwen3-ASR-Flash API 接入开发文档说明
+---
+
+# Qwen3-ASR API 开发指南
+
+## 概述
+阿里云千问的 `qwen3-asr-flash`（及 `qwen3-asr-flash-us`）系列模型提供低延迟的短音频识别能力。与原生支持 `multipart/form-data` 的 OpenAI Whisper 接口不同，千问宣称的“OpenAI兼容方式”**实际上是基于多模态的对话补全接口（Chat Completions）**。
+
+因此，在 Readio 中接入此 API 时，不能复用现有的 `openaiCompatible` 提供程序，必须独立实现基于 JSON 和 Base64 编码的音频提取链路。
+
+## 规格限制
+- **音频大小限制**: 不超过 10MB
+- **时长限制**: 不超过 5 分钟
+- **应用场景**: 短音频转写、低延迟交互
+
+## API 端点参数
+- **转写端点**: 
+  - 北京地域: `POST https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions`
+  - 新加坡地域: `POST https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions`
+
+## 请求规范 (转写)
+
+### Header
+- `Authorization`: `Bearer $DASHSCOPE_API_KEY`
+- `Content-Type`: `application/json`
+
+### Body (JSON)
+
+请求体不再是表单数据，而是标准的 OpenAI Chat 报文格式，音频作为 `user` 的 `content` 的一部分传递。**音频数据必须被编码为完整的 Data URI (Base64) 字符串。**
+
+```json
+{
+  "model": "qwen3-asr-flash",
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "input_audio",
+          "input_audio": {
+            // 格式必须为 data:<mediatype>;base64,<data>
+            "data": "data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0U..."
+          }
+        }
+      ]
+    }
+  ],
+  "stream": false,
+  "extra_body": {
+    "asr_options": {
+      "enable_itn": false
+    }
+  }
+}
+```
+
+### 关键字段说明
+| 字段 | 说明 |
+| :--- | :--- |
+| `messages[0].content[0].input_audio.data` | **核心要点**：必须提取本地 Blob / File，使用 `FileReader` 或类似手段转为带有 MIME types 的 Base64 字符串。由于 Base64 会体积膨胀约 33%，需警惕 10MB 限制。 |
+| `asr_options` | 千问特有的底层控制参数。目前如 `enable_itn`（逆文本正则化，比如将 "一百" 转为 "100"）可在其中配置。如果使用官方 SDK，需放在 `extra_body` 层级下。 |
+
+---
+
+## 响应解析 (Chat Completion)
+
+接口返回的是类似大模型聊天对话的结构，而不是带时间戳和 words 的特化语音响应格式（如 Whisper 的 `verbose_json`）。
+
+```json
+{
+  "choices": [
+    {
+      "message": {
+        "role": "assistant",
+        "content": "识别出来的文本内容..."
+      }
+    }
+  ]
+}
+```
+
+### 接入 Readio 的挑战与处理
+1. **时间戳丢失**: 千问通过 `chat/completions` 返回的只是整段文本（位于 `choices[0].message.content`），**缺乏 `start` 和 `end` 的单词级别/段落级别时间戳偏移**。在转译生成 `ASRCue[]` 时，只能采用“整段音频共享一个起始和终止时间”的妥协方案。
+2. **内存消耗**: 把 Blob 转为大体积的 Base64 字符串驻留在内存中并塞入 JSON 序列化，对前端浏览器内存的考验比原生 FormData 直传要大。在切片上传时必须严格关注垃圾回收和 10MB 限额的规避。
+
+## 总结
+在架构层面，要支持 Qwen ASR，你需要创建一个独立的 `src/lib/asr/providers/qwenCompatible.ts`，内置音频切片的 Base64 文件翻转转换流，并使用多模态对话结构去请求它。

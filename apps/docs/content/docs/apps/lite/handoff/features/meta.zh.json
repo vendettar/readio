@@ -1,0 +1,17 @@
+{
+  "title": "核心功能模块",
+  "pages": [
+    "audio-engine",
+    "transcript-reading",
+    "episode-resolution",
+    "files-management",
+    "history",
+    "favorites",
+    "subscriptions",
+    "settings",
+    "theming",
+    "search",
+    "discovery",
+    "asr-pipeline"
+  ]
+}

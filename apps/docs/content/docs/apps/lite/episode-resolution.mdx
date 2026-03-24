@@ -1,0 +1,228 @@
+---
+title: Episode Resolution Strategy
+description: Understanding how Readio resolves episode metadata through multi-stage fallback
+---
+
+# Episode Resolution Strategy
+
+Readio implements a sophisticated multi-stage resolution strategy to ensure episodes are always accessible, even when primary data sources fail. This document explains how the system works, particularly when navigating from Top Episodes.
+
+## Core Problem
+
+When users navigate to an episode detail page (e.g., from Top Episodes), the system faces two challenges:
+
+1. **ID Mismatch**: Apple's iTunes ID (`1000748472995`) differs from RSS feed GUIDs (`gid://art19...`)
+2. **Data Quality**: Apple API provides basic metadata, but RSS feeds contain rich content (chapters, HTML show notes)
+
+## Country Source Rules (Current)
+
+- Content routes are country-scoped: `/$country/podcast/*`.
+- For these routes, country authority is route param only (`$country`), validated/canonicalized in `routes/$country.tsx`.
+- `useResolvedLibraryCountry` is intentionally de-scoped from podcast content routes.
+- Library records still persist `countryAtSave` and use it for path-only link construction from History/Favorites/Subscriptions.
+- Episode resolution correctness is path-only (`$country/$id/$episodeId`); query hints are no longer part of the in-app content-route contract.
+- Legacy query hints on content routes are tolerated and stripped by route search validation, not strictly rejected.
+
+## Resolution Flow
+
+### Stage 1: Podcast Metadata Lookup
+
+**Request**: `GET /lookup?id={podcastId}&country={country}&entity=podcast`
+
+**Purpose**: Obtain the RSS feed URL for the podcast.
+
+**Cache Key**: `['podcast', 'lookup', podcastId, country]`
+
+**Triggers**: Always, unless cache hit within 24 hours.
+
+### Stage 2: RSS Feed Fetch
+
+**Request**: Proxy request to podcast's RSS feed URL (via custom proxy)
+
+**Purpose**: Get comprehensive episode data including:
+- Rich HTML descriptions (`content:encoded`)
+- Chapter markers (`podcast:chapters`)
+- Transcript URLs
+- Accurate audio URLs
+
+**Cache Key**: `['podcast', 'feed', normalizedFeedUrl]`
+
+**Triggers**: When `feedUrl` is available from Stage 1.
+
+**Fallback**: If RSS fetch fails, the system falls back to provider episodes in the same query path. If provider fallback also fails, the query throws and enters fetch-error state (not region-unavailable).
+
+### Stage 3: Provider Episode Lookup (Fallback)
+
+**Request**: `GET /lookup?id={podcastId}&country={country}&entity=podcastEpisode&limit=300`
+
+**Purpose**: 
+- **Recovery**: If RSS failed, get basic episode data from Apple
+- **ID Resolution**: Map iTunes ID to RSS GUID using title/URL matching
+
+**Cache Key**: `['podcast', 'provider-episodes', podcastId, country]`
+
+**Triggers**: When `!!feed && !episode` (feed loaded but episode not found by ID)
+
+**Process**:
+1. Fetch up to 300 recent episodes from Apple
+2. Find episode matching the iTunes ID
+3. If RSS succeeded: Match by title or audio URL to find corresponding RSS episode
+4. If RSS failed: Use Apple metadata directly (degraded experience)
+
+## Navigation Scenarios
+
+### Scenario A: Direct Click from Top Episode (Cold Cache)
+
+**User Action**: Click episode from Top Episodes list → Episode detail page
+
+**Network Requests**:
+1. **Podcast Lookup** (Required): Get RSS feed URL
+2. **RSS Feed** (Required): Get rich content (returns GUIDs)
+3. **Provider Episodes** (Required): Resolve iTunes ID (`12345`) to RSS GUID → **3 requests total**
+   - **Reason**: iTunes ID provided by Top Episodes API never matches RSS GUID directly.
+
+**Cache State After**:
+- `['podcast', 'lookup', id, country]` → Podcast metadata (24 hours)
+- `['podcast', 'feed', normalizedFeedUrl]` → RSS feed or fallback list (24 hours)
+- `['podcast', 'provider-episodes', id, country]` → Episode list (12 hours) *(if Stage 3 fired)*
+
+### Scenario B: Navigate via Show Page First (Warm Cache)
+
+**User Action**: Visit podcast show page → Return to Top Episodes → Click episode
+
+**Network Requests**:
+1. **Show Page**:
+   - Podcast Lookup (cache miss) → **1 request**
+   - RSS Feed (cache miss) → **1 request** (or fallback if failed)
+2. **Episode Page**:
+   - Podcast Lookup → **Cache hit** (0 requests)
+   - RSS Feed → **Cache hit** (0 requests)
+   - Provider Episodes → **1 request** (Cache miss)
+     - **Reason**: Top Episodes provides an iTunes ID (`12345`), but RSS Feed uses a GUID (`gid://...`). They don't match.
+     - System must fetch `provider-episodes` to map the iTunes ID to the RSS episode.
+
+**Result**: Episode page loads with **1 request** (for ID resolution) instead of 3.
+
+> **Note**: If the Podcast Show Page previously failed to load RSS and fell back to Apple API, `provider-episodes` would already be cached. In that specific case, the Episode Page loads with **0 requests**.
+
+### Scenario C: RSS Failure Mode
+
+**User Action**: Click episode when custom proxy is down
+
+**Network Requests**:
+1. Podcast Lookup → Success
+2. RSS Feed → **Fails** (403, timeout, empty response)
+   - Catch block returns stub feed with `episodes: []`
+3. Provider Episodes → **Triggered** (because `!episode`)
+   - Returns Apple's episode list
+   - Episode rendered using Apple metadata
+
+**User Experience**: Page loads successfully, but with degraded quality:
+- ✅ Playable audio
+- ✅ Basic description (plain text or limited HTML)
+- ❌ No chapters
+- ❌ No rich show notes
+
+## Cache Optimization
+
+### Key Structure Consistency
+
+Lookup/provider queries remain country-scoped. Feed cache is country-agnostic and keyed by normalized feed URL only.
+
+**Current Pattern**:
+```typescript
+// ✅ Country-scoped lookup/provider
+['podcast', 'lookup', podcastId, country]
+['podcast', 'provider-episodes', podcastId, country]
+
+// ✅ Country-agnostic feed key
+['podcast', 'feed', normalizedFeedUrl]
+```
+
+Feed storage namespace is `feed`.
+
+### Region-Unavailable Behavior
+
+- Trigger conditions:
+  1. Route country is valid.
+  2. `lookupPodcast` succeeds.
+  3. Target show/episode cannot be resolved in route-country content path.
+- Behavior:
+  - Show explicit unavailable message.
+  - Show one explicit CTA to open the same target under current global country.
+  - No auto-switch and no silent country fallback.
+
+### Cache Lifetimes
+
+| Cache Key | Stale Time | GC Time | Rationale |
+|-----------|------------|---------|-----------|
+| `podcast/lookup` | 24 hours | 24 hours | Podcast metadata changes slowly; country-scoped identity reuse |
+| `podcast/feed` | 24 hours | 24 hours | Feed parse result reused across entry points by normalized URL key |
+| `podcast/provider-episodes` | 12 hours | 24 hours | Fallback ID mapping cache with shorter freshness than lookup/feed |
+
+### Query Contract (Instruction 117)
+
+- Query-key policy is centralized in `src/lib/discovery/podcastQueryContract.ts`.
+- Content pages and resolver hook use the same key builders and cache lifetimes:
+  - `buildPodcastLookupQueryKey(podcastId, country)`
+  - `buildPodcastFeedQueryKey(normalizedFeedUrl)` (consumes normalized input)
+  - `buildPodcastProviderEpisodesQueryKey(podcastId, country)`
+- Feed URL normalization runs at ingestion/write boundaries (provider mapping and local persistence writes), not in render/query hot paths.
+- Page-level and hook-level query functions forward React Query `signal` to discovery calls to preserve cancellation semantics on route-country switches.
+- When feed fallback obtains provider episodes, resolver seeds `provider-episodes` cache with that payload to avoid duplicate provider fetch loops in the same resolution cycle.
+- Route-component and resolver-hook tests both cover country-switch stale-response protection.
+
+### Error Classification Contract (Instruction 117)
+
+- Route rendering order is strict:
+  1. fetch/runtime errors (`lookup` / `feed` / `provider`) -> error state
+  2. not-found semantics
+  3. region-unavailable business state
+- `regionUnavailable` is only valid when upstream lookup/feed/provider path is successful but current route-country content cannot resolve.
+- Region-unavailable must not be used as a fallback for raw network failures.
+
+### 5xx Upstream Retry
+
+When **all** fetch attempts (Direct, Custom Proxy, Default Proxy) fail with **5xx errors** (server errors), and a **custom proxy is configured**, the system implements an automatic retry mechanism:
+
+1. **Wait 3 seconds**: Allows transient upstream issues (e.g., Apple API momentary outages) to recover
+2. **Retry proxy-only**: Skips direct fetch (which already failed) and retries Custom Proxy → Default Proxy
+3. **Single retry**: Only one retry attempt to avoid excessive delays
+
+**Conditions for triggering retry:**
+- All attempts returned 5xx status codes (500, 502, 503, 504, etc.)
+- A custom proxy is configured (`CORS_PROXY_URL` is set)
+- The request has not been aborted
+
+**Why only with custom proxy?**
+- Proxy services are managed by the user; retrying it rarely helps if the proxy itself is failing.
+- Custom proxies (e.g., Cloudflare Workers) have dedicated capacity and are worth retrying
+
+**Code Reference**: `apps/lite/src/lib/fetchUtils.ts` - `fetchWithFallback()`
+
+## Performance Impact
+
+### Without Cache Optimization
+- **First visit (cold)**: 2-3 requests, ~1-2s load time
+- **Subsequent visit (warm, but show page not visited)**: 2-3 requests, ~1-2s load time
+
+### With Cache Optimization (Current Implementation)
+- **First visit (cold)**: 2-3 requests, ~1-2s load time
+- **After visiting show page**: 1 request (ID resolution), ~300-500ms load time
+
+**Improvement**: Up to **90% reduction** in requests and **80% reduction** in load time for users browsing multiple episodes from the same podcast.
+
+## Code References
+
+- **Hook**: `apps/lite/src/hooks/useEpisodeResolution.ts`
+- **Show Page**: `apps/lite/src/routeComponents/podcast/PodcastShowPage.tsx`
+- **Episode Page**: `apps/lite/src/routeComponents/podcast/PodcastEpisodeDetailPage.tsx`
+- **Provider**: `apps/lite/src/lib/discovery/providers/apple.ts`
+- **Fetch Utilities**: `apps/lite/src/lib/fetchUtils.ts` (5xx retry mechanism)
+
+## Future Optimizations
+
+1. **Pre-fetch on hover**: Start loading episode metadata when user hovers over episode card
+2. **Shared cache warming**: When fetching Top Episodes, pre-populate podcast lookup cache
+3. **Service Worker**: Cache RSS feeds in Service Worker for offline access
+4. **Smart ID mapping cache**: Build persistent mapping between iTunes IDs and RSS GUIDs

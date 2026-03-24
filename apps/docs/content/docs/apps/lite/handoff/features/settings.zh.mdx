@@ -1,0 +1,88 @@
+---
+title: 设置
+---
+
+## 1. 范围与归属
+
+- 路由：`/settings`。
+- 主界面：`src/routeComponents/SettingsPage.tsx`。
+- 架构模式：Orchestration Page (编排页) + Modular Sections (模块化分区)。
+- 组件位置：`src/components/Settings/sections/`。
+
+## 2. 模块化设计
+
+为了提升性能和可维护性，设置页采用了“编排与渲染分离”的模式：
+
+- **SettingsPage (Orchestrator)**：
+  - 负责状态分发（atomic selectors）。
+  - 处理复杂的异步逻辑（如 i18n 安全切换、数据导入导出）。
+  - 管理全局对话框状态（如删除确认弹窗）。
+- **Sections (Sub-modules)**：
+  - 采用 `React.memo` 优化，仅在自身 Props 变化时重绘。
+  - 通过显式 Props 接收标量数据和 `useCallback` 包裹的回调函数。
+
+### 核心分区清单：
+- **Appearance (外观)**：主题色（Accent Color）切换。
+- **General (通用)**：界面语言（i18n 安全切换）与内容地区设置。
+- **Maintenance (维护)**：手动触发数据完整性检查与修复。
+- **Storage (存储)**：管理数据库配额、缓存清理及会话抹除。
+- **Vault/Migration (导出导入)**：处理 Vault 数据备份与恢复。
+- **API Keys & Diagnostics (API 与诊断)**：秘钥配置与日志下载。
+
+## 3. i18n 安全切换契约
+
+设置页是切换应用语言的唯一入口，必须遵守以下契约以防止异步加载期间的竞态与闪烁：
+
+- **changeLanguageSafely**：所有切换必须调用该 API。
+- **版本锁机制**：利用 `requestVersion` 确保只有最后一次点击的语言生效。
+- **按需加载**：除英文外，其余语言资源在切换时通过动态 `import()` 加载并注入 i18next 实例。
+
+## 4. 数据一致性维护 (Integrity Maintenance)
+
+设置页提供了显式的数据维护能力，其核心职责包括：
+
+- **Scan & Repair**：通过 `runIntegrityCheck` 扫描本地数据库。
+- **维护范围**：
+  - 修复缺失音频 Blob 的轨道（标记为 Corrupted）。
+  - 处理归属文件夹已消失的孤儿轨道（移动至根目录）。
+  - 清理指向不存在轨道的过期字幕记录。
+- **确定性报告**：返回 `IntegrityCheckReport`，记录检查时间及各项修复数量。
+
+## 5. 存储管理与破坏性操作
+
+- **确认流 (Confirmation Flow)**：所有破坏性操作（如 Wipe All Data）必须经过 `useConfirmDialog` 触发二次确认。
+- **配额显示**：实时反映 IndexedDB 的占用情况及配额状态。
+- **抹除逻辑**：
+  - `Wipe All`：清空所有数据库表及缓存。
+  - `Clear Cache`：仅清理音轨的二进制缓存，保留元数据与进度。
+- **数据与隐私说明（新增 UI 区块）**：
+  - 在 Settings > Storage 中新增常驻说明卡，明确本地模式边界。
+  - 必须包含以下信息：
+    - 数据仅存于当前设备。
+    - 无账号跨设备自动同步。
+    - 浏览器/站点清理可能导致本地数据永久丢失。
+    - 本地存储偏向便捷，不保证长期归档。
+  - 目的：把“本地优先 + 可丢失”的语义在产品内显式告知，而不只放在文档里。
+
+## 6. 性能优化与测试
+
+- **渲染控制**：全量使用原子 Selector 和 `memo`，确保修改单一配置（如 API Key）不会触发其他分区（如外观设置）的重绘。
+- **测试覆盖**：
+  - 分区渲染稳定性：`src/components/Settings/__tests__/SectionMemoBehavior.test.tsx`。
+  - 业务逻辑验证：`src/routeComponents/__tests__/SettingsPage.test.tsx`。
+  - 维护 hook 测试：`src/hooks/__tests__/useIntegrityMaintenance.test.ts`。
+
+## 7. UI 现代化（Instruction 112）
+
+- **布局升级 (Page Shell & Header Contract)**：
+  - 设置路由遵循标准化的结构契约：
+    - 包裹于 `<PageShell>` 中以确保一致的内边距和最大宽度。
+    - 使用 `<PageHeader>` 配合卡片式页头模版。
+    - Meta 插槽用于状态指示标签 (Language, Content Region, Session count)。
+    - 优化后的桌面端双栏布局，宽屏下右侧存储分区 sticky 置顶。
+- **分区卡片视觉契约**：
+  - `SettingsSectionCard` 提供更明确的信息层级（顶部渐变细线、标题/描述节奏优化、卡片表面质感增强）。
+  - 分区 API 契约不变（`title`、`description`、`icon`、`children`、`contentClassName` 保持兼容）。
+- **行为保证**：
+  - Settings 的交互、回调与破坏性操作流不变。
+  - 本次改造仅限展示层，不触及持久化、路由、i18n 切换流程与维护逻辑。

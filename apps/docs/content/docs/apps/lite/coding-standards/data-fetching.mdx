@@ -1,0 +1,27 @@
+---
+title: Data Fetching
+---
+
+## Data Fetching Strategy
+
+- **Proxy Fallback**:
+  - Use `fetchWithFallback` from `src/lib/fetchUtils.ts`.
+  - Implements: Direct → Primary Proxy → Secondary Proxy.
+
+- **Deduplication**:
+  - Use `deduplicatedFetch` from `src/lib/requestManager.ts` for read-only GET requests.
+
+- **Cancellation**:
+  - Always pass `AbortSignal`.
+  - Use `abortRequestsWithPrefix` for cleaning up requests when switching views.
+
+## External Input Validation
+- **Rule**: All external inputs (RSS/Search/Drag&Drop) must pass through Zod schema (`safeParse`).
+- **Implementation**: Use `src/lib/schemas/*`.
+
+---
+
+- **Network Fallback Policy** [Implemented]:
+  - Each chain step uses a single attempt (`maxRetries: 0`).
+  - **Policy**: On failure, immediately move to the next fallback step (Direct/DefaultProxy/CustomProxy order).
+  - Circuit breaker counters are kept for observability, but short-circuit skip is intentionally disabled.

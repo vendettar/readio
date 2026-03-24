@@ -1,0 +1,120 @@
+---
+title: Cloud 部署指南
+description: Cloud CD 工作流与远程发布布局的运维说明。
+---
+
+# Cloud 部署指南
+
+本文档与 `.github/workflows/cd-cloud.yml` 保持一致，仅记录部署契约。
+它不负责 VPS、nginx、TLS、防火墙或 `systemd` 的搭建。
+
+## 1. 工作流构建内容
+
+- 使用 `pnpm -C apps/lite build` 在服务器外构建 Lite。
+- 使用 `apps/cloud` 中的 `CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o readio-cloud .` 构建 Linux 二进制。
+- 只暂存发布产物：`readio-cloud` 二进制和 `apps/lite/dist`。
+- 这里明确要求交叉编译，因为 `apps/cloud/package.json` 的本地脚手架脚本是 `go build -o /tmp/readio-cloud .`，不能满足 Linux CD 契约。
+
+## 2. 必需的 GitHub 配置
+
+使用受保护的 `cloud-production` GitHub Environment 存放部署 secrets，并可用于人工审批。
+
+Secrets：
+
+- `CLOUD_SSH_HOST`
+- `CLOUD_SSH_PORT`
+- `CLOUD_SSH_USER`
+- `CLOUD_SSH_PRIVATE_KEY`
+- `CLOUD_SSH_KNOWN_HOSTS`
+
+Variables：
+
+- `CLOUD_SERVICE_NAME`，默认 `readio-cloud`
+- `CLOUD_PORT`，默认 `8080`
+
+SSH 安全规则：
+
+- 通过 `CLOUD_SSH_KNOWN_HOSTS` 提供主机身份材料。
+- 保持 `StrictHostKeyChecking=yes`。
+- 不要把 `StrictHostKeyChecking=no` 作为可接受的文档化路径。
+
+## 2a. 远端前置条件
+
+在工作流能够成功执行之前，目标 VPS 必须已经具备：
+
+- 与 `CLOUD_SSH_USER` 一致的 Linux 用户
+- 该用户可通过上传的私钥进行 SSH 登录
+- VPS 上已安装 `rsync`
+- VPS 上已安装 `curl`，用于健康检查
+- 存在一个名称与 `CLOUD_SERVICE_NAME` 一致的 `systemd` 服务
+- SSH 用户具备重启并检查该服务状态的权限
+  - 要么服务直接由该 SSH 用户管理
+  - 要么该 SSH 用户可非交互式执行所需的 `systemctl` 命令
+
+本部署指南假设这些前置条件已经存在。如果其中任意一项缺失，工作流即使构建成功，也仍可能在发布或烟测阶段失败。
+
+## 3. 远程目录布局
+
+工作流在 VPS 上预期如下布局：
+
+- `/opt/readio/shared/data/`：持久化 SQLite 数据
+- `/opt/readio/releases/<git-sha>/`：发布产物
+- `/opt/readio/current`：运行时指针
+
+运行时契约：
+
+- 服务应从 `current` 指向的发布目录执行二进制，或在 `systemd` 中使用 `WorkingDirectory=/opt/readio/current`
+- Cloud 应用必须能从当前激活发布目录解析同目录下的 `dist/`
+- SQLite 数据库路径必须保持在 `/opt/readio/shared/data/` 下，或其他位于发布目录之外的共享持久路径中
+
+每个发布目录包含：
+
+- `readio-cloud`
+- `dist/`
+
+工作流会先创建远程目录再传输，且不会清空部署根目录，因此 SQLite 的 `data/` 会被保留。
+
+## 4. 发布流程
+
+部署采用按版本号分段的发布方式，并且仅在指针层面保持原子性：
+
+1. 在 GitHub runner 上构建 Lite 和 Cloud。
+2. 将产物先暂存到本地 `release/`。
+3. 为当前提交 SHA 创建远程发布目录。
+4. 只把 `release/` 传到 `/opt/readio/releases/<git-sha>/`。
+5. 使用 `ln -sfn` 把 `/opt/readio/current` 切到新发布目录。
+6. 重启 `CLOUD_SERVICE_NAME` 指定的服务，默认值为 `readio-cloud`。
+7. 校验服务处于 active 状态。
+8. 校验当前发布目录中的二进制和静态资源目录存在。
+9. 使用 `CLOUD_PORT` 指定的端口做健康探测，默认值为 `8080`，路径为 `/healthz`。
+
+这不是原地覆盖式部署。工作流不会先删除持久化数据，也不会直接往 live 路径里复制构建产物。
+
+## 5. 重启与烟测
+
+工作流使用 `CLOUD_SERVICE_NAME` 指定的服务名，并检查：
+
+- `systemctl is-active --quiet <service>`
+- 当前发布目录中存在 `readio-cloud`
+- 当前发布目录中存在 `dist/`
+- `curl -fsS http://127.0.0.1:${CLOUD_PORT}/healthz`
+
+如果需要手动验证运行时状态，也应使用同样的检查。
+
+## 6. 回滚
+
+回滚是手动、按发布目录进行的：
+
+1. 保留上一个成功发布的目录。
+2. 用 `ln -sfn` 把 `/opt/readio/current` 指回上一个发布目录。
+3. 再次重启服务。
+4. 重新执行相同的 smoke 检查。
+
+如果上一个发布目录不存在，就需要从其他已知正常的发布目录恢复。工作流不会自动重新生成回滚产物。
+
+## 7. 运维边界
+
+- 该工作流假设 VPS 已经存在。
+- 它不负责安装或管理 `systemd`。
+- 它不负责配置 nginx、TLS 或防火墙。
+- 它不部署 SQLite schema、同步、认证或多节点能力。

@@ -1,0 +1,120 @@
+---
+title: Testing Guide
+---
+
+# Testing Guide
+
+We use **Vitest** for unit and integration testing.
+
+## 1. Mocking Dexie (IndexedDB)
+
+Since Vitest runs in Node.js (JSDOM), IndexedDB is available via `fake-indexeddb` (setup in `vitest.setup.ts`).
+
+However, for Unit Tests (e.g., testing a Hook), it is often better to **Mock the DB module** entirely to avoid state leakage.
+
+```tsx
+// Example: Mocking DB in a test
+vi.mock('@/lib/dexieDb', () => ({
+  DB: {
+    files: {
+      add: vi.fn(),
+      toArray: vi.fn().mockResolvedValue([])
+    }
+  }
+}))
+```
+
+## 2. Testing Stores (Zustand)
+
+Zustand stores persist state between tests. You MUST reset them.
+
+```tsx
+import { usePlayerStore } from '@/store/playerStore'
+
+const initialState = usePlayerStore.getState()
+
+beforeEach(() => {
+  usePlayerStore.setState(initialState, true) // true = replace
+})
+```
+
+## 3. Simulating Audio Events
+
+For testing audio-related logic, mock the `<audio>` element's properties.
+
+```tsx
+const audio = document.querySelector('audio')!;
+Object.defineProperty(audio, 'currentTime', { get: () => 10, configurable: true });
+fireEvent.timeUpdate(audio);
+// Verify store.progress is now 10.
+```
+
+## 4. Network Mocking (MSW)
+
+We use **Mock Service Worker (MSW)** to mock external network requests (iTunes, RSS feeds) in tests. This ensures tests are deterministic, fast, and work offline.
+
+- **Setup**: `src/__tests__/setup.ts` initializes the server.
+- **Handlers**: `src/__tests__/handlers.ts` defines mock responses.
+- **Usage**: Tests running in Vitest automatically intercept requests to matched URLs.
+
+```tsx
+// Example: The test doesn't need to know about MSW, just fetch normally.
+const { result } = renderHook(() => usePodcastSearch('test', 'us'))
+await waitFor(() => expect(result.current.isSuccess).toBe(true))
+```
+
+## 5. Hardware Mocks (Audio Engine)
+
+Tests in `apps/lite/src/store/__tests__/playerStore.test.ts` and `apps/lite/src/components/AppShell/__tests__/GlobalAudioController.test.tsx` cover:
+- **Status Enum Transitions**: `idle` -> `loading` -> `playing` | `paused`.
+- **Resource Management**: Verification that `URL.revokeObjectURL` is called when switching tracks.
+- **Autoplay Blocks**: Ensuring store reverts to correctly handled state if `audio.play()` rejects.
+- **Feedback Loops**: Verifying that events from the `<audio>` element (timeupdate, durationchange) correctly update the centralized store.
+
+## 6. Time-Based Tests
+
+**Rule**: Never use `setTimeout` or real delays in tests.
+- **Action**: Use `vi.useFakeTimers()`.
+- **Scenario**: Testing the Sleep Timer. 
+  - `vi.advanceTimersByTime(60000)` to simulate 1 minute passing.
+
+## 7. What to Test?
+
+- **Hooks**: Test the logic. e.g., `useFileHandler` should call `DB.add` when a file is dropped.
+- **Utils**: Test edge cases. e.g., `formatDuration(0)` -> "00:00".
+- **Components**: **Do NOT test** visual rendering unless it has complex conditional logic.
+
+---
+
+## 8. E2E Smoke Tests (Playwright) [Implemented]
+
+Playwright smoke tests cover the top 3 user journeys to prevent release regressions.
+
+- **Test Location**: `apps/lite/tests/e2e/`
+- **Fixtures**: `apps/lite/tests/fixtures/` (small MP3/SRT/VTT files)
+- **Run**: `pnpm --filter @readio/lite test:e2e`
+- **Dev Server**: `pnpm --filter @readio/lite dev:e2e` (auto-used by Playwright config)
+
+**Smoke Coverage**:
+1. Home → Upload → Play
+2. Subscriptions → List
+3. Files → Playback with subtitles
+
+---
+
+## 9. Memory Stress Tests [Implemented]
+
+To detect long-term memory leaks, we maintain a manual stress test script.
+
+- **Location**: `apps/lite/tests/stress/memory.test.ts`
+- **Logic**: Simulates 2 hours of user activity (50 loops of Search -> Settings -> Files).
+- **Run**: `npx playwright test apps/lite/tests/stress/memory.test.ts --project=chromium --headed`
+- **Analysis**: Use Chrome DevTools Memory tab to snapshot heap before and after.
+
+---
+
+## Planned (Pending Execution)
+
+_(None)_
+
+

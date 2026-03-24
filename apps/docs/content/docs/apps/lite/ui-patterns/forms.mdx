@@ -1,0 +1,54 @@
+---
+title: Forms & Feedback
+---
+
+## Feedback & Loading (States)
+
+- **Skeletons**: Use the "Shimmer" effect (`.animate-shimmer`), never solid gray blocks.
+- **Loading Spinner**: Use the shared `<LoadingSpinner />` component for consistency.
+- **Empty States**: Use the shared `<EmptyState />` component. Must contain a centered layout with a muted icon, a clear title, and a **Call to Action (CTA)** button.
+
+---
+
+## Resilience & Network Feedback
+
+- **Offline State**: When `isOnline` is false, hide all "Discovery" elements (Search API, Top Charts). Provide a clear "Offline" badge in the sidebar or header.
+- **Network Error Empty State**: If a query fails due to network (not code bug), show an Empty State with:
+  - **Icon**: `WifiOff` or `CloudAlert`.
+  - **Message**: "Connection Failed".
+  - **Action**: A "Retry" button that calls `refetch()`.
+- **Proxy Health Indicator**: If the Custom Proxy fails but the Default Proxy works, notify the user in Settings.
+
+---
+
+## Form Validation (react-hook-form + Zod)
+
+Use `react-hook-form` with `zod` schemas for all user input forms that require validation.
+
+### Implementation Pattern
+
+1. **Schema Definition**: Create Zod schemas in `src/lib/schemas/`.
+2. **Hook Usage**: Use `useForm<T>({ resolver: zodResolver(schema) })`.
+3. **Components**: Use shadcn `Form` primitives (`FormField`, `FormItem`, `FormControl`, `FormLabel`, `FormMessage`).
+4. **Persistence**: Save to `localStorage` via `src/lib/storage.ts` helpers (never use `localStorage.setItem` directly).
+5. **Auto-save**: Trigger save on valid field blur for better UX.
+
+### Example
+
+```tsx
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { settingsFormSchema, type SettingsFormValues } from '../lib/schemas/settings'
+
+const form = useForm<SettingsFormValues>({
+  resolver: zodResolver(settingsFormSchema),
+  mode: 'onBlur',
+})
+```
+
+### Rules
+
+- **DO**: Define validation schemas in `src/lib/schemas/`.
+- **DO**: Use `FormMessage` to display validation errors.
+- **DON'T**: Use uncontrolled inputs for validated fields.
+- **DON'T**: Use `localStorage.setItem` directly; use `setJson()` from storage utilities.

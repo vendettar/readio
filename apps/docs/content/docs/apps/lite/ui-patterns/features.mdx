@@ -1,0 +1,87 @@
+---
+title: Feature Patterns
+---
+
+## Motion & Spatial Metaphors
+
+- **Shared Element Transitions (Active)**: When a persistent element (like Podcast Artwork) moves from one view to another (e.g. Mini Player to Full Player), it MUST use a shared layout transition (`layoutId` in Framer Motion) to maintain spatial orientation.
+- **layoutId strategy**: The system uses `artwork-${id}-player`. To meet the "List -> Player" morphing requirement, both list items and the global player shared this semantic ID.
+- **Duplicate Lists (Scoping)**: In views with repetitive categories (e.g., Explore Page), using the same ID across different sections causes `layoutId` contention, leading to blank images or broken interactions.
+  - **Solution**: Prepend the section name to the layout ID (e.g., `artwork-podcast-topShows-${id}`).
+  - **Handshake**: Navigation must pass `fromLayoutPrefix` via typed `location.state` so the target page can derive the exact matching transition ID. This metadata is not part of URL search contract.
+- **Viewport Compatibility**: Inside `FullPlayer`, the `layoutId` MUST be applied conditionally (e.g., via `isDesktop`) to ensure only the active artwork node in the current layout holds the ID, preventing Framer Motion collisions.
+- **Entrance Animations**: Lists (Files, Episodes) should not appear instantly. Use the `AnimatedList` bit for a staggered fade-in + slide-up effect for items.
+- **Micro-animations**: Use the `CountUp` bit for numeric values (e.g., Storage Usage) to provide a premium, dynamic feel.
+- **App Boot**: Do not show half-loaded UI. Use a centered App Logo with a breathing animation while stores are hydrating from Dexie. Use `AnimatePresence` to fade out the loader.
+
+## Image Fallback Strategy [Implemented]
+
+- **Loading State**: Displays a themed placeholder (`bg-muted/50`) during image fetch.
+- **Error Handling**: Automatically replaces broken images with a Lucide `Podcast` icon.
+- **Transitions**: Smoothly fades artwork in (`opacity-0` to `opacity-100`) once loaded to prevent layout jars.
+- **Local Files**: Supports embedded artwork from IDB blobs with the same fallback logic.
+
+## Transcript & Selection
+ 
+### Anchoring Strategy
+The system uses a tiered approach to UI anchoring:
+- **Geometric Anchoring**: Used for word context menus and text selection ranges. The UI is centered horizontally relative to the selection and placed at the top edge. This ensures the menu stays "attached" to the meaningful content during viewport shifts.
+- **Pointer-Origin Anchoring**: Used for right-clicking in empty space (line-level actions). The UI anchors directly to the mouse click point to avoid jumping to the block center, matching standard desktop context menu behavior.
+
+### Interaction Absorption (Backdrop Strategy)
+Selection and lookup components implement an "Absorption" behavior to prevent accidental interactions:
+- **Lookup Backdrop**: When a word definition (LookupCallout) is open, a transparent full-screen backdrop is mounted behind it. 
+- **First Click (Absorb)**: A left-click on the backdrop (anywhere outside the callout) is captured and swallowed (propagated events are stopped). This dismisses the UI without triggering any underlying word actions or playback jumps.
+- **Scroll Retention**: Scrolling *inside* the LookupCallout is allowed and does not trigger dismissal. However, scrolling the *transcript* (window/viewport scroll) will still close the UI to prevent it from becoming detached from its anchor word.
+- **Sequential Interaction**: After dismissal, the backdrop is unmounted, and subsequent clicks interact with the transcript normally.
+- **Immediate Switch**: A right-click on the backdrop triggers an immediate dismissal AND allows the native context menu event to pass through to the word underneath, ensuring a seamless menu switch.
+
+### Occlusion Prevention
+To maintain readability during playback, all selection UIs prioritize `top` placement. By appearing above the focus point, they minimize occlusion of the text currently being read or synthesized.
+
+## List Row Interactions
+
+- **Hover Layer**:
+  - **General Lists**: Use `bg-accent/50` for the background highlight of standard list rows and cards.
+  - **Search Palette**: Use a solid `bg-primary` for the background highlight to provide maximum contrast and a clear focused state (Decision D081).
+- **Subtle Separation**: Use `border-border/50` for dividers.
+- **Smart Dividers**: Dividers should hide or be covered automatically on the active (hovered) row:
+    - **General Lists**: Hide neighbor dividers using `:has()` selectors to create a "floating" focused card effect.
+    - **Search Palette (Merge Selection)**: Use a negative top margin (`-mt-px`) and `z-10` on the active item to visually cover the preceding divider. This avoids `:has()` complexity while ensuring a sharp, unified selection rectangle.
+- **Action Visibility**: Interactive buttons (Play, Favorite, Menu) should typically appear or increase in opacity on row hover.
+
+- **Overlay Content**: Display a prominent "Drop to upload" message with an animated icon (e.g. bouncing Upload icon) to confirm active state.
+
+## Empty States & Onboarding [Implemented]
+
+- **Guiding the User**: Replace blank screens with the `<EmptyState />` component.
+- **Components**: Use a high-quality Lucide icon, a bold title, and a descriptive subtitle to explain how to populate the view.
+- **Call to Action (CTA)**: Always provide a primary action button (e.g., "Discover Podcasts" for Subscriptions, or "Add Audio" for Files) to guide the next step.
+- **Drop Zone Prominence**: For the Files library when empty, use a larger, dashed-border container to explicitly invite drag-and-drop actions.
+
+## Search & Command Palette
+
+- **Global Entry**: The search trigger in the sidebar MUST be an integrated search input that expands into a premium floating results overlay.
+- **Keyboard-First**: Navigation within the palette MUST support Arrow keys and Enter (via `cmdk`).
+- **Shortcut**: `Cmd+K` (or `Ctrl+K`) MUST be globally bound to open the palette.
+- **Vibe**: The palette MUST use Premium Glass visuals (`backdrop-blur-xl`, `bg-popover/95`, `backdrop-saturate-150`).
+- **Standardized Badge System**: All status indicators (Subscribed, Favorited, History) MUST use a unified, right-aligned **icon-based** style (text-primary color). When multiple states exist (e.g., Favorited AND History), ALL relevant icons MUST be displayed side-by-side, never overriding each other.
+- **Smart Highlighting**: As users type, search suggestions must visually distinguish matched characters (bright foreground color) from the rest of the text (muted color) to provide clear feedback on why a result was suggested.
+- **Selection Cleanup**: Mouse movements between the results panel and the search box MUST trigger a selection reset (`onMouseEnter` / `onMouseLeave`) to maintain a clean interaction flow without "sticky" selection states.
+
+## Hotkeys & Gestures
+
+- **Global Shortcuts**:
+  - `Space`: Toggle Play/Pause (globally, except when typing in inputs).
+  - `Arrow Left/Right`: Seek -/+ 15 seconds.
+  - `Cmd/Ctrl + K`: Focus Search.
+  - `Esc`: Close Overlays or Exit Full Player.
+- **Touch Interaction**:
+  - **Swipe Down**: Swiping down on the Full Player container (especially from the top drag handle) MUST collapse the player and return to the main view.
+  - **Drag Handle**: A subtle visual handle (pill shape, low opacity) should be visible at the top of the Full Player to hint at swipe-down behavior.
+
+
+## Planned (Pending Execution)
+
+- **Offline Content Badges**: Visual indicator for locally cached content + cleanup actions (Instruction 053).
+- **Episode Sorting/Filtering UI**: Controls for sort/filter in episode lists (Instruction 054).

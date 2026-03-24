@@ -1,0 +1,118 @@
+---
+title: Performance
+---
+
+# Performance Guidelines
+
+Readio is an audio application. 
+**Goal**: Audio playback must NEVER stutter, and CPU usage must be minimal to save battery.
+
+---
+
+## 1. Battery Conservation (The "Hidden" Rule)
+
+**Rule**: Pause non-essential work when the tab is not visible.
+- **Mechanism**: Use `document.hidden` or `Page Visibility API`.
+- **Optimization**:
+  - Stop updating the Transcript active line highlighting if the tab is hidden.
+  - Slow down UI polling/refresh intervals.
+  - Resume immediately when `visibilitychange` fires.
+  - Use `usePageVisibility` to throttle `GlobalAudioController` progress updates to **≤ 1/sec** when hidden.
+  - Pause CSS and Framer Motion animations in `FullPlayer` while hidden (do not unmount).
+
+## 2. Memory Management (The Revoke Rule) - **IMPLEMENTED** (Instruction 027)
+
+**Rule**: Every `URL.createObjectURL()` MUST have a corresponding `URL.revokeObjectURL()`.
+
+- **Audio Blobs**: Object URLs are managed **strictly inside the store** (`playerStore`). Components must NEVER call `URL.createObjectURL` for audio; they should use `loadAudio` or `loadAudioBlob` which handle revocation of previous URLs automatically before creating new ones.
+- **Image Blobs**: Components and UI elements must use the `useImageObjectUrl` hook to manage artwork Blobs. This ensures URLs are revoked automatically when the component unmounts or the Blob changes.
+- **Verification**: If memory usage increases after every song change, you have a leaked Object URL.
+
+## 3. List Virtualization
+
+**Rule**: Any list that can potentially grow > 50 items MUST be virtualized.
+- **Tool**: `react-virtuoso`.
+- **Scenarios**:
+  - Podcast Episode Lists.
+  - File Explorer (Folders/Tracks).
+  - Transcript View (Every line is a virtual item).
+
+**Anti-Pattern**: Rendering `array.map()` on a large array. This blocks the main thread and freezes audio UI.
+
+## 4. Image Optimization
+
+**Rule**: Lazy load all images that are not in the viewport.
+- **Component**: Use standard `img` with `loading="lazy"`.
+- **Decoding**: Use `decoding="async"` to prevent image decoding from blocking the main thread.
+
+### Embedded Artwork Resizing
+**Rule**: (Planned) Never store raw 4K embedded album art in IndexedDB.
+- **Action**: Resize all extracted ID3 APIC images to max ~1024px during ingestion.
+- **Why**: Reduces DB size, speeds up queries, and prevents memory spikes during `createObjectURL`.
+- **Status**: Currently DISABLED. `normalizeArtwork` logic in `metadata.worker.ts` is commented out due to stability issues with `OffscreenCanvas` on some files. We currently store raw blobs (with JPEG EOI repair enabled).
+
+## 5. Re-render Hygiene
+
+**Rule**: Audio Player components (Progress Bar, Timer) update every second.
+- **Isolation**: Isolate fast-changing state into small leaf components (`ProgressBar`, `CurrentTime`).
+- **Avoid**: Do not let high-frequency updates trigger a re-render of the entire `Player` or `Page`.
+- **Technique**: Use Zustand atomic selectors (`usePlayerStore(s => s.progress)`).
+
+## 6. Root Layout Hygiene
+
+**Rule**: The Root Layout (`__root.tsx`) must NEVER subscribe to high-frequency state changes.
+- **Why**: If Root re-renders, the entire React tree re-renders.
+- **Fix**: Move event listeners and high-frequency logic into an isolated, memoized component (e.g., `<GlobalAudioController />`).
+
+## 7. Event Listener Cleanup [Implemented]
+**Rule**: All global event listeners (`window.*`, `document.*`) MUST be cleaned up on unmount to prevent memory leaks and ghost interactions.
+- **Hook**: Use the `useEventListener` hook for all manual window/document listener attachments in React components.
+- **Cleanup**: `useEventListener` handles automatic removal on unmount or dependency change.
+- **Identity**: Ensure event handler references are stable or use the `useEventListener` internal ref pattern to avoid unnecessary re-attachments.
+- **Exceptions**: Non-React boot logic (e.g., in `main.tsx`) may attach persistent global handlers but must ensure they are correctly guarded against duplicate attachment.
+
+## 8. Heavy Computation (Web Workers)
+
+**Rule**: Parsing large files (e.g., 50MB RSS XML, large SRT subtitles) must happen in a Web Worker.
+- **Blocking**: Any function taking > 50ms is too slow for the main thread and will cause audio glitches.
+
+## 9. Interaction Latency (Async Handlers)
+
+**Rule**: Never perform an `await` in a click handler without immediate UI feedback.
+- **Scenario**: Clicking a search result that needs to fetch data before playing.
+- **Bad**: User clicks -> Nothing happens for 2s -> Audio plays.
+- **Good**: User clicks -> **Immediate Spinner/Disable state** -> Fetch -> Audio plays.
+
+## 10. Database Indexing (Dexie)
+
+**Rule**: Never use `.filter()` for searching large tables.
+- **Why**: This triggers a Table Scan (O(N)), reading all records into memory.
+- **Fix**: Use IndexedDB indexes and `.startsWithIgnoreCase()` or `.equals()` on indexed fields.
+
+## 11. Bundle Size & Performance Budget [Implemented]
+
+To ensure the application remains lightweight and fast (Instruction 050):
+- **Bundle Analysis**: `rollup-plugin-visualizer` is integrated into the build process, generating a `stats.html` on every build.
+- **Size Budgets**:
+  - **Main JS Entry**: Should remain under ~250KB (Gzipped) / ~800KB (Raw).
+  - **Total Assets**: Should remain under ~1MB (Gzipped) / ~2MB (Raw).
+- **Enforcement**: Build-time budgets are checked via `npm run check-size`.
+- **Core Web Vitals**: Real-user metrics (LCP, FID, CLS) are monitored via `useReportWebVitals` and logged to the local diagnostic logger in production.
+
+---
+
+## 12. Memory Stress Test [Implemented]
+
+To ensure long-term stability:
+- **Test**: `apps/lite/tests/stress/memory.test.ts`.
+- **Policy**: Must be run manually before major releases (minor version bumps).
+- **Success Criteria**: Heap usage must return to baseline ±10MB after 50 navigation loops (2 hours).
+- **Tool**: Use Chrome DevTools Memory tab snapshots + the provided Playwright driver script.
+
+---
+
+## Planned (Pending Execution)
+
+- **PWA Audio Range Cache**: Offline seek with 206 support implemented via `workbox-range-requests` (Instruction 060).
+- **Async Race Audit**: Last-action-wins enforcement (Instruction 068).
+- **Media Cache Eviction**: LRU trim policy for audio blobs (Instruction 072).

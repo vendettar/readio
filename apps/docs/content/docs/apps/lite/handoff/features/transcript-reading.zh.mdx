@@ -1,0 +1,126 @@
+---
+title: 字幕交互系统
+---
+
+## 1. 组件层次与职责
+
+字幕系统遵循严格的原子化层级，确保在处理长篇文本时的交互性能：
+
+- **TranscriptView**：根容器，负责滚动容器管理、`useSelection` 逻辑编排及自动滚动监听。
+- **SubtitleLine**：行级组件，负责时间戳匹配检测及该行内单词的渲染。
+- **Word**：token 级最小交互单元。它仍是可查词单词与单词右键菜单的激活目标，但 pointer intent 的裁决由浏览器原生选区与共享 selection 层负责，而不是由 `Word` 独占按下阶段。
+
+## 2. 交互契约 (Interaction Contract)
+
+### 单词点击与查词
+- **触发入口**：点击 `Word` 组件。
+- **行为**：
+  - 发送查词请求至词典 API。
+  - 同步更新全局 `transcriptStore.highlightedWord` 状态。
+  - **播放暂停规则**：当 `pauseOnDictionaryLookup` 开启时，该次查词会触发播放暂停。
+- **意图决议规则**：
+  - 在桌面指针输入路径上，单词查词意图在 release / click 阶段决议，而不是在 `pointerdown` 阶段决议。
+  - `Word` 不得通过接管按下事件来阻断浏览器从单词 token 直接开始原生文本选择。
+- **查词资格单一事实来源（SSOT）**：
+  - Transcript 中单词的查词交互 affordance，与单词右键菜单里 `look up` 的可见性，统一复用共享的 `isLookupEligible()` helper。
+  - 组件代码不得再维护第二份 stopword 列表，也不得复制本地正则规则来判断是否可查词。
+- **当前英文停用词行为**：
+  - 英文 stopword 当前不被视为 lookup-capable 单词。
+  - 在 transcript 中不会呈现查词风格的 hover / focus affordance。
+  - 其单词右键菜单中不会出现 `look up` 操作。
+  - 以上描述仅对应当前英文 stopword 实现，不应外推为多语言 stopword 已全部支持。
+- **键盘激活**：
+  - 当字幕行获得焦点时，`Enter` / `Space` 触发与鼠标点击一致的行跳转行为。
+  - 当单词获得焦点时，`Enter` / `Space` 触发与鼠标点击一致的查词行为。
+  - 键盘激活遵循相同的选区优先级保护；若存在 transcript 内原生选区，则继续阻断跳转/查词派发。
+- **Pointer 优先级契约**：
+  - 只要存在拖拽 / 选区意图，原生拖拽选区必须优先于单词查词。
+  - 允许从单词 token 本体直接开始拖拽；从可查词单词起始的桌面拖拽仍必须能够建立原生 range selection。
+  - 对可查词单词执行无拖拽的简单点击，仍会触发查词。
+  - 对单词执行右键，仍会打开单词上下文菜单。
+- **拖拽保护**：鼠标左键拖拽选区始终优先于单词查词。
+  - **空间阈值**：移动超过 `10px` 判定为拖拽，播放会立即**提前暂停**。
+  - **时间阈值**：按下超过 `300ms` 判定为长按，播放会**提前暂停**以准备弹出菜单。
+  - **单击跳转**：短促且位移轻微（< 10px）的点击被视为“行跳转”或“普通点击”，**不得**触发暂停。
+- **实例高亮规则**：`transcriptStore.highlightedWord` 保存的是被点击单词的实例 id。同屏存在重复单词时，只有当前点击实例带“选中背景”。
+- **优先级**：若当前存在非折叠的原生文本选区，单词点击将被忽略。
+- **行与单词激活契约**：
+  - 点击非单词区域的字幕行仍会触发 cue jump。
+  - 单词激活不得冒泡为整行跳转。
+  - 行级键盘激活与单词级键盘激活继续保持为两条显式分离的路径；后续重构不得静默合并这两条路径。
+
+### 选区与菜单管理
+- **原生选区优先**：系统优先响应浏览器的原生文本选区（Native Selection）。
+- **Surface 类型**：
+  - `rangeActionMenu`：气泡式水平菜单（复制、查词、搜索），出现在手动拖拽选区之上。
+  - `contextMenu`：列表式垂直菜单，通过右键或长按特定单词/行触发。
+  - `lookup`：词典查询结果浮层。
+- **显式所有者元数据 (Owner Metadata)**：所有选词浮层均携带 `SelectionOwner` 数据（字幕键、时间戳、Token 实例 ID），用于精确追踪交互来源。
+- **复制文案契约**：拖拽选区菜单和单词菜单使用 `copySelected`；整段右键菜单继续使用 `copyLine` / “复制此段落”。
+- **查词入口一致性**：直接点词查词与上下文菜单查词共享同一行为；弹出菜单或查词框期间播放应保持暂停，关闭后自动恢复。
+- **误触恢复**：如果系统因轻微位移提前暂停了播放，但 `mouseup` 时并未触发有效选区或菜单，系统必须立即恢复播放（Cancel Interaction）。
+- **自动关闭**：在滚动容器发生位移或视口尺寸调整时，所有活动菜单立即关闭。
+- **冻结 Surface 契约**：当菜单或浮层处于打开状态时，字幕 hover 必须冻结。来源字幕行持续保留浅灰 hover 块，其他行不得再触发 hover 样式。
+- **外部交互契约**：当 surface 打开时，外部的第一次点击（或右键）只负责关闭当前 surface。
+- **滚动与缩放锁定契约 (Scroll & Zoom Blocking / Viewport Freeze)**：当任何选词浮层（`lookup`、`contextMenu`、`rangeActionMenu`）处于打开状态时，系统进入“视口状态冻结”：锁定主体滚动、拦截背景区域的所有滚轮事件、以及屏蔽所有缩放行为（手势与快捷键）。但系统**允许**在活动浮层内部进行正常滚动，以确保长释义内容的查阅体验。
+- **Surface 切换与播放隔离 (Playback Isolation)**：
+  - 从一个已打开的 surface 右键切到另一个合法目标（例如 菜单 A -> 菜单 B）被视为 **Surface Switch**，而非单纯的关闭行为。
+  - 在 Switch 过程中，交互会话（Session）保持连续：**音频应持续保持暂停状态**，不得出现“先恢复再播放”的声音漏出（blip）。
+  - 在单词间的右键切换过程中，跳过 Focus 恢复逻辑，以避免与新 Surface 的 focus 夺取发生冲突。
+  - 只有在真正的 **Dismiss** 路径下才恢复 focus 并恢复播放：
+    - 外部左键点击。
+    - Escape 键。
+    - 显式的关闭按钮（如 Lookup 关闭按钮）。
+    - 视口变化导致的自动关闭。
+- **Focus Purity 规则**：Focus 恢复工具函数（如 `restoreSelectionOwnerFocus`）必须是纯粹的逻辑；是否跳过恢复的条件判断应保留在触发关闭的 hook 或组件位点。
+- **冻结来源真值**：灰色锁定块必须根据当前 surface 的 anchor rect 推导。
+
+### 查词与菜单定位（Instruction 134b）
+- **Floating UI 集成**：所有选词浮层均使用 `@floating-ui/react` 进行精密定位。
+- **Portal 边界**：所有浮层均通过 Radix UI `Portal`（渲染至 `document.body`）输出，避免被 docked/full 转换容器影响。
+- **视口坐标**：定位基于视口锚点坐标（或 `DOMRect` 矩形，若可用），而非祖先布局偏移。
+- **翻转与夹取契约**：使用 `flip()` 和 `shift()` 中间件确保浮层留在视口内，并保留 `8px-12px` 的锚点间距。
+- **默认放置策略**：优先将浮层放在锚点上方 (`top`) 且不重叠；空间不足时自动翻转至下方 (`bottom`) 或其他侧面。
+
+## 3. 技术实现规范
+
+### 高性能高亮 (Highlights API)
+- **机制**：利用 CSS Custom Highlight API 实现搜索匹配及查词高亮。
+- **优势**：避免修改 DOM 结构，防止因频繁添加 `<span>` 标签导致的渲染性能抖动。
+- **降级**：在不支持 Highlights API 的环境下，静默失效，不影响核心阅读功能。
+
+### 自动滚动算法 (Auto-scroll)
+- **触发**：播放进度 `timeupdate` 触发当前活跃行变更。
+- **对齐策略**：采用 `center` 对齐，即始终尝试将当前播放行保持在视口中心。
+- **平滑度**：使用原生 `scrollIntoView({ behavior: 'smooth', block: 'center' })`。
+- **干预保护**：当检测到用户正在手动滚动或发生选词行为时，系统应自动暂停自动滚动，直到用户停止干预。
+
+## 4. 词典集成
+
+- **当前后端范围**：运行时词典后端当前仅配置为英语使用。现行运行时配置契约是英语专用 key，而不是面向所有语言的通用词典端点。
+- **英语配置契约**：英语查词请求通过英语专用运行时配置路径构造（`EN_DICTIONARY_API_URL` / `READIO_EN_DICTIONARY_API_URL`）。
+- **语言归一化**：查词可用性先基于归一化后的基础语言判断。区域形式如 `en-US` 会先归一化为 `en`，然后继续走英语查词路径。
+- **未配置语言状态**：如果归一化后的 transcript/content 语言当前尚未配置（例如 `zh-CN` -> `zh`），查词浮层会进入专用的 `lookupDictionaryNotConfigured` 状态。
+- **失败状态分离**：该“未配置”状态与 `lookupNotFound`、`errorNetwork` 严格区分；它表示当前语言未接入词典配置，而不是英语词典请求失败。
+- **不继承成功语义**：未配置语言路径不会调用英语词典 fetch 路径，也不得表现得像一次成功查词关闭。特别是，关闭浮层后不得触发延迟的同词页面高亮。
+- **上下文透明**：查词请求不存储于本地数据库，仅维持内存态。
+
+## 5. 性能加固
+
+- **虚拟化兼容**：字幕视图与 `GroupedVirtuoso` 深度集成，确保即使是数小时长的播客单集，其字幕渲染也能保持常数级的内存占用。
+- **原子订阅**：`Word` 组件仅订阅与自身相关的 `isHighlighted` 状态，避免因播放进度更新导致全量单词重绘。
+
+## 6. 语言感知分词集成（Instruction 111b）
+
+- **语言来源**：`TranscriptView` 从 i18n 读取运行时语言（`resolvedLanguage ?? language`），并传入每个 `SubtitleLine`。
+- **分词权威路径**：`SubtitleLine` 使用 `tokenize(text, language)`；转录渲染链路已启用语言感知分词。
+- **交互一致性**：
+  - 查词（左键）与单词菜单（右键/长按）行为保持不变。
+  - 高亮仍通过 `transcriptStore.highlightedWord` 的规范化 token 匹配驱动。
+- **Memoization 边界**：
+  - `SubtitleLine` 以 `text + language` 作为分词 memo key。
+  - 非相关重渲染（如 active 行视觉状态变化）不会重复执行分词。
+
+## 7. 活动字幕来源 (Active Subtitle Source)
+
+对于已下载的播客单集，字幕系统不再依赖单一的 `activeSubtitleId` 字段，而是通过 `DownloadsRepository.getActiveSubtitleByTrackId(trackId)` 获取。该机制确保了在多版本环境下，播放器始终加载用户在下载管理页面中指定的“当前激活”版本。

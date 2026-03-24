@@ -1,0 +1,66 @@
+> **⚠️ CRITICAL**: You MUST preserve the current UI/UX layout and styling. Do NOT change visual appearance unless explicitly instructed.
+> **Prerequisites**: Read `apps/docs/content/docs/general/design-system/index.mdx` and `apps/docs/content/docs/apps/lite/ui-patterns/index.mdx` before starting.
+
+# Task: Implement Sleep Timer
+
+## Objective
+Allow users to stop playback automatically after a duration or at the end of an episode.
+
+## 1. Create `useSleepTimer` Hook
+- **Path**: `apps/lite/src/hooks/useSleepTimer.ts`.
+- **State**: `isActive`, `remainingTime`.
+- **Logic**:
+  - `startTimer(minutes)`: Set `endTime`. Tick every second.
+  - `startEndOfEpisode()`: Set flag. `GlobalAudioController` listens for `ended` event.
+  - When time/event reached: `store.pause()`, reset timer.
+
+## 2. Integration (`GlobalAudioController.tsx`)
+- **Action**: Check `useSleepTimer` state. If `endOfEpisode` is active and `ended` fires, pause.
+
+## 3. UI Component (`src/components/Player/SleepTimerButton.tsx`)
+- **Action**: Add a "Moon" icon button to `FullPlayer`.
+- **Interaction**: Clicking ALWAYS opens a `DropdownMenu` (not a toggle).
+- **Menu Items**:
+  - `15m` (`t('timer.15m')`)
+  - `30m` (`t('timer.30m')`)
+  - `End of Episode` (`t('timer.endOfEpisode')`)
+  - `Cancel` (if active)
+- **Feedback**: If active, the icon should be filled/colored (`text-primary`), and tooltip should show remaining time (`t('timer.remaining', { time })`).
+ - **I18n**: Add all `timer.*` keys to `apps/lite/src/lib/translations.ts`.
+
+## 4. Verification
+- **Test**: Set 15m timer. Wait (or mock time). Audio pauses.
+- **Test**: Set End of Episode. Seek to end. Audio pauses.
+
+### Quality Check
+- **Type Check**: Run `pnpm --filter @readio/lite typecheck`.
+- **Lint**: Run `pnpm --filter @readio/lite lint`.
+
+---
+## Documentation
+- Update `apps/docs/content/docs/apps/lite/ui-patterns/shell.mdx`.
+- Update `apps/docs/content/docs/apps/lite/handoff/features/audio-engine.mdx`.
+- Update `apps/docs/content/docs/apps/lite/handoff/index.mdx` with the new status.
+
+## Completion
+- **Completed by**: Antigravity
+- **Commands**: `pnpm --filter @readio/lite test:run`
+- **Date**: 2026-01-28
+- **Reviewed by**: Readio Reviewer (QA)
+
+## Patch Additions (Integrated)
+# Patch: 033-implement-sleep-timer
+
+## Why
+Content-level normalization to align with Leadership requirements and prevent execution drift.
+
+## Global Additions
+- Add Scope Scan (config, persistence, routing, logging, network, storage, UI state, tests).
+- Add Hidden Risk Sweep for async control flow and hot-path performance.
+- Add State Transition Integrity check.
+- Add Dynamic Context Consistency check for locale/theme/timezone/permissions.
+- Add Impact Checklist: affected modules, regression risks, required verification.
+- Add Forbidden Dependencies / Required Patterns when touching architecture or cross-module refactors.
+
+## Task-Specific Additions
+- Define sleep timer persistence behavior and test accordingly.

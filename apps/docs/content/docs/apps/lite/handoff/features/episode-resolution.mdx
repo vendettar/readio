@@ -1,0 +1,38 @@
+---
+title: Episode Resolution Contract
+---
+
+## 1. Design Objectives
+
+To resolve inconsistencies between iTunes IDs and RSS GUIDs within the podcast ecosystem and ensure that episode URLs remain permalink-stable even when data sources change, the system employs a **ShortId 8-character Hash Matching Algorithm**.
+
+## 2. Matching Algorithm Flow
+
+When a user visits an episode detail URL, the system executes the following deterministic logic:
+
+1. **Token Extraction**: Extracts the 8-character `ShortId` from the end of the URL slug (e.g., `title-slug-a1b2c3d4`).
+2. **Priority 1: RSS GUID Matching**:
+   - Iterates through all episodes in the RSS feed.
+   - Computes an 8-character hash for each episode's raw GUID.
+   - If a match is found, the association is established.
+3. **Priority 2: Title Hash Matching**:
+   - If GUID matching misses (some podcasts lack GUIDs), a hash is computed from the title for matching.
+4. **Fallback Strategy: Provider Lookup**:
+   - If RSS scanning fails, the Provider Lookup API (limit=300) is called to retrieve metadata.
+   - The system then cross-references the RSS feed using the audio URL and title returned by the Provider.
+
+## 3. Constraints & Rules
+
+### Uniqueness Assurance
+If an 8-character hash collision occurs (multiple matches), the system applies secondary criteria:
+- Compares the full title slug.
+- Prioritizes the most recent item by `pubDate`.
+
+### URL Stability
+- **Immutability**: Once a URL with a hash is generated for an episode, the `ShortId` must remain constant.
+- **Purity**: Detail page jumps must not carry redundant query parameters like `source` or `feedUrl`. All necessary context must be derivable from route parameters.
+
+## 4. Error Handling
+
+- **Region Unavailable**: If the Provider returns a successful response but the content is unresolvable under the current `$country`, the system must display a region-unavailability prompt rather than a generic 404.
+- **Metadata Fallback**: If an RSS entity cannot be linked, the system renders in read-only mode using Provider metadata to ensure playback availability.

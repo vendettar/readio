@@ -1,0 +1,43 @@
+---
+title: 状态管理
+---
+
+## React & Hooks
+
+- **焦点管理**:
+  - 使用 `autoFocus` prop 和库回调 (`onCloseAutoFocus`)。
+  - 不要使用 `setTimeout` hacks。
+
+- **Effect 依赖**:
+  - `useEffect` 依赖项要详尽。
+  - 正确处理 refs (例如 Audio 元素) 的“后期绑定”。
+
+- **Zustand & 持久化**:
+  - 保持 store 逻辑纯净和类型化。
+  - **原子选择器**: 使用原子选择器 (`const value = useStore(s => s.value)`) 来防止不必要的重新渲染。严禁在高频路径中使用组件级解构 (`const { a, b } = useStore()`)。
+  - **高频隔离**: 显示实时数据（如 `progress`, `duration`, `currentTime`）的组件必须隔离成小的、稳定的叶子组件，以避免重新渲染大型 UI 子树。
+  - **多字段选择**: 当单个 Hook 调用中需要多个依赖字段时，使用 `zustand/shallow` 中的 `useShallow`。
+  - **持久化**: 优先使用显式的 `loadFromDB()` / `saveToDB()` 操作 (使用 `src/lib/dexieDb.ts`) 而不是 `zustand/persist`。
+  - **Dexie 版本控制**: 仅使用单个模式版本。如果模式更改，重置本地数据。
+
+## 表单处理 (标准)
+- **规则**: 不要对手写 `useState` 用于复杂表单或设置。
+- **库**: **`react-hook-form`** + **`zod`**。
+- **用法**: 使用 Shadcn 的 `<Form>` 组件包装逻辑。确保所有输入都已注册。
+
+## 共享缓存策略
+- **规则**: 缓存读/写必须使用统一的 `storage` 工具 (`getJsonWithTtl`)。
+
+## 反模式 (对与错)
+
+### 表单状态
+❌ **错**: 手动状态
+```tsx
+const [name, setName] = useState('')
+<input value={name} onChange={e => setName(e.target.value)} />
+```
+✅ **对**: React Hook Form
+```tsx
+const form = useForm({ defaultValues: { name: '' } })
+<FormField control={form.control} name="name" render={({ field }) => <Input {...field} />} />
+```

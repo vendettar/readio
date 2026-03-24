@@ -1,0 +1,60 @@
+---
+title: Discovery & Explore
+---
+
+## 1. Scope and Principles
+
+- Routes: `/explore`, `/$country/podcast/$id`, and `/$country/podcast/$id/episode/$episodeId`.
+- Positioning: Hub for podcast discovery, maintaining a restrained, quiet, and reading-first design.
+- Architecture: Orchestration Page + Modular Section Components.
+
+## 2. Page Architecture (Explore)
+
+The Explore page is composed of multiple discovery modules with automatic offline degradation:
+
+- **Editor's Picks**: A grid of curated podcasts based on fixed IDs.
+- **Top Shows**: Dynamic carousels of trending shows per region.
+- **Top Episodes**: A grid of trending episodes sourced from Provider charts.
+- **CarouselShell**: A unified wrapper handling scrolling, navigation, and responsive layouts.
+
+## 3. Podcast Show Page Standards
+
+### Data Flow Contract
+1. **Lookup**: Fetches podcast metadata via `lookupPodcastFull`.
+2. **RSS Feed**: Extracts episode lists, transcripts, and chapters metadata via `fetchPodcastFeed`.
+3. **SSOT**: All data requests are strictly based on the `$country` route parameter.
+
+### Core Interactions
+- **Subscription**: Management is restricted to the Show Page, using `feedUrl` as the unique index.
+- **Limited Feed Notice**: When the number of episodes available in the RSS is significantly lower than the store metadata (threshold: < 80% or diff > 20), a notice is rendered at the bottom. This notice is centered within a simulated "next episode" slot (160px height, fully centered) for visual stability and balance.
+- **Expandable Descriptions**: Supports both HTML and Plain Text modes with memoization for performance.
+- **Visual Hygiene**: Standardized icon sizes (e.g., Search `h-4`) must be used across all retrieval entry points.
+
+## 4. Episode Detail Page Standards
+
+### Maximum Information Extraction
+- **Scope**: The detail page is the final level of the discovery hierarchy.
+- **Description Policy**: Descriptions on the Episode Detail page must always be displayed in full. The "Show more/less" toggle is disabled (`isExpandable={false}`) to ensure users have immediate access to all metadata.
+- **Interactive Consistency**: Actions (Play, Favorite) are anchored to the hero section for immediate visibility.
+
+## 5. Episode Resolution Contract
+
+To handle data source differences, the detail page uses a deterministic multi-level matching strategy:
+1. Matches RSS GUID by ShortId token.
+2. Uses Title Slug matching if conflicts occur.
+3. Falls back to Provider Lookup API if RSS misses.
+
+## 6. Cache and Sync (TanStack Query)
+
+### Storage Matrix
+- **Remote Data**: React Query memory -> IndexedDB runtime cache (`runtime_cache`) -> Network.
+- **TTL**: Homepage 24h; Search results 30m; Episode fallback 12h.
+- **Silent Updates**: UI refreshes via `setQueryData` after revalidation without page reloads.
+
+### Quota Management
+- Discovery/feed runtime cache keeps a bounded key window (60 entries).
+- Uses a hard retention window (TTL * 4) to protect essential fallback caches from eviction.
+
+## 7. Testing
+- Rendering Stability: `CarouselShell.test.tsx`.
+- Resolution Logic: `useEpisodeResolution.test.ts`.

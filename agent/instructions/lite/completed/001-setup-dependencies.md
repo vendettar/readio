@@ -1,0 +1,70 @@
+> **⚠️ CRITICAL**: You MUST preserve the current UI/UX layout and styling. Do NOT change visual appearance unless explicitly instructed.
+> **Prerequisites**: Read `apps/docs/content/docs/general/design-system/index.mdx` and `apps/docs/content/docs/apps/lite/ui-patterns/index.mdx` before starting.
+
+# Task: Setup Standard Dependencies [COMPLETED]
+
+## Objective
+Install approved utility libraries and ensure project configuration matches the Vibe Charter. This is the foundational step for Phase 1.
+
+## Decision Log
+- **Required / Waived**: Waived (no rule-doc changes).
+
+## Bilingual Sync
+- **Required / Not applicable**: Not applicable (no doc changes).
+
+## 1. Install `date-fns`
+We have officially adopted `date-fns` for all date manipulation and formatting to replace brittle manual logic.
+- **Action**: Run the following command from the root:
+  ```bash
+  pnpm --filter @readio/lite add date-fns
+  ```
+- **Verify**: Ensure it appears in `apps/lite/package.json`.
+
+## 2. Refactor Legacy Date Logic (Targeted)
+The Constitution forbids manual date string parsing, but we must preserve our custom I18n keys (`dateDaysAgo`).
+- **Target**: `apps/lite/src/lib/dateUtils.ts`.
+- **Mandatory**: Replace the implementation of `formatDateStandard` (YYYY-MM-DD) with `date-fns/format`.
+- **Optional**: You MAY refactor `formatRelativeTime` logic to use `date-fns` for *calculations* (e.g. `differenceInDays`), but you **MUST preserve** the return of `t('key')` strings and `.toUpperCase()` formatting. Do NOT blindly replace it with `formatDistanceToNow` as that would break I18n.
+
+## 3. Verify No Forbidden Libs
+- **Action**: Check `apps/lite/package.json`.
+- **Rule**: Ensure `lodash`, `underscore`, `moment` are NOT present. If found, remove them.
+
+## 4. Verification & Quality Check
+Since the `typecheck` script is not yet standardized (will be in Instruction 003), use direct commands:
+- **Type Check**: Run `pnpm --filter @readio/lite exec tsc --noEmit`.
+- **Lint**: Run `pnpm --filter @readio/lite exec biome check .`.
+- **Logic Check**: Run `pnpm --filter @readio/lite test:run` (to verify logic without watch mode).
+
+---
+## Documentation
+- If you changed any architectural pattern, update the corresponding doc in `apps/docs/content/docs/`.
+- Update `apps/docs/content/docs/apps/lite/handoff/index.mdx` with the new status.
+
+## Completion
+- **Completed by**: Readio Worker (Coder)
+- **Reviewed by**: Readio Reviewer (QA)
+- **Commands**: 
+  - `pnpm --filter @readio/lite add date-fns`
+  - `pnpm --filter @readio/lite exec tsc --noEmit`
+  - `pnpm --filter @readio/lite exec biome check .`
+  - `pnpm --filter @readio/lite test:run`
+- **Date**: 2026-01-18
+
+## Patch Additions (Integrated)
+# Patch: 001-setup-dependencies
+
+## Why
+Content-level normalization to align with Leadership requirements and prevent execution drift.
+
+## Global Additions
+- Add Scope Scan (config, persistence, routing, logging, network, storage, UI state, tests).
+- Add Hidden Risk Sweep for async control flow and hot-path performance.
+- Add State Transition Integrity check.
+- Add Dynamic Context Consistency check for locale/theme/timezone/permissions.
+- Add Impact Checklist: affected modules, regression risks, required verification.
+- Add Forbidden Dependencies / Required Patterns when touching architecture or cross-module refactors.
+
+## Task-Specific Additions
+- Use date-fns only via shared formatter wrappers; no ad-hoc formatting in UI.
+- New date logic must live in `apps/lite/src/lib/dateUtils.ts`.

@@ -1,0 +1,32 @@
+---
+title: 补充规范
+---
+
+# 补充规范
+
+## `location.state` 边界（Instruction 116f）
+
+- `location.state` 只允许承载 **UI 转场元数据**。
+- 允许：视觉转场上下文（例如 `fromLayoutPrefix`）。
+- 禁止：业务正确性身份字段（`country`、`podcastId`、`episodeId`、`feedUrl`、`audioUrl`、`providerEpisodeId`、`sessionId`）。
+
+该规则的原因：
+- 浏览器刷新、直开、分享链接都不会保留 `location.state`。
+- 业务正确性必须保持 URL 驱动且可确定复现。
+
+## Feed URL 规范化放置（Instruction 116f）
+
+- `normalizeFeedUrl` 只在 ingestion/写入边界执行。
+- Query key 与渲染路径只消费已规范化的 feed URL。
+- 禁止在高频渲染循环中新增 `new URL()` 或 `normalizeFeedUrl`。
+
+## ReadingContent 切换性能守卫（Instruction 116f）
+
+- `docked <-> full` 表面切换采用 `120ms` 基线预算。
+- 超预算切换应在开发态输出日志，便于回归检测。
+
+## Guard / Country / Search 语义规范（Instruction 116g）
+
+- 路由守卫采用 AST 级检测 `location.state` 业务字段读取，覆盖解构/别名/可选链绕过形式。
+- `useSession` 的 `countryAtSave` 必须复用 `normalizeCountryParam` 校验；不支持国家视为非法并拒绝 explore session 持久化。
+- Search 单集项“进入详情”动作的 props 命名与 aria 文案必须体现“打开详情”语义，不能使用“播放”语义。

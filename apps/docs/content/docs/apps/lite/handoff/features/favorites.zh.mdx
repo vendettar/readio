@@ -1,0 +1,49 @@
+---
+title: 收藏夹
+---
+
+## 1. 范围与归属
+
+- 路由：`/favorites`。
+- 主界面：`src/routeComponents/FavoritesPage.tsx`。
+- 数据访问权威：`src/store/exploreStore.ts`（收藏数据持久化于 IndexedDB 的 `favorites` 表）。
+- 渲染契约：统一使用 `EpisodeListItem` + `episodeRowModel.fromFavorite`。
+
+## 2. 数据模型与唯一性
+
+收藏记录以 `key` 作为唯一标识，构造规则如下：
+- **Key 格式**：`${feedUrl}::${audioUrl}`。
+- **元数据包含**：
+  - 播客信息：`feedUrl`, `podcastTitle`, `artworkUrl`, `providerPodcastId`, `countryAtSave`。
+  - 单集信息：`title`, `audioUrl`, `duration`, `publishedAt`, `episodeId`, `providerEpisodeId`。
+
+## 3. 渲染与交互优化
+
+为了保证长列表下的丝滑体验，收藏页实施了以下优化：
+
+### 编排与渲染分离
+- **FavoritesPage (Orchestrator)**：
+  - 负责从 `exploreStore` 获取全量收藏数据。
+  - 使用 `useMemo` 构造 `favoriteRows` 视图模型数组，确保在非数据变更导致的重绘中保持引用稳定。
+  - 统一处理 `playFavorite` 和 `removeFavorite` 回调。
+- **EpisodeListItem (Memoized)**：
+  - 每个列表项均被 `React.memo` 包裹。
+  - 仅当对应的 `model` 数据或操作回调发生变化时才触发重绘。
+
+### 收藏操作 (useEpisodeRowFavoriteAction)
+- 收藏页内的“取消收藏”操作通过 `EpisodeListItem` 的 `favorite` prop 传入。
+- 点击“星标”按钮直接触发 `removeFavorite(key)`，界面实时响应（Optimistic UI 体验）。
+
+## 4. 详情页深链
+
+收藏条目支持跳转至单集详情页，跳转契约如下：
+- **路径**：`/$country/podcast/$id/episode/$episodeId`。
+- **必要条件**：必须具备 `countryAtSave` 和 `providerPodcastId`。
+- **回退行为**：若缺少路由元数据，标题点击将退化为直接播放，不显示详情链接。
+
+## 5. 性能与测试
+
+- **空状态**：当 `favorites.length === 0` 时，渲染 `EmptyState` 组件引导用户前往探索页。
+- **测试覆盖**：
+  - 渲染正确性：`src/routeComponents/__tests__/FavoritesPage.row-render.test.tsx`。
+  - URL 规范化：`src/routeComponents/__tests__/FavoritesPage.urlHygiene.test.tsx`。

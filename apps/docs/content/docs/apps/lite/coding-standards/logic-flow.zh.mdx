@@ -1,0 +1,170 @@
+---
+title: 逻辑流与工程
+---
+
+## 多媒体与 OS 集成
+
+### 媒体会话 API (系统同步规则)
+**规则**: App 的播放状态必须与操作系统的媒体中心同步。
+- **同步**: 标题、艺术家和封面必须通过 `navigator.mediaSession.metadata` 更新。
+- **控制**: 播放、暂停、搜索和跳过操作必须映射到 `navigator.mediaSession.setActionHandler`。
+- **结果**: 用户应该能够从他们的锁屏、键盘按键和菜单栏控制 Readio。
+
+### 播放器状态机规则
+**规则**: UI 状态必须严格遵循硬件 `<audio>` 状态。
+- **枚举**: 优先使用 `status` 枚举 (`idle`, `loading`, `playing`, `paused`, `error`) 而不是多个布尔值。
+- **反向同步**: UI 的 `isPlaying` 状态必须由音频元素的 `onPlay` 和 `onPause` 事件更新，而不仅仅是用户的点击。
+- **错误处理**: 如果 `audio.play()` 失败 (自动播放阻止)，UI 必须恢复为 `paused`。
+
+---
+
+## 国际化与 RTL
+
+### 逻辑属性 (RTL 规则)
+**规则**: 绝不要使用物理方向类 (`ml-`, `mr-`, `pl-`, `pr-`, `left-`, `right-`)。
+**要求**: 使用逻辑属性以确保 UI 对于从右到左 (RTL) 语言 (阿拉伯语, 希伯来语) 正确镜像。
+- `ml-*` -> **`ms-*`** (Margin Start)
+- `mr-*` -> **`me-*`** (Margin End)
+- `pl-*` -> **`ps-*`** (Padding Start)
+- `pr-*` -> **`pe-*`** (Padding End)
+- `text-left` -> **`text-start`**
+- `border-l` -> **`border-s`**
+
+### 日期与数字格式化
+**规则**: 对所有面向用户的日期和数字使用 `Intl` API 或带有区域设置对象的 `date-fns`。永远不要手动拆分日期字符串。
+
+---
+
+## 文件处理 (标准)
+- **规则**: 不要使用手动拖/放事件监听器进行文件摄取。
+- **库**: **`react-dropzone`**。
+- **实现**: 使用 `useDropzone` hook 管理状态 (`isDragActive`, `acceptedFiles`)。
+
+## 错误处理层级
+| 层级 | 触发 | 动作 |
+|---|---|---|
+| **用户错误** | 操作失败 | Toast / 空状态 (i18n) |
+| **系统错误** | 解析失败 | `console.warn/error` (静默) |
+
+**Toast 国际化规则**：所有面向用户的 Toast 必须使用 `toast.*Key(...)`。不要把任意异常字符串直接展示给用户；应记录日志并展示稳定的 i18n key。
+
+## 类型安全 I18n
+- **规则**: 所有翻译必须使用 **`react-i18next`**。
+- **类型**: `t()` 函数必须针对英语键进行类型检查 (参见 `i18n-guide.md`)。
+
+## 测试标准 (金字塔)
+- **框架**: Vitest。
+- **Store 测试**: 在 `beforeEach` 中重置 store 状态。
+
+## 文件与结构
+- **`src/lib`**: 集中业务逻辑 (`storage.ts`, `dateUtils.ts`)。
+- **`src/components/ui`**: 保留用于 shadcn 原语。
+- **`src/components/interactive`**: 自定义交互原语。
+
+## 防御性工程
+
+### 布局稳健性 (长文本规则)
+**规则**: 永远不要假设文本会很短。
+- **标题**: 始终使用 `truncate` 或 `line-clamp-X`。
+- **容器**: 在 flex 项目上使用 `min-w-0` 以确保它们不会超出父边界。
+- **滚动**: 确保处理溢出 (`overflow-hidden` 或 `overflow-y-auto`)。
+
+### 多标签单例
+**规则**: 音频应用必须是每个浏览器单例。
+- **实现**: 使用名为 `readio_playback` 的 `BroadcastChannel`。
+- **动作**: 当标签 A 开始播放时，发送 "PLAY" 消息。所有其他标签 (B, C) 必须立即暂停。
+
+### 网络韧性 [已实现]
+
+#### 回退链路 (重试规则)
+**规则**: 为保持时延可预测，链路中的每一步只尝试一次，然后立即切换下一步。
+- **目标**: `fetchWithFallback` 每一步单次尝试 (`maxRetries: 0`)。
+- **策略**: 任一步失败（网络/超时/HTTP）后，立即进入下一配置步骤。
+- **排除**: 单步内部不做本地 backoff 重试。
+
+#### 熔断器（仅指标）
+**规则**: 记录端点健康度，但不短路用户请求。
+- **实现**: 按代理记录失败/成功计数。
+- **策略**: 即使计数达到“跳闸”条件，也不跳过请求；仍会尝试所有已配置步骤。
+
+### 异步交互安全 (竞态防护) [已实现]
+**规则**: UI 状态必须决定“最后写入”。防止因快速交互导致的不一致。
+
+1.  **Request ID 追踪**: 耗时的 Store 操作 (如 `restoreSession` 或处理字幕) 必须追踪 `requestId`。如果在异步操作完成前 ID 发生变化 (由于新的用户操作)，必须中止过时的操作。
+2.  **AbortController**: 搜索和 Fetch 操作必须使用 `AbortController` (或 TanStack Query 的等效逻辑) 来取消标准的网络请求。
+3.  **播放锁**: `play()` 逻辑必须检查播放器状态是否为 `loading` 或受限，以防止重叠的音频请求。
+
+### 优雅降级
+- **规则**: 如果本地文件从 DB 中丢失 (例如，被浏览器清理删除)，显示“文件丢失”状态而不是崩溃。
+
+### 细粒度错误边界 (隔离规则) [已实现]
+**规则**: UI 崩溃必须隔离到特定组件。字幕或搜索结果行中的渲染失败不得导致整个页面崩溃。
+- **层级**: 对叶子组件（`EpisodeRow`, `TranscriptView`, `Sidebar`）使用 `ComponentErrorBoundary`。
+- **回退**: 回退 UI 必须保留预期的布局高度/宽度，以防止项失败时出现异常的布局抖动。
+- **日志**: 错误必须通过 `logError` 记录以供诊断。
+- **上报范围**: 默认仅记录日志；只有关键场景（如 `TranscriptView`）才通过 `onError` 接入 `reportError` 上报。
+- **恢复**: 包含本地“重试”按钮以重置边界状态。
+
+### 异步错误与 Promise 安全 [已实现]
+**规则**: 所有异步操作必须显式、被处理且具有取消感知。
+
+1.  **显式处理**: 绝不允许“浮动” Promise。
+    - 所有异步调用必须被 `await`，或者
+    - 以 `void` 为前缀以表示有意的“即发即弃”，并带有本地 `.catch(logError)` 处理。
+2.  **Store Action 契约**:
+    - 涉及 DB/网络的 Action 必须在 `try...catch` 中包装逻辑。
+    - 通过 `status` (loading/error) 或 `toast.*Key` 显露错误。
+    - 如果 `status` 存在，它是主要的 UX 信号。应避免为瞬时中止显示重复的 toast。
+3.  **取消防护**:
+    - 异步 Store Action 必须接受可选的 `AbortSignal`。
+    - UI 状态更新必须使用 `if (signal?.aborted) return` 进行防护。
+    - 这可以防止在用户导航离开或更改上下文后的“幽灵”状态更新。
+4.  **Lint 强制执行**:
+    - `nursery/noFloatingPromises` [Biome](https://biomejs.dev/) 规则已作为 `error` 启用。
+
+---
+
+## 反模式: 文件放置
+❌ **错**: 原生监听器
+```tsx
+<div onDrop={e => handleFiles(e.dataTransfer.files)} />
+```
+✅ **对**: React Dropzone
+```tsx
+const { getRootProps } = useDropzone({ onDrop })
+<div {...getRootProps()} />
+```
+
+---
+
+## 强制架构规则
+
+### DB 访问防护（Store 优先持久化）[已实现]
+**规则**: UI 组件 (`src/components/**`, `src/routeComponents/**`) 禁止从 `dexieDb` 导入任何内容（包括纯类型导入）。
+
+- **访问模式**: 组件只能调用 **hooks 或 store actions**。Hooks/stores 调用 `DB.*`。
+- **类型模式**: UI 从 `lib/db/types` 导入 DB 实体类型（而非从 `dexieDb`）。
+- **防护脚本**: `pnpm lint:db-guard` 在本地和 CI 中强制执行此规则。
+
+**示例**:
+```tsx
+// ❌ 错误 - 直接导入 dexieDb
+import type { FileTrack } from '../../lib/dexieDb'
+
+// ✅ 正确 - 使用类型界面模块
+import type { FileTrack } from '../../lib/db/types'
+```
+
+**理由**: 强制 UI 层与持久化实现之间的清晰分离，防止紧密耦合，使未来的持久化重构无需大量修改 UI。
+
+**验证**:
+```bash
+# 检查违规
+pnpm --filter @readio/lite lint:db-guard
+
+# 应输出: ✅ No direct DB access violations found!
+```
+
+---
+
+## 计划中（待执行）

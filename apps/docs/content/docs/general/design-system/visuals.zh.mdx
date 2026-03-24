@@ -1,0 +1,128 @@
+---
+title: 视觉与动效
+---
+
+## 运动 & 动画
+
+UI 应该感觉生动但不让人分心。
+
+### 1. 标准过渡 (CSS)
+- **悬停**: `transition-colors duration-200` (按钮/链接的标准)。
+- **变换**: `transition-transform duration-200 ease-out` (用于缩放/滑动)。
+- **进入/退出**: 使用 `tailwindcss-animate` 工具类 (`animate-in fade-in zoom-in-95`).
+
+### 2. 复杂运动 (Framer Motion)
+对于布局偏移（列表重新排序）、共享元素过渡或复杂序列，使用 **Framer Motion**。
+- **安装**: 批准这些用例使用 `framer-motion`。
+- **规则**: 持久元素（如封面）在视图转换期间（例如迷你播放器到全屏播放器）必须使用 `layoutId`。
+- **组件**: 在 `src/components/bits/` 中创建可重用的“Bits”（例如 `AnimatedList.tsx`, `CountUp.tsx`）以封装 Framer Motion 逻辑。
+
+### 3. 空间隐喻
+- **规则**: 当持久元素从一个视图移动到另一个视图时，使用共享布局过渡来帮助用户保持空间方向感。
+- **进入动画**: 列表不应瞬间出现。对项目使用交错淡入 + 上滑效果。
+
+---
+
+## 排版 & 可读性
+
+Readio 是一个阅读工具。阅读体验的质量是我们的主要优势。
+
+- **行高**: 逐字稿区域默认必须是 **1.6**。防止阅读时“跳行”。
+- **段落间距**: 使用 **1.2em** 到 **1.5em**。在对话转换之间提供清晰的视觉中断。
+- **动态缩放**: 缩放必须是 **流式** (调整 `font-size`) 而不是 `transform: scale()`.
+- **约束**: 不要在阅读区域使用 `scale()`，因为它会产生模糊的文本。将 `--reading-font-size` 变量应用于根容器。
+- **可见性**: 逐字稿中的每个单词必须保持可见。不允许对字幕文本使用 `text-overflow: ellipsis` 或 `white-space: nowrap`。
+
+---
+
+## 全局 CSS 白名单 (`src/index.css`)
+
+**规则**: 避免将“普通 UI 样式”（按钮、卡片、间距调整、页面布局）放入全局 CSS。
+
+如果 UI 可以通过 Tailwind 工具类 + shadcn 组件 + 组件级变体 (`cva`) 来实现，则**绝不能**添加到 `src/index.css`。
+
+全局 CSS 仅允许用于一小部分系统级 Token 和仅交互行为。目前的白名单是：
+
+### A) 主题和 Token 定义 (允许)
+- `@layer base :root` 和 `.dark` CSS 变量 (shadcn 主题 tokens)
+- 基础 shadcn 全局变量:
+  - `@layer base * { border-color: hsl(var(--border)) }`
+  - `@layer base body { background-color: hsl(var(--background)); color: hsl(var(--foreground)) }`
+- 强调色 token 覆盖:
+  - `:root[data-accent="…"]` 和 `.dark[data-accent="…"]`
+- 阅读背景调色板覆盖（有意的产品功能）:
+  - `[data-reading-bg]` 和 `[data-reading-bg="…"]`
+
+### B) 仅交互 / 系统工具类 (允许)
+- 阅读容器工具类:
+  - `.reading-area` (将阅读背景变量应用于逐字稿区域)
+- 拖放光标锁定（防止 DnD 交互期间光标闪烁）:
+  - `.is-dragging` 和 `.is-dragging *` (在拖动时通过 `document.body.classList` 使用)
+- 智能列表分隔线（高级播客风格：当悬停下一个项目时隐藏分隔线）:
+  - `.smart-divider-group:has(+ .smart-divider-group:hover) .smart-divider`
+- 隐藏滚动条工具类:
+  - `.scrollbar-none`
+- 选择“图钉”标记（交互绑定，使用 SVG 遮罩）:
+  - `.readio-highlight::before/::after`
+  - `.readio-overlay-rect.start::before`
+  - `.readio-overlay-rect.end::after`
+- 字幕的文本选择行为:
+  - `.subtitle-text::selection`
+- 现代高亮 API 样式（查找高亮）:
+  - `::highlight(lookup-highlight)`
+- 滚动条主题（作用域）:
+  - `.custom-scrollbar::-webkit-scrollbar` (及相关伪元素)
+  - 理由：系统滚动条在深色/浅色模式和操作系统之间是不一致的。作用域样式允许精美、有意的外观，而不会污染外部或第三方容器。
+
+### 禁止在全局 CSS 中
+不要为普通 UI 样式（卡片、按钮、进度条、图标样式）添加全局工具类。通过 Tailwind 工具类、shadcn 原语和组件变体 (`cva`) 实现这些。
+
+### 添加新的全局 CSS
+如果你认为新规则必须进入 `src/index.css`:
+- 它必须是“Token/主题” (A) 或“仅交互/系统工具类” (B)。
+- 添加简短注释解释为何它不能存在于 Tailwind/shadcn/组件作用域中。
+- 使用新的选择器和理由更新此白名单部分。
+
+冲突处理:
+- 如果用户请求与设计系统冲突，请明确指出。
+- 不要为了满足请求而默默破坏或绕过系统。
+
+主要目标:
+在保持严格的视觉和结构一致性的同时保持速度。
+可预测性 > 聪明。
+
+---
+
+## 内联样式规则
+
+**默认**: 仅使用 Tailwind CSS。内联样式 (`style={{ ... }}`) 是**禁止的**。
+
+**例外** (仅白名单):
+1. **虚拟列表**: `top`, `height`, `transform`, `overflow` 用于虚拟化定位 (例如 react-virtuoso / react-window)。包括 `TranscriptView` 容器及其 Virtuoso 组件。
+2. **动态弹出窗口**: `left`, `top` 用于基于光标的定位 (例如 SelectionUI, 上下文菜单)
+3. **CSS 变量注入**: `--variable-name` 用于动态值 (见下文模式)
+
+所有其他内联样式都是**禁止的**。使用 Tailwind 工具类或组件作用域 CSS。
+
+---
+
+## 动态值的 CSS 变量模式
+
+对于需要运行时计算的值（进度条、动态宽度/高度）：
+
+**✅ 正确**:
+```tsx
+// 组件
+<div
+    className="h-1 bg-primary w-[var(--progress)]"
+    style={{ '--progress': '37%' } as React.CSSProperties}
+/>
+```
+
+**❌ 错误**:
+```tsx
+// 直接内联样式
+<div style={{ width: '37%' }} />
+```
+
+**为什么**: CSS 变量将视觉 token 保留在 CSS 中，同时允许动态 JavaScript 值。

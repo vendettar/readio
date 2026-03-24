@@ -1,0 +1,71 @@
+---
+title: Development Standards
+---
+
+## 1. UI/UX Standards
+
+### Tokenized Layouts
+- Hardcoded pixel values (e.g., `w-[420px]`) are strictly prohibited.
+- Use standard Tailwind tokens (e.g., `max-w-md`) for layout and spacing.
+- Color references must be semantic (e.g., `text-primary`, `bg-muted`).
+
+### Interaction Consistency
+- **Interaction Primitives**: Use `InteractiveTitle` for navigation and `InteractiveArtwork` for artwork-related actions.
+- **Playback Control Primitives**: Reuse `PlaybackSpeedButton`, `TransportPlayPauseButton`, and `TransportSkipButton` from `src/components/Player/controls/` for both Mini and Full surface controls; keep behavior callbacks in shell components.
+- **Confirmations**: Destructive actions (delete, wipe) must follow a two-step confirmation flow.
+- **Delete Coverage**: This applies to all delete/remove entry points, including subtitle-row delete buttons (not only top-level menus).
+- **Button Types**: All interactable buttons must explicitly set `type="button"` to prevent accidental form submissions and page reloads.
+- **Skeletons**: All list loading states must provide skeletons to prevent layout shifts.
+- **Overflow Menu Icons**: Every 3-dot overflow menu item must include an icon and use text-left/icon-right alignment.
+
+## 2. State Management (Zustand)
+
+### Atomic Selectors
+- **Core Rule**: Do not destructure entire stores (e.g., `const { ... } = useStore()`).
+- **Best Practice**: Use targeted atomic selectors for each field to isolate component re-renders.
+- **Validation**: High-frequency components (e.g., progress bars) must be verified via React Profiler.
+
+### Static Access
+- Within actions or async callbacks, use `useStore.getState()` to access snapshots without triggering reactive subscriptions.
+
+## 3. Async Hygiene
+
+### Race Condition Guards
+- All async data flows (session restoration, search, parsing) must implement Request ID or version validation.
+- Only results matching the current `activeId` may be written back to the store.
+
+### Signal Cancellation
+- All `fetch` requests and persistence hooks must accept and respond to `AbortSignal`.
+- Previous requests must be physically aborted upon route changes.
+
+## 4. Architectural Isolation
+
+### Database Segregation
+- **Layering**: UI components must never import from `dexieDb` directly.
+- **Type Safety**: Import entity definitions only from `lib/db/types.ts`.
+- **Persistence Path**: All write operations must be encapsulated in Store Actions.
+
+### Resource Lifecycle
+- **Memory Safety**: Every `ObjectURL` creation must be paired with a corresponding `revoke` call.
+- **Lifecycle Hooks**: Use dedicated hooks like `useImageObjectUrl` to automate resource cleanup.
+
+## 5. Internationalization (i18n)
+
+### Safe Switching
+- Trigger all language changes via `changeLanguageSafely`.
+- Never force-apply a language before its assets are loaded to prevent "Key leaking".
+- All translation keys must be type-safe; raw strings are not permitted.
+
+## 6. Accessibility Baseline (Instruction 114)
+
+- **Overlay Keyboard Contract**:
+  - Command palette input now exposes `aria-expanded` + `aria-controls`.
+  - `Esc` closes the command palette deterministically from both input and panel context.
+  - Selection context menus (`WordContextMenu`, `RangeActionMenu`) support keyboard navigation (`ArrowUp`/`ArrowDown`/`Home`/`End`) and `Esc` close.
+- **Menu/Dialog Semantics**:
+  - Selection context actions use `role="menu"` / `role="menuitem"` (WordContextMenu) or `role="toolbar"` (RangeActionMenu).
+  - Dictionary lookup popover uses `role="dialog"` with `aria-modal`.
+  - All selection surfaces are implemented using **Radix UI** primitives and **Floating UI** for robust positioning.
+- **Player Control ARIA**:
+  - Mini and Full player seek sliders expose `ariaPlaybackProgress`.
+  - Mini player volume slider exposes `ariaVolumeSlider`.

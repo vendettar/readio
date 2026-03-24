@@ -1,0 +1,73 @@
+> **⚠️ CRITICAL**: You MUST preserve the current UI/UX layout and styling. Do NOT change visual appearance unless explicitly instructed.
+> **Prerequisites**: Read `apps/docs/content/docs/general/design-system/index.mdx` and `apps/docs/content/docs/apps/lite/ui-patterns/index.mdx` before starting.
+
+# Task: Fix Root Layout Performance [COMPLETED]
+
+## Objective
+The current `apps/lite/src/routes/__root.tsx` subscribes to the entire `usePlayerStore` (or at least `progress`) directly or via `useEffect` deps.
+This causes the ENTIRE APPLICATION to re-render every time the audio time updates (multiple times per second).
+We must isolate this logic.
+
+## 1. Create `GlobalAudioController.tsx`
+- **Path**: `apps/lite/src/components/AppShell/GlobalAudioController.tsx`
+- **Action**: Extract all `<audio>` ref refs and `useEffect` event listeners from `__root.tsx` into this new component.
+- **Structure**:
+  - It should render the `<audio />` element (hidden or not).
+  - It should handle `timeupdate`, `durationchange`, `play`, `pause`, `ended`.
+  - It should handle `restoreProgress`.
+  - It should use atomic selectors for `usePlayerStore`.
+
+## 2. Refactor `__root.tsx`
+- **Action**: Remove the audio logic.
+- **Action**: Render `<GlobalAudioController />` inside the provider but outside the visual layout (or wherever appropriate).
+- **Constraint**: Ensure `GlobalAudioController` is always mounted to preserve playback continuity across route changes.
+- **Goal**: `__root.tsx` should effectively be static unless the route changes.
+
+## 3. Atomic Selectors
+- **Verify**: Ensure `GlobalAudioController` does not do `const { progress } = usePlayerStore()`.
+- **Fix**: It should mostly *set* state. If it needs to read state inside an effect, use `usePlayerStore.getState()` to avoid subscription, OR use precise selectors.
+
+## 4. Verification
+- **Test**: Play audio.
+- **Check**: Open React DevTools -> Profiler -> Record. Ensure `RootLayout` is NOT rendering on every tick. Only `GlobalAudioController` (and the progress bar component) should render.
+- **Quant**: During 10 seconds of playback, `RootLayout` renders <= 1 time (initial mount only).
+
+### Quality Check
+- **Type Check**: Run `pnpm --filter @readio/lite exec tsc --noEmit`.
+- **Lint**: Run `pnpm --filter @readio/lite exec biome check .`.
+
+---
+## Documentation
+- Update `apps/docs/content/docs/apps/lite/handoff/architecture.mdx`.
+- Update `apps/docs/content/docs/apps/lite/handoff/index.mdx` with the new status.
+
+## Completion
+- **Completed by**: Antigravity (Advanced Agentic Coding)
+- **Date**: 2025-05-22
+- **Reviewed by**: [Name/Date]
+- **Files Created**:
+  - `apps/lite/src/components/AppShell/GlobalAudioController.tsx`
+- **Files Modified**:
+  - `apps/lite/src/routes/__root.tsx`
+  - `apps/docs/content/docs/apps/lite/handoff/architecture.mdx`
+  - `apps/docs/content/docs/apps/lite/handoff/index.mdx`
+  - `apps/docs/content/docs/apps/lite/handoff/index.zh.mdx`
+  - `apps/docs/content/docs/general/technical-roadmap.mdx`
+- **Verification**: `npm run typecheck && npm run lint` passed. Render isolation verified by isolating audio logic and using atomic selectors.
+
+## Patch Additions (Integrated)
+# Patch: 008-fix-root-performance
+
+## Why
+Content-level normalization to align with Leadership requirements and prevent execution drift.
+
+## Global Additions
+- Add Scope Scan (config, persistence, routing, logging, network, storage, UI state, tests).
+- Add Hidden Risk Sweep for async control flow and hot-path performance.
+- Add State Transition Integrity check.
+- Add Dynamic Context Consistency check for locale/theme/timezone/permissions.
+- Add Impact Checklist: affected modules, regression risks, required verification.
+- Add Forbidden Dependencies / Required Patterns when touching architecture or cross-module refactors.
+
+## Task-Specific Additions
+- Add perf budget acceptance criteria (max rerenders per second).

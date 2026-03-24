@@ -1,0 +1,298 @@
+---
+title: 音频引擎与同步
+---
+
+## 1. 范围与职责
+
+音频引擎负责应用内所有音频流的生命周期管理、状态同步以及离线元数据持久化。
+
+- **核心组件**：`src/components/AppShell/GlobalAudioController.tsx`。
+- **状态管理**：`src/store/playerStore.ts`。
+- **持久化契约**：播放进度与会话数据存储于 IndexedDB 表 `playback_sessions`。时长值统一标准化为 `durationSeconds` (整型秒数)。
+
+## 2. 播放生命周期
+
+系统根据音频来源采用不同的驱动策略：
+
+### 远程播客播放
+- **Session 注入**：每次启动远程播放均会生成或复用 `playback_sessions` 记录。
+- **元数据降级**：若单集缺失 `feedUrl`，系统会自动触发 lookup 尝试补全元数据，补全失败则禁止写入持久化会话。
+
+### 本地文件播放
+- **Blob 检索**：从 `audioBlobs` 表提取二进制数据并生成 `ObjectUrl`。
+- **内存回收**：切换音轨或组件卸载时，引擎必须显式调用 `URL.revokeObjectURL` 防止内存泄露。
+
+## 3. 状态同步契约
+
+- **标签页同步**：利用 `BroadcastChannel` (Channel: `readio_tab_sync`) 实现多标签页间的播放/暂停状态及进度同步。
+- **媒体控制 (MediaSession)**：集成系统级媒体控制（通知栏、锁屏），支持上一首/下一首、播放/暂停、快进/快退（±15s）。
+- **心跳持久化**：播放期间每 5 秒执行一次进度回写，确保非正常关闭下的进度找回。
+- **查词暂停契约（Instruction 134a）**：
+  - 查词触发的暂停由动作执行时实时读取的 `getSettingsSnapshot().pauseOnDictionaryLookup` 决定。
+  - 每次用户主动发起的查词最多只会触发一次暂停。
+  - 非查词类选区动作（`copy`、`search web`、普通菜单开关）绝不会调用 `pause()`。
+- **播放控件原语契约（Instruction 106）**：
+  - 共享控件原语位于 `src/components/Player/controls/`：
+    - `PlaybackSpeedButton`
+    - `TransportPlayPauseButton`
+    - `TransportSkipButton`
+  - `MiniPlayer` 与 full surface footer 统一复用这些原语；行为回调仍保留在 shell 组件层。
+  - 播放速率轮换统一为 `[0.8, 1.0, 1.25, 1.5, 2.0]`（共享 controller）。
+  - 跳转语义保持不变：
+    - Full surface：严格 ±10s seek。
+    - MiniPlayer：字幕智能跳转，未命中时回退 ±10s。
+
+## 4. 数据完整性与保留 (Retention)
+
+为了保持本地数据库的健康，系统执行以下自动策略：
+
+### 历史保留政策
+- **上限控制**：`playback_sessions` 仅保留最近的 1000 条记录。
+- **触发机制**：应用启动及手动触发维护时运行。
+
+### 完整性检查 (Integrity)
+- **Blob 检查**：验证音轨与播客下载项是否具备有效的二进制引用，缺失则标记为 Corrupted 并自动触发修复逻辑。
+- **自我修复 (Self-Healing)**：清理程序会自动扫描 `podcast_downloads` 与 `local_tracks`，确保物理存储与数据库元数据保持一致。
+- **孤儿轨道修复**：将指向已删除文件夹的轨道移回根目录。
+- **垃圾回收**：自动清理无主（无轨道引用）的字幕记录。
+
+## 5. 错误分类与处理
+
+- **网络错误**：针对 429/5xx 错误提供自动重试机制。
+- **解析错误**：当 RSS 或元数据解析失败时，UI 进入明确的错误分类状态（Error Classification）。
+- **静默失败**：对于非核心的封面图加载失败，引擎应保持播放正常运行。
+
+## 6. 转录分词核心（Instruction 111）
+
+- **核心模块**：`src/lib/text/tokenizeWithLocale.ts`。
+- **权威契约**：
+  - `tokenizeWithLocale(text, language)` 在可用时使用 `Intl.Segmenter`（`granularity: 'word'`）。
+  - `tokenizeFallback(text)` 保持确定性并保留分隔符 token。
+- **兼容边界**：
+  - 对外分词 API 仍保持 `src/lib/text`（目录入口）稳定。
+  - 本阶段仅替换分词内核，不改动转录交互接线。
+
+## 7. GlobalAudioController 内部 Hook 化（Instruction 113）
+
+- **协调壳层**：`GlobalAudioController` 现作为协调层，继续保留 autoplay/media-session 编排。
+- **同步 Hook**：`src/hooks/useAudioElementSync.ts`
+  - 负责同步 `<audio>` 的 `src`、`volume`、`playbackRate`。
+- **事件 Hook**：`src/hooks/useAudioElementEvents.ts`
+  - 统一管理 `timeupdate`、`durationchange`、`play/pause`、`ended`、`waiting`、`playing`、`canplay`、`error`、一次性 `loadedmetadata` 事件绑定。
+- **行为契约**：
+  - 事件到 store 的状态迁移语义保持不变（`loading/playing/paused/error`）。
+  - media-session 与 autoplay retry 路径继续留在 `GlobalAudioController`，保持阶段边界清晰。
+
+## 8. Media Session + Autoplay Retry 隔离（Instruction 113b）
+
+- **Autoplay Retry Hook**：`src/hooks/useAutoplayRetry.ts`
+  - 承担 `play()` 重试流程与定时器生命周期管理。
+  - 保持既有语义：
+    - `NotSupportedError`：先 `audio.load()`，延迟 500ms 后仅重试 1 次。
+    - `NotAllowedError`：将 store 置为 pause，并提示 `player.autoplayBlocked` toast。
+- **音频错误工具**：`src/lib/audioErrors.ts`
+  - 统一媒体错误到 i18n 文案映射（`player.errorAborted/network/decode/src/generic`）。
+- **控制器职责**：
+  - `GlobalAudioController` 继续作为协调壳层，组合：
+    - `useAudioElementSync`
+    - `useAudioElementEvents`
+    - `useAutoplayRetry`
+
+## 9. 前台轻量音频预取（Instruction 115a）
+
+- **范围**：仅在前台播放期间对远程音频（仅 `http(s)`）执行轻量预取。
+- **接线路径**：
+  - `GlobalAudioController` 组合 `useForegroundAudioPrefetch`。
+  - `useForegroundAudioPrefetch` 将调度逻辑委托给 `src/lib/audioPrefetch.ts`。
+- **触发与迟滞**：
+  - 触发阈值：仅在 buffered-ahead 低于 `20s` 时考虑发起预取。
+  - 重置阈值：发起一次后，只有 buffered-ahead 恢复到至少 `25s` 才允许再次触发。
+  - 设计意图：`20s/25s` 是有意的防抖窗口，用于避免阈值附近的请求抖动，不属于缺陷。
+- **目标大小与夹取**：
+  - 目标字节数基于滚动 bitrate 估算与窗口秒数计算。
+  - 基线窗口：`30s`；`3g` 降级窗口：`15s`。
+  - 夹取范围：`256KB` 到 `2MB`。
+  - 兜底 bitrate：样本不足或无效时使用 `64KB/s`。
+- **并发与速率控制**：
+  - 最大并发预取请求：`1`。
+  - 最小尝试间隔：`9s`。
+  - 同源连续失败回退：`9s -> 18s -> 36s`（上限 `36s`）。
+  - Inflight 去重键：`sourceId:rangeStart:rangeEnd`。
+- **网络降级规则**：
+  - `navigator.connection.saveData === true` 或 `effectiveType === '2g'` 时禁用预取。
+  - `3g` 使用降级窗口；`4g`/`wifi`/unknown 使用基线窗口。
+  - `navigator.connection` 不可用时按 unknown 基线处理，不抛运行时错误。
+- **Range 请求契约**：
+  - 预取只发 forward-only 的 `Range: bytes=start-end`，`start` 位于当前 buffered tail 之后。
+  - 仅 `206` 且具备有效 `Content-Range` 视为成功。
+  - `200` 或不支持 range 的响应按“非预取资格”静默丢弃，不降级成整文件拉取。
+- **生命周期安全**：
+  - Source 切换或组件卸载时，立即 abort inflight 请求并重置调度门控。
+  - 旧 source 的迟到响应会被丢弃，且不会污染当前 source 调度状态。
+
+## 10. 在线 ASR 集成（Instruction 123 / 126 / 133）
+
+- **Provider 范围**：ASR Provider 由注册表驱动（`groq`、`qwen`、`deepgram`），模型可用性按 Provider 作用域约束。
+- **Provider 架构**：
+  - 运行时分发由 `lib/asr/registry.ts` 统一编排，按 provider 走专用传输实现：
+    - OpenAI-compatible：`lib/asr/providers/openaiCompatible.ts`（例如 Groq）
+    - Qwen chat-completions：`lib/asr/providers/qwenCompatible.ts`
+    - Deepgram native：`lib/asr/providers/deepgramCompatible.ts`
+  - 默认通过 registry 增加新的 OpenAI-compatible provider；仅在协议或响应格式不兼容时才新增独立适配文件。
+- **模型目录治理（Instruction 126）**：
+  - 运行时模型目录由 `lib/asr/registry.ts` 内本地静态 allowlist 管理（人工治理）。
+  - Provider `/models` 接口仅用于 Key 有效性验证，不作为动态模型 SSOT。
+- **运行时 Provider 开关（Instruction 133）**：
+  - 运行时环境变量：
+    - `READIO_ENABLED_ASR_PROVIDERS`
+    - `READIO_DISABLED_ASR_PROVIDERS`
+  - 语义：
+    - `enabled`: `'' | '*' | 'all'` 表示全部 provider。
+    - `disabled`: 在 whitelist 基础上做 blacklist 扣减。
+    - blacklist 优先级固定且可预测。
+    - 未知 provider ID 会触发配置字段校验失败（fail-closed 回退）。
+    - 不允许 silent all-open 回退：无效开关配置不会扩大 provider 可用范围。
+  - 开关解析逻辑集中在 `lib/asr/providerToggles.ts`（单一解析源）。
+  - 被禁用 provider 会在 Settings 隐藏，并在运行时入口（`transcribeAudioWithRetry`、`verifyAsrKey`）被 fail-closed 拦截为 `client_error`。
+- **设置契约**：
+  - `asrProvider`
+  - `asrModel`（allowlist 模式）
+  - `asrUseCustomModel: boolean`
+  - `asrCustomModelId: string`（custom 模式）
+  - ASR API Key 读取顺序为：`credentials` 表优先，运行时环境变量兜底。
+- **校验与归一化契约（Instruction 126）**：
+  - 必须先选 provider，后选 model。
+  - 除非显式启用 custom 模式，否则 model 必须属于当前 provider 的 allowlist。
+  - 持久化中不合法的 provider/model 组合在读写与运行时边界执行 fail-closed 归一化（首发策略下不引入历史数据迁移/回填分支）。
+- **Key 优先级**：
+  - 用户写入后的 IndexedDB `credentials` 为权威来源。
+  - 仅当 DB 为空时才回退到运行时 `READIO_ASR_API_KEY`。
+- **触发路径**：
+  - **流媒体拦截 (Download before Play)：** 通过设计意图（by design），为了防止分片 ASR 网络竞争及断网时的灾难性播放错位，只要远端无硬字幕且 ASR provider/model/key 已配置，`playback` 过程即会被全量离线下载守卫 (`enforceAsrDownloadBlocking`) 强制截断。直至文件 100% 落盘并移交 IndexedDB 后，方才起播并提交后续 ASR 原生执行任务。
+  - **本地文件：** 全屏阅读区在无字幕状态下展示 `生成字幕 (ASR)` 按钮（仅 ASR 已启用时）。
+- **关联 ID 契约 (`localTrackId`)：**
+  - 当播放源解析为本地可回放音轨（用户上传或已下载播客）时，播放器会通过 `setPlaybackTrackId(trackId)` 建立身份锚点。
+  - 在 `stream_without_transcript` 模式下，会显式执行 `setPlaybackTrackId(null)`，避免复用旧字幕绑定。
+  - `playerStore.localTrackId` 是通用回放音轨绑定 ID，可指向本地上传或下载播客的轨道 ID。
+- **并发与取消契约**：
+  - `playerStore.transcriptIngestionStatus` 新增 `transcribing`。
+  - `playerStore.abortAsrController` 持有当前请求控制器。
+  - 所有 ASR 任务通过全局 FIFO 队列 `ASRQueue` 处理，`concurrency = 1`，以避免 429 限流。
+  - `Manual` 触发会使用 `enqueuePriority` 插入队首，确保当前音轨的字幕生成更及时。
+  - 切歌/重置时会立刻 `abort()` 正在进行的 ASR 请求。
+- **载荷护栏（切片支持）**：
+  - 采用基于 MP3 帧边界的流式切片引擎技术 `mp3Chunker.ts` 处理超长音频。
+  - 切片按顺序独立上传转录并在客户端进行无缝时间戳重组拼装。
+  - **渐进式渲染 (JIT 预览)**：随着每个切片成功完成转录，`transcribeAudioWithRetry` 管道会通过 `onProgress` 回调吐出中间的 `ASRCue[]` 结果。`playerStore` 将这些片段保存在一个易失性的 `partialAsrCues` 内存状态中，使 UI 能够立刻渲染出不断增长的实时字幕，而无需干等整个文件处理完毕。
+  - **原子性提交 (Atomic Committals)**：持久化的 IndexedDB 存储（`subtitles` 与 `remote_transcripts` 表）**仅在** 100% 的切片成功完成时才会被写入。一旦全部成功，系统会执行原子交换：清空易失性的 `partialAsrCues` 内存，并加载永久的数据库记录。如果任何一个切片中途遇到致命错误（例如 429 额度耗尽），系统只需简单地清空临时内存，从而保证绝对不会有半成品或损坏的字幕片段污染离线数据库。
+- **指纹与数据去重**：
+  - 使用 SHA-256 生成唯一指纹：`localTrackId | audioId | size | model | downloadedAt`。
+  - 在请求 API 之前，触发 `subtitles` 与 `remote_transcripts` 表的缓存命中查询。
+  - 如果音频内容完全相同，支持跨不同源 URL 重用现成字幕。（Instruction 125）
+- **持久化契约**：
+  - 若存在 `localTrackId`（含下载播客与本地上传），ASR 结果写入 `subtitles` 并关联 `local_subtitles`。
+  - 若 `localTrackId` 缺失（纯在线播放），结果写入 `remote_transcripts`（按规范化 URL + 指纹索引）。
+  - 两条路径均写入 `rawAsrData`（序列化的 `ASRCue[]`）保存词级时间戳数据。
+  - **网络冗余斩杀（重试拦截）**：考虑到因为 Groq 会在中途抛 429 失败引发重试、或文件恰好因自动触发等原因早已落盘的情况。`fetchTrackAudioBlob` 在对网络发起下载请求前增设基于 `sourceUrlNormalized` 的 `podcast_downloads` 嗅探逻辑。只要命中，即使没有传递显式的 ID，引擎依然会提取本地 Blob 秒发 ASR，斩断重复网络占用。
+- **去重键规则**：
+  - 播客路径：URL 归一化为 `https`、host 小写、去尾斜杠、移除跟踪参数（`utm_*`、`fbclid` 等）。
+  - 本地路径：使用稳定 `localTrackId`，不使用 object URL。
+- **错误分层行为**：
+  - `401`：提示 Key 无效并自动跳转 `/settings#asr`。
+  - `429`：单次重试绑定策略（最多 1 次），仍失败则在 UI 呈现失败状态（无 Toast）。
+  - `5xx`：3 秒后重试 1 次，仍失败无侵入呈现 UI 失败状态（无 Toast）。
+  - **网络与解析错误**：系统不再静默降级（Instruction 123 后的改进）。当音频下载或 API 转录失败时，展示“转录失败”的视觉指示与“重试”按钮。为了界面整洁，详细的技术错误信息仅保留在开发者日志中，UI 层仅展示用户友好的标题。
+  - **静默失败门控**：如果 ASR 所需配置（provider/model/key）不完整，系统在尝试拉取转录失败后会静默进入 `idle` 状态，不再误报“转录失败”状态，确保普通听歌流的非侵入性。
+- **ASR 额度防爆 (Quota Hardening)**：
+  - **双重阈值切片**：只要音频大小超过 `ASR_MAX_BLOB_BYTES` (10MB) 或预期时长超过 15 分钟 (900s) 即可触发切片。对于高压缩率文件，动态缩小切片体积以达到 ~10 分钟的安全物理切块，有效防止 5xx 超时故障导致的额度单点雪崩。
+  - **渐进式切片爬坡（Instruction 130）**：
+    - 当时长元数据有效且音源为帧安全 MP3 时，切片策略改为前置小块：`5s -> 10s -> 20s -> 60s`，随后收敛到稳定的 `600s` 大块。
+    - 必须启用调用预算守卫：`baselineCalls = ceil(duration/600)`，`maxExtraCalls = min(4, max(2, ceil(baselineCalls * 0.5)))`，`hardCallBudget = min(24, baselineCalls + maxExtraCalls)`。
+    - 短音频旁路为强制规则：`expectedDurationSeconds <= 90` 直接走单切片计划。
+    - 若时长缺失/无效、音源非帧安全，或 `baselineCalls >= ABSOLUTE_MAX_CALLS`（`24`），必须跳过 ramp 计划并回退到旧的按字节稳态切片路径。
+    - 在上限边界触发回退时，日志原因码固定为：`baseline_at_cap`。
+    - 若第一次 progressive 切片结果超过 `hardCallBudget`，系统会基于比例放大后的每片字节目标执行一次确定性收敛重试；仅当第二次仍超预算时才以 `split_result_exceeds_budget` 回退到 legacy。
+    - MP3 边界检测已升级为严格 MPEG 头校验 + 双帧确认，且边界选择改为在窗口内选最近合法偏移并对非末片施加最小体积约束，以避免 false-sync 导致的过度碎片化。
+  - **ASPH 限流解析**：底层的 `extractRetryAfterMs` 全面兼容标准 `Retry-After` Header，嗅探包含 `try again in X.Xs` 的报错正文，并隐式捕捉 Groq 特有的 `"Limit (ASPH)"` 每小时额度耗尽报警（强制执行长度高达 61 分钟的重试退避）。
+  - **严格退避策略**：对于 429 限流，只在要求的等待时间 `<= 15s` 时才进行最后 1 次重试。5xx 服务端错误仅当切片预估时长 `<= 600s` 时方可重试 1 次。**所有标兵要求等待 `> 60s` 的报错均会触发即时彻底失败**（防死循环挂起）。
+  - **冷却时间窗 (Cooldown Window)**：`startOnlineASRForTrack` 在触发 ASPH 或超长退避后，会在内存中落锁一个 Provider 级别的冷却期。该锁生效期间，后续的用户点击会极其快速的被 `failed` 短路截断，阻止无效请求打到服务器。
+- **自动持久化 (Auto-Save)**：
+  - 为了优化用户体验与离线支持，系统会在 ASR 成功后（或在下载音频期间）自动将音频全量 Blob 持久化至 `podcast_downloads` 表。
+  - 这确保了任何经过 ASR 转录的单集都会自动出现在“下载”页面中，无需用户二次操作即可实现离线回听。
+- **用户取消**：不弹提示，状态回到 `idle`。
+- **评审后改进 (2026-02-19/23)**：
+  - `verifyKey` / `verifyAsrKey` 接受可选 `AbortSignal`，支持组件卸载时取消进行中的验证请求。
+  - `formatSrtTimestamp` 修复了毫秒进位处理逻辑。
+  - `startOnlineASRForTrack` 使用统一的 `try/catch/finally` 重构，确保任何异常下状态都能正确清理。
+  - 移除了旧有的 `migrateCredentialsFromLocalStorage` 路径；系统现在严格遵循“失败关闭”(fail-closed) 安全策略加载凭据。
+  - 为“设置”和“凭据”实现了 Epoch 守卫写入，防止 `wipeAll` 操作期间发生异步覆盖。
+  - `parseRawAsrCues` 对 `words` 数组逐项校验，不再直接类型断言。
+  - `navigateToSettingsAsrSection` 标注其对原生 `popstate` 事件的依赖（路由脆弱性备注）。
+  - `asrFileTooLarge` 国际化文案由 "25MB" 更新为 "20MB"，与实际 `ASR_MAX_BLOB_BYTES` 限制保持一致。
+  - **ASR 设置 UI 优化 (2026-02-23)**：API Key 验证按钮引入了“验证中/成功/失败”的图标状态反馈，移除了冗余的 Toast 提示，并增加了 2 秒自动重置逻辑。
+  - **错误 UI 精简 (2026-02-23)**：播放器 ASR 错误区统一了按钮样式（均为 secondary），保留了醒目的标题但移除了技术性的具体错误文案，提升了界面的专业感。
+## 11. 基础离线下载（Instruction 124）
+
+- **存储目标**：远程播客单集持久化于 `audioBlobs` 表，元数据存入独立的 `podcast_downloads` 表。这确保了其与 `local_tracks` 中的用户上传音轨在逻辑上完全隔离。
+- **内存安全**：
+  - 下载采用流式管道（通过 `fetchWithFallback` + `TransformStream`），将响应数据块直接导向 IndexedDB。
+  - 杜绝全量二进制缓冲，避免在资源受限的移动浏览器上触发 OOM（内存溢出）。
+- **网络韧性**：
+  - 所有下载请求（包括 `HEAD` 预检及 `GET` 数据拉取）均集成 `fetchWithFallback` 层。
+  - 继承应用级的代理回退及自动重试策略，确保跨域或不稳定的播客源能稳定下载。
+  - **自定义代理契约**：发往自定义代理的传输统一使用 `POST` 访法，即使上游是 `HEAD` 这种原生 `fetch` 禁止带 Body 的请求，也会在 JSON 载荷中传递原始方法。
+- **存储容量策略**：
+  - **限额**：严格遵循 `MAX_AUDIO_CACHE_GB`（默认 10GB）。
+  - **预检**：通过 `HEAD` 请求获取 `Content-Length`。若 `当前使用 + 预估大小 > 限额`，则提前拦截下载。
+  - **物理配额**：若 `navigator.storage.estimate()` 显示剩余空间为零或负数，则拦截下载。对于未知大小的下载，应用 **5MB 的保守临界阈值** 守卫，防止磁盘耗尽导致的系统不稳定。
+  - **容错溢出**：若缺少 `Content-Length`，允许该次下载尝试；若完成后超出限额，则后续所有下载启动将被拦截。
+  - **手动清理**：无自动过期机制，一旦达到上限，用户必须手动删除音轨以释放空间。
+- **身份与播放解析**：
+  - **桥接变量**：`episodeMetadata.originalAudioUrl` 作为稳定身份标识，关联网络地址与本地下载副本。
+  - **数据脱钩（Sanitization）**：删除下载音轨（`podcast_downloads`）时，系统会自动清理 `playback_sessions.localTrackId`，防止历史回溯播放时出现陈旧引用错误。
+- **状态反馈与进度 UI**：
+  - `useEpisodeStatus` hook 提供四种状态：`idle`、`downloading`、`downloaded`、`failed`。
+  - 它订阅了专用的 Zustand 状态库 (`useDownloadProgressStore`) 以暴露活动下载的实时进度 `progress` (0-100) 和下载速度 `speedBytesPerSecond`。
+  - UI 层面（如 `EpisodeDetailDownloadButton`, `PlayerDownloadAction`）基于 `status.progress` 渲染环形 SVG 进度条指示器，取代了不确定的 Spinner 动画，为大文件下载提供了更好的用户反馈。
+  - 离线模式执行严格播放守卫：远程项禁用，本地项可播放。
+- **全局搜索集成**：已下载内容在本地搜索 hook 中被索引为独立的 `download` 结果类型，与播放历史隔离，使导航更加清晰。
+
+## 12. 性能与生命周期优化
+
+- **Promise 合并 (并发控制)**：
+  - 加载操作（例如 `loadSubscriptions`, `loadFavorites`, `loadSessions`, `loadFolders`）采用了**一次性并发合并**。在应用初始化挂载或快速切换页面时，共享一个悬空的 Promise 队列，防止重复发起完全相同的并行网络 / DB 请求。
+- **重新渲染缓解 (列表视图)**：
+  - 提供分发方法的 Hook（比如 `useEpisodePlayback`）内部状态访问通过 `useStore.getState()` 即时读取，而不是向上层订阅诸如 `globalCountry` 这样的全局状态，并且所有吐出动作使用 `useCallback` / `useMemo` 包装。
+  - 这种设计打断了不必要的反应链（Reactivity Chain），彻底防止了全局配置变量变更时在长列表视图（大面积元素渲染）中触发昂贵的 `O(N)` 级无效级联重绘。
+- **`loadedmetadata` 生命周期 Bug 消除**：
+  - 控制系统原生播放器事件的核心组件 `useAudioElementEvents` 移除针对 `<audio>` 事件监听中的 `{ once: true }` 字面量。
+  - 这消除了 React 不断拆除和重建系统事件流时的内存/CPU开支（引用不相等陷阱），并修复了同一会话周期中第二首及其之后的所有流播轨道无法找回过往进度的严重故障。
+- **下载状态全量流转 (Live Sync)**：
+  - 下载列表 `DownloadsPage` 及单集详情等相关 UI 件，使用轻量模式的订阅器挂载 `subscribeToDownloads`，实现后台下载成功及删除状态下的列表即时呈现，抛除不必要的手动刷新。
+- **IndexedDB 检索去重**：
+  - 渲染列表父层统一拦截获取一次 `useEpisodeStatus` 内容。通过将读取过的状态以 props 对象直接向下透传至所有内置小部件（比如 `DownloadEpisodeButton`），成功将页面庞杂单集的冗余数据库请求直接减半，加速离线渲染性能。
+
+## 13. 音频拉取稳定性保障 (2026-02-23/24 改进)
+
+- **音频追踪链接解包 (Tracking URL Unwrapping)**：
+  - **背景**：主流播客平台通常使用嵌套的追踪重定向（如 Podtrac, Chartable）。这些域名极易被广告拦截插件或严格的网络环境阻断，导致浏览器抛出 `ERR_CONNECTION_CLOSED` 错误。
+  - **方案**：在 `urlUtils.ts` 中实现了 `unwrapPodcastTrackingUrl()`。它通过递归匹配黑名单前缀，强行剥离嵌套的追踪层，暴露出底层的 CDN 直连地址。
+  - **集成**：在音频播放解析、后台下载以及 ASR 音频抓取之前统一执行解包逻辑。
+  - **收益**：显著提升了在开启广告拦截器或受限网络环境下的音频拉取成功率。
+
+## 14. 仅流播模式契约（Instruction 129）
+
+- **模式契约**：`src/lib/player/remotePlayback.ts` 新增请求级别的播放模式类型：
+  - `default`
+  - `stream_without_transcript`
+- **单一决策点**：`playRemotePayload` 与 `playHistorySessionWithDeps` 是唯一允许分支的位置，用于决定：
+  - 是否走 ASR 阻塞下载
+  - 是否执行 `autoIngestEpisodeTranscript`
+- **仅流播语义**：
+  - 先通过 `resolvePlaybackSource` 尝试复用本地已下载音频；仅在本地无 blob 时，才通过 `resolveRemoteStreamTargetUrl` 解析 HTTP(S) 远程流地址（优先级：`sourceUrlNormalized` -> `audioUrl`）
+  - 跳过 ASR 阻塞下载
+  - 跳过 `autoIngestEpisodeTranscript`
+  - 在设置最终音源前调用 `useTranscriptStore.getState().resetTranscript()` 清理字幕状态
+  - 本次请求显式执行 `setPlaybackTrackId(null)`，防止复用旧的本地字幕绑定
+  - 在抑制字幕绑定的同时，保持既有进度/会话恢复语义
+- **默认路径稳定性**：原有默认播放按钮行为保持不变。

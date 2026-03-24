@@ -1,0 +1,125 @@
+---
+title: Transcript & Interaction
+---
+
+## 1. Component Hierarchy & Responsibilities
+
+The transcript system follows a strict atomic hierarchy to ensure interaction performance when handling long texts:
+
+- **TranscriptView**: The root container, managing scroll containers, `useSelection` orchestration, and auto-scroll listeners.
+- **SubtitleLine**: Line-level component responsible for timestamp matching and rendering words within the line.
+- **Word**: The smallest token-level interaction unit. It remains the activation target for eligible word lookup and word context menus, while pointer-intent arbitration stays with the browser/native selection plus the shared selection layer.
+
+## 2. Interaction Contract
+
+### Word Clicks & Lookups
+- **Entry Point**: Clicking the `Word` component.
+- **Behavior**:
+  - Dispatches a lookup request to the Dictionary API.
+  - Synchronously updates the global `transcriptStore.highlightedWord` state.
+  - **Playback Pause Rule**: If `pauseOnDictionaryLookup` is enabled, playback pauses for that lookup.
+- **Intent Resolution Rule**:
+  - On desktop pointer input, word lookup intent is resolved on release/click, not on `pointerdown`.
+  - `Word` must not own pointer-press behavior in a way that blocks the browser from starting native text selection directly from a word token.
+- **Lookup Eligibility SSOT**:
+  - Transcript word affordance and word-context-menu lookup visibility both reuse the shared `isLookupEligible()` helper.
+  - Component code must not introduce a second stopword list or duplicate local regex gating for lookup capability.
+- **Current English Stopword Behavior**:
+  - English stopwords are not treated as lookup-capable words.
+  - They do not expose lookup-style hover/focus affordance in the transcript.
+  - Their word context menu omits the `look up` action.
+  - This wording is intentionally limited to the current English-stopword implementation and does not claim multilingual stopword handling.
+- **Keyboard Activation**:
+  - Focused subtitle lines accept `Enter` / `Space` to trigger the same jump behavior as mouse click.
+  - Focused words accept `Enter` / `Space` to trigger the same lookup behavior as mouse click.
+  - Keyboard activation keeps the same selection-priority guard; active transcript-owned native selection still blocks lookup/jump dispatch.
+- **Pointer Priority Contract**:
+  - Native drag selection always takes priority over word lookup when drag/selection intent exists.
+  - Word-origin drag is allowed; starting a desktop drag from the body of an eligible word token must still permit native range selection.
+  - A simple click without drag on an eligible word still triggers lookup.
+  - Right-click on a word still opens the word context menu.
+- **Drag & Long-Press Guard**: Left-button drag selection always takes priority over word lookup.
+  - **Space Threshold**: Movement exceeding `10px` is classified as a drag, causing an **early pause**.
+  - **Time Threshold**: Holding for more than `300ms` is classified as a long-press, causing an **early pause** to prepare the menu.
+  - **Simple Click**: Short, low-movement (< 10px) clicks are treated as paragraph jumps or simple clicks and **MUST NOT** trigger a pause.
+- **Instance Highlight Rule**: `transcriptStore.highlightedWord` stores the clicked word instance id.
+- **Priority**: If a non-collapsed native text selection exists, word clicks are ignored.
+- **Line vs Word Activation Contract**:
+  - Clicking non-word line body still triggers cue jump.
+  - Word activation must not bubble into line jump behavior.
+  - Keyboard line activation and keyboard word activation remain distinct paths; preserving this distinction is required for future refactors.
+
+### Selection & Menu Management
+- **Native Selection Priority**: The system prioritizes browser native text selections.
+- **Surface Types**:
+  - `rangeActionMenu`: A horizontal bubble menu (Copy, Search, Lookup) that appears above range selections.
+  - `contextMenu`: A vertical list menu triggered via right-click or long-press on a specific word or line.
+  - `lookup`: A dictionary callout surface.
+- **Explicit Owner Metadata**: All selection surfaces carry `SelectionOwner` metadata (cue key, timestamp, token instance ID) to track the origin of the interaction.
+- **Copy Label Contract**: Range/word menus must use `copySelected`; line-level context menus must continue to use `copyLine` / “Copy paragraph”.
+- **Lookup Path Parity**: Direct word lookup and context-menu lookup both route through the same behavior; playback remains paused while the UI is open and resumes automatically on close.
+- **Accidental Pause Recovery**: If playback was paused early due to movement but no selection/menu was triggered on `mouseup`, playback MUST be restored (Cancel Interaction).
+- **Auto-Dismiss**: All active menus close immediately upon container scrolling or viewport resizing.
+- **Frozen Surface Contract**: While a menu or lookup surface is open, transcript hover is frozen.
+- **Outside Interaction Contract**: While a surface is open, the first outside click or right-click closes it.
+- **Scroll & Zoom Blocking Contract (Viewport Freeze)**: When any selection surface (`lookup`, `contextMenu`, `rangeActionMenu`) is active, the system enforces "Viewport Stability": locking body overflow, intercepting wheel events on background areas, and blocking all zoom behaviors. However, it **permits** scrolling within the active menu/callout itself to ensure accessibility of long dictionary results.
+- **Surface Switching & Playback isolation**:
+  - Right-click switching from one surface to another (e.g., Menu A -> Menu B) is treated as a **Surface Switch**, not a dismissal.
+  - During a Switch, the interaction session remains active: **playback stays paused continuously** without a "resume-then-pause" blip.
+  - Focus restoration is skipped during word-to-word right-click switches to prevent focus "tug-of-war" with the new surface.
+  - Focus MUST be restored and playback resumed ONLY on a true **Dismissal**:
+    - Outside left-click.
+    - Escape key.
+    - Explicit close button (e.g., Lookup close).
+    - Viewport-change dismissal.
+- **Focus Purity Rule**: Focus restoration helpers (e.g., `restoreSelectionOwnerFocus`) must be pure; conditional logic for skipping restoration belongs at the dismissal site/hook.
+
+### Lookup & Menu Positioning (Instruction 134b)
+- **Floating UI Integration**: All selection surfaces use `@floating-ui/react` for precise positioning.
+- **Portal Boundary**: All overlays render through Radix UI `Portal` (targeting `document.body`) so transformed docked/full transcript surfaces cannot skew geometry.
+- **Viewport Coordinates**: Placement is derived from viewport anchor coordinates (or `DOMRect` when available), not ancestor layout offsets.
+- **Clamp & Flip Contract**: Surfaces use `flip()` and `shift()` middleware to stay within viewport bounds with a fixed safety margin and preserve an `8px-12px` anchor gap.
+- **Default Placement**: Surfaces prefer rendering `top` of the anchor without overlap, and automatically flip to `bottom` (or other sides) when space is insufficient.
+
+## 3. Technical Implementation
+
+### High-Performance Highlighting (Highlights API)
+- **Mechanism**: Utilizes the CSS Custom Highlight API for search matches and lookup highlights.
+- **Benefit**: Avoids DOM structural changes, preventing rendering jitters caused by frequent `<span>` tag injections.
+- **Fallback**: Gracefully degrades in environments without Highlights API support, without affecting core reading functionality.
+
+### Auto-scroll Algorithm
+- **Trigger**: Active line changes triggered by `timeupdate` events.
+- **Alignment**: Uses `center` alignment, always attempting to keep the active playback line centered in the viewport.
+- **Smoothness**: Implements native `scrollIntoView({ behavior: 'smooth', block: 'center' })`.
+- **Intervention Guard**: Auto-scrolling is paused when manual scrolling or word selection is detected.
+
+## 4. Dictionary Integration
+
+- **Current Backend Scope**: The runtime dictionary backend is currently configured for English only. The active runtime config contract is the English-specific key, not a generic all-language dictionary endpoint.
+- **English Config Contract**: English lookup requests are constructed from the English-only runtime config path (`EN_DICTIONARY_API_URL` / `READIO_EN_DICTIONARY_API_URL`).
+- **Language Normalization**: Lookup availability is checked against the normalized base language. Region forms such as `en-US` normalize to `en` and continue through the English lookup path.
+- **Unsupported-Language State**: If the normalized transcript/content language is not currently configured (for example `zh-CN` -> `zh`), the lookup UI opens in a dedicated `lookupDictionaryNotConfigured` state.
+- **Failure-State Separation**: This unsupported-language state is distinct from `lookupNotFound` and `errorNetwork`; it is a configuration/availability result, not a failed English dictionary request.
+- **No Success Semantics On Unsupported Path**: Unsupported-language lookup does not call the English dictionary fetch path and must not behave like a successful lookup close path. In particular, closing the callout must not apply delayed same-word page highlight.
+- **Context Transparency**: Lookup requests are not stored in the local database and remain strictly in memory.
+
+## 5. Performance Hardening
+
+- **Virtualization**: Deeply integrated with `GroupedVirtuoso` to ensure constant memory footprint even for several-hour-long podcast episodes.
+- **Atomic Subscriptions**: `Word` components subscribe only to their relevant `isHighlighted` state to avoid redundant re-renders during playback.
+
+## 6. Locale-Aware Tokenization Integration (Instruction 111b)
+
+- **Language Source**: `TranscriptView` reads runtime language from i18n (`resolvedLanguage ?? language`) and passes it into each `SubtitleLine`.
+- **Tokenization Authority**: `SubtitleLine` calls `tokenize(text, language)`; locale-aware segmentation is now active in transcript rendering path.
+- **Interaction Parity**:
+  - Lookup (left-click) and word-menu (right-click/long-press) behavior remains unchanged.
+  - Highlight state continues to be driven by normalized token matching in `transcriptStore.highlightedWord`.
+- **Memoization Boundary**:
+  - Tokenization is memoized by `text + language` in `SubtitleLine`.
+  - Unrelated rerenders (for example active-row visual state changes) do not recompute tokens.
+
+## 7. Active Subtitle Source
+
+For downloaded podcast episodes, the subtitle system no longer relies on a single `activeSubtitleId` field. Instead, it uses `DownloadsRepository.getActiveSubtitleByTrackId(trackId)`. This mechanism ensures that in a multi-version environment, the player always loads the user-specified "currently active" version from the downloads management page.

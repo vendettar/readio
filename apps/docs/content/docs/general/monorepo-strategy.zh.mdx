@@ -1,0 +1,88 @@
+---
+title: Monorepo 策略
+---
+
+# Monorepo 策略与未来应用
+
+Readio 旨在从单一 PWA 演变为多平台生态系统。
+本文档概述了 `apps/cloud` 的当前角色以及 `apps/native` 的长期方向。
+
+## 1. 应用概览
+
+| 应用 | 路径 | 类型 | 状态 | 目标 |
+|---|---|---|---|---|
+| **Lite** | `apps/lite` | SPA/PWA | 🟢 Live | 零依赖、离线优先的播放器。 |
+| **Cloud** | `apps/cloud` | 后端脚手架 | ⚪ 仅脚手架 | 提供 `apps/lite/dist`、RSS 代理与 SQLite 启动。 |
+| **Native** | `apps/native` | Mobile | ⚪ 仅脚手架 | 通过 Capacitor 的 iOS/Android 包装器。 |
+
+---
+
+## 2. Cloud 策略 (后端)
+
+**角色**: 可选增强。App 必须在没有它的情况下完美运行。
+
+### 计划功能 (P2/P3)
+- **数据同步**: 跨设备同步订阅和进度。
+- **AI 服务**: 服务端 Whisper (转录) 和 LLM (摘要)。
+- **社交**: 评论和“播客俱乐部”。
+
+### 技术栈
+- **框架**: 当前脚手架使用 Go `net/http`。
+- **数据库**: 当前脚手架使用 SQLite；PostgreSQL 仅保留为未来 SaaS 方向。
+- **认证**: JWT 认证仅保留为未来方向。
+
+---
+
+## 3. Native 策略 (包装器)
+
+**角色**: 访问 PWA 无法触及的系统 API。
+
+### 计划功能 (P2)
+- **后台音频**: 原生 iOS/Android 音频会话处理。
+- **通知**: 新剧集的推送通知。
+- **小组件**: 主屏幕小组件。
+- **CarPlay / Auto**: 驾驶时的简化 UI。
+
+### 技术栈
+- **框架**: Capacitor (包装 `apps/lite`)。
+- **共享代码**: `packages/core` 中的逻辑。
+
+---
+
+## 4. 共享包 (`packages/`)
+
+为了支持这种演变，我们必须将逻辑从 `apps/lite` 移出到共享包中。
+
+- **`packages/core`**: 跨应用共享的领域 schema 与核心逻辑。
+- **`packages/ui`**: UI 包占位目录（目录已存在，具体实现待补全）。
+- **`packages/config`**: 工程配置 SSOT 占位目录（目录已存在，具体实现待补全）。
+ 
+---
+ 
+## 5. 引擎策略 (Engine Policy)
+
+为了防止架构漂移和“在我的机器上能运行”这类 Bug，整个 monorepo 严格强制执行工具版本：
+
+- **运行时 (Runtime)**: Node.js `>=20.0.0` (LTS 基准)。
+- **包管理器 (Manager)**: pnpm `>=10.28.0` (Lockfile 版本稳定性)。
+- **强制措施**: 在根目录 `.npmrc` 中强制设置 `engine-strict=true`。
+
+---
+
+## 6. 缓存策略 (Turborepo) [已实现]
+
+为了最大化构建性能并防止过时的输出：
+
+- **全局依赖**: `.npmrc` 和 `pnpm-workspace.yaml` 变更时会使所有缓存失效。
+- **构建输入**: 源文件 (`src/**`)、配置文件 (`vite.config.ts`、`tsconfig.json`)，排除测试文件。
+- **构建输出**: `dist/**`、`.next/**`、`stats.html`。
+- **依赖传播**: `^build` 确保上游包先重新构建。
+- **不缓存任务**: `dev` 和 `format` 永远不缓存。
+
+**验证**: 运行 `pnpm build` 两次。第二次应显示 `>>> FULL TURBO`。
+
+---
+
+## 计划中（待执行）
+
+- **架构图**：用 Mermaid 描绘 `apps/docs`、`apps/lite`、`agent/instructions` 的关系（指令 059）。

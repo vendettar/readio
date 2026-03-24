@@ -1,0 +1,60 @@
+> **⚠️ CRITICAL**: You MUST preserve the current UI/UX layout and styling. Do NOT change visual appearance unless explicitly instructed.
+> **Prerequisites**: Read `apps/docs/content/docs/general/design-system/index.mdx` and `apps/docs/content/docs/apps/lite/ui-patterns/index.mdx` before starting.
+
+# Task: Implement Tab Synchronization [COMPLETED]
+
+## Objective
+Ensure only one tab plays audio at a time (Singleton Playback).
+If Tab A is playing and user plays in Tab B, Tab A should pause.
+
+## 1. Create `useTabSync` Hook
+- **Path**: `apps/lite/src/hooks/useTabSync.ts`.
+- **Implementation**:
+  - Generate a unique `tabId` on mount using `createId()` from `apps/lite/src/lib/id.ts`.
+  - Use `BroadcastChannel('readio_sync')`.
+  - When `play()` is called, post `{ type: 'PLAYING', senderId: tabId }`.
+  - Listener: If message received AND `senderId !== tabId`, dispatch `PAUSE` **only when this tab is currently playing**; otherwise no-op.
+  - **Fallback**: If `BroadcastChannel` is unavailable, use `storage` events with a `localStorage` key (`readio_sync`) to broadcast the same payload.
+  - **Feedback Guard**: Include `timestamp` and ignore events older than 2 seconds. Ignore events originating from the current tab.
+
+## 2. Integration
+- **Target**: `apps/lite/src/components/AppShell/GlobalAudioController.tsx`.
+- **Action**: Call `useTabSync()`.
+
+## 3. Verification
+- **Test**: Open Readio in 2 tabs.
+- **Test**: Play in Tab 1.
+- **Test**: Play in Tab 2.
+- **Result**: Tab 1 should pause automatically.
+
+### Quality Check
+- **Type Check**: Run `pnpm --filter @readio/lite typecheck`.
+- **Lint**: Run `pnpm --filter @readio/lite lint`.
+
+---
+## Documentation
+- Update `apps/docs/content/docs/apps/lite/handoff/architecture.mdx`.
+- Update `apps/docs/content/docs/apps/lite/handoff/standards.mdx`.
+- Update `apps/docs/content/docs/apps/lite/handoff/index.mdx` with the new status.
+
+## Completion
+- Completed by: Codex
+- Commands: `pnpm --filter @readio/lite typecheck` (failed: pnpm not found), `pnpm --filter @readio/lite lint` (failed: pnpm not found)
+- Date: 2026-01-27
+
+## Patch Additions (Integrated)
+# Patch: 029-implement-tab-synchronization
+
+## Why
+Content-level normalization to align with Leadership requirements and prevent execution drift.
+
+## Global Additions
+- Add Scope Scan (config, persistence, routing, logging, network, storage, UI state, tests).
+- Add Hidden Risk Sweep for async control flow and hot-path performance.
+- Add State Transition Integrity check.
+- Add Dynamic Context Consistency check for locale/theme/timezone/permissions.
+- Add Impact Checklist: affected modules, regression risks, required verification.
+- Add Forbidden Dependencies / Required Patterns when touching architecture or cross-module refactors.
+
+## Task-Specific Additions
+- Document conflict resolution strategy for tab sync.
