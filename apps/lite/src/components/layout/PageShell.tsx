@@ -1,4 +1,6 @@
+import { AppShell } from '@readio/ui'
 import type React from 'react'
+
 import { cn } from '../../lib/utils'
 
 interface PageShellProps {
@@ -13,7 +15,7 @@ interface PageShellProps {
  */
 export function PageShell({ children, className, contentClassName }: PageShellProps) {
   return (
-    <div className={cn('h-full bg-background text-foreground flex flex-col', className)}>
+    <AppShell className={cn('h-full bg-background text-foreground flex flex-col', className)}>
       <div
         className={cn(
           'w-full max-w-content mx-auto px-page pt-page pb-32 min-h-full',
@@ -22,6 +24,6 @@ export function PageShell({ children, className, contentClassName }: PageShellPr
       >
         {children}
       </div>
-    </div>
+    </AppShell>
   )
 }

@@ -9,6 +9,7 @@ describe('PageHeader Contract', () => {
     render(<PageHeader title={longTitle} />)
     const titleEl = screen.getByRole('heading', { level: 1 })
     expect(titleEl.className).toContain('line-clamp-2')
+    expect(titleEl.className).not.toContain('ui-shell__title')
     expect(titleEl.textContent).toBe(longTitle)
   })
 
@@ -19,6 +20,7 @@ describe('PageHeader Contract', () => {
     // subtitle is a paragraph
     const subtitleEl = screen.getByText(longSubtitle)
     expect(subtitleEl.className).toContain('line-clamp-2')
+    expect(subtitleEl.className).not.toContain('ui-shell__description')
   })
 
   it('allows actions container to wrap under pressure', () => {

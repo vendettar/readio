@@ -5,36 +5,64 @@ title: Cloud Handoff
 # Cloud Handoff
 
 This document is the current entry point for the Cloud scaffold phase.
-It records the implemented backend contracts only, and it should stay aligned with the actual `apps/cloud` code.
+It records the implemented backend contracts only, and it should stay aligned with the actual `apps/cloud-api` code.
+
+## 0. Current Scaffold vs Target Topology
+
+Current reality:
+
+- `apps/cloud-api` is the current Go scaffold.
+- It currently serves built frontend assets directly and owns a narrow scaffold-phase backend contract.
+
+Target topology:
+
+- `apps/cloud-api`: Go backend
+- `apps/cloud-ui`: Cloud frontend
+
+Architecture rule:
+
+- `apps/lite` and `apps/cloud-ui` are separate web apps.
+- They may share presentation components and schema contracts, but they must not share the same networking model.
+- Cloud frontend is expected to converge on same-origin backend-owned discovery APIs and should not preserve Lite's long-term CORS proxy mental model.
 
 ## 1. Current Purpose
 
-- Serve the built `apps/lite/dist` frontend output from `apps/cloud`.
+- Serve the built `apps/cloud-ui/dist` frontend output from `apps/cloud-api`.
 - Provide the `/api/proxy` RSS proxy contract for the current scaffold phase.
+- Own same-origin discovery/search/feed networking and backend error mapping for Cloud UI.
 - Bootstrap SQLite for the Cloud backend scaffold and keep the lifecycle explicit.
 
-## 2. Static Serving Strategy
+## 2. Release Layout
 
-- `apps/cloud` serves the built Lite output directly.
+- The release is dual-artifact:
+  - `apps/cloud-ui/dist` for the frontend asset bundle
+  - `apps/cloud-api` for the Go API binary
+- The workflow stages the Cloud UI build output into `dist/` inside the release directory.
+- `apps/cloud-api` serves the built Cloud UI output directly.
+
+## 3. Static Serving Strategy
+
 - Non-API routes fall back to `index.html` only when a direct file does not exist.
 - Existing files, including extensionless assets, are served directly when present.
 - `/api/*` routes remain owned by API handlers and must not fall back to the SPA shell.
 
-## 3. RSS Proxy Contract
+## 4. RSS Proxy Contract
 
 - `GET /api/proxy?url=...` is the current proxy surface.
 - The proxy validates the requested target before dialing and rejects private, loopback, link-local, or metadata-style destinations.
 - The request path is fail-closed: it uses a pinned validated target set and does not follow redirects into disallowed destinations.
 - The proxy uses a custom user agent, applies a bounded fetch timeout, and keeps a basic in-memory rate limit.
 
-## 4. SQLite Bootstrap Status
+## 5. SQLite Bootstrap Status
 
 - SQLite is the current Cloud persistence bootstrap target.
 - The bootstrap path creates the parent directory, opens the database, applies initialization PRAGMAs, and closes cleanly on shutdown.
 - This phase does not define schema, migrations, sync, or auth layers.
 
-## 5. Boundaries
+## 6. Boundaries
 
 - Do not describe a separate Cloud web frontend as already implemented.
+- Do not describe the current `apps/cloud-api` scaffold as the final Cloud topology.
+- Do not imply that future Cloud UI should continue using Lite's browser-direct discovery or user-configured CORS proxy model.
 - Do not claim schema, sync, auth, or multi-user SaaS behavior in this scaffold stage.
 - Keep future Cloud evolution in docs that are explicitly labeled as future direction.

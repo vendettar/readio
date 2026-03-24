@@ -5,14 +5,15 @@ title: Monorepo 策略
 # Monorepo 策略与未来应用
 
 Readio 旨在从单一 PWA 演变为多平台生态系统。
-本文档概述了 `apps/cloud` 的当前角色以及 `apps/native` 的长期方向。
+本文档概述了 `apps/cloud-api` 的当前角色以及 `apps/native` 的长期方向。
 
 ## 1. 应用概览
 
 | 应用 | 路径 | 类型 | 状态 | 目标 |
 |---|---|---|---|---|
 | **Lite** | `apps/lite` | SPA/PWA | 🟢 Live | 零依赖、离线优先的播放器。 |
-| **Cloud** | `apps/cloud` | 后端脚手架 | ⚪ 仅脚手架 | 提供 `apps/lite/dist`、RSS 代理与 SQLite 启动。 |
+| **Cloud API（当前脚手架）** | `apps/cloud-api` | 后端脚手架 | ⚪ 仅脚手架 | 作为 Cloud 的同源后端，提供 discovery/search/feed 网关、缓存、SQLite-backed 服务，并服务 Cloud UI 的发布产物。 |
+| **Cloud API（历史脚手架位置）** | `apps/cloud` | 后端脚手架 | ⚪ 历史 | Cloud Go 脚手架在仓库移动到 `apps/cloud-api` 之前的旧位置。 |
 | **Native** | `apps/native` | Mobile | ⚪ 仅脚手架 | 通过 Capacitor 的 iOS/Android 包装器。 |
 
 ---
@@ -54,7 +55,7 @@ Readio 旨在从单一 PWA 演变为多平台生态系统。
 为了支持这种演变，我们必须将逻辑从 `apps/lite` 移出到共享包中。
 
 - **`packages/core`**: 跨应用共享的领域 schema 与核心逻辑。
-- **`packages/ui`**: UI 包占位目录（目录已存在，具体实现待补全）。
+- **`packages/ui`**: 共享展示组件包，已开始承载 Cloud/Lite 可复用的 presentation primitives。
 - **`packages/config`**: 工程配置 SSOT 占位目录（目录已存在，具体实现待补全）。
  
 ---
