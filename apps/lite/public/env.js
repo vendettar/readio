@@ -1,0 +1,58 @@
+/**
+ * Readio Runtime Configuration (Defaults)
+ *
+ * This file contains safe defaults and is committed to Git.
+ *
+ * LOCAL CUSTOMIZATION:
+ * Create a file named `env.local.js` (NOT committed to Git) to override:
+ * See env.local.js.example for a template.
+ */
+
+window.__READIO_ENV__ = window.__READIO_ENV__ || {
+  // --- Basic Info ---
+  READIO_APP_NAME: 'Readio',
+  READIO_APP_VERSION: '1.0.0',
+
+  // --- Proxy & Network ---
+  READIO_CORS_PROXY_URL: '',
+  READIO_PROXY_TIMEOUT_MS: 10000,
+  READIO_DIRECT_TIMEOUT_MS: 5000,
+  READIO_MAX_CONCURRENT_REQUESTS: 6,
+  READIO_DB_NAME: 'readio-lite',
+
+  // External APIs
+  READIO_DISCOVERY_SEARCH_URL: 'https://itunes.apple.com/search',
+  READIO_DISCOVERY_LOOKUP_URL: 'https://itunes.apple.com/lookup',
+  READIO_RSS_FEED_BASE_URL: 'https://rss.applemarketingtools.com/api/v2',
+  READIO_EN_DICTIONARY_API_URL: 'https://api.dictionaryapi.dev/api/v2/entries/en',
+  // Browser runtime config must not expose real upstream provider secrets.
+  // Readio rejects known secret formats like sk-, sk-proj-, gsk_, gsk-.
+  // Only public/intentionally browser-visible values belong here.
+  READIO_ASR_API_KEY: '',
+  READIO_OPENAI_API_KEY: '',
+  READIO_ENABLED_ASR_PROVIDERS: '',
+  READIO_DISABLED_ASR_PROVIDERS: '',
+
+  // --- Limits & Quotas ---
+  READIO_MAX_AUDIO_SIZE_MB: 300,
+  READIO_MAX_AUDIO_CACHE_GB: 10,
+  READIO_DICT_CACHE_MAX_ENTRIES: 500,
+  READIO_SAVE_PROGRESS_INTERVAL_MS: 5000,
+
+  // --- UI & Interaction ---
+  READIO_MIN_ZOOM: 0.5,
+  READIO_MAX_ZOOM: 3.0,
+  READIO_ZOOM_STEP: 0.1,
+  READIO_ZOOM_HIDE_DELAY_MS: 2000,
+
+  // --- Localization ---
+  READIO_DEFAULT_PODCAST_CONTENT_COUNTRY: 'us',
+  READIO_DEFAULT_LANGUAGE: 'en',
+
+  // --- Assets ---
+  READIO_FALLBACK_PODCAST_IMAGE: '/placeholder-podcast.svg',
+
+  // --- Cache TTLs (ms) ---
+  READIO_CACHE_TTL_EPISODES_MS: 3600000, // 1 hour
+  READIO_RECOMMENDED_TTL_MS: 86400000, // 24 hours
+}

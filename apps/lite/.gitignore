@@ -1,0 +1,22 @@
+# Vite & Frontend Build
+dist/
+dist-ssr/
+.vite/
+stats.html
+
+# Router & Code Gen
+.tanstack/
+
+# Playwright Test Outputs
+test-results/
+playwright-report/
+playwright/.cache/
+tests/.output/
+.nyc_output/
+
+# Local Dev Env
+public/env.local.js
+
+# Local runtime config template is tracked, actual local overrides
+# use: git update-index --assume-unchanged public/env.js
+# public/env.js

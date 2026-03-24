@@ -22,7 +22,7 @@ interface TranscriptViewProps {
 
 const Scroller = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>((props, ref) => (
   <div {...props} ref={ref} className={cn(props.className, 'custom-scrollbar')} />
-)) as unknown as NonNullable<Components['Scroller']> as unknown as NonNullable<Components['Scroller']>
+)) as unknown as NonNullable<Components['Scroller']>
 
 function TranscriptViewInner({
   subtitles,
