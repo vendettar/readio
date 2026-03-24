@@ -1,0 +1,104 @@
+name: Cloud CD
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloud-cd-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: cloud-production
+    env:
+      SSH_HOST: ${{ secrets.CLOUD_SSH_HOST }}
+      SSH_PORT: ${{ secrets.CLOUD_SSH_PORT || '22' }}
+      SSH_USER: ${{ secrets.CLOUD_SSH_USER }}
+      REMOTE_ROOT: /opt/readio
+      REMOTE_RELEASE_DIR: /opt/readio/releases/${{ github.sha }}
+      REMOTE_CURRENT_DIR: /opt/readio/current
+      REMOTE_SHARED_DATA_DIR: /opt/readio/shared/data
+      SERVICE_NAME: ${{ vars.CLOUD_SERVICE_NAME || 'readio-cloud' }}
+      APP_PORT: ${{ vars.CLOUD_PORT || '8080' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Lite off-server
+        run: pnpm -C apps/lite build
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+
+      - name: Build Cloud Linux binary
+        run: |
+          mkdir -p release
+          cd apps/cloud
+          # Explicit cross-compile instead of reusing apps/cloud/package.json build,
+          # because that script writes to /tmp/readio-cloud and does not enforce Linux output.
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o "$GITHUB_WORKSPACE/release/readio-cloud" .
+
+      - name: Stage release assets
+        run: |
+          mkdir -p release/dist
+          rsync -a apps/lite/dist/ release/dist/
+
+      - name: Write SSH known hosts
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.CLOUD_SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          printf '%s\n' "${{ secrets.CLOUD_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/known_hosts ~/.ssh/id_ed25519
+
+      - name: Create remote release directory
+        run: |
+          ssh -i ~/.ssh/id_ed25519 \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -p "$SSH_PORT" \
+            "$SSH_USER@$SSH_HOST" \
+            "mkdir -p '$REMOTE_ROOT' '$REMOTE_SHARED_DATA_DIR' '$REMOTE_RELEASE_DIR'"
+
+      - name: Transfer release artifacts
+        run: |
+          rsync -a \
+            -e "ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts -p $SSH_PORT" \
+            release/ \
+            "$SSH_USER@$SSH_HOST:$REMOTE_RELEASE_DIR/"
+
+      - name: Publish release and smoke test
+        run: |
+          ssh -i ~/.ssh/id_ed25519 \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -p "$SSH_PORT" \
+            "$SSH_USER@$SSH_HOST" \
+            "set -euo pipefail; ln -sfn '$REMOTE_RELEASE_DIR' '$REMOTE_CURRENT_DIR'; systemctl restart '$SERVICE_NAME'; systemctl is-active --quiet '$SERVICE_NAME'; test -x '$REMOTE_CURRENT_DIR/readio-cloud'; test -d '$REMOTE_CURRENT_DIR/dist'; curl -fsS 'http://127.0.0.1:${APP_PORT}/healthz' >/dev/null"
