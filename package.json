@@ -20,7 +20,9 @@
     "lite:test": "pnpm --filter @readio/lite test",
     "lite:test:run": "pnpm --filter @readio/lite test:run",
     "lite:e2e": "pnpm --filter @readio/lite test:e2e",
-    "lite:e2e:ui": "pnpm --filter @readio/lite test:e2e:ui"
+    "lite:e2e:ui": "pnpm --filter @readio/lite test:e2e:ui",
+    "cloud:build": "pnpm --filter @readio/cloud-ui build",
+    "cloud:dev": "pnpm run cloud:build && pnpm --filter @readio/cloud-api dev"
   },
   "devDependencies": {
     "@biomejs/biome": "2.3.13",

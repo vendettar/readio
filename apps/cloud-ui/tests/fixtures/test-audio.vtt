@@ -1,0 +1,7 @@
+WEBVTT
+
+00:00:01.000 --> 00:00:02.000
+First VTT line
+
+00:02.500 --> 00:04.000
+Second VTT line with short timestamp

@@ -1,0 +1,4 @@
+export const QUOTA_WARNING_THRESHOLD = 0.8
+export const QUOTA_BLOCK_THRESHOLD = 0.85
+export const QUOTA_HARD_BLOCK_THRESHOLD = 0.95
+export const BYTES_PER_GB = 1024 * 1024 * 1024

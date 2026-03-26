@@ -1,8 +1,0 @@
-/bin/
-*.exe
-*.test
-*.out
-*.prof
-*.pprof
-coverage.out
-cloud

@@ -4,21 +4,23 @@ title: Cloud Handoff
 
 # Cloud Handoff
 
-This document is the current entry point for the Cloud scaffold phase.
-It records the implemented backend contracts only, and it should stay aligned with the actual `apps/cloud` code.
+This document is the current entry point for the Cloud bootstrap phase.
+It records the implemented `apps/cloud-ui` + `apps/cloud-api` contracts and should stay aligned with the actual code.
 
 ## 1. Current Purpose
 
-- Serve the built `apps/lite/dist` frontend output from `apps/cloud`.
+- Build `apps/cloud-ui` as a full Lite-equivalent frontend clone.
+- Serve the built `apps/cloud-ui/dist` frontend output from `apps/cloud-api`.
 - Provide the `/api/proxy` RSS proxy contract for the current scaffold phase.
 - Bootstrap SQLite for the Cloud backend scaffold and keep the lifecycle explicit.
 
 ## 2. Static Serving Strategy
 
-- `apps/cloud` serves the built Lite output directly.
+- `apps/cloud-api` serves the built Cloud UI output directly.
 - Non-API routes fall back to `index.html` only when a direct file does not exist.
 - Existing files, including extensionless assets, are served directly when present.
 - `/api/*` routes remain owned by API handlers and must not fall back to the SPA shell.
+- The backend resolves `dist/` from an explicit `READIO_CLOUD_UI_DIST_DIR` override first, then falls back to colocated `dist/` or repository-local `apps/cloud-ui/dist`.
 
 ## 3. RSS Proxy Contract
 
@@ -35,6 +37,6 @@ It records the implemented backend contracts only, and it should stay aligned wi
 
 ## 5. Boundaries
 
-- Do not describe a separate Cloud web frontend as already implemented.
+- Do describe Cloud as a Lite-equivalent frontend clone served by the Go backend for this phase.
 - Do not claim schema, sync, auth, or multi-user SaaS behavior in this scaffold stage.
 - Keep future Cloud evolution in docs that are explicitly labeled as future direction.
