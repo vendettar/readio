@@ -4,21 +4,23 @@ title: Cloud 交接
 
 # Cloud 交接
 
-本文档是 Cloud 脚手架阶段的当前入口。
-它只记录已实现的后端契约，并且必须与 `apps/cloud` 的实际代码保持一致。
+本文档是 Cloud bootstrap 阶段的当前入口。
+它记录 `apps/cloud-ui` 与 `apps/cloud-api` 的已实现契约，并且必须与实际代码保持一致。
 
 ## 1. 当前目的
 
-- 直接提供 `apps/lite/dist` 构建后的前端产物。
+- 将 `apps/cloud-ui` 构建为与 Lite 等价的完整前端克隆。
+- 由 `apps/cloud-api` 直接提供 `apps/cloud-ui/dist` 的构建产物。
 - 暴露当前脚手架阶段的 `/api/proxy` RSS 代理契约。
 - 启动 SQLite 作为 Cloud 后端脚手架的持久化基础，并保持生命周期清晰。
 
 ## 2. 静态服务策略
 
-- `apps/cloud` 直接提供 Lite 的构建输出。
+- `apps/cloud-api` 直接提供 Cloud UI 的构建输出。
 - 非 API 路由仅在不存在同名文件时回退到 `index.html`。
 - 已存在的文件，包括无扩展名资源，都会被直接提供。
 - `/api/*` 路由由 API 处理器独占，不能回退到 SPA shell。
+- 后端会优先读取显式的 `READIO_CLOUD_UI_DIST_DIR`，否则回退到同目录 `dist/` 或仓库内的 `apps/cloud-ui/dist`。
 
 ## 3. RSS 代理契约
 
@@ -35,6 +37,6 @@ title: Cloud 交接
 
 ## 5. 边界
 
-- 不要把单独的 Cloud Web 前端描述为已经实现。
+- 在这一阶段，应把 Cloud 描述为由 Go 后端提供的 Lite 等价前端克隆。
 - 不要在这一阶段声称已经具备 schema、同步、认证或多用户 SaaS 行为。
 - 未来 Cloud 演进应放在明确标记为 future direction 的文档里。

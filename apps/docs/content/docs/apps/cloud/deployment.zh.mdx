@@ -10,10 +10,10 @@ description: Cloud CD 工作流与远程发布布局的运维说明。
 
 ## 1. 工作流构建内容
 
-- 使用 `pnpm -C apps/lite build` 在服务器外构建 Lite。
-- 使用 `apps/cloud` 中的 `CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o readio-cloud .` 构建 Linux 二进制。
-- 只暂存发布产物：`readio-cloud` 二进制和 `apps/lite/dist`。
-- 这里明确要求交叉编译，因为 `apps/cloud/package.json` 的本地脚手架脚本是 `go build -o /tmp/readio-cloud .`，不能满足 Linux CD 契约。
+- 使用 `pnpm -C apps/cloud-ui build` 在服务器外构建 Cloud UI。
+- 使用 `apps/cloud-api` 中的 `CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o readio-cloud .` 构建 Linux 二进制。
+- 只暂存发布产物：`readio-cloud` 二进制和 `apps/cloud-ui/dist`。
+- 这里明确要求交叉编译，因为 `apps/cloud-api/package.json` 的本地脚手架脚本是 `go build -o /tmp/readio-cloud .`，不能满足 Linux CD 契约。
 
 ## 2. 必需的 GitHub 配置
 
