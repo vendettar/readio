@@ -1,3 +1,10 @@
+const DEFAULT_RUNTIME_ORIGIN =
+  typeof globalThis !== 'undefined' && globalThis.location?.origin
+    ? globalThis.location.origin
+    : 'http://localhost:3000'
+
+const SAME_ORIGIN_DISCOVERY_BASE = `${DEFAULT_RUNTIME_ORIGIN}/api/v1/discovery`
+
 export const DEFAULTS = {
   APP_NAME: 'Readio',
   APP_VERSION: '1.0.0',
@@ -14,9 +21,9 @@ export const DEFAULTS = {
   MAX_CONCURRENT_REQUESTS: 6,
   DB_NAME: 'readio-lite',
   EN_DICTIONARY_API_URL: 'https://api.dictionaryapi.dev/api/v2/entries/en/',
-  DISCOVERY_LOOKUP_URL: 'https://itunes.apple.com/lookup',
-  DISCOVERY_SEARCH_URL: 'https://itunes.apple.com/search',
-  RSS_FEED_BASE_URL: 'https://rss.applemarketingtools.com/api/v2',
+  DISCOVERY_LOOKUP_URL: `${SAME_ORIGIN_DISCOVERY_BASE}/lookup`,
+  DISCOVERY_SEARCH_URL: `${SAME_ORIGIN_DISCOVERY_BASE}/search`,
+  RSS_FEED_BASE_URL: SAME_ORIGIN_DISCOVERY_BASE,
   MAX_AUDIO_CACHE_GB: 10,
   DICT_CACHE_MAX_ENTRIES: 500,
   DICT_CACHE_KEY: 'readio-lite-dict-cache',

@@ -2,7 +2,7 @@
   "name": "@readio/cloud-api",
   "private": true,
   "scripts": {
-    "dev": "go run main.go",
+    "dev": "go run .",
     "build": "go build -o /tmp/readio-cloud ."
   }
 }

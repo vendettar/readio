@@ -137,6 +137,10 @@ vi.mock('../../components/Settings/sections/AsrSettingsSection', () => ({
   AsrSettingsSection: () => <div data-testid="asr-settings-section" />,
 }))
 
+vi.mock('../../components/Settings/sections/CorsProxySettingsSection', () => ({
+  CorsProxySettingsSection: () => <div data-testid="cors-proxy-settings-section" />,
+}))
+
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ children, to }: { children: React.ReactNode; to: string }) => (
     <a href={to}>{children}</a>
@@ -214,6 +218,13 @@ describe('SettingsPage', () => {
     expect(screen.queryByRole('button', { name: 'settingsExportVault' })).toBeNull()
     expect(screen.queryByText('settingsAiServices')).toBeNull()
     expect(screen.queryByText('settingsDictionary')).toBeNull()
+  })
+
+  it('keeps settings sections aligned while removing the CORS proxy block', () => {
+    render(<SettingsPage />)
+
+    expect(screen.getByTestId('asr-settings-section')).not.toBeNull()
+    expect(screen.queryByTestId('cors-proxy-settings-section')).toBeNull()
   })
 
   it('formats export date suffix deterministically for explicit timezones', () => {

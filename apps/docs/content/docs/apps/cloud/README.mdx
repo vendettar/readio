@@ -4,6 +4,8 @@ description: Documentation for the Readio Cloud application and backend architec
 ---
 
 The Cloud bootstrap currently splits into `apps/cloud-ui` and `apps/cloud-api`.
-`apps/cloud-ui` is a full Lite-equivalent frontend clone, and `apps/cloud-api` is a pure Go `net/http` backend that serves the built frontend output and bootstraps SQLite for the current phase.
+`apps/cloud-ui` is the Cloud UI build, and `apps/cloud-api` is the Go service that serves that build, boots SQLite for the current phase, and owns the backend same-origin networking used by migrated discovery, search, and feed flows.
+
+Cloud Settings no longer includes the `CORS Proxy` block for the migrated Cloud contract.
 
 See the Cloud handoff docs under `apps/docs/content/docs/apps/cloud/handoff/` for the current backend contracts and task-level implementation boundaries.

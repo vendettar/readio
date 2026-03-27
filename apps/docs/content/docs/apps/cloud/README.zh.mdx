@@ -4,6 +4,8 @@ description: Readio 云端应用及后端架构文档。
 ---
 
 当前 Cloud bootstrap 拆分为 `apps/cloud-ui` 与 `apps/cloud-api`。
-其中 `apps/cloud-ui` 是与 Lite 等价的完整前端克隆，`apps/cloud-api` 则是纯 Go `net/http` 后端，负责提供构建后的前端产物并在当前阶段启动 SQLite。
+其中 `apps/cloud-ui` 是 Cloud 的前端构建产物，`apps/cloud-api` 则是负责提供该构建产物、在当前阶段启动 SQLite，并接管已迁移的 discovery、search、feed 同源后端网络请求的 Go 服务。
+
+Cloud Settings 在当前 Cloud 契约中不再包含 `CORS Proxy` 区块。
 
 当前后端契约与任务级边界请查看 `apps/docs/content/docs/apps/cloud/handoff/` 下的 Cloud handoff 文档。

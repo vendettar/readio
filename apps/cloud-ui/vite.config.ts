@@ -2,8 +2,6 @@ import path from 'node:path'
 import { TanStackRouterVite } from '@tanstack/router-plugin/vite'
 import react from '@vitejs/plugin-react'
 import { defineConfig, type PluginOption } from 'vite'
-import { VitePWA } from 'vite-plugin-pwa'
-import { API_RUNTIME_CACHING, AUDIO_RUNTIME_CACHING } from './src/lib/pwa/runtimeCaching'
 
 // https://vite.dev/config/
 
@@ -15,7 +13,6 @@ const visualizerPlugin = visualizer({
   brotliSize: true,
 }) as PluginOption
 
-const enablePwaDev = process.env.PWA_DEV === '1'
 const devHostAll = process.env.VITE_DEV_HOST_ALL === '1'
 
 const base = process.env.VITE_BASE_PATH || '/'
@@ -29,75 +26,9 @@ export default defineConfig({
       generatedRouteTree: './src/routeTree.gen.ts',
     }),
     react(),
-    VitePWA({
-      registerType: 'prompt',
-      injectRegister: 'auto',
-      manifestFilename: 'manifest.json',
-      devOptions: {
-        enabled: enablePwaDev,
-        type: 'module',
-      },
-      manifest: {
-        name: 'Readio Lite',
-        short_name: 'Readio',
-        description: 'Premium Podcast Player with transcripts',
-        theme_color: '#2563EB',
-        background_color: '#FFFFFF',
-        display: 'standalone',
-        orientation: 'portrait',
-        scope: './',
-        start_url: './',
-        icons: [
-          {
-            src: 'readio.png',
-            sizes: '192x192',
-            type: 'image/png',
-          },
-          {
-            src: 'readio.png',
-            sizes: '512x512',
-            type: 'image/png',
-          },
-        ],
-      },
-      workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        mode: 'development',
-        sourcemap: false,
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'google-fonts-cache',
-              expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365, // <== 365 days
-              },
-              cacheableResponse: {
-                statuses: [0, 200],
-              },
-            },
-          },
-          {
-            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'gstatic-fonts-cache',
-              expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365, // <== 365 days
-              },
-              cacheableResponse: {
-                statuses: [0, 200],
-              },
-            },
-          },
-          API_RUNTIME_CACHING,
-          AUDIO_RUNTIME_CACHING,
-        ],
-      },
-    }),
+    // TODO(cloud-pwa): Re-enable vite-plugin-pwa only if Cloud explicitly needs
+    // offline/installable app behavior. For now we keep Cloud free of Workbox
+    // to reduce cache/debugging complexity while backend-owned networking settles.
     visualizerPlugin,
   ],
   resolve: {

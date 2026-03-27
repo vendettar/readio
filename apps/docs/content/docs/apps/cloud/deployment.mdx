@@ -14,6 +14,7 @@ It does not provision the VPS, nginx, TLS, firewall rules, or `systemd`.
 - Build Cloud API as a Linux binary with `CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o readio-cloud .` from `apps/cloud-api`.
 - Stage only the release artifacts: the `readio-cloud` binary and `apps/cloud-ui/dist`.
 - Cross-compilation is deliberate and required because `apps/cloud-api/package.json` uses `go build -o /tmp/readio-cloud .` for the local scaffold, which is not sufficient for the Linux CD contract.
+- The Go binary reads `PORT`; the workflow's `CLOUD_PORT` variable is only the smoke-check port and must match the service's `PORT` value.
 
 ## 2. Required GitHub configuration
 
@@ -66,6 +67,7 @@ Runtime contract:
 - the service should execute the binary from the `current` release path or use `WorkingDirectory=/opt/readio/current`
 - the Cloud app must be able to resolve the colocated `dist/` directory from the active release
 - the SQLite database path must stay under `/opt/readio/shared/data/` (or another shared persistent path outside release directories)
+- the service must export `PORT` for the listen port; do not use `READIO_PORT` for this contract
 
 Each release directory contains:
 
@@ -117,7 +119,7 @@ WorkingDirectory=$CURRENT_DIR
 ExecStart=$CURRENT_DIR/readio-cloud
 Restart=always
 
-Environment=READIO_PORT=8080
+Environment=PORT=8080
 Environment=READIO_CLOUD_UI_DIST_DIR=$CURRENT_DIR/dist
 Environment=READIO_CLOUD_DB_PATH=$DB_PATH
 
@@ -141,6 +143,7 @@ Important details:
 - The static Cloud UI assets are served from `/opt/readio/current/dist`.
 - The SQLite file stays outside release directories, for example `/opt/readio/shared/data/readio.db`.
 - The workflow already uses `sudo -n`, so the deploy user must be able to run both `systemctl restart` and `systemctl is-active` without a password prompt.
+- The workflow points `/opt/readio/current` at the new release before it restarts the service, so the first restart on a fresh host needs that release directory to exist.
 
 If the VPS sudoers entry only allows `systemctl restart readio-cloud` and does not also allow `systemctl is-active readio-cloud`, the non-interactive smoke step will still fail in GitHub Actions.
 
@@ -148,7 +151,7 @@ If the VPS sudoers entry only allows `systemctl restart readio-cloud` and does n
 
 The deployment is release-scoped and atomic at the pointer level:
 
-1. Build Lite and Cloud on the GitHub runner.
+1. Build Cloud UI and Cloud API on the GitHub runner.
 2. Stage artifacts locally under `release/`.
 3. Create the remote release directory for the current commit SHA.
 4. Transfer only `release/` into `/opt/readio/releases/<git-sha>/`.

@@ -25,6 +25,10 @@ describe('PWA runtime caching policy', () => {
     expect(isDiscoveryApiRequest({ url: new URL('https://cdn.example.com/track.mp3') })).toBe(false)
   })
 
+  it('keeps the discovery matcher self-contained for service worker serialization', () => {
+    expect(isDiscoveryApiRequest.toString()).not.toContain('isAudioRequest')
+  })
+
   it('keeps audio cache bounded and range-capable', () => {
     expect(AUDIO_RUNTIME_CACHING.options.cacheName).toBe(AUDIO_CACHE_NAME)
     expect(AUDIO_RUNTIME_CACHING.options.rangeRequests).toBe(true)

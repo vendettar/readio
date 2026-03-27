@@ -14,6 +14,7 @@ description: Cloud CD 工作流与远程发布布局的运维说明。
 - 使用 `apps/cloud-api` 中的 `CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o readio-cloud .` 构建 Linux 二进制。
 - 只暂存发布产物：`readio-cloud` 二进制和 `apps/cloud-ui/dist`。
 - 这里明确要求交叉编译，因为 `apps/cloud-api/package.json` 的本地脚手架脚本是 `go build -o /tmp/readio-cloud .`，不能满足 Linux CD 契约。
+- Go 二进制读取的是 `PORT`；工作流中的 `CLOUD_PORT` 只是烟测端口，必须与服务的 `PORT` 值一致。
 
 ## 2. 必需的 GitHub 配置
 
@@ -66,6 +67,7 @@ SSH 安全规则：
 - 服务应从 `current` 指向的发布目录执行二进制，或在 `systemd` 中使用 `WorkingDirectory=/opt/readio/current`
 - Cloud 应用必须能从当前激活发布目录解析同目录下的 `dist/`
 - SQLite 数据库路径必须保持在 `/opt/readio/shared/data/` 下，或其他位于发布目录之外的共享持久路径中
+- 服务必须为监听端口导出 `PORT`；不要在这个契约里使用 `READIO_PORT`
 
 每个发布目录包含：
 
@@ -74,11 +76,90 @@ SSH 安全规则：
 
 工作流会先创建远程目录再传输，且不会清空部署根目录，因此 SQLite 的 `data/` 会被保留。
 
+## 3a. 新主机 VPS 启动
+
+如果你在准备新的 VPS，先创建发布目录、安装 `systemd` 单元，并授予部署用户无需交互即可重启和检查 Cloud 服务的权限。
+
+请仅使用当前运行时契约：
+
+- `READIO_CLOUD_UI_DIST_DIR`
+- `READIO_CLOUD_DB_PATH`
+
+不要在 Cloud 服务定义中继续使用旧名字，例如 `READIO_LITE_DIST_DIR` 或 `READIO_DATA_DIR`。
+
+示例启动脚本：
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+DEPLOY_USER="$(id -un)"
+DEPLOY_GROUP="$(id -gn)"
+SYSTEMCTL_BIN="$(command -v systemctl)"
+SERVICE_NAME="readio-cloud"
+REMOTE_ROOT="/opt/readio"
+RELEASES_DIR="$REMOTE_ROOT/releases"
+SHARED_DATA_DIR="$REMOTE_ROOT/shared/data"
+CURRENT_DIR="$REMOTE_ROOT/current"
+DB_PATH="$SHARED_DATA_DIR/readio.db"
+
+sudo mkdir -p "$RELEASES_DIR"
+sudo mkdir -p "$SHARED_DATA_DIR"
+sudo chown -R "$DEPLOY_USER:$DEPLOY_GROUP" "$REMOTE_ROOT"
+
+sudo tee "/etc/systemd/system/${SERVICE_NAME}.service" >/dev/null <<EOF
+[Unit]
+Description=Readio Cloud Backend
+After=network.target
+
+[Service]
+Type=simple
+User=$DEPLOY_USER
+WorkingDirectory=$CURRENT_DIR
+ExecStart=$CURRENT_DIR/readio-cloud
+Restart=always
+
+Environment=PORT=8080
+Environment=READIO_CLOUD_UI_DIST_DIR=$CURRENT_DIR/dist
+Environment=READIO_CLOUD_DB_PATH=$DB_PATH
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo tee "/etc/sudoers.d/readio-cloud-cd" >/dev/null <<EOF
+$DEPLOY_USER ALL=(root) NOPASSWD: $SYSTEMCTL_BIN restart $SERVICE_NAME, $SYSTEMCTL_BIN is-active $SERVICE_NAME
+EOF
+sudo chmod 440 /etc/sudoers.d/readio-cloud-cd
+
+sudo "$SYSTEMCTL_BIN" daemon-reload
+sudo "$SYSTEMCTL_BIN" enable "$SERVICE_NAME"
+```
+
+重要细节：
+
+- 服务使用 `WorkingDirectory=/opt/readio/current`。
+- 二进制路径是 `/opt/readio/current/readio-cloud`。
+- Cloud UI 静态资源从 `/opt/readio/current/dist` 提供。
+- SQLite 文件应保留在发布目录之外，例如 `/opt/readio/shared/data/readio.db`。
+- 工作流已经使用 `sudo -n`，因此部署用户必须能够无密码执行 `systemctl restart` 和 `systemctl is-active`。
+- 工作流会在重启服务前把 `/opt/readio/current` 指向新发布目录，所以新主机第一次重启前必须已经存在对应发布目录。
+
+如果 VPS 的 sudoers 规则只允许 `systemctl restart readio-cloud`，却不允许 `systemctl is-active readio-cloud`，那么 GitHub Actions 里的非交互烟测步骤仍会失败。
+
+建议在 VPS 上做的预启动验证：
+
+```bash
+sudo -n "$(command -v systemctl)" restart readio-cloud
+sudo -n "$(command -v systemctl)" is-active --quiet readio-cloud
+curl -fsS http://127.0.0.1:8080/healthz
+```
+
 ## 4. 发布流程
 
 部署采用按版本号分段的发布方式，并且仅在指针层面保持原子性：
 
-1. 在 GitHub runner 上构建 Lite 和 Cloud。
+1. 在 GitHub runner 上构建 Cloud UI 和 Cloud API。
 2. 将产物先暂存到本地 `release/`。
 3. 为当前提交 SHA 创建远程发布目录。
 4. 只把 `release/` 传到 `/opt/readio/releases/<git-sha>/`。
@@ -117,4 +198,5 @@ SSH 安全规则：
 - 该工作流假设 VPS 已经存在。
 - 它不负责安装或管理 `systemd`。
 - 它不负责配置 nginx、TLS 或防火墙。
+- 它不会让 Cloud 前端直接调用 Apple；后端负责 Apple 相关网络请求和错误映射。
 - 它不部署 SQLite schema、同步、认证或多节点能力。

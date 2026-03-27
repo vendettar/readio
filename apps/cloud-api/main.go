@@ -126,11 +126,13 @@ func runCloudServer(parent context.Context) error {
 	slog.Info("sqlite database ready", "path", dbPath)
 
 	proxy := cloudNewProxyService()
+	discovery := newDiscoveryService()
 
 	addr := ":" + port
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", healthHandler)
+	mux.Handle(discoveryRoutePrefix, discovery)
 	mux.Handle(proxyRoute, proxy)
 	mux.Handle("/", handler)
 
