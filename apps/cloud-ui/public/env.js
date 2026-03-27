@@ -13,17 +13,16 @@ window.__READIO_ENV__ = window.__READIO_ENV__ || {
   READIO_APP_NAME: 'Readio',
   READIO_APP_VERSION: '1.0.0',
 
-  // --- Proxy & Network ---
-  READIO_CORS_PROXY_URL: '',
+  // --- Network ---
   READIO_PROXY_TIMEOUT_MS: 10000,
   READIO_DIRECT_TIMEOUT_MS: 5000,
   READIO_MAX_CONCURRENT_REQUESTS: 6,
   READIO_DB_NAME: 'readio-lite',
 
-  // External APIs
-  READIO_DISCOVERY_SEARCH_URL: 'https://itunes.apple.com/search',
-  READIO_DISCOVERY_LOOKUP_URL: 'https://itunes.apple.com/lookup',
-  READIO_RSS_FEED_BASE_URL: 'https://rss.applemarketingtools.com/api/v2',
+  // Migrated discovery/search/feed networking is backend-owned and same-origin in Cloud.
+  READIO_DISCOVERY_SEARCH_URL: `${window.location.origin}/api/v1/discovery/search`,
+  READIO_DISCOVERY_LOOKUP_URL: `${window.location.origin}/api/v1/discovery/lookup`,
+  READIO_RSS_FEED_BASE_URL: `${window.location.origin}/api/v1/discovery`,
   READIO_EN_DICTIONARY_API_URL: 'https://api.dictionaryapi.dev/api/v2/entries/en',
   // Browser runtime config must not expose real upstream provider secrets.
   // Readio rejects known secret formats like sk-, sk-proj-, gsk_, gsk-.

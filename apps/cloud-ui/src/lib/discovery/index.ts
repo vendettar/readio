@@ -5,6 +5,16 @@ import {
   DISCOVERY_CACHE_TTLS_MS,
   runDiscoveryCacheMaintenance as runAppleDiscoveryCacheMaintenance,
 } from './providers/apple'
+import {
+  fetchPodcastFeed as fetchCloudPodcastFeed,
+  fetchTopEpisodes as fetchCloudTopEpisodes,
+  fetchTopPodcasts as fetchCloudTopPodcasts,
+  getPodcast as getCloudPodcast,
+  getPodcastEpisodes as getCloudPodcastEpisodes,
+  lookupPodcastsByIds as lookupCloudPodcastsByIds,
+  searchEpisodes as searchCloudEpisodes,
+  searchPodcasts as searchCloudPodcasts,
+} from './cloudApi'
 import type {
   DiscoveryPodcast,
   DiscoveryRequestOptions,
@@ -31,7 +41,10 @@ const discovery = {
     limit = 30,
     signal?: AbortSignal,
     options?: DiscoveryRequestOptions<Podcast[]>
-  ) => provider.searchPodcasts(query, country, limit, signal, options),
+  ) => {
+    void options
+    return searchCloudPodcasts(query, country, limit, signal)
+  },
 
   searchEpisodes: (
     query: string,
@@ -39,7 +52,10 @@ const discovery = {
     limit = 20,
     signal?: AbortSignal,
     options?: DiscoveryRequestOptions<SearchEpisode[]>
-  ) => provider.searchEpisodes(query, country, limit, signal, options),
+  ) => {
+    void options
+    return searchCloudEpisodes(query, country, limit, signal)
+  },
 
   // Lookup / Get
   getPodcast: (
@@ -47,7 +63,10 @@ const discovery = {
     country = 'us',
     signal?: AbortSignal,
     options?: DiscoveryRequestOptions<Podcast | null>
-  ) => provider.lookupPodcast(id, country, signal, options),
+  ) => {
+    void options
+    return getCloudPodcast(id, country, signal)
+  },
 
   getPodcastEpisodes: (
     id: string,
@@ -55,7 +74,10 @@ const discovery = {
     limit = 50,
     signal?: AbortSignal,
     options?: DiscoveryRequestOptions<Episode[]>
-  ) => provider.lookupPodcastEpisodes(id, country, limit, signal, options),
+  ) => {
+    void options
+    return getCloudPodcastEpisodes(id, country, limit, signal)
+  },
 
   // Legacy/Helper methods (exposed for compatibility, can be refactored later)
   lookupEpisode: (
@@ -70,14 +92,20 @@ const discovery = {
     country = 'us',
     signal?: AbortSignal,
     options?: DiscoveryRequestOptions<DiscoveryPodcast[]>
-  ) => provider.lookupPodcastsByIds(ids, country, signal, options),
+  ) => {
+    void options
+    return lookupCloudPodcastsByIds(ids, country, signal)
+  },
 
   // Feed
   fetchPodcastFeed: (
     feedUrl: string,
     signal?: AbortSignal,
     options?: DiscoveryRequestOptions<ParsedFeed>
-  ) => provider.fetchPodcastFeed(feedUrl, signal, options),
+  ) => {
+    void options
+    return fetchCloudPodcastFeed(feedUrl, signal)
+  },
 
   // Top Charts
   fetchTopPodcasts: (
@@ -85,14 +113,20 @@ const discovery = {
     limit = 30,
     signal?: AbortSignal,
     options?: DiscoveryRequestOptions<DiscoveryPodcast[]>
-  ) => provider.fetchTopPodcasts(country, limit, signal, options),
+  ) => {
+    void options
+    return fetchCloudTopPodcasts(country, limit, signal)
+  },
 
   fetchTopEpisodes: (
     country = 'us',
     limit = 30,
     signal?: AbortSignal,
     options?: DiscoveryRequestOptions<DiscoveryPodcast[]>
-  ) => provider.fetchTopEpisodes(country, limit, signal, options),
+  ) => {
+    void options
+    return fetchCloudTopEpisodes(country, limit, signal)
+  },
 
   fetchTopSubscriberPodcasts: (country = 'us', limit = 30, signal?: AbortSignal) =>
     provider.fetchTopSubscriberPodcasts(country, limit, signal),

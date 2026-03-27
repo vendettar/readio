@@ -9,7 +9,7 @@ export function isAudioRequest({ url }: { url: URL }) {
 
 export function isDiscoveryApiRequest({ url }: { url: URL }) {
   if (!url.protocol.startsWith('http')) return false
-  if (isAudioRequest({ url })) return false
+  if (AUDIO_PATH_PATTERN.test(url.pathname)) return false
 
   return (
     url.hostname === 'itunes.apple.com' ||

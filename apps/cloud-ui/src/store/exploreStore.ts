@@ -78,9 +78,6 @@ function abortPodcast(): void {
 function abortAll(): void {
   abortSearch()
   abortPodcast()
-  // Also abort any inflight requests via requestManager
-  // Use the search URL prefix from config to cancel pending requests
-  abortRequestsWithPrefix(`GET:${getAppConfig().DISCOVERY_SEARCH_URL}`)
 }
 
 function bindExternalAbortSignal(

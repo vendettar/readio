@@ -4,7 +4,6 @@ import { PageHeader, PageShell } from '../components/layout'
 import { SettingsSectionCard } from '../components/Settings/SettingsSectionCard'
 import { AppearanceSettingsSection } from '../components/Settings/sections/AppearanceSettingsSection'
 import { AsrSettingsSection } from '../components/Settings/sections/AsrSettingsSection'
-import { CorsProxySettingsSection } from '../components/Settings/sections/CorsProxySettingsSection'
 import { GeneralSettingsSection } from '../components/Settings/sections/GeneralSettingsSection'
 import { LegalSettingsSection } from '../components/Settings/sections/LegalSettingsSection'
 import { ConfirmAlertDialog } from '../components/ui/confirm-alert-dialog'
@@ -54,8 +53,7 @@ export default function SettingsPage() {
   const setCountry = useExploreStore((s) => s.setCountry)
 
   // Settings form with validation
-  const { credentialsLoaded, loadError, form, handleFieldBlur, handleAsrFieldBlur } =
-    useSettingsForm()
+  const { credentialsLoaded, loadError, form, handleAsrFieldBlur } = useSettingsForm()
 
   // Data loading hook
   const { sessions } = useSettingsData()
@@ -150,7 +148,6 @@ export default function SettingsPage() {
                 /> */}
                 {/* TODO(settings): restore the Dictionary Lookup block when its product requirements are defined again. */}
                 {/* <DictionarySettingsSection form={form} onFieldBlur={handleFieldBlur} /> */}
-                <CorsProxySettingsSection form={form} onFieldBlur={handleFieldBlur} />
               </>
             ) : (
               <SettingsSectionCard

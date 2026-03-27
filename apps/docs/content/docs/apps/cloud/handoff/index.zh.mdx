@@ -11,6 +11,8 @@ title: Cloud 交接
 
 - 将 `apps/cloud-ui` 构建为与 Lite 等价的完整前端克隆。
 - 由 `apps/cloud-api` 直接提供 `apps/cloud-ui/dist` 的构建产物。
+- 让已迁移的 discovery、search、feed 流量通过 `apps/cloud-api` 以同源后端方式承载。
+- 让 Cloud Settings 在当前契约中不再包含 `CORS Proxy` 区块。
 - 暴露当前脚手架阶段的 `/api/proxy` RSS 代理契约。
 - 启动 SQLite 作为 Cloud 后端脚手架的持久化基础，并保持生命周期清晰。
 
@@ -38,5 +40,7 @@ title: Cloud 交接
 ## 5. 边界
 
 - 在这一阶段，应把 Cloud 描述为由 Go 后端提供的 Lite 等价前端克隆。
+- 应把已迁移的 discovery、search、feed 请求描述为由后端拥有的同源流量。
+- 应把 Cloud Settings 描述为不再包含 `CORS Proxy` 区块。
 - 不要在这一阶段声称已经具备 schema、同步、认证或多用户 SaaS 行为。
 - 未来 Cloud 演进应放在明确标记为 future direction 的文档里。

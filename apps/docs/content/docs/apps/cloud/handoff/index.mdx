@@ -11,6 +11,8 @@ It records the implemented `apps/cloud-ui` + `apps/cloud-api` contracts and shou
 
 - Build `apps/cloud-ui` as a full Lite-equivalent frontend clone.
 - Serve the built `apps/cloud-ui/dist` frontend output from `apps/cloud-api`.
+- Keep migrated discovery, search, and feed flows backend-owned and same-origin through `apps/cloud-api`.
+- Keep Cloud Settings free of the `CORS Proxy` block for the current Cloud contract.
 - Provide the `/api/proxy` RSS proxy contract for the current scaffold phase.
 - Bootstrap SQLite for the Cloud backend scaffold and keep the lifecycle explicit.
 
@@ -38,5 +40,7 @@ It records the implemented `apps/cloud-ui` + `apps/cloud-api` contracts and shou
 ## 5. Boundaries
 
 - Do describe Cloud as a Lite-equivalent frontend clone served by the Go backend for this phase.
+- Do describe migrated discovery, search, and feed requests as backend-owned same-origin flows.
+- Do describe Cloud Settings as no longer including the `CORS Proxy` block.
 - Do not claim schema, sync, auth, or multi-user SaaS behavior in this scaffold stage.
 - Keep future Cloud evolution in docs that are explicitly labeled as future direction.
