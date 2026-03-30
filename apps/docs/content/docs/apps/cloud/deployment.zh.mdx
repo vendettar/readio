@@ -8,6 +8,25 @@ description: Cloud CD 工作流与远程发布布局的运维说明。
 本文档与 `.github/workflows/cd-cloud.yml` 保持一致，仅记录部署契约。
 它不负责 VPS、nginx、TLS、防火墙或 `systemd` 的搭建。
 
+## 0a. 生产环境运行时配置契约
+
+在生产环境 Cloud 中：
+
+- `apps/cloud-api` 动态提供 `/env.js`，**优先于** SPA/静态资源回退。
+- 生产环境 Cloud **不使用** `apps/cloud-ui/public/env.js` 或 `dist/env.js` 作为运行时配置基准。
+- 后端仅通过显式浏览器安全 allowlist 发出运行时配置。
+- 服务端所有的运行时值（监听端口、路径、滥用控制设置）保留在 VPS 环境或 systemd 环境文件（`/etc/readio/readio-cloud.env`）中。
+
+在前端独立开发时：
+
+- `apps/cloud-ui/public/env.js` 仍是开发用默认模板。
+- `apps/cloud-ui/public/env.local.js` 仍是本地覆盖路径。
+- 前端在两种环境下都读取 `window.__READIO_ENV__`。
+
+浏览器公开的运行时配置字段不是密钥。如果字段被发出到 `/env.js`，假设每个浏览器用户都能读取它。
+
+完整配置审计见 `handoff/runtime-config-ownership-audit.md`。
+
 ## 1. 工作流构建内容
 
 - 使用 `pnpm -C apps/cloud-ui build` 在服务器外构建 Cloud UI。
@@ -85,7 +104,11 @@ SSH 安全规则：
 - `READIO_CLOUD_UI_DIST_DIR`
 - `READIO_CLOUD_DB_PATH`
 
-不要在 Cloud 服务定义中继续使用旧名字，例如 `READIO_LITE_DIST_DIR` 或 `READIO_DATA_DIR`。
+对于可变的运行时配置，优先使用 env file，而不是把所有值都硬编码进 `systemd` 单元：
+
+- 像 `PORT`、`READIO_CLOUD_UI_DIST_DIR`、`READIO_CLOUD_DB_PATH` 这种稳定路径留在 unit 里。
+- secrets 和可调运维参数放到 `/etc/readio/readio-cloud.env`。
+- 这样可以保持 `systemd` unit 稳定，同时允许你只修改运行时配置而不反复重写服务定义。
 
 示例启动脚本：
 
@@ -105,7 +128,16 @@ DB_PATH="$SHARED_DATA_DIR/readio.db"
 
 sudo mkdir -p "$RELEASES_DIR"
 sudo mkdir -p "$SHARED_DATA_DIR"
+sudo mkdir -p /etc/readio
 sudo chown -R "$DEPLOY_USER:$DEPLOY_GROUP" "$REMOTE_ROOT"
+
+sudo tee /etc/readio/readio-cloud.env >/dev/null <<EOF
+READIO_ASR_ALLOWED_ORIGINS=https://www.readio.top
+READIO_ASR_RELAY_TOKEN=replace-with-a-long-random-token
+READIO_ASR_RATE_LIMIT_BURST=60
+READIO_ASR_RATE_LIMIT_WINDOW_MS=60000
+EOF
+sudo chmod 600 /etc/readio/readio-cloud.env
 
 sudo tee "/etc/systemd/system/${SERVICE_NAME}.service" >/dev/null <<EOF
 [Unit]
@@ -118,6 +150,7 @@ User=$DEPLOY_USER
 WorkingDirectory=$CURRENT_DIR
 ExecStart=$CURRENT_DIR/readio-cloud
 Restart=always
+EnvironmentFile=/etc/readio/readio-cloud.env
 
 Environment=PORT=8080
 Environment=READIO_CLOUD_UI_DIST_DIR=$CURRENT_DIR/dist
@@ -142,10 +175,20 @@ sudo "$SYSTEMCTL_BIN" enable "$SERVICE_NAME"
 - 二进制路径是 `/opt/readio/current/readio-cloud`。
 - Cloud UI 静态资源从 `/opt/readio/current/dist` 提供。
 - SQLite 文件应保留在发布目录之外，例如 `/opt/readio/shared/data/readio.db`。
+- `/etc/readio/readio-cloud.env` 是推荐的 Cloud 可变运行时配置位置。
+- Cloud ASR relay 的防滥用边界依赖 `READIO_ASR_ALLOWED_ORIGINS`、`READIO_ASR_RELAY_TOKEN`、`READIO_ASR_RATE_LIMIT_BURST`、`READIO_ASR_RATE_LIMIT_WINDOW_MS`。
+- 浏览器需要发送 `X-Readio-Relay-Token`，所以同一个 relay token 需要同时存在于后端运行环境和 Cloud 前端运行时环境中。
 - 工作流已经使用 `sudo -n`，因此部署用户必须能够无密码执行 `systemctl restart` 和 `systemctl is-active`。
 - 工作流会在重启服务前把 `/opt/readio/current` 指向新发布目录，所以新主机第一次重启前必须已经存在对应发布目录。
 
 如果 VPS 的 sudoers 规则只允许 `systemctl restart readio-cloud`，却不允许 `systemctl is-active readio-cloud`，那么 GitHub Actions 里的非交互烟测步骤仍会失败。
+
+如果修改了 unit 或 env file，记得执行：
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart readio-cloud
+```
 
 建议在 VPS 上做的预启动验证：
 

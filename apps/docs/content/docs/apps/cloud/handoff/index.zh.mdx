@@ -75,3 +75,13 @@ title: Cloud 交接
 - 当前 Cloud 契约已经把 provider 转写切到独立的同源 relay，而 provider 验证 / readiness 仍然保持 browser-direct。
 - 浏览器本地 blob 与已下载 blob 仍然是 browser-local 输入；relay 不会把它们变成后端持久化对象。
 - 这一页只保留高层映射；实现细节放在审计子文档里。
+
+## 8. 运行时配置所有权审计
+
+- 运行时配置所有权审计记录在 `runtime-config-ownership-audit.md`。
+- 它将配置分为三个所有权桶：服务端所有运行时环境、由后端 `/env.js` 发出的浏览器公开运行时配置，以及浏览器本地/用户本地配置。
+- 生产环境 Cloud `/env.js` 由 `apps/cloud-api` 通过显式 allowlist 生成，不是从进程环境变量转储。
+- `apps/cloud-ui/public/env.js` 仅面向开发/默认模板。
+- 服务端所有配置保留在 VPS 环境或 systemd 环境文件（例如 `/etc/readio/readio-cloud.env`）。
+- 浏览器公开字段（例如 `READIO_ASR_RELAY_TOKEN`）不是密钥；它们是轻量级滥用控制 token。
+- 这一页只保留高层映射；实现细节放在审计子文档里。

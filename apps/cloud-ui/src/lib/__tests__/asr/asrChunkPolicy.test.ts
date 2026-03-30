@@ -1,10 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ABSOLUTE_MAX_CALLS, transcribeAudioWithRetry } from '../../asr'
+import * as backendRelay from '../../asr/backendRelay'
 import * as chunker from '../../asr/mp3Chunker'
 
 vi.mock('../../asr/registry', () => ({
   getAsrProviderConfig: () => ({ transport: 'mock' }),
 }))
+
+vi.mock('../../asr/backendRelay', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../asr/backendRelay')>()
+  return {
+    ...actual,
+    transcribeViaCloudRelay: vi.fn(),
+  }
+})
 
 function createLikelyMp3Bytes(size: number): Uint8Array {
   const bytes = new Uint8Array(size)
@@ -49,10 +58,17 @@ describe('ASR Chunk Policy', () => {
   let logSpy: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
+    vi.clearAllMocks()
     splitLegacySpy = vi.spyOn(chunker, 'splitMp3Blob').mockResolvedValue([new Blob()])
     splitProgressiveSpy = vi
       .spyOn(chunker, 'splitMp3BlobWithTargetSizes')
       .mockResolvedValue([new Blob()])
+    vi.spyOn(backendRelay, 'transcribeViaCloudRelay').mockResolvedValue({
+      cues: [{ start: 0, end: 1, text: 'ok' }],
+      provider: 'groq',
+      model: 'model',
+      durationSeconds: 1,
+    })
     logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
   })
 

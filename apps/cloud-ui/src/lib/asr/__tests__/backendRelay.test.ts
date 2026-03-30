@@ -4,25 +4,29 @@ import { transcribeViaCloudRelay, verifyAsrKeyViaCloudRelay } from '../backendRe
 describe('ASR backend relay', () => {
   afterEach(() => {
     vi.restoreAllMocks()
+    window.__READIO_ENV__ = undefined
   })
 
   it('submits transcription to the same-origin relay instead of a provider endpoint', async () => {
+    window.__READIO_ENV__ = {
+      READIO_ASR_RELAY_TOKEN: 'relay-public-token',
+    }
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       expect(typeof input === 'string' ? input : input.toString()).toBe('/api/v1/asr/transcriptions')
       expect(init?.method).toBe('POST')
+      expect(init?.body).toBeInstanceOf(FormData)
+      expect(init?.headers).toEqual({
+        'X-Readio-Relay-Token': 'relay-public-token',
+      })
 
-      const payload = JSON.parse(String(init?.body ?? '{}')) as {
-        provider: string
-        model: string
-        apiKey: string
-        audioBase64: string
-        audioMimeType?: string
-      }
-      expect(payload.provider).toBe('groq')
-      expect(payload.model).toBe('whisper-large-v3')
-      expect(payload.apiKey).toBe('gsk_test')
-      expect(payload.audioBase64).not.toBe('')
-      expect(payload.audioMimeType).toBe('audio/mpeg')
+      const payload = init?.body as FormData
+      expect(payload.get('provider')).toBe('groq')
+      expect(payload.get('model')).toBe('whisper-large-v3')
+      expect(payload.get('apiKey')).toBe('gsk_test')
+      expect(payload.get('audioMimeType')).toBe('audio/mpeg')
+      const audio = payload.get('audio')
+      expect(audio).toBeInstanceOf(File)
+      expect((audio as File).type).toBe('audio/mpeg')
 
       return new Response(
         JSON.stringify({
@@ -152,9 +156,16 @@ describe('ASR backend relay', () => {
   })
 
   it('submits verification to the same-origin verify relay instead of a provider endpoint', async () => {
+    window.__READIO_ENV__ = {
+      READIO_ASR_RELAY_TOKEN: 'relay-public-token',
+    }
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       expect(typeof input === 'string' ? input : input.toString()).toBe('/api/v1/asr/verify')
       expect(init?.method).toBe('POST')
+      expect(init?.headers).toEqual({
+        'Content-Type': 'application/json',
+        'X-Readio-Relay-Token': 'relay-public-token',
+      })
 
       const payload = JSON.parse(String(init?.body ?? '{}')) as {
         provider: string

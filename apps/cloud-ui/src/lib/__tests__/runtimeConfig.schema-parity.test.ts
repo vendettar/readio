@@ -19,6 +19,7 @@ describe('runtimeConfig schema parity', () => {
   it('maps representative runtime env values with expected coercion', async () => {
     window.__READIO_ENV__ = {
       READIO_CORS_PROXY_URL: 'https://proxy.example.com',
+      READIO_ASR_RELAY_TOKEN: 'relay-public-token',
       READIO_PROXY_TIMEOUT_MS: '1234',
       READIO_DEFAULT_LANGUAGE: 'ZH-CN',
       READIO_DEFAULT_PODCAST_CONTENT_COUNTRY: 'JP',
@@ -32,6 +33,7 @@ describe('runtimeConfig schema parity', () => {
     const config = getAppConfig()
 
     expect(config.CORS_PROXY_URL).toBe('https://proxy.example.com')
+    expect(config.ASR_RELAY_TOKEN).toBe('relay-public-token')
     expect(config.PROXY_TIMEOUT_MS).toBe(1234)
     expect(config.DEFAULT_LANGUAGE).toBe('zh')
     expect(config.DEFAULT_COUNTRY).toBe('JP')

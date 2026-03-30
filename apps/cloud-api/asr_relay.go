@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -13,6 +14,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -20,9 +22,16 @@ import (
 
 const asrRelayRoute = "/api/v1/asr/transcriptions"
 const asrVerifyRoute = "/api/v1/asr/verify"
+const asrRelayTokenHeader = "X-Readio-Relay-Token"
+const asrRelayTokenEnv = "READIO_ASR_RELAY_TOKEN"
+const asrRelayAllowedOriginsEnv = "READIO_ASR_ALLOWED_ORIGINS"
+const asrRelayRateLimitBurstEnv = "READIO_ASR_RATE_LIMIT_BURST"
+const asrRelayRateLimitWindowMsEnv = "READIO_ASR_RATE_LIMIT_WINDOW_MS"
 
 const asrRelayBodyLimit = 20 << 20
 const asrRelayRequestTimeout = 60 * time.Second
+const asrRelayRateLimitWindow = time.Minute
+const asrRelayRateLimitBurst = 60
 
 type asrRelayProviderConfig struct {
 	id             string
@@ -35,11 +44,11 @@ type asrRelayProviderConfig struct {
 }
 
 type asrRelayRequestPayload struct {
-	Provider      string `json:"provider"`
-	Model         string `json:"model"`
-	APIKey        string `json:"apiKey"`
-	AudioBase64   string `json:"audioBase64"`
-	AudioMimeType string `json:"audioMimeType,omitempty"`
+	Provider      string
+	Model         string
+	APIKey        string
+	AudioBytes    []byte
+	AudioMimeType string
 }
 
 type asrRelayResponsePayload struct {
@@ -82,18 +91,24 @@ type asrRelayErrorPayload struct {
 }
 
 type asrRelayService struct {
-	client    *http.Client
-	timeout   time.Duration
-	bodyLimit int64
-	providers map[string]asrRelayProviderConfig
+	client         *http.Client
+	timeout        time.Duration
+	bodyLimit      int64
+	providers      map[string]asrRelayProviderConfig
+	limiter        *rateLimiter
+	allowedOrigins map[string]struct{}
+	relayToken     string
 }
 
 func newASRRelayService() *asrRelayService {
 	return &asrRelayService{
-		client:    &http.Client{},
-		timeout:   asrRelayRequestTimeout,
-		bodyLimit: asrRelayBodyLimit,
-		providers: defaultASRRelayProviders(),
+		client:         &http.Client{},
+		timeout:        asrRelayRequestTimeout,
+		bodyLimit:      asrRelayBodyLimit,
+		providers:      defaultASRRelayProviders(),
+		limiter:        newRateLimiter(resolveASRRelayRateLimitBurst(), resolveASRRelayRateLimitWindow(), time.Now),
+		allowedOrigins: resolveASRRelayAllowedOrigins(),
+		relayToken:     strings.TrimSpace(os.Getenv(asrRelayTokenEnv)),
 	}
 }
 
@@ -157,35 +172,38 @@ func (s *asrRelayService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeASRRelayError(w, http.StatusMethodNotAllowed, "only POST is allowed", "invalid_method", nil)
 		return
 	}
-	if ct := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type"))); ct == "" || !strings.HasPrefix(ct, "application/json") {
-		writeASRRelayError(w, http.StatusBadRequest, "content-type must be application/json", "invalid_payload", nil)
-		return
-	}
-
-	body, err := io.ReadAll(io.LimitReader(r.Body, s.bodyLimit+1))
-	if err != nil {
-		writeASRRelayError(w, http.StatusBadRequest, "invalid relay request payload", "invalid_payload", nil)
-		return
-	}
-	if int64(len(body)) > s.bodyLimit {
-		writeASRRelayError(w, http.StatusRequestEntityTooLarge, "relay request body too large", "payload_too_large", nil)
+	if relayErr := s.authorizeRequest(r); relayErr != nil {
+		writeASRRelayError(w, relayErr.Status, relayErr.Message, relayErr.Code, relayErr.RetryAfterMs)
 		return
 	}
 
 	switch r.URL.Path {
 	case asrRelayRoute:
-		var payload asrRelayRequestPayload
-		if err := decodeStrictJSON(body, &payload); err != nil {
-			writeASRRelayError(w, http.StatusBadRequest, "invalid relay request payload", "invalid_payload", nil)
+		payload, relayErr := s.decodeMultipartRelayPayload(w, r)
+		if relayErr != nil {
+			writeASRRelayError(w, relayErr.Status, relayErr.Message, relayErr.Code, relayErr.RetryAfterMs)
 			return
 		}
-		result, relayErr := s.transcribe(r.Context(), payload)
+		result, relayErr := s.transcribe(r.Context(), *payload)
 		if relayErr != nil {
 			writeASRRelayError(w, relayErr.Status, relayErr.Message, relayErr.Code, relayErr.RetryAfterMs)
 			return
 		}
 		writeJSON(w, http.StatusOK, result)
 	case asrVerifyRoute:
+		if ct := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type"))); ct == "" || !strings.HasPrefix(ct, "application/json") {
+			writeASRRelayError(w, http.StatusBadRequest, "content-type must be application/json", "invalid_payload", nil)
+			return
+		}
+		body, err := io.ReadAll(io.LimitReader(r.Body, s.bodyLimit+1))
+		if err != nil {
+			writeASRRelayError(w, http.StatusBadRequest, "invalid relay request payload", "invalid_payload", nil)
+			return
+		}
+		if int64(len(body)) > s.bodyLimit {
+			writeASRRelayError(w, http.StatusRequestEntityTooLarge, "relay request body too large", "payload_too_large", nil)
+			return
+		}
 		var payload asrVerifyRequestPayload
 		if err := decodeStrictJSON(body, &payload); err != nil {
 			writeASRRelayError(w, http.StatusBadRequest, "invalid relay request payload", "invalid_payload", nil)
@@ -205,6 +223,175 @@ func (s *asrRelayService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+}
+
+func (s *asrRelayService) authorizeRequest(r *http.Request) *asrRelayErrorPayload {
+	if !s.isAllowedOrigin(r) {
+		return &asrRelayErrorPayload{
+			Status:  http.StatusForbidden,
+			Code:    "forbidden",
+			Message: "origin is not allowed",
+		}
+	}
+
+	if token := strings.TrimSpace(s.relayToken); token != "" {
+		if subtle.ConstantTimeCompare([]byte(r.Header.Get(asrRelayTokenHeader)), []byte(token)) != 1 {
+			return &asrRelayErrorPayload{
+				Status:  http.StatusUnauthorized,
+				Code:    "unauthorized",
+				Message: "invalid relay token",
+			}
+		}
+	}
+
+	if s.limiter != nil && !s.limiter.allow(remoteIP(r.RemoteAddr)) {
+		return &asrRelayErrorPayload{
+			Status:  http.StatusTooManyRequests,
+			Code:    "rate_limited",
+			Message: "rate limit exceeded",
+		}
+	}
+
+	return nil
+}
+
+func (s *asrRelayService) isAllowedOrigin(r *http.Request) bool {
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	if origin == "" {
+		return false
+	}
+
+	parsed, err := url.Parse(origin)
+	if err != nil || parsed.Host == "" || parsed.User != nil {
+		return false
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return false
+	}
+
+	normalized := parsed.Scheme + "://" + parsed.Host
+	if len(s.allowedOrigins) > 0 {
+		_, ok := s.allowedOrigins[normalized]
+		return ok
+	}
+
+	requestHost := strings.TrimSpace(r.Host)
+	return requestHost != "" && strings.EqualFold(parsed.Host, requestHost)
+}
+
+func resolveASRRelayAllowedOrigins() map[string]struct{} {
+	raw := strings.TrimSpace(os.Getenv(asrRelayAllowedOriginsEnv))
+	if raw == "" {
+		return nil
+	}
+
+	origins := make(map[string]struct{})
+	for _, part := range strings.Split(raw, ",") {
+		candidate := strings.TrimSpace(part)
+		if candidate == "" {
+			continue
+		}
+		parsed, err := url.Parse(candidate)
+		if err != nil || parsed.Host == "" || parsed.User != nil {
+			continue
+		}
+		if parsed.Scheme != "http" && parsed.Scheme != "https" {
+			continue
+		}
+		origins[parsed.Scheme+"://"+parsed.Host] = struct{}{}
+	}
+
+	if len(origins) == 0 {
+		return nil
+	}
+	return origins
+}
+
+func resolveASRRelayRateLimitBurst() int {
+	raw := strings.TrimSpace(os.Getenv(asrRelayRateLimitBurstEnv))
+	if raw == "" {
+		return asrRelayRateLimitBurst
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 {
+		return asrRelayRateLimitBurst
+	}
+	return value
+}
+
+func resolveASRRelayRateLimitWindow() time.Duration {
+	raw := strings.TrimSpace(os.Getenv(asrRelayRateLimitWindowMsEnv))
+	if raw == "" {
+		return asrRelayRateLimitWindow
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 {
+		return asrRelayRateLimitWindow
+	}
+	return time.Duration(value) * time.Millisecond
+}
+
+func (s *asrRelayService) decodeMultipartRelayPayload(
+	w http.ResponseWriter,
+	r *http.Request,
+) (*asrRelayRequestPayload, *asrRelayErrorPayload) {
+	ct := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type")))
+	if ct == "" || !strings.HasPrefix(ct, "multipart/form-data") {
+		return nil, &asrRelayErrorPayload{
+			Status:  http.StatusBadRequest,
+			Code:    "invalid_payload",
+			Message: "content-type must be multipart/form-data",
+		}
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, s.bodyLimit)
+	if err := r.ParseMultipartForm(s.bodyLimit); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			return nil, &asrRelayErrorPayload{
+				Status:  http.StatusRequestEntityTooLarge,
+				Code:    "payload_too_large",
+				Message: "relay request body too large",
+			}
+		}
+		return nil, &asrRelayErrorPayload{
+			Status:  http.StatusBadRequest,
+			Code:    "invalid_payload",
+			Message: "invalid relay request payload",
+		}
+	}
+	defer func() {
+		if r.MultipartForm != nil {
+			_ = r.MultipartForm.RemoveAll()
+		}
+	}()
+
+	file, _, err := r.FormFile("audio")
+	if err != nil {
+		return nil, &asrRelayErrorPayload{
+			Status:  http.StatusBadRequest,
+			Code:    "invalid_payload",
+			Message: "missing audio payload",
+		}
+	}
+	defer file.Close()
+
+	audioBytes, err := io.ReadAll(file)
+	if err != nil || len(audioBytes) == 0 {
+		return nil, &asrRelayErrorPayload{
+			Status:  http.StatusBadRequest,
+			Code:    "invalid_payload",
+			Message: "invalid audio payload",
+		}
+	}
+
+	return &asrRelayRequestPayload{
+		Provider:      r.FormValue("provider"),
+		Model:         r.FormValue("model"),
+		APIKey:        r.FormValue("apiKey"),
+		AudioBytes:    audioBytes,
+		AudioMimeType: r.FormValue("audioMimeType"),
+	}, nil
 }
 
 func decodeStrictJSON[T any](body []byte, out *T) error {
@@ -239,8 +426,8 @@ func (s *asrRelayService) transcribe(ctx context.Context, payload asrRelayReques
 		return nil, &asrRelayErrorPayload{Status: http.StatusUnauthorized, Code: "unauthorized", Message: "missing ASR API key"}
 	}
 
-	audioBytes, err := base64.StdEncoding.DecodeString(strings.TrimSpace(payload.AudioBase64))
-	if err != nil || len(audioBytes) == 0 {
+	audioBytes := payload.AudioBytes
+	if len(audioBytes) == 0 {
 		return nil, &asrRelayErrorPayload{Status: http.StatusBadRequest, Code: "invalid_payload", Message: "invalid audio payload"}
 	}
 

@@ -16,10 +16,6 @@ interface ApiEntry {
 
 type DictionaryTransport = 'direct' | 'go-proxy'
 
-interface ProxyErrorPayload {
-  message?: unknown
-}
-
 interface DictionaryApiNotFoundPayload {
   title?: unknown
   message?: unknown

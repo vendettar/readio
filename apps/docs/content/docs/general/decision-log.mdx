@@ -959,3 +959,21 @@ description: Architecture decisions and rationale.
   - Provider verification/readiness remains browser-direct and is intentionally out of scope for this phase.
   - Browser-local blobs/downloaded blobs remain browser-local inputs; the relay does not move audio storage server-side.
   - Request bodies must stay bounded, and error mapping must preserve the existing ASR retry/cooldown semantics.
+
+## D118 — Cloud Production Runtime Config Ownership Moved to Backend-Generated /env.js [Implemented]
+- **Decision**:
+  - Cloud production runtime config ownership moved to backend-generated `/env.js` by `apps/cloud-api`.
+  - `apps/cloud-ui/public/env.js` is dev/default-template oriented, not production Cloud truth.
+  - Server-owned runtime config (listen address, paths, abuse-control settings) belongs in VPS/systemd env files.
+  - Browser-public runtime config is emitted by backend via an explicit allowlist, not dumped from process env.
+- **Alternatives Considered**:
+  - Keeping static frontend files (`dist/env.js`) as production truth: rejected because Cloud is a backend-owned product surface and production config should not require editing static frontend assets.
+  - Shared config package: rejected as prematurely generalized; Cloud's ownership model differs from Lite's browser-direct model.
+- **Rationale**:
+  - Cloud now owns networking on the backend and must own the runtime configuration contract.
+  - Production config should not require manually editing static frontend assets on the VPS.
+  - Browser-public fields are not secrets; emitting them via backend allowlist makes the contract explicit and auditable.
+- **Risk Notes**:
+  - Browser-public fields (e.g., `READIO_ASR_RELAY_TOKEN`) are lightweight abuse-control tokens, not strong secret boundaries.
+  - If a field is emitted to `/env.js`, every browser user can read it; design accordingly.
+  - The allowlist is implicit in the map literal construction in the Go handler (`apps/cloud-api/main.go`), and only browser-safe fields are emitted.

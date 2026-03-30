@@ -6,6 +6,18 @@ description: Readio 云端应用及后端架构文档。
 当前 Cloud bootstrap 拆分为 `apps/cloud-ui` 与 `apps/cloud-api`。
 其中 `apps/cloud-ui` 是 Cloud 的前端构建产物，`apps/cloud-api` 则是负责提供该构建产物、在当前阶段启动 SQLite，并接管已迁移的 discovery、search、feed 同源后端网络请求的 Go 服务。
 
+## 运行时配置所有权
+
+Cloud 生产环境运行时配置所有权分为三个桶：
+
+1. **服务端所有运行时配置**：保留在后端运行时环境（VPS env/systemd env 文件）中的值。包括服务监听地址、静态资源路径、数据库路径和后端滥用控制设置（`PORT`、`READIO_CLOUD_UI_DIST_DIR`、`READIO_CLOUD_DB_PATH`、`READIO_ASR_ALLOWED_ORIGINS`、`READIO_ASR_RATE_LIMIT_BURST`、`READIO_ASR_RATE_LIMIT_WINDOW_MS`）。
+
+2. **浏览器公开运行时配置**：由 `apps/cloud-api` 通过 `/env.js` 使用显式 allowlist 发出的值。在生产环境中，Cloud **不**使用 `apps/cloud-ui/public/env.js` 或 `dist/env.js` 作为运行时基准。后端动态提供 `/env.js`，仅包含浏览器安全字段。浏览器公开字段包括应用名称/版本、同源后端 URL、ASR relay token（仅为滥用控制，非密钥）、ASR provider/model 默认值、功能开关和 UI 默认值。
+
+3. **浏览器本地/用户本地配置**：保留在浏览器端、不迁移到后端运行时的值（`READIO_ASR_API_KEY`、`READIO_OPENAI_API_KEY`、IndexedDB/Dexie 持久化、播放/会话状态）。
+
+完整审计见 `handoff/runtime-config-ownership-audit.md`，运行时配置所有权摘要见 `handoff/index.mdx` 第 8 节。
+
 Cloud Settings 在当前 Cloud 契约中不再包含 `CORS Proxy` 区块。
 Cloud 媒体在可用时仍然优先走浏览器直连，仅对已批准的失败类回退到 `apps/cloud-api`；该 fallback 为透传且不缓存，浏览器本地的媒体产物也仍然留在浏览器本地。
 Cloud ASR provider 转写现在通过 `apps/cloud-api` 里的独立同源 relay 提交；在这一阶段，provider credential 仍然由用户拥有并由浏览器按请求提供，后端只能把它当作瞬时请求数据处理。

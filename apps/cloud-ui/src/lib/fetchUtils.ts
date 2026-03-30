@@ -174,7 +174,7 @@ export async function checkCorsProxyHealth(options?: {
   }
 }
 
-export interface FetchWithFallbackOptions {
+interface FetchWithFallbackOptionsBase {
   signal?: AbortSignal
   timeoutMs?: number
   fetchImpl?: typeof fetch
@@ -194,10 +194,20 @@ export interface FetchWithFallbackOptions {
   method?: string
   /** Human readable purpose for logging (Instruction 124 refinement) */
   purpose?: string
+}
+
+export interface StandardFetchWithFallbackOptions extends FetchWithFallbackOptionsBase {
   /** Optional request body (string). Forwarded to both direct fetch and proxy. */
   body?: string
   /** Cloud-only fallback route for approved media request classes. */
-  cloudBackendFallbackClass?: CloudBackendFallbackClass
+  cloudBackendFallbackClass?: undefined
+}
+
+export interface CloudBackendFetchWithFallbackOptions extends FetchWithFallbackOptionsBase {
+  /** Cloud backend fallback is restricted to body-less requests. */
+  body?: never
+  /** Cloud-only fallback route for approved media request classes. */
+  cloudBackendFallbackClass: CloudBackendFallbackClass
 }
 
 export const CLOUD_BACKEND_FALLBACK_CLASSES = {
@@ -210,6 +220,18 @@ export const CLOUD_BACKEND_FALLBACK_CLASSES = {
 
 export type CloudBackendFallbackClass =
   (typeof CLOUD_BACKEND_FALLBACK_CLASSES)[keyof typeof CLOUD_BACKEND_FALLBACK_CLASSES]
+
+export type FetchWithFallbackOptions =
+  | StandardFetchWithFallbackOptions
+  | CloudBackendFetchWithFallbackOptions
+
+type FetchJsonWithFallbackOptions =
+  | Omit<StandardFetchWithFallbackOptions, 'json'>
+  | Omit<CloudBackendFetchWithFallbackOptions, 'json'>
+
+type FetchTextWithFallbackOptions =
+  | Omit<StandardFetchWithFallbackOptions, 'json'>
+  | Omit<CloudBackendFetchWithFallbackOptions, 'json'>
 
 type FetchSource = 'direct' | 'customProxy' | 'cloudBackend'
 
@@ -372,12 +394,10 @@ function buildCloudBackendProxyBody(options: {
   url: string
   method: string
   headers: Record<string, string>
-  body?: string
 }): string {
   return JSON.stringify({
     url: options.url,
     method: options.method,
-    ...(options.body !== undefined ? { body: options.body } : {}),
     ...(Object.keys(options.headers).length > 0 ? { headers: options.headers } : {}),
   })
 }
@@ -387,7 +407,6 @@ async function fetchCloudBackendResponse(
   options: {
     method: string
     headers: Record<string, string>
-    body?: string
     signal?: AbortSignal
     fetchImpl?: typeof fetch
   }
@@ -404,7 +423,6 @@ async function fetchCloudBackendResponse(
       url: targetUrl,
       method: options.method,
       headers: options.headers,
-      ...(options.body !== undefined ? { body: options.body } : {}),
     }),
   })
 
@@ -413,7 +431,7 @@ async function fetchCloudBackendResponse(
 
 async function fetchCloudBackendWithFallback<T>(
   url: string,
-  options: FetchWithFallbackOptions & { cloudBackendFallbackClass: CloudBackendFallbackClass }
+  options: CloudBackendFetchWithFallbackOptions
 ): Promise<T> {
   const {
     signal,
@@ -432,6 +450,10 @@ async function fetchCloudBackendWithFallback<T>(
   const attemptFetch = fetchImpl ?? fetch
   const purposeLabel = purpose ? ` [${purpose}]` : ''
   const shouldTryDirect = !forceProxy && !shouldBypassCloudBackendDirect(cloudBackendFallbackClass, url)
+
+  if (requestBody !== undefined) {
+    throw new Error('Cloud backend fallback does not support request bodies')
+  }
 
   const runDirectAttempt = async (attemptSignal: AbortSignal): Promise<Response> => {
     try {
@@ -455,7 +477,6 @@ async function fetchCloudBackendWithFallback<T>(
       return await fetchCloudBackendResponse(url, {
         method,
         headers,
-        body: requestBody,
         signal: attemptSignal,
         fetchImpl: attemptFetch,
       })
@@ -560,9 +581,7 @@ export async function fetchWithFallback<T = string>(
   const isParentAborted = () => !!signal?.aborted
 
   if (options.cloudBackendFallbackClass) {
-    return fetchCloudBackendWithFallback<T>(url, options as FetchWithFallbackOptions & {
-      cloudBackendFallbackClass: CloudBackendFallbackClass
-    })
+    return fetchCloudBackendWithFallback<T>(url, options)
   }
 
   // 1. Direct Fetch
@@ -853,7 +872,7 @@ export async function fetchWithFallback<T = string>(
  */
 export async function fetchJsonWithFallback<T>(
   url: string,
-  options: Omit<FetchWithFallbackOptions, 'json'> = {}
+  options: FetchJsonWithFallbackOptions = {}
 ): Promise<T> {
   return fetchWithFallback<T>(url, { ...options, json: true })
 }
@@ -863,7 +882,7 @@ export async function fetchJsonWithFallback<T>(
  */
 export async function fetchTextWithFallback(
   url: string,
-  options: Omit<FetchWithFallbackOptions, 'json'> = {}
+  options: FetchTextWithFallbackOptions = {}
 ): Promise<string> {
   return fetchWithFallback<string>(url, {
     ...options,

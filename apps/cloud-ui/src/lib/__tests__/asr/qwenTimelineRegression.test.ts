@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { transcribeAudioWithRetry } from '../../asr'
+import * as backendRelay from '../../asr/backendRelay'
 import * as mp3Chunker from '../../asr/mp3Chunker'
-import * as qwenProvider from '../../asr/providers/qwenCompatible'
 import type { ASRProvider } from '../../asr/types'
 
 vi.mock('../../asr/mp3Chunker', async (importOriginal) => {
@@ -10,6 +10,14 @@ vi.mock('../../asr/mp3Chunker', async (importOriginal) => {
     ...actual,
     splitMp3Blob: vi.fn(),
     splitMp3BlobWithTargetSizes: vi.fn(),
+  }
+})
+
+vi.mock('../../asr/backendRelay', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../asr/backendRelay')>()
+  return {
+    ...actual,
+    transcribeViaCloudRelay: vi.fn(),
   }
 })
 
@@ -30,7 +38,7 @@ describe('Qwen Timeline Regression', () => {
     // 2. Mock Qwen to return "Instruction 125b" style zero-duration cues
     // This simulates the behavior where Qwen only returns text and we produce a cue spanning [0, 0]
     const mockTranscribe = vi
-      .spyOn(qwenProvider, 'transcribeWithQwen')
+      .spyOn(backendRelay, 'transcribeViaCloudRelay')
       .mockResolvedValueOnce({
         cues: [{ start: 0, end: 0, text: 'Hello' }],
         provider: 'qwen' as ASRProvider,

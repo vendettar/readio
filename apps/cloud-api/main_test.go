@@ -123,6 +123,103 @@ func TestAppHandlerServesStaticFilesAndSPA(t *testing.T) {
 	})
 }
 
+func TestCloudMuxServesDynamicEnvBeforeStaticFallback(t *testing.T) {
+	indexDir := t.TempDir()
+	distDir := filepath.Join(indexDir, "dist")
+	if err := os.MkdirAll(distDir, 0o755); err != nil {
+		t.Fatalf("mkdir dist: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(distDir, "index.html"), []byte("index"), 0o644); err != nil {
+		t.Fatalf("write index: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(distDir, "env.js"), []byte("static-env"), 0o644); err != nil {
+		t.Fatalf("write static env: %v", err)
+	}
+
+	app, err := newAppHandler(distDir)
+	if err != nil {
+		t.Fatalf("new app handler: %v", err)
+	}
+
+	t.Setenv("READIO_APP_NAME", "Readio Cloud")
+	t.Setenv("READIO_APP_VERSION", "2.0.0")
+	t.Setenv(asrRelayTokenEnv, "relay-public-token")
+	t.Setenv("READIO_ASR_PROVIDER", "groq")
+	t.Setenv("READIO_ASR_MODEL", "whisper-large-v3")
+	t.Setenv("READIO_ENABLED_ASR_PROVIDERS", "groq")
+	t.Setenv("READIO_EN_DICTIONARY_API_TRANSPORT", "direct")
+	t.Setenv("READIO_DEFAULT_LANGUAGE", "zh")
+	t.Setenv(cloudDBEnv, "/srv/readio/data/readio.db")
+	t.Setenv(cloudUIDistEnv, "/srv/readio/current/dist")
+	t.Setenv(asrRelayAllowedOriginsEnv, "https://readio.example")
+	t.Setenv(asrRelayRateLimitBurstEnv, "9")
+	t.Setenv(asrRelayRateLimitWindowMsEnv, "1500")
+	t.Setenv("PORT", "8080")
+
+	mux := newCloudMux(app, http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler())
+
+	req := httptest.NewRequest(http.MethodGet, browserEnvRoute, nil)
+	req.Host = "cloud.example"
+	req.Header.Set("X-Forwarded-Proto", "https")
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+	if got := rr.Header().Get("Content-Type"); got != "application/javascript; charset=utf-8" {
+		t.Fatalf("content-type = %q, want %q", got, "application/javascript; charset=utf-8")
+	}
+	if rr.Body.String() == "static-env" {
+		t.Fatalf("/env.js fell back to static file instead of dynamic handler")
+	}
+
+	body := strings.TrimSpace(rr.Body.String())
+	const prefix = "window.__READIO_ENV__ = "
+	if !strings.HasPrefix(body, prefix) || !strings.HasSuffix(body, ";") {
+		t.Fatalf("unexpected body = %q", body)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal([]byte(strings.TrimSuffix(strings.TrimPrefix(body, prefix), ";")), &payload); err != nil {
+		t.Fatalf("unmarshal env payload: %v", err)
+	}
+
+	if payload["READIO_APP_NAME"] != "Readio Cloud" {
+		t.Fatalf("READIO_APP_NAME = %#v, want %#v", payload["READIO_APP_NAME"], "Readio Cloud")
+	}
+	if payload["READIO_ASR_RELAY_TOKEN"] != "relay-public-token" {
+		t.Fatalf("READIO_ASR_RELAY_TOKEN = %#v, want %#v", payload["READIO_ASR_RELAY_TOKEN"], "relay-public-token")
+	}
+	if payload["READIO_DISCOVERY_SEARCH_URL"] != "https://cloud.example/api/v1/discovery/search" {
+		t.Fatalf("READIO_DISCOVERY_SEARCH_URL = %#v", payload["READIO_DISCOVERY_SEARCH_URL"])
+	}
+	if payload["READIO_RSS_FEED_BASE_URL"] != "https://cloud.example/api/v1/discovery" {
+		t.Fatalf("READIO_RSS_FEED_BASE_URL = %#v", payload["READIO_RSS_FEED_BASE_URL"])
+	}
+
+	for _, key := range browserEnvAllowlist {
+		if _, ok := payload[key]; !ok {
+			t.Fatalf("payload missing expected allowlist key %s", key)
+		}
+	}
+
+	for _, forbidden := range []string{
+		"PORT",
+		"READIO_CLOUD_DB_PATH",
+		"READIO_CLOUD_UI_DIST_DIR",
+		"READIO_ASR_ALLOWED_ORIGINS",
+		"READIO_ASR_RATE_LIMIT_BURST",
+		"READIO_ASR_RATE_LIMIT_WINDOW_MS",
+		"READIO_ASR_API_KEY",
+		"READIO_OPENAI_API_KEY",
+	} {
+		if _, ok := payload[forbidden]; ok {
+			t.Fatalf("payload unexpectedly exposed %s", forbidden)
+		}
+	}
+}
+
 func TestResolveCloudUIDistDirFindsRepoRootFromWorkingDirectory(t *testing.T) {
 	root := t.TempDir()
 	distDir := filepath.Join(root, "apps", "cloud-ui", "dist")

@@ -115,6 +115,10 @@ export const AppConfigSchema = z.object({
   // Browser runtime-config only: known upstream secret formats are fail-closed
   // in runtimeConfig.ts (e.g., sk-, sk-proj-, gsk_, gsk-).
   ASR_API_KEY: z.string().optional(),
+  ASR_RELAY_TOKEN: z
+    .string()
+    .default(DEFAULTS.ASR_RELAY_TOKEN)
+    .catch(catchWithLog('ASR_RELAY_TOKEN', DEFAULTS.ASR_RELAY_TOKEN)),
   OPENAI_API_KEY: z.string().optional(),
   ASR_PROVIDER: z
     .string()
@@ -271,6 +275,7 @@ export const ENV_MAP: Record<keyof AppConfig, string> = {
   CORS_PROXY_AUTH_HEADER: 'READIO_CORS_PROXY_AUTH_HEADER',
   CORS_PROXY_AUTH_VALUE: 'READIO_CORS_PROXY_AUTH_VALUE',
   ASR_API_KEY: 'READIO_ASR_API_KEY',
+  ASR_RELAY_TOKEN: 'READIO_ASR_RELAY_TOKEN',
   OPENAI_API_KEY: 'READIO_OPENAI_API_KEY',
   ASR_PROVIDER: 'READIO_ASR_PROVIDER',
   ASR_MODEL: 'READIO_ASR_MODEL',
