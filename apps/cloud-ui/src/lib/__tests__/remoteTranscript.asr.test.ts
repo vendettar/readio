@@ -98,14 +98,11 @@ describe('remoteTranscript ASR integration', () => {
       }
 
       if (url === '/api/v1/asr/transcriptions') {
-        const body = JSON.parse(String(init?.body ?? '{}')) as {
-          provider: string
-          model: string
-          apiKey: string
-        }
-        expect(body.provider).toBe('groq')
-        expect(body.model).toBe('whisper-large-v3-turbo')
-        expect(body.apiKey).toBe('public-asr-token')
+        const body = init?.body as FormData
+        expect(body.get('provider')).toBe('groq')
+        expect(body.get('model')).toBe('whisper-large-v3-turbo')
+        expect(body.get('apiKey')).toBe('public-asr-token')
+        expect(body.get('audio')).toBeInstanceOf(File)
         return new Promise<Response>((resolve) => {
           resolveTranscribe = () => {
             resolve(
@@ -285,14 +282,11 @@ describe('remoteTranscript ASR integration', () => {
       }
 
       if (url === '/api/v1/asr/transcriptions') {
-        const body = JSON.parse(String(init?.body ?? '{}')) as {
-          provider: string
-          model: string
-          apiKey: string
-        }
-        expect(body.provider).toBe('groq')
-        expect(body.model).toBe('whisper-large-v3-turbo')
-        expect(body.apiKey).toBe('public-asr-token')
+        const body = init?.body as FormData
+        expect(body.get('provider')).toBe('groq')
+        expect(body.get('model')).toBe('whisper-large-v3-turbo')
+        expect(body.get('apiKey')).toBe('public-asr-token')
+        expect(body.get('audio')).toBeInstanceOf(File)
         return Promise.resolve(
           new Response(
             JSON.stringify({

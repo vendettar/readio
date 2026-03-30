@@ -8,6 +8,25 @@ description: Operational guide for the Cloud CD workflow and remote release layo
 This guide matches `.github/workflows/cd-cloud.yml` and documents the deployment contract only.
 It does not provision the VPS, nginx, TLS, firewall rules, or `systemd`.
 
+## 0a. Production Runtime Config Contract
+
+In production Cloud:
+
+- `apps/cloud-api` serves `/env.js` dynamically **before** the SPA/static fallback.
+- Production Cloud does **not** use `apps/cloud-ui/public/env.js` or `dist/env.js` as runtime configuration truth.
+- The backend emits runtime config from an explicit browser-safe allowlist only.
+- Server-owned runtime values (listen port, paths, abuse-control settings) stay in VPS env or systemd env files (`/etc/readio/readio-cloud.env`).
+
+In frontend-only development:
+
+- `apps/cloud-ui/public/env.js` remains the dev/default template.
+- `apps/cloud-ui/public/env.local.js` remains the local override path.
+- The frontend reads `window.__READIO_ENV__` in both environments.
+
+Browser-public runtime config fields are not secrets. If a field is emitted to `/env.js`, assume every browser user can read it.
+
+See `handoff/runtime-config-ownership-audit.md` for the full config audit.
+
 ## 1. What the workflow builds
 
 - Build Cloud UI off-server with `pnpm -C apps/cloud-ui build`.
@@ -85,7 +104,11 @@ Use the current runtime contract only:
 - `READIO_CLOUD_UI_DIST_DIR`
 - `READIO_CLOUD_DB_PATH`
 
-Do not keep using legacy names such as `READIO_LITE_DIST_DIR` or `READIO_DATA_DIR` in the Cloud service definition.
+Prefer an env file for mutable runtime configuration instead of hard-coding everything into the unit itself:
+
+- Keep stable paths such as `PORT`, `READIO_CLOUD_UI_DIST_DIR`, and `READIO_CLOUD_DB_PATH` in the unit.
+- Put secrets and operational knobs into `/etc/readio/readio-cloud.env`.
+- This keeps the `systemd` unit stable while allowing runtime-only changes without rewriting the service definition.
 
 Example bootstrap script:
 
@@ -105,7 +128,16 @@ DB_PATH="$SHARED_DATA_DIR/readio.db"
 
 sudo mkdir -p "$RELEASES_DIR"
 sudo mkdir -p "$SHARED_DATA_DIR"
+sudo mkdir -p /etc/readio
 sudo chown -R "$DEPLOY_USER:$DEPLOY_GROUP" "$REMOTE_ROOT"
+
+sudo tee /etc/readio/readio-cloud.env >/dev/null <<EOF
+READIO_ASR_ALLOWED_ORIGINS=https://www.readio.top
+READIO_ASR_RELAY_TOKEN=replace-with-a-long-random-token
+READIO_ASR_RATE_LIMIT_BURST=60
+READIO_ASR_RATE_LIMIT_WINDOW_MS=60000
+EOF
+sudo chmod 600 /etc/readio/readio-cloud.env
 
 sudo tee "/etc/systemd/system/${SERVICE_NAME}.service" >/dev/null <<EOF
 [Unit]
@@ -118,6 +150,7 @@ User=$DEPLOY_USER
 WorkingDirectory=$CURRENT_DIR
 ExecStart=$CURRENT_DIR/readio-cloud
 Restart=always
+EnvironmentFile=/etc/readio/readio-cloud.env
 
 Environment=PORT=8080
 Environment=READIO_CLOUD_UI_DIST_DIR=$CURRENT_DIR/dist
@@ -142,10 +175,20 @@ Important details:
 - The binary path is `/opt/readio/current/readio-cloud`.
 - The static Cloud UI assets are served from `/opt/readio/current/dist`.
 - The SQLite file stays outside release directories, for example `/opt/readio/shared/data/readio.db`.
+- `/etc/readio/readio-cloud.env` is the recommended home for mutable Cloud runtime configuration.
+- Cloud ASR relay protection is driven by `READIO_ASR_ALLOWED_ORIGINS`, `READIO_ASR_RELAY_TOKEN`, `READIO_ASR_RATE_LIMIT_BURST`, and `READIO_ASR_RATE_LIMIT_WINDOW_MS`.
+- The same relay token must be present in both the backend runtime environment and the Cloud frontend runtime environment so the browser can send `X-Readio-Relay-Token`.
 - The workflow already uses `sudo -n`, so the deploy user must be able to run both `systemctl restart` and `systemctl is-active` without a password prompt.
 - The workflow points `/opt/readio/current` at the new release before it restarts the service, so the first restart on a fresh host needs that release directory to exist.
 
 If the VPS sudoers entry only allows `systemctl restart readio-cloud` and does not also allow `systemctl is-active readio-cloud`, the non-interactive smoke step will still fail in GitHub Actions.
+
+After editing either the unit or the env file:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart readio-cloud
+```
 
 ## 4. Publish flow
 

@@ -30,6 +30,7 @@ import (
 const defaultPort = "8080"
 
 const cloudUIDistEnv = "READIO_CLOUD_UI_DIST_DIR"
+const browserEnvRoute = "/env.js"
 const proxyUserAgent = "Readio/1.0 (Cloud Proxy)"
 const proxyRequestTimeout = 10 * time.Second
 const proxyBodyLimit = 2 << 20
@@ -39,6 +40,33 @@ const proxyRoute = "/api/proxy"
 const proxyMaxRedirects = 5
 const cloudDBEnv = "READIO_CLOUD_DB_PATH"
 const cloudDBDefaultPath = "./data/readio.db"
+const defaultRuntimeAppName = "Readio"
+const defaultRuntimeAppVersion = "1.0.0"
+const defaultDictionaryAPIURL = "https://api.dictionaryapi.dev/api/v2/entries/en/"
+const defaultDictionaryTransport = "direct"
+const defaultPodcastCountry = "us"
+const defaultLanguage = "en"
+const defaultFallbackPodcastImage = "/placeholder-podcast.svg"
+
+// browserEnvAllowlist is the exhaustive set of keys emitted into /env.js.
+// Every key listed here MUST have a corresponding entry in buildBrowserRuntimeEnv.
+var browserEnvAllowlist = []string{
+	"READIO_APP_NAME",
+	"READIO_APP_VERSION",
+	"READIO_ASR_RELAY_TOKEN",
+	"READIO_ASR_PROVIDER",
+	"READIO_ASR_MODEL",
+	"READIO_ENABLED_ASR_PROVIDERS",
+	"READIO_DISABLED_ASR_PROVIDERS",
+	"READIO_EN_DICTIONARY_API_URL",
+	"READIO_EN_DICTIONARY_API_TRANSPORT",
+	"READIO_DISCOVERY_LOOKUP_URL",
+	"READIO_DISCOVERY_SEARCH_URL",
+	"READIO_RSS_FEED_BASE_URL",
+	"READIO_DEFAULT_PODCAST_CONTENT_COUNTRY",
+	"READIO_DEFAULT_LANGUAGE",
+	"READIO_FALLBACK_PODCAST_IMAGE",
+}
 
 var proxyAllowedRequestHeaders = map[string]struct{}{
 	"accept":            {},
@@ -188,13 +216,7 @@ func runCloudServer(parent context.Context) error {
 
 	addr := ":" + port
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", healthHandler)
-	mux.Handle(asrRelayRoute, asrRelay)
-	mux.Handle(asrVerifyRoute, asrRelay)
-	mux.Handle(discoveryRoutePrefix, discovery)
-	mux.Handle(proxyRoute, proxy)
-	mux.Handle("/", handler)
+	mux := newCloudMux(handler, proxy, asrRelay, discovery)
 
 	server := &http.Server{
 		Addr:              addr,
@@ -257,6 +279,18 @@ func newAppHandler(distDir string) (http.Handler, error) {
 	}, nil
 }
 
+func newCloudMux(app http.Handler, proxy http.Handler, asrRelay http.Handler, discovery http.Handler) *http.ServeMux {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/healthz", healthHandler)
+	mux.Handle(browserEnvRoute, newBrowserRuntimeEnvHandler())
+	mux.Handle(asrRelayRoute, asrRelay)
+	mux.Handle(asrVerifyRoute, asrRelay)
+	mux.Handle(discoveryRoutePrefix, discovery)
+	mux.Handle(proxyRoute, proxy)
+	mux.Handle("/", app)
+	return mux
+}
+
 func (h *appHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == "/api" || strings.HasPrefix(r.URL.Path, "/api/") {
 		http.NotFound(w, r)
@@ -280,6 +314,101 @@ func (h *appHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.ServeFile(w, r, h.indexPath)
+}
+
+func newBrowserRuntimeEnvHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			w.Header().Set("Allow", "GET, HEAD")
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		payload, err := json.Marshal(buildBrowserRuntimeEnv(r))
+		if err != nil {
+			http.Error(w, "unable to build runtime env", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+
+		if r.Method == http.MethodHead {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprintf(w, "window.__READIO_ENV__ = %s;\n", payload)
+	})
+}
+
+// buildBrowserRuntimeEnv returns browser-safe runtime config.
+// Key set must match browserEnvAllowlist. Do not add keys here
+// without also adding them to the allowlist slice.
+func buildBrowserRuntimeEnv(r *http.Request) map[string]any {
+	origin := requestOrigin(r)
+
+	return map[string]any{
+		"READIO_APP_NAME":                    envOrDefault("READIO_APP_NAME", defaultRuntimeAppName),
+		"READIO_APP_VERSION":                 envOrDefault("READIO_APP_VERSION", defaultRuntimeAppVersion),
+		"READIO_ASR_RELAY_TOKEN":             strings.TrimSpace(os.Getenv(asrRelayTokenEnv)),
+		"READIO_ASR_PROVIDER":                strings.TrimSpace(os.Getenv("READIO_ASR_PROVIDER")),
+		"READIO_ASR_MODEL":                   strings.TrimSpace(os.Getenv("READIO_ASR_MODEL")),
+		"READIO_ENABLED_ASR_PROVIDERS":       strings.TrimSpace(os.Getenv("READIO_ENABLED_ASR_PROVIDERS")),
+		"READIO_DISABLED_ASR_PROVIDERS":      strings.TrimSpace(os.Getenv("READIO_DISABLED_ASR_PROVIDERS")),
+		"READIO_EN_DICTIONARY_API_URL":       envOrDefault("READIO_EN_DICTIONARY_API_URL", defaultDictionaryAPIURL),
+		"READIO_EN_DICTIONARY_API_TRANSPORT": envOrDefault("READIO_EN_DICTIONARY_API_TRANSPORT", defaultDictionaryTransport),
+		"READIO_DISCOVERY_LOOKUP_URL":        origin + "/api/v1/discovery/lookup",
+		"READIO_DISCOVERY_SEARCH_URL":        origin + "/api/v1/discovery/search",
+		"READIO_RSS_FEED_BASE_URL":           origin + "/api/v1/discovery",
+		"READIO_DEFAULT_PODCAST_CONTENT_COUNTRY": envOrDefault(
+			"READIO_DEFAULT_PODCAST_CONTENT_COUNTRY",
+			defaultPodcastCountry,
+		),
+		"READIO_DEFAULT_LANGUAGE": envOrDefault("READIO_DEFAULT_LANGUAGE", defaultLanguage),
+		"READIO_FALLBACK_PODCAST_IMAGE": envOrDefault(
+			"READIO_FALLBACK_PODCAST_IMAGE",
+			defaultFallbackPodcastImage,
+		),
+	}
+}
+
+func envOrDefault(name, fallback string) string {
+	if value := strings.TrimSpace(os.Getenv(name)); value != "" {
+		return value
+	}
+	return fallback
+}
+
+func requestOrigin(r *http.Request) string {
+	proto := strings.TrimSpace(firstForwardedValue(r.Header.Get("X-Forwarded-Proto")))
+	if proto == "" {
+		if r.TLS != nil {
+			proto = "https"
+		} else {
+			proto = "http"
+		}
+	}
+
+	host := strings.TrimSpace(firstForwardedValue(r.Header.Get("X-Forwarded-Host")))
+	if host == "" {
+		host = strings.TrimSpace(r.Host)
+	}
+	if host == "" {
+		host = "localhost"
+	}
+
+	return proto + "://" + host
+}
+
+func firstForwardedValue(raw string) string {
+	if raw == "" {
+		return ""
+	}
+	parts := strings.Split(raw, ",")
+	return strings.TrimSpace(parts[0])
 }
 
 func fileExists(distDir, requestPath string) bool {

@@ -1,7 +1,9 @@
 import { ASRClientError, type ASRProvider, type ASRTranscriptionResult } from './types'
+import { getAppConfig } from '../runtimeConfig'
 
 const ASR_RELAY_ROUTE = '/api/v1/asr/transcriptions'
 const ASR_VERIFY_ROUTE = '/api/v1/asr/verify'
+const ASR_RELAY_TOKEN_HEADER = 'X-Readio-Relay-Token'
 
 type ASRRelayErrorPayload = {
   code?: unknown
@@ -14,29 +16,19 @@ type ASRVerifyRelayResponsePayload = {
   ok?: unknown
 }
 
-function encodeBase64(bytes: Uint8Array): string {
-  let binary = ''
-  const chunkSize = 0x8000
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize))
-  }
-  return btoa(binary)
+function toRelayAudioFile(blob: Blob): File {
+  const fileName = blob.type.includes('wav') ? 'audio.wav' : 'audio.mp3'
+  if (blob instanceof File) return blob
+  return new File([blob], fileName, { type: blob.type || 'audio/mpeg' })
 }
 
-async function blobToBase64(blob: Blob): Promise<string> {
-  const withArrayBuffer = blob as Blob & { arrayBuffer?: () => Promise<ArrayBuffer> }
-  let buffer: ArrayBuffer
-  if (typeof withArrayBuffer.arrayBuffer === 'function') {
-    buffer = await withArrayBuffer.arrayBuffer()
-  } else {
-    buffer = await new Promise<ArrayBuffer>((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => resolve(reader.result as ArrayBuffer)
-      reader.onerror = () => reject(reader.error ?? new Error('Failed to read blob'))
-      reader.readAsArrayBuffer(blob)
-    })
+function getRelayHeaders(headers?: Record<string, string>): Record<string, string> | undefined {
+  const token = getAppConfig().ASR_RELAY_TOKEN.trim()
+  if (!token) return headers
+  return {
+    ...(headers ?? {}),
+    [ASR_RELAY_TOKEN_HEADER]: token,
   }
-  return encodeBase64(new Uint8Array(buffer))
 }
 
 function mapRelayError(payload: ASRRelayErrorPayload, responseStatus: number): ASRClientError {
@@ -72,19 +64,20 @@ export async function transcribeViaCloudRelay(options: {
 
   let response: Response
   try {
+    const formData = new FormData()
+    formData.set('provider', provider)
+    formData.set('model', model)
+    formData.set('apiKey', apiKey)
+    formData.set('audio', toRelayAudioFile(blob))
+    if (blob.type) {
+      formData.set('audioMimeType', blob.type)
+    }
+
     response = await fetch(ASR_RELAY_ROUTE, {
       method: 'POST',
       signal,
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        provider,
-        model,
-        apiKey,
-        audioBase64: await blobToBase64(blob),
-        ...(blob.type ? { audioMimeType: blob.type } : {}),
-      }),
+      headers: getRelayHeaders(),
+      body: formData,
     })
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
@@ -127,6 +120,7 @@ export async function verifyAsrKeyViaCloudRelay(options: {
       method: 'POST',
       signal,
       headers: {
+        ...(getRelayHeaders() ?? {}),
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({

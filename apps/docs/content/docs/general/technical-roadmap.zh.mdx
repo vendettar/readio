@@ -161,11 +161,12 @@ title: 技术路线图
 - [x] **006a-006e**: Cloud 媒体 fallback-first 契约、后端代理加固、客户端 fallback 路由、range/seek 回归覆盖，以及文档/运行时同步。
 - [x] **007**: Cloud ASR fallback 切换。
 - [x] **008a-008e**: Cloud ASR provider relay 切换、确定性回归覆盖，以及面向同源 provider 提交和瞬时浏览器凭证的文档/运行时同步。
+- [x] **009a-009b**: Cloud 运行时配置归属切换 — 生产 `/env.js` 现由 `apps/cloud-api` 后端生成并使用显式浏览器安全白名单；服务端配置驻留在后端运行时环境中；开发环境静态 `public/env.js` 保留为模板。
 - [x] **001d**: 文档同步与 SSOT 对齐，仅在审阅批准后完成。
 - [x] **003**: Cloud Lite 全量克隆引导（`apps/cloud-ui` 克隆 + Go 托管 `8080` 运行入口）。
 
 **位置**：Cloud 指令位于 `agent/instructions/cloud/`。
-**当前状态**：005a-005g 已关闭。Cloud 的可见 discovery/feed 流量已经完全由后端接管。006a-006e 已关闭，建立了浏览器直连优先、仅对已批准失败类回退到后端的媒体契约，文档与部署/运行时契约也已与该契约保持一致。007 已关闭，覆盖了 ASR 相关媒体 fallback 缺口。008a-008e 已关闭，把 Cloud ASR provider 转写迁移到独立的同源 relay，同时保持 provider 验证 / readiness 仍为 browser-direct，浏览器本地媒体输入也继续留在浏览器本地。
+**当前状态**：005a-005g 已关闭。Cloud 的可见 discovery/feed 流量已经完全由后端接管。006a-006e 已关闭，建立了浏览器直连优先、仅对已批准失败类回退到后端的媒体契约，文档与部署/运行时契约也已与该契约保持一致。007 已关闭，覆盖了 ASR 相关媒体 fallback 缺口。008a-008e 已关闭，把 Cloud ASR provider 转写迁移到独立的同源 relay，同时保持 provider 验证 / readiness 仍为 browser-direct，浏览器本地媒体输入也继续留在浏览器本地。009a-009b 已关闭，生产 `/env.js` 所有权已切换为后端生成并使用显式浏览器安全白名单；服务端配置驻留在后端运行时环境中；开发环境静态 `public/env.js` 保留为模板。
 
 ---
 

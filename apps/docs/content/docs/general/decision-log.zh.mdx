@@ -807,3 +807,35 @@ description: 架构决策与其背后的理由。
   - 文档不能暗示当前已经存在单独的 Cloud Web 前端。
   - 文档不能声称脚手架阶段尚未具备的同步、认证或 schema 层。
   - Cloud 的长期演进可以改变技术栈，但当前阶段契约必须保持明确且收敛。
+
+## D117 — Cloud ASR Provider 转写使用专用同源 Relay [已实施]
+- **决策**：
+  - Cloud ASR provider 转写必须使用专用同源后端 relay（`POST /api/v1/asr/transcriptions`），而不是浏览器直连 provider 调用。
+  - `/api/proxy` 保持为有限的 media/RSS 代理入口，不能变成通用的 provider POST 隧道。
+  - 在这一阶段，provider credential 仍由用户拥有并由浏览器按请求提供；后端 relay 只能把它们当作瞬时请求数据，不能持久化、缓存或记录。
+- **理由**：
+  - 浏览器直连 provider 提交在媒体 fallback 工作完成后仍会因为 provider CORS 而失败。
+  - 专用 relay 在不提前改变产品用户提供的密钥模型的情况下修复了传输所有权。
+  - 保持 `/api/proxy` 收敛可避免在便利抽象下扩大 SSRF/body-tunneling 风险。
+- **风险说明**：
+  - Provider 验证 / readiness 保持 browser-direct，在本阶段有意不在范围内。
+  - 浏览器本地 blob/已下载 blob 保持为 browser-local 输入；relay 不会把音频存储移到服务端。
+  - 请求体必须保持有限，错误映射必须保留现有 ASR 重试/冷却语义。
+
+## D118 — Cloud 生产环境运行时配置所有权迁移至后端生成的 /env.js [已实施]
+- **决策**：
+  - Cloud 生产环境运行时配置所有权迁移至由 `apps/cloud-api` 动态生成的 `/env.js`。
+  - `apps/cloud-ui/public/env.js` 面向开发/默认模板，不是生产环境 Cloud 基准。
+  - 服务端所有的运行时配置（监听地址、路径、滥用控制设置）放在 VPS/systemd 环境文件中。
+  - 浏览器公开运行时配置由后端通过显式 allowlist 发出，不是从进程环境变量转储。
+- **备选方案**：
+  - 保持静态前端文件（`dist/env.js`）作为生产基准：被拒绝，因为 Cloud 是后端所有的产品表面，生产配置不应要求手动编辑静态前端资产。
+  - 共享配置包：被拒绝，因为过于提前泛化；Cloud 的所有权模型不同于 Lite 的浏览器直连模型。
+- **理由**：
+  - Cloud 现在在后端拥有网络，必须拥有运行时配置契约。
+  - 生产配置不应要求在 VPS 上手动编辑静态前端资产。
+  - 浏览器公开字段不是密钥；通过后端 allowlist 发出使契约显式且可审计。
+- **风险说明**：
+  - 浏览器公开字段（例如 `READIO_ASR_RELAY_TOKEN`）是轻量级滥用控制 token，不是强密钥边界。
+  - 如果字段被发出到 `/env.js`，假设每个浏览器用户都能读取它；设计时需考虑这一点。
+  - allowlist 在 Go handler（`apps/cloud-api/main.go`）的 map 字面量构造中是隐式的，只发出浏览器安全的字段。

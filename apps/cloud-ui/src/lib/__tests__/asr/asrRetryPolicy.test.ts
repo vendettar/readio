@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { transcribeAudioWithRetry } from '../../asr'
-import * as openaiCompatible from '../../asr/providers/openaiCompatible'
+import * as backendRelay from '../../asr/backendRelay'
 import { ASRClientError } from '../../asr/types'
 
 vi.mock('../../asr/mp3Chunker', async (importOriginal) => {
@@ -12,8 +12,17 @@ vi.mock('../../asr/mp3Chunker', async (importOriginal) => {
   }
 })
 
+vi.mock('../../asr/backendRelay', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../asr/backendRelay')>()
+  return {
+    ...actual,
+    transcribeViaCloudRelay: vi.fn(),
+  }
+})
+
 describe('ASR Retry Policy', () => {
   beforeEach(() => {
+    vi.clearAllMocks()
     vi.useFakeTimers()
   })
 
@@ -32,7 +41,7 @@ describe('ASR Retry Policy', () => {
     }
 
     const mockTranscribe = vi
-      .spyOn(openaiCompatible, 'transcribeWithOpenAiCompatible')
+      .spyOn(backendRelay, 'transcribeViaCloudRelay')
       .mockRejectedValueOnce(error429)
       .mockResolvedValueOnce(successResult)
 
@@ -54,7 +63,7 @@ describe('ASR Retry Policy', () => {
   it('does not retry 429 on long backoff (>15s)', async () => {
     const error429 = new ASRClientError('Rate Limit', 'rate_limited', 429, 20000, 'generic')
 
-    vi.spyOn(openaiCompatible, 'transcribeWithOpenAiCompatible').mockRejectedValue(error429)
+    vi.spyOn(backendRelay, 'transcribeViaCloudRelay').mockRejectedValue(error429)
 
     await expect(
       transcribeAudioWithRetry({
@@ -76,7 +85,7 @@ describe('ASR Retry Policy', () => {
     }
 
     const mockTranscribe = vi
-      .spyOn(openaiCompatible, 'transcribeWithOpenAiCompatible')
+      .spyOn(backendRelay, 'transcribeViaCloudRelay')
       .mockRejectedValueOnce(error500)
       .mockResolvedValueOnce(successResult)
 
@@ -99,9 +108,7 @@ describe('ASR Retry Policy', () => {
   it('does not retry 5xx for large chunks (>600s)', async () => {
     const error500 = new ASRClientError('Server Error', 'service_unavailable', 500)
 
-    const mockTranscribe = vi
-      .spyOn(openaiCompatible, 'transcribeWithOpenAiCompatible')
-      .mockRejectedValue(error500)
+    const mockTranscribe = vi.spyOn(backendRelay, 'transcribeViaCloudRelay').mockRejectedValue(error500)
 
     await expect(
       transcribeAudioWithRetry({
@@ -123,7 +130,7 @@ describe('ASR Retry Policy', () => {
       503,
       61 * 60 * 1000
     )
-    vi.spyOn(openaiCompatible, 'transcribeWithOpenAiCompatible').mockRejectedValue(extremeWait)
+    vi.spyOn(backendRelay, 'transcribeViaCloudRelay').mockRejectedValue(extremeWait)
 
     await expect(
       transcribeAudioWithRetry({
@@ -137,9 +144,7 @@ describe('ASR Retry Policy', () => {
 
   it('throws ASRClientError(aborted) if aborted during backoff', async () => {
     const error429 = new ASRClientError('Rate Limit', 'rate_limited', 429, 2000, 'generic')
-    const mockTranscribe = vi
-      .spyOn(openaiCompatible, 'transcribeWithOpenAiCompatible')
-      .mockRejectedValue(error429)
+    const mockTranscribe = vi.spyOn(backendRelay, 'transcribeViaCloudRelay').mockRejectedValue(error429)
 
     const controller = new AbortController()
 

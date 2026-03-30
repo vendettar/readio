@@ -419,6 +419,25 @@ describe('fetchUtils: fetchWithFallback', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1)
   })
 
+  it('rejects Cloud backend fallback requests that try to carry a body', async () => {
+    setupConfig()
+    const fetchImpl = vi.fn()
+
+    await expect(
+      fetchWithFallback(
+        url,
+        {
+          method: 'POST',
+          body: '{"foo":"bar"}',
+          fetchImpl: fetchImpl as unknown as typeof fetch,
+          cloudBackendFallbackClass: CLOUD_BACKEND_FALLBACK_CLASSES.TRANSCRIPT,
+        } as unknown as Parameters<typeof fetchWithFallback>[1]
+      )
+    ).rejects.toThrow('Cloud backend fallback does not support request bodies')
+
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
   it('Cloud backend breaker bypasses repeated direct failures after the threshold', async () => {
     setupConfig()
     let directCalls = 0
