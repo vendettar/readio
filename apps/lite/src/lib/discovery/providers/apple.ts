@@ -195,6 +195,16 @@ function isRelevant(item: RawAppleItem, query: string): boolean {
   return tokens.some((token) => searchText.includes(token))
 }
 
+/**
+ * Extracts the podcast ID from an Apple Podcasts URL.
+ * URL format example: https://podcasts.apple.com/us/podcast/the-daily/id1200361736
+ */
+function extractPodcastIdFromUrl(url?: string): string | undefined {
+  if (!url) return undefined
+  const match = url.match(/\/id(\d+)/i)
+  return match?.[1]
+}
+
 function getConfig() {
   const config = getAppConfig()
   const lookupEpisodesTtl = Number(config.CACHE_TTL_EPISODES_MS)
@@ -880,7 +890,7 @@ function mapRssEpisodeResult(item: RawAppleItem): DiscoveryPodcast | null {
     artworkUrl100: item.artworkUrl100,
     url: item.url,
     genres: [],
-    providerPodcastId: item.collectionId ? String(item.collectionId) : undefined,
+    providerPodcastId: item.collectionId ? String(item.collectionId) : extractPodcastIdFromUrl(item.url),
     description: item.description,
     releaseDate: item.releaseDate,
     duration: item.duration,

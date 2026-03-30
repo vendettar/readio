@@ -198,5 +198,9 @@ If the previous release is missing, you must restore it from another known-good 
 - This workflow assumes the VPS already exists.
 - It does not install or manage `systemd`.
 - It does not configure nginx, TLS, or firewall rules.
-- It does not let the Cloud frontend call Apple directly; the backend owns Apple-facing networking and error mapping.
+- It does not require a user-configured CORS proxy for supported media fallback paths.
+- It does not force all audio through the backend; browser-direct media access remains first-choice when available.
+- For supported media-adjacent failure classes, the Go backend acts as a pass-through fallback proxy only and does not cache or persist media bytes.
+- Browser-local downloads, transcripts, and settings remain browser-local.
+- It does not re-enable Workbox/PWA in this workflow; Cloud currently keeps PWA disabled.
 - It does not deploy SQLite schema, sync, auth, or multi-node features.

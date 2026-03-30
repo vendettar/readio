@@ -162,10 +162,17 @@ export const AsrSettingsSection = memo(function AsrSettingsSection({
       setVerifyStatus(ok ? VERIFY_STATUS.SUCCESS : VERIFY_STATUS.FAIL)
     } catch (error: unknown) {
       clearAsrVerification()
-      if (error instanceof ASRClientError && error.code === 'unauthorized') {
-        form.setError('asrKey', {
-          type: 'manual',
+      if (error instanceof ASRClientError) {
+        console.error('[asr] verify failed', {
+          provider: validation.provider,
+          code: error.code,
+          status: error.status,
           message: error.message,
+        })
+      } else {
+        console.error('[asr] verify failed', {
+          provider: validation.provider,
+          error,
         })
       }
       setVerifyStatus(VERIFY_STATUS.FAIL)

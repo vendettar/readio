@@ -37,15 +37,15 @@
     /* Reading area specific tokens */
     --zoom-scale: 1;
     --reading-line-height: 1.6;
-    --reading-para-spacing: calc(1.2em * var(--zoom-scale));
+    --reading-para-spacing: 1.25em;
     --reading-font-size: calc(1.125rem * var(--zoom-scale));
     /* 18px base */
 
-    /* Prose / Episode Page tokens */
-    --prose-line-height: 1.4;
-    --prose-para-spacing: calc(10px * var(--zoom-scale));
-    --prose-font-size: calc(0.875rem * var(--zoom-scale));
-    /* 14px base */
+    /* Prose / Episode Page tokens (Stable UI) */
+    --prose-line-height: 1.5;
+    --prose-para-spacing: 12px;
+    --prose-font-size: 0.875rem;
+    /* 14px base, stable across zoom */
 
     --sel-pin-head-d: calc(10px * var(--zoom-scale));
     --sel-pin-total-h: calc(30px * var(--zoom-scale));
@@ -57,7 +57,7 @@
 
     /* Layout dimensions - single source of truth */
     --sidebar-width: 260px;
-    --mini-player-height: 73px;
+    --mini-player-height: 60px;
     --player-footer-height: 10rem;
     --page-margin-x: 3rem;
     /* 48px */

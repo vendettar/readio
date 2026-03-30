@@ -277,7 +277,7 @@ export function MiniPlayer() {
 
             {/* Title (centered, truncate) */}
             <div className="flex-1 min-w-0 max-w-full overflow-hidden flex items-center justify-center">
-              <span className="text-sm font-semibold text-foreground truncate block">
+              <span className="text-xs font-semibold text-foreground truncate block">
                 {audioTitle || t('noTrackLoaded')}
               </span>
             </div>

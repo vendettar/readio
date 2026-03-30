@@ -16,7 +16,7 @@
  */
 
 const DEFAULT_ALLOWED_UPSTREAM_HOSTS = [
-  'rss.applemarketingtools.com',
+  'rss.marketingtools.apple.com',
   'itunes.apple.com',
   'feeds.megaphone.fm',
   'anchor.fm',

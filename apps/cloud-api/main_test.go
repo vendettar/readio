@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net"
@@ -768,8 +769,8 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 		req.RemoteAddr = "198.51.100.10:12345"
 		proxy.ServeHTTP(rr, req)
 
-		if rr.Code != http.StatusBadGateway {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusBadGateway)
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusBadRequest)
 		}
 		if lookupCalls != 1 {
 			t.Fatalf("lookup calls = %d, want %d", lookupCalls, 1)
@@ -884,8 +885,8 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 		req.RemoteAddr = "198.51.100.10:12345"
 		proxy.ServeHTTP(rr, req)
 
-		if rr.Code != http.StatusBadGateway {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusBadGateway)
+		if rr.Code != http.StatusInternalServerError {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusInternalServerError)
 		}
 		if calls != 1 {
 			t.Fatalf("upstream calls = %d, want %d", calls, 1)
@@ -938,8 +939,240 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 	})
 }
 
+func TestProxyServiceMediaFallbackContract(t *testing.T) {
+	t.Run("post head request preserves sizing headers and omits body", func(t *testing.T) {
+		proxy, dialedAddress := newMediaProxyTestService(t, func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodHead {
+				t.Fatalf("method = %q, want %q", r.Method, http.MethodHead)
+			}
+			if got := r.Header.Get("User-Agent"); got != proxyUserAgent {
+				t.Fatalf("user-agent = %q, want %q", got, proxyUserAgent)
+			}
+
+			w.Header().Set("Content-Type", "audio/mpeg")
+			w.Header().Set("Content-Length", "12345")
+			w.Header().Set("Accept-Ranges", "bytes")
+			w.Header().Set("ETag", `"head-etag"`)
+			w.Header().Set("Cache-Control", "public, max-age=60")
+			w.Header().Set("X-Blocked", "hidden")
+			w.WriteHeader(http.StatusOK)
+		}, testPublicLookupIP)
+
+		rr := httptest.NewRecorder()
+		req := newProxyJSONRequest(t, http.MethodHead, "http://feeds.example.com/audio.mp3", nil)
+		req.RemoteAddr = "198.51.100.10:12345"
+		proxy.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+		}
+		if *dialedAddress != "203.0.113.10:80" {
+			t.Fatalf("dialed address = %q, want %q", *dialedAddress, "203.0.113.10:80")
+		}
+		if rr.Body.Len() != 0 {
+			t.Fatalf("body length = %d, want %d", rr.Body.Len(), 0)
+		}
+		if rr.Header().Get("Content-Length") != "12345" {
+			t.Fatalf("content-length = %q, want %q", rr.Header().Get("Content-Length"), "12345")
+		}
+		if rr.Header().Get("Accept-Ranges") != "bytes" {
+			t.Fatalf("accept-ranges = %q, want %q", rr.Header().Get("Accept-Ranges"), "bytes")
+		}
+		if rr.Header().Get("ETag") != `"head-etag"` {
+			t.Fatalf("etag = %q, want %q", rr.Header().Get("ETag"), `"head-etag"`)
+		}
+		if rr.Header().Get("X-Blocked") != "" {
+			t.Fatalf("unexpected disallowed header passthrough: %q", rr.Header().Get("X-Blocked"))
+		}
+	})
+
+	t.Run("range get returns 206 and passes through media headers", func(t *testing.T) {
+		proxy, dialedAddress := newMediaProxyTestService(t, func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				t.Fatalf("method = %q, want %q", r.Method, http.MethodGet)
+			}
+			if got := r.Header.Get("Range"); got != "bytes=0-4" {
+				t.Fatalf("range = %q, want %q", got, "bytes=0-4")
+			}
+
+			w.Header().Set("Content-Type", "audio/mpeg")
+			w.Header().Set("Content-Length", "5")
+			w.Header().Set("Content-Range", "bytes 0-4/10")
+			w.Header().Set("Accept-Ranges", "bytes")
+			w.Header().Set("ETag", `"range-etag"`)
+			w.Header().Set("Cache-Control", "public, max-age=60")
+			w.Header().Set("Vary", "Accept-Encoding")
+			w.Header().Set("X-Blocked", "hidden")
+			w.WriteHeader(http.StatusPartialContent)
+			_, _ = io.WriteString(w, "hello")
+		}, testPublicLookupIP)
+
+		rr := httptest.NewRecorder()
+		req := newProxyJSONRequest(t, http.MethodGet, "http://feeds.example.com/audio.mp3", map[string]string{
+			"Range": "bytes=0-4",
+		})
+		req.RemoteAddr = "198.51.100.10:12345"
+		proxy.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusPartialContent {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusPartialContent)
+		}
+		if *dialedAddress != "203.0.113.10:80" {
+			t.Fatalf("dialed address = %q, want %q", *dialedAddress, "203.0.113.10:80")
+		}
+		if rr.Body.String() != "hello" {
+			t.Fatalf("body = %q, want %q", rr.Body.String(), "hello")
+		}
+		if rr.Header().Get("Content-Range") != "bytes 0-4/10" {
+			t.Fatalf("content-range = %q, want %q", rr.Header().Get("Content-Range"), "bytes 0-4/10")
+		}
+		if rr.Header().Get("Accept-Ranges") != "bytes" {
+			t.Fatalf("accept-ranges = %q, want %q", rr.Header().Get("Accept-Ranges"), "bytes")
+		}
+		if rr.Header().Get("X-Blocked") != "" {
+			t.Fatalf("unexpected disallowed header passthrough: %q", rr.Header().Get("X-Blocked"))
+		}
+	})
+
+	t.Run("range 416 passes through without collapsing", func(t *testing.T) {
+		proxy, _ := newMediaProxyTestService(t, func(w http.ResponseWriter, r *http.Request) {
+			if got := r.Header.Get("Range"); got != "bytes=999-1000" {
+				t.Fatalf("range = %q, want %q", got, "bytes=999-1000")
+			}
+
+			w.Header().Set("Content-Range", "bytes */10")
+			w.Header().Set("Content-Type", "audio/mpeg")
+			w.WriteHeader(http.StatusRequestedRangeNotSatisfiable)
+		}, testPublicLookupIP)
+
+		rr := httptest.NewRecorder()
+		req := newProxyJSONRequest(t, http.MethodGet, "http://feeds.example.com/audio.mp3", map[string]string{
+			"Range": "bytes=999-1000",
+		})
+		req.RemoteAddr = "198.51.100.10:12345"
+		proxy.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusRequestedRangeNotSatisfiable {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusRequestedRangeNotSatisfiable)
+		}
+		if rr.Header().Get("Content-Range") != "bytes */10" {
+			t.Fatalf("content-range = %q, want %q", rr.Header().Get("Content-Range"), "bytes */10")
+		}
+	})
+
+	t.Run("follows a public redirect chain", func(t *testing.T) {
+		lookupCalls := 0
+		proxy, _ := newMediaProxyTestService(t, func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/start":
+				w.Header().Set("Location", "http://other.example.com/final")
+				w.WriteHeader(http.StatusFound)
+			case "/final":
+				if got := r.Host; got != "other.example.com" {
+					t.Fatalf("host = %q, want %q", got, "other.example.com")
+				}
+				_, _ = io.WriteString(w, "done")
+			default:
+				t.Fatalf("unexpected path %q", r.URL.Path)
+			}
+		}, func(ctx context.Context, host string) ([]net.IPAddr, error) {
+			lookupCalls++
+			return testPublicLookupIP(ctx, host)
+		})
+
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/api/proxy?url=http://feeds.example.com/start", nil)
+		req.RemoteAddr = "198.51.100.10:12345"
+		proxy.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+		}
+		if rr.Body.String() != "done" {
+			t.Fatalf("body = %q, want %q", rr.Body.String(), "done")
+		}
+		if lookupCalls < 2 {
+			t.Fatalf("lookup calls = %d, want at least %d", lookupCalls, 2)
+		}
+	})
+
+	t.Run("rejects unsupported proxy methods and invalid range headers", func(t *testing.T) {
+		proxy, _ := newMediaProxyTestService(t, func(w http.ResponseWriter, r *http.Request) {
+			t.Fatalf("upstream should not be reached")
+		}, testPublicLookupIP)
+
+		rr := httptest.NewRecorder()
+		req := newProxyJSONRequest(t, http.MethodPut, "http://feeds.example.com/audio.mp3", nil)
+		req.RemoteAddr = "198.51.100.10:12345"
+		proxy.ServeHTTP(rr, req)
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("method status = %d, want %d", rr.Code, http.StatusBadRequest)
+		}
+
+		rr = httptest.NewRecorder()
+		req = newProxyJSONRequest(t, http.MethodGet, "http://feeds.example.com/audio.mp3", map[string]string{
+			"Range": "items=1-2",
+		})
+		req.RemoteAddr = "198.51.100.10:12345"
+		proxy.ServeHTTP(rr, req)
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("range status = %d, want %d", rr.Code, http.StatusBadRequest)
+		}
+	})
+}
+
 func testPublicLookupIP(ctx context.Context, host string) ([]net.IPAddr, error) {
 	return []net.IPAddr{{IP: net.ParseIP("203.0.113.10")}}, nil
+}
+
+func newMediaProxyTestService(
+	t *testing.T,
+	handler http.HandlerFunc,
+	lookupIP func(context.Context, string) ([]net.IPAddr, error),
+) (*proxyService, *string) {
+	t.Helper()
+
+	backend := httptest.NewServer(handler)
+	t.Cleanup(backend.Close)
+
+	dialedAddress := ""
+	if lookupIP == nil {
+		lookupIP = testPublicLookupIP
+	}
+
+	proxy := &proxyService{
+		lookupIP: lookupIP,
+		dialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+			dialedAddress = address
+			var d net.Dialer
+			return d.DialContext(ctx, network, backend.Listener.Addr().String())
+		},
+		limiter:   newRateLimiter(5, time.Minute, func() time.Time { return time.Unix(0, 0) }),
+		timeout:   200 * time.Millisecond,
+		userAgent: proxyUserAgent,
+		bodyLimit: proxyBodyLimit,
+	}
+
+	return proxy, &dialedAddress
+}
+
+func newProxyJSONRequest(t *testing.T, method, targetURL string, headers map[string]string) *http.Request {
+	t.Helper()
+
+	payload := proxyRequestPayload{
+		URL:     targetURL,
+		Method:  method,
+		Headers: headers,
+	}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal proxy payload: %v", err)
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/proxy", strings.NewReader(string(body)))
+	req.Header.Set("Content-Type", "application/json")
+	return req
 }
 
 type testSQLiteHandle struct {

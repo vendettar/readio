@@ -65,7 +65,7 @@ export function AppShell({ children }: AppShellProps) {
 
       <main className="flex-1 flex flex-col relative bg-background overflow-hidden">
         {/* Main content area */}
-        <div className="flex-1 h-full overflow-hidden relative">
+        <div className="flex-1 h-0 overflow-hidden relative">
           <div className="h-full overflow-y-auto pb-mini-player custom-scrollbar">{children}</div>
         </div>
       </main>

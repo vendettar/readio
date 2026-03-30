@@ -146,20 +146,25 @@ describe('runtimeConfig schema parity', () => {
   })
 
   it('uses the English-specific dictionary config field for definition requests', async () => {
-    const fetchJsonWithFallback = vi.fn().mockResolvedValue([
-      {
-        word: 'hello',
-        meanings: [],
-      },
-    ])
-
-    vi.doMock('../fetchUtils', () => ({
-      FetchError: class FetchError extends Error {},
-      fetchJsonWithFallback,
-    }))
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          {
+            word: 'hello',
+            meanings: [],
+          },
+        ]),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }
+      )
+    )
+    vi.stubGlobal('fetch', fetchMock)
     vi.doMock('../runtimeConfig', () => ({
       getAppConfig: () => ({
         EN_DICTIONARY_API_URL: 'https://english.example/api',
+        EN_DICTIONARY_API_TRANSPORT: 'direct',
         PROXY_TIMEOUT_MS: 1234,
       }),
     }))
@@ -171,10 +176,11 @@ describe('runtimeConfig schema parity', () => {
     const { fetchDefinition } = await import('../selection/api')
     await fetchDefinition('Hello')
 
-    expect(fetchJsonWithFallback).toHaveBeenCalledWith(
+    expect(fetchMock).toHaveBeenCalledWith(
       'https://english.example/api/hello',
       expect.objectContaining({
-        timeoutMs: 1234,
+        method: 'GET',
+        credentials: 'omit',
       })
     )
   })

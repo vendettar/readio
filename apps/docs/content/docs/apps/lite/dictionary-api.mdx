@@ -1,0 +1,147 @@
+---
+title: Dictionary API
+---
+
+## Overview
+
+Readio currently uses `dictionaryapi.dev` as the English dictionary backend.
+
+- Base endpoint: `https://api.dictionaryapi.dev/api/v2/entries/en/<word>`
+- Current scope: English only
+- Transport mode is runtime-configured per app:
+  - Lite: `direct` or custom proxy
+  - Cloud: `direct` or same-origin `/api/proxy`
+
+This page defines the current API contract and the error semantics that frontend code must preserve.
+
+## Request Contract
+
+### Get Word Definitions
+
+```http
+GET https://api.dictionaryapi.dev/api/v2/entries/en/<word>
+```
+
+Example:
+
+```http
+GET https://api.dictionaryapi.dev/api/v2/entries/en/hello
+```
+
+## Success Response
+
+Successful responses return `200 OK` and a JSON array.
+
+Example:
+
+```json
+[
+  {
+    "word": "hello",
+    "phonetic": "həˈləʊ",
+    "phonetics": [
+      {
+        "text": "həˈləʊ",
+        "audio": "//ssl.gstatic.com/dictionary/static/sounds/20200429/hello--_gb_1.mp3"
+      },
+      {
+        "text": "hɛˈləʊ"
+      }
+    ],
+    "origin": "early 19th century: variant of earlier hollo ; related to holla.",
+    "meanings": [
+      {
+        "partOfSpeech": "exclamation",
+        "definitions": [
+          {
+            "definition": "used as a greeting or to begin a phone conversation.",
+            "example": "hello there, Katie!",
+            "synonyms": [],
+            "antonyms": []
+          }
+        ]
+      }
+    ]
+  }
+]
+```
+
+Frontend code currently normalizes this response into:
+
+- `word`
+- `phonetic`
+- `meanings[].partOfSpeech`
+- `meanings[].definitions[]`
+
+Extra upstream fields may exist, but the current product contract only depends on the normalized subset above.
+
+## Not Found Contract
+
+When a word is missing, `dictionaryapi.dev` returns `404 Not Found` with a structured JSON payload.
+
+Example:
+
+```json
+{
+  "title": "No Definitions Found",
+  "message": "Sorry pal, we couldn't find definitions for the word you were looking for.",
+  "resolution": "You can try the search again at later time or head to the web instead."
+}
+```
+
+This is the only contract that should be mapped to the product-level error:
+
+- `Word not found`
+
+Implementation rule:
+
+- Do not treat generic 4xx as `Word not found`
+- Only map to `Word not found` when the response is `404` and matches the `dictionaryapi.dev` not-found payload contract
+
+## Network And Proxy Error Separation
+
+Network and proxy failures must remain distinct from dictionary not-found behavior.
+
+These cases must **not** be mapped to `Word not found`:
+
+- direct browser network failure
+- direct upstream `5xx`
+- custom proxy authentication/config failure
+- same-origin `/api/proxy` request failure
+- proxy-side `4xx` / `5xx` unrelated to the upstream dictionary not-found payload
+
+Implementation rule:
+
+- preserve the concrete proxy/network/service error message whenever possible
+- only use dictionary not-found semantics for the real upstream not-found contract
+
+## Transport Contract
+
+Dictionary transport is preconfigured, not runtime-fallback-driven.
+
+- `direct`
+  - browser requests the dictionary endpoint directly
+- proxy transport
+  - Lite uses the configured custom proxy URL
+  - Cloud uses same-origin `/api/proxy`
+
+This contract is explicit because dictionary providers are expected to have known CORS behavior ahead of time.
+
+## Future Providers
+
+If a new dictionary backend is added in the future, it must not silently inherit the `dictionaryapi.dev` error contract.
+
+Required for every new dictionary backend:
+
+1. add a provider-specific API contract document
+2. document request format
+3. document success shape
+4. document not-found semantics
+5. document transport mode
+6. document how proxy/network/service errors differ from business not-found
+
+Do not assume:
+
+- another provider also uses `404` for missing words
+- another provider returns the same JSON not-found payload
+- another provider should reuse `Word not found` mapping without an explicit contract

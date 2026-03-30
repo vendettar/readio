@@ -21,6 +21,7 @@ Each step corresponds to a specific Instruction file in `agent/instructions/lite
   - [x] **005e**: Harden Operational Error Handling.
   - [x] **005f**: Align Network Fetching & Cache Controls.
   - [x] **005g**: Storage Serialization Hardening.
+  - [x] **005j**: Monorepo Layout Standardization (Lite & Cloud Offset Unification - `pb-mini-player`).
 
 ---
 
@@ -163,11 +164,14 @@ Each step corresponds to a specific Instruction file in `agent/instructions/lite
 - [x] **001e**: SQLite bootstrap contract and startup/shutdown lifecycle.
 - [x] **001f**: Integration wiring and handoff verification.
 - [x] **005a-005g**: Cloud networking cutover, same-origin backend ownership, and docs/deploy/runtime contract sync, including Explore Editor's Picks and XML-accurate feed error semantics.
+- [x] **006a-006e**: Cloud media fallback-first contract, backend proxy hardening, client fallback routing, range/seek regression coverage, and docs/runtime sync.
+- [x] **007**: Cloud ASR fallback cutover.
+- [x] **008a-008e**: Cloud ASR provider relay cutover, deterministic regression coverage, and docs/runtime sync for same-origin provider submission with transient browser-supplied credentials.
 - [x] **001d**: Doc sync and SSOT alignment, completed only after reviewer approval.
 - [x] **003**: Cloud Lite Full Clone Bootstrap (`apps/cloud-ui` clone + Go-hosted `8080` runtime entrypoint).
 
 **Placement**: Cloud instructions live in `agent/instructions/cloud/`.
-**Current status**: 005a-005g is now closed. Cloud networking ownership is fully backend-owned for the visible discovery/feed flows, and the docs/deploy/runtime contract is synchronized with the cutover.
+**Current status**: 005a-005g is now closed. Cloud networking ownership is fully backend-owned for the visible discovery/feed flows. 006a-006e is now closed, establishing browser-direct-first media with backend fallback only for approved failure classes, and the docs/deploy/runtime contract is synchronized with the resulting Cloud media contract. 007 is now closed, covering the ASR-adjacent media fallback gap. 008a-008e is now closed, moving Cloud ASR provider transcription behind a dedicated same-origin relay while keeping provider verification/readiness browser-direct and browser-local media inputs browser-local.
 
 ---
 

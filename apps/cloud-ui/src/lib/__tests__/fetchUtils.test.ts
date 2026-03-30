@@ -1,7 +1,13 @@
 import { delay, HttpResponse, http } from 'msw'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { server } from '@/__tests__/setup'
-import { buildProxyUrl, checkCorsProxyHealth, fetchWithFallback } from '../fetchUtils'
+import {
+  CLOUD_BACKEND_FALLBACK_CLASSES,
+  __resetCloudBackendBreakerForTests,
+  buildProxyUrl,
+  checkCorsProxyHealth,
+  fetchWithFallback,
+} from '../fetchUtils'
 import type { AppConfig } from '../runtimeConfig'
 import * as runtimeConfig from '../runtimeConfig'
 
@@ -48,6 +54,7 @@ describe('fetchUtils: fetchWithFallback', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     server.resetHandlers()
+    __resetCloudBackendBreakerForTests()
   })
 
   it('Scenario 1: Direct fetch success', async () => {
@@ -263,6 +270,184 @@ describe('fetchUtils: fetchWithFallback', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('Cloud backend media fallback keeps direct success direct', async () => {
+    setupConfig()
+    const fetchImpl = vi.fn(async (input: string) => {
+      if (input === url) {
+        return new Response('<rss>Cloud Direct Success</rss>')
+      }
+      throw new Error(`unexpected fetch target: ${input}`)
+    })
+
+    const result = await fetchWithFallback(url, {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      cloudBackendFallbackClass: CLOUD_BACKEND_FALLBACK_CLASSES.TRANSCRIPT,
+    })
+
+    expect(result).toBe('<rss>Cloud Direct Success</rss>')
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(fetchImpl).toHaveBeenCalledWith(url, expect.objectContaining({ method: 'GET' }))
+  })
+
+  it('Cloud backend media fallback routes direct network failure to /api/proxy', async () => {
+    setupConfig()
+    const fetchImpl = vi.fn(async (input: string, init?: RequestInit) => {
+      if (input === url) {
+        throw new TypeError('Failed to fetch')
+      }
+
+      if (input === '/api/proxy') {
+        const body = JSON.parse(String(init?.body ?? '{}')) as {
+          url: string
+          method: string
+          headers?: Record<string, string>
+        }
+        expect(body.url).toBe(url)
+        expect(body.method).toBe('GET')
+        expect(body.headers?.Range).toBe('bytes=10-99')
+        return new Response('', {
+          status: 206,
+          headers: {
+            'content-range': 'bytes 10-99/1000',
+          },
+        })
+      }
+
+      throw new Error(`unexpected fetch target: ${input}`)
+    })
+
+    const res = await fetchWithFallback<Response>(url, {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      raw: true,
+      headers: { Range: 'bytes=10-99' },
+      cloudBackendFallbackClass: CLOUD_BACKEND_FALLBACK_CLASSES.AUDIO_PREFETCH_RANGE,
+    })
+
+    expect(res.status).toBe(206)
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+  })
+
+  it('Cloud backend media fallback treats direct timeout aborts as fallback-eligible', async () => {
+    vi.useFakeTimers()
+    setupConfig()
+
+    try {
+      const fetchImpl = vi.fn((input: string, init?: RequestInit) => {
+        if (input === url) {
+          return new Promise<Response>((_, reject) => {
+            init?.signal?.addEventListener(
+              'abort',
+              () => reject(new DOMException('Aborted', 'AbortError')),
+              { once: true }
+            )
+          })
+        }
+
+        if (input === '/api/proxy') {
+          return Promise.resolve(new Response('<rss>Recovered After Timeout</rss>'))
+        }
+
+        throw new Error(`unexpected fetch target: ${input}`)
+      })
+
+      const promise = fetchWithFallback(url, {
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+        cloudBackendFallbackClass: CLOUD_BACKEND_FALLBACK_CLASSES.TRANSCRIPT,
+      })
+
+      await vi.advanceTimersByTimeAsync(60)
+
+      await expect(promise).resolves.toBe('<rss>Recovered After Timeout</rss>')
+      expect(fetchImpl).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('Cloud backend media fallback retries direct 5xx raw responses through /api/proxy', async () => {
+    setupConfig()
+    const fetchImpl = vi.fn(async (input: string, init?: RequestInit) => {
+      if (input === url) {
+        return new Response('upstream failed', { status: 500 })
+      }
+
+      if (input === '/api/proxy') {
+        const body = JSON.parse(String(init?.body ?? '{}')) as {
+          url: string
+          method: string
+        }
+        expect(body.url).toBe(url)
+        expect(body.method).toBe('GET')
+        return new Response('audio-bytes', {
+          status: 200,
+          headers: {
+            'content-type': 'audio/mpeg',
+          },
+        })
+      }
+      throw new Error(`unexpected fetch target: ${input}`)
+    })
+
+    const res = await fetchWithFallback<Response>(url, {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      raw: true,
+      cloudBackendFallbackClass: CLOUD_BACKEND_FALLBACK_CLASSES.DOWNLOAD_GET,
+    })
+
+    expect(res.status).toBe(200)
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
+  })
+
+  it('Cloud backend media fallback keeps raw 416 terminal without proxy recursion', async () => {
+    setupConfig()
+    const fetchImpl = vi.fn(async (input: string) => {
+      if (input === url) {
+        return new Response('', { status: 416 })
+      }
+      throw new Error(`unexpected fetch target: ${input}`)
+    })
+
+    await expect(
+      fetchWithFallback<Response>(url, {
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+        raw: true,
+        cloudBackendFallbackClass: CLOUD_BACKEND_FALLBACK_CLASSES.DOWNLOAD_GET,
+      })
+    ).rejects.toThrow(/416/)
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+
+  it('Cloud backend breaker bypasses repeated direct failures after the threshold', async () => {
+    setupConfig()
+    let directCalls = 0
+    let proxyCalls = 0
+    const fetchImpl = vi.fn(async (input: string) => {
+      if (input === url) {
+        directCalls++
+        throw new TypeError('Failed to fetch')
+      }
+
+      if (input === '/api/proxy') {
+        proxyCalls++
+        return new Response('<rss>Proxy Success</rss>')
+      }
+
+      throw new Error(`unexpected fetch target: ${input}`)
+    })
+
+    const options = {
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      cloudBackendFallbackClass: CLOUD_BACKEND_FALLBACK_CLASSES.DOWNLOAD_HEAD,
+    }
+
+    await fetchWithFallback(url, options)
+    await fetchWithFallback(url, options)
+    await fetchWithFallback(url, options)
+
+    expect(directCalls).toBe(2)
+    expect(proxyCalls).toBe(3)
   })
 })
 

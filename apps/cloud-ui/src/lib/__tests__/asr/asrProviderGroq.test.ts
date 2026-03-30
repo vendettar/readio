@@ -300,16 +300,39 @@ describe('ASR provider (Groq) via openai-compatible transport', () => {
     ).rejects.toMatchObject({ code: 'unauthorized', status: 401 })
   })
 
-  it('verifies key by calling models endpoint and returns boolean for 200/401', async () => {
+  it('verifies key by calling the same-origin relay and preserves unauthorized detail', async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce({ ok: true, status: 200, headers: { get: () => null } })
-      .mockResolvedValueOnce({ ok: false, status: 401, headers: { get: () => null } })
+      .mockImplementationOnce(async (input: RequestInfo | URL) => {
+        expect(typeof input === 'string' ? input : input.toString()).toBe('/api/v1/asr/verify')
+        return new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      })
+      .mockImplementationOnce(async (input: RequestInfo | URL) => {
+        expect(typeof input === 'string' ? input : input.toString()).toBe('/api/v1/asr/verify')
+        return new Response(
+          JSON.stringify({
+            code: 'unauthorized',
+            message: 'provider rejected credentials',
+            status: 401,
+          }),
+          {
+            status: 401,
+            headers: { 'content-type': 'application/json' },
+          }
+        )
+      })
 
     vi.stubGlobal('fetch', fetchMock)
 
     await expect(verifyAsrKey({ apiKey: 'gsk_valid', provider: 'groq' })).resolves.toBe(true)
-    await expect(verifyAsrKey({ apiKey: 'gsk_invalid', provider: 'groq' })).resolves.toBe(false)
+    await expect(verifyAsrKey({ apiKey: 'gsk_invalid', provider: 'groq' })).rejects.toMatchObject({
+      code: 'unauthorized',
+      status: 401,
+      message: 'provider rejected credentials',
+    })
   })
 
   it('maps 429 ASPH error to ASRClientError with asph kind and retryAfterMs fallback', async () => {

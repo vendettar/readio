@@ -17,7 +17,7 @@ The Page Shell and Route Header follow a strict structural contract to ensure co
 All top-level routes MUST be wrapped in the `<PageShell>` component:
 - **Max Width**: `max-w-content` (105rem).
 - **Horizontal Padding**: `px-page` (variable based on viewport).
-- **Vertical Rhythm**: `pt-page` top padding and a generous `pb-32` bottom gutter to stay clear of the Mini-Player.
+- **Vertical Rhythm**: `pt-page` top padding. The global `AppShell` container provides the necessary `pb-mini-player` (54px) bottom gutter to clear the Mini-Player. `<PageShell>` no longer enforces its own fixed bottom padding.
 - **Scroll**: The global `AppShell` owns the primary vertical scroll container (`overflow-y-auto`). `PageShell` does not introduce nested scrolling.
 
 ### 2. Header Contract

@@ -23,6 +23,7 @@ declare global {
       READIO_MAX_CONCURRENT_REQUESTS?: number | string
       READIO_DB_NAME?: string
       READIO_EN_DICTIONARY_API_URL?: string
+      READIO_EN_DICTIONARY_API_TRANSPORT?: string
       READIO_DISCOVERY_LOOKUP_URL?: string
       READIO_DISCOVERY_SEARCH_URL?: string
       READIO_RSS_FEED_BASE_URL?: string

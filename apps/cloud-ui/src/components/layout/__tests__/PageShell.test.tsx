@@ -14,14 +14,15 @@ describe('PageShell Contract', () => {
     expect(container?.className).toContain('px-page')
   })
 
-  it('provides bottom padding to clear the mini-player', () => {
+  it('keeps content full-height without hardcoding mini-player padding', () => {
     render(
       <PageShell>
         <div data-testid="content">Content</div>
       </PageShell>
     )
     const container = screen.getByTestId('content').parentElement
-    expect(container?.className).toContain('pb-32')
+    expect(container?.className).toContain('min-h-full')
+    expect(container?.className).not.toContain('pb-32')
   })
 
   it('delegates scrolling to AppShell (no nested overflow-y-auto)', () => {

@@ -13,12 +13,9 @@ interface PageShellProps {
  */
 export function PageShell({ children, className, contentClassName }: PageShellProps) {
   return (
-    <div className={cn('h-full bg-background text-foreground flex flex-col', className)}>
+    <div className={cn('min-h-full bg-background text-foreground flex flex-col', className)}>
       <div
-        className={cn(
-          'w-full max-w-content mx-auto px-page pt-page pb-32 min-h-full',
-          contentClassName
-        )}
+        className={cn('w-full max-w-content mx-auto px-page pt-page min-h-full', contentClassName)}
       >
         {children}
       </div>

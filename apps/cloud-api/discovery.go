@@ -29,7 +29,7 @@ const (
 	discoveryLookupPodcastRoute               = "/api/v1/discovery/lookup/podcast"
 	discoveryLookupPodcastEpisodesRoute       = "/api/v1/discovery/lookup/podcast-episodes"
 	discoveryLookupPodcastsRoute              = "/api/v1/discovery/lookup/podcasts"
-	discoveryRSSBaseURL                       = "https://rss.applemarketingtools.com/api/v2"
+	discoveryRSSBaseURL                       = "https://rss.marketingtools.apple.com/api/v2"
 	discoverySearchBaseURL                    = "https://itunes.apple.com/search"
 	discoveryLookupBaseURL                    = "https://itunes.apple.com/lookup"
 	discoveryUserAgent                        = "Readio/1.0 (Cloud Discovery)"

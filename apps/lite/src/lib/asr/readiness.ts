@@ -89,5 +89,5 @@ export async function getAsrReadiness(): Promise<AsrReadinessResult> {
 
 export async function isAsrReadyForGeneration(): Promise<boolean> {
   const readiness = await getAsrReadiness()
-  return readiness.ready
+  return readiness.ready || readiness.reasonCode === 'not_verified'
 }

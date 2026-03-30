@@ -7,5 +7,9 @@ The Cloud bootstrap currently splits into `apps/cloud-ui` and `apps/cloud-api`.
 `apps/cloud-ui` is the Cloud UI build, and `apps/cloud-api` is the Go service that serves that build, boots SQLite for the current phase, and owns the backend same-origin networking used by migrated discovery, search, and feed flows.
 
 Cloud Settings no longer includes the `CORS Proxy` block for the migrated Cloud contract.
+Cloud media stays browser-direct first when available, then falls back through `apps/cloud-api` only for approved failure classes; that fallback is pass-through and non-caching, and browser-local media artifacts stay browser-local.
+Cloud ASR provider transcription now goes through a dedicated same-origin relay in `apps/cloud-api`; in this phase provider credentials remain user-owned and browser-supplied per request, and the backend must treat them as transient request data only.
+Cloud ASR provider verification/readiness checks remain browser-direct in the current phase.
+Cloud currently keeps Workbox/PWA disabled in this phase.
 
 See the Cloud handoff docs under `apps/docs/content/docs/apps/cloud/handoff/` for the current backend contracts and task-level implementation boundaries.

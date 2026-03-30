@@ -85,7 +85,7 @@ export function PodcastEpisodesGrid({ episodes, isLoading }: PodcastEpisodesGrid
               delay={colIndex * 0.1}
               staggerDelay={0.08}
               renderItem={(episode, rowIndex) => {
-                const podcastId = (episode.providerPodcastId ?? '').trim()
+                const podcastId = String(episode.providerPodcastId ?? '').trim()
                 const episodeRoute = buildPodcastEpisodeRoute({
                   country: normalizeCountryParam(globalCountry),
                   podcastId,

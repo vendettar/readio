@@ -33,7 +33,7 @@ export default function ExplorePage() {
   const isEverythingEmpty = !hasPicks && !hasShows && !hasEpisodes
 
   return (
-    <PageShell contentClassName="pb-14">
+    <PageShell>
       {/* Header */}
       <PageHeader title={t('exploreTitle')} subtitle={t('exploreSubtitle')} />
 

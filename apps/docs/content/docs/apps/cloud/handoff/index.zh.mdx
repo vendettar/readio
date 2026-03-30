@@ -12,7 +12,12 @@ title: Cloud 交接
 - 将 `apps/cloud-ui` 构建为与 Lite 等价的完整前端克隆。
 - 由 `apps/cloud-api` 直接提供 `apps/cloud-ui/dist` 的构建产物。
 - 让已迁移的 discovery、search、feed 流量通过 `apps/cloud-api` 以同源后端方式承载。
+- 在浏览器直连可用时优先使用浏览器直连；仅对已批准的媒体失败类由 `apps/cloud-api` 提供内建 fallback 代理。
+- 让浏览器本地的下载、转录和其他本地媒体产物继续留在浏览器本地；清除站点数据后仍会被移除。
 - 让 Cloud Settings 在当前契约中不再包含 `CORS Proxy` 区块。
+- 让 Cloud ASR provider 转写通过 `apps/cloud-api` 里的独立同源 relay 提交，同时在这一阶段保持 provider credential 由用户拥有并由浏览器按请求提供。
+- 让 Cloud ASR provider 的验证 / readiness 在后续指令明确修改之前继续保持 browser-direct。
+- 在当前阶段保持 Workbox/PWA 关闭，除非后续指令明确恢复。
 - 暴露当前脚手架阶段的 `/api/proxy` RSS 代理契约。
 - 启动 SQLite 作为 Cloud 后端脚手架的持久化基础，并保持生命周期清晰。
 
@@ -42,5 +47,31 @@ title: Cloud 交接
 - 在这一阶段，应把 Cloud 描述为由 Go 后端提供的 Lite 等价前端克隆。
 - 应把已迁移的 discovery、search、feed 请求描述为由后端拥有的同源流量。
 - 应把 Cloud Settings 描述为不再包含 `CORS Proxy` 区块。
+- 应把 Cloud 媒体描述为浏览器直连优先，仅对已批准的失败类使用后端 fallback。
+- 应把 Cloud ASR provider 转写描述为通过独立后端路由拥有的同源 relay。
+- 应把 Cloud ASR 的 provider credential 描述为在这一阶段仍由用户拥有，并由浏览器按请求提供。
+- 应把 Cloud ASR provider 的验证 / readiness 描述为仍然是 browser-direct。
+- 应把后端媒体 fallback 描述为透传且不缓存。
+- 应把浏览器本地媒体产物描述为继续留在浏览器本地。
+- 应注明 Cloud 在当前阶段保持 Workbox/PWA 关闭。
 - 不要在这一阶段声称已经具备 schema、同步、认证或多用户 SaaS 行为。
+- 不要声称所有音频都会一直走后端。
+- 不要声称 `/api/proxy` 负责 provider 转写。
+- 不要声称 Cloud 在这一阶段会服务端持久化用户的 ASR provider credential。
+- 不要声称存在服务端媒体缓存或持久化。
 - 未来 Cloud 演进应放在明确标记为 future direction 的文档里。
+
+## 6. 媒体 fallback 审计
+
+- 006a 的媒体审计记录在 `media-fallback-audit.md`。
+- 它分类了原生 audio、JS fetch 预取、`HEAD`、`GET`、`Range GET`、transcript 抓取、本地 `blob:` 播放，以及 tracking URL 解包行为。
+- 当前运行时契约保持浏览器直连优先，并仅对已批准的失败类使用窄而明确的后端 fallback，且为透传、不缓存。
+- 这一页只保留高层映射；实现细节放在审计子文档里。
+
+## 7. ASR Relay 审计
+
+- 008a 的 ASR transport 审计记录在 `asr-relay-audit.md`。
+- 它把媒体抓取 fallback 与 provider 转写提交、provider 验证 / readiness 检查分开。
+- 当前 Cloud 契约已经把 provider 转写切到独立的同源 relay，而 provider 验证 / readiness 仍然保持 browser-direct。
+- 浏览器本地 blob 与已下载 blob 仍然是 browser-local 输入；relay 不会把它们变成后端持久化对象。
+- 这一页只保留高层映射；实现细节放在审计子文档里。

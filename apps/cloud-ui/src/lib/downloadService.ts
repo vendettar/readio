@@ -14,7 +14,7 @@
 import { create } from 'zustand'
 import { DB, DB_TABLE_NAMES, type PodcastDownload } from './dexieDb'
 import { checkDownloadCapacity } from './downloadCapacity'
-import { fetchWithFallback } from './fetchUtils'
+import { CLOUD_BACKEND_FALLBACK_CLASSES, fetchWithFallback } from './fetchUtils'
 import { log, error as logError } from './logger'
 import { normalizePodcastAudioUrl, unwrapPodcastTrackingUrl } from './networking/urlUtils'
 import { DownloadsRepository } from './repositories/DownloadsRepository'
@@ -295,6 +295,7 @@ async function executeDownload(options: DownloadJobOptions): Promise<DownloadRes
         signal,
         raw: true,
         purpose: 'Sizing',
+        cloudBackendFallbackClass: CLOUD_BACKEND_FALLBACK_CLASSES.DOWNLOAD_HEAD,
       })
 
       // Ensure any preflight raw response body is explicitly canceled when not consumed.
@@ -332,6 +333,7 @@ async function executeDownload(options: DownloadJobOptions): Promise<DownloadRes
       signal,
       raw: true,
       purpose: 'Download',
+      cloudBackendFallbackClass: CLOUD_BACKEND_FALLBACK_CLASSES.DOWNLOAD_GET,
     })
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}`)

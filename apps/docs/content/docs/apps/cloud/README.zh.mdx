@@ -7,5 +7,9 @@ description: Readio 云端应用及后端架构文档。
 其中 `apps/cloud-ui` 是 Cloud 的前端构建产物，`apps/cloud-api` 则是负责提供该构建产物、在当前阶段启动 SQLite，并接管已迁移的 discovery、search、feed 同源后端网络请求的 Go 服务。
 
 Cloud Settings 在当前 Cloud 契约中不再包含 `CORS Proxy` 区块。
+Cloud 媒体在可用时仍然优先走浏览器直连，仅对已批准的失败类回退到 `apps/cloud-api`；该 fallback 为透传且不缓存，浏览器本地的媒体产物也仍然留在浏览器本地。
+Cloud ASR provider 转写现在通过 `apps/cloud-api` 里的独立同源 relay 提交；在这一阶段，provider credential 仍然由用户拥有并由浏览器按请求提供，后端只能把它当作瞬时请求数据处理。
+Cloud ASR provider 的验证 / readiness 检查在当前阶段仍然保持 browser-direct。
+Cloud 在当前阶段保持 Workbox/PWA 关闭。
 
 当前后端契约与任务级边界请查看 `apps/docs/content/docs/apps/cloud/handoff/` 下的 Cloud handoff 文档。

@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -14,6 +17,7 @@ import (
 	"os/signal"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -32,8 +36,38 @@ const proxyBodyLimit = 2 << 20
 const proxyRateLimitWindow = time.Minute
 const proxyRateLimitBurst = 5
 const proxyRoute = "/api/proxy"
+const proxyMaxRedirects = 5
 const cloudDBEnv = "READIO_CLOUD_DB_PATH"
 const cloudDBDefaultPath = "./data/readio.db"
+
+var proxyAllowedRequestHeaders = map[string]struct{}{
+	"accept":            {},
+	"accept-language":   {},
+	"cache-control":     {},
+	"if-modified-since": {},
+	"if-none-match":     {},
+	"if-range":          {},
+	"pragma":            {},
+	"range":             {},
+}
+
+var proxyAllowedResponseHeaders = []string{
+	"Accept-Ranges",
+	"Age",
+	"Cache-Control",
+	"Content-Disposition",
+	"Content-Encoding",
+	"Content-Length",
+	"Content-Range",
+	"Content-Type",
+	"ETag",
+	"Expires",
+	"Last-Modified",
+	"Retry-After",
+	"Vary",
+}
+
+var proxyRangePattern = regexp.MustCompile(`^bytes=(?:\d+-\d*|\d*-\d+)$`)
 
 type appHandler struct {
 	distDir   string
@@ -71,13 +105,36 @@ type sqliteCloser interface {
 
 type sqliteOpener func(context.Context, string) (sqliteCloser, error)
 
+type proxyRequestPayload struct {
+	URL     string            `json:"url"`
+	Method  string            `json:"method"`
+	Headers map[string]string `json:"headers,omitempty"`
+}
+
+type proxyRequestSpec struct {
+	targetURL *url.URL
+	method    string
+	headers   http.Header
+	legacyGET bool
+}
+
+type proxyError struct {
+	status  int
+	message string
+}
+
+func (e *proxyError) Error() string {
+	return e.message
+}
+
 var (
 	cloudOpenSQLite sqliteOpener = func(ctx context.Context, dbPath string) (sqliteCloser, error) {
 		return openCloudSQLite(ctx, dbPath)
 	}
-	cloudNewProxyService = newProxyService
-	cloudCloseSQLite     = func(db sqliteCloser) error { return db.Close() }
-	cloudListenAndServe  = func(ctx context.Context, server *http.Server) error {
+	cloudNewProxyService    = newProxyService
+	cloudNewASRRelayService = newASRRelayService
+	cloudCloseSQLite        = func(db sqliteCloser) error { return db.Close() }
+	cloudListenAndServe     = func(ctx context.Context, server *http.Server) error {
 		return server.ListenAndServe()
 	}
 	cloudShutdownServer = func(ctx context.Context, server *http.Server) error {
@@ -126,12 +183,15 @@ func runCloudServer(parent context.Context) error {
 	slog.Info("sqlite database ready", "path", dbPath)
 
 	proxy := cloudNewProxyService()
+	asrRelay := cloudNewASRRelayService()
 	discovery := newDiscoveryService()
 
 	addr := ":" + port
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", healthHandler)
+	mux.Handle(asrRelayRoute, asrRelay)
+	mux.Handle(asrVerifyRoute, asrRelay)
 	mux.Handle(discoveryRoutePrefix, discovery)
 	mux.Handle(proxyRoute, proxy)
 	mux.Handle("/", handler)
@@ -285,30 +345,9 @@ func newRateLimiter(limit int, window time.Duration, now func() time.Time) *rate
 }
 
 func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		writeProxyError(w, http.StatusMethodNotAllowed, "only GET is allowed")
-		return
-	}
-
-	targetURL := strings.TrimSpace(r.URL.Query().Get("url"))
-	if targetURL == "" {
-		writeProxyError(w, http.StatusBadRequest, "missing url")
-		return
-	}
-
-	parsedURL, err := url.ParseRequestURI(targetURL)
+	spec, err := p.parseProxyRequest(w, r)
 	if err != nil {
-		writeProxyError(w, http.StatusBadRequest, "invalid url")
-		return
-	}
-
-	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
-		writeProxyError(w, http.StatusBadRequest, "only http and https urls are allowed")
-		return
-	}
-
-	if err := validateProxyTarget(parsedURL); err != nil {
-		writeProxyError(w, http.StatusBadRequest, err.Error())
+		p.respondProxyError(w, err)
 		return
 	}
 
@@ -320,9 +359,9 @@ func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), p.timeout)
 	defer cancel()
 
-	validatedAddrs, err := p.resolveProxyTargetAddresses(ctx, parsedURL)
+	validatedAddrs, err := p.resolveProxyTargetAddresses(ctx, spec.targetURL)
 	if err != nil {
-		writeProxyError(w, http.StatusBadRequest, err.Error())
+		p.respondProxyError(w, err)
 		return
 	}
 
@@ -331,19 +370,32 @@ func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		client = p.newProxyClient(validatedAddrs)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, parsedURL.String(), nil)
+	req, err := http.NewRequestWithContext(ctx, spec.method, spec.targetURL.String(), nil)
 	if err != nil {
 		writeProxyError(w, http.StatusBadGateway, "unable to create upstream request")
 		return
 	}
 
 	req.Header.Set("User-Agent", p.userAgent)
-	req.Header.Set("Accept", "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8")
+	for key, values := range spec.headers {
+		for _, value := range values {
+			req.Header.Add(key, value)
+		}
+	}
+	if spec.legacyGET && req.Header.Get("Accept") == "" {
+		req.Header.Set("Accept", "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8")
+	}
 
 	resp, err := client.Do(req)
 	if err != nil {
-		if ctx.Err() != nil {
+		if ctx.Err() != nil || errors.Is(err, context.DeadlineExceeded) {
 			writeProxyError(w, http.StatusGatewayTimeout, "upstream request timed out")
+			return
+		}
+
+		var proxyErr *proxyError
+		if errors.As(err, &proxyErr) {
+			writeProxyError(w, proxyErr.status, proxyErr.message)
 			return
 		}
 
@@ -352,31 +404,170 @@ func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		writeProxyError(w, http.StatusBadGateway, "upstream returned an invalid response")
-		return
-	}
-
-	body, err := io.ReadAll(io.LimitReader(resp.Body, p.bodyLimit+1))
-	if err != nil {
-		writeProxyError(w, http.StatusBadGateway, "unable to read upstream response")
-		return
-	}
-
-	if int64(len(body)) > p.bodyLimit {
-		writeProxyError(w, http.StatusBadGateway, "upstream response too large")
-		return
-	}
-
-	contentType := strings.TrimSpace(resp.Header.Get("Content-Type"))
-	if contentType == "" {
-		contentType = "application/xml; charset=utf-8"
-	}
-
+	copyProxyResponseHeaders(w.Header(), resp.Header)
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Content-Type", contentType)
-	w.WriteHeader(http.StatusOK)
-	_, _ = w.Write(body)
+	w.Header().Set("Access-Control-Expose-Headers", strings.Join(proxyAllowedResponseHeaders, ", "))
+	w.WriteHeader(resp.StatusCode)
+
+	if spec.method == http.MethodHead {
+		return
+	}
+
+	if _, err := io.Copy(w, resp.Body); err != nil && ctx.Err() != nil {
+		slog.Warn("proxy body copy interrupted", "error", err)
+	}
+}
+
+func (p *proxyService) parseProxyRequest(w http.ResponseWriter, r *http.Request) (*proxyRequestSpec, error) {
+	switch r.Method {
+	case http.MethodGet:
+		rawTarget := strings.TrimSpace(r.URL.Query().Get("url"))
+		if rawTarget == "" {
+			return nil, &proxyError{status: http.StatusBadRequest, message: "missing url"}
+		}
+
+		parsedURL, err := parseProxyTargetURL(rawTarget)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := validateProxyTarget(parsedURL); err != nil {
+			return nil, &proxyError{status: http.StatusBadRequest, message: err.Error()}
+		}
+
+		return &proxyRequestSpec{
+			targetURL: parsedURL,
+			method:    http.MethodGet,
+			headers:   make(http.Header),
+			legacyGET: true,
+		}, nil
+	case http.MethodPost:
+		if ct := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type"))); ct != "" && !strings.HasPrefix(ct, "application/json") {
+			return nil, &proxyError{status: http.StatusBadRequest, message: "content-type must be application/json"}
+		}
+
+		body, err := io.ReadAll(io.LimitReader(r.Body, p.bodyLimit+1))
+		if err != nil {
+			return nil, &proxyError{status: http.StatusBadRequest, message: "invalid proxy request payload"}
+		}
+		if int64(len(body)) > p.bodyLimit {
+			return nil, &proxyError{status: http.StatusBadRequest, message: "invalid proxy request payload"}
+		}
+
+		decoder := json.NewDecoder(bytes.NewReader(body))
+		decoder.DisallowUnknownFields()
+
+		var payload proxyRequestPayload
+		if err := decoder.Decode(&payload); err != nil {
+			return nil, &proxyError{status: http.StatusBadRequest, message: "invalid proxy request payload"}
+		}
+
+		var trailing json.RawMessage
+		if err := decoder.Decode(&trailing); err != io.EOF {
+			return nil, &proxyError{status: http.StatusBadRequest, message: "invalid proxy request payload"}
+		}
+
+		rawTarget := strings.TrimSpace(payload.URL)
+		if rawTarget == "" {
+			return nil, &proxyError{status: http.StatusBadRequest, message: "missing url"}
+		}
+
+		parsedURL, err := parseProxyTargetURL(rawTarget)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := validateProxyTarget(parsedURL); err != nil {
+			return nil, &proxyError{status: http.StatusBadRequest, message: err.Error()}
+		}
+
+		method := strings.ToUpper(strings.TrimSpace(payload.Method))
+		if method == "" {
+			return nil, &proxyError{status: http.StatusBadRequest, message: "missing method"}
+		}
+		if method != http.MethodGet && method != http.MethodHead {
+			return nil, &proxyError{status: http.StatusBadRequest, message: "unsupported proxy method"}
+		}
+
+		headers, err := validateProxyForwardHeaders(payload.Headers)
+		if err != nil {
+			var proxyErr *proxyError
+			if errors.As(err, &proxyErr) {
+				return nil, proxyErr
+			}
+			return nil, &proxyError{status: http.StatusBadRequest, message: "invalid proxy headers"}
+		}
+
+		return &proxyRequestSpec{
+			targetURL: parsedURL,
+			method:    method,
+			headers:   headers,
+		}, nil
+	default:
+		return nil, &proxyError{status: http.StatusMethodNotAllowed, message: "only GET and POST are allowed"}
+	}
+}
+
+func (p *proxyService) respondProxyError(w http.ResponseWriter, err error) {
+	var proxyErr *proxyError
+	if errors.As(err, &proxyErr) {
+		writeProxyError(w, proxyErr.status, proxyErr.message)
+		return
+	}
+
+	writeProxyError(w, http.StatusBadGateway, err.Error())
+}
+
+func parseProxyTargetURL(raw string) (*url.URL, error) {
+	parsedURL, err := url.ParseRequestURI(raw)
+	if err != nil {
+		return nil, &proxyError{status: http.StatusBadRequest, message: "invalid url"}
+	}
+
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return nil, &proxyError{status: http.StatusBadRequest, message: "only http and https urls are allowed"}
+	}
+	if parsedURL.User != nil {
+		return nil, &proxyError{status: http.StatusBadRequest, message: "userinfo is not allowed"}
+	}
+
+	return parsedURL, nil
+}
+
+func validateProxyForwardHeaders(headers map[string]string) (http.Header, error) {
+	forwarded := make(http.Header)
+	for rawName, rawValue := range headers {
+		name := http.CanonicalHeaderKey(strings.TrimSpace(rawName))
+		value := strings.TrimSpace(rawValue)
+		if name == "" {
+			return nil, &proxyError{status: http.StatusBadRequest, message: "invalid proxy headers"}
+		}
+
+		if _, ok := proxyAllowedRequestHeaders[strings.ToLower(name)]; !ok {
+			return nil, &proxyError{status: http.StatusBadRequest, message: "unsupported proxy header"}
+		}
+
+		if name == "Range" && !proxyRangePattern.MatchString(value) {
+			return nil, &proxyError{status: http.StatusBadRequest, message: "invalid range header"}
+		}
+
+		if value == "" {
+			return nil, &proxyError{status: http.StatusBadRequest, message: "invalid proxy headers"}
+		}
+
+		forwarded.Set(name, value)
+	}
+
+	return forwarded, nil
+}
+
+func copyProxyResponseHeaders(dst http.Header, src http.Header) {
+	for _, headerName := range proxyAllowedResponseHeaders {
+		value := strings.TrimSpace(src.Get(headerName))
+		if value != "" {
+			dst.Set(headerName, value)
+		}
+	}
 }
 
 func (p *proxyService) allowRequest(remoteAddr string) bool {
@@ -458,7 +649,7 @@ func (p *proxyService) resolveProxyTargetAddresses(ctx context.Context, target *
 	if _, err := netip.ParseAddr(host); err == nil {
 		addr, _ := netip.ParseAddr(host)
 		if isDisallowedProxyAddr(addr) {
-			return nil, fmt.Errorf("target host is not allowed")
+			return nil, &proxyError{status: http.StatusBadRequest, message: "target host is not allowed"}
 		}
 
 		return []netip.Addr{addr.Unmap()}, nil
@@ -482,7 +673,7 @@ func (p *proxyService) resolveProxyTargetAddresses(ctx context.Context, target *
 	for _, addr := range addresses {
 		ip, ok := netip.AddrFromSlice(addr.IP)
 		if !ok || isDisallowedProxyAddr(ip) {
-			return nil, fmt.Errorf("target host is not allowed")
+			return nil, &proxyError{status: http.StatusBadRequest, message: "target host is not allowed"}
 		}
 		allowed = append(allowed, ip.Unmap())
 	}
@@ -496,22 +687,92 @@ func isDisallowedProxyAddr(addr netip.Addr) bool {
 }
 
 func (p *proxyService) newProxyClient(addrs []netip.Addr) *http.Client {
+	pinnedAddrs := append([]netip.Addr(nil), addrs...)
+	var pinnedOnce sync.Mutex
+	pinnedUsed := false
+
 	transport := &http.Transport{
+		DisableCompression: true,
 		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
-			_, port, err := net.SplitHostPort(address)
+			host, port, err := net.SplitHostPort(address)
 			if err != nil {
 				return nil, err
 			}
 
-			return p.dialValidatedTargets(ctx, network, port, addrs)
+			pinnedOnce.Lock()
+			usePinned := !pinnedUsed && len(pinnedAddrs) > 0
+			if usePinned {
+				pinnedUsed = true
+			}
+			pinnedOnce.Unlock()
+
+			if usePinned {
+				return p.dialValidatedTargets(ctx, network, port, pinnedAddrs)
+			}
+
+			validatedAddrs, err := p.resolveProxyTargetAddresses(ctx, &url.URL{Host: host})
+			if err != nil {
+				return nil, err
+			}
+
+			return p.dialValidatedTargets(ctx, network, port, validatedAddrs)
 		},
 	}
 
-	return &http.Client{
+	client := &http.Client{
 		Transport: transport,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			return http.ErrUseLastResponse
+			if len(via) >= proxyMaxRedirects {
+				return &proxyError{status: http.StatusBadGateway, message: "redirect chain too long"}
+			}
+
+			if err := validateProxyTarget(req.URL); err != nil {
+				return &proxyError{status: http.StatusBadRequest, message: err.Error()}
+			}
+
+			if _, err := p.resolveProxyTargetAddresses(req.Context(), req.URL); err != nil {
+				return &proxyError{status: http.StatusBadRequest, message: err.Error()}
+			}
+
+			if len(via) > 0 && len(via[0].Header) > 0 {
+				copyProxyRequestHeaders(req.Header, via[0].Header)
+			}
+
+			req.Header.Set("User-Agent", p.userAgent)
+			return nil
 		},
+	}
+
+	if p != nil && p.timeout > 0 {
+		client.Timeout = p.timeout
+	}
+
+	return client
+}
+
+func copyProxyRequestHeaders(dst http.Header, src http.Header) {
+	dst.Del("Accept")
+	dst.Del("Accept-Language")
+	dst.Del("Cache-Control")
+	dst.Del("If-Modified-Since")
+	dst.Del("If-None-Match")
+	dst.Del("If-Range")
+	dst.Del("Pragma")
+	dst.Del("Range")
+
+	for _, headerName := range []string{
+		"Accept",
+		"Accept-Language",
+		"Cache-Control",
+		"If-Modified-Since",
+		"If-None-Match",
+		"If-Range",
+		"Pragma",
+		"Range",
+	} {
+		if value := strings.TrimSpace(src.Get(headerName)); value != "" {
+			dst.Set(headerName, value)
+		}
 	}
 }
 
