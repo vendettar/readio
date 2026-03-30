@@ -297,7 +297,7 @@ export function ReadingContent({
           <span className="text-2xl">⚠️</span>
         </div>
         <p className="text-xl font-serif text-foreground mb-6">
-          {transcriptIngestionError?.code === 'network_error'
+          {transcriptIngestionError?.code === 'audio_download_error'
             ? t('asrErrorDownloadFailed')
             : t('asrErrorTitle')}
         </p>
@@ -325,7 +325,7 @@ export function ReadingContent({
     ) : (
       <div className="flex flex-col items-center justify-center h-full text-center p-6 bg-destructive/5 cursor-default">
         <p className="text-sm font-medium text-destructive mb-4">
-          {transcriptIngestionError?.code === 'network_error'
+          {transcriptIngestionError?.code === 'audio_download_error'
             ? t('asrErrorDownloadFailed')
             : t('asrErrorTitle')}
         </p>

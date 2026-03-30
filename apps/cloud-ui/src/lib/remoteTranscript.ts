@@ -16,7 +16,12 @@ import { getAsrCredentialKey, getCredential } from './db/credentialsRepository'
 import { isPodcastDownloadTrack, isUserUploadTrack } from './db/types'
 import { DB } from './dexieDb'
 import { emitDownloadChange, persistAudioBlobAsDownload } from './downloadService'
-import { FetchError, fetchTextWithFallback, fetchWithFallback } from './fetchUtils'
+import {
+  CLOUD_BACKEND_FALLBACK_CLASSES,
+  FetchError,
+  fetchTextWithFallback,
+  fetchWithFallback,
+} from './fetchUtils'
 import { log, logError } from './logger'
 import { normalizePodcastAudioUrl, sha256, unwrapPodcastTrackingUrl } from './networking/urlUtils'
 import { DownloadsRepository } from './repositories/DownloadsRepository'
@@ -57,6 +62,14 @@ export interface RemoteTranscriptParseFailure {
 export type RemoteTranscriptParseResult =
   | RemoteTranscriptParseSuccess
   | RemoteTranscriptParseFailure
+
+export class AudioDownloadError extends Error {
+  code = 'audio_download_error' as const
+  constructor(message: string) {
+    super(message)
+    this.name = 'AudioDownloadError'
+  }
+}
 
 export interface RemoteTranscriptLoadResult {
   ok: boolean
@@ -454,7 +467,11 @@ async function fetchAndPersistRemoteTranscript(
   reason?: 'empty' | 'unsupported' | 'invalid' | 'network'
 }> {
   try {
-    const content = await fetchTextWithFallback(url, { signal, expectXml: false })
+    const content = await fetchTextWithFallback(url, {
+      signal,
+      expectXml: false,
+      cloudBackendFallbackClass: CLOUD_BACKEND_FALLBACK_CLASSES.TRANSCRIPT,
+    })
     const parsed = parseRemoteTranscriptContent(url, content)
     if (!parsed.ok) {
       log('[remoteTranscript] parse unsupported/invalid', { url, reason: parsed.reason })
@@ -613,6 +630,7 @@ async function fetchRemoteAudioBlob(audioUrl: string, signal?: AbortSignal): Pro
       raw: true,
       method: 'GET',
       purpose: 'ASR-Fetch',
+      cloudBackendFallbackClass: CLOUD_BACKEND_FALLBACK_CLASSES.ASR_AUDIO,
     })
     return await response.blob()
   } catch (error) {
@@ -622,9 +640,8 @@ async function fetchRemoteAudioBlob(audioUrl: string, signal?: AbortSignal): Pro
     if (error instanceof FetchError) {
       throw mapStatusToAsrError(error.status ?? 0, error.message)
     }
-    throw new ASRClientError(
-      error instanceof Error ? error.message : 'Network error while downloading audio',
-      'network_error'
+    throw new AudioDownloadError(
+      error instanceof Error ? error.message : 'Network error while downloading audio'
     )
   }
 }
@@ -814,6 +831,13 @@ function handleAsrFailure(
   error: unknown,
   _trigger: OnlineAsrTrigger
 ): { status: 'idle' | 'failed'; error: { code: string; message: string } | null } {
+  if (error instanceof AudioDownloadError) {
+    return {
+      status: 'failed',
+      error: { code: error.code, message: error.message },
+    }
+  }
+
   const asrError =
     error instanceof ASRClientError
       ? error

@@ -1,3 +1,8 @@
+import {
+  CLOUD_BACKEND_FALLBACK_CLASSES,
+  fetchWithFallback,
+} from './fetchUtils'
+
 export const PREFETCH_ARM_THRESHOLD_SECONDS = 20
 export const PREFETCH_REARM_THRESHOLD_SECONDS = 25
 export const PREFETCH_BASE_INTERVAL_MS = 9_000
@@ -215,11 +220,16 @@ export class AudioPrefetchScheduler {
     this.inflightKeys.add(dedupeKey)
 
     try {
-      const response = await this.fetchImpl(sourceUrl, {
+      const response = await fetchWithFallback<Response>(sourceUrl, {
         signal: controller.signal,
         headers: {
           Range: `bytes=${rangeStart}-${rangeEnd}`,
         },
+        method: 'GET',
+        raw: true,
+        purpose: 'AudioPrefetch',
+        fetchImpl: this.fetchImpl,
+        cloudBackendFallbackClass: CLOUD_BACKEND_FALLBACK_CLASSES.AUDIO_PREFETCH_RANGE,
       })
 
       // Ignore stale completion without mutating active-source scheduler state.

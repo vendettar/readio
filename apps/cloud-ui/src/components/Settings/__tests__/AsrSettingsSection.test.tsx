@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useForm } from 'react-hook-form'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ASRClientError } from '@/lib/asr'
 import type { SettingsFormValues } from '@/lib/schemas/settings'
 import { AsrSettingsSection } from '../sections/AsrSettingsSection'
 
@@ -152,6 +153,28 @@ describe('AsrSettingsSection', () => {
     await waitFor(() => {
       expect(verifyAsrKeyMock).toHaveBeenCalledWith({ apiKey: 'gsk_test', provider: 'groq' })
     })
+  })
+
+  it('logs verify errors to console without surfacing provider message in the form', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    verifyAsrKeyMock.mockRejectedValue(
+      new ASRClientError('provider rejected credentials', 'unauthorized', 401)
+    )
+    const onFieldBlur = vi.fn(async () => {})
+
+    render(<Harness onFieldBlur={onFieldBlur} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'settingsVerify' }))
+
+    await waitFor(() => {
+      expect(consoleErrorSpy).toHaveBeenCalledWith('[asr] verify failed', {
+        provider: 'groq',
+        code: 'unauthorized',
+        status: 401,
+        message: 'provider rejected credentials',
+      })
+    })
+    expect(screen.queryByText('provider rejected credentials')).toBeNull()
   })
 
   it('disables model selector when provider is empty', () => {

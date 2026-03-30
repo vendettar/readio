@@ -15,6 +15,9 @@ const { fetchTextWithFallbackMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('../../lib/fetchUtils', () => ({
+  CLOUD_BACKEND_FALLBACK_CLASSES: {
+    TRANSCRIPT: 'transcript',
+  },
   fetchTextWithFallback: fetchTextWithFallbackMock,
 }))
 

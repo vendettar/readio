@@ -2,13 +2,7 @@ import { log } from '../logger'
 import { executeWithRetry } from '../networking/transportPolicy'
 import { getAppConfig } from '../runtimeConfig'
 import { mergeAsrCues, splitMp3Blob, splitMp3BlobWithTargetSizes } from './mp3Chunker'
-import { transcribeWithDeepgram, verifyDeepgramKey } from './providers/deepgramCompatible'
-import {
-  transcribeWithOpenAiCompatible,
-  verifyOpenAiCompatibleKey,
-} from './providers/openaiCompatible'
-import { transcribeWithQwen, verifyQwenKey } from './providers/qwenCompatible'
-import { transcribeWithVolcengine, verifyVolcengineKey } from './providers/volcengineCompatible'
+import { transcribeViaCloudRelay, verifyAsrKeyViaCloudRelay } from './backendRelay'
 import { isAsrProviderEnabled } from './providerToggles'
 import { getAsrProviderConfig } from './registry'
 import { ASRClientError, type ASRCue, type ASRProvider, type ASRTranscriptionResult } from './types'
@@ -301,7 +295,6 @@ export async function transcribeAudioWithRetry(options: {
     onProgress,
   } = options
   assertAsrProviderEnabled(provider)
-  const providerConfig = getAsrProviderConfig(provider)
 
   const progressiveDecision = preferProgressive
     ? await decideProgressivePlan(blob, expectedDurationSeconds)
@@ -415,43 +408,13 @@ export async function transcribeAudioWithRetry(options: {
     })
 
     const transcribeOnce = () => {
-      if (providerConfig.transport === 'openai-compatible') {
-        return transcribeWithOpenAiCompatible({
-          blob: chunk,
-          apiKey,
-          model,
-          providerConfig,
-          signal,
-        })
-      }
-      if (providerConfig.transport === 'qwen-chat-completions') {
-        return transcribeWithQwen({
-          blob: chunk,
-          apiKey,
-          model,
-          providerConfig,
-          signal,
-        })
-      }
-      if (providerConfig.transport === 'deepgram-native') {
-        return transcribeWithDeepgram({
-          blob: chunk,
-          apiKey,
-          model,
-          providerConfig,
-          signal,
-        })
-      }
-      if (providerConfig.transport === 'volcengine-asr') {
-        return transcribeWithVolcengine({
-          blob: chunk,
-          apiKey,
-          model,
-          providerConfig,
-          signal,
-        })
-      }
-      throw new ASRClientError(`Unsupported ASR provider: ${provider}`, 'client_error')
+      return transcribeViaCloudRelay({
+        blob: chunk,
+        apiKey,
+        model,
+        provider,
+        signal,
+      })
     }
 
     let rateLimitRetries = 0
@@ -550,18 +513,6 @@ export async function verifyAsrKey(options: {
 }): Promise<boolean> {
   const { apiKey, provider, signal } = options
   assertAsrProviderEnabled(provider)
-  const providerConfig = getAsrProviderConfig(provider)
-  if (providerConfig.transport === 'openai-compatible') {
-    return verifyOpenAiCompatibleKey({ apiKey, providerConfig, signal })
-  }
-  if (providerConfig.transport === 'qwen-chat-completions') {
-    return verifyQwenKey({ apiKey, providerConfig, signal })
-  }
-  if (providerConfig.transport === 'deepgram-native') {
-    return verifyDeepgramKey({ apiKey, providerConfig, signal })
-  }
-  if (providerConfig.transport === 'volcengine-asr') {
-    return verifyVolcengineKey({ apiKey, providerConfig, signal })
-  }
-  throw new ASRClientError(`Unsupported ASR provider: ${provider}`, 'client_error')
+  getAsrProviderConfig(provider)
+  return verifyAsrKeyViaCloudRelay({ apiKey, provider, signal })
 }

@@ -1,0 +1,68 @@
+# Cloud 媒体 fallback 审计
+
+## 范围
+本审计以 Lite 当前的媒体处理逻辑为基线，分类 Cloud 中仍会因为上游主机或请求类型不同而变化的媒体面。
+
+它明确区分：
+
+- 原生 `<audio src=...>` 传输
+- JS `fetch` 传输
+- `HEAD`
+- 普通 `GET`
+- `Range GET`
+- 本地 `blob:` 播放
+- tracking URL 解包预处理
+
+## 8 维扫描
+
+- 配置：Cloud 的 runtime config 和 settings schema 里仍保留 `CORS_PROXY_*` plumbing，但 Cloud Settings 页面已经不再渲染 proxy 区块。风险：残留配置 plumbing 可能被误认为是当前可见契约。
+- 持久化：本地下载、转录和播放状态仍然保存在浏览器本地的 IndexedDB / storage。风险：backend fallback 不能引入服务端持久化或隐藏缓存状态。
+- 路由：Cloud 播放仍走同一套 player shell 和 `audioUrl` 流；Cloud Settings 不再显示 `CORS Proxy` 区块。风险：startup fallback 不应改变路由拓扑。
+- 日志：`fetchUtils` 已记录 direct/proxy 尝试和超时结果；download/transcript 路径也有失败日志。风险：后续 fallback 需要带上 request class 标签，才能定位重复失败。
+- 网络：只有 `fetchWithFallback` 当前是 direct-first + proxy fallback；foreground prefetch 仍是带 `Range` 的直接 `fetch`；原生 audio element 仍然是 browser-direct。风险：过宽的重试逻辑会把本来能工作的请求也代理掉。
+- 存储：blob 播放依赖本地 object URL；prefetch 状态只在内存中；transcript cache 是本地 DB + 内存缓存。风险：不要把媒体字节移动到 backend 存储里。
+- UI 状态：`GlobalAudioController` 依赖 `mediaReadySrc`、`pendingSeek` 和 latest-request-wins 行为。风险：异步回包过晚会把 fallback 响应挂到错误的音轨上。
+- 测试：当前已有 `fetchUtils`、`downloadService`、`remoteTranscript`、`urlUtils`、`audioPrefetch`、`playbackSource` 和 Settings 的覆盖。风险：媒体 fallback 需要可重复的确定性测试，不能只靠线上 host 冒烟。
+
+## 分类矩阵
+
+| 请求类别 | 请求发起者 | Lite 行为 | 当前 Cloud 行为 | 是否已用 `fetchWithFallback` | 今天是否存在用户可配 proxy fallback | Cloud backend fallback 是否应该存在 | 安全触发条件 | 不应 fallback 的原因 |
+|---|---|---|---|---|---|---|---|---|
+| 原生 `<audio>` 的远程播放 | `useAudioElementSync` 通过 `GlobalAudioController` 设定 `audio.src` | 浏览器直接加载；如果本地已有下载则用 `blob:` | 与 Lite 相同 | 否 | 对原生 audio 不适用；Cloud UI 也不再显示 proxy 区块 | 在 `006a` 里不批准；以后若要做，必须使用显式的 proxied media URL 策略 | 本审计阶段不设定 | 原生 audio 不是 JS retry 目标，不能被无声地塞进通用 fetch fallback |
+| 使用 JS `fetch` + `Range` 的前台预取 | `useForegroundAudioPrefetch` -> `AudioPrefetchScheduler` | 直接 `fetch` 带 `Range`；没有 proxy fallback | 与 Lite 相同 | 否 | Cloud 没有可见 UI proxy；也没有激活中的用户代理配置 | 是，但只针对已批准的浏览器/CORS/network failure | 直接 `fetch` 因 CORS/network 失败，或上游不支持 partial-content 请求 | 这是优化项，不应让所有播放字节都走 backend |
+| `HEAD` 下载体积探测 | `downloadService.executeDownload` | `fetchWithFallback` 先直连，再按配置走 proxy | 与 Lite 相同；Cloud UI 隐藏了 proxy 区块，但配置 plumbing 仍在 | 是 | Cloud 不可见，但仍存在 dormant config plumbing | 是 | 直接请求出现 network/CORS/timeout 或 direct 之后的 5xx | 只需保留 body cancel，不要做缓存 |
+| `GET` 下载音频流 | `downloadService.executeDownload` | `fetchWithFallback` 先直连，再按配置走 proxy；流式写入 IndexedDB | 与 Lite 相同 | 是 | Cloud 不可见，但仍存在 dormant config plumbing | 是 | 直接请求出现 network/CORS/timeout 或 direct 之后的 5xx | 不要引入服务端持久化或缓存 |
+| 远程 transcript 抓取 | `fetchAndPersistRemoteTranscript` 通过 `fetchTextWithFallback` | direct-first 文本抓取，支持 proxy fallback；抓取后缓存到本地 | 与 Lite 相同 | 是 | Cloud 不可见，但仍存在 dormant config plumbing | 是 | 直接请求出现 network/CORS/timeout 或 direct 之后的 5xx | 解析失败要和 transport failure 分开，不要混在一起 |
+| 播放启动时触发的媒体抓取 | `remotePlayback` 在需要媒体字节时委派到 `downloadEpisode` / `fetchRemoteAudioBlob` | 启动本身主要是 source resolution；真正的媒体抓取继承 download/transcript 行为 | 与 Lite 相同 | 取决于分支 | 与被委派的请求类一致 | 是，但只能通过被委派的请求类；startup 本身不是新传输类 | 被委派分支的 fallback trigger | 纯 source resolution 且不抓取字节的部分应保持 browser-local |
+| 本地 `blob:` 播放 | `playbackSource.resolvePlaybackSource` | 来自 IndexedDB 下载的本地 object URL | 与 Lite 相同 | 否 | 否 | 否 | 无 | 必须保持 browser-only，不能代理 |
+| tracking URL 解包路径 | `playbackSource`、`downloadService`、`remoteTranscript` 里的 `unwrapPodcastTrackingUrl` | 只做规范化，不发网络请求 | 与 Lite 相同 | 否 | 否 | 仅保留为预处理 | 不是 transport fallback trigger | 解包不是网络请求；它只是喂给后面的请求类，必须保持确定性 |
+
+## 风险说明
+
+- 重复 fallback retries：如果 direct failure 的重试范围过宽，同一节目会对同一 source / request class 重复产生 proxy 流量。
+- 源切换时的陈旧异步回包：fallback 响应必须避免挂到新的 track 上。
+- 播放启动 re-entrancy：触发 download 或 transcript 的启动分支必须保留 latest-request-wins，不能被冗余 await 卡住。
+- prefetch/download overlap：foreground `Range` 预取、`HEAD` 探测和 download `GET` 是三类不同请求；一类失败不能扩散到另一类。
+
+## 后续子指令的测试目标
+
+- `apps/cloud-ui/src/lib/__tests__/audioPrefetch.test.ts`
+- `apps/lite/src/lib/__tests__/audioPrefetch.test.ts`
+- `apps/cloud-ui/src/lib/__tests__/fetchUtils.test.ts`
+- `apps/lite/src/lib/__tests__/fetchUtils.test.ts`
+- `apps/cloud-ui/src/lib/__tests__/downloadService.regression.test.ts`
+- `apps/lite/src/lib/__tests__/downloadService.regression.test.ts`
+- `apps/cloud-ui/src/lib/__tests__/remoteTranscript.test.ts`
+- `apps/lite/src/lib/__tests__/remoteTranscript.test.ts`
+- `apps/cloud-ui/src/lib/player/__tests__/playbackSource.test.ts`
+- `apps/cloud-ui/src/lib/player/__tests__/remotePlayback.test.ts`
+- `apps/cloud-api` 的 handler 测试，用于覆盖 media proxy 的 `Range`、`206`、`416`、timeout 和 redirect 行为
+
+## 审计结论
+
+- 原生 audio 和本地 blob 播放保持 browser-direct 优先。
+- 对 JS `fetch` 类媒体相关流量，backend fallback 是合理的，但必须是窄的、按 request class 的。
+- Cloud backend 在这个阶段不应变成 blanket media relay。
+- tracking URL 解包必须保留为预处理，而不是 transport fallback。
+- Cloud UI 当前不会在 Settings 里显示 proxy 区块，但底层 config plumbing 仍然存在。
+

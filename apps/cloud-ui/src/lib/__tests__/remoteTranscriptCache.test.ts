@@ -14,6 +14,9 @@ const { fetchTextWithFallbackMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('../fetchUtils', () => ({
+  CLOUD_BACKEND_FALLBACK_CLASSES: {
+    TRANSCRIPT: 'transcript',
+  },
   fetchTextWithFallback: fetchTextWithFallbackMock,
 }))
 
@@ -166,6 +169,7 @@ describe('remoteTranscript cache behavior', () => {
     expect(fetchTextWithFallbackMock).toHaveBeenCalledWith(normalizeTranscriptUrl(url), {
       signal: undefined,
       expectXml: false,
+      cloudBackendFallbackClass: 'transcript',
     })
 
     const cached = await DB.getRemoteTranscriptByUrl(normalizeTranscriptUrl(url))

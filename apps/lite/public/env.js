@@ -23,7 +23,7 @@ window.__READIO_ENV__ = window.__READIO_ENV__ || {
   // External APIs
   READIO_DISCOVERY_SEARCH_URL: 'https://itunes.apple.com/search',
   READIO_DISCOVERY_LOOKUP_URL: 'https://itunes.apple.com/lookup',
-  READIO_RSS_FEED_BASE_URL: 'https://rss.applemarketingtools.com/api/v2',
+  READIO_RSS_FEED_BASE_URL: 'https://rss.marketingtools.apple.com/api/v2',
   READIO_EN_DICTIONARY_API_URL: 'https://api.dictionaryapi.dev/api/v2/entries/en',
   // Browser runtime config must not expose real upstream provider secrets.
   // Readio rejects known secret formats like sk-, sk-proj-, gsk_, gsk-.

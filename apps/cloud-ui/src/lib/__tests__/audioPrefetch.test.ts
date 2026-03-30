@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AudioPrefetchScheduler,
   PREFETCH_BASE_INTERVAL_MS,
@@ -6,6 +6,7 @@ import {
   PREFETCH_MAX_BACKOFF_MS,
   PREFETCH_SLOW3G_WINDOW_SECONDS,
 } from '../audioPrefetch'
+import { __resetCloudBackendBreakerForTests } from '../fetchUtils'
 
 function createAudio(currentTime: number, rangeStart: number, rangeEnd: number, duration = 600) {
   const buffered = {
@@ -37,6 +38,10 @@ function getRangeHeader(init: RequestInit | undefined): string {
 }
 
 describe('AudioPrefetchScheduler', () => {
+  beforeEach(() => {
+    __resetCloudBackendBreakerForTests()
+  })
+
   it('prefetches only remote http sources and requests forward range', async () => {
     const now = 1_000
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
@@ -182,9 +187,14 @@ describe('AudioPrefetchScheduler', () => {
     let now = 1_000
     let shouldFail = true
 
-    const fetchMock = vi.fn(async () => {
+    const fetchMock = vi.fn(async (input: string) => {
       if (shouldFail) {
-        return new Response('', { status: 500 })
+        if (input === 'https://example.com/e.mp3') {
+          return new Response('', { status: 500 })
+        }
+        if (input === '/api/proxy') {
+          return new Response('', { status: 502 })
+        }
       }
       return new Response('', {
         status: 206,
@@ -213,7 +223,9 @@ describe('AudioPrefetchScheduler', () => {
       sourceUrl: 'https://example.com/e.mp3',
       audio: createAudio(10, 0, 14),
     })
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('https://example.com/e.mp3')
+    expect(fetchMock.mock.calls[1]?.[0]).toBe('/api/proxy')
     expect(scheduler.getState().consecutiveFailures).toBe(1)
 
     await rearm()
@@ -223,7 +235,7 @@ describe('AudioPrefetchScheduler', () => {
       sourceUrl: 'https://example.com/e.mp3',
       audio: createAudio(10, 0, 14),
     })
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(2)
 
     now += PREFETCH_BASE_INTERVAL_MS
     await scheduler.maybePrefetch({
@@ -231,7 +243,9 @@ describe('AudioPrefetchScheduler', () => {
       sourceUrl: 'https://example.com/e.mp3',
       audio: createAudio(10, 0, 14),
     })
-    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+    expect(fetchMock.mock.calls[2]?.[0]).toBe('https://example.com/e.mp3')
+    expect(fetchMock.mock.calls[3]?.[0]).toBe('/api/proxy')
     expect(scheduler.getState().consecutiveFailures).toBe(2)
 
     await rearm()
@@ -241,7 +255,7 @@ describe('AudioPrefetchScheduler', () => {
       sourceUrl: 'https://example.com/e.mp3',
       audio: createAudio(10, 0, 14),
     })
-    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock).toHaveBeenCalledTimes(4)
 
     now += PREFETCH_MAX_BACKOFF_MS - PREFETCH_BASE_INTERVAL_MS
     shouldFail = false
@@ -250,7 +264,8 @@ describe('AudioPrefetchScheduler', () => {
       sourceUrl: 'https://example.com/e.mp3',
       audio: createAudio(10, 0, 14),
     })
-    expect(fetchMock).toHaveBeenCalledTimes(3)
+    expect(fetchMock).toHaveBeenCalledTimes(5)
+    expect(fetchMock.mock.calls[4]?.[0]).toBe('/api/proxy')
     expect(scheduler.getState().consecutiveFailures).toBe(0)
   })
 
@@ -293,5 +308,48 @@ describe('AudioPrefetchScheduler', () => {
     })
 
     expect(schedulerNoRange.getState().consecutiveFailures).toBe(1)
+  })
+
+  it('falls back to Cloud backend proxy for direct range fetch failures', async () => {
+    const now = 1_000
+    const fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
+      if (input === 'https://example.com/fallback.mp3') {
+        throw new TypeError('Failed to fetch')
+      }
+
+      if (input === '/api/proxy') {
+        const body = JSON.parse(String(init?.body ?? '{}')) as {
+          url: string
+          method: string
+          headers?: Record<string, string>
+        }
+        expect(body.url).toBe('https://example.com/fallback.mp3')
+        expect(body.method).toBe('GET')
+        expect(body.headers?.Range).toMatch(/^bytes=\d+-\d+$/)
+        return new Response('', {
+          status: 206,
+          headers: {
+            'content-range': 'bytes 100-599/12000000',
+          },
+        })
+      }
+
+      throw new Error(`unexpected fetch target: ${input}`)
+    })
+
+    const scheduler = new AudioPrefetchScheduler({
+      fetchImpl: fetchMock as unknown as typeof fetch,
+      now: () => now,
+      getConnection: () => ({ effectiveType: '4g' }),
+    })
+
+    await scheduler.maybePrefetch({
+      sourceId: 'https://example.com/fallback.mp3',
+      sourceUrl: 'https://example.com/fallback.mp3',
+      audio: createAudio(10, 0, 14),
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(scheduler.getState().consecutiveFailures).toBe(0)
   })
 })

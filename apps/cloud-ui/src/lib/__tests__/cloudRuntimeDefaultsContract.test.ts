@@ -19,6 +19,7 @@ describe('cloud runtime defaults contract', () => {
     expect(envJs).not.toContain('https://itunes.apple.com/search')
     expect(envJs).not.toContain('https://itunes.apple.com/lookup')
     expect(envJs).not.toContain('https://rss.applemarketingtools.com/api/v2')
+    expect(envJs).not.toContain('https://rss.marketingtools.apple.com/api/v2')
 
     const { DEFAULTS } = await import('../runtimeConfig.defaults')
     const { getAppConfig } = await import('../runtimeConfig')
@@ -30,6 +31,7 @@ describe('cloud runtime defaults contract', () => {
     expect(DEFAULTS.DISCOVERY_SEARCH_URL).not.toContain('itunes.apple.com')
     expect(DEFAULTS.DISCOVERY_LOOKUP_URL).not.toContain('itunes.apple.com')
     expect(DEFAULTS.RSS_FEED_BASE_URL).not.toContain('rss.applemarketingtools.com')
+    expect(DEFAULTS.RSS_FEED_BASE_URL).not.toContain('rss.marketingtools.apple.com')
 
     expect(config.DISCOVERY_SEARCH_URL).toBe(DEFAULTS.DISCOVERY_SEARCH_URL)
     expect(config.DISCOVERY_LOOKUP_URL).toBe(DEFAULTS.DISCOVERY_LOOKUP_URL)

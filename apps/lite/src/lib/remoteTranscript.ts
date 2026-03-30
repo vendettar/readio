@@ -58,6 +58,14 @@ export type RemoteTranscriptParseResult =
   | RemoteTranscriptParseSuccess
   | RemoteTranscriptParseFailure
 
+export class AudioDownloadError extends Error {
+  code = 'audio_download_error' as const
+  constructor(message: string) {
+    super(message)
+    this.name = 'AudioDownloadError'
+  }
+}
+
 export interface RemoteTranscriptLoadResult {
   ok: boolean
   status: RemoteTranscriptReadStatus
@@ -622,9 +630,8 @@ async function fetchRemoteAudioBlob(audioUrl: string, signal?: AbortSignal): Pro
     if (error instanceof FetchError) {
       throw mapStatusToAsrError(error.status ?? 0, error.message)
     }
-    throw new ASRClientError(
-      error instanceof Error ? error.message : 'Network error while downloading audio',
-      'network_error'
+    throw new AudioDownloadError(
+      error instanceof Error ? error.message : 'Network error while downloading audio'
     )
   }
 }
@@ -814,6 +821,13 @@ function handleAsrFailure(
   error: unknown,
   _trigger: OnlineAsrTrigger
 ): { status: 'idle' | 'failed'; error: { code: string; message: string } | null } {
+  if (error instanceof AudioDownloadError) {
+    return {
+      status: 'failed',
+      error: { code: error.code, message: error.message },
+    }
+  }
+
   const asrError =
     error instanceof ASRClientError
       ? error

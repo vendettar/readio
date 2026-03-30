@@ -1,3 +1,5 @@
+import { HttpResponse, http } from 'msw'
+import { server } from '@/__tests__/setup'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolveEnabledAsrProviders } from '../asr/providerToggles'
 
@@ -20,6 +22,7 @@ describe('runtimeConfig schema parity', () => {
     window.__READIO_ENV__ = {
       READIO_CORS_PROXY_URL: 'https://proxy.example.com',
       READIO_PROXY_TIMEOUT_MS: '1234',
+      READIO_EN_DICTIONARY_API_TRANSPORT: 'direct',
       READIO_DEFAULT_LANGUAGE: 'ZH-CN',
       READIO_DEFAULT_PODCAST_CONTENT_COUNTRY: 'JP',
       READIO_USE_MOCK: '1',
@@ -33,6 +36,7 @@ describe('runtimeConfig schema parity', () => {
 
     expect(config.CORS_PROXY_URL).toBe('https://proxy.example.com')
     expect(config.PROXY_TIMEOUT_MS).toBe(1234)
+    expect(config.EN_DICTIONARY_API_TRANSPORT).toBe('direct')
     expect(config.DEFAULT_LANGUAGE).toBe('zh')
     expect(config.DEFAULT_COUNTRY).toBe('JP')
     expect(config.USE_MOCK_DATA).toBe(true)
@@ -86,6 +90,29 @@ describe('runtimeConfig schema parity', () => {
     const { getAppConfig: getAppConfigWithLegacyOnly } = await import('../runtimeConfig')
     const legacyOnlyConfig = getAppConfigWithLegacyOnly()
     expect(legacyOnlyConfig.EN_DICTIONARY_API_URL).toBe(DEFAULTS.EN_DICTIONARY_API_URL)
+  })
+
+  it('defaults dictionary transport to direct and accepts only supported values', async () => {
+    const { getAppConfig, DEFAULTS } = await import('../runtimeConfig')
+    const config = getAppConfig()
+    expect(config.EN_DICTIONARY_API_TRANSPORT).toBe('direct')
+    expect(DEFAULTS.EN_DICTIONARY_API_TRANSPORT).toBe('direct')
+
+    window.__READIO_ENV__ = {
+      READIO_EN_DICTIONARY_API_TRANSPORT: 'go-proxy',
+    }
+    vi.resetModules()
+
+    const { getAppConfig: getAppConfigWithProxy } = await import('../runtimeConfig')
+    expect(getAppConfigWithProxy().EN_DICTIONARY_API_TRANSPORT).toBe('go-proxy')
+
+    window.__READIO_ENV__ = {
+      READIO_EN_DICTIONARY_API_TRANSPORT: 'fallback',
+    } as Window['__READIO_ENV__']
+    vi.resetModules()
+
+    const { getAppConfig: getAppConfigWithInvalid } = await import('../runtimeConfig')
+    expect(getAppConfigWithInvalid().EN_DICTIONARY_API_TRANSPORT).toBe('direct')
   })
 
   it('surfaces invalid toggle tokens and fails closed (no all-open fallback)', async () => {
@@ -146,20 +173,22 @@ describe('runtimeConfig schema parity', () => {
   })
 
   it('uses the English-specific dictionary config field for definition requests', async () => {
-    const fetchJsonWithFallback = vi.fn().mockResolvedValue([
-      {
-        word: 'hello',
-        meanings: [],
-      },
-    ])
-
-    vi.doMock('../fetchUtils', () => ({
-      FetchError: class FetchError extends Error {},
-      fetchJsonWithFallback,
-    }))
+    const dictionarySpy = vi.fn()
+    server.use(
+      http.get('https://english.example/api/hello', ({ request }) => {
+        dictionarySpy(request.url)
+        return HttpResponse.json([
+          {
+            word: 'hello',
+            meanings: [],
+          },
+        ])
+      })
+    )
     vi.doMock('../runtimeConfig', () => ({
       getAppConfig: () => ({
         EN_DICTIONARY_API_URL: 'https://english.example/api',
+        EN_DICTIONARY_API_TRANSPORT: 'direct',
         PROXY_TIMEOUT_MS: 1234,
       }),
     }))
@@ -171,11 +200,6 @@ describe('runtimeConfig schema parity', () => {
     const { fetchDefinition } = await import('../selection/api')
     await fetchDefinition('Hello')
 
-    expect(fetchJsonWithFallback).toHaveBeenCalledWith(
-      'https://english.example/api/hello',
-      expect.objectContaining({
-        timeoutMs: 1234,
-      })
-    )
+    expect(dictionarySpy).toHaveBeenCalledWith('https://english.example/api/hello')
   })
 })

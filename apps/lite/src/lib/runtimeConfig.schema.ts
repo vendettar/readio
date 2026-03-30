@@ -58,6 +58,8 @@ const SupportedLanguageSchema = z.preprocess(
   z.enum(['en', 'zh', 'ja', 'ko', 'de', 'es'])
 )
 
+const DictionaryTransportSchema = z.enum(['direct', 'go-proxy'])
+
 function normalizeProviderToggleToken(value: string): string {
   return value.trim().toLowerCase()
 }
@@ -169,6 +171,9 @@ export const AppConfigSchema = z.object({
   EN_DICTIONARY_API_URL: UrlSchema.default(DEFAULTS.EN_DICTIONARY_API_URL).catch(
     catchWithLog('EN_DICTIONARY_API_URL', DEFAULTS.EN_DICTIONARY_API_URL)
   ),
+  EN_DICTIONARY_API_TRANSPORT: DictionaryTransportSchema.default(
+    DEFAULTS.EN_DICTIONARY_API_TRANSPORT
+  ).catch(catchWithLog('EN_DICTIONARY_API_TRANSPORT', DEFAULTS.EN_DICTIONARY_API_TRANSPORT)),
   DISCOVERY_LOOKUP_URL: UrlSchema.default(DEFAULTS.DISCOVERY_LOOKUP_URL).catch(
     catchWithLog('DISCOVERY_LOOKUP_URL', DEFAULTS.DISCOVERY_LOOKUP_URL)
   ),
@@ -276,6 +281,7 @@ export const ENV_MAP: Record<keyof AppConfig, string> = {
   MAX_CONCURRENT_REQUESTS: 'READIO_MAX_CONCURRENT_REQUESTS',
   DB_NAME: 'READIO_DB_NAME',
   EN_DICTIONARY_API_URL: 'READIO_EN_DICTIONARY_API_URL',
+  EN_DICTIONARY_API_TRANSPORT: 'READIO_EN_DICTIONARY_API_TRANSPORT',
   DISCOVERY_LOOKUP_URL: 'READIO_DISCOVERY_LOOKUP_URL',
   DISCOVERY_SEARCH_URL: 'READIO_DISCOVERY_SEARCH_URL',
   RSS_FEED_BASE_URL: 'READIO_RSS_FEED_BASE_URL',

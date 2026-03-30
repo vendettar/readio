@@ -147,8 +147,8 @@ function SidebarInner({ className = '' }: SidebarProps) {
       </nav>
 
       {/* Bottom Actions */}
-      <div className="p-3 border-t border-border/50 space-y-2">
-        <div className="flex items-center gap-2">
+      <div className="h-mini-player px-3 border-t border-border/50 flex items-center">
+        <div className="flex items-center gap-2 flex-1">
           <Link
             to="/settings"
             onClick={usePlayerSurfaceStore((s) => s.toMini)}

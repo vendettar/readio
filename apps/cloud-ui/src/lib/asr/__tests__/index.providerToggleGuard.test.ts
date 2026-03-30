@@ -3,8 +3,9 @@ import { transcribeAudioWithRetry, verifyAsrKey } from '..'
 
 const splitMp3BlobMock = vi.hoisted(() => vi.fn())
 const splitMp3BlobWithTargetSizesMock = vi.hoisted(() => vi.fn())
+const transcribeViaCloudRelayMock = vi.hoisted(() => vi.fn())
+const verifyAsrKeyViaCloudRelayMock = vi.hoisted(() => vi.fn())
 const transcribeWithDeepgramMock = vi.hoisted(() => vi.fn())
-const verifyDeepgramKeyMock = vi.hoisted(() => vi.fn())
 const isAsrProviderEnabledMock = vi.hoisted(() => vi.fn())
 
 vi.mock('../mp3Chunker', () => ({
@@ -14,6 +15,11 @@ vi.mock('../mp3Chunker', () => ({
     cuesList.flat(),
 }))
 
+vi.mock('../backendRelay', () => ({
+  transcribeViaCloudRelay: (...args: unknown[]) => transcribeViaCloudRelayMock(...args),
+  verifyAsrKeyViaCloudRelay: (...args: unknown[]) => verifyAsrKeyViaCloudRelayMock(...args),
+}))
+
 vi.mock('../providers/deepgramCompatible', async () => {
   const actual = await vi.importActual<typeof import('../providers/deepgramCompatible')>(
     '../providers/deepgramCompatible'
@@ -21,7 +27,6 @@ vi.mock('../providers/deepgramCompatible', async () => {
   return {
     ...actual,
     transcribeWithDeepgram: (...args: unknown[]) => transcribeWithDeepgramMock(...args),
-    verifyDeepgramKey: (...args: unknown[]) => verifyDeepgramKeyMock(...args),
   }
 })
 
@@ -53,7 +58,7 @@ describe('ASR runtime provider toggle guard', () => {
 
     expect(splitMp3BlobMock).not.toHaveBeenCalled()
     expect(splitMp3BlobWithTargetSizesMock).not.toHaveBeenCalled()
-    expect(transcribeWithDeepgramMock).not.toHaveBeenCalled()
+    expect(transcribeViaCloudRelayMock).not.toHaveBeenCalled()
   })
 
   it('fails closed before verify network path when provider is disabled', async () => {
@@ -64,19 +69,19 @@ describe('ASR runtime provider toggle guard', () => {
       message: 'ASR provider disabled by runtime config',
     })
 
-    expect(verifyDeepgramKeyMock).not.toHaveBeenCalled()
+    expect(verifyAsrKeyViaCloudRelayMock).not.toHaveBeenCalled()
   })
 
   it('keeps enabled provider path unchanged', async () => {
     const chunk = new Blob(['audio'], { type: 'audio/mpeg' })
     splitMp3BlobMock.mockResolvedValue([chunk])
-    transcribeWithDeepgramMock.mockResolvedValue({
+    transcribeViaCloudRelayMock.mockResolvedValue({
       cues: [{ start: 0, end: 1.2, text: 'deepgram text' }],
       durationSeconds: 1.2,
       provider: 'deepgram',
       model: 'nova-3',
     })
-    verifyDeepgramKeyMock.mockResolvedValue(true)
+    verifyAsrKeyViaCloudRelayMock.mockResolvedValue(true)
 
     const transcribeResult = await transcribeAudioWithRetry({
       blob: chunk,
@@ -89,7 +94,8 @@ describe('ASR runtime provider toggle guard', () => {
 
     expect(transcribeResult.provider).toBe('deepgram')
     expect(verifyResult).toBe(true)
-    expect(transcribeWithDeepgramMock).toHaveBeenCalledTimes(1)
-    expect(verifyDeepgramKeyMock).toHaveBeenCalledTimes(1)
+    expect(transcribeViaCloudRelayMock).toHaveBeenCalledTimes(1)
+    expect(transcribeWithDeepgramMock).not.toHaveBeenCalled()
+    expect(verifyAsrKeyViaCloudRelayMock).toHaveBeenCalledTimes(1)
   })
 })

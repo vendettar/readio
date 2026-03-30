@@ -6,6 +6,7 @@ import { useTranscriptStore } from '../../store/transcriptStore'
 import { DB } from '../dexieDb'
 import {
   __resetRemoteTranscriptStateForTests,
+  autoIngestEpisodeTranscript,
   startOnlineASRForCurrentTrack,
 } from '../remoteTranscript'
 import { SETTINGS_STORAGE_KEY } from '../schemas/settings'
@@ -84,7 +85,7 @@ describe('remoteTranscript ASR integration', () => {
   it('enforces one active ASR request per track when clicked repeatedly', async () => {
     let resolveTranscribe: (() => void) | null = null
 
-    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
       const url = typeof input === 'string' ? input : input.toString()
 
       if (url === 'https://example.com/audio.mp3') {
@@ -96,12 +97,24 @@ describe('remoteTranscript ASR integration', () => {
         )
       }
 
-      if (url === 'https://api.groq.com/openai/v1/audio/transcriptions') {
+      if (url === '/api/v1/asr/transcriptions') {
+        const body = JSON.parse(String(init?.body ?? '{}')) as {
+          provider: string
+          model: string
+          apiKey: string
+        }
+        expect(body.provider).toBe('groq')
+        expect(body.model).toBe('whisper-large-v3-turbo')
+        expect(body.apiKey).toBe('public-asr-token')
         return new Promise<Response>((resolve) => {
           resolveTranscribe = () => {
             resolve(
               new Response(
-                JSON.stringify({ segments: [{ start: 0, end: 1.2, text: 'ASR line' }] }),
+                JSON.stringify({
+                  cues: [{ start: 0, end: 1.2, text: 'ASR line' }],
+                  provider: 'groq',
+                  model: 'whisper-large-v3-turbo',
+                }),
                 {
                   status: 200,
                   headers: { 'content-type': 'application/json' },
@@ -130,9 +143,7 @@ describe('remoteTranscript ASR integration', () => {
     const audioRequests = fetchMock.mock.calls.filter(
       (call) => call[0] === 'https://example.com/audio.mp3'
     )
-    const transcribeRequests = fetchMock.mock.calls.filter(
-      (call) => call[0] === 'https://api.groq.com/openai/v1/audio/transcriptions'
-    )
+    const transcribeRequests = fetchMock.mock.calls.filter((call) => call[0] === '/api/v1/asr/transcriptions')
 
     expect(audioRequests).toHaveLength(1)
     expect(transcribeRequests).toHaveLength(1)
@@ -153,7 +164,7 @@ describe('remoteTranscript ASR integration', () => {
         )
       }
 
-      if (url === 'https://api.groq.com/openai/v1/audio/transcriptions') {
+      if (url === '/api/v1/asr/transcriptions') {
         transcribeSignal = init?.signal ?? undefined
         return new Promise<Response>((_, reject) => {
           init?.signal?.addEventListener(
@@ -186,6 +197,208 @@ describe('remoteTranscript ASR integration', () => {
     expect(useTranscriptStore.getState().transcriptIngestionStatus).toBe('idle')
   })
 
+  it('ignores a stale relay completion that resolves after the track switches', async () => {
+    let resolveTranscribe: ((response: Response) => void) | null = null
+
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString()
+
+      if (url === 'https://example.com/audio.mp3') {
+        return Promise.resolve(
+          new Response(new Blob(['audio'], { type: 'audio/mpeg' }), {
+            status: 200,
+            headers: { 'content-length': '1024' },
+          })
+        )
+      }
+
+      if (url === '/api/v1/asr/transcriptions') {
+        return new Promise<Response>((resolve) => {
+          resolveTranscribe = resolve
+        })
+      }
+
+      return Promise.resolve(new Response('{}', { status: 200 }))
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    startOnlineASRForCurrentTrack('manual')
+
+    await waitFor(() => {
+      expect(resolveTranscribe).not.toBeNull()
+    })
+
+    act(() => {
+      usePlayerStore.getState().setAudioUrl('https://example.com/new-track.mp3', 'Next Track')
+    })
+
+    if (!resolveTranscribe) {
+      throw new Error('stale relay resolver was not captured')
+    }
+    const completeStaleRelay: (response: Response) => void = resolveTranscribe
+
+    completeStaleRelay(
+      new Response(
+        JSON.stringify({
+          cues: [{ start: 0, end: 1.2, text: 'stale line' }],
+          provider: 'groq',
+          model: 'whisper-large-v3-turbo',
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }
+      )
+    )
+
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(usePlayerStore.getState().audioUrl).toBe('https://example.com/new-track.mp3')
+    expect(useTranscriptStore.getState().subtitlesLoaded).toBe(false)
+    expect(useTranscriptStore.getState().subtitles).toHaveLength(0)
+    expect(useTranscriptStore.getState().transcriptIngestionStatus).toBe('idle')
+    expect(useTranscriptStore.getState().transcriptIngestionError).toBeNull()
+  })
+
+  it('falls back through /api/proxy when direct audio fetch returns 500', async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString()
+
+      if (url === 'https://example.com/audio.mp3') {
+        return Promise.resolve(new Response('upstream error', { status: 500 }))
+      }
+
+      if (url === '/api/proxy') {
+        const body = JSON.parse(String(init?.body ?? '{}')) as { url: string; method: string }
+        expect(body.url).toBe('https://example.com/audio.mp3')
+        expect(body.method).toBe('GET')
+        return Promise.resolve(
+          new Response(new Blob(['audio'], { type: 'audio/mpeg' }), {
+            status: 200,
+            headers: { 'content-length': '1024' },
+          })
+        )
+      }
+
+      if (url === '/api/v1/asr/transcriptions') {
+        const body = JSON.parse(String(init?.body ?? '{}')) as {
+          provider: string
+          model: string
+          apiKey: string
+        }
+        expect(body.provider).toBe('groq')
+        expect(body.model).toBe('whisper-large-v3-turbo')
+        expect(body.apiKey).toBe('public-asr-token')
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              cues: [{ start: 0, end: 1.2, text: 'ASR line' }],
+              provider: 'groq',
+              model: 'whisper-large-v3-turbo',
+            }),
+            {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            }
+          )
+        )
+      }
+
+      return Promise.resolve(new Response('{}', { status: 200 }))
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    startOnlineASRForCurrentTrack('manual')
+
+    await waitFor(() => {
+      expect(useTranscriptStore.getState().subtitlesLoaded).toBe(true)
+    })
+
+    const directAudioCalls = fetchMock.mock.calls.filter(
+      (call) => call[0] === 'https://example.com/audio.mp3'
+    )
+    const proxyCalls = fetchMock.mock.calls.filter((call) => call[0] === '/api/proxy')
+    const transcribeCalls = fetchMock.mock.calls.filter((call) => call[0] === '/api/v1/asr/transcriptions')
+
+    expect(directAudioCalls).toHaveLength(1)
+    expect(proxyCalls).toHaveLength(1)
+    expect(transcribeCalls).toHaveLength(1)
+  })
+
+  it('falls back through /api/proxy when direct transcript fetch returns 500', async () => {
+    const transcriptUrl = 'https://example.com/transcript.srt'
+    const audioUrl = 'https://example.com/audio.mp3'
+
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString()
+
+      if (url === audioUrl) {
+        return Promise.resolve(
+          new Response(new Blob(['audio'], { type: 'audio/mpeg' }), {
+            status: 200,
+            headers: { 'content-length': '1024' },
+          })
+        )
+      }
+
+      if (url === transcriptUrl) {
+        return Promise.resolve(new Response('upstream error', { status: 500 }))
+      }
+
+      if (url === '/api/proxy') {
+        const body = JSON.parse(String(init?.body ?? '{}')) as { url: string; method: string }
+        expect(body.url).toBe(transcriptUrl)
+        expect(body.method).toBe('GET')
+        return Promise.resolve(
+          new Response(
+            `1
+00:00:00,000 --> 00:00:01,000
+Transcript line
+`,
+            {
+              status: 200,
+              headers: { 'content-type': 'text/plain' },
+            }
+          )
+        )
+      }
+
+      if (url === 'https://api.groq.com/openai/v1/audio/transcriptions') {
+        return Promise.reject(new Error('should not call ASR provider when transcript exists'))
+      }
+
+      return Promise.resolve(new Response('{}', { status: 200 }))
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    act(() => {
+      usePlayerStore.getState().setAudioUrl(audioUrl, 'Episode')
+    })
+
+    autoIngestEpisodeTranscript(transcriptUrl, audioUrl)
+
+    await waitFor(() => {
+      expect(useTranscriptStore.getState().subtitlesLoaded).toBe(true)
+    })
+
+    const transcriptFetchCalls = fetchMock.mock.calls.filter((call) => call[0] === transcriptUrl)
+    const proxyCalls = fetchMock.mock.calls.filter((call) => call[0] === '/api/proxy')
+    const asrCalls = fetchMock.mock.calls.filter(
+      (call) => call[0] === 'https://api.groq.com/openai/v1/audio/transcriptions'
+    )
+
+    expect(transcriptFetchCalls).toHaveLength(1)
+    expect(proxyCalls).toHaveLength(1)
+    expect(asrCalls).toHaveLength(0)
+    expect(useTranscriptStore.getState().subtitles[0]?.text).toBe('Transcript line')
+  })
+
   it('enters cooldown window after ASPH error and prevents subsequent requests', async () => {
     let mockDateNow = 1000000
     const dateSpy = vi.spyOn(Date, 'now').mockImplementation(() => mockDateNow)
@@ -197,8 +410,21 @@ describe('remoteTranscript ASR integration', () => {
           new Response(new Blob(['audio'], { type: 'audio/mpeg' }), { status: 200 })
         )
       }
-      if (url === 'https://api.groq.com/openai/v1/audio/transcriptions') {
-        return Promise.resolve(new Response('Limit (ASPH) reached', { status: 429 }))
+      if (url === '/api/v1/asr/transcriptions') {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              code: 'rate_limited',
+              message: 'Limit (ASPH) reached',
+              status: 429,
+              retryAfterMs: 61 * 60 * 1000,
+            }),
+            {
+              status: 429,
+              headers: { 'content-type': 'application/json' },
+            }
+          )
+        )
       }
       return Promise.resolve(new Response('{}', { status: 200 }))
     })
@@ -216,9 +442,7 @@ describe('remoteTranscript ASR integration', () => {
       { timeout: 3000 }
     )
 
-    const firstApiHitCount = fetchMock.mock.calls.filter(
-      (c) => c[0] === 'https://api.groq.com/openai/v1/audio/transcriptions'
-    ).length
+    const firstApiHitCount = fetchMock.mock.calls.filter((c) => c[0] === '/api/v1/asr/transcriptions').length
     expect(firstApiHitCount).toBe(1)
 
     // Advance time by 5 seconds (5000ms), far short of 61 minutes
@@ -239,9 +463,7 @@ describe('remoteTranscript ASR integration', () => {
     )
 
     // Assert that the transcriber API was NOT called again
-    const totalApiHitCount = fetchMock.mock.calls.filter(
-      (c) => c[0] === 'https://api.groq.com/openai/v1/audio/transcriptions'
-    ).length
+    const totalApiHitCount = fetchMock.mock.calls.filter((c) => c[0] === '/api/v1/asr/transcriptions').length
     expect(totalApiHitCount).toBe(firstApiHitCount)
 
     dateSpy.mockRestore()

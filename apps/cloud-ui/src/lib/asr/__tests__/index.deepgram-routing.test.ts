@@ -3,18 +3,22 @@ import { transcribeAudioWithRetry, verifyAsrKey } from '..'
 
 const splitMp3BlobMock = vi.hoisted(() => vi.fn())
 const splitMp3BlobWithTargetSizesMock = vi.hoisted(() => vi.fn())
+const transcribeViaCloudRelayMock = vi.hoisted(() => vi.fn())
+const verifyAsrKeyViaCloudRelayMock = vi.hoisted(() => vi.fn())
 const transcribeWithOpenAiCompatibleMock = vi.hoisted(() => vi.fn())
-const verifyOpenAiCompatibleKeyMock = vi.hoisted(() => vi.fn())
 const transcribeWithQwenMock = vi.hoisted(() => vi.fn())
-const verifyQwenKeyMock = vi.hoisted(() => vi.fn())
 const transcribeWithDeepgramMock = vi.hoisted(() => vi.fn())
-const verifyDeepgramKeyMock = vi.hoisted(() => vi.fn())
 
 vi.mock('../mp3Chunker', () => ({
   splitMp3Blob: (...args: unknown[]) => splitMp3BlobMock(...args),
   splitMp3BlobWithTargetSizes: (...args: unknown[]) => splitMp3BlobWithTargetSizesMock(...args),
   mergeAsrCues: (cuesList: Array<Array<{ start: number; end: number; text: string }>>) =>
     cuesList.flat(),
+}))
+
+vi.mock('../backendRelay', () => ({
+  transcribeViaCloudRelay: (...args: unknown[]) => transcribeViaCloudRelayMock(...args),
+  verifyAsrKeyViaCloudRelay: (...args: unknown[]) => verifyAsrKeyViaCloudRelayMock(...args),
 }))
 
 vi.mock('../providers/openaiCompatible', async () => {
@@ -25,7 +29,6 @@ vi.mock('../providers/openaiCompatible', async () => {
     ...actual,
     transcribeWithOpenAiCompatible: (...args: unknown[]) =>
       transcribeWithOpenAiCompatibleMock(...args),
-    verifyOpenAiCompatibleKey: (...args: unknown[]) => verifyOpenAiCompatibleKeyMock(...args),
   }
 })
 
@@ -36,7 +39,6 @@ vi.mock('../providers/qwenCompatible', async () => {
   return {
     ...actual,
     transcribeWithQwen: (...args: unknown[]) => transcribeWithQwenMock(...args),
-    verifyQwenKey: (...args: unknown[]) => verifyQwenKeyMock(...args),
   }
 })
 
@@ -47,7 +49,6 @@ vi.mock('../providers/deepgramCompatible', async () => {
   return {
     ...actual,
     transcribeWithDeepgram: (...args: unknown[]) => transcribeWithDeepgramMock(...args),
-    verifyDeepgramKey: (...args: unknown[]) => verifyDeepgramKeyMock(...args),
   }
 })
 
@@ -60,7 +61,7 @@ describe('ASR index deepgram transport routing', () => {
     const chunk = new Blob(['audio'], { type: 'audio/mpeg' })
     splitMp3BlobMock.mockResolvedValue([chunk])
     splitMp3BlobWithTargetSizesMock.mockResolvedValue([chunk])
-    transcribeWithDeepgramMock.mockResolvedValue({
+    transcribeViaCloudRelayMock.mockResolvedValue({
       cues: [{ start: 0, end: 1.2, text: 'deepgram text' }],
       durationSeconds: 1.2,
       provider: 'deepgram',
@@ -86,33 +87,30 @@ describe('ASR index deepgram transport routing', () => {
       preferProgressive: false,
     })
 
-    expect(transcribeWithDeepgramMock).toHaveBeenCalledTimes(1)
+    expect(transcribeViaCloudRelayMock).toHaveBeenCalledTimes(1)
     expect(transcribeWithOpenAiCompatibleMock).not.toHaveBeenCalled()
+    expect(transcribeWithDeepgramMock).not.toHaveBeenCalled()
     expect(transcribeWithQwenMock).not.toHaveBeenCalled()
     expect(result.provider).toBe('deepgram')
   })
 
-  it('routes verifyAsrKey deepgram provider to verifyDeepgramKey only', async () => {
-    verifyDeepgramKeyMock.mockResolvedValue(true)
-    verifyOpenAiCompatibleKeyMock.mockResolvedValue(true)
-    verifyQwenKeyMock.mockResolvedValue(true)
+  it('routes verifyAsrKey deepgram provider to same-origin relay only', async () => {
+    verifyAsrKeyViaCloudRelayMock.mockResolvedValue(true)
 
     await expect(verifyAsrKey({ apiKey: 'dg_key', provider: 'deepgram' })).resolves.toBe(true)
-    expect(verifyDeepgramKeyMock).toHaveBeenCalledTimes(1)
-    expect(verifyOpenAiCompatibleKeyMock).not.toHaveBeenCalled()
-    expect(verifyQwenKeyMock).not.toHaveBeenCalled()
+    expect(verifyAsrKeyViaCloudRelayMock).toHaveBeenCalledTimes(1)
   })
 
   it('keeps non-deepgram providers off deepgram transport', async () => {
     const chunk = new Blob(['audio'], { type: 'audio/mpeg' })
     splitMp3BlobMock.mockResolvedValue([chunk])
-    transcribeWithOpenAiCompatibleMock.mockResolvedValue({
+    transcribeViaCloudRelayMock.mockResolvedValue({
       cues: [{ start: 0, end: 1.1, text: 'openai text' }],
       durationSeconds: 1.1,
       provider: 'groq',
       model: 'whisper-large-v3',
     })
-    verifyQwenKeyMock.mockResolvedValue(true)
+    verifyAsrKeyViaCloudRelayMock.mockResolvedValue(true)
 
     await transcribeAudioWithRetry({
       blob: chunk,
@@ -123,9 +121,9 @@ describe('ASR index deepgram transport routing', () => {
     })
     await verifyAsrKey({ apiKey: 'qwen_key', provider: 'qwen' })
 
-    expect(transcribeWithOpenAiCompatibleMock).toHaveBeenCalledTimes(1)
-    expect(verifyQwenKeyMock).toHaveBeenCalledTimes(1)
+    expect(transcribeViaCloudRelayMock).toHaveBeenCalledTimes(1)
+    expect(transcribeWithOpenAiCompatibleMock).not.toHaveBeenCalled()
+    expect(verifyAsrKeyViaCloudRelayMock).toHaveBeenCalledTimes(1)
     expect(transcribeWithDeepgramMock).not.toHaveBeenCalled()
-    expect(verifyDeepgramKeyMock).not.toHaveBeenCalled()
   })
 })

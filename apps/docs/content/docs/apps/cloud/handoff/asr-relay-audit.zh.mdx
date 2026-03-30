@@ -1,0 +1,59 @@
+# Cloud ASR Relay 审计
+
+## 范围
+本审计记录促成 provider relay 的 Cloud ASR 传输分工，以及切换完成后的当前运行时契约。
+
+它明确区分：
+
+- 媒体抓取 fallback
+- provider 转写提交
+- provider 验证 / readiness 检查
+- 本地 blob / 已下载 blob 的输入准备
+
+## 8 维扫描
+
+- 配置：Cloud 仍保留浏览器侧的 ASR provider registry/config plumbing 和由设置驱动的 provider 选择。风险：如果 backend relay contract 不明确，transport 归属和 key 归属会被混淆。
+- 持久化：ASR 转录和本地下载仍然保存在浏览器本地的 IndexedDB / download 表中。风险：relay 实现不能引入服务端持久化或隐藏 transcript cache 状态。
+- 路由：ASR 流程仍然经过 `remoteTranscript` 和队列化的播放/转写管线。风险：relay 切换必须保留 latest-request-wins 和 track-switch 边界。
+- 日志：provider 相关代码会记录 chunking、retries 和 provider error。风险：relay 日志不能泄露 API key 或 request body。
+- 网络：provider 转写提交现在已经切到独立的同源 relay；已经批准的媒体抓取类请求仍然走 Cloud backend fallback。风险：provider 验证 / readiness 仍然是 browser-direct，在后续指令扩展前仍可能遇到 provider-origin CORS。
+- 存储：ASR 输入 blob 在转写前仍由浏览器本地音频/blob 构造。风险：relay 必须支持有上限的上传，不能把本地媒体存储移到服务端。
+- UI 状态：transcript ingestion 使用 `asrActiveTrackKey`、`abortAsrController` 和 `isTrackStillCurrent`。风险：过晚返回的 relay 响应不能覆盖当前轨道。
+- 测试：当前已有 `remoteTranscript`、`remoteTranscript.retranscribe`、`asr` provider 行为和 fallback helper 的覆盖。风险：provider relay 需要确定性的路由测试，而不是只靠 media fallback 测试。
+
+附加风险说明：
+
+- provider secret 暴露
+- 大 multipart 上传体积
+- 重复 transcription 提交
+- track 切换后的陈旧完成回包
+- client/server retry 交互
+
+## 分类矩阵
+
+| 请求类别 | 请求发起者 | 当前 Cloud 归属 | 仍然 browser-direct 吗 | 是否使用 `fetchWithFallback` | 今天是否存在用户可配 proxy fallback | 是否涉及 `/api/proxy` | 是否需要 same-origin relay 归属 | 必须保持终止语义的失败类 | 不应 cut over 的原因 |
+|---|---|---|---|---|---|---|---|---|---|
+| 作为 ASR 输入的远程音频抓取 | `remoteTranscript.ts` 里的 `fetchRemoteAudioBlob` | Cloud media fallback 类 `ASR_AUDIO` | 是，先直连 | 是 | 否 | 是，fallback 时会用 | 不需要。现有 `/api/proxy` 的 media fallback 已足够 | 本地 blob 无效、track 切换后陈旧回包、显式 abort | 这是媒体抓取 fallback，不是 provider 提交。不要把它移动到新的 ASR relay。 |
+| 用于 transcript recovery 的远程 transcript 抓取 | `remoteTranscript.ts` 里的 `fetchTextWithFallback` | Cloud media fallback 类 `TRANSCRIPT` | 是，先直连 | 是 | 否 | 是，fallback 时会用 | 不需要。现有 `/api/proxy` 的 media fallback 已足够 | transcript 内容 malformed、track 切换后陈旧回包、显式 abort | 这是 recovery 抓取，不是 provider 转写。不要把它重分类成 provider transport。 |
+| provider 转写提交 | `transcribeAudioWithRetry` -> `transcribeViaCloudRelay` -> `POST /api/v1/asr/transcriptions` | 独立的同源 provider relay | 否 | 否 | 否 | 否 | 需要，且已完成 | 缺失 provider config、unsupported provider/model、unauthorized、payload too large、rate limited、service unavailable、client abort | 不要把 `/api/proxy` 扩展成通用 multipart POST 隧道。在这一阶段，provider credential 必须保持为浏览器按请求提供、后端瞬时使用且不持久化。 |
+| provider 验证 / readiness 请求 | `verifyOpenAiCompatibleKey`、`verifyQwenKey`、`verifyDeepgramKey`、`verifyVolcengineKey` | 浏览器直连 provider 检查；其中部分 provider 已使用 `fetchWithFallback` 的用户 proxy plumbing | 是 | 是（OpenAI-compatible / Deepgram / Qwen）；Volcengine 否 | 是，如果运行时里仍存在 dormant proxy plumbing | 否 | 当前 relay 切换不要求；除非后续指令明确扩展范围 | unauthorized、malformed provider key、unsupported provider、client abort | 在后续工作证明它也必须移动之前，先保持它与转写 relay 分离。 |
+| 本地 `blob:` / 已下载 blob / Dexie-backed blob ASR 输入 | `fetchTrackAudioBlob`、本地播放/下载查找 | browser-local 输入准备 | 否 | 否 | 否 | 否 | 否 | 缺失本地 blob、缺失本地 track、陈旧完成 | 必须保持 browser-local，不能代理。 |
+| ASR ingestion 里的 tracking URL 解包路径 | `unwrapPodcastTrackingUrl` / `normalizeAsrAudioUrl` | 只是预处理 | 否 | 否 | 否 | 否 | 否 | 无。这不是 transport | 不要把 URL 规范化变成 transport fallback trigger。 |
+| ASR 流程中的 abort / stale-track-switch 边界 | `isTrackStillCurrent`、`inFlightAsrTasks`、`AbortController`、queued ASR tasks | UI state 边界 | 否 | 否 | 否 | 否 | 否 | stale completion、abort、latest-request-wins 保持 | 不要让 relay 工作或 provider fallback 绕过 track identity 检查。 |
+
+## 审计结论
+
+- Cloud 的 media fetch fallback 已经覆盖 ASR 相关的音频和 transcript 抓取类请求。
+- provider 转写提交的 CORS 缺口现在已经通过独立的同源 relay 关闭，而不是通过 `/api/proxy` 解决。
+- provider 验证 / readiness 仍然是 browser-direct，必须和转写 relay 分开，直到后续指令明确扩展范围。
+- 本地 blob / 已下载 blob 输入仍然是 browser-local，不能移动到后端存储。
+- provider credential 在这一阶段仍然由用户拥有并由浏览器按请求提供；后端 relay 只能把它当作瞬时请求数据处理。
+
+## 后续子指令的测试目标
+
+- `apps/cloud-ui/src/lib/__tests__/remoteTranscript.asr.test.ts`
+- `apps/cloud-ui/src/lib/__tests__/remoteTranscript.localInputRelay.test.ts`
+- `apps/cloud-ui/src/lib/asr/__tests__/backendRelay.test.ts`
+- `apps/cloud-ui/src/lib/asr/__tests__/index.deepgram-routing.test.ts`
+- `apps/cloud-ui/src/lib/asr/__tests__/index.providerToggleGuard.test.ts`
+- `apps/cloud-api/asr_relay_test.go`

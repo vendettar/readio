@@ -945,3 +945,17 @@ description: Architecture decisions and rationale.
   - Documentation must not imply that a separate Cloud web frontend exists yet.
   - Documentation must not claim sync, auth, or schema layers that are not part of the scaffold phase.
   - Future Cloud evolution can change the long-term stack, but the current phase contract must remain explicit and narrow.
+
+## D117 — Cloud ASR Provider Submission Uses a Dedicated Same-Origin Relay [Implemented]
+- **Decision**:
+  - Cloud ASR provider transcription submission must use a dedicated same-origin backend relay (`POST /api/v1/asr/transcriptions`) rather than browser-direct provider calls.
+  - `/api/proxy` remains a bounded media/RSS proxy surface and must not become a generic provider POST tunnel.
+  - In this phase, provider credentials remain user-owned and browser-supplied; the backend relay may use them only as transient request data and must not persist, cache, or log them.
+- **Rationale**:
+  - Browser-direct provider submission still fails under provider CORS even after the media fallback work is complete.
+  - A dedicated relay fixes transport ownership without prematurely changing the product's user-provided-key model.
+  - Keeping `/api/proxy` narrow avoids broadening SSRF/body-tunneling risk under a convenience abstraction.
+- **Risk Notes**:
+  - Provider verification/readiness remains browser-direct and is intentionally out of scope for this phase.
+  - Browser-local blobs/downloaded blobs remain browser-local inputs; the relay does not move audio storage server-side.
+  - Request bodies must stay bounded, and error mapping must preserve the existing ASR retry/cooldown semantics.
