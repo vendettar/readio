@@ -8,7 +8,7 @@ export const PREFETCH_MIN_BYTES = 256 * 1024
 export const PREFETCH_MAX_BYTES = 2 * 1024 * 1024
 export const PREFETCH_DEFAULT_WINDOW_SECONDS = 30
 export const PREFETCH_SLOW3G_WINDOW_SECONDS = 15
-export const PREFETCH_FALLBACK_BITRATE_BYTES_PER_SEC = 64 * 1024
+export const PREFETCH_FALLBACK_BITRATE_BYTES_PER_SEC = 16 * 1024
 export const PREFETCH_MIN_SAMPLES = 3
 
 interface NetworkInformationLike {
@@ -208,6 +208,12 @@ export class AudioPrefetchScheduler {
     if (profile.disabled) return
 
     if (this.inflight) return
+
+    const isDurationValid = Number.isFinite(audio.duration) && audio.duration > 0
+    if (isDurationValid && window.tailSeconds >= Math.max(0, audio.duration - 1)) {
+      this.markEOF(this.knownTotalBytes)
+      return
+    }
 
     const requiredInterval = Math.min(
       PREFETCH_MAX_BACKOFF_MS,
