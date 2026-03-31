@@ -133,9 +133,11 @@ sudo chown -R "$DEPLOY_USER:$DEPLOY_GROUP" "$REMOTE_ROOT"
 
 sudo tee /etc/readio/readio-cloud.env >/dev/null <<EOF
 READIO_ASR_ALLOWED_ORIGINS=https://www.readio.top
-READIO_ASR_RELAY_TOKEN=replace-with-a-long-random-token
+READIO_ASR_RELAY_PUBLIC_TOKEN=replace-with-a-long-random-token
 READIO_ASR_RATE_LIMIT_BURST=60
 READIO_ASR_RATE_LIMIT_WINDOW_MS=60000
+READIO_PROXY_RATE_LIMIT_BURST=5
+READIO_PROXY_RATE_LIMIT_WINDOW_MS=60000
 EOF
 sudo chmod 600 /etc/readio/readio-cloud.env
 
@@ -176,8 +178,10 @@ Important details:
 - The static Cloud UI assets are served from `/opt/readio/current/dist`.
 - The SQLite file stays outside release directories, for example `/opt/readio/shared/data/readio.db`.
 - `/etc/readio/readio-cloud.env` is the recommended home for mutable Cloud runtime configuration.
-- Cloud ASR relay protection is driven by `READIO_ASR_ALLOWED_ORIGINS`, `READIO_ASR_RELAY_TOKEN`, `READIO_ASR_RATE_LIMIT_BURST`, and `READIO_ASR_RATE_LIMIT_WINDOW_MS`.
-- The same relay token must be present in both the backend runtime environment and the Cloud frontend runtime environment so the browser can send `X-Readio-Relay-Token`.
+- Cloud ASR relay protection is driven by `READIO_ASR_ALLOWED_ORIGINS`, `READIO_ASR_RELAY_PUBLIC_TOKEN`, `READIO_ASR_RATE_LIMIT_BURST`, and `READIO_ASR_RATE_LIMIT_WINDOW_MS`.
+- Cloud proxy rate limiting is driven by `READIO_PROXY_RATE_LIMIT_BURST` and `READIO_PROXY_RATE_LIMIT_WINDOW_MS`.
+- Configure `READIO_ASR_RELAY_PUBLIC_TOKEN` once in backend runtime env. In production Cloud, `apps/cloud-api` emits the same browser-public value through dynamic `/env.js`, so the browser can send `X-Readio-Relay-Public-Token` without a separately maintained frontend runtime token. This is a lightweight abuse-control value, not a secret boundary.
+- Cloud ASR relay is a browser-facing same-origin endpoint. Requests must include a valid `Origin`; requests with a missing or disallowed `Origin` are rejected.
 - The workflow already uses `sudo -n`, so the deploy user must be able to run both `systemctl restart` and `systemctl is-active` without a password prompt.
 - The workflow points `/opt/readio/current` at the new release before it restarts the service, so the first restart on a fresh host needs that release directory to exist.
 
@@ -236,7 +240,75 @@ Rollback is manual and release-based:
 
 If the previous release is missing, you must restore it from another known-good release directory. The workflow does not rebuild rollback artifacts.
 
-## 7. Operational boundaries
+## 7. Trusted proxy and client-IP contract
+
+The Go backend derives the effective client IP using a trusted-proxy gate. This ensures rate limiting and abuse control target the real browser client, not the proxy chain.
+
+### Trust chain: Cloudflare → nginx → Go
+
+Requests flow through three layers:
+
+1. **Cloudflare** — edge filtering, bot protection, and DDoS mitigation.
+2. **nginx** — reverse-proxy on the VPS; terminates TLS, forwards requests to Go on localhost.
+3. **Go (`apps/cloud-api`)** — route-aware application rate limiting on `/api/proxy` and `/api/v1/asr/transcriptions`.
+
+Go trusts only the **immediate proxy hop** (loopback/nginx), NOT Cloudflare public CIDRs. The trusted proxy set is configured via `READIO_TRUSTED_PROXY_CIDRS`.
+
+### nginx real-ip configuration
+
+nginx must first restore the original client IP from **Cloudflare**, then pass that restored client IP to Go.
+
+Do **not** use loopback addresses in nginx `set_real_ip_from` for this step. In the production chain `Cloudflare -> nginx -> Go`, nginx's immediate network peer is Cloudflare, so nginx must trust the **current Cloudflare published IP ranges** when honoring `CF-Connecting-IP`.
+
+Add the real-ip directives in the appropriate `http`, `server`, or included nginx config scope, and keep the Cloudflare IP ranges current:
+
+```nginx
+# Replace these examples with the current Cloudflare published IP ranges.
+set_real_ip_from 173.245.48.0/20;
+set_real_ip_from 103.21.244.0/22;
+set_real_ip_from 2400:cb00::/32;
+
+real_ip_header CF-Connecting-IP;
+real_ip_recursive on;
+```
+
+Then, in the `location` block that proxies to Go:
+
+```nginx
+# After the real-ip step above, $remote_addr is the restored client IP.
+proxy_set_header X-Real-IP          $remote_addr;
+proxy_set_header X-Forwarded-For    $proxy_add_x_forwarded_for;
+proxy_set_header X-Forwarded-Proto  $scheme;
+proxy_set_header Host               $host;
+proxy_pass http://127.0.0.1:8080;
+```
+
+### `READIO_TRUSTED_PROXY_CIDRS` runtime config
+
+- **Type**: comma-separated CIDR list
+- **Default**: empty (no trusted proxies; all forwarded headers are ignored)
+- **Example**: `127.0.0.1/32,::1/128`
+- **Scope**: backend-only — must NOT appear in browser `/env.js`
+
+When the immediate peer IP matches a trusted proxy CIDR, Go honors `X-Real-IP` (preferred) and `X-Forwarded-For` (fallback). When the peer is untrusted, forwarded headers are ignored and rate limiting applies to the peer IP directly.
+
+Set this in `/etc/readio/readio-cloud.env`:
+
+```bash
+READIO_TRUSTED_PROXY_CIDRS=127.0.0.1/32,::1/128
+```
+
+### Layered abuse control
+
+| Layer | Role |
+| --- | --- |
+| Cloudflare | Edge filtering, bot detection, DDoS mitigation |
+| nginx | Reverse-proxy gatekeeping, TLS termination, request buffering |
+| Go (`apps/cloud-api`) | Route-aware application rate limiting using effective client IP |
+
+Each layer operates independently. Go's rate limiter targets the real browser client, even when requests arrive via the proxy chain.
+
+## 8. Operational boundaries
 
 - This workflow assumes the VPS already exists.
 - It does not install or manage `systemd`.

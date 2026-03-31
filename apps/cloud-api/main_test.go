@@ -143,7 +143,7 @@ func TestCloudMuxServesDynamicEnvBeforeStaticFallback(t *testing.T) {
 
 	t.Setenv("READIO_APP_NAME", "Readio Cloud")
 	t.Setenv("READIO_APP_VERSION", "2.0.0")
-	t.Setenv(asrRelayTokenEnv, "relay-public-token")
+	t.Setenv(asrRelayPublicTokenEnv, "relay-public-token")
 	t.Setenv("READIO_ASR_PROVIDER", "groq")
 	t.Setenv("READIO_ASR_MODEL", "whisper-large-v3")
 	t.Setenv("READIO_ENABLED_ASR_PROVIDERS", "groq")
@@ -170,6 +170,9 @@ func TestCloudMuxServesDynamicEnvBeforeStaticFallback(t *testing.T) {
 	if got := rr.Header().Get("Content-Type"); got != "application/javascript; charset=utf-8" {
 		t.Fatalf("content-type = %q, want %q", got, "application/javascript; charset=utf-8")
 	}
+	if got := rr.Header().Get("Cache-Control"); got != "no-store" {
+		t.Fatalf("cache-control = %q, want %q", got, "no-store")
+	}
 	if rr.Body.String() == "static-env" {
 		t.Fatalf("/env.js fell back to static file instead of dynamic handler")
 	}
@@ -188,8 +191,8 @@ func TestCloudMuxServesDynamicEnvBeforeStaticFallback(t *testing.T) {
 	if payload["READIO_APP_NAME"] != "Readio Cloud" {
 		t.Fatalf("READIO_APP_NAME = %#v, want %#v", payload["READIO_APP_NAME"], "Readio Cloud")
 	}
-	if payload["READIO_ASR_RELAY_TOKEN"] != "relay-public-token" {
-		t.Fatalf("READIO_ASR_RELAY_TOKEN = %#v, want %#v", payload["READIO_ASR_RELAY_TOKEN"], "relay-public-token")
+	if payload["READIO_ASR_RELAY_PUBLIC_TOKEN"] != "relay-public-token" {
+		t.Fatalf("READIO_ASR_RELAY_PUBLIC_TOKEN = %#v, want %#v", payload["READIO_ASR_RELAY_PUBLIC_TOKEN"], "relay-public-token")
 	}
 	if payload["READIO_DISCOVERY_SEARCH_URL"] != "https://cloud.example/api/v1/discovery/search" {
 		t.Fatalf("READIO_DISCOVERY_SEARCH_URL = %#v", payload["READIO_DISCOVERY_SEARCH_URL"])
@@ -211,11 +214,35 @@ func TestCloudMuxServesDynamicEnvBeforeStaticFallback(t *testing.T) {
 		"READIO_ASR_ALLOWED_ORIGINS",
 		"READIO_ASR_RATE_LIMIT_BURST",
 		"READIO_ASR_RATE_LIMIT_WINDOW_MS",
+		"READIO_PROXY_RATE_LIMIT_BURST",
+		"READIO_PROXY_RATE_LIMIT_WINDOW_MS",
 		"READIO_ASR_API_KEY",
 		"READIO_OPENAI_API_KEY",
 	} {
 		if _, ok := payload[forbidden]; ok {
 			t.Fatalf("payload unexpectedly exposed %s", forbidden)
+		}
+	}
+}
+
+func TestBrowserEnvAllowlistMatchesArtifact(t *testing.T) {
+	data, err := os.ReadFile("browser-env-allowlist.json")
+	if err != nil {
+		t.Fatalf("read allowlist artifact: %v", err)
+	}
+
+	var artifact []string
+	if err := json.Unmarshal(data, &artifact); err != nil {
+		t.Fatalf("unmarshal allowlist artifact: %v", err)
+	}
+
+	if len(artifact) != len(browserEnvAllowlist) {
+		t.Fatalf("allowlist length = %d, artifact length = %d", len(browserEnvAllowlist), len(artifact))
+	}
+
+	for i := range browserEnvAllowlist {
+		if artifact[i] != browserEnvAllowlist[i] {
+			t.Fatalf("key[%d] = %q, artifact[%d] = %q — browser-env-allowlist.json must be updated to match browserEnvAllowlist", i, browserEnvAllowlist[i], i, artifact[i])
 		}
 	}
 }
@@ -330,6 +357,188 @@ func TestResolveCloudDBPathUsesEnvOverride(t *testing.T) {
 
 	if got := resolveCloudDBPath(); got != filepath.Join("state", "cloud.db") {
 		t.Fatalf("path = %q, want %q", got, filepath.Join("state", "cloud.db"))
+	}
+}
+
+func TestResolveProxyRateLimitBurstEnvOverrides(t *testing.T) {
+	tests := []struct {
+		name      string
+		envValue  string
+		wantBurst int
+	}{
+		{
+			name:      "valid custom value",
+			envValue:  "10",
+			wantBurst: 10,
+		},
+		{
+			name:      "zero disables",
+			envValue:  "0",
+			wantBurst: 0,
+		},
+		{
+			name:      "negative disables",
+			envValue:  "-1",
+			wantBurst: -1,
+		},
+		{
+			name:      "invalid uses default",
+			envValue:  "abc",
+			wantBurst: proxyRateLimitBurst,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv(proxyRateLimitBurstEnv, tc.envValue)
+
+			got := resolveProxyRateLimitBurst()
+			if got != tc.wantBurst {
+				t.Fatalf("burst = %d, want %d", got, tc.wantBurst)
+			}
+		})
+	}
+}
+
+func TestResolveProxyRateLimitWindowEnvOverrides(t *testing.T) {
+	tests := []struct {
+		name       string
+		envValue   string
+		wantWindow time.Duration
+	}{
+		{
+			name:       "valid custom value 30s",
+			envValue:   "30000",
+			wantWindow: 30 * time.Second,
+		},
+		{
+			name:       "zero uses default",
+			envValue:   "0",
+			wantWindow: proxyRateLimitWindow,
+		},
+		{
+			name:       "negative uses default",
+			envValue:   "-1000",
+			wantWindow: proxyRateLimitWindow,
+		},
+		{
+			name:       "invalid uses default",
+			envValue:   "abc",
+			wantWindow: proxyRateLimitWindow,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv(proxyRateLimitWindowMsEnv, tc.envValue)
+
+			got := resolveProxyRateLimitWindow()
+			if got != tc.wantWindow {
+				t.Fatalf("window = %v, want %v", got, tc.wantWindow)
+			}
+		})
+	}
+}
+
+func TestProxyServiceUsesConfiguredRateLimitBurst(t *testing.T) {
+	t.Setenv(proxyRateLimitBurstEnv, "2")
+
+	proxy := newProxyService()
+	if proxy.limiter == nil {
+		t.Fatal("limiter = nil, want non-nil")
+	}
+
+	if proxy.limiter.limit != 2 {
+		t.Fatalf("limiter.limit = %d, want 2", proxy.limiter.limit)
+	}
+}
+
+func TestProxyServiceRateLimiterDisableWhenBurstZero(t *testing.T) {
+	t.Setenv(proxyRateLimitBurstEnv, "0")
+
+	proxy := newProxyService()
+	if proxy.limiter == nil {
+		t.Fatal("limiter = nil, want non-nil")
+	}
+
+	if proxy.limiter.limit != 0 {
+		t.Fatalf("limiter.limit = %d, want 0", proxy.limiter.limit)
+	}
+
+	for i := 0; i < 100; i++ {
+		if !proxy.limiter.allow("198.51.100.10") {
+			t.Fatalf("request %d should pass when burst=0 (disabled)", i+1)
+		}
+	}
+}
+
+func TestProxyServiceRateLimiterDisableWhenBurstNegative(t *testing.T) {
+	t.Setenv(proxyRateLimitBurstEnv, "-5")
+
+	proxy := newProxyService()
+	if proxy.limiter == nil {
+		t.Fatal("limiter = nil, want non-nil")
+	}
+
+	if proxy.limiter.limit != -5 {
+		t.Fatalf("limiter.limit = %d, want -5 (disabled)", proxy.limiter.limit)
+	}
+
+	if !proxy.allowRequest("198.51.100.10") {
+		t.Fatal("expected request to pass when limit < 0 (disabled)")
+	}
+}
+
+func TestProxyServiceRateLimiterDisableWhenBurstMinusOne(t *testing.T) {
+	t.Setenv(proxyRateLimitBurstEnv, "-1")
+
+	proxy := newProxyService()
+	if proxy.limiter == nil {
+		t.Fatal("limiter = nil, want non-nil")
+	}
+
+	if proxy.limiter.limit != -1 {
+		t.Fatalf("limiter.limit = %d, want -1", proxy.limiter.limit)
+	}
+
+	for i := 0; i < 100; i++ {
+		if !proxy.limiter.allow("198.51.100.10") {
+			t.Fatalf("request %d should pass when burst=-1 (disabled)", i+1)
+		}
+	}
+}
+
+func TestProxyServiceRateLimiterReenableWhenBurstOne(t *testing.T) {
+	t.Setenv(proxyRateLimitBurstEnv, "1")
+
+	proxy := newProxyService()
+	if proxy.limiter == nil {
+		t.Fatal("limiter = nil, want non-nil")
+	}
+
+	if proxy.limiter.limit != 1 {
+		t.Fatalf("limiter.limit = %d, want 1", proxy.limiter.limit)
+	}
+
+	if !proxy.limiter.allow("198.51.100.10") {
+		t.Fatal("expected first request to pass with burst=1")
+	}
+
+	if proxy.limiter.allow("198.51.100.10") {
+		t.Fatal("expected second request to be rate limited with burst=1")
+	}
+}
+
+func TestProxyServiceUsesConfiguredRateLimitWindow(t *testing.T) {
+	t.Setenv(proxyRateLimitWindowMsEnv, "5000")
+
+	proxy := newProxyService()
+	if proxy.limiter == nil {
+		t.Fatal("limiter = nil, want non-nil")
+	}
+
+	if proxy.limiter.window != 5*time.Second {
+		t.Fatalf("limiter.window = %v, want 5s", proxy.limiter.window)
 	}
 }
 

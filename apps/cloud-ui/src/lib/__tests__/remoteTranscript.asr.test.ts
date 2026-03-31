@@ -462,4 +462,198 @@ Transcript line
 
     dateSpy.mockRestore()
   })
+
+  it('local blob paths do not gain backend fallback', async () => {
+    const blobUrl = 'blob:http://localhost/abc123'
+
+    act(() => {
+      usePlayerStore.setState({
+        audioUrl: blobUrl,
+        audioLoaded: true,
+        loadRequestId: 2,
+        localTrackId: null,
+      })
+    })
+
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString()
+
+      if (url === blobUrl) {
+        return Promise.resolve(
+          new Response(new Blob(['audio'], { type: 'audio/mpeg' }), {
+            status: 200,
+            headers: { 'content-length': '1024' },
+          })
+        )
+      }
+
+      if (url === '/api/proxy') {
+        throw new Error('proxy should not be called for blob URLs')
+      }
+
+      if (url === '/api/v1/asr/transcriptions') {
+        const body = init?.body as FormData
+        expect(body.get('provider')).toBe('groq')
+        expect(body.get('model')).toBe('whisper-large-v3-turbo')
+        expect(body.get('apiKey')).toBe('public-asr-token')
+        expect(body.get('audio')).toBeInstanceOf(File)
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              cues: [{ start: 0, end: 1.2, text: 'ASR line' }],
+              provider: 'groq',
+              model: 'whisper-large-v3-turbo',
+            }),
+            {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            }
+          )
+        )
+      }
+
+      return Promise.resolve(new Response('{}', { status: 200 }))
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    startOnlineASRForCurrentTrack('manual')
+
+    await waitFor(() => {
+      expect(useTranscriptStore.getState().subtitlesLoaded).toBe(true)
+    })
+
+    const blobCalls = fetchMock.mock.calls.filter((call) => call[0] === blobUrl)
+    const proxyCalls = fetchMock.mock.calls.filter((call) => call[0] === '/api/proxy')
+
+    expect(blobCalls).toHaveLength(1)
+    expect(proxyCalls).toHaveLength(0)
+  })
+
+  it('direct success stays direct and does not go through proxy', async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString()
+
+      if (url === 'https://example.com/audio.mp3') {
+        return Promise.resolve(
+          new Response(new Blob(['audio'], { type: 'audio/mpeg' }), {
+            status: 200,
+            headers: { 'content-length': '1024' },
+          })
+        )
+      }
+
+      if (url === '/api/proxy') {
+        throw new Error('proxy should not be called when direct succeeds')
+      }
+
+      if (url === '/api/v1/asr/transcriptions') {
+        const body = init?.body as FormData
+        expect(body.get('provider')).toBe('groq')
+        expect(body.get('model')).toBe('whisper-large-v3-turbo')
+        expect(body.get('apiKey')).toBe('public-asr-token')
+        expect(body.get('audio')).toBeInstanceOf(File)
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              cues: [{ start: 0, end: 1.2, text: 'ASR line' }],
+              provider: 'groq',
+              model: 'whisper-large-v3-turbo',
+            }),
+            {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            }
+          )
+        )
+      }
+
+      return Promise.resolve(new Response('{}', { status: 200 }))
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    startOnlineASRForCurrentTrack('manual')
+
+    await waitFor(() => {
+      expect(useTranscriptStore.getState().subtitlesLoaded).toBe(true)
+    })
+
+    const directAudioCalls = fetchMock.mock.calls.filter(
+      (call) => call[0] === 'https://example.com/audio.mp3'
+    )
+    const proxyCalls = fetchMock.mock.calls.filter((call) => call[0] === '/api/proxy')
+    const transcribeCalls = fetchMock.mock.calls.filter(
+      (call) => call[0] === '/api/v1/asr/transcriptions'
+    )
+
+    expect(directAudioCalls).toHaveLength(1)
+    expect(proxyCalls).toHaveLength(0)
+    expect(transcribeCalls).toHaveLength(1)
+  })
+
+  it('NetworkError (TypeError) triggers fallback to /api/proxy', async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString()
+
+      if (url === 'https://example.com/audio.mp3') {
+        return Promise.reject(new TypeError('CORS error'))
+      }
+
+      if (url === '/api/proxy') {
+        const body = JSON.parse(String(init?.body ?? '{}')) as { url: string; method: string }
+        expect(body.url).toBe('https://example.com/audio.mp3')
+        expect(body.method).toBe('GET')
+        return Promise.resolve(
+          new Response(new Blob(['audio'], { type: 'audio/mpeg' }), {
+            status: 200,
+            headers: { 'content-length': '1024' },
+          })
+        )
+      }
+
+      if (url === '/api/v1/asr/transcriptions') {
+        const body = init?.body as FormData
+        expect(body.get('provider')).toBe('groq')
+        expect(body.get('model')).toBe('whisper-large-v3-turbo')
+        expect(body.get('apiKey')).toBe('public-asr-token')
+        expect(body.get('audio')).toBeInstanceOf(File)
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              cues: [{ start: 0, end: 1.2, text: 'ASR line' }],
+              provider: 'groq',
+              model: 'whisper-large-v3-turbo',
+            }),
+            {
+              status: 200,
+              headers: { 'content-type': 'application/json' },
+            }
+          )
+        )
+      }
+
+      return Promise.resolve(new Response('{}', { status: 200 }))
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    startOnlineASRForCurrentTrack('manual')
+
+    await waitFor(() => {
+      expect(useTranscriptStore.getState().subtitlesLoaded).toBe(true)
+    })
+
+    const directAudioCalls = fetchMock.mock.calls.filter(
+      (call) => call[0] === 'https://example.com/audio.mp3'
+    )
+    const proxyCalls = fetchMock.mock.calls.filter((call) => call[0] === '/api/proxy')
+    const transcribeCalls = fetchMock.mock.calls.filter(
+      (call) => call[0] === '/api/v1/asr/transcriptions'
+    )
+
+    expect(directAudioCalls).toHaveLength(1)
+    expect(proxyCalls).toHaveLength(1)
+    expect(transcribeCalls).toHaveLength(1)
+  })
 })

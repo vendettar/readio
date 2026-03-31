@@ -974,6 +974,6 @@ description: Architecture decisions and rationale.
   - Production config should not require manually editing static frontend assets on the VPS.
   - Browser-public fields are not secrets; emitting them via backend allowlist makes the contract explicit and auditable.
 - **Risk Notes**:
-  - Browser-public fields (e.g., `READIO_ASR_RELAY_TOKEN`) are lightweight abuse-control tokens, not strong secret boundaries.
+  - Browser-public fields (e.g., `READIO_ASR_RELAY_PUBLIC_TOKEN`) are lightweight abuse-control tokens, not strong secret boundaries.
   - If a field is emitted to `/env.js`, every browser user can read it; design accordingly.
   - The allowlist is implicit in the map literal construction in the Go handler (`apps/cloud-api/main.go`), and only browser-safe fields are emitted.

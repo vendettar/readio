@@ -36,6 +36,8 @@ const proxyRequestTimeout = 10 * time.Second
 const proxyBodyLimit = 2 << 20
 const proxyRateLimitWindow = time.Minute
 const proxyRateLimitBurst = 5
+const proxyRateLimitBurstEnv = "READIO_PROXY_RATE_LIMIT_BURST"
+const proxyRateLimitWindowMsEnv = "READIO_PROXY_RATE_LIMIT_WINDOW_MS"
 const proxyRoute = "/api/proxy"
 const proxyMaxRedirects = 5
 const cloudDBEnv = "READIO_CLOUD_DB_PATH"
@@ -53,7 +55,7 @@ const defaultFallbackPodcastImage = "/placeholder-podcast.svg"
 var browserEnvAllowlist = []string{
 	"READIO_APP_NAME",
 	"READIO_APP_VERSION",
-	"READIO_ASR_RELAY_TOKEN",
+	"READIO_ASR_RELAY_PUBLIC_TOKEN",
 	"READIO_ASR_PROVIDER",
 	"READIO_ASR_MODEL",
 	"READIO_ENABLED_ASR_PROVIDERS",
@@ -104,13 +106,14 @@ type appHandler struct {
 }
 
 type proxyService struct {
-	client      *http.Client
-	limiter     *rateLimiter
-	timeout     time.Duration
-	userAgent   string
-	bodyLimit   int64
-	lookupIP    func(context.Context, string) ([]net.IPAddr, error)
-	dialContext func(context.Context, string, string) (net.Conn, error)
+	client         *http.Client
+	limiter        *rateLimiter
+	timeout        time.Duration
+	userAgent      string
+	bodyLimit      int64
+	lookupIP       func(context.Context, string) ([]net.IPAddr, error)
+	dialContext    func(context.Context, string, string) (net.Conn, error)
+	trustedProxies trustedProxySet
 }
 
 type rateLimiter struct {
@@ -351,9 +354,10 @@ func buildBrowserRuntimeEnv(r *http.Request) map[string]any {
 	origin := requestOrigin(r)
 
 	return map[string]any{
-		"READIO_APP_NAME":                    envOrDefault("READIO_APP_NAME", defaultRuntimeAppName),
-		"READIO_APP_VERSION":                 envOrDefault("READIO_APP_VERSION", defaultRuntimeAppVersion),
-		"READIO_ASR_RELAY_TOKEN":             strings.TrimSpace(os.Getenv(asrRelayTokenEnv)),
+		"READIO_APP_NAME":    envOrDefault("READIO_APP_NAME", defaultRuntimeAppName),
+		"READIO_APP_VERSION": envOrDefault("READIO_APP_VERSION", defaultRuntimeAppVersion),
+		// This browser-visible value is abuse-control only; it is not a secret boundary.
+		"READIO_ASR_RELAY_PUBLIC_TOKEN":      strings.TrimSpace(os.Getenv(asrRelayPublicTokenEnv)),
 		"READIO_ASR_PROVIDER":                strings.TrimSpace(os.Getenv("READIO_ASR_PROVIDER")),
 		"READIO_ASR_MODEL":                   strings.TrimSpace(os.Getenv("READIO_ASR_MODEL")),
 		"READIO_ENABLED_ASR_PROVIDERS":       strings.TrimSpace(os.Getenv("READIO_ENABLED_ASR_PROVIDERS")),
@@ -450,13 +454,42 @@ func resolveCloudUIDistDir() (string, error) {
 	return "", fmt.Errorf("unable to locate cloud-ui dist; set %s", cloudUIDistEnv)
 }
 
+func resolveProxyRateLimitBurst() int {
+	raw := strings.TrimSpace(os.Getenv(proxyRateLimitBurstEnv))
+	if raw == "" {
+		return proxyRateLimitBurst
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil {
+		return proxyRateLimitBurst
+	}
+	return v
+}
+
+func resolveProxyRateLimitWindow() time.Duration {
+	raw := strings.TrimSpace(os.Getenv(proxyRateLimitWindowMsEnv))
+	if raw == "" {
+		return proxyRateLimitWindow
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil || v <= 0 {
+		return proxyRateLimitWindow
+	}
+	return time.Duration(v) * time.Millisecond
+}
+
 func newProxyService() *proxyService {
+	burst := resolveProxyRateLimitBurst()
+	if burst <= 0 {
+		slog.Warn("application-layer rate limiting disabled for /api/proxy", "READIO_PROXY_RATE_LIMIT_BURST", burst)
+	}
 	return &proxyService{
-		limiter:   newRateLimiter(proxyRateLimitBurst, proxyRateLimitWindow, time.Now),
-		timeout:   proxyRequestTimeout,
-		userAgent: proxyUserAgent,
-		bodyLimit: proxyBodyLimit,
-		lookupIP:  net.DefaultResolver.LookupIPAddr,
+		limiter:        newRateLimiter(burst, resolveProxyRateLimitWindow(), time.Now),
+		timeout:        proxyRequestTimeout,
+		userAgent:      proxyUserAgent,
+		bodyLimit:      proxyBodyLimit,
+		lookupIP:       net.DefaultResolver.LookupIPAddr,
+		trustedProxies: loadTrustedProxySet(slog.Default()),
 	}
 }
 
@@ -480,7 +513,7 @@ func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !p.allowRequest(remoteIP(r.RemoteAddr)) {
+	if !p.allowRequest(effectiveClientIP(r, p.trustedProxies)) {
 		writeProxyError(w, http.StatusTooManyRequests, "rate limit exceeded")
 		return
 	}

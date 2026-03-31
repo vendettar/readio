@@ -19,7 +19,7 @@ describe('runtimeConfig schema parity', () => {
   it('maps representative runtime env values with expected coercion', async () => {
     window.__READIO_ENV__ = {
       READIO_CORS_PROXY_URL: 'https://proxy.example.com',
-      READIO_ASR_RELAY_TOKEN: 'relay-public-token',
+      READIO_ASR_RELAY_PUBLIC_TOKEN: 'relay-public-token',
       READIO_PROXY_TIMEOUT_MS: '1234',
       READIO_DEFAULT_LANGUAGE: 'ZH-CN',
       READIO_DEFAULT_PODCAST_CONTENT_COUNTRY: 'JP',
@@ -33,7 +33,7 @@ describe('runtimeConfig schema parity', () => {
     const config = getAppConfig()
 
     expect(config.CORS_PROXY_URL).toBe('https://proxy.example.com')
-    expect(config.ASR_RELAY_TOKEN).toBe('relay-public-token')
+    expect(config.ASR_RELAY_PUBLIC_TOKEN).toBe('relay-public-token')
     expect(config.PROXY_TIMEOUT_MS).toBe(1234)
     expect(config.DEFAULT_LANGUAGE).toBe('zh')
     expect(config.DEFAULT_COUNTRY).toBe('JP')
@@ -145,6 +145,34 @@ describe('runtimeConfig schema parity', () => {
 
     expect(enabledProviders).toEqual([])
     parseSpy.mockRestore()
+  })
+
+  // Must match apps/cloud-api/browser-env-allowlist.json
+  const GO_BROWSER_ENV_ALLOWLIST = [
+    'READIO_APP_NAME',
+    'READIO_APP_VERSION',
+    'READIO_ASR_RELAY_PUBLIC_TOKEN',
+    'READIO_ASR_PROVIDER',
+    'READIO_ASR_MODEL',
+    'READIO_ENABLED_ASR_PROVIDERS',
+    'READIO_DISABLED_ASR_PROVIDERS',
+    'READIO_EN_DICTIONARY_API_URL',
+    'READIO_EN_DICTIONARY_API_TRANSPORT',
+    'READIO_DISCOVERY_LOOKUP_URL',
+    'READIO_DISCOVERY_SEARCH_URL',
+    'READIO_RSS_FEED_BASE_URL',
+    'READIO_DEFAULT_PODCAST_CONTENT_COUNTRY',
+    'READIO_DEFAULT_LANGUAGE',
+    'READIO_FALLBACK_PODCAST_IMAGE',
+  ] as const
+
+  it('verifies Go allowlist keys exist in frontend ENV_MAP', async () => {
+    const { ENV_MAP } = await import('../runtimeConfig.schema')
+    const envMapValues = new Set(Object.values(ENV_MAP))
+
+    for (const goKey of GO_BROWSER_ENV_ALLOWLIST) {
+      expect(envMapValues).toContain(goKey)
+    }
   })
 
   it('uses the English-specific dictionary config field for definition requests', async () => {

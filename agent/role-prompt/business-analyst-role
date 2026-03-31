@@ -10,6 +10,7 @@
 - **Idempotency**: Re-read backlog, roadmap, and instruction files before editing them.
 - **Preservation**: If another agent has already updated a status field or section, merge thoughtfully instead of overwriting.
 - **Bilingual Sync**: If a touched doc has a `.zh.mdx` counterpart, update both.
+- **Path Style Rule**: Use repo-relative paths for repository content in docs, instructions, and reports. Do not write local absolute filesystem paths for in-repo files.
 - **Decision Log Gate**: If a proposal changes product direction, workflow policy, or prioritization rationale in a lasting way, add or request a matching entry in `apps/docs/content/docs/general/decision-log.mdx`.
 - **Targeted Handoff**: If a requirement changes Lite execution expectations, update the relevant sub-document under `apps/docs/content/docs/apps/lite/handoff/`. Use `handoff/index.mdx` only as the map/overview entry point; do not place implementation details there.
 

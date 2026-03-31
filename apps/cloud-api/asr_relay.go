@@ -22,8 +22,8 @@ import (
 
 const asrRelayRoute = "/api/v1/asr/transcriptions"
 const asrVerifyRoute = "/api/v1/asr/verify"
-const asrRelayTokenHeader = "X-Readio-Relay-Token"
-const asrRelayTokenEnv = "READIO_ASR_RELAY_TOKEN"
+const asrRelayPublicTokenHeader = "X-Readio-Relay-Public-Token"
+const asrRelayPublicTokenEnv = "READIO_ASR_RELAY_PUBLIC_TOKEN"
 const asrRelayAllowedOriginsEnv = "READIO_ASR_ALLOWED_ORIGINS"
 const asrRelayRateLimitBurstEnv = "READIO_ASR_RATE_LIMIT_BURST"
 const asrRelayRateLimitWindowMsEnv = "READIO_ASR_RATE_LIMIT_WINDOW_MS"
@@ -91,24 +91,30 @@ type asrRelayErrorPayload struct {
 }
 
 type asrRelayService struct {
-	client         *http.Client
-	timeout        time.Duration
-	bodyLimit      int64
-	providers      map[string]asrRelayProviderConfig
-	limiter        *rateLimiter
-	allowedOrigins map[string]struct{}
-	relayToken     string
+	client           *http.Client
+	timeout          time.Duration
+	bodyLimit        int64
+	providers        map[string]asrRelayProviderConfig
+	limiter          *rateLimiter
+	allowedOrigins   map[string]struct{}
+	relayPublicToken string
+	trustedProxies   trustedProxySet
 }
 
 func newASRRelayService() *asrRelayService {
+	burst := resolveASRRelayRateLimitBurst()
+	if burst <= 0 {
+		slog.Warn("application-layer rate limiting disabled for ASR relay", "READIO_ASR_RATE_LIMIT_BURST", burst)
+	}
 	return &asrRelayService{
-		client:         &http.Client{},
-		timeout:        asrRelayRequestTimeout,
-		bodyLimit:      asrRelayBodyLimit,
-		providers:      defaultASRRelayProviders(),
-		limiter:        newRateLimiter(resolveASRRelayRateLimitBurst(), resolveASRRelayRateLimitWindow(), time.Now),
-		allowedOrigins: resolveASRRelayAllowedOrigins(),
-		relayToken:     strings.TrimSpace(os.Getenv(asrRelayTokenEnv)),
+		client:           &http.Client{},
+		timeout:          asrRelayRequestTimeout,
+		bodyLimit:        asrRelayBodyLimit,
+		providers:        defaultASRRelayProviders(),
+		limiter:          newRateLimiter(burst, resolveASRRelayRateLimitWindow(), time.Now),
+		allowedOrigins:   resolveASRRelayAllowedOrigins(),
+		relayPublicToken: strings.TrimSpace(os.Getenv(asrRelayPublicTokenEnv)),
+		trustedProxies:   loadTrustedProxySet(slog.Default()),
 	}
 }
 
@@ -226,16 +232,12 @@ func (s *asrRelayService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *asrRelayService) authorizeRequest(r *http.Request) *asrRelayErrorPayload {
-	if !s.isAllowedOrigin(r) {
-		return &asrRelayErrorPayload{
-			Status:  http.StatusForbidden,
-			Code:    "forbidden",
-			Message: "origin is not allowed",
-		}
+	if originErr := s.originAuthorizationError(r); originErr != nil {
+		return originErr
 	}
 
-	if token := strings.TrimSpace(s.relayToken); token != "" {
-		if subtle.ConstantTimeCompare([]byte(r.Header.Get(asrRelayTokenHeader)), []byte(token)) != 1 {
+	if token := strings.TrimSpace(s.relayPublicToken); token != "" {
+		if subtle.ConstantTimeCompare([]byte(r.Header.Get(asrRelayPublicTokenHeader)), []byte(token)) != 1 {
 			return &asrRelayErrorPayload{
 				Status:  http.StatusUnauthorized,
 				Code:    "unauthorized",
@@ -244,7 +246,7 @@ func (s *asrRelayService) authorizeRequest(r *http.Request) *asrRelayErrorPayloa
 		}
 	}
 
-	if s.limiter != nil && !s.limiter.allow(remoteIP(r.RemoteAddr)) {
+	if s.limiter != nil && !s.limiter.allow(effectiveClientIP(r, s.trustedProxies)) {
 		return &asrRelayErrorPayload{
 			Status:  http.StatusTooManyRequests,
 			Code:    "rate_limited",
@@ -252,6 +254,25 @@ func (s *asrRelayService) authorizeRequest(r *http.Request) *asrRelayErrorPayloa
 		}
 	}
 
+	return nil
+}
+
+func (s *asrRelayService) originAuthorizationError(r *http.Request) *asrRelayErrorPayload {
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	if origin == "" {
+		return &asrRelayErrorPayload{
+			Status:  http.StatusForbidden,
+			Code:    "missing_or_disallowed_origin",
+			Message: "missing or disallowed origin",
+		}
+	}
+	if !s.isAllowedOrigin(r) {
+		return &asrRelayErrorPayload{
+			Status:  http.StatusForbidden,
+			Code:    "origin_not_allowed",
+			Message: "missing or disallowed origin",
+		}
+	}
 	return nil
 }
 
@@ -313,7 +334,7 @@ func resolveASRRelayRateLimitBurst() int {
 		return asrRelayRateLimitBurst
 	}
 	value, err := strconv.Atoi(raw)
-	if err != nil || value <= 0 {
+	if err != nil {
 		return asrRelayRateLimitBurst
 	}
 	return value

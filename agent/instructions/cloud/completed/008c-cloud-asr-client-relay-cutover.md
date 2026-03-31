@@ -74,7 +74,7 @@ At minimum, add or update Cloud frontend tests proving:
 - Completed by: Codex
 - Reviewed by: Codex
 - Commands:
-  - `pnpm -C /Users/Leo_Qiu/Documents/dev/readio/apps/cloud-ui exec vitest run src/lib/asr/__tests__/backendRelay.test.ts src/lib/asr/__tests__/index.deepgram-routing.test.ts src/lib/asr/__tests__/index.providerToggleGuard.test.ts src/lib/__tests__/remoteTranscript.asr.test.ts`
-  - `pnpm -C /Users/Leo_Qiu/Documents/dev/readio/apps/cloud-ui exec vitest run src/lib/__tests__/remoteTranscript.asr.test.ts src/hooks/__tests__/useEpisodePlayback.transcript.test.ts src/lib/asr/__tests__/backendRelay.test.ts src/lib/asr/__tests__/index.deepgram-routing.test.ts src/lib/asr/__tests__/index.providerToggleGuard.test.ts`
-  - `pnpm -C /Users/Leo_Qiu/Documents/dev/readio/apps/cloud-ui build`
+  - `pnpm -C apps/cloud-ui exec vitest run src/lib/asr/__tests__/backendRelay.test.ts src/lib/asr/__tests__/index.deepgram-routing.test.ts src/lib/asr/__tests__/index.providerToggleGuard.test.ts src/lib/__tests__/remoteTranscript.asr.test.ts`
+  - `pnpm -C apps/cloud-ui exec vitest run src/lib/__tests__/remoteTranscript.asr.test.ts src/hooks/__tests__/useEpisodePlayback.transcript.test.ts src/lib/asr/__tests__/backendRelay.test.ts src/lib/asr/__tests__/index.deepgram-routing.test.ts src/lib/asr/__tests__/index.providerToggleGuard.test.ts`
+  - `pnpm -C apps/cloud-ui build`
 - Date: 2026-03-29

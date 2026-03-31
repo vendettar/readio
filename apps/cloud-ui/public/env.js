@@ -30,7 +30,7 @@ window.__READIO_ENV__ = window.__READIO_ENV__ || {
   // Readio rejects known secret formats like sk-, sk-proj-, gsk_, gsk-.
   // Only public/intentionally browser-visible values belong here.
   READIO_ASR_API_KEY: '',
-  READIO_ASR_RELAY_TOKEN: '',
+  READIO_ASR_RELAY_PUBLIC_TOKEN: '',
   READIO_OPENAI_API_KEY: '',
   READIO_ENABLED_ASR_PROVIDERS: '',
   READIO_DISABLED_ASR_PROVIDERS: '',

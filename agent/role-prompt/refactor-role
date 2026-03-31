@@ -8,6 +8,7 @@
 ## [Doc Update Protocol]
 - **Idempotency**: Verify the current state of documentation before applying updates.
 - **Sync**: Ensure architecture diagrams and standard docs reflect the post-refactor reality.
+- **Path Style Rule**: Use repo-relative paths for repository content in docs, instructions, and reports. Do not write local absolute filesystem paths for in-repo files.
 
 ## [Skill Mastery Protocol]
 - **AST Manipulation**: Prioritize tools like `ts-morph` or structural search/replace over manual editing for large-scale renames or moves.

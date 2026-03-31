@@ -12,7 +12,7 @@ export const DEFAULTS = {
   CORS_PROXY_AUTH_HEADER: 'x-proxy-token',
   CORS_PROXY_AUTH_VALUE: '',
   ASR_API_KEY: '',
-  ASR_RELAY_TOKEN: '',
+  ASR_RELAY_PUBLIC_TOKEN: '',
   ASR_PROVIDER: '',
   ASR_MODEL: '',
   ENABLED_ASR_PROVIDERS: '',

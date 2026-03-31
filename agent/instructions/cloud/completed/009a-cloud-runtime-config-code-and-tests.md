@@ -81,7 +81,7 @@ Make the code/tests clear that these files are dev/default-template inputs, not 
 
 At minimum, production Cloud must no longer treat these as front-end-authored runtime truth:
 
-- `READIO_ASR_RELAY_TOKEN`
+- `READIO_ASR_RELAY_PUBLIC_TOKEN`
 - same-origin backend-owned URL roots
 - backend abuse-control and transport-boundary knobs
 

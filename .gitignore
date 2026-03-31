@@ -19,6 +19,7 @@ out/
 .turbo/
 .biome/
 next-env.d.ts
+apps/cloud-api/readio-cloud
 
 # Logs and coverage
 *.log

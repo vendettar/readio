@@ -69,5 +69,5 @@ Also perform the hidden-risk sweep for async re-entrancy and repeated hot-path w
 ## Completion
 - Completed by: Codex execution worker
 - Reviewed by: Codex reviewer
-- Commands: `go test ./...` in `apps/cloud-api`; `pnpm -C apps/cloud-ui exec vitest run src/lib/discovery/__tests__/cloudCutover.sameOrigin.test.ts`; `pnpm -C apps/cloud-ui build`; `rg -n "appleProvider\\.lookupPodcastsByIds" /Users/Leo_Qiu/Documents/dev/readio/apps/cloud-ui/src`
+- Commands: `go test ./...` in `apps/cloud-api`; `pnpm -C apps/cloud-ui exec vitest run src/lib/discovery/__tests__/cloudCutover.sameOrigin.test.ts`; `pnpm -C apps/cloud-ui build`; `rg -n "appleProvider\\.lookupPodcastsByIds" apps/cloud-ui/src`
 - Date: 2026-03-27 18:25:05 CST
