@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AudioPrefetchScheduler,
   PREFETCH_BASE_INTERVAL_MS,
+  PREFETCH_DEFAULT_WINDOW_SECONDS,
   PREFETCH_FALLBACK_BITRATE_BYTES_PER_SEC,
   PREFETCH_MAX_BACKOFF_MS,
   PREFETCH_SLOW3G_WINDOW_SECONDS,
@@ -129,7 +130,7 @@ describe('AudioPrefetchScheduler', () => {
   it('enforces hysteresis and interval floor between attempts', async () => {
     let now = 10_000
     const fetchMock = vi.fn(
-      async () =>
+      async (_url?: string, _init?: RequestInit) =>
         new Response('', {
           status: 206,
           headers: {
@@ -187,7 +188,7 @@ describe('AudioPrefetchScheduler', () => {
     let now = 1_000
     let shouldFail = true
 
-    const fetchMock = vi.fn(async (input: string) => {
+    const fetchMock = vi.fn(async (input: string, _init?: RequestInit) => {
       if (shouldFail) {
         if (input === 'https://example.com/e.mp3') {
           return new Response('', { status: 500 })
@@ -355,7 +356,7 @@ describe('AudioPrefetchScheduler', () => {
 
   it('treats proxied 416 as EOF and stops further prefetch attempts for the source', async () => {
     let now = 1_000
-    const fetchMock = vi.fn(async (input: string) => {
+    const fetchMock = vi.fn(async (input: string, _init?: RequestInit) => {
       if (input === 'https://example.com/eof.mp3') {
         throw new TypeError('Failed to fetch')
       }
@@ -397,9 +398,184 @@ describe('AudioPrefetchScheduler', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
+  it('clamps rangeEnd to knownTotalBytes on short files to prevent 416', async () => {
+    let now = 1_000
+    const fetchMock = vi.fn(async (_url?: string, _init?: RequestInit) => {
+      return new Response('', {
+        status: 206,
+        headers: {
+          'content-range': 'bytes 0-262143/400000',
+        },
+      })
+    })
+
+    const scheduler = new AudioPrefetchScheduler({
+      fetchImpl: fetchMock as unknown as typeof fetch,
+      now: () => now,
+      getConnection: () => ({ effectiveType: '4g' }),
+    })
+
+    // First fetch: returns 206 with total=400000, sets knownTotalBytes
+    await scheduler.maybePrefetch({
+      sourceId: 'https://example.com/short.mp3',
+      sourceUrl: 'https://example.com/short.mp3',
+      audio: createAudio(3, 0, 5),
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    // Re-arm (>= 25s ahead) and advance past interval
+    await scheduler.maybePrefetch({
+      sourceId: 'https://example.com/short.mp3',
+      sourceUrl: 'https://example.com/short.mp3',
+      audio: createAudio(10, 0, 40),
+    })
+    now += PREFETCH_MAX_BACKOFF_MS
+
+    // Third call: buffered tail at 6s → rangeStart = 393216 (still < 400000)
+    // bytesTarget = 1966080 → without clamp: rangeEnd = 2359295 >> 400000 (would 416)
+    // With clamp: rangeEnd = 399999
+    await scheduler.maybePrefetch({
+      sourceId: 'https://example.com/short.mp3',
+      sourceUrl: 'https://example.com/short.mp3',
+      audio: createAudio(5, 0, 6),
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const [, init] = fetchMock.mock.calls[1] as [string, RequestInit]
+    const range = getRangeHeader(init)
+    expect(range).toBe('bytes=393217-399999')
+  })
+
+  it('uses x-total-bytes URL hint to bound the first near-EOF prefetch', async () => {
+    const fetchMock = vi.fn(async (_url?: string, _init?: RequestInit) => {
+      return new Response('', {
+        status: 206,
+        headers: {
+          'content-range': 'bytes 393217-399999/400000',
+        },
+      })
+    })
+
+    const scheduler = new AudioPrefetchScheduler({
+      fetchImpl: fetchMock as unknown as typeof fetch,
+      now: () => 1_000,
+      getConnection: () => ({ effectiveType: '4g' }),
+    })
+
+    await scheduler.maybePrefetch({
+      sourceId: 'https://example.com/short.mp3?x-total-bytes=400000',
+      sourceUrl: 'https://example.com/short.mp3?x-total-bytes=400000',
+      audio: createAudio(5, 0, 6),
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const range = getRangeHeader(init)
+    expect(range).toBe('bytes=393217-399999')
+  })
+
+  it('clamps after learning total from 206 to prevent future overshoot', async () => {
+    let now = 1_000
+    let callCount = 0
+
+    const fetchMock = vi.fn(async (_url?: string, _init?: RequestInit) => {
+      callCount++
+      if (callCount === 1) {
+        // First fetch: partial content, learn total=400000
+        return new Response('', {
+          status: 206,
+          headers: {
+            'content-range': 'bytes 0-262143/400000',
+          },
+        })
+      }
+      // Second fetch: should be clamped, return content
+      return new Response('', {
+        status: 206,
+        headers: {
+          'content-range': 'bytes 393217-399999/400000',
+        },
+      })
+    })
+
+    const scheduler = new AudioPrefetchScheduler({
+      fetchImpl: fetchMock as unknown as typeof fetch,
+      now: () => now,
+      getConnection: () => ({ effectiveType: '4g' }),
+    })
+
+    // First fetch: learns total=400000
+    await scheduler.maybePrefetch({
+      sourceId: 'https://example.com/short.mp3',
+      sourceUrl: 'https://example.com/short.mp3',
+      audio: createAudio(3, 0, 5),
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(scheduler.getState().consecutiveFailures).toBe(0)
+
+    // Re-arm (>= 25s ahead) and advance past interval
+    await scheduler.maybePrefetch({
+      sourceId: 'https://example.com/short.mp3',
+      sourceUrl: 'https://example.com/short.mp3',
+      audio: createAudio(10, 0, 40),
+    })
+    now += PREFETCH_MAX_BACKOFF_MS
+
+    // Third call: tail at 6s, would overshoot without clamp
+    await scheduler.maybePrefetch({
+      sourceId: 'https://example.com/short.mp3',
+      sourceUrl: 'https://example.com/short.mp3',
+      audio: createAudio(5, 0, 6),
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    // Verify it was clamped, not a 416
+    expect(scheduler.getState().consecutiveFailures).toBe(0)
+    const [, init] = fetchMock.mock.calls[1] as [string, RequestInit]
+    const range = getRangeHeader(init)
+    expect(range).toBe('bytes=393217-399999')
+  })
+
+  it('does not clamp rangeEnd for large files', async () => {
+    const now = 1_000
+    const fetchMock = vi.fn(async (_url?: string, _init?: RequestInit) => {
+      return new Response('', {
+        status: 206,
+        headers: {
+          'content-range': 'bytes 0-262143/12000000',
+        },
+      })
+    })
+
+    const scheduler = new AudioPrefetchScheduler({
+      fetchImpl: fetchMock as unknown as typeof fetch,
+      now: () => now,
+      getConnection: () => ({ effectiveType: '4g' }),
+    })
+
+    await scheduler.maybePrefetch({
+      sourceId: 'https://example.com/large.mp3',
+      sourceUrl: 'https://example.com/large.mp3',
+      audio: createAudio(10, 0, 14),
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    // For large files, rangeEnd should not be clamped — full window used
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
+    const range = getRangeHeader(init)
+    const [, values] = range.split('=')
+    const [startRaw, endRaw] = values.split('-')
+    const requestedBytes = Number(endRaw) - Number(startRaw) + 1
+    expect(requestedBytes).toBe(
+      PREFETCH_FALLBACK_BITRATE_BYTES_PER_SEC * PREFETCH_DEFAULT_WINDOW_SECONDS
+    )
+  })
+
   it('skips prefetch once known total size proves the next range would be out of bounds', async () => {
     let now = 1_000
-    const fetchMock = vi.fn(async () => {
+    const fetchMock = vi.fn(async (_url?: string, _init?: RequestInit) => {
       return new Response('', {
         status: 206,
         headers: {
