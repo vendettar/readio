@@ -12,6 +12,7 @@ import (
 	"io"
 	"log/slog"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -276,6 +277,38 @@ func (s *asrRelayService) originAuthorizationError(r *http.Request) *asrRelayErr
 	return nil
 }
 
+// normalizeHostPort returns (hostname, effectivePort) from a host:port string.
+// If no port is specified, returns the default port for the given scheme.
+func normalizeHostPort(hostPort string, scheme string) (string, int) {
+	host, portStr, err := net.SplitHostPort(hostPort)
+	if err != nil {
+		host = hostPort
+		portStr = ""
+	}
+	if portStr == "" {
+		switch scheme {
+		case "https":
+			return host, 443
+		case "http":
+			return host, 80
+		default:
+			return host, 0
+		}
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		return host, 0
+	}
+	return host, port
+}
+
+// isSameOrigin compares two origins accounting for default port normalization.
+func isSameOrigin(originScheme, originHost string, requestScheme, requestHost string) bool {
+	originHostname, originPort := normalizeHostPort(originHost, originScheme)
+	requestHostname, requestPort := normalizeHostPort(requestHost, requestScheme)
+	return strings.EqualFold(originHostname, requestHostname) && originPort == requestPort && originScheme == requestScheme
+}
+
 func (s *asrRelayService) isAllowedOrigin(r *http.Request) bool {
 	origin := strings.TrimSpace(r.Header.Get("Origin"))
 	if origin == "" {
@@ -297,7 +330,22 @@ func (s *asrRelayService) isAllowedOrigin(r *http.Request) bool {
 	}
 
 	requestHost := strings.TrimSpace(r.Host)
-	return requestHost != "" && strings.EqualFold(parsed.Host, requestHost)
+	if requestHost == "" {
+		return false
+	}
+	requestScheme := "http"
+	if r.TLS != nil {
+		requestScheme = "https"
+	}
+	// Only trust X-Forwarded-Proto from trusted proxies.
+	if peerHost, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		if peerIP := net.ParseIP(peerHost); peerIP != nil && s.trustedProxies.contains(peerIP) {
+			if proto := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")); proto == "https" || proto == "http" {
+				requestScheme = proto
+			}
+		}
+	}
+	return isSameOrigin(parsed.Scheme, parsed.Host, requestScheme, requestHost)
 }
 
 func resolveASRRelayAllowedOrigins() map[string]struct{} {

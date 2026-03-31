@@ -182,6 +182,7 @@ Important details:
 - Cloud proxy rate limiting is driven by `READIO_PROXY_RATE_LIMIT_BURST` and `READIO_PROXY_RATE_LIMIT_WINDOW_MS`.
 - Configure `READIO_ASR_RELAY_PUBLIC_TOKEN` once in backend runtime env. In production Cloud, `apps/cloud-api` emits the same browser-public value through dynamic `/env.js`, so the browser can send `X-Readio-Relay-Public-Token` without a separately maintained frontend runtime token. This is a lightweight abuse-control value, not a secret boundary.
 - Cloud ASR relay is a browser-facing same-origin endpoint. Requests must include a valid `Origin`; requests with a missing or disallowed `Origin` are rejected.
+- `READIO_ASR_ALLOWED_ORIGINS` is an explicit operator-authored allowlist. Write exact origins such as `https://www.readio.top` or `https://example.com:8443`; do not rely on implicit default-port normalization inside the allowlist.
 - The workflow already uses `sudo -n`, so the deploy user must be able to run both `systemctl restart` and `systemctl is-active` without a password prompt.
 - The workflow points `/opt/readio/current` at the new release before it restarts the service, so the first restart on a fresh host needs that release directory to exist.
 
@@ -282,6 +283,8 @@ proxy_set_header X-Forwarded-Proto  $scheme;
 proxy_set_header Host               $host;
 proxy_pass http://127.0.0.1:8080;
 ```
+
+`X-Forwarded-Proto` is part of the backend same-origin contract. Keep it aligned with the external request scheme (`$scheme`); do not hardcode or drop it, because `apps/cloud-api` only honors it when the immediate peer is trusted and uses it to distinguish `http` vs `https` during same-origin fallback checks.
 
 ### `READIO_TRUSTED_PROXY_CIDRS` runtime config
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -627,4 +628,260 @@ func expectRelayErrorCode(t *testing.T, body []byte, wantCode string) {
 	if payload.Code != wantCode {
 		t.Fatalf("error code = %q, want %q", payload.Code, wantCode)
 	}
+}
+
+func TestNormalizeHostPort(t *testing.T) {
+	tests := []struct {
+		name     string
+		hostPort string
+		scheme   string
+		wantHost string
+		wantPort int
+	}{
+		{name: "https default port stripped", hostPort: "www.readio.top:443", scheme: "https", wantHost: "www.readio.top", wantPort: 443},
+		{name: "http default port stripped", hostPort: "localhost:80", scheme: "http", wantHost: "localhost", wantPort: 80},
+		{name: "no port https defaults to 443", hostPort: "www.readio.top", scheme: "https", wantHost: "www.readio.top", wantPort: 443},
+		{name: "no port http defaults to 80", hostPort: "localhost", scheme: "http", wantHost: "localhost", wantPort: 80},
+		{name: "explicit non-default port", hostPort: "example.com:8443", scheme: "https", wantHost: "example.com", wantPort: 8443},
+		{name: "explicit non-default port http", hostPort: "localhost:8080", scheme: "http", wantHost: "localhost", wantPort: 8080},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			host, port := normalizeHostPort(tc.hostPort, tc.scheme)
+			if host != tc.wantHost {
+				t.Fatalf("host = %q, want %q", host, tc.wantHost)
+			}
+			if port != tc.wantPort {
+				t.Fatalf("port = %d, want %d", port, tc.wantPort)
+			}
+		})
+	}
+}
+
+func TestIsSameOrigin(t *testing.T) {
+	tests := []struct {
+		name          string
+		originScheme  string
+		originHost    string
+		requestScheme string
+		requestHost   string
+		want          bool
+	}{
+		{
+			name:         "https origin with explicit 443 matches request with explicit 443 via X-Forwarded-Proto",
+			originScheme: "https", originHost: "www.readio.top",
+			requestScheme: "https", requestHost: "www.readio.top:443",
+			want: true,
+		},
+		{
+			name:         "http origin without port matches request with explicit :80",
+			originScheme: "http", originHost: "localhost",
+			requestScheme: "http", requestHost: "localhost:80",
+			want: true,
+		},
+		{
+			name:         "explicit non-default port matches",
+			originScheme: "https", originHost: "example.com:8443",
+			requestScheme: "https", requestHost: "example.com:8443",
+			want: true,
+		},
+		{
+			name:         "different host rejects",
+			originScheme: "https", originHost: "evil.com",
+			requestScheme: "https", requestHost: "www.readio.top",
+			want: false,
+		},
+		{
+			name:         "https origin rejects request on port 8080",
+			originScheme: "https", originHost: "www.readio.top",
+			requestScheme: "https", requestHost: "www.readio.top:8080",
+			want: false,
+		},
+		{
+			name:         "http origin rejects https request",
+			originScheme: "http", originHost: "example.com",
+			requestScheme: "https", requestHost: "example.com",
+			want: false,
+		},
+		{
+			name:         "case insensitive hostname match",
+			originScheme: "https", originHost: "WWW.READIO.TOP",
+			requestScheme: "https", requestHost: "www.readio.top",
+			want: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := isSameOrigin(tc.originScheme, tc.originHost, tc.requestScheme, tc.requestHost)
+			if got != tc.want {
+				t.Fatalf("isSameOrigin(%q, %q, %q, %q) = %v, want %v",
+					tc.originScheme, tc.originHost, tc.requestScheme, tc.requestHost, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestASRRelaySameOriginFallback(t *testing.T) {
+	t.Run("origin with default https port matches request host with :443", func(t *testing.T) {
+		relay := newASRRelayService()
+		relay.allowedOrigins = nil // same-origin fallback
+
+		rr := httptest.NewRecorder()
+		req := newMultipartASRRelayRequest(t, multipartASRRelayRequestPayload{
+			Provider:      "groq",
+			Model:         "whisper-large-v3",
+			APIKey:        "groq-key",
+			AudioBytes:    []byte("test-audio"),
+			AudioMimeType: "audio/mpeg",
+		})
+		req.Header.Set("Origin", "https://www.readio.top")
+		req.Host = "www.readio.top:443"
+		req.TLS = &tls.ConnectionState{} // signal https scheme for request
+		relay.ServeHTTP(rr, req)
+
+		if rr.Code == http.StatusForbidden {
+			t.Fatalf("expected non-forbidden status, got %d", rr.Code)
+		}
+	})
+
+	t.Run("http origin matches localhost with explicit :80", func(t *testing.T) {
+		relay := newASRRelayService()
+		relay.allowedOrigins = nil
+
+		rr := httptest.NewRecorder()
+		req := newMultipartASRRelayRequest(t, multipartASRRelayRequestPayload{
+			Provider:      "groq",
+			Model:         "whisper-large-v3",
+			APIKey:        "groq-key",
+			AudioBytes:    []byte("test-audio"),
+			AudioMimeType: "audio/mpeg",
+		})
+		req.Header.Set("Origin", "http://localhost")
+		req.Host = "localhost:80"
+		relay.ServeHTTP(rr, req)
+
+		if rr.Code == http.StatusForbidden {
+			t.Fatalf("expected non-forbidden status, got %d", rr.Code)
+		}
+	})
+
+	t.Run("explicit non-default port matches exactly", func(t *testing.T) {
+		relay := newASRRelayService()
+		relay.allowedOrigins = nil
+
+		rr := httptest.NewRecorder()
+		req := newMultipartASRRelayRequest(t, multipartASRRelayRequestPayload{
+			Provider:      "groq",
+			Model:         "whisper-large-v3",
+			APIKey:        "groq-key",
+			AudioBytes:    []byte("test-audio"),
+			AudioMimeType: "audio/mpeg",
+		})
+		req.Header.Set("Origin", "https://example.com:8443")
+		req.Host = "example.com:8443"
+		req.TLS = &tls.ConnectionState{} // signal https scheme for request
+		relay.ServeHTTP(rr, req)
+
+		if rr.Code == http.StatusForbidden {
+			t.Fatalf("expected non-forbidden status, got %d", rr.Code)
+		}
+	})
+
+	t.Run("different host still rejects", func(t *testing.T) {
+		relay := newASRRelayService()
+		relay.allowedOrigins = nil
+
+		rr := httptest.NewRecorder()
+		req := newMultipartASRRelayRequest(t, multipartASRRelayRequestPayload{
+			Provider:      "groq",
+			Model:         "whisper-large-v3",
+			APIKey:        "groq-key",
+			AudioBytes:    []byte("test-audio"),
+			AudioMimeType: "audio/mpeg",
+		})
+		req.Header.Set("Origin", "https://evil.com")
+		req.Host = "www.readio.top"
+		req.Header.Set("X-Forwarded-Proto", "https")
+		relay.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusForbidden {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusForbidden)
+		}
+		expectRelayErrorCode(t, rr.Body.Bytes(), "origin_not_allowed")
+	})
+
+	t.Run("https origin rejects request on non-default port 8080", func(t *testing.T) {
+		relay := newASRRelayService()
+		relay.allowedOrigins = nil
+
+		rr := httptest.NewRecorder()
+		req := newMultipartASRRelayRequest(t, multipartASRRelayRequestPayload{
+			Provider:      "groq",
+			Model:         "whisper-large-v3",
+			APIKey:        "groq-key",
+			AudioBytes:    []byte("test-audio"),
+			AudioMimeType: "audio/mpeg",
+		})
+		req.Header.Set("Origin", "https://www.readio.top")
+		req.Host = "www.readio.top:8080"
+		req.Header.Set("X-Forwarded-Proto", "https")
+		relay.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusForbidden {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusForbidden)
+		}
+		expectRelayErrorCode(t, rr.Body.Bytes(), "origin_not_allowed")
+	})
+
+	t.Run("explicit allowlist still works unchanged", func(t *testing.T) {
+		relay := newASRRelayService()
+		relay.allowedOrigins = map[string]struct{}{
+			"https://www.readio.top": {},
+		}
+
+		rr := httptest.NewRecorder()
+		req := newMultipartASRRelayRequest(t, multipartASRRelayRequestPayload{
+			Provider:      "groq",
+			Model:         "whisper-large-v3",
+			APIKey:        "groq-key",
+			AudioBytes:    []byte("test-audio"),
+			AudioMimeType: "audio/mpeg",
+		})
+		req.Header.Set("Origin", "https://www.readio.top")
+		req.Host = "www.readio.top:443"
+		req.Header.Set("X-Forwarded-Proto", "https")
+		relay.ServeHTTP(rr, req)
+
+		// With explicit allowlist, origin is checked against the map directly
+		// Origin "https://www.readio.top" should match the allowlist entry
+		if rr.Code == http.StatusForbidden {
+			t.Fatalf("expected non-forbidden status, got %d", rr.Code)
+		}
+	})
+
+	t.Run("untrusted peer cannot spoof scheme via X-Forwarded-Proto", func(t *testing.T) {
+		relay := newASRRelayService()
+		relay.allowedOrigins = nil // same-origin fallback
+
+		rr := httptest.NewRecorder()
+		req := newMultipartASRRelayRequest(t, multipartASRRelayRequestPayload{
+			Provider:      "groq",
+			Model:         "whisper-large-v3",
+			APIKey:        "groq-key",
+			AudioBytes:    []byte("test-audio"),
+			AudioMimeType: "audio/mpeg",
+		})
+		// Origin says https, but request arrives plain http (no TLS, no trusted proxy)
+		req.Header.Set("Origin", "https://www.readio.top")
+		req.Host = "www.readio.top"
+		req.Header.Set("X-Forwarded-Proto", "https") // attacker-supplied
+		// RemoteAddr is untrusted (default httptest value), so X-Forwarded-Proto must be ignored
+		relay.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusForbidden {
+			t.Fatalf("expected forbidden (scheme mismatch), got %d", rr.Code)
+		}
+	})
 }

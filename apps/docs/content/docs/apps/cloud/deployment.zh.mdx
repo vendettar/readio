@@ -182,6 +182,7 @@ sudo "$SYSTEMCTL_BIN" enable "$SERVICE_NAME"
 - Cloud `/api/proxy` 的应用级速率限制由 `READIO_PROXY_RATE_LIMIT_BURST` 和 `READIO_PROXY_RATE_LIMIT_WINDOW_MS` 控制。
 - `READIO_ASR_RELAY_PUBLIC_TOKEN` 只需要在后端运行时环境中配置一次。生产 Cloud 会由 `apps/cloud-api` 动态生成 `/env.js`，把同一个浏览器可见值下发给前端，因此不再需要额外维护一份前端运行时 token。它只是轻量级防滥用值，不是强 secret 边界。
 - Cloud ASR relay 是 browser-facing 的 same-origin endpoint。请求必须带合法 `Origin`；缺失或不被允许的 `Origin` 会被直接拒绝。
+- `READIO_ASR_ALLOWED_ORIGINS` 是运维显式编写的 allowlist。请写完整 origin，例如 `https://www.readio.top` 或 `https://example.com:8443`；不要依赖 allowlist 内部对默认端口做隐式归一化。
 - 工作流已经使用 `sudo -n`，因此部署用户必须能够无密码执行 `systemctl restart` 和 `systemctl is-active`。
 - 工作流会在重启服务前把 `/opt/readio/current` 指向新发布目录，所以新主机第一次重启前必须已经存在对应发布目录。
 
@@ -282,6 +283,8 @@ proxy_set_header X-Forwarded-Proto  $scheme;
 proxy_set_header Host               $host;
 proxy_pass http://127.0.0.1:8080;
 ```
+
+`X-Forwarded-Proto` 是后端 same-origin 契约的一部分。它必须与外部请求协议保持一致（即使用 `$scheme`），不要硬编码也不要省略；`apps/cloud-api` 只会在紧邻对端可信时采信它，并用它区分 same-origin fallback 中的 `http` / `https`。
 
 ### `READIO_TRUSTED_PROXY_CIDRS` 运行时配置
 
