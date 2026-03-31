@@ -909,6 +909,11 @@ func mapTopEpisode(item rawAppleItem) (discoveryPodcastResponse, bool) {
 		return discoveryPodcastResponse{}, false
 	}
 
+	providerPodcastID := asStringID(item.CollectionID)
+	if providerPodcastID == "" {
+		providerPodcastID = extractPodcastIDFromURL(itemURL)
+	}
+
 	return discoveryPodcastResponse{
 		ID:                id,
 		Name:              name,
@@ -919,8 +924,19 @@ func mapTopEpisode(item rawAppleItem) (discoveryPodcastResponse, bool) {
 		Description:       strings.TrimSpace(item.Description),
 		ReleaseDate:       strings.TrimSpace(item.ReleaseDate),
 		Duration:          asOptionalInt64(item.Duration),
-		ProviderPodcastID: asStringID(item.CollectionID),
+		ProviderPodcastID: providerPodcastID,
 	}, true
+}
+
+func extractPodcastIDFromURL(itemURL string) string {
+	if itemURL == "" {
+		return ""
+	}
+	match := regexp.MustCompile(`(?i)/id(\d+)`).FindStringSubmatch(itemURL)
+	if len(match) > 1 {
+		return match[1]
+	}
+	return ""
 }
 
 func mapSearchPodcast(item rawAppleItem) (podcastLookupResponse, bool) {
