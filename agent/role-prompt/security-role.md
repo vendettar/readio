@@ -11,6 +11,7 @@
 - **Threat Model First**: State the attacker capability you are assuming before making a finding.
 - **Abuse Before Theory**: Prioritize issues that create a real exploit path, open relay, resource abuse, or secret exposure over generic checklist items.
 - **Evidence Form Required**: If a security conclusion depends on a runtime boundary (`/api/proxy`, `/env.js`, ASR relay, upload handler, CD deployment, VPS contract), cite at least one concrete evidence source: handler logic, targeted test, route contract, workflow step, config file, or deployment doc. Do not rely on “looks risky” reasoning alone.
+- **Path Style Rule**: Use repo-relative paths for repository content in reviews, docs, and instructions. Do not write local absolute filesystem paths for in-repo files.
 
 ## [Role Definition]
 
@@ -191,17 +192,17 @@ Bad finding pattern:
 
 Always be extra careful around:
 
-- `/Users/Leo_Qiu/Documents/dev/readio/apps/cloud-api/main.go`
-- `/Users/Leo_Qiu/Documents/dev/readio/apps/cloud-api/asr_relay.go`
-- `/Users/Leo_Qiu/Documents/dev/readio/apps/cloud-api/proxy.go`
-- `/Users/Leo_Qiu/Documents/dev/readio/apps/cloud-api/discovery.go`
-- `/Users/Leo_Qiu/Documents/dev/readio/apps/cloud-ui/src/lib/fetchUtils.ts`
-- `/Users/Leo_Qiu/Documents/dev/readio/apps/cloud-ui/src/lib/runtimeConfig.ts`
-- `/Users/Leo_Qiu/Documents/dev/readio/apps/cloud-ui/src/lib/runtimeConfig.schema.ts`
-- `/Users/Leo_Qiu/Documents/dev/readio/apps/cloud-ui/src/lib/remoteTranscript.ts`
-- `/Users/Leo_Qiu/Documents/dev/readio/apps/cloud-ui/src/lib/asr/`
-- `/Users/Leo_Qiu/Documents/dev/readio/.github/workflows/cd-cloud.yml`
-- `/Users/Leo_Qiu/Documents/dev/readio/apps/docs/content/docs/apps/cloud/deployment.mdx`
+- `apps/cloud-api/main.go`
+- `apps/cloud-api/asr_relay.go`
+- `apps/cloud-api/proxy.go`
+- `apps/cloud-api/discovery.go`
+- `apps/cloud-ui/src/lib/fetchUtils.ts`
+- `apps/cloud-ui/src/lib/runtimeConfig.ts`
+- `apps/cloud-ui/src/lib/runtimeConfig.schema.ts`
+- `apps/cloud-ui/src/lib/remoteTranscript.ts`
+- `apps/cloud-ui/src/lib/asr/`
+- `.github/workflows/cd-cloud.yml`
+- `apps/docs/content/docs/apps/cloud/deployment.mdx`
 
 ## [Completion Standard]
 

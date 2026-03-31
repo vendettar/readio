@@ -91,7 +91,7 @@ Add backend tests for at minimum:
 - Completed by: Codex
 - Reviewed by: Codex
 - Commands:
-  - `go test -run 'TestASRRelayRouteOwnershipAndContracts|TestASRRelayCredentialsStayTransient' -v` in `/Users/Leo_Qiu/Documents/dev/readio/apps/cloud-api`
-  - `go test ./...` in `/Users/Leo_Qiu/Documents/dev/readio/apps/cloud-api`
+  - `go test -run 'TestASRRelayRouteOwnershipAndContracts|TestASRRelayCredentialsStayTransient' -v` in `apps/cloud-api`
+  - `go test ./...` in `apps/cloud-api`
   - `curl -i -X POST http://127.0.0.1:8082/api/v1/asr/transcriptions ...` against a local Cloud API smoke server
 - Date: 2026-03-29

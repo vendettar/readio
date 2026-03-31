@@ -83,5 +83,5 @@ title: Cloud 交接
 - 生产环境 Cloud `/env.js` 由 `apps/cloud-api` 通过显式 allowlist 生成，不是从进程环境变量转储。
 - `apps/cloud-ui/public/env.js` 仅面向开发/默认模板。
 - 服务端所有配置保留在 VPS 环境或 systemd 环境文件（例如 `/etc/readio/readio-cloud.env`）。
-- 浏览器公开字段（例如 `READIO_ASR_RELAY_TOKEN`）不是密钥；它们是轻量级滥用控制 token。
+- 浏览器公开字段（例如 `READIO_ASR_RELAY_PUBLIC_TOKEN`）不是密钥；它们是轻量级滥用控制 token。
 - 这一页只保留高层映射；实现细节放在审计子文档里。

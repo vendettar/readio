@@ -66,8 +66,8 @@ If a touched docs file has a `.zh.mdx` counterpart, update both.
 - Completed by: Codex
 - Reviewed by: Codex
 - Commands:
-  - `pnpm -C /Users/Leo_Qiu/Documents/dev/readio/apps/cloud-ui exec vitest run src/lib/asr/__tests__/backendRelay.test.ts src/lib/__tests__/remoteTranscript.asr.test.ts src/lib/__tests__/remoteTranscript.localInputRelay.test.ts`
+  - `pnpm -C apps/cloud-ui exec vitest run src/lib/asr/__tests__/backendRelay.test.ts src/lib/__tests__/remoteTranscript.asr.test.ts src/lib/__tests__/remoteTranscript.localInputRelay.test.ts`
   - `go test ./...`
-  - `pnpm -C /Users/Leo_Qiu/Documents/dev/readio/apps/cloud-ui build`
+  - `pnpm -C apps/cloud-ui build`
   - `git diff --check`
 - Date: 2026-03-29

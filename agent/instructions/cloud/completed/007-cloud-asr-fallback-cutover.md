@@ -136,9 +136,10 @@ Return:
 
 ## Completion
 - Completed by: Codex
-- Reviewed by: Codex
+- Reviewed by: Codex, Reviewer (independent 2026-03-31)
 - Commands:
-  - `pnpm -C apps/cloud-ui exec vitest run src/lib/__tests__/remoteTranscript.asr.test.ts`
+  - `pnpm -C apps/cloud-ui exec vitest run src/lib/__tests__/remoteTranscript.asr.test.ts` (9/9 PASS)
   - `pnpm -C apps/cloud-ui exec vitest run src/lib/__tests__/fetchUtils.test.ts src/lib/__tests__/audioPrefetch.test.ts src/lib/__tests__/remoteTranscript.asr.test.ts src/hooks/__tests__/useEpisodePlayback.transcript.test.ts`
   - `pnpm -C apps/cloud-ui build`
 - Date: 2026-03-28
+- Independent review addendum (2026-03-31): Added 3 missing test cases — local blob no-fallback, direct-stays-direct, TypeError fallback. All 6 instruction-required cases now covered.

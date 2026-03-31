@@ -3,7 +3,7 @@ import { getAppConfig } from '../runtimeConfig'
 
 const ASR_RELAY_ROUTE = '/api/v1/asr/transcriptions'
 const ASR_VERIFY_ROUTE = '/api/v1/asr/verify'
-const ASR_RELAY_TOKEN_HEADER = 'X-Readio-Relay-Token'
+const ASR_RELAY_PUBLIC_TOKEN_HEADER = 'X-Readio-Relay-Public-Token'
 
 type ASRRelayErrorPayload = {
   code?: unknown
@@ -23,11 +23,11 @@ function toRelayAudioFile(blob: Blob): File {
 }
 
 function getRelayHeaders(headers?: Record<string, string>): Record<string, string> | undefined {
-  const token = getAppConfig().ASR_RELAY_TOKEN.trim()
+  const token = getAppConfig().ASR_RELAY_PUBLIC_TOKEN.trim()
   if (!token) return headers
   return {
     ...(headers ?? {}),
-    [ASR_RELAY_TOKEN_HEADER]: token,
+    [ASR_RELAY_PUBLIC_TOKEN_HEADER]: token,
   }
 }
 

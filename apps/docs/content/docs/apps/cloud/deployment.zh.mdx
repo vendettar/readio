@@ -133,9 +133,11 @@ sudo chown -R "$DEPLOY_USER:$DEPLOY_GROUP" "$REMOTE_ROOT"
 
 sudo tee /etc/readio/readio-cloud.env >/dev/null <<EOF
 READIO_ASR_ALLOWED_ORIGINS=https://www.readio.top
-READIO_ASR_RELAY_TOKEN=replace-with-a-long-random-token
+READIO_ASR_RELAY_PUBLIC_TOKEN=replace-with-a-long-random-token
 READIO_ASR_RATE_LIMIT_BURST=60
 READIO_ASR_RATE_LIMIT_WINDOW_MS=60000
+READIO_PROXY_RATE_LIMIT_BURST=5
+READIO_PROXY_RATE_LIMIT_WINDOW_MS=60000
 EOF
 sudo chmod 600 /etc/readio/readio-cloud.env
 
@@ -176,8 +178,10 @@ sudo "$SYSTEMCTL_BIN" enable "$SERVICE_NAME"
 - Cloud UI 静态资源从 `/opt/readio/current/dist` 提供。
 - SQLite 文件应保留在发布目录之外，例如 `/opt/readio/shared/data/readio.db`。
 - `/etc/readio/readio-cloud.env` 是推荐的 Cloud 可变运行时配置位置。
-- Cloud ASR relay 的防滥用边界依赖 `READIO_ASR_ALLOWED_ORIGINS`、`READIO_ASR_RELAY_TOKEN`、`READIO_ASR_RATE_LIMIT_BURST`、`READIO_ASR_RATE_LIMIT_WINDOW_MS`。
-- 浏览器需要发送 `X-Readio-Relay-Token`，所以同一个 relay token 需要同时存在于后端运行环境和 Cloud 前端运行时环境中。
+- Cloud ASR relay 的防滥用边界依赖 `READIO_ASR_ALLOWED_ORIGINS`、`READIO_ASR_RELAY_PUBLIC_TOKEN`、`READIO_ASR_RATE_LIMIT_BURST`、`READIO_ASR_RATE_LIMIT_WINDOW_MS`。
+- Cloud `/api/proxy` 的应用级速率限制由 `READIO_PROXY_RATE_LIMIT_BURST` 和 `READIO_PROXY_RATE_LIMIT_WINDOW_MS` 控制。
+- `READIO_ASR_RELAY_PUBLIC_TOKEN` 只需要在后端运行时环境中配置一次。生产 Cloud 会由 `apps/cloud-api` 动态生成 `/env.js`，把同一个浏览器可见值下发给前端，因此不再需要额外维护一份前端运行时 token。它只是轻量级防滥用值，不是强 secret 边界。
+- Cloud ASR relay 是 browser-facing 的 same-origin endpoint。请求必须带合法 `Origin`；缺失或不被允许的 `Origin` 会被直接拒绝。
 - 工作流已经使用 `sudo -n`，因此部署用户必须能够无密码执行 `systemctl restart` 和 `systemctl is-active`。
 - 工作流会在重启服务前把 `/opt/readio/current` 指向新发布目录，所以新主机第一次重启前必须已经存在对应发布目录。
 
@@ -236,7 +240,75 @@ curl -fsS http://127.0.0.1:8080/healthz
 
 如果上一个发布目录不存在，就需要从其他已知正常的发布目录恢复。工作流不会自动重新生成回滚产物。
 
-## 7. 运维边界
+## 7. 可信代理与客户端 IP 契约
+
+Go 后端通过可信代理网关推导有效的客户端 IP。这确保速率限制和滥用控制针对的是真正的浏览器客户端，而非代理链。
+
+### 信任链：Cloudflare → nginx → Go
+
+请求经过三层：
+
+1. **Cloudflare** — 边缘过滤、机器人防护和 DDoS 缓解。
+2. **nginx** — VPS 上的反向代理；终止 TLS，将请求转发到本地 Go。
+3. **Go (`apps/cloud-api`)** — 对 `/api/proxy` 和 `/api/v1/asr/transcriptions` 执行面向路由的应用级速率限制。
+
+Go 只信任**紧邻的代理跳**（loopback/nginx），不信任 Cloudflare 公共 CIDR。可信代理集合通过 `READIO_TRUSTED_PROXY_CIDRS` 配置。
+
+### nginx real-ip 配置
+
+nginx 必须先从 **Cloudflare** 恢复原始客户端 IP，再把恢复后的客户端 IP 传给 Go。
+
+这一步不要在 nginx 的 `set_real_ip_from` 中使用 loopback 地址。在生产链路 `Cloudflare -> nginx -> Go` 中，nginx 的直接网络对端是 Cloudflare，因此 nginx 在采纳 `CF-Connecting-IP` 时必须信任 **Cloudflare 当前公布的 IP 段**。
+
+请在合适的 `http`、`server` 或包含的 nginx 配置作用域中添加 real-ip 指令，并保持 Cloudflare IP 段为最新：
+
+```nginx
+# 下面只是示例；请替换成 Cloudflare 当前公布的 IP 段。
+set_real_ip_from 173.245.48.0/20;
+set_real_ip_from 103.21.244.0/22;
+set_real_ip_from 2400:cb00::/32;
+
+real_ip_header CF-Connecting-IP;
+real_ip_recursive on;
+```
+
+然后，在代理到 Go 的 `location` 块中配置：
+
+```nginx
+# 完成上面的 real-ip 步骤后，$remote_addr 已经是恢复后的客户端 IP。
+proxy_set_header X-Real-IP          $remote_addr;
+proxy_set_header X-Forwarded-For    $proxy_add_x_forwarded_for;
+proxy_set_header X-Forwarded-Proto  $scheme;
+proxy_set_header Host               $host;
+proxy_pass http://127.0.0.1:8080;
+```
+
+### `READIO_TRUSTED_PROXY_CIDRS` 运行时配置
+
+- **类型**：逗号分隔的 CIDR 列表
+- **默认值**：空（无可信代理，所有转发头被忽略）
+- **示例**：`127.0.0.1/32,::1/128`
+- **范围**：仅后端 —— 不得出现在浏览器 `/env.js` 中
+
+当紧邻的对等方 IP 匹配可信代理 CIDR 时，Go 会采纳 `X-Real-IP`（优先）和 `X-Forwarded-For`（回退）。当对等方不受信任时，转发头被忽略，速率限制直接应用于对等方 IP。
+
+在 `/etc/readio/readio-cloud.env` 中设置：
+
+```bash
+READIO_TRUSTED_PROXY_CIDRS=127.0.0.1/32,::1/128
+```
+
+### 分层滥用控制
+
+| 层级 | 作用 |
+| --- | --- |
+| Cloudflare | 边缘过滤、机器人检测、DDoS 缓解 |
+| nginx | 反向代理把关、TLS 终止、请求缓冲 |
+| Go (`apps/cloud-api`) | 基于有效客户端 IP 的面向路由应用级速率限制 |
+
+各层独立运行。Go 的速率限制器即使请求通过代理链到达，也针对真正的浏览器客户端。
+
+## 8. 运维边界
 
 - 该工作流假设 VPS 已经存在。
 - 它不负责安装或管理 `systemd`。

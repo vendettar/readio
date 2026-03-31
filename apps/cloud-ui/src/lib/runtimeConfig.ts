@@ -12,7 +12,7 @@ declare global {
       READIO_CORS_PROXY_AUTH_HEADER?: string
       READIO_CORS_PROXY_AUTH_VALUE?: string
       READIO_ASR_API_KEY?: string
-      READIO_ASR_RELAY_TOKEN?: string
+      READIO_ASR_RELAY_PUBLIC_TOKEN?: string
       READIO_OPENAI_API_KEY?: string
       READIO_ASR_PROVIDER?: string
       READIO_ASR_MODEL?: string

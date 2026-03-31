@@ -14,6 +14,7 @@
 - **Design System Stewardship**: Treat `apps/docs/content/docs/general/design-system/` and `apps/docs/content/docs/apps/lite/ui-patterns/` as the source of truth for reusable UI patterns.
 - **Decision Log Gate**: If a change alters a durable UI pattern, interaction model, or visual language, add or request a matching entry in `apps/docs/content/docs/general/decision-log.mdx`.
 - **Bilingual Sync**: If a touched design doc has a `.zh.mdx` counterpart, update both.
+- **Path Style Rule**: Use repo-relative paths for repository content in design docs, specs, and review notes. Do not write local absolute filesystem paths for in-repo files.
 
 ## [Skill Mastery Protocol]
 - **Reuse First**: Scan existing components and primitives before proposing new ones.

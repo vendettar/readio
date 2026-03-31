@@ -9,14 +9,14 @@ describe('ASR backend relay', () => {
 
   it('submits transcription to the same-origin relay instead of a provider endpoint', async () => {
     window.__READIO_ENV__ = {
-      READIO_ASR_RELAY_TOKEN: 'relay-public-token',
+      READIO_ASR_RELAY_PUBLIC_TOKEN: 'relay-public-token',
     }
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       expect(typeof input === 'string' ? input : input.toString()).toBe('/api/v1/asr/transcriptions')
       expect(init?.method).toBe('POST')
       expect(init?.body).toBeInstanceOf(FormData)
       expect(init?.headers).toEqual({
-        'X-Readio-Relay-Token': 'relay-public-token',
+        'X-Readio-Relay-Public-Token': 'relay-public-token',
       })
 
       const payload = init?.body as FormData
@@ -157,14 +157,14 @@ describe('ASR backend relay', () => {
 
   it('submits verification to the same-origin verify relay instead of a provider endpoint', async () => {
     window.__READIO_ENV__ = {
-      READIO_ASR_RELAY_TOKEN: 'relay-public-token',
+      READIO_ASR_RELAY_PUBLIC_TOKEN: 'relay-public-token',
     }
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       expect(typeof input === 'string' ? input : input.toString()).toBe('/api/v1/asr/verify')
       expect(init?.method).toBe('POST')
       expect(init?.headers).toEqual({
         'Content-Type': 'application/json',
-        'X-Readio-Relay-Token': 'relay-public-token',
+        'X-Readio-Relay-Public-Token': 'relay-public-token',
       })
 
       const payload = JSON.parse(String(init?.body ?? '{}')) as {

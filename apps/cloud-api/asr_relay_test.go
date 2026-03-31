@@ -288,7 +288,30 @@ func TestASRRelayRouteOwnershipAndContracts(t *testing.T) {
 		if rr.Code != http.StatusForbidden {
 			t.Fatalf("status = %d, want %d", rr.Code, http.StatusForbidden)
 		}
-		expectRelayErrorCode(t, rr.Body.Bytes(), "forbidden")
+		expectRelayErrorCode(t, rr.Body.Bytes(), "origin_not_allowed")
+	})
+
+	t.Run("rejects requests with missing origin", func(t *testing.T) {
+		relay := newASRRelayService()
+		relay.allowedOrigins = map[string]struct{}{
+			"https://www.readio.top": {},
+		}
+
+		rr := httptest.NewRecorder()
+		req := newMultipartASRRelayRequest(t, multipartASRRelayRequestPayload{
+			Provider:      "groq",
+			Model:         "whisper-large-v3",
+			APIKey:        "groq-key",
+			AudioBytes:    []byte("test-audio"),
+			AudioMimeType: "audio/mpeg",
+		})
+		req.Header.Del("Origin")
+		relay.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusForbidden {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusForbidden)
+		}
+		expectRelayErrorCode(t, rr.Body.Bytes(), "missing_or_disallowed_origin")
 	})
 
 	t.Run("rejects requests with missing relay token when configured", func(t *testing.T) {
@@ -296,7 +319,7 @@ func TestASRRelayRouteOwnershipAndContracts(t *testing.T) {
 		relay.allowedOrigins = map[string]struct{}{
 			"https://www.readio.top": {},
 		}
-		relay.relayToken = "relay-secret"
+		relay.relayPublicToken = "relay-secret"
 
 		rr := httptest.NewRecorder()
 		req := newMultipartASRRelayRequest(t, multipartASRRelayRequestPayload{
@@ -458,6 +481,79 @@ func TestASRRelayCredentialsStayTransient(t *testing.T) {
 			t.Fatalf("logs leaked api key: %s", logs.String())
 		}
 		expectRelayErrorCode(t, rr.Body.Bytes(), "unauthorized")
+	})
+}
+
+func TestASRRelayRateLimitDisableSemantics(t *testing.T) {
+	t.Run("burst zero disables rate limiting", func(t *testing.T) {
+		t.Setenv(asrRelayRateLimitBurstEnv, "0")
+
+		relay := newASRRelayService()
+		if relay.limiter == nil {
+			t.Fatal("limiter = nil, want non-nil")
+		}
+
+		if relay.limiter.limit != 0 {
+			t.Fatalf("limiter.limit = %d, want 0 (disabled)", relay.limiter.limit)
+		}
+
+		if !relay.limiter.allow("198.51.100.10") {
+			t.Fatal("expected request to pass when limit == 0 (disabled)")
+		}
+	})
+
+	t.Run("burst negative disables rate limiting", func(t *testing.T) {
+		t.Setenv(asrRelayRateLimitBurstEnv, "-5")
+
+		relay := newASRRelayService()
+		if relay.limiter == nil {
+			t.Fatal("limiter = nil, want non-nil")
+		}
+
+		if relay.limiter.limit != -5 {
+			t.Fatalf("limiter.limit = %d, want -5 (disabled)", relay.limiter.limit)
+		}
+
+		if !relay.limiter.allow("198.51.100.10") {
+			t.Fatal("expected request to pass when limit < 0 (disabled)")
+		}
+	})
+
+	t.Run("burst positive enables rate limiting", func(t *testing.T) {
+		t.Setenv(asrRelayRateLimitBurstEnv, "2")
+
+		relay := newASRRelayService()
+		if relay.limiter.limit != 2 {
+			t.Fatalf("limiter.limit = %d, want 2", relay.limiter.limit)
+		}
+
+		if !relay.limiter.allow("198.51.100.10") {
+			t.Fatal("expected first request to pass")
+		}
+		if !relay.limiter.allow("198.51.100.10") {
+			t.Fatal("expected second request to pass (within limit)")
+		}
+		if relay.limiter.allow("198.51.100.10") {
+			t.Fatal("expected third request to fail (over limit)")
+		}
+	})
+
+	t.Run("window zero falls back to default", func(t *testing.T) {
+		t.Setenv(asrRelayRateLimitWindowMsEnv, "0")
+
+		relay := newASRRelayService()
+		if relay.limiter.window != asrRelayRateLimitWindow {
+			t.Fatalf("limiter.window = %v, want default %v", relay.limiter.window, asrRelayRateLimitWindow)
+		}
+	})
+
+	t.Run("window negative falls back to default", func(t *testing.T) {
+		t.Setenv(asrRelayRateLimitWindowMsEnv, "-1000")
+
+		relay := newASRRelayService()
+		if relay.limiter.window != asrRelayRateLimitWindow {
+			t.Fatalf("limiter.window = %v, want default %v", relay.limiter.window, asrRelayRateLimitWindow)
+		}
 	})
 }
 

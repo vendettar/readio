@@ -836,6 +836,6 @@ description: 架构决策与其背后的理由。
   - 生产配置不应要求在 VPS 上手动编辑静态前端资产。
   - 浏览器公开字段不是密钥；通过后端 allowlist 发出使契约显式且可审计。
 - **风险说明**：
-  - 浏览器公开字段（例如 `READIO_ASR_RELAY_TOKEN`）是轻量级滥用控制 token，不是强密钥边界。
+  - 浏览器公开字段（例如 `READIO_ASR_RELAY_PUBLIC_TOKEN`）是轻量级滥用控制 token，不是强密钥边界。
   - 如果字段被发出到 `/env.js`，假设每个浏览器用户都能读取它；设计时需考虑这一点。
   - allowlist 在 Go handler（`apps/cloud-api/main.go`）的 map 字面量构造中是隐式的，只发出浏览器安全的字段。
