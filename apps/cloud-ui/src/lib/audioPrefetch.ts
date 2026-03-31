@@ -1,4 +1,4 @@
-import { CLOUD_BACKEND_FALLBACK_CLASSES, fetchWithFallback } from './fetchUtils'
+import { CLOUD_BACKEND_FALLBACK_CLASSES, FetchError, fetchWithFallback } from './fetchUtils'
 
 export const PREFETCH_ARM_THRESHOLD_SECONDS = 20
 export const PREFETCH_REARM_THRESHOLD_SECONDS = 25
@@ -40,6 +40,14 @@ interface PrefetchState {
   consecutiveFailures: number
   armed: boolean
   recentBitrateEstimate: number
+}
+
+function parseUnsatisfiedContentRange(header: string | null): number | null {
+  if (!header) return null
+  const match = /^bytes\s+\*\/(\d+)$/i.exec(header.trim())
+  if (!match) return null
+  const total = Number(match[1])
+  return Number.isFinite(total) && total > 0 ? total : null
 }
 
 function parseContentRange(
@@ -133,6 +141,8 @@ export class AudioPrefetchScheduler {
   private armed = true
   private bitrateSamples: number[] = []
   private lastRangeEndByte: number | null = null
+  private knownTotalBytes: number | null = null
+  private reachedEOF = false
 
   constructor(deps: AudioPrefetchDeps = {}) {
     this.fetchImpl = deps.fetchImpl ?? fetch
@@ -168,6 +178,7 @@ export class AudioPrefetchScheduler {
   async maybePrefetch({ sourceId, sourceUrl, audio }: PrefetchRequestInput): Promise<void> {
     if (!isHttpUrl(sourceUrl)) return
     this.resetForSource(sourceId)
+    if (this.reachedEOF) return
 
     const window = getBufferedWindow(audio)
     if (!window) return
@@ -204,6 +215,11 @@ export class AudioPrefetchScheduler {
       rangeStart = this.lastRangeEndByte + 1
     }
 
+    if (this.knownTotalBytes !== null && rangeStart >= this.knownTotalBytes) {
+      this.markEOF(this.knownTotalBytes)
+      return
+    }
+
     const rangeEnd = rangeStart + bytesTarget - 1
     const dedupeKey = `${sourceId}:${rangeStart}:${rangeEnd}`
 
@@ -232,6 +248,11 @@ export class AudioPrefetchScheduler {
       // Ignore stale completion without mutating active-source scheduler state.
       if (this.sourceId !== sourceId) return
 
+      if (response.status === 416) {
+        this.markEOF(parseUnsatisfiedContentRange(response.headers.get('content-range')))
+        return
+      }
+
       if (response.status !== 206) {
         controller.abort()
         this.markFailure()
@@ -245,6 +266,9 @@ export class AudioPrefetchScheduler {
         return
       }
 
+      if (contentRange.total !== null) {
+        this.knownTotalBytes = contentRange.total
+      }
       this.lastRangeEndByte = Math.max(this.lastRangeEndByte ?? 0, contentRange.end)
 
       const bytesTransferred = contentRange.end - contentRange.start + 1
@@ -255,9 +279,13 @@ export class AudioPrefetchScheduler {
 
       this.pushBitrateSample(derivedBitrate)
       this.consecutiveFailures = 0
-    } catch {
+    } catch (error) {
       // Silent failure by design.
       if (this.sourceId === sourceId) {
+        if (error instanceof FetchError && error.status === 416) {
+          this.markEOF(null)
+          return
+        }
         this.markFailure()
       }
     } finally {
@@ -278,6 +306,8 @@ export class AudioPrefetchScheduler {
     this.consecutiveFailures = 0
     this.armed = true
     this.lastRangeEndByte = null
+    this.knownTotalBytes = null
+    this.reachedEOF = false
     this.bitrateSamples = []
   }
 
@@ -299,6 +329,16 @@ export class AudioPrefetchScheduler {
 
   private markFailure(): void {
     this.consecutiveFailures = Math.min(this.consecutiveFailures + 1, 2)
+  }
+
+  private markEOF(totalBytes: number | null): void {
+    if (totalBytes !== null) {
+      this.knownTotalBytes = totalBytes
+      this.lastRangeEndByte = totalBytes - 1
+    }
+    this.reachedEOF = true
+    this.armed = false
+    this.consecutiveFailures = 0
   }
 }
 
