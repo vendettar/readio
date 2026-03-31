@@ -12,7 +12,9 @@ describe('ASR backend relay', () => {
       READIO_ASR_RELAY_PUBLIC_TOKEN: 'relay-public-token',
     }
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      expect(typeof input === 'string' ? input : input.toString()).toBe('/api/v1/asr/transcriptions')
+      expect(typeof input === 'string' ? input : input.toString()).toBe(
+        '/api/v1/asr/transcriptions'
+      )
       expect(init?.method).toBe('POST')
       expect(init?.body).toBeInstanceOf(FormData)
       expect(init?.headers).toEqual({
@@ -59,7 +61,9 @@ describe('ASR backend relay', () => {
 
   it('maps unauthorized relay responses to ASRClientError', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      expect(typeof input === 'string' ? input : input.toString()).toBe('/api/v1/asr/transcriptions')
+      expect(typeof input === 'string' ? input : input.toString()).toBe(
+        '/api/v1/asr/transcriptions'
+      )
       return new Response(
         JSON.stringify({
           code: 'unauthorized',
@@ -91,7 +95,9 @@ describe('ASR backend relay', () => {
 
   it('maps rate-limited relay responses to ASRClientError with retryAfterMs', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      expect(typeof input === 'string' ? input : input.toString()).toBe('/api/v1/asr/transcriptions')
+      expect(typeof input === 'string' ? input : input.toString()).toBe(
+        '/api/v1/asr/transcriptions'
+      )
       return new Response(
         JSON.stringify({
           code: 'rate_limited',
@@ -125,7 +131,9 @@ describe('ASR backend relay', () => {
 
   it('maps provider 5xx relay responses to service_unavailable', async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
-      expect(typeof input === 'string' ? input : input.toString()).toBe('/api/v1/asr/transcriptions')
+      expect(typeof input === 'string' ? input : input.toString()).toBe(
+        '/api/v1/asr/transcriptions'
+      )
       return new Response(
         JSON.stringify({
           code: 'service_unavailable',

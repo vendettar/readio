@@ -14,9 +14,8 @@ describe('cloud discovery 005d runtime cutover', () => {
     })
 
     vi.doMock('../../runtimeConfig', async () => {
-      const actual = await vi.importActual<typeof import('../../runtimeConfig')>(
-        '../../runtimeConfig'
-      )
+      const actual =
+        await vi.importActual<typeof import('../../runtimeConfig')>('../../runtimeConfig')
 
       return {
         ...actual,

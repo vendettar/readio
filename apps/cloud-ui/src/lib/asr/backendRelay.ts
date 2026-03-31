@@ -1,5 +1,5 @@
-import { ASRClientError, type ASRProvider, type ASRTranscriptionResult } from './types'
 import { getAppConfig } from '../runtimeConfig'
+import { ASRClientError, type ASRProvider, type ASRTranscriptionResult } from './types'
 
 const ASR_RELAY_ROUTE = '/api/v1/asr/transcriptions'
 const ASR_VERIFY_ROUTE = '/api/v1/asr/verify'
@@ -34,7 +34,9 @@ function getRelayHeaders(headers?: Record<string, string>): Record<string, strin
 function mapRelayError(payload: ASRRelayErrorPayload, responseStatus: number): ASRClientError {
   const code = typeof payload.code === 'string' ? payload.code : 'service_unavailable'
   const message =
-    typeof payload.message === 'string' ? payload.message : `ASR relay failed with ${responseStatus}`
+    typeof payload.message === 'string'
+      ? payload.message
+      : `ASR relay failed with ${responseStatus}`
   const status = typeof payload.status === 'number' ? payload.status : responseStatus
   const retryAfterMs = typeof payload.retryAfterMs === 'number' ? payload.retryAfterMs : undefined
 

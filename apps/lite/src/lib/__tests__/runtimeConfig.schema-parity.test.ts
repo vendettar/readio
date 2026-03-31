@@ -1,6 +1,6 @@
 import { HttpResponse, http } from 'msw'
-import { server } from '@/__tests__/setup'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { server } from '@/__tests__/setup'
 import { resolveEnabledAsrProviders } from '../asr/providerToggles'
 
 const logErrorMock = vi.hoisted(() => vi.fn())

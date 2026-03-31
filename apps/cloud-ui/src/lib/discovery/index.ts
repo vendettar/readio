@@ -1,11 +1,4 @@
 import {
-  appleProvider,
-  clearDiscoveryMemoryCache as clearAppleDiscoveryMemoryCache,
-  DISCOVERY_CACHE_KEY_BUILDERS,
-  DISCOVERY_CACHE_TTLS_MS,
-  runDiscoveryCacheMaintenance as runAppleDiscoveryCacheMaintenance,
-} from './providers/apple'
-import {
   fetchPodcastFeed as fetchCloudPodcastFeed,
   fetchTopEpisodes as fetchCloudTopEpisodes,
   fetchTopPodcasts as fetchCloudTopPodcasts,
@@ -15,6 +8,13 @@ import {
   searchEpisodes as searchCloudEpisodes,
   searchPodcasts as searchCloudPodcasts,
 } from './cloudApi'
+import {
+  appleProvider,
+  clearDiscoveryMemoryCache as clearAppleDiscoveryMemoryCache,
+  DISCOVERY_CACHE_KEY_BUILDERS,
+  DISCOVERY_CACHE_TTLS_MS,
+  runDiscoveryCacheMaintenance as runAppleDiscoveryCacheMaintenance,
+} from './providers/apple'
 import type {
   DiscoveryPodcast,
   DiscoveryRequestOptions,

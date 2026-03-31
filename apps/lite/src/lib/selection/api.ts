@@ -17,10 +17,6 @@ interface ApiEntry {
 
 type DictionaryTransport = 'direct' | 'go-proxy'
 
-interface ProxyErrorPayload {
-  message?: unknown
-}
-
 interface DictionaryApiNotFoundPayload {
   title?: unknown
   message?: unknown
@@ -92,40 +88,38 @@ async function fetchDictionaryJSON(
   options.signal?.addEventListener('abort', abort, { once: true })
 
   try {
-    const response = await (
-      options.transport === 'go-proxy'
-        ? (() => {
-            const { proxyUrl, authHeader, authValue } = getCorsProxyConfig()
-            if (!proxyUrl) {
-              throw new Error('Missing proxy base URL')
-            }
+    const response = await (options.transport === 'go-proxy'
+      ? (() => {
+          const { proxyUrl, authHeader, authValue } = getCorsProxyConfig()
+          if (!proxyUrl) {
+            throw new Error('Missing proxy base URL')
+          }
 
-            return fetch(proxyUrl, {
-              method: 'POST',
-              signal: controller.signal,
-              credentials: 'omit',
-              headers: {
-                'Content-Type': 'application/json',
-                ...buildProxyAuthHeaders(authHeader, authValue),
-              },
-              body: JSON.stringify({
-                url: lookupUrl,
-                method: 'GET',
-                headers: {
-                  Accept: 'application/json',
-                },
-              }),
-            })
-          })()
-        : fetch(lookupUrl, {
-            method: 'GET',
+          return fetch(proxyUrl, {
+            method: 'POST',
             signal: controller.signal,
             credentials: 'omit',
             headers: {
-              Accept: 'application/json',
+              'Content-Type': 'application/json',
+              ...buildProxyAuthHeaders(authHeader, authValue),
             },
+            body: JSON.stringify({
+              url: lookupUrl,
+              method: 'GET',
+              headers: {
+                Accept: 'application/json',
+              },
+            }),
           })
-    )
+        })()
+      : fetch(lookupUrl, {
+          method: 'GET',
+          signal: controller.signal,
+          credentials: 'omit',
+          headers: {
+            Accept: 'application/json',
+          },
+        }))
     const text = await readResponseText(response)
     if (!response.ok) {
       const payload = parseJsonObject(text)
