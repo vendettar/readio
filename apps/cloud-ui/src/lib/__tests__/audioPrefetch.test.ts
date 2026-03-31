@@ -5,6 +5,7 @@ import {
   PREFETCH_DEFAULT_WINDOW_SECONDS,
   PREFETCH_FALLBACK_BITRATE_BYTES_PER_SEC,
   PREFETCH_MAX_BACKOFF_MS,
+  PREFETCH_MIN_BYTES,
   PREFETCH_SLOW3G_WINDOW_SECONDS,
 } from '../audioPrefetch'
 import { __resetCloudBackendBreakerForTests } from '../fetchUtils'
@@ -85,7 +86,7 @@ describe('AudioPrefetchScheduler', () => {
       return new Response('', {
         status: 206,
         headers: {
-          'content-range': 'bytes 960001-1943039/12000000',
+          'content-range': 'bytes 960001-1222144/12000000',
         },
       })
     })
@@ -123,7 +124,10 @@ describe('AudioPrefetchScheduler', () => {
 
     // 3g uses 15s window before clamp. Fallback bitrate is 64KB/s => 983,040 bytes.
     expect(requestedBytes).toBe(
-      PREFETCH_FALLBACK_BITRATE_BYTES_PER_SEC * PREFETCH_SLOW3G_WINDOW_SECONDS
+      Math.max(
+        PREFETCH_MIN_BYTES,
+        PREFETCH_FALLBACK_BITRATE_BYTES_PER_SEC * PREFETCH_SLOW3G_WINDOW_SECONDS
+      )
     )
   })
 
@@ -433,18 +437,19 @@ describe('AudioPrefetchScheduler', () => {
     now += PREFETCH_MAX_BACKOFF_MS
 
     // Third call: buffered tail at 6s → rangeStart = 393216 (still < 400000)
-    // bytesTarget = 1966080 → without clamp: rangeEnd = 2359295 >> 400000 (would 416)
+    // bytesTarget = 262144 → without clamp: rangeEnd = 524287 >> 400000 (would 416)
     // With clamp: rangeEnd = 399999
+    // Since previous end was 262143, rangeStart is max(16*1024*10 + 1, 262144) = 262144
     await scheduler.maybePrefetch({
       sourceId: 'https://example.com/short.mp3',
       sourceUrl: 'https://example.com/short.mp3',
-      audio: createAudio(5, 0, 6),
+      audio: createAudio(5, 0, 10),
     })
 
     expect(fetchMock).toHaveBeenCalledTimes(2)
     const [, init] = fetchMock.mock.calls[1] as [string, RequestInit]
     const range = getRangeHeader(init)
-    expect(range).toBe('bytes=393217-399999')
+    expect(range).toBe('bytes=262144-399999')
   })
 
   it('uses x-total-bytes URL hint to bound the first near-EOF prefetch', async () => {
@@ -452,7 +457,7 @@ describe('AudioPrefetchScheduler', () => {
       return new Response('', {
         status: 206,
         headers: {
-          'content-range': 'bytes 393217-399999/400000',
+          'content-range': 'bytes 163841-399999/400000',
         },
       })
     })
@@ -466,13 +471,13 @@ describe('AudioPrefetchScheduler', () => {
     await scheduler.maybePrefetch({
       sourceId: 'https://example.com/short.mp3?x-total-bytes=400000',
       sourceUrl: 'https://example.com/short.mp3?x-total-bytes=400000',
-      audio: createAudio(5, 0, 6),
+      audio: createAudio(5, 0, 10),
     })
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit]
     const range = getRangeHeader(init)
-    expect(range).toBe('bytes=393217-399999')
+    expect(range).toBe('bytes=163841-399999')
   })
 
   it('clamps after learning total from 206 to prevent future overshoot', async () => {
@@ -494,7 +499,7 @@ describe('AudioPrefetchScheduler', () => {
       return new Response('', {
         status: 206,
         headers: {
-          'content-range': 'bytes 393217-399999/400000',
+          'content-range': 'bytes 262144-399999/400000',
         },
       })
     })
@@ -523,11 +528,11 @@ describe('AudioPrefetchScheduler', () => {
     })
     now += PREFETCH_MAX_BACKOFF_MS
 
-    // Third call: tail at 6s, would overshoot without clamp
+    // Third call: tail at 10s, would overshoot without clamp
     await scheduler.maybePrefetch({
       sourceId: 'https://example.com/short.mp3',
       sourceUrl: 'https://example.com/short.mp3',
-      audio: createAudio(5, 0, 6),
+      audio: createAudio(5, 0, 10),
     })
 
     expect(fetchMock).toHaveBeenCalledTimes(2)
@@ -535,7 +540,7 @@ describe('AudioPrefetchScheduler', () => {
     expect(scheduler.getState().consecutiveFailures).toBe(0)
     const [, init] = fetchMock.mock.calls[1] as [string, RequestInit]
     const range = getRangeHeader(init)
-    expect(range).toBe('bytes=393217-399999')
+    expect(range).toBe('bytes=262144-399999')
   })
 
   it('does not clamp rangeEnd for large files', async () => {
@@ -569,7 +574,10 @@ describe('AudioPrefetchScheduler', () => {
     const [startRaw, endRaw] = values.split('-')
     const requestedBytes = Number(endRaw) - Number(startRaw) + 1
     expect(requestedBytes).toBe(
-      PREFETCH_FALLBACK_BITRATE_BYTES_PER_SEC * PREFETCH_DEFAULT_WINDOW_SECONDS
+      Math.max(
+        PREFETCH_MIN_BYTES,
+        PREFETCH_FALLBACK_BITRATE_BYTES_PER_SEC * PREFETCH_DEFAULT_WINDOW_SECONDS
+      )
     )
   })
 
