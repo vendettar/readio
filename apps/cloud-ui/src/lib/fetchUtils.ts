@@ -321,7 +321,8 @@ function recordCloudBackendDirectFailure(
   cloudBackendBreaker.set(key, {
     failures,
     firstFailureAt: existing.firstFailureAt,
-    bypassUntil: failures >= CLOUD_BACKEND_BREAKER_THRESHOLD ? now + CLOUD_BACKEND_BREAKER_BYPASS_MS : 0,
+    bypassUntil:
+      failures >= CLOUD_BACKEND_BREAKER_THRESHOLD ? now + CLOUD_BACKEND_BREAKER_BYPASS_MS : 0,
   })
 }
 
@@ -449,7 +450,8 @@ async function fetchCloudBackendWithFallback<T>(
 
   const attemptFetch = fetchImpl ?? fetch
   const purposeLabel = purpose ? ` [${purpose}]` : ''
-  const shouldTryDirect = !forceProxy && !shouldBypassCloudBackendDirect(cloudBackendFallbackClass, url)
+  const shouldTryDirect =
+    !forceProxy && !shouldBypassCloudBackendDirect(cloudBackendFallbackClass, url)
 
   if (requestBody !== undefined) {
     throw new Error('Cloud backend fallback does not support request bodies')
@@ -488,10 +490,7 @@ async function fetchCloudBackendWithFallback<T>(
     }
   }
 
-  const parseResult = async (
-    response: Response,
-    source: 'direct' | 'cloudBackend'
-  ): Promise<T> => {
+  const parseResult = async (response: Response, source: 'direct' | 'cloudBackend'): Promise<T> => {
     if (!response.ok) {
       throw new FetchError(
         `${source === 'direct' ? 'Direct fetch' : 'Cloud backend fallback'} failed: ${response.status}`,
@@ -511,9 +510,7 @@ async function fetchCloudBackendWithFallback<T>(
     )
 
     try {
-      log(
-        `[fetchWithFallback]${purposeLabel} [${sourceLabel}] Cloud media fallback for: ${url}`
-      )
+      log(`[fetchWithFallback]${purposeLabel} [${sourceLabel}] Cloud media fallback for: ${url}`)
       const response =
         sourceLabel === 'Direct'
           ? await runDirectAttempt(timeout.controller.signal)
@@ -540,8 +537,7 @@ async function fetchCloudBackendWithFallback<T>(
       return await executeAttempt('Direct')
     } catch (error) {
       const shouldFallback =
-        error instanceof NetworkError ||
-        (error instanceof FetchError && (error.status ?? 0) >= 500)
+        error instanceof NetworkError || (error instanceof FetchError && (error.status ?? 0) >= 500)
 
       if (!shouldFallback) {
         throw error

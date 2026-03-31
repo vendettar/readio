@@ -1,6 +1,6 @@
 import { HttpResponse, http } from 'msw'
-import { server } from '@/__tests__/setup'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { server } from '@/__tests__/setup'
 
 describe('selection api dictionary transport', () => {
   beforeEach(() => {
@@ -100,11 +100,11 @@ describe('selection api dictionary transport', () => {
         'x-proxy-token': 'secret',
       }),
       body: {
-      url: 'https://english.example/api/hello',
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-      },
+        url: 'https://english.example/api/hello',
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+        },
       },
     })
   })
@@ -149,17 +149,15 @@ describe('selection api dictionary transport', () => {
 
   it('maps dictionaryapi.dev 404 contract to Word not found in direct mode', async () => {
     server.use(
-      http.get(
-        'https://english.example/api/hello',
-        () =>
-          HttpResponse.json(
-            {
-              title: 'No Definitions Found',
-              message: "Sorry pal, we couldn't find definitions for the word you were looking for.",
-              resolution: 'You can try the search again at later time or head to the web instead.',
-            },
-            { status: 404 }
-          )
+      http.get('https://english.example/api/hello', () =>
+        HttpResponse.json(
+          {
+            title: 'No Definitions Found',
+            message: "Sorry pal, we couldn't find definitions for the word you were looking for.",
+            resolution: 'You can try the search again at later time or head to the web instead.',
+          },
+          { status: 404 }
+        )
       )
     )
 
@@ -188,15 +186,13 @@ describe('selection api dictionary transport', () => {
 
   it('does not collapse proxy auth/config 4xx into Word not found', async () => {
     server.use(
-      http.post(
-        'https://proxy.example/relay',
-        () =>
-          HttpResponse.json(
-            {
-              message: 'proxy authentication failed',
-            },
-            { status: 401 }
-          )
+      http.post('https://proxy.example/relay', () =>
+        HttpResponse.json(
+          {
+            message: 'proxy authentication failed',
+          },
+          { status: 401 }
+        )
       )
     )
 
@@ -225,15 +221,13 @@ describe('selection api dictionary transport', () => {
 
   it('does not collapse direct 4xx that do not match dictionaryapi.dev not-found contract', async () => {
     server.use(
-      http.get(
-        'https://english.example/api/hello',
-        () =>
-          HttpResponse.json(
-            {
-              message: 'dictionary access denied',
-            },
-            { status: 403 }
-          )
+      http.get('https://english.example/api/hello', () =>
+        HttpResponse.json(
+          {
+            message: 'dictionary access denied',
+          },
+          { status: 403 }
+        )
       )
     )
 

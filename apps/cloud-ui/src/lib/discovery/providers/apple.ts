@@ -890,7 +890,9 @@ function mapRssEpisodeResult(item: RawAppleItem): DiscoveryPodcast | null {
     artworkUrl100: item.artworkUrl100,
     url: item.url,
     genres: [],
-    providerPodcastId: item.collectionId ? String(item.collectionId) : extractPodcastIdFromUrl(item.url),
+    providerPodcastId: item.collectionId
+      ? String(item.collectionId)
+      : extractPodcastIdFromUrl(item.url),
     description: item.description,
     releaseDate: item.releaseDate,
     duration: item.duration,

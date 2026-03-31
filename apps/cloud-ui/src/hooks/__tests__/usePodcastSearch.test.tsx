@@ -63,7 +63,9 @@ describe('usePodcastSearch', () => {
 
   it('handles empty results', async () => {
     server.use(
-      http.get('http://localhost:3000/api/v1/discovery/search/podcasts', () => HttpResponse.json([]))
+      http.get('http://localhost:3000/api/v1/discovery/search/podcasts', () =>
+        HttpResponse.json([])
+      )
     )
 
     const { result } = renderHook(() => usePodcastSearch('empty', 'us'), {
@@ -80,7 +82,10 @@ describe('usePodcastSearch', () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     server.use(
       http.get('http://localhost:3000/api/v1/discovery/search/podcasts', () =>
-        HttpResponse.json({ error: 'upstream_invalid_response', message: 'bad gateway' }, { status: 502 })
+        HttpResponse.json(
+          { error: 'upstream_invalid_response', message: 'bad gateway' },
+          { status: 502 }
+        )
       )
     )
 

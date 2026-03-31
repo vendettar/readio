@@ -2,9 +2,9 @@ import { delay, HttpResponse, http } from 'msw'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { server } from '@/__tests__/setup'
 import {
-  CLOUD_BACKEND_FALLBACK_CLASSES,
   __resetCloudBackendBreakerForTests,
   buildProxyUrl,
+  CLOUD_BACKEND_FALLBACK_CLASSES,
   checkCorsProxyHealth,
   fetchWithFallback,
 } from '../fetchUtils'
@@ -424,15 +424,12 @@ describe('fetchUtils: fetchWithFallback', () => {
     const fetchImpl = vi.fn()
 
     await expect(
-      fetchWithFallback(
-        url,
-        {
-          method: 'POST',
-          body: '{"foo":"bar"}',
-          fetchImpl: fetchImpl as unknown as typeof fetch,
-          cloudBackendFallbackClass: CLOUD_BACKEND_FALLBACK_CLASSES.TRANSCRIPT,
-        } as unknown as Parameters<typeof fetchWithFallback>[1]
-      )
+      fetchWithFallback(url, {
+        method: 'POST',
+        body: '{"foo":"bar"}',
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+        cloudBackendFallbackClass: CLOUD_BACKEND_FALLBACK_CLASSES.TRANSCRIPT,
+      } as unknown as Parameters<typeof fetchWithFallback>[1])
     ).rejects.toThrow('Cloud backend fallback does not support request bodies')
 
     expect(fetchImpl).not.toHaveBeenCalled()

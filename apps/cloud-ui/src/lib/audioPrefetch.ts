@@ -1,7 +1,4 @@
-import {
-  CLOUD_BACKEND_FALLBACK_CLASSES,
-  fetchWithFallback,
-} from './fetchUtils'
+import { CLOUD_BACKEND_FALLBACK_CLASSES, fetchWithFallback } from './fetchUtils'
 
 export const PREFETCH_ARM_THRESHOLD_SECONDS = 20
 export const PREFETCH_REARM_THRESHOLD_SECONDS = 25

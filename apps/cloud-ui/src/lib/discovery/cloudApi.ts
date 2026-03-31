@@ -1,3 +1,4 @@
+import type { ParsedFeed } from '@readio/core'
 import {
   DiscoveryPodcastSchema,
   EpisodeSchema,
@@ -8,7 +9,6 @@ import {
 import { FetchError, NetworkError } from '../fetchUtils'
 import { normalizeFeedUrl } from './feedUrl'
 import type { DiscoveryPodcast, Episode, Podcast, SearchEpisode } from './providers/types'
-import type { ParsedFeed } from '@readio/core'
 
 function buildDiscoveryURL(pathname: string, search: URLSearchParams): string {
   const query = search.toString()
@@ -34,7 +34,10 @@ async function fetchDiscoveryJSON<T>(
 
     if (!response.ok) {
       const message =
-        parsed && typeof parsed === 'object' && 'message' in parsed && typeof parsed.message === 'string'
+        parsed &&
+        typeof parsed === 'object' &&
+        'message' in parsed &&
+        typeof parsed.message === 'string'
           ? parsed.message
           : `Cloud discovery request failed: ${response.status}`
       throw new FetchError(message, pathname, response.status, 'direct')
@@ -55,7 +58,10 @@ export function fetchTopPodcasts(
   signal?: AbortSignal
 ): Promise<DiscoveryPodcast[]> {
   return fetchDiscoveryJSON(
-    buildDiscoveryURL('/api/v1/discovery/top-podcasts', new URLSearchParams({ country, limit: String(limit) })),
+    buildDiscoveryURL(
+      '/api/v1/discovery/top-podcasts',
+      new URLSearchParams({ country, limit: String(limit) })
+    ),
     (value) => {
       if (!Array.isArray(value)) {
         throw new Error('Invalid top podcasts payload')
@@ -114,7 +120,10 @@ export function fetchTopEpisodes(
   signal?: AbortSignal
 ): Promise<DiscoveryPodcast[]> {
   return fetchDiscoveryJSON(
-    buildDiscoveryURL('/api/v1/discovery/top-episodes', new URLSearchParams({ country, limit: String(limit) })),
+    buildDiscoveryURL(
+      '/api/v1/discovery/top-episodes',
+      new URLSearchParams({ country, limit: String(limit) })
+    ),
     (value) => {
       if (!Array.isArray(value)) {
         throw new Error('Invalid top episodes payload')

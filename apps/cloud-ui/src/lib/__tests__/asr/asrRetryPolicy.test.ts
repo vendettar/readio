@@ -108,7 +108,9 @@ describe('ASR Retry Policy', () => {
   it('does not retry 5xx for large chunks (>600s)', async () => {
     const error500 = new ASRClientError('Server Error', 'service_unavailable', 500)
 
-    const mockTranscribe = vi.spyOn(backendRelay, 'transcribeViaCloudRelay').mockRejectedValue(error500)
+    const mockTranscribe = vi
+      .spyOn(backendRelay, 'transcribeViaCloudRelay')
+      .mockRejectedValue(error500)
 
     await expect(
       transcribeAudioWithRetry({
@@ -144,7 +146,9 @@ describe('ASR Retry Policy', () => {
 
   it('throws ASRClientError(aborted) if aborted during backoff', async () => {
     const error429 = new ASRClientError('Rate Limit', 'rate_limited', 429, 2000, 'generic')
-    const mockTranscribe = vi.spyOn(backendRelay, 'transcribeViaCloudRelay').mockRejectedValue(error429)
+    const mockTranscribe = vi
+      .spyOn(backendRelay, 'transcribeViaCloudRelay')
+      .mockRejectedValue(error429)
 
     const controller = new AbortController()
 

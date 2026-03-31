@@ -140,7 +140,9 @@ describe('remoteTranscript ASR integration', () => {
     const audioRequests = fetchMock.mock.calls.filter(
       (call) => call[0] === 'https://example.com/audio.mp3'
     )
-    const transcribeRequests = fetchMock.mock.calls.filter((call) => call[0] === '/api/v1/asr/transcriptions')
+    const transcribeRequests = fetchMock.mock.calls.filter(
+      (call) => call[0] === '/api/v1/asr/transcriptions'
+    )
 
     expect(audioRequests).toHaveLength(1)
     expect(transcribeRequests).toHaveLength(1)
@@ -317,7 +319,9 @@ describe('remoteTranscript ASR integration', () => {
       (call) => call[0] === 'https://example.com/audio.mp3'
     )
     const proxyCalls = fetchMock.mock.calls.filter((call) => call[0] === '/api/proxy')
-    const transcribeCalls = fetchMock.mock.calls.filter((call) => call[0] === '/api/v1/asr/transcriptions')
+    const transcribeCalls = fetchMock.mock.calls.filter(
+      (call) => call[0] === '/api/v1/asr/transcriptions'
+    )
 
     expect(directAudioCalls).toHaveLength(1)
     expect(proxyCalls).toHaveLength(1)
@@ -436,7 +440,9 @@ Transcript line
       { timeout: 3000 }
     )
 
-    const firstApiHitCount = fetchMock.mock.calls.filter((c) => c[0] === '/api/v1/asr/transcriptions').length
+    const firstApiHitCount = fetchMock.mock.calls.filter(
+      (c) => c[0] === '/api/v1/asr/transcriptions'
+    ).length
     expect(firstApiHitCount).toBe(1)
 
     // Advance time by 5 seconds (5000ms), far short of 61 minutes
@@ -457,7 +463,9 @@ Transcript line
     )
 
     // Assert that the transcriber API was NOT called again
-    const totalApiHitCount = fetchMock.mock.calls.filter((c) => c[0] === '/api/v1/asr/transcriptions').length
+    const totalApiHitCount = fetchMock.mock.calls.filter(
+      (c) => c[0] === '/api/v1/asr/transcriptions'
+    ).length
     expect(totalApiHitCount).toBe(firstApiHitCount)
 
     dateSpy.mockRestore()
