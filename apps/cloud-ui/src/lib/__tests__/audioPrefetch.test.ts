@@ -352,4 +352,83 @@ describe('AudioPrefetchScheduler', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(scheduler.getState().consecutiveFailures).toBe(0)
   })
+
+  it('treats proxied 416 as EOF and stops further prefetch attempts for the source', async () => {
+    let now = 1_000
+    const fetchMock = vi.fn(async (input: string) => {
+      if (input === 'https://example.com/eof.mp3') {
+        throw new TypeError('Failed to fetch')
+      }
+
+      if (input === '/api/proxy') {
+        return new Response('', {
+          status: 416,
+          headers: {
+            'content-range': 'bytes */1000',
+          },
+        })
+      }
+
+      throw new Error(`unexpected fetch target: ${input}`)
+    })
+
+    const scheduler = new AudioPrefetchScheduler({
+      fetchImpl: fetchMock as unknown as typeof fetch,
+      now: () => now,
+      getConnection: () => ({ effectiveType: '4g' }),
+    })
+
+    await scheduler.maybePrefetch({
+      sourceId: 'https://example.com/eof.mp3',
+      sourceUrl: 'https://example.com/eof.mp3',
+      audio: createAudio(10, 0, 14),
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(scheduler.getState().consecutiveFailures).toBe(0)
+
+    now += PREFETCH_MAX_BACKOFF_MS
+    await scheduler.maybePrefetch({
+      sourceId: 'https://example.com/eof.mp3',
+      sourceUrl: 'https://example.com/eof.mp3',
+      audio: createAudio(10, 0, 40),
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('skips prefetch once known total size proves the next range would be out of bounds', async () => {
+    let now = 1_000
+    const fetchMock = vi.fn(async () => {
+      return new Response('', {
+        status: 206,
+        headers: {
+          'content-range': 'bytes 900-999/1000',
+        },
+      })
+    })
+
+    const scheduler = new AudioPrefetchScheduler({
+      fetchImpl: fetchMock as unknown as typeof fetch,
+      now: () => now,
+      getConnection: () => ({ effectiveType: '4g' }),
+    })
+
+    await scheduler.maybePrefetch({
+      sourceId: 'https://example.com/bounded.mp3',
+      sourceUrl: 'https://example.com/bounded.mp3',
+      audio: createAudio(10, 0, 14),
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    now += PREFETCH_MAX_BACKOFF_MS
+    await scheduler.maybePrefetch({
+      sourceId: 'https://example.com/bounded.mp3',
+      sourceUrl: 'https://example.com/bounded.mp3',
+      audio: createAudio(10, 0, 40),
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
 })
