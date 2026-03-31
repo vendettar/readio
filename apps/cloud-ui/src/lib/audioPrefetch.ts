@@ -87,6 +87,18 @@ function isHttpUrl(url: string): boolean {
   return /^https?:\/\//i.test(url)
 }
 
+function parseTotalBytesHint(url: string): number | null {
+  try {
+    const parsed = new URL(url)
+    const raw = parsed.searchParams.get('x-total-bytes')
+    if (!raw) return null
+    const total = Number(raw)
+    return Number.isFinite(total) && total > 0 ? Math.floor(total) : null
+  } catch {
+    return null
+  }
+}
+
 function getBufferedWindow(audio: HTMLAudioElement): PrefetchWindow | null {
   const { buffered, currentTime } = audio
   if (!buffered || buffered.length === 0) return null
@@ -215,12 +227,23 @@ export class AudioPrefetchScheduler {
       rangeStart = this.lastRangeEndByte + 1
     }
 
-    if (this.knownTotalBytes !== null && rangeStart >= this.knownTotalBytes) {
-      this.markEOF(this.knownTotalBytes)
+    const totalBytes = this.knownTotalBytes ?? parseTotalBytesHint(sourceUrl)
+    if (this.knownTotalBytes === null && totalBytes !== null) {
+      this.knownTotalBytes = totalBytes
+    }
+
+    if (totalBytes !== null && rangeStart >= totalBytes) {
+      this.markEOF(totalBytes)
       return
     }
 
-    const rangeEnd = rangeStart + bytesTarget - 1
+    let rangeEnd = rangeStart + bytesTarget - 1
+
+    // Clamp range end to known file size to avoid 416 on short files
+    if (totalBytes !== null && rangeEnd >= totalBytes) {
+      rangeEnd = totalBytes - 1
+    }
+
     const dedupeKey = `${sourceId}:${rangeStart}:${rangeEnd}`
 
     if (this.inflightKeys.has(dedupeKey)) return
