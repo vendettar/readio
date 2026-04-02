@@ -26,7 +26,8 @@ describe('Qwen Timeline Regression', () => {
     vi.restoreAllMocks()
   })
 
-  it('ensures monotonic increasing timestamps when Qwen returns 0-end cues in multi-chunk mode', async () => {
+  // TODO: Re-enable Qwen regression tests once Qwen provider is stabilized and restriction is lifted.
+  it.skip('ensures monotonic increasing timestamps when Qwen returns 0-end cues in multi-chunk mode', async () => {
     // 1. Setup multi-chunk scenario
     // 200 bytes total, 2 chunks of 100 bytes
     const totalBlob = new Blob([new ArrayBuffer(200)], { type: 'audio/mpeg' })

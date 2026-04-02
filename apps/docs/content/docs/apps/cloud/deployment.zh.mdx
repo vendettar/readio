@@ -138,6 +138,9 @@ READIO_ASR_RATE_LIMIT_BURST=60
 READIO_ASR_RATE_LIMIT_WINDOW_MS=60000
 READIO_PROXY_RATE_LIMIT_BURST=5
 READIO_PROXY_RATE_LIMIT_WINDOW_MS=60000
+# ASR Proxy Worker 配置 (可选)
+READIO_ASR_WORKER_BASE_URL=https://asr-proxy.example.workers.dev
+READIO_ASR_WORKER_SHARED_SECRET=your-high-entropy-secret-string
 EOF
 sudo chmod 600 /etc/readio/readio-cloud.env
 
@@ -322,3 +325,43 @@ READIO_TRUSTED_PROXY_CIDRS=127.0.0.1/32,::1/128
 - 浏览器本地的下载、转录和设置仍然留在浏览器本地。
 - 该工作流不会重新启用 Workbox/PWA；Cloud 当前保持 PWA 关闭。
 - 它不部署 SQLite schema、同步、认证或多节点能力。
+
+## 9. ASR 代理 (Cloudflare Workers) 配置
+
+为了规避 Provider (如 Groq) 基于 IP 的速率限制并利用分布式出口 IP，Cloud 版本支持使用可选的 Cloudflare Workers 网关作为 ASR 转写代理。
+
+该 Worker 仅作为**后端出口跳**（`apps/cloud-api` → Worker → Groq），不是浏览器直连的代理，也不是通用出站隧道。当前仅启用 **Groq 转写提交**。
+
+### 9.1 部署 Worker
+1. 在 Cloudflare 面板创建新的 Worker。
+2. 将 `apps/cloud-api/resources/workers/asr-proxy.js` 中的源码粘贴至编辑器。
+3. 在 Worker 的 **Settings -> Variables** 中添加环境变量：
+   - `READIO_ASR_WORKER_SHARED_SECRET`: 设置一个长随机高熵字符串（Secret）。
+4. 部署 Worker 并记录其公网 URL（例如 `https://asr-proxy.example.workers.dev`）。
+
+### 9.2 后端接入配置
+在 VPS 的运行时环境文件 `/etc/readio/readio-cloud.env` 中添加以下字段，使 `apps/cloud-api` 能够正确对接 ASR 代理：
+
+```bash
+# ASR Proxy Worker 的基础 URL
+READIO_ASR_WORKER_BASE_URL=https://asr-proxy.example.workers.dev
+# 必须与 Worker 侧配置的 READIO_ASR_WORKER_SHARED_SECRET 严格一致
+READIO_ASR_WORKER_SHARED_SECRET=your-high-entropy-secret-string
+```
+
+两个值都必须配置 Worker transport 才会激活。任一缺失或为空时，后端默认走 direct-to-Groq。
+
+回滚方式：清空或删除这两个值并重启服务即可。无论传输模式如何，浏览器 contract 不受影响。
+
+### 9.3 安全性说明
+- **鉴权**：后端请求 Worker 时会自动携带 `X-Readio-Cloud-Secret` Header，Worker 校验失败将拒绝转发。
+- **收敛**：Worker 源码级限制了仅允许转发至 `api.groq.com`，其他 provider 显式拒绝 (404)，不是通用代理。
+- **密钥卫生**：Worker 共享密钥和 provider API key 均不出现在日志或响应体中。
+- **性能**：Worker 使用流式透传模式处理音频 Body，支持大体积音频文件。
+
+## 10. 运维总结与边界
+
+- 该工作流假设 VPS 已经存在并完成基础系统初始化。
+- 运维人员负责管理 Cloudflare Workers 的生命周期及其 Secrets 同步。
+- 它不负责配置 nginx TLS 证书自动续期。
+- 浏览器本地数据（IndexedDB）的持久化安全性由浏览器同源策略保证，不属于后端部署边界。

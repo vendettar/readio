@@ -619,7 +619,7 @@ func TestRunCloudServerInitializesSQLiteAndShutsDownOnCancellation(t *testing.T)
 	shutdownCalled := make(chan struct{})
 	closed := make(chan struct{})
 
-	cloudOpenSQLite = func(ctx context.Context, gotPath string) (sqliteCloser, error) {
+	cloudOpenSQLite = func(_ context.Context, gotPath string) (sqliteCloser, error) {
 		openPath <- gotPath
 		return &testSQLiteHandle{closed: closed}, nil
 	}
@@ -647,7 +647,7 @@ func TestRunCloudServerInitializesSQLiteAndShutsDownOnCancellation(t *testing.T)
 		<-ctx.Done()
 		return http.ErrServerClosed
 	}
-	cloudShutdownServer = func(ctx context.Context, server *http.Server) error {
+	cloudShutdownServer = func(_ context.Context, _ *http.Server) error {
 		close(shutdownCalled)
 		return nil
 	}
@@ -764,16 +764,16 @@ func TestRunCloudServerReturnsListenErrorWithoutBlocking(t *testing.T) {
 	shutdownCalled := false
 	listenErr := errors.New("listen failed")
 
-	cloudOpenSQLite = func(ctx context.Context, gotPath string) (sqliteCloser, error) {
+	cloudOpenSQLite = func(_ context.Context, _ string) (sqliteCloser, error) {
 		return &testSQLiteHandle{closed: closed}, nil
 	}
 	cloudNewProxyService = func() *proxyService {
 		return newProxyService()
 	}
-	cloudListenAndServe = func(ctx context.Context, server *http.Server) error {
+	cloudListenAndServe = func(_ context.Context, _ *http.Server) error {
 		return listenErr
 	}
-	cloudShutdownServer = func(ctx context.Context, server *http.Server) error {
+	cloudShutdownServer = func(_ context.Context, _ *http.Server) error {
 		shutdownCalled = true
 		return nil
 	}
@@ -851,7 +851,7 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 					headers: http.Header{
 						"Content-Type": []string{"application/xml"},
 					},
-					onRequest: func(req *http.Request) {
+					onRequest: func(_ *http.Request) {
 						called++
 					},
 				},
@@ -900,7 +900,7 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 		proxy := &proxyService{
 			client: &http.Client{
 				Transport: &proxyRoundTripper{
-					onRequest: func(req *http.Request) {
+					onRequest: func(_ *http.Request) {
 						called++
 					},
 				},
@@ -949,12 +949,12 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 		proxy := &proxyService{
 			client: &http.Client{
 				Transport: &proxyRoundTripper{
-					onRequest: func(req *http.Request) {
+					onRequest: func(_ *http.Request) {
 						called++
 					},
 				},
 			},
-			lookupIP: func(ctx context.Context, host string) ([]net.IPAddr, error) {
+			lookupIP: func(_ context.Context, host string) ([]net.IPAddr, error) {
 				if host != "feeds.example.com" {
 					t.Fatalf("lookup host = %q, want %q", host, "feeds.example.com")
 				}
@@ -987,7 +987,7 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 		lookupCalls := 0
 		dialedAddress := ""
 		proxy := &proxyService{
-			lookupIP: func(ctx context.Context, host string) ([]net.IPAddr, error) {
+			lookupIP: func(_ context.Context, host string) ([]net.IPAddr, error) {
 				lookupCalls++
 				if host != "feeds.example.com" {
 					t.Fatalf("lookup host = %q, want %q", host, "feeds.example.com")
@@ -999,11 +999,11 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 
 				return []net.IPAddr{{IP: net.ParseIP("10.0.0.8")}}, nil
 			},
-			dialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+			dialContext: func(_ context.Context, _, address string) (net.Conn, error) {
 				dialedAddress = address
 				clientConn, serverConn := net.Pipe()
 				go func() {
-					defer serverConn.Close()
+					defer func() { _ = serverConn.Close() }()
 					req, err := http.ReadRequest(bufio.NewReader(serverConn))
 					if err == nil {
 						_ = req.Body.Close()
@@ -1042,7 +1042,7 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 		lookupCalls := 0
 		dialCalls := 0
 		proxy := &proxyService{
-			lookupIP: func(ctx context.Context, host string) ([]net.IPAddr, error) {
+			lookupIP: func(_ context.Context, host string) ([]net.IPAddr, error) {
 				lookupCalls++
 				if host != "feeds.example.com" {
 					t.Fatalf("lookup host = %q, want %q", host, "feeds.example.com")
@@ -1050,11 +1050,11 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 
 				return []net.IPAddr{{IP: net.ParseIP("203.0.113.10")}}, nil
 			},
-			dialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+			dialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
 				dialCalls++
 				clientConn, serverConn := net.Pipe()
 				go func() {
-					defer serverConn.Close()
+					defer func() { _ = serverConn.Close() }()
 					req, err := http.ReadRequest(bufio.NewReader(serverConn))
 					if err == nil {
 						_ = req.Body.Close()
@@ -1174,7 +1174,7 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 					headers: http.Header{
 						"Content-Type": []string{"text/plain"},
 					},
-					onRequest: func(req *http.Request) {
+					onRequest: func(_ *http.Request) {
 						calls++
 					},
 				},
@@ -1212,7 +1212,7 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 					headers: http.Header{
 						"Content-Type": []string{"application/xml"},
 					},
-					onRequest: func(req *http.Request) {
+					onRequest: func(_ *http.Request) {
 						calls++
 					},
 				},
@@ -1403,7 +1403,7 @@ func TestProxyServiceMediaFallbackContract(t *testing.T) {
 	})
 
 	t.Run("rejects unsupported proxy methods and invalid range headers", func(t *testing.T) {
-		proxy, _ := newMediaProxyTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		proxy, _ := newMediaProxyTestService(t, func(_ http.ResponseWriter, _ *http.Request) {
 			t.Fatalf("upstream should not be reached")
 		}, testPublicLookupIP)
 
@@ -1427,7 +1427,7 @@ func TestProxyServiceMediaFallbackContract(t *testing.T) {
 	})
 }
 
-func testPublicLookupIP(ctx context.Context, host string) ([]net.IPAddr, error) {
+func testPublicLookupIP(_ context.Context, _ string) ([]net.IPAddr, error) {
 	return []net.IPAddr{{IP: net.ParseIP("203.0.113.10")}}, nil
 }
 
@@ -1522,10 +1522,6 @@ func (rt *proxyRoundTripper) RoundTrip(req *http.Request) (*http.Response, error
 	headers := make(http.Header)
 	for key, values := range rt.headers {
 		headers[key] = append([]string(nil), values...)
-	}
-
-	if headers == nil {
-		headers = make(http.Header)
 	}
 
 	return &http.Response{

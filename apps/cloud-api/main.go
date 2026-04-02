@@ -165,7 +165,7 @@ var (
 	cloudNewProxyService    = newProxyService
 	cloudNewASRRelayService = newASRRelayService
 	cloudCloseSQLite        = func(db sqliteCloser) error { return db.Close() }
-	cloudListenAndServe     = func(ctx context.Context, server *http.Server) error {
+	cloudListenAndServe     = func(_ context.Context, server *http.Server) error {
 		return server.ListenAndServe()
 	}
 	cloudShutdownServer = func(ctx context.Context, server *http.Server) error {
@@ -564,7 +564,7 @@ func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeProxyError(w, http.StatusBadGateway, "upstream request failed")
 		return
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	copyProxyResponseHeaders(w.Header(), resp.Header)
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -580,7 +580,7 @@ func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (p *proxyService) parseProxyRequest(w http.ResponseWriter, r *http.Request) (*proxyRequestSpec, error) {
+func (p *proxyService) parseProxyRequest(_ http.ResponseWriter, r *http.Request) (*proxyRequestSpec, error) {
 	switch r.Method {
 	case http.MethodGet:
 		rawTarget := strings.TrimSpace(r.URL.Query().Get("url"))
@@ -968,14 +968,6 @@ func (p *proxyService) dialTarget(ctx context.Context, network, address string) 
 	return d.DialContext(ctx, network, address)
 }
 
-func remoteIP(remoteAddr string) string {
-	host, _, err := net.SplitHostPort(remoteAddr)
-	if err != nil {
-		return remoteAddr
-	}
-
-	return host
-}
 
 func writeProxyError(w http.ResponseWriter, status int, message string) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -1086,7 +1078,7 @@ func resolvePort() (string, error) {
 	return port, nil
 }
 
-func healthHandler(w http.ResponseWriter, r *http.Request) {
+func healthHandler(w http.ResponseWriter, _ *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte("ok"))
 }

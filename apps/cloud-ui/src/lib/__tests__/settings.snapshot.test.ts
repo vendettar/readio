@@ -28,8 +28,7 @@ describe('getSettingsSnapshot', () => {
     expect(snapshot).toEqual({
       asrProvider: 'groq',
       asrModel: 'whisper-large-v3',
-      asrUseCustomModel: false,
-      asrCustomModelId: '',
+
       proxyUrl: 'http://default-proxy',
       proxyAuthHeader: 'x-proxy-token',
       proxyAuthValue: 'default-token',
@@ -46,9 +45,11 @@ describe('getSettingsSnapshot', () => {
       CORS_PROXY_AUTH_VALUE: 'default-token',
     } as runtimeConfig.AppConfig)
 
+    // Groq is the only enabled provider in current rollout.
+    // normalizeAsrPreferenceValues resets any non-enabled provider to fallback.
     vi.spyOn(storage, 'getJson').mockReturnValue({
-      asrProvider: 'qwen',
-      asrModel: 'qwen3-asr-flash',
+      asrProvider: 'groq',
+      asrModel: 'whisper-large-v3-turbo',
       proxyUrl: 'http://custom-proxy',
       proxyAuthHeader: 'x-proxy-token',
       proxyAuthValue: 'custom-token',
@@ -57,10 +58,9 @@ describe('getSettingsSnapshot', () => {
     const snapshot = getSettingsSnapshot()
 
     expect(snapshot).toEqual({
-      asrProvider: 'qwen',
-      asrModel: 'qwen3-asr-flash',
-      asrUseCustomModel: false,
-      asrCustomModelId: '',
+      asrProvider: 'groq',
+      asrModel: 'whisper-large-v3-turbo',
+
       proxyUrl: 'http://custom-proxy',
       proxyAuthHeader: 'x-proxy-token',
       proxyAuthValue: 'custom-token',
@@ -102,13 +102,10 @@ describe('getSettingsSnapshot', () => {
 
     const snapshot = getSettingsSnapshot()
 
-    expect(snapshot.asrProvider).toBe('')
-    expect(snapshot.asrModel).toBe('')
-    expect(snapshot.proxyAuthHeader).toBe('x-proxy-token') // invalid header becomes "", then falls back to config which becomes normalized
-    // Wait, let's see how normalize works:
-    // normalizeAsrProvider("invalid") -> ""
-    // "" || config.ASR_PROVIDER -> config.ASR_PROVIDER
-    // normalizeAsrProvider(config.ASR_PROVIDER) -> "groq"
-    // So this is correct.
+    expect(snapshot.asrProvider).toBe('groq')
+    // Auto-selected groq model since ASR_PROVIDER is groq and input was invalid.
+    // normalizeAsrPreferenceValues picks the first model if none is provided.
+    expect(snapshot.asrModel).toBe('whisper-large-v3-turbo')
+    expect(snapshot.proxyAuthHeader).toBe('x-proxy-token')
   })
 })

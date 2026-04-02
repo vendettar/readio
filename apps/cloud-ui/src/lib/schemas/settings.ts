@@ -3,8 +3,13 @@
 
 import { z } from 'zod'
 import { SETTINGS_STORAGE_KEY } from '../../constants/storage'
-import { resolveEnabledAsrProviders } from '../asr/providerToggles'
-import { ASR_CONFIG_ERROR, isAsrProvider, validateAsrProviderModelSelection } from '../asr/registry'
+import { defaultAsrProvider, resolveEnabledAsrProviders } from '../asr/providerToggles'
+import {
+  ASR_CONFIG_ERROR,
+  getAsrModelsForProvider,
+  isAsrProvider,
+  validateAsrProviderModelSelection,
+} from '../asr/registry'
 import type { ASRProvider } from '../asr/types'
 import { translate } from '../i18nUtils'
 import { getAppConfig } from '../runtimeConfig'
@@ -36,59 +41,28 @@ export function normalizeAsrModel(value: unknown): string {
   return value.trim()
 }
 
-export function normalizeAsrUseCustomModel(value: unknown): boolean {
-  return value === true
-}
-
-export function normalizeAsrPreferenceValues(raw: {
-  asrProvider: unknown
-  asrModel: unknown
-  asrUseCustomModel: unknown
-  asrCustomModelId: unknown
-}): {
+export function normalizeAsrPreferenceValues(raw: { asrProvider: unknown; asrModel: unknown }): {
   asrProvider: ASRProvider | ''
   asrModel: string
-  asrUseCustomModel: boolean
-  asrCustomModelId: string
 } {
-  const asrProvider = normalizeAsrProvider(raw.asrProvider)
-  const asrModel = normalizeAsrModel(raw.asrModel)
-  const asrUseCustomModel = normalizeAsrUseCustomModel(raw.asrUseCustomModel)
-  const asrCustomModelId = normalizeAsrModel(raw.asrCustomModelId)
-
-  if (!asrProvider) {
-    return {
-      asrProvider: '',
-      asrModel: '',
-      asrUseCustomModel: false,
-      asrCustomModelId: '',
-    }
-  }
+  let asrProvider = normalizeAsrProvider(raw.asrProvider)
+  let asrModel = normalizeAsrModel(raw.asrModel)
 
   const enabledProviders = getEnabledAsrProviders()
-  if (!enabledProviders.includes(asrProvider)) {
-    return {
-      asrProvider: '',
-      asrModel: '',
-      asrUseCustomModel: false,
-      asrCustomModelId: '',
+
+  // Forced single provider auto-selection
+  if (enabledProviders.length === 1 && enabledProviders[0] === defaultAsrProvider && !asrProvider) {
+    asrProvider = defaultAsrProvider
+    const models = getAsrModelsForProvider(defaultAsrProvider)
+    if (models.length > 0 && !asrModel) {
+      asrModel = models[0]
     }
   }
 
-  if (asrUseCustomModel) {
-    if (!asrCustomModelId) {
-      return {
-        asrProvider,
-        asrModel: '',
-        asrUseCustomModel: true,
-        asrCustomModelId: '',
-      }
-    }
+  if (asrProvider && !enabledProviders.includes(asrProvider)) {
     return {
-      asrProvider,
+      asrProvider: '',
       asrModel: '',
-      asrUseCustomModel: true,
-      asrCustomModelId,
     }
   }
 
@@ -96,31 +70,24 @@ export function normalizeAsrPreferenceValues(raw: {
     return {
       asrProvider,
       asrModel: '',
-      asrUseCustomModel: false,
-      asrCustomModelId: '',
     }
   }
 
   const pairValidation = validateAsrProviderModelSelection({
     asrProvider,
     asrModel,
-    asrUseCustomModel: false,
-    asrCustomModelId: '',
   })
+
   if (!pairValidation.ok) {
     return {
       asrProvider,
       asrModel: '',
-      asrUseCustomModel: false,
-      asrCustomModelId: '',
     }
   }
 
   return {
     asrProvider,
     asrModel,
-    asrUseCustomModel: false,
-    asrCustomModelId: '',
   }
 }
 
@@ -136,8 +103,6 @@ export function createSettingsFormSchema() {
     .object({
       asrProvider: z.string().trim(),
       asrModel: z.string().trim(),
-      asrUseCustomModel: z.boolean(),
-      asrCustomModelId: z.string().trim(),
       asrKey: z.string().trim(),
       translateKey: z.string().refine((val) => val === '' || val.startsWith('sk-'), {
         message: translate('validationApiKeyPrefix'),
@@ -165,17 +130,24 @@ export function createSettingsFormSchema() {
     .superRefine((values, ctx) => {
       const provider = values.asrProvider.trim()
       const model = values.asrModel.trim()
-      const customModel = values.asrCustomModelId.trim()
-      const useCustom = values.asrUseCustomModel
+      const asrKey = values.asrKey.trim()
 
-      const asrDisabled = !provider && !model && !customModel && !useCustom
+      if (provider === defaultAsrProvider && asrKey !== '') {
+        if (!asrKey.startsWith('gsk_') || asrKey.length !== 56) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: translate('validationGroqKeyInvalid'),
+            path: ['asrKey'],
+          })
+        }
+      }
+
+      const asrDisabled = !provider && !model
       if (asrDisabled) return
 
       const validation = validateAsrProviderModelSelection({
         asrProvider: provider,
         asrModel: model,
-        asrUseCustomModel: useCustom,
-        asrCustomModelId: customModel,
       })
 
       if (validation.ok) {
@@ -201,10 +173,8 @@ export function createSettingsFormSchema() {
       if (validation.code === ASR_CONFIG_ERROR.UNCONFIGURED_MODEL) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          message: useCustom
-            ? translate('validationCustomModelRequired')
-            : translate('validationModelRequired'),
-          path: useCustom ? ['asrCustomModelId'] : ['asrModel'],
+          message: translate('validationModelRequired'),
+          path: ['asrModel'],
         })
         return
       }
@@ -224,8 +194,6 @@ export type SettingsPreferenceValues = Pick<
   SettingsFormValues,
   | 'asrProvider'
   | 'asrModel'
-  | 'asrUseCustomModel'
-  | 'asrCustomModelId'
   | 'proxyUrl'
   | 'proxyAuthHeader'
   | 'proxyAuthValue'
@@ -235,32 +203,21 @@ export type SettingsPreferenceValues = Pick<
 export function getSettingsSnapshot(): SettingsPreferenceValues {
   const config = getAppConfig()
   const stored = getJson<SettingsPreferenceValues>(SETTINGS_STORAGE_KEY)
-  const hasStoredAsrSelection =
-    !!stored &&
-    ('asrProvider' in stored ||
-      'asrModel' in stored ||
-      'asrUseCustomModel' in stored ||
-      'asrCustomModelId' in stored)
+  const hasStoredAsrSelection = !!stored && ('asrProvider' in stored || 'asrModel' in stored)
   const rawAsr = hasStoredAsrSelection
     ? {
         asrProvider: stored?.asrProvider,
         asrModel: stored?.asrModel,
-        asrUseCustomModel: stored?.asrUseCustomModel,
-        asrCustomModelId: stored?.asrCustomModelId,
       }
     : {
         asrProvider: config.ASR_PROVIDER,
         asrModel: config.ASR_MODEL,
-        asrUseCustomModel: false,
-        asrCustomModelId: '',
       }
   const normalizedAsr = normalizeAsrPreferenceValues(rawAsr)
 
   return {
     asrProvider: normalizedAsr.asrProvider,
     asrModel: normalizedAsr.asrModel,
-    asrUseCustomModel: normalizedAsr.asrUseCustomModel,
-    asrCustomModelId: normalizedAsr.asrCustomModelId,
     proxyUrl: stored?.proxyUrl ?? config.CORS_PROXY_URL ?? '',
     proxyAuthHeader:
       normalizeProxyAuthHeader(stored?.proxyAuthHeader) ||
@@ -270,13 +227,11 @@ export function getSettingsSnapshot(): SettingsPreferenceValues {
   }
 }
 
-// Storage keys for settings persistence
-// In-memory epoch counter for settings — bumped on wipeAll() to invalidate
-// stale async writes captured before the wipe.
 let settingsWriteEpoch = 0
 export function getSettingsWriteEpoch(): number {
   return settingsWriteEpoch
 }
+
 export function bumpSettingsWriteEpoch(): void {
   settingsWriteEpoch += 1
 }

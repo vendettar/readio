@@ -113,8 +113,6 @@ In `normalizeAsrPreferenceValues`:
 - If stored provider is now disabled, clear:
   - `asrProvider`
   - `asrModel`
-  - `asrUseCustomModel`
-  - `asrCustomModelId`
 
 ### 5) UI Visibility
 In `AsrSettingsSection.tsx`:

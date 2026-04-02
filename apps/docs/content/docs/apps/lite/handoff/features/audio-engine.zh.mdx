@@ -154,15 +154,13 @@ title: 音频引擎与同步
     - 不允许 silent all-open 回退：无效开关配置不会扩大 provider 可用范围。
   - 开关解析逻辑集中在 `lib/asr/providerToggles.ts`（单一解析源）。
   - 被禁用 provider 会在 Settings 隐藏，并在运行时入口（`transcribeAudioWithRetry`、`verifyAsrKey`）被 fail-closed 拦截为 `client_error`。
-- **设置契约**：
+ - **设置契约**：
   - `asrProvider`
   - `asrModel`（allowlist 模式）
-  - `asrUseCustomModel: boolean`
-  - `asrCustomModelId: string`（custom 模式）
   - ASR API Key 读取顺序为：`credentials` 表优先，运行时环境变量兜底。
 - **校验与归一化契约（Instruction 126）**：
   - 必须先选 provider，后选 model。
-  - 除非显式启用 custom 模式，否则 model 必须属于当前 provider 的 allowlist。
+  - model 必须属于当前 provider 的 allowlist。
   - 持久化中不合法的 provider/model 组合在读写与运行时边界执行 fail-closed 归一化（首发策略下不引入历史数据迁移/回填分支）。
 - **Key 优先级**：
   - 用户写入后的 IndexedDB `credentials` 为权威来源。

@@ -20,8 +20,7 @@ function Harness({ defaults }: { defaults?: Partial<SettingsFormValues> }) {
       proxyAuthValue: '',
       asrProvider: '',
       asrModel: '',
-      asrUseCustomModel: false,
-      asrCustomModelId: '',
+
       asrKey: '',
       translateKey: '',
       ...defaults,

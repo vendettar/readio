@@ -1,3 +1,4 @@
+// Package main provides the cloud-api server.
 package main
 
 import (
@@ -28,6 +29,11 @@ const asrRelayPublicTokenEnv = "READIO_ASR_RELAY_PUBLIC_TOKEN"
 const asrRelayAllowedOriginsEnv = "READIO_ASR_ALLOWED_ORIGINS"
 const asrRelayRateLimitBurstEnv = "READIO_ASR_RATE_LIMIT_BURST"
 const asrRelayRateLimitWindowMsEnv = "READIO_ASR_RATE_LIMIT_WINDOW_MS"
+
+const asrWorkerBaseURLEnv = "READIO_ASR_WORKER_BASE_URL"
+const asrWorkerSharedSecretEnv = "READIO_ASR_WORKER_SHARED_SECRET"
+const asrWorkerSecretHeader = "X-Readio-Cloud-Secret"
+const asrWorkerGroqRoute = "/relay/groq/transcriptions"
 
 const asrRelayBodyLimit = 20 << 20
 const asrRelayRequestTimeout = 60 * time.Second
@@ -92,14 +98,16 @@ type asrRelayErrorPayload struct {
 }
 
 type asrRelayService struct {
-	client           *http.Client
-	timeout          time.Duration
-	bodyLimit        int64
-	providers        map[string]asrRelayProviderConfig
-	limiter          *rateLimiter
-	allowedOrigins   map[string]struct{}
-	relayPublicToken string
-	trustedProxies   trustedProxySet
+	client             *http.Client
+	timeout            time.Duration
+	bodyLimit          int64
+	providers          map[string]asrRelayProviderConfig
+	limiter            *rateLimiter
+	allowedOrigins     map[string]struct{}
+	relayPublicToken   string
+	trustedProxies     trustedProxySet
+	workerBaseURL      string
+	workerSharedSecret string
 }
 
 func newASRRelayService() *asrRelayService {
@@ -107,15 +115,26 @@ func newASRRelayService() *asrRelayService {
 	if burst <= 0 {
 		slog.Warn("application-layer rate limiting disabled for ASR relay", "READIO_ASR_RATE_LIMIT_BURST", burst)
 	}
+
+	workerBase := strings.TrimSpace(os.Getenv(asrWorkerBaseURLEnv))
+	workerSecret := strings.TrimSpace(os.Getenv(asrWorkerSharedSecretEnv))
+	if workerBase != "" && workerSecret != "" {
+		slog.Info("ASR worker transport enabled", "baseURL", workerBase)
+	} else {
+		slog.Info("ASR worker transport disabled (env not configured)")
+	}
+
 	return &asrRelayService{
-		client:           &http.Client{},
-		timeout:          asrRelayRequestTimeout,
-		bodyLimit:        asrRelayBodyLimit,
-		providers:        defaultASRRelayProviders(),
-		limiter:          newRateLimiter(burst, resolveASRRelayRateLimitWindow(), time.Now),
-		allowedOrigins:   resolveASRRelayAllowedOrigins(),
-		relayPublicToken: strings.TrimSpace(os.Getenv(asrRelayPublicTokenEnv)),
-		trustedProxies:   loadTrustedProxySet(slog.Default()),
+		client:             &http.Client{},
+		timeout:            asrRelayRequestTimeout,
+		bodyLimit:          asrRelayBodyLimit,
+		providers:          defaultASRRelayProviders(),
+		limiter:            newRateLimiter(burst, resolveASRRelayRateLimitWindow(), time.Now),
+		allowedOrigins:     resolveASRRelayAllowedOrigins(),
+		relayPublicToken:   strings.TrimSpace(os.Getenv(asrRelayPublicTokenEnv)),
+		trustedProxies:     loadTrustedProxySet(slog.Default()),
+		workerBaseURL:      workerBase,
+		workerSharedSecret: workerSecret,
 	}
 }
 
@@ -133,44 +152,47 @@ func defaultASRRelayProviders() map[string]asrRelayProviderConfig {
 			},
 			transport: "openai-compatible",
 		},
-		"qwen": {
-			id:             "qwen",
-			label:          "Qwen",
-			transcribeURL:  "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
-			verifyURL:      "https://dashscope.aliyuncs.com/compatible-mode/v1/models",
-			responseFormat: "chat",
-			allowedModels: map[string]struct{}{
-				"qwen3-asr-flash":    {},
-				"qwen3-asr-flash-us": {},
+		// TODO: Temporarily block other providers until they are fully stabilized.
+		/*
+			"qwen": {
+				id:             "qwen",
+				label:          "Qwen",
+				transcribeURL:  "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+				verifyURL:      "https://dashscope.aliyuncs.com/compatible-mode/v1/models",
+				responseFormat: "chat",
+				allowedModels: map[string]struct{}{
+					"qwen3-asr-flash":    {},
+					"qwen3-asr-flash-us": {},
+				},
+				transport: "qwen-chat-completions",
 			},
-			transport: "qwen-chat-completions",
-		},
-		"deepgram": {
-			id:             "deepgram",
-			label:          "Deepgram",
-			transcribeURL:  "https://api.deepgram.com/v1/listen",
-			verifyURL:      "https://api.deepgram.com/v1/projects",
-			responseFormat: "json",
-			allowedModels: map[string]struct{}{
-				"nova-3":  {},
-				"nova-2":  {},
-				"nova":    {},
-				"base":    {},
-				"whisper": {},
+			"deepgram": {
+				id:             "deepgram",
+				label:          "Deepgram",
+				transcribeURL:  "https://api.deepgram.com/v1/listen",
+				verifyURL:      "https://api.deepgram.com/v1/projects",
+				responseFormat: "json",
+				allowedModels: map[string]struct{}{
+					"nova-3":  {},
+					"nova-2":  {},
+					"nova":    {},
+					"base":    {},
+					"whisper": {},
+				},
+				transport: "deepgram-native",
 			},
-			transport: "deepgram-native",
-		},
-		"volcengine": {
-			id:             "volcengine",
-			label:          "Volcengine",
-			transcribeURL:  "https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash",
-			verifyURL:      "https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash",
-			responseFormat: "json",
-			allowedModels: map[string]struct{}{
-				"bigmodel": {},
+			"volcengine": {
+				id:             "volcengine",
+				label:          "Volcengine",
+				transcribeURL:  "https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash",
+				verifyURL:      "https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash",
+				responseFormat: "json",
+				allowedModels: map[string]struct{}{
+					"bigmodel": {},
+				},
+				transport: "volcengine-asr",
 			},
-			transport: "volcengine-asr",
-		},
+		*/
 	}
 }
 
@@ -443,7 +465,7 @@ func (s *asrRelayService) decodeMultipartRelayPayload(
 			Message: "missing audio payload",
 		}
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	audioBytes, err := io.ReadAll(file)
 	if err != nil || len(audioBytes) == 0 {
@@ -505,8 +527,13 @@ func (s *asrRelayService) transcribe(ctx context.Context, payload asrRelayReques
 		audioMimeType = "audio/mpeg"
 	}
 
+	transportMode := "direct"
+	if s.asrWorkerTransportEnabled() && provider.id == "groq" {
+		transportMode = "worker"
+	}
+
 	logger := slog.Default()
-	logger.Info("asr relay request", "provider", provider.id, "model", model, "audioBytes", len(audioBytes))
+	logger.Info("asr relay request", "provider", provider.id, "model", model, "audioBytes", len(audioBytes), "transport", transportMode)
 
 	client := s.client
 	if client == nil {
@@ -521,9 +548,48 @@ func (s *asrRelayService) transcribe(ctx context.Context, payload asrRelayReques
 	reqCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
+	// Worker transport: only Groq transcription submit.
+	if transportMode == "worker" {
+		start := time.Now()
+		result, relayErr, hopError := s.transcribeViaWorker(reqCtx, client, provider, model, apiKey, audioBytes, audioMimeType)
+		duration := time.Since(start)
+		if relayErr != nil {
+			if hopError {
+				// Worker hop itself failed (network, auth, misconfigured).
+				// Fall through to direct transport.
+				logger.Warn("asr worker hop failed, falling back to direct",
+					"provider", provider.id, "duration_ms", duration.Milliseconds(),
+					"status", relayErr.Status, "code", relayErr.Code)
+			} else {
+				// Groq upstream error transparently forwarded by Worker.
+				// Do NOT retry via direct — same Groq error would recur,
+				// wasting rate-limit budget and duplicating paid upstream work.
+				logger.Warn("asr worker transport returned upstream error",
+					"provider", provider.id, "duration_ms", duration.Milliseconds(),
+					"status", relayErr.Status, "code", relayErr.Code)
+				return nil, relayErr
+			}
+		} else {
+			logger.Info("asr worker transport success",
+				"provider", provider.id, "duration_ms", duration.Milliseconds())
+			return result, nil
+		}
+	}
+
 	switch provider.transport {
 	case "openai-compatible":
-		return s.transcribeOpenAICompatible(reqCtx, client, provider, model, apiKey, audioBytes, audioMimeType)
+		start := time.Now()
+		result, relayErr := s.transcribeOpenAICompatible(reqCtx, client, provider, model, apiKey, audioBytes, audioMimeType)
+		duration := time.Since(start)
+		if relayErr != nil {
+			logger.Warn("asr direct transport failed",
+				"provider", provider.id, "duration_ms", duration.Milliseconds(),
+				"status", relayErr.Status, "code", relayErr.Code)
+		} else {
+			logger.Info("asr direct transport success",
+				"provider", provider.id, "duration_ms", duration.Milliseconds())
+		}
+		return result, relayErr
 	case "qwen-chat-completions":
 		return s.transcribeQwen(reqCtx, client, provider, model, apiKey, audioBytes, audioMimeType)
 	case "deepgram-native":
@@ -533,6 +599,120 @@ func (s *asrRelayService) transcribe(ctx context.Context, payload asrRelayReques
 	default:
 		return nil, &asrRelayErrorPayload{Status: http.StatusBadRequest, Code: "invalid_payload", Message: "unsupported provider transport"}
 	}
+}
+
+// asrWorkerTransportEnabled returns true when both Worker base URL
+// and shared secret are configured, enabling the Worker egress hop.
+func (s *asrRelayService) asrWorkerTransportEnabled() bool {
+	return s.workerBaseURL != "" && s.workerSharedSecret != ""
+}
+
+// transcribeViaWorker sends audio to the Cloudflare Worker egress hop,
+// which forwards to the Groq upstream. The request body is built as
+// the same multipart/form-data that Groq expects, so the Worker can
+// stream it through without buffering or parsing.
+//
+// The third return value (hopError) distinguishes Worker-hop failures
+// (network, auth, misconfigured — fallback-eligible) from transparent
+// Groq upstream errors (not fallback-eligible, since direct would fail
+// the same way and waste rate-limit budget).
+func (s *asrRelayService) transcribeViaWorker(
+	ctx context.Context,
+	client *http.Client,
+	provider asrRelayProviderConfig,
+	model string,
+	apiKey string,
+	audioBytes []byte,
+	audioMimeType string,
+) (*asrRelayResponsePayload, *asrRelayErrorPayload, bool) {
+	// Build the same multipart body that transcribeOpenAICompatible builds.
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	fileName := "input.mp3"
+	if strings.Contains(strings.ToLower(audioMimeType), "wav") {
+		fileName = "input.wav"
+	}
+	part, err := writer.CreateFormFile("file", fileName)
+	if err != nil {
+		return nil, asrRelayInternalError("failed to build worker transcription request"), true
+	}
+	if _, err := part.Write(audioBytes); err != nil {
+		return nil, asrRelayInternalError("failed to build worker transcription request"), true
+	}
+	_ = writer.WriteField("model", model)
+	_ = writer.WriteField("response_format", provider.responseFormat)
+	_ = writer.WriteField("temperature", "0")
+	_ = writer.WriteField("timestamp_granularities[]", "segment")
+	_ = writer.WriteField("timestamp_granularities[]", "word")
+	if err := writer.Close(); err != nil {
+		return nil, asrRelayInternalError("failed to build worker transcription request"), true
+	}
+
+	workerURL := strings.TrimRight(s.workerBaseURL, "/") + asrWorkerGroqRoute
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, workerURL, &body)
+	if err != nil {
+		return nil, asrRelayInternalError("failed to create worker request"), true
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set(asrWorkerSecretHeader, s.workerSharedSecret)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		// Network-level failure reaching the Worker: hop error, fallback-eligible.
+		return nil, mapASRRelayTransportError(err), true
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	// Detect Worker-hop errors vs transparent Groq responses.
+	//
+	// Rule: 401 (with Worker's own body) and any 5xx are treated as
+	// hop errors (fallback-eligible).
+	// We treat 5xx as hop errors because even if it's a real Groq 5xx,
+	// retrying direct is safer than assuming the Worker's 5xx is from Groq.
+	// (Groq only returns 5xx for rare infra issues).
+	// Most notably, 502/504 from the Worker itself reaching Groq must be retried.
+	if resp.StatusCode >= 500 {
+		return nil, &asrRelayErrorPayload{
+			Status:  http.StatusServiceUnavailable,
+			Code:    "service_unavailable",
+			Message: "worker hop failed or upstream unavailable",
+		}, true
+	}
+
+	// Also treat Worker's own auth failure as a hop error.
+	if resp.StatusCode == http.StatusUnauthorized {
+		// Peek at the body to distinguish Worker auth error vs Groq auth error.
+		bodyBytes, readErr := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		if readErr == nil {
+			var workerErr struct {
+				Error string `json:"error"`
+			}
+			if json.Unmarshal(bodyBytes, &workerErr) == nil && (workerErr.Error == "unauthorized" || workerErr.Error == "misconfigured") {
+				// Worker rejected our secret or is misconfigured — hop error.
+				return nil, &asrRelayErrorPayload{
+					Status:  http.StatusServiceUnavailable,
+					Code:    "service_unavailable",
+					Message: "worker auth failed or misconfigured",
+				}, true
+			}
+		}
+		// Otherwise it's Groq's 401 forwarded through the Worker.
+		return nil, &asrRelayErrorPayload{
+			Status:  http.StatusUnauthorized,
+			Code:    "unauthorized",
+			Message: "provider rejected credentials",
+		}, false
+	}
+
+	// All other responses: parse as transparent Groq response.
+	result, relayErr := parseOpenAICompatibleRelayResponse(resp, provider, model)
+	if relayErr != nil {
+		// All non-500 upstream errors (429, 400, etc.) are NOT fallback-eligible.
+		return nil, relayErr, false
+	}
+	return result, nil, false
 }
 
 func (s *asrRelayService) verify(ctx context.Context, payload asrVerifyRequestPayload) (bool, *asrRelayErrorPayload) {
@@ -615,7 +795,7 @@ func (s *asrRelayService) transcribeOpenAICompatible(
 	if err != nil {
 		return nil, mapASRRelayTransportError(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	return parseOpenAICompatibleRelayResponse(resp, provider, model)
 }
@@ -661,7 +841,7 @@ func (s *asrRelayService) transcribeQwen(
 	if err != nil {
 		return nil, mapASRRelayTransportError(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	return parseQwenRelayResponse(resp, provider, model)
 }
@@ -698,7 +878,7 @@ func (s *asrRelayService) transcribeDeepgram(
 	if err != nil {
 		return nil, mapASRRelayTransportError(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	return parseDeepgramRelayResponse(resp, provider, model)
 }
@@ -710,15 +890,15 @@ func (s *asrRelayService) transcribeVolcengine(
 	model string,
 	apiKey string,
 	audioBytes []byte,
-	audioMimeType string,
+	_ string,
 ) (*asrRelayResponsePayload, *asrRelayErrorPayload) {
-	appId, accessToken, err := parseVolcengineRelayCredentials(apiKey)
+	appID, accessToken, err := parseVolcengineRelayCredentials(apiKey)
 	if err != nil {
 		return nil, &asrRelayErrorPayload{Status: http.StatusUnauthorized, Code: "unauthorized", Message: err.Error()}
 	}
 
 	body := map[string]any{
-		"user":    map[string]any{"uid": appId},
+		"user":    map[string]any{"uid": appID},
 		"audio":   map[string]any{"data": base64.StdEncoding.EncodeToString(audioBytes)},
 		"request": map[string]any{"model_name": model},
 	}
@@ -727,7 +907,7 @@ func (s *asrRelayService) transcribeVolcengine(
 	if err != nil {
 		return nil, asrRelayInternalError("failed to create upstream request")
 	}
-	req.Header.Set("X-Api-App-Key", appId)
+	req.Header.Set("X-Api-App-Key", appID)
 	req.Header.Set("X-Api-Access-Key", accessToken)
 	req.Header.Set("X-Api-Resource-Id", "volc.bigasr.auc_turbo")
 	req.Header.Set("X-Api-Request-Id", newRelayRequestID())
@@ -738,7 +918,7 @@ func (s *asrRelayService) transcribeVolcengine(
 	if err != nil {
 		return nil, mapASRRelayTransportError(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	return parseVolcengineRelayResponse(resp, provider, model)
 }
@@ -759,7 +939,7 @@ func (s *asrRelayService) verifyOpenAICompatible(
 	if err != nil {
 		return false, mapASRRelayTransportError(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 		return false, nil
@@ -795,7 +975,7 @@ func (s *asrRelayService) verifyDeepgram(
 	if err != nil {
 		return false, mapASRRelayTransportError(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 		return false, nil
@@ -812,13 +992,13 @@ func (s *asrRelayService) verifyVolcengine(
 	provider asrRelayProviderConfig,
 	apiKey string,
 ) (bool, *asrRelayErrorPayload) {
-	appId, accessToken, err := parseVolcengineRelayCredentials(apiKey)
+	appID, accessToken, err := parseVolcengineRelayCredentials(apiKey)
 	if err != nil {
 		return false, &asrRelayErrorPayload{Status: http.StatusUnauthorized, Code: "unauthorized", Message: err.Error()}
 	}
 
 	body := map[string]any{
-		"user":    map[string]any{"uid": appId},
+		"user":    map[string]any{"uid": appID},
 		"audio":   map[string]any{"data": base64.StdEncoding.EncodeToString(minimalSilentWAVBytes())},
 		"request": map[string]any{"model_name": "bigmodel"},
 	}
@@ -827,7 +1007,7 @@ func (s *asrRelayService) verifyVolcengine(
 	if err != nil {
 		return false, asrRelayInternalError("failed to create upstream request")
 	}
-	req.Header.Set("X-Api-App-Key", appId)
+	req.Header.Set("X-Api-App-Key", appID)
 	req.Header.Set("X-Api-Access-Key", accessToken)
 	req.Header.Set("X-Api-Resource-Id", "volc.bigasr.auc_turbo")
 	req.Header.Set("X-Api-Request-Id", newRelayRequestID())
@@ -837,7 +1017,7 @@ func (s *asrRelayService) verifyVolcengine(
 	if err != nil {
 		return false, mapASRRelayTransportError(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
 		return false, nil
@@ -1206,7 +1386,7 @@ func parseRetryAfterHeader(value string) *int64 {
 		return &ms
 	}
 	if t, err := http.ParseTime(value); err == nil {
-		ms := t.Sub(time.Now()).Milliseconds()
+		ms := time.Until(t).Milliseconds()
 		if ms < 0 {
 			ms = 0
 		}
@@ -1218,12 +1398,12 @@ func parseRetryAfterHeader(value string) *int64 {
 func parseVolcengineRelayCredentials(apiKey string) (string, string, error) {
 	separator := strings.Index(apiKey, ":")
 	if separator <= 0 || separator >= len(apiKey)-1 {
-		return "", "", fmt.Errorf("Volcengine API key must be in the format %q", "appId:accessToken")
+		return "", "", fmt.Errorf("volcengine API key must be in the format %q", "appId:accessToken")
 	}
 	appID := strings.TrimSpace(apiKey[:separator])
 	accessToken := strings.TrimSpace(apiKey[separator+1:])
 	if appID == "" || accessToken == "" {
-		return "", "", fmt.Errorf("Volcengine API key must be in the format %q", "appId:accessToken")
+		return "", "", fmt.Errorf("volcengine API key must be in the format %q", "appId:accessToken")
 	}
 	return appID, accessToken, nil
 }

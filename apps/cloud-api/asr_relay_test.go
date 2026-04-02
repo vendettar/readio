@@ -141,7 +141,7 @@ func TestASRRelayRouteOwnershipAndContracts(t *testing.T) {
 
 		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {
-				backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 					w.WriteHeader(tc.statusCode)
 					_, _ = io.WriteString(w, "boom")
 				}))
@@ -171,7 +171,7 @@ func TestASRRelayRouteOwnershipAndContracts(t *testing.T) {
 	})
 
 	t.Run("maps provider 5xx errors to service unavailable", func(t *testing.T) {
-		backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusBadGateway)
 			_, _ = io.WriteString(w, "upstream boom")
 		}))
@@ -245,7 +245,7 @@ func TestASRRelayRouteOwnershipAndContracts(t *testing.T) {
 	})
 
 	t.Run("maps provider unauthorized verify responses to structured unauthorized errors", func(t *testing.T) {
-		backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusUnauthorized)
 			_, _ = io.WriteString(w, "nope")
 		}))
@@ -346,7 +346,7 @@ func TestASRRelayRouteOwnershipAndContracts(t *testing.T) {
 		}
 		relay.limiter = newRateLimiter(1, time.Minute, func() time.Time { return time.Unix(0, 0) })
 
-		backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"language": "en",
 				"duration": 1.0,
@@ -451,7 +451,7 @@ func TestASRRelayCredentialsStayTransient(t *testing.T) {
 			slog.SetDefault(oldLogger)
 		})
 
-		backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusUnauthorized)
 			_, _ = io.WriteString(w, "upstream unauthorized")
 		}))
@@ -565,6 +565,450 @@ type multipartASRRelayRequestPayload struct {
 	AudioBytes    []byte
 	AudioMimeType string
 }
+
+func TestASRWorkerTransport(t *testing.T) {
+	t.Run("worker transport disabled when env not configured", func(t *testing.T) {
+		relay := newASRRelayService()
+		relay.workerBaseURL = ""
+		relay.workerSharedSecret = ""
+
+		if relay.asrWorkerTransportEnabled() {
+			t.Fatal("expected worker transport to be disabled")
+		}
+	})
+
+	t.Run("worker transport disabled when only base URL set", func(t *testing.T) {
+		relay := newASRRelayService()
+		relay.workerBaseURL = "https://worker.example.com"
+		relay.workerSharedSecret = ""
+
+		if relay.asrWorkerTransportEnabled() {
+			t.Fatal("expected worker transport to be disabled without secret")
+		}
+	})
+
+	t.Run("worker transport disabled when only secret set", func(t *testing.T) {
+		relay := newASRRelayService()
+		relay.workerBaseURL = ""
+		relay.workerSharedSecret = "test-secret"
+
+		if relay.asrWorkerTransportEnabled() {
+			t.Fatal("expected worker transport to be disabled without base URL")
+		}
+	})
+
+	t.Run("worker transport enabled when both env vars set", func(t *testing.T) {
+		relay := newASRRelayService()
+		relay.workerBaseURL = "https://worker.example.com"
+		relay.workerSharedSecret = "test-secret"
+
+		if !relay.asrWorkerTransportEnabled() {
+			t.Fatal("expected worker transport to be enabled")
+		}
+	})
+
+	t.Run("groq transcription routed through worker when enabled", func(t *testing.T) {
+		workerCalls := 0
+		workerServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			workerCalls++
+
+			if got := r.URL.Path; got != asrWorkerGroqRoute {
+				t.Fatalf("worker path = %q, want %q", got, asrWorkerGroqRoute)
+			}
+			if r.Method != http.MethodPost {
+				t.Fatalf("worker method = %q, want POST", r.Method)
+			}
+			if got := r.Header.Get(asrWorkerSecretHeader); got != "test-worker-secret" {
+				t.Fatalf("worker secret = %q, want %q", got, "test-worker-secret")
+			}
+			if got := r.Header.Get("Authorization"); got != "Bearer groq-key" {
+				t.Fatalf("authorization = %q, want %q", got, "Bearer groq-key")
+			}
+			if ct := r.Header.Get("Content-Type"); !strings.HasPrefix(ct, "multipart/form-data") {
+				t.Fatalf("content-type = %q, want multipart/form-data", ct)
+			}
+
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"language": "en",
+				"duration": 5.0,
+				"segments": []map[string]any{
+					{"start": 0, "end": 2.5, "text": "hello from worker"},
+				},
+			})
+		}))
+		t.Cleanup(workerServer.Close)
+
+		relay := newASRRelayService()
+		relay.workerBaseURL = workerServer.URL
+		relay.workerSharedSecret = "test-worker-secret"
+
+		rr := httptest.NewRecorder()
+		req := newMultipartASRRelayRequest(t, multipartASRRelayRequestPayload{
+			Provider:      "groq",
+			Model:         "whisper-large-v3",
+			APIKey:        "groq-key",
+			AudioBytes:    []byte("test-audio"),
+			AudioMimeType: "audio/mpeg",
+		})
+		relay.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d, body = %s", rr.Code, http.StatusOK, rr.Body.String())
+		}
+		if workerCalls != 1 {
+			t.Fatalf("worker calls = %d, want 1", workerCalls)
+		}
+
+		var payload asrRelayResponsePayload
+		if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("unmarshal response: %v", err)
+		}
+		if payload.Provider != "groq" || payload.Model != "whisper-large-v3" {
+			t.Fatalf("payload provider/model = %q/%q", payload.Provider, payload.Model)
+		}
+		if len(payload.Cues) != 1 || payload.Cues[0].Text != "hello from worker" {
+			t.Fatalf("payload cues = %#v", payload.Cues)
+		}
+	})
+
+	t.Run("worker failure falls back to direct-to-groq", func(t *testing.T) {
+		workerCalls := 0
+		workerServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			workerCalls++
+			w.WriteHeader(http.StatusBadGateway)
+			_, _ = io.WriteString(w, "worker down")
+		}))
+		t.Cleanup(workerServer.Close)
+
+		directCalls := 0
+		directBackend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			directCalls++
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"language": "en",
+				"duration": 3.0,
+				"segments": []map[string]any{
+					{"start": 0, "end": 1.5, "text": "hello from direct"},
+				},
+			})
+		}))
+		t.Cleanup(directBackend.Close)
+
+		relay := newASRRelayService()
+		relay.workerBaseURL = workerServer.URL
+		relay.workerSharedSecret = "test-worker-secret"
+		provider := relay.providers["groq"]
+		provider.transcribeURL = directBackend.URL + "/openai/v1/audio/transcriptions"
+		relay.providers["groq"] = provider
+
+		rr := httptest.NewRecorder()
+		req := newMultipartASRRelayRequest(t, multipartASRRelayRequestPayload{
+			Provider:      "groq",
+			Model:         "whisper-large-v3",
+			APIKey:        "groq-key",
+			AudioBytes:    []byte("test-audio"),
+			AudioMimeType: "audio/mpeg",
+		})
+		relay.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d, body = %s", rr.Code, http.StatusOK, rr.Body.String())
+		}
+		if workerCalls != 1 {
+			t.Fatalf("worker calls = %d, want 1", workerCalls)
+		}
+		if directCalls != 1 {
+			t.Fatalf("direct calls = %d, want 1 (fallback)", directCalls)
+		}
+
+		var payload asrRelayResponsePayload
+		if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
+			t.Fatalf("unmarshal response: %v", err)
+		}
+		if len(payload.Cues) != 1 || payload.Cues[0].Text != "hello from direct" {
+			t.Fatalf("expected fallback response, got cues = %#v", payload.Cues)
+		}
+	})
+
+	t.Run("direct path used when worker env not configured", func(t *testing.T) {
+		directCalls := 0
+		directBackend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			directCalls++
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"language": "en",
+				"duration": 2.0,
+				"segments": []map[string]any{
+					{"start": 0, "end": 1.0, "text": "direct only"},
+				},
+			})
+		}))
+		t.Cleanup(directBackend.Close)
+
+		relay := newASRRelayService()
+		relay.workerBaseURL = ""
+		relay.workerSharedSecret = ""
+		provider := relay.providers["groq"]
+		provider.transcribeURL = directBackend.URL + "/openai/v1/audio/transcriptions"
+		relay.providers["groq"] = provider
+
+		rr := httptest.NewRecorder()
+		req := newMultipartASRRelayRequest(t, multipartASRRelayRequestPayload{
+			Provider:      "groq",
+			Model:         "whisper-large-v3",
+			APIKey:        "groq-key",
+			AudioBytes:    []byte("test-audio"),
+			AudioMimeType: "audio/mpeg",
+		})
+		relay.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+		}
+		if directCalls != 1 {
+			t.Fatalf("direct calls = %d, want 1", directCalls)
+		}
+	})
+
+	t.Run("verify stays direct-to-groq even when worker enabled", func(t *testing.T) {
+		workerCalls := 0
+		workerServer := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+			workerCalls++
+			t.Fatal("worker should not be called for verify")
+		}))
+		t.Cleanup(workerServer.Close)
+
+		directVerifyCalls := 0
+		directBackend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			directVerifyCalls++
+			w.WriteHeader(http.StatusOK)
+			_, _ = io.WriteString(w, `{"data":[]}`)
+		}))
+		t.Cleanup(directBackend.Close)
+
+		relay := newASRRelayService()
+		relay.workerBaseURL = workerServer.URL
+		relay.workerSharedSecret = "test-worker-secret"
+		provider := relay.providers["groq"]
+		provider.verifyURL = directBackend.URL + "/openai/v1/models"
+		relay.providers["groq"] = provider
+
+		rr := httptest.NewRecorder()
+		req := newASRVerifyRequest(t, asrVerifyRequestPayload{
+			Provider: "groq",
+			APIKey:   "groq-key",
+		})
+		relay.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+		}
+		if workerCalls != 0 {
+			t.Fatalf("worker calls = %d, want 0 (verify must stay direct)", workerCalls)
+		}
+		if directVerifyCalls != 1 {
+			t.Fatalf("direct verify calls = %d, want 1", directVerifyCalls)
+		}
+	})
+
+	t.Run("worker transport does not leak shared secret or api key in response or logs", func(t *testing.T) {
+		const secretAPIKey = "super-secret-api-key-99"
+		const workerSecret = "worker-secret-42"
+
+		var logs bytes.Buffer
+		oldLogger := slog.Default()
+		slog.SetDefault(slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
+		t.Cleanup(func() {
+			slog.SetDefault(oldLogger)
+		})
+
+		workerServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"language": "en",
+				"duration": 1.0,
+				"segments": []map[string]any{
+					{"start": 0, "end": 1.0, "text": "ok"},
+				},
+			})
+		}))
+		t.Cleanup(workerServer.Close)
+
+		relay := newASRRelayService()
+		relay.workerBaseURL = workerServer.URL
+		relay.workerSharedSecret = workerSecret
+
+		rr := httptest.NewRecorder()
+		req := newMultipartASRRelayRequest(t, multipartASRRelayRequestPayload{
+			Provider:      "groq",
+			Model:         "whisper-large-v3",
+			APIKey:        secretAPIKey,
+			AudioBytes:    []byte("test-audio"),
+			AudioMimeType: "audio/mpeg",
+		})
+		relay.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+		}
+		if strings.Contains(rr.Body.String(), secretAPIKey) {
+			t.Fatal("response leaked api key")
+		}
+		if strings.Contains(rr.Body.String(), workerSecret) {
+			t.Fatal("response leaked worker secret")
+		}
+		if strings.Contains(logs.String(), secretAPIKey) {
+			t.Fatal("logs leaked api key")
+		}
+		if strings.Contains(logs.String(), workerSecret) {
+			t.Fatal("logs leaked worker secret")
+		}
+	})
+
+	t.Run("groq upstream errors via worker do NOT trigger direct fallback", func(t *testing.T) {
+		// Groq 429 forwarded by Worker should not cause a second direct attempt.
+		workerCalls := 0
+		workerServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			workerCalls++
+			w.WriteHeader(http.StatusTooManyRequests)
+			_, _ = io.WriteString(w, "groq rate limited")
+		}))
+		t.Cleanup(workerServer.Close)
+
+		directCalls := 0
+		directBackend := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
+			directCalls++
+			t.Fatal("direct backend should NOT be called for transparent Groq errors")
+		}))
+		t.Cleanup(directBackend.Close)
+
+		relay := newASRRelayService()
+		relay.workerBaseURL = workerServer.URL
+		relay.workerSharedSecret = "test-secret"
+		provider := relay.providers["groq"]
+		provider.transcribeURL = directBackend.URL + "/openai/v1/audio/transcriptions"
+		relay.providers["groq"] = provider
+
+		rr := httptest.NewRecorder()
+		req := newMultipartASRRelayRequest(t, multipartASRRelayRequestPayload{
+			Provider:      "groq",
+			Model:         "whisper-large-v3",
+			APIKey:        "groq-key",
+			AudioBytes:    []byte("test-audio"),
+			AudioMimeType: "audio/mpeg",
+		})
+		relay.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusTooManyRequests {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusTooManyRequests)
+		}
+		if workerCalls != 1 {
+			t.Fatalf("worker calls = %d, want 1", workerCalls)
+		}
+		if directCalls != 0 {
+			t.Fatalf("direct calls = %d, want 0 (no fallback for Groq errors)", directCalls)
+		}
+	})
+
+	t.Run("worker 502 hop error triggers fallback to direct", func(t *testing.T) {
+		workerCalls := 0
+		workerServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			workerCalls++
+			w.WriteHeader(http.StatusBadGateway)
+			_, _ = io.WriteString(w, `{"error":"upstream_error","message":"upstream request failed"}`)
+		}))
+		t.Cleanup(workerServer.Close)
+
+		directCalls := 0
+		directBackend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			directCalls++
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"language": "en",
+				"duration": 1.0,
+				"segments": []map[string]any{
+					{"start": 0, "end": 1.0, "text": "fallback success"},
+				},
+			})
+		}))
+		t.Cleanup(directBackend.Close)
+
+		relay := newASRRelayService()
+		relay.workerBaseURL = workerServer.URL
+		relay.workerSharedSecret = "test-secret"
+		provider := relay.providers["groq"]
+		provider.transcribeURL = directBackend.URL + "/openai/v1/audio/transcriptions"
+		relay.providers["groq"] = provider
+
+		rr := httptest.NewRecorder()
+		req := newMultipartASRRelayRequest(t, multipartASRRelayRequestPayload{
+			Provider:      "groq",
+			Model:         "whisper-large-v3",
+			APIKey:        "groq-key",
+			AudioBytes:    []byte("test-audio"),
+			AudioMimeType: "audio/mpeg",
+		})
+		relay.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d (should fallback on 502)", rr.Code, http.StatusOK)
+		}
+		if workerCalls != 1 {
+			t.Fatalf("worker calls = %d, want 1", workerCalls)
+		}
+		if directCalls != 1 {
+			t.Fatalf("direct calls = %d, want 1 (fallback)", directCalls)
+		}
+	})
+
+	t.Run("worker auth failure triggers fallback to direct", func(t *testing.T) {
+		workerCalls := 0
+		workerServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			workerCalls++
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = io.WriteString(w, `{"error":"unauthorized","message":"invalid or missing shared secret"}`)
+		}))
+		t.Cleanup(workerServer.Close)
+
+		directCalls := 0
+		directBackend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			directCalls++
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"language": "en",
+				"duration": 1.0,
+				"segments": []map[string]any{
+					{"start": 0, "end": 1.0, "text": "fallback after worker auth fail"},
+				},
+			})
+		}))
+		t.Cleanup(directBackend.Close)
+
+		relay := newASRRelayService()
+		relay.workerBaseURL = workerServer.URL
+		relay.workerSharedSecret = "wrong-secret"
+		provider := relay.providers["groq"]
+		provider.transcribeURL = directBackend.URL + "/openai/v1/audio/transcriptions"
+		relay.providers["groq"] = provider
+
+		rr := httptest.NewRecorder()
+		req := newMultipartASRRelayRequest(t, multipartASRRelayRequestPayload{
+			Provider:      "groq",
+			Model:         "whisper-large-v3",
+			APIKey:        "groq-key",
+			AudioBytes:    []byte("test-audio"),
+			AudioMimeType: "audio/mpeg",
+		})
+		relay.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d (should fallback on worker auth fail)", rr.Code, http.StatusOK)
+		}
+		if workerCalls != 1 {
+			t.Fatalf("worker calls = %d, want 1", workerCalls)
+		}
+		if directCalls != 1 {
+			t.Fatalf("direct calls = %d, want 1 (fallback)", directCalls)
+		}
+	})
+}
+
 
 func newMultipartASRRelayRequest(t *testing.T, payload multipartASRRelayRequestPayload) *http.Request {
 	t.Helper()

@@ -138,6 +138,9 @@ READIO_ASR_RATE_LIMIT_BURST=60
 READIO_ASR_RATE_LIMIT_WINDOW_MS=60000
 READIO_PROXY_RATE_LIMIT_BURST=5
 READIO_PROXY_RATE_LIMIT_WINDOW_MS=60000
+# ASR Proxy Worker config (optional)
+READIO_ASR_WORKER_BASE_URL=https://asr-proxy.example.workers.dev
+READIO_ASR_WORKER_SHARED_SECRET=your-high-entropy-secret-string
 EOF
 sudo chmod 600 /etc/readio/readio-cloud.env
 
@@ -322,3 +325,43 @@ Each layer operates independently. Go's rate limiter targets the real browser cl
 - Browser-local downloads, transcripts, and settings remain browser-local.
 - It does not re-enable Workbox/PWA in this workflow; Cloud currently keeps PWA disabled.
 - It does not deploy SQLite schema, sync, auth, or multi-node features.
+
+## 9. ASR Proxy (Cloudflare Workers) Configuration
+
+To mitigate IP-based rate limiting from providers (e.g., Groq) and leverage distributed egress IPs, the Cloud version supports an optional Cloudflare Workers gateway as an ASR transcription proxy.
+
+This Worker is a **backend egress hop only** (`apps/cloud-api` → Worker → Groq). It is not a browser-facing proxy and not a generic outbound tunnel. The current rollout only enables **Groq transcription submit**.
+
+### 9.1 Deploying the Worker
+1. Create a new Worker in the Cloudflare dashboard.
+2. Paste the `asr-proxy.js` source code from `apps/cloud-api/resources/workers/asr-proxy.js`.
+3. Add the following environment variable in the Worker's **Settings -> Variables**:
+   - `READIO_ASR_WORKER_SHARED_SECRET`: A long, high-entropy random string (Secret).
+4. Deploy the Worker and note its public URL (e.g., `https://asr-proxy.example.workers.dev`).
+
+### 9.2 Backend Integration Config
+Add the following fields to your VPS runtime environment file at `/etc/readio/readio-cloud.env` to allow `apps/cloud-api` to connect to the ASR proxy:
+
+```bash
+# The base URL of your ASR Proxy Worker
+READIO_ASR_WORKER_BASE_URL=https://asr-proxy.example.workers.dev
+# MUST strictly match the READIO_ASR_WORKER_SHARED_SECRET configured in the Worker
+READIO_ASR_WORKER_SHARED_SECRET=your-high-entropy-secret-string
+```
+
+Both values must be configured for the Worker transport to activate. If either is missing or empty, the backend defaults to direct-to-Groq.
+
+To rollback: clear or remove these two values and restart the service. The browser contract is unchanged regardless of transport mode.
+
+### 9.3 Security Best Practices
+- **Authentication**: Backend requests to the Worker automatically include the `X-Readio-Cloud-Secret` header; the Worker rejects any request where this is missing or incorrect.
+- **Convergence**: The Worker source code restricts forwarding to `api.groq.com` only. Other providers are explicitly rejected (404). The Worker is not a generic proxy.
+- **Secret hygiene**: Neither the Worker shared secret nor the provider API key appear in logs or response bodies on either side.
+- **Performance**: The Worker uses a stream-through pattern for audio bodies, ensuring it stays well within the CPU limit and supports large audio files.
+
+## 10. Operational Boundaries
+
+- This workflow assumes the VPS already exists and has undergone basic system initialization.
+- The operator is responsible for managing the Cloudflare Workers lifecycle and its secrets.
+- It does not configure nginx TLS certificate auto-renewal.
+- The security of browser-local data (IndexedDB) is guaranteed by the browser same-origin policy and is outside the backend deployment scope.
