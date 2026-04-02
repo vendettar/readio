@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as SubscriptionsRouteImport } from './routes/subscriptions'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SearchRouteImport } from './routes/search'
+import { Route as OpsRouteImport } from './routes/ops'
 import { Route as LegalRouteImport } from './routes/legal'
 import { Route as HistoryRouteImport } from './routes/history'
 import { Route as FilesRouteImport } from './routes/files'
@@ -42,6 +43,11 @@ const SettingsRoute = SettingsRouteImport.update({
 const SearchRoute = SearchRouteImport.update({
   id: '/search',
   path: '/search',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OpsRoute = OpsRouteImport.update({
+  id: '/ops',
+  path: '/ops',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LegalRoute = LegalRouteImport.update({
@@ -136,6 +142,7 @@ export interface FileRoutesByFullPath {
   '/files': typeof FilesRouteWithChildren
   '/history': typeof HistoryRoute
   '/legal': typeof LegalRouteWithChildren
+  '/ops': typeof OpsRoute
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/subscriptions': typeof SubscriptionsRoute
@@ -156,6 +163,7 @@ export interface FileRoutesByTo {
   '/favorites': typeof FavoritesRoute
   '/history': typeof HistoryRoute
   '/legal': typeof LegalRouteWithChildren
+  '/ops': typeof OpsRoute
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/subscriptions': typeof SubscriptionsRoute
@@ -177,6 +185,7 @@ export interface FileRoutesById {
   '/files': typeof FilesRouteWithChildren
   '/history': typeof HistoryRoute
   '/legal': typeof LegalRouteWithChildren
+  '/ops': typeof OpsRoute
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/subscriptions': typeof SubscriptionsRoute
@@ -200,6 +209,7 @@ export interface FileRouteTypes {
     | '/files'
     | '/history'
     | '/legal'
+    | '/ops'
     | '/search'
     | '/settings'
     | '/subscriptions'
@@ -220,6 +230,7 @@ export interface FileRouteTypes {
     | '/favorites'
     | '/history'
     | '/legal'
+    | '/ops'
     | '/search'
     | '/settings'
     | '/subscriptions'
@@ -240,6 +251,7 @@ export interface FileRouteTypes {
     | '/files'
     | '/history'
     | '/legal'
+    | '/ops'
     | '/search'
     | '/settings'
     | '/subscriptions'
@@ -262,6 +274,7 @@ export interface RootRouteChildren {
   FilesRoute: typeof FilesRouteWithChildren
   HistoryRoute: typeof HistoryRoute
   LegalRoute: typeof LegalRouteWithChildren
+  OpsRoute: typeof OpsRoute
   SearchRoute: typeof SearchRoute
   SettingsRoute: typeof SettingsRoute
   SubscriptionsRoute: typeof SubscriptionsRoute
@@ -288,6 +301,13 @@ declare module '@tanstack/react-router' {
       path: '/search'
       fullPath: '/search'
       preLoaderRoute: typeof SearchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ops': {
+      id: '/ops'
+      path: '/ops'
+      fullPath: '/ops'
+      preLoaderRoute: typeof OpsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/legal': {
@@ -464,6 +484,7 @@ const rootRouteChildren: RootRouteChildren = {
   FilesRoute: FilesRouteWithChildren,
   HistoryRoute: HistoryRoute,
   LegalRoute: LegalRouteWithChildren,
+  OpsRoute: OpsRoute,
   SearchRoute: SearchRoute,
   SettingsRoute: SettingsRoute,
   SubscriptionsRoute: SubscriptionsRoute,
