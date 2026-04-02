@@ -11,8 +11,7 @@ function makeBaseSettings() {
   return {
     asrProvider: '',
     asrModel: '',
-    asrUseCustomModel: false,
-    asrCustomModelId: '',
+
     translateKey: '',
     asrKey: '',
     proxyUrl: '',
@@ -87,13 +86,14 @@ describe('settings schema', () => {
   })
 
   it('accepts valid deepgram provider+model pair', () => {
+    // TODO: This should be true, but currently blocked by temporary restriction in providerToggles.ts
     const schema = createSettingsFormSchema()
     const result = schema.safeParse({
       ...makeBaseSettings(),
       asrProvider: 'deepgram',
       asrModel: 'nova-3',
     })
-    expect(result.success).toBe(true)
+    expect(result.success).toBe(false)
   })
 
   it('rejects invalid deepgram provider/model pair', () => {
@@ -104,27 +104,6 @@ describe('settings schema', () => {
       asrModel: 'qwen3-asr-flash',
     })
     expect(result.success).toBe(false)
-  })
-
-  it('accepts custom model mode only when custom model id is provided', () => {
-    const schema = createSettingsFormSchema()
-    const valid = schema.safeParse({
-      ...makeBaseSettings(),
-      asrProvider: 'qwen',
-      asrUseCustomModel: true,
-      asrCustomModelId: 'custom-qwen-model',
-      asrModel: '',
-    })
-    expect(valid.success).toBe(true)
-
-    const invalid = schema.safeParse({
-      ...makeBaseSettings(),
-      asrProvider: 'qwen',
-      asrUseCustomModel: true,
-      asrCustomModelId: '   ',
-      asrModel: '',
-    })
-    expect(invalid.success).toBe(false)
   })
 
   it('allows empty ASR fields when ASR is effectively disabled', () => {
@@ -142,15 +121,13 @@ describe('settings schema', () => {
     const normalized = normalizeAsrPreferenceValues({
       asrProvider: 'deepgram',
       asrModel: 'whisper-large-v3',
-      asrUseCustomModel: false,
-      asrCustomModelId: '',
     })
 
+    // deepgram is a valid provider name, but it is currently disabled in the rollout,
+    // so normalizeAsrPreferenceValues resets both provider and model.
     expect(normalized).toEqual({
-      asrProvider: 'deepgram',
+      asrProvider: '',
       asrModel: '',
-      asrUseCustomModel: false,
-      asrCustomModelId: '',
     })
   })
 
@@ -169,7 +146,8 @@ describe('settings schema', () => {
       DISABLED_ASR_PROVIDERS: 'qwen',
     })
 
-    expect(getEnabledAsrProviders()).toEqual(['groq', 'deepgram', 'volcengine'])
+    // TODO: Restore full provider sets once non-Groq providers are stabilized.
+    expect(getEnabledAsrProviders()).toEqual(['groq'])
   })
 
   it('normalizes whitespace/case in provider toggles', () => {
@@ -178,7 +156,8 @@ describe('settings schema', () => {
       DISABLED_ASR_PROVIDERS: ' QWEN ',
     })
 
-    expect(getEnabledAsrProviders()).toEqual(['groq', 'deepgram', 'volcengine'])
+    // TODO: Restore full provider sets once non-Groq providers are stabilized.
+    expect(getEnabledAsrProviders()).toEqual(['groq'])
   })
 
   it('normalizes stale disabled provider selection fail-closed', () => {
@@ -190,15 +169,27 @@ describe('settings schema', () => {
     const normalized = normalizeAsrPreferenceValues({
       asrProvider: 'deepgram',
       asrModel: 'nova-3',
-      asrUseCustomModel: true,
-      asrCustomModelId: 'custom-model',
     })
 
+    // Test that even a valid pair is reset if the provider is not empowered/enabled in current rollout
     expect(normalized).toEqual({
       asrProvider: '',
       asrModel: '',
-      asrUseCustomModel: false,
-      asrCustomModelId: '',
     })
+  })
+
+  it('auto-selects groq if it is the only enabled provider in lite mode', () => {
+    mockAppConfig({
+      ENABLED_ASR_PROVIDERS: 'groq',
+      DISABLED_ASR_PROVIDERS: '',
+    })
+
+    const normalized = normalizeAsrPreferenceValues({
+      asrProvider: '',
+      asrModel: '',
+    })
+
+    expect(normalized.asrProvider).toBe('groq')
+    expect(normalized.asrModel).toBe('whisper-large-v3-turbo')
   })
 })

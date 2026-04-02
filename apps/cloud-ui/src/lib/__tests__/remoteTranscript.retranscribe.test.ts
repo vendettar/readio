@@ -52,8 +52,6 @@ function seedAsrSettings() {
     JSON.stringify({
       asrProvider: 'groq',
       asrModel: 'whisper-large-v3',
-      asrUseCustomModel: false,
-      asrCustomModelId: '',
       proxyUrl: '',
     })
   )

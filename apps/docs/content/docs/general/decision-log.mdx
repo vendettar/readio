@@ -704,12 +704,7 @@ description: Architecture decisions and rationale.
   - `/models` endpoint remains useful for key-validity checks without coupling user configuration semantics to remote catalog volatility.
 - **Credential Binding Note**:
   - provider-to-credential lookup is centralized in ASR domain flow; UI/runtime must not hardcode provider-specific credential branches.
-- **Risk Notes (Custom Model Mode)**:
-  - custom mode (`asrUseCustomModel + asrCustomModelId`) is intentionally explicit and opt-in.
-  - main risk is invalid freeform model IDs; mitigated by fail-closed validation (`unconfigured_provider`, `unconfigured_model`, `invalid_provider_model_pair`) before verify/runtime execution.
-- **Rollback Policy**:
-  - first-release policy applies: no legacy migration/backfill.
-  - rollback path is configuration-level (disable custom mode or reset invalid selections), not data migration.
+
 
 ## D104 — Overflow Menu Item Icon Alignment (3-dot Menus) [Implemented]
 - **Decision**:

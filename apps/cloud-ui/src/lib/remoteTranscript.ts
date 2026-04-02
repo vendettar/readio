@@ -87,8 +87,6 @@ const ASR_LOCAL_SUBTITLE_PREFIX = 'ASR'
 interface AsrSettingsSnapshot {
   asrProvider: ASRProvider | ''
   asrModel: string
-  asrUseCustomModel: boolean
-  asrCustomModelId: string
 }
 
 type OnlineAsrTrigger = 'auto' | 'manual'
@@ -162,8 +160,6 @@ export function getAsrSettingsSnapshot(): AsrSettingsSnapshot {
   return {
     asrProvider: snapshot.asrProvider as ASRProvider | '',
     asrModel: effectiveModel,
-    asrUseCustomModel: snapshot.asrUseCustomModel,
-    asrCustomModelId: snapshot.asrCustomModelId,
   }
 }
 
@@ -589,8 +585,6 @@ async function resolveAsrApiKeyAndSettings(): Promise<
   const selectionValidation = validateAsrProviderModelSelection({
     asrProvider: settings.asrProvider,
     asrModel: settings.asrModel,
-    asrUseCustomModel: settings.asrUseCustomModel,
-    asrCustomModelId: settings.asrCustomModelId,
   })
   if (!selectionValidation.ok) {
     return { ok: false, reasonCode: selectionValidation.code }

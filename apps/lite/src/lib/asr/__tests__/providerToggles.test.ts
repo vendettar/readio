@@ -12,26 +12,28 @@ describe('asr provider toggles resolver', () => {
   })
 
   it('supports all/asterisk/empty semantics', () => {
+    // TODO: Restore full provider sets once non-Groq providers are stabilized.
+    // Currently limited to ['groq'] by temporary restriction in providerToggles.ts.
     expect(
       resolveEnabledAsrProviders({
         ENABLED_ASR_PROVIDERS: '',
         DISABLED_ASR_PROVIDERS: '',
       })
-    ).toEqual(['groq', 'qwen', 'deepgram', 'volcengine'])
+    ).toEqual(['groq'])
 
     expect(
       resolveEnabledAsrProviders({
         ENABLED_ASR_PROVIDERS: '*',
         DISABLED_ASR_PROVIDERS: '',
       })
-    ).toEqual(['groq', 'qwen', 'deepgram', 'volcengine'])
+    ).toEqual(['groq'])
 
     expect(
       resolveEnabledAsrProviders({
         ENABLED_ASR_PROVIDERS: 'all',
         DISABLED_ASR_PROVIDERS: '',
       })
-    ).toEqual(['groq', 'qwen', 'deepgram', 'volcengine'])
+    ).toEqual(['groq'])
   })
 
   it('normalizes whitespace/case and deduplicates tokens', () => {
@@ -40,7 +42,8 @@ describe('asr provider toggles resolver', () => {
       DISABLED_ASR_PROVIDERS: ' QWEN, qwen ',
     })
 
-    expect(enabled).toEqual(['groq', 'deepgram'])
+    // qwen is disabled via DISABLED_ASR_PROVIDERS, DEEPGRAM is filtered out by temporary Groq-only restriction.
+    expect(enabled).toEqual(['groq'])
   })
 
   it('ignores unknown tokens defensively without expanding availability', () => {
@@ -60,7 +63,8 @@ describe('asr provider toggles resolver', () => {
 
     expect(isAsrProviderEnabled('groq', config)).toBe(true)
     expect(isAsrProviderEnabled('qwen', config)).toBe(false)
-    expect(isAsrProviderEnabled('deepgram', config)).toBe(true)
-    expect(isAsrProviderEnabled('volcengine', config)).toBe(true)
+    // TODO: Re-enable deepgram/volcengine in tests once stabilized and restriction is lifted.
+    expect(isAsrProviderEnabled('deepgram', config)).toBe(false)
+    expect(isAsrProviderEnabled('volcengine', config)).toBe(false)
   })
 })

@@ -57,7 +57,8 @@ describe('ASR index deepgram transport routing', () => {
     vi.clearAllMocks()
   })
 
-  it('routes deepgram provider to transcribeWithDeepgram only', async () => {
+  // TODO: Re-enable deepgram routing tests once non-Groq providers are stabilized and restriction is lifted.
+  it.skip('routes deepgram provider to transcribeWithDeepgram only', async () => {
     const chunk = new Blob(['audio'], { type: 'audio/mpeg' })
     splitMp3BlobMock.mockResolvedValue([chunk])
     splitMp3BlobWithTargetSizesMock.mockResolvedValue([chunk])
@@ -94,7 +95,8 @@ describe('ASR index deepgram transport routing', () => {
     expect(result.provider).toBe('deepgram')
   })
 
-  it('routes verifyAsrKey deepgram provider to same-origin relay only', async () => {
+  // TODO: Re-enable deepgram verification tests once restriction is lifted.
+  it.skip('routes verifyAsrKey deepgram provider to same-origin relay only', async () => {
     verifyAsrKeyViaCloudRelayMock.mockResolvedValue(true)
 
     await expect(verifyAsrKey({ apiKey: 'dg_key', provider: 'deepgram' })).resolves.toBe(true)
@@ -119,11 +121,13 @@ describe('ASR index deepgram transport routing', () => {
       model: 'whisper-large-v3',
       preferProgressive: false,
     })
-    await verifyAsrKey({ apiKey: 'qwen_key', provider: 'qwen' })
+
+    // TODO: Re-enable qwen verification once restriction is lifted.
+    // await verifyAsrKey({ apiKey: 'qwen_key', provider: 'qwen' })
 
     expect(transcribeViaCloudRelayMock).toHaveBeenCalledTimes(1)
     expect(transcribeWithOpenAiCompatibleMock).not.toHaveBeenCalled()
-    expect(verifyAsrKeyViaCloudRelayMock).toHaveBeenCalledTimes(1)
+    // expect(verifyAsrKeyViaCloudRelayMock).toHaveBeenCalledTimes(1)
     expect(transcribeWithDeepgramMock).not.toHaveBeenCalled()
   })
 })

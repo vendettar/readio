@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -38,7 +39,8 @@ func newDiscoveryFeedFixtureService(
 		timeout:   timeout,
 		userAgent: discoveryUserAgent,
 		bodyLimit: discoveryBodyLimit,
-		lookupIP: func(ctx context.Context, lookupHost string) ([]net.IPAddr, error) {
+		cache:     newDiscoveryCache(discoveryCacheMaxKeys),
+		lookupIP: func(_ context.Context, lookupHost string) ([]net.IPAddr, error) {
 			if lookupHost != host {
 				t.Fatalf("lookup host = %q, want %q", lookupHost, host)
 			}
@@ -87,6 +89,7 @@ func TestDiscoveryServiceTopPodcastsNormalizesPayload(t *testing.T) {
 		lookupBaseURL: discoveryLookupBaseURL,
 		userAgent:     discoveryUserAgent,
 		bodyLimit:     discoveryBodyLimit,
+		cache:         newDiscoveryCache(discoveryCacheMaxKeys),
 	}
 
 	rr := httptest.NewRecorder()
@@ -142,6 +145,7 @@ func TestDiscoveryServiceTopEpisodesNormalizesPayload(t *testing.T) {
 		lookupBaseURL: discoveryLookupBaseURL,
 		userAgent:     discoveryUserAgent,
 		bodyLimit:     discoveryBodyLimit,
+		cache:         newDiscoveryCache(discoveryCacheMaxKeys),
 	}
 
 	rr := httptest.NewRecorder()
@@ -200,6 +204,7 @@ func TestDiscoveryServiceLookupPodcastNormalizesPayloadAndNullMiss(t *testing.T)
 			lookupBaseURL: discoveryLookupBaseURL,
 			userAgent:     discoveryUserAgent,
 			bodyLimit:     discoveryBodyLimit,
+			cache:         newDiscoveryCache(discoveryCacheMaxKeys),
 		}
 
 		rr := httptest.NewRecorder()
@@ -224,7 +229,7 @@ func TestDiscoveryServiceLookupPodcastNormalizesPayloadAndNullMiss(t *testing.T)
 	t.Run("returns null when upstream has no matching podcast", func(t *testing.T) {
 		service := &discoveryService{
 			client: &http.Client{
-				Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+				Transport: discoveryRoundTripper(func(_ *http.Request) (*http.Response, error) {
 					return jsonResponse(http.StatusOK, `{"results":[]}`), nil
 				}),
 			},
@@ -233,6 +238,7 @@ func TestDiscoveryServiceLookupPodcastNormalizesPayloadAndNullMiss(t *testing.T)
 			lookupBaseURL: discoveryLookupBaseURL,
 			userAgent:     discoveryUserAgent,
 			bodyLimit:     discoveryBodyLimit,
+			cache:         newDiscoveryCache(discoveryCacheMaxKeys),
 		}
 
 		rr := httptest.NewRecorder()
@@ -305,6 +311,7 @@ func TestDiscoveryServiceLookupPodcastsByIDsPreservesRequestedOrder(t *testing.T
 		lookupBaseURL: discoveryLookupBaseURL,
 		userAgent:     discoveryUserAgent,
 		bodyLimit:     discoveryBodyLimit,
+		cache:         newDiscoveryCache(discoveryCacheMaxKeys),
 	}
 
 	rr := httptest.NewRecorder()
@@ -365,6 +372,7 @@ func TestDiscoveryServiceLookupPodcastEpisodesNormalizesPayload(t *testing.T) {
 		lookupBaseURL: discoveryLookupBaseURL,
 		userAgent:     discoveryUserAgent,
 		bodyLimit:     discoveryBodyLimit,
+		cache:         newDiscoveryCache(discoveryCacheMaxKeys),
 	}
 
 	rr := httptest.NewRecorder()
@@ -425,7 +433,7 @@ func TestDiscoveryServiceFeedUsesValidatedDialTargets(t *testing.T) {
 
 	unrestrictedClientUsed := false
 	service.client = &http.Client{
-		Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+		Transport: discoveryRoundTripper(func(_ *http.Request) (*http.Response, error) {
 			unrestrictedClientUsed = true
 			return textResponse(http.StatusOK, `<rss><channel><title>wrong</title></channel></rss>`, "application/xml"), nil
 		}),
@@ -497,7 +505,7 @@ func TestDiscoveryServiceFeedNormalizesParsedPayload(t *testing.T) {
 		},
 	)
 	service.client = &http.Client{
-		Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+		Transport: discoveryRoundTripper(func(_ *http.Request) (*http.Response, error) {
 			return nil, errors.New("unexpected unrestricted client usage")
 		}),
 	}
@@ -587,6 +595,7 @@ func TestDiscoveryServiceSearchPodcastsNormalizesPayload(t *testing.T) {
 		searchBaseURL: discoverySearchBaseURL,
 		userAgent:     discoveryUserAgent,
 		bodyLimit:     discoveryBodyLimit,
+		cache:         newDiscoveryCache(discoveryCacheMaxKeys),
 	}
 
 	rr := httptest.NewRecorder()
@@ -611,7 +620,7 @@ func TestDiscoveryServiceSearchPodcastsNormalizesPayload(t *testing.T) {
 func TestDiscoveryServiceSearchPodcastsFiltersIrrelevantFallbackResults(t *testing.T) {
 	service := &discoveryService{
 		client: &http.Client{
-			Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+			Transport: discoveryRoundTripper(func(_ *http.Request) (*http.Response, error) {
 				return jsonResponse(http.StatusOK, `{
 					"results": [
 						{
@@ -638,6 +647,7 @@ func TestDiscoveryServiceSearchPodcastsFiltersIrrelevantFallbackResults(t *testi
 		searchBaseURL: discoverySearchBaseURL,
 		userAgent:     discoveryUserAgent,
 		bodyLimit:     discoveryBodyLimit,
+		cache:         newDiscoveryCache(discoveryCacheMaxKeys),
 	}
 
 	rr := httptest.NewRecorder()
@@ -699,6 +709,7 @@ func TestDiscoveryServiceSearchEpisodesNormalizesPayload(t *testing.T) {
 		searchBaseURL: discoverySearchBaseURL,
 		userAgent:     discoveryUserAgent,
 		bodyLimit:     discoveryBodyLimit,
+		cache:         newDiscoveryCache(discoveryCacheMaxKeys),
 	}
 
 	rr := httptest.NewRecorder()
@@ -723,7 +734,7 @@ func TestDiscoveryServiceSearchEpisodesNormalizesPayload(t *testing.T) {
 func TestDiscoveryServiceSearchEpisodesFiltersIrrelevantFallbackResults(t *testing.T) {
 	service := &discoveryService{
 		client: &http.Client{
-			Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+			Transport: discoveryRoundTripper(func(_ *http.Request) (*http.Response, error) {
 				return jsonResponse(http.StatusOK, `{
 					"results": [
 						{
@@ -756,6 +767,7 @@ func TestDiscoveryServiceSearchEpisodesFiltersIrrelevantFallbackResults(t *testi
 		searchBaseURL: discoverySearchBaseURL,
 		userAgent:     discoveryUserAgent,
 		bodyLimit:     discoveryBodyLimit,
+		cache:         newDiscoveryCache(discoveryCacheMaxKeys),
 	}
 
 	rr := httptest.NewRecorder()
@@ -813,6 +825,7 @@ func TestDiscoveryServiceRejectsInvalidParamsAndMapsUpstreamErrors(t *testing.T)
 			lookupBaseURL: discoveryLookupBaseURL,
 			userAgent:     discoveryUserAgent,
 			bodyLimit:     discoveryBodyLimit,
+			cache:         newDiscoveryCache(discoveryCacheMaxKeys),
 		}
 
 		rr := httptest.NewRecorder()
@@ -871,10 +884,11 @@ func TestDiscoveryServiceRejectsInvalidParamsAndMapsUpstreamErrors(t *testing.T)
 			timeout:   20 * time.Millisecond,
 			userAgent: discoveryUserAgent,
 			bodyLimit: discoveryBodyLimit,
+			cache:     newDiscoveryCache(discoveryCacheMaxKeys),
 			lookupIP: func(context.Context, string) ([]net.IPAddr, error) {
 				return []net.IPAddr{{IP: net.ParseIP("93.184.216.34")}}, nil
 			},
-			dialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+			dialContext: func(ctx context.Context, _ , _ string) (net.Conn, error) {
 				<-ctx.Done()
 				return nil, ctx.Err()
 			},
@@ -901,7 +915,7 @@ func TestDiscoveryServiceRejectsInvalidParamsAndMapsUpstreamErrors(t *testing.T)
 			"example.com",
 			"93.184.216.34",
 			time.Second,
-			func(w http.ResponseWriter, r *http.Request) {
+			func(w http.ResponseWriter, _ *http.Request) {
 				w.Header().Set("Content-Type", "text/plain")
 				w.WriteHeader(http.StatusBadGateway)
 				_, _ = io.WriteString(w, "boom")
@@ -1016,10 +1030,182 @@ func TestDecodeDiscoveryJSONRejectsOversizedBodies(t *testing.T) {
 	}
 }
 
+func TestDecodeDiscoveryFeedSanitizesXML(t *testing.T) {
+	t.Run("bare ampersand in content", func(t *testing.T) {
+		body := strings.NewReader(`<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Smith & Jones Show</title>
+    <description>Fun times</description>
+    <item>
+      <title>Ep 1: Smith & Jones intro</title>
+      <description>Smith &amp; Jones talk about things</description>
+      <guid>ep-1</guid>
+      <pubDate>Fri, 30 Jan 2026 12:00:00 GMT</pubDate>
+      <enclosure url="http://example.com/audio.mp3" length="1000" />
+    </item>
+  </channel>
+</rss>`)
+		result, err := decodeDiscoveryFeed(body, discoveryBodyLimit)
+		if err != nil {
+			t.Fatalf("decodeDiscoveryFeed error = %v", err)
+		}
+		if !strings.Contains(result.Title, "Smith") {
+			t.Fatalf("title = %q, want to contain Smith", result.Title)
+		}
+		if len(result.Episodes) != 1 {
+			t.Fatalf("episodes length = %d, want 1", len(result.Episodes))
+		}
+	})
+
+	t.Run("bare ampersand in URL attribute", func(t *testing.T) {
+		body := strings.NewReader(`<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Ampersand Feed</title>
+    <description>test</description>
+    <item>
+      <title>Ep 1</title>
+      <description>ok</description>
+      <guid>ep-1</guid>
+      <pubDate>Fri, 30 Jan 2026 12:00:00 GMT</pubDate>
+      <enclosure url="http://example.com/audio.mp3?id=1&format=mp3" length="1000" />
+    </item>
+  </channel>
+</rss>`)
+		result, err := decodeDiscoveryFeed(body, discoveryBodyLimit)
+		if err != nil {
+			t.Fatalf("decodeDiscoveryFeed error = %v", err)
+		}
+		if len(result.Episodes) != 1 {
+			t.Fatalf("episodes length = %d, want 1", len(result.Episodes))
+		}
+		if !strings.Contains(result.Episodes[0].AudioURL, "format=mp3") {
+			t.Fatalf("audioUrl = %q, want to contain format=mp3", result.Episodes[0].AudioURL)
+		}
+	})
+
+	t.Run("control characters in text", func(t *testing.T) {
+		body := strings.NewReader(`<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Clean` + "\x01\x0B\x7F" + `Feed</title>
+    <description>desc</description>
+    <item>
+      <title>Ep` + "\x01" + ` 1</title>
+      <description>ok</description>
+      <guid>ep-1</guid>
+      <pubDate>Fri, 30 Jan 2026 12:00:00 GMT</pubDate>
+      <enclosure url="http://example.com/audio.mp3" length="1000" />
+    </item>
+  </channel>
+</rss>`)
+		result, err := decodeDiscoveryFeed(body, discoveryBodyLimit)
+		if err != nil {
+			t.Fatalf("decodeDiscoveryFeed error = %v", err)
+		}
+		if result.Title == "" {
+			t.Fatalf("title is empty after sanitization")
+		}
+		if len(result.Episodes) != 1 {
+			t.Fatalf("episodes length = %d, want 1", len(result.Episodes))
+		}
+	})
+
+	t.Run("CDATA with ampersands", func(t *testing.T) {
+		body := strings.NewReader(`<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>CDATA Feed</title>
+    <description>test</description>
+    <item>
+      <title>Ep 1</title>
+      <description><![CDATA[<p>Tom & Jerry are friends</p>]]></description>
+      <guid>ep-1</guid>
+      <pubDate>Fri, 30 Jan 2026 12:00:00 GMT</pubDate>
+      <enclosure url="http://example.com/audio.mp3" length="1000" />
+    </item>
+  </channel>
+</rss>`)
+		result, err := decodeDiscoveryFeed(body, discoveryBodyLimit)
+		if err != nil {
+			t.Fatalf("decodeDiscoveryFeed error = %v", err)
+		}
+		if len(result.Episodes) != 1 {
+			t.Fatalf("episodes length = %d, want 1", len(result.Episodes))
+		}
+	})
+
+	t.Run("empty feed no items", func(t *testing.T) {
+		body := strings.NewReader(`<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Empty Feed</title>
+    <description>no items</description>
+  </channel>
+</rss>`)
+		result, err := decodeDiscoveryFeed(body, discoveryBodyLimit)
+		if err != nil {
+			t.Fatalf("decodeDiscoveryFeed error = %v", err)
+		}
+		if result.Title != "Empty Feed" {
+			t.Fatalf("title = %q, want Empty Feed", result.Title)
+		}
+		if len(result.Episodes) != 0 {
+			t.Fatalf("episodes length = %d, want 0", len(result.Episodes))
+		}
+	})
+
+	t.Run("enclosure missing URL", func(t *testing.T) {
+		body := strings.NewReader(`<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Missing URL Feed</title>
+    <description>test</description>
+    <item>
+      <title>No Audio Episode</title>
+      <description>has no enclosure url</description>
+      <guid>ep-1</guid>
+      <pubDate>Fri, 30 Jan 2026 12:00:00 GMT</pubDate>
+      <enclosure length="0" />
+    </item>
+  </channel>
+</rss>`)
+		result, err := decodeDiscoveryFeed(body, discoveryBodyLimit)
+		if err != nil {
+			t.Fatalf("decodeDiscoveryFeed error = %v", err)
+		}
+		if len(result.Episodes) != 0 {
+			t.Fatalf("episodes length = %d, want 0 (enclosure missing url should be skipped)", len(result.Episodes))
+		}
+	})
+
+	t.Run("whitespace-only title", func(t *testing.T) {
+		body := strings.NewReader(`<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>   </title>
+    <description>no real title</description>
+    <item>
+      <title>Ep 1</title>
+      <description>ok</description>
+      <guid>ep-1</guid>
+      <pubDate>Fri, 30 Jan 2026 12:00:00 GMT</pubDate>
+      <enclosure url="http://example.com/audio.mp3" length="1000" />
+    </item>
+  </channel>
+</rss>`)
+		_, err := decodeDiscoveryFeed(body, discoveryBodyLimit)
+		if err == nil {
+			t.Fatalf("decodeDiscoveryFeed should return error for whitespace-only title")
+		}
+	})
+}
+
 func TestDiscoveryFetchJSONMapsNonSuccessStatus(t *testing.T) {
 	service := &discoveryService{
 		client: &http.Client{
-			Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+			Transport: discoveryRoundTripper(func(_ *http.Request) (*http.Response, error) {
 				return jsonResponse(http.StatusBadGateway, `{"error":"bad"}`), nil
 			}),
 		},
@@ -1028,6 +1214,7 @@ func TestDiscoveryFetchJSONMapsNonSuccessStatus(t *testing.T) {
 		lookupBaseURL: discoveryLookupBaseURL,
 		userAgent:     discoveryUserAgent,
 		bodyLimit:     discoveryBodyLimit,
+		cache:         newDiscoveryCache(discoveryCacheMaxKeys),
 	}
 
 	err := service.fetchJSON(context.Background(), "https://example.com", &map[string]any{})
@@ -1035,4 +1222,226 @@ func TestDiscoveryFetchJSONMapsNonSuccessStatus(t *testing.T) {
 	if !errors.As(err, &statusErr) || statusErr.status != http.StatusBadGateway {
 		t.Fatalf("error = %v, want discoveryUpstreamStatusError(502)", err)
 	}
+}
+
+func TestDiscoveryCacheBehavior(t *testing.T) {
+	t.Run("cache hit returns cached data without upstream call", func(t *testing.T) {
+		upstreamCalls := 0
+		service := &discoveryService{
+			client: &http.Client{
+				Transport: discoveryRoundTripper(func(_ *http.Request) (*http.Response, error) {
+					upstreamCalls++
+					return jsonResponse(http.StatusOK, `{
+						"feed": {
+							"results": [
+								{"id": "100", "name": "Cached Show", "url": "https://example.com/show"}
+							]
+						}
+					}`), nil
+				}),
+			},
+			timeout:       time.Second,
+			rssBaseURL:    discoveryRSSBaseURL,
+			lookupBaseURL: discoveryLookupBaseURL,
+			userAgent:     discoveryUserAgent,
+			bodyLimit:     discoveryBodyLimit,
+			cache:         newDiscoveryCache(256),
+		}
+
+		req := httptest.NewRequest(http.MethodGet, discoveryTopPodcastsRoute+"?country=us&limit=25", nil)
+
+		rr1 := httptest.NewRecorder()
+		service.ServeHTTP(rr1, req)
+		if rr1.Code != http.StatusOK {
+			t.Fatalf("first request: status = %d, want %d", rr1.Code, http.StatusOK)
+		}
+
+		rr2 := httptest.NewRecorder()
+		service.ServeHTTP(rr2, req)
+		if rr2.Code != http.StatusOK {
+			t.Fatalf("second request: status = %d, want %d", rr2.Code, http.StatusOK)
+		}
+
+		if upstreamCalls != 1 {
+			t.Fatalf("upstreamCalls = %d, want 1 (cache hit should skip upstream)", upstreamCalls)
+		}
+		if rr1.Body.String() != rr2.Body.String() {
+			t.Fatalf("cached response differs from first response")
+		}
+	})
+
+	t.Run("cache miss triggers upstream fetch", func(t *testing.T) {
+		upstreamCalls := 0
+		service := &discoveryService{
+			client: &http.Client{
+				Transport: discoveryRoundTripper(func(_ *http.Request) (*http.Response, error) {
+					upstreamCalls++
+					return jsonResponse(http.StatusOK, `{
+						"feed": {
+							"results": [
+								{"id": "1", "name": "Show", "url": "https://example.com/1"}
+							]
+						}
+					}`), nil
+				}),
+			},
+			timeout:       time.Second,
+			rssBaseURL:    discoveryRSSBaseURL,
+			lookupBaseURL: discoveryLookupBaseURL,
+			userAgent:     discoveryUserAgent,
+			bodyLimit:     discoveryBodyLimit,
+			cache:         newDiscoveryCache(256),
+		}
+
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, discoveryTopPodcastsRoute+"?country=us&limit=25", nil)
+		service.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+		}
+		if upstreamCalls != 1 {
+			t.Fatalf("upstreamCalls = %d, want 1", upstreamCalls)
+		}
+	})
+
+	t.Run("error responses are NOT cached", func(t *testing.T) {
+		upstreamCalls := 0
+		service := &discoveryService{
+			client: &http.Client{
+				Transport: discoveryRoundTripper(func(_ *http.Request) (*http.Response, error) {
+					upstreamCalls++
+					return jsonResponse(http.StatusBadGateway, `{"error":"bad"}`), nil
+				}),
+			},
+			timeout:       time.Second,
+			rssBaseURL:    discoveryRSSBaseURL,
+			lookupBaseURL: discoveryLookupBaseURL,
+			userAgent:     discoveryUserAgent,
+			bodyLimit:     discoveryBodyLimit,
+			cache:         newDiscoveryCache(256),
+		}
+
+		req := httptest.NewRequest(http.MethodGet, discoveryTopPodcastsRoute+"?country=us&limit=25", nil)
+
+		rr1 := httptest.NewRecorder()
+		service.ServeHTTP(rr1, req)
+		if rr1.Code != http.StatusBadGateway {
+			t.Fatalf("first request: status = %d, want %d", rr1.Code, http.StatusBadGateway)
+		}
+
+		rr2 := httptest.NewRecorder()
+		service.ServeHTTP(rr2, req)
+		if rr2.Code != http.StatusBadGateway {
+			t.Fatalf("second request: status = %d, want %d", rr2.Code, http.StatusBadGateway)
+		}
+
+		if upstreamCalls != 2 {
+			t.Fatalf("upstreamCalls = %d, want 2 (error must not be cached)", upstreamCalls)
+		}
+	})
+
+	t.Run("expired entries are not returned", func(t *testing.T) {
+		upstreamCalls := 0
+		service := &discoveryService{
+			client: &http.Client{
+				Transport: discoveryRoundTripper(func(_ *http.Request) (*http.Response, error) {
+					upstreamCalls++
+					name := fmt.Sprintf("Show-%d", upstreamCalls)
+					return jsonResponse(http.StatusOK, fmt.Sprintf(`{
+						"feed": {
+							"results": [
+								{"id": "1", "name": %q, "url": "https://example.com/1"}
+							]
+						}
+					}`, name)), nil
+				}),
+			},
+			timeout:       time.Second,
+			rssBaseURL:    discoveryRSSBaseURL,
+			lookupBaseURL: discoveryLookupBaseURL,
+			userAgent:     discoveryUserAgent,
+			bodyLimit:     discoveryBodyLimit,
+			cache:         newDiscoveryCache(256),
+		}
+
+		origTTL := discoveryCacheTTLTopPodcasts
+		discoveryCacheTTLTopPodcasts = 50 * time.Millisecond
+		defer func() { discoveryCacheTTLTopPodcasts = origTTL }()
+
+		req := httptest.NewRequest(http.MethodGet, discoveryTopPodcastsRoute+"?country=us&limit=25", nil)
+
+		rr1 := httptest.NewRecorder()
+		service.ServeHTTP(rr1, req)
+		if rr1.Code != http.StatusOK {
+			t.Fatalf("first request: status = %d", rr1.Code)
+		}
+
+		time.Sleep(100 * time.Millisecond)
+
+		rr2 := httptest.NewRecorder()
+		service.ServeHTTP(rr2, req)
+		if rr2.Code != http.StatusOK {
+			t.Fatalf("second request: status = %d", rr2.Code)
+		}
+
+		if upstreamCalls != 2 {
+			t.Fatalf("upstreamCalls = %d, want 2 (expired entry should trigger refetch)", upstreamCalls)
+		}
+
+		var first, second []discoveryPodcastResponse
+		decodeResponseJSON(t, rr1.Body, &first)
+		decodeResponseJSON(t, rr2.Body, &second)
+		if len(first) != 1 || len(second) != 1 {
+			t.Fatalf("unexpected payload lengths: %d, %d", len(first), len(second))
+		}
+		if first[0].Name == second[0].Name {
+			t.Fatalf("expected different names after TTL expiry, got %q both times", first[0].Name)
+		}
+	})
+
+	t.Run("lookup podcast is cached", func(t *testing.T) {
+		upstreamCalls := 0
+		service := &discoveryService{
+			client: &http.Client{
+				Transport: discoveryRoundTripper(func(_ *http.Request) (*http.Response, error) {
+					upstreamCalls++
+					return jsonResponse(http.StatusOK, `{
+						"results": [
+							{
+								"wrapperType": "collection",
+								"kind": "podcast",
+								"collectionId": 42,
+								"collectionName": "Cached Lookup",
+								"collectionViewUrl": "https://podcasts.apple.com/show-42"
+							}
+						]
+					}`), nil
+				}),
+			},
+			timeout:       time.Second,
+			rssBaseURL:    discoveryRSSBaseURL,
+			lookupBaseURL: discoveryLookupBaseURL,
+			userAgent:     discoveryUserAgent,
+			bodyLimit:     discoveryBodyLimit,
+			cache:         newDiscoveryCache(256),
+		}
+
+		req := httptest.NewRequest(http.MethodGet, discoveryLookupPodcastRoute+"?id=42&country=us", nil)
+
+		rr1 := httptest.NewRecorder()
+		service.ServeHTTP(rr1, req)
+		if rr1.Code != http.StatusOK {
+			t.Fatalf("first request: status = %d", rr1.Code)
+		}
+
+		rr2 := httptest.NewRecorder()
+		service.ServeHTTP(rr2, req)
+		if rr2.Code != http.StatusOK {
+			t.Fatalf("second request: status = %d", rr2.Code)
+		}
+
+		if upstreamCalls != 1 {
+			t.Fatalf("upstreamCalls = %d, want 1 (lookup podcast should be cached)", upstreamCalls)
+		}
+	})
 }

@@ -183,7 +183,7 @@ func TestLoadTrustedProxySet(t *testing.T) {
 
 func TestEffectiveClientIPWithoutTrustedProxies(t *testing.T) {
 	t.Run("ENV READIO_TRUSTED_PROXY_CIDRS empty falls back to RemoteAddr", func(t *testing.T) {
-		os.Unsetenv("READIO_TRUSTED_PROXY_CIDRS")
+		_ = os.Unsetenv("READIO_TRUSTED_PROXY_CIDRS")
 		set := loadTrustedProxySet(newTestLogger(t))
 		req := httptest.NewRequest(http.MethodGet, "/", nil)
 		req.RemoteAddr = "203.0.113.50:8080"

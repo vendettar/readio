@@ -164,11 +164,13 @@ title: 技术路线图
 - [x] **009a-009b**: Cloud 运行时配置归属切换 — 生产 `/env.js` 现由 `apps/cloud-api` 后端生成并使用显式浏览器安全白名单；服务端配置驻留在后端运行时环境中；开发环境静态 `public/env.js` 保留为模板。
 - [x] **010**: Cloud trusted proxy client-IP and rate-limit contract — effective client-IP extraction from trusted proxy headers; shared helper for `/api/proxy` and ASR relay rate limiting; `READIO_TRUSTED_PROXY_CIDRS` backend config; deployment docs for Cloudflare -> nginx -> Go trust chain.
 - [x] **011**: Cloud 限速可配置性与临时禁用 — `/api/proxy` 与 ASR relay 均可通过环境变量配置；`BURST <= 0` 在两个接口上一致禁用应用层限速器；禁用时输出 `slog.Warn`。
+- [x] **012**: Cloud ASR Proxy Worker — 面向 provider 的 Cloudflare Workers 出口跳，用于 `apps/cloud-api` → Groq 转写上游；`X-Readio-Cloud-Secret` 后端鉴权；流式 body 透传；自动 fallback 到 direct-to-Groq；verify 保持 direct；通过 `READIO_ASR_WORKER_BASE_URL` + `READIO_ASR_WORKER_SHARED_SECRET` 运行时上线/回滚。
+- [x] **013**: Cloud discovery 后端加固 — XML 清洗（裸 `&`、控制字符）与 Lite 行为一致；8 条 discovery 路由全部接入结构化日志；有界内存缓存（top/lookup，256 条目，TTL 15-30 分钟）；URL 构建与错误分类辅助函数已提取。
 - [x] **001d**: 文档同步与 SSOT 对齐，仅在审阅批准后完成。
 - [x] **003**: Cloud Lite 全量克隆引导（`apps/cloud-ui` 克隆 + Go 托管 `8080` 运行入口）。
 
 **位置**：Cloud 指令位于 `agent/instructions/cloud/`。
-**当前状态**：005a-005g 已关闭。Cloud 的可见 discovery/feed 流量已经完全由后端接管。006a-006e 已关闭，建立了浏览器直连优先、仅对已批准失败类回退到后端的媒体契约，文档与部署/运行时契约也已与该契约保持一致。007 已关闭，覆盖了 ASR 相关媒体 fallback 缺口。008a-008e 已关闭，把 Cloud ASR provider 转写迁移到独立的同源 relay，同时保持 provider 验证 / readiness 仍为 browser-direct，浏览器本地媒体输入也继续留在浏览器本地。009a-009b 已关闭，生产 `/env.js` 所有权已切换为后端生成并使用显式浏览器安全白名单；服务端配置驻留在后端运行时环境中；开发环境静态 `public/env.js` 保留为模板。010 已关闭，可信代理客户端 IP 提取已就位；共享 helper 覆盖 `/api/proxy` 与 ASR relay 限速；`READIO_TRUSTED_PROXY_CIDRS` 后端配置及 Cloudflare -> nginx -> Go 信任链部署文档已发布。011 已关闭，`/api/proxy` 与 ASR relay 限速均完全可通过环境变量配置；`BURST <= 0` 在两个接口上一致禁用应用层限速器，禁用时输出 `slog.Warn`。
+**当前状态**：005a-005g 已关闭。Cloud 的可见 discovery/feed 流量已经完全由后端接管。006a-006e 已关闭，建立了浏览器直连优先、仅对已批准失败类回退到后端的媒体契约，文档与部署/运行时契约也已与该契约保持一致。007 已关闭，覆盖了 ASR 相关媒体 fallback 缺口。008a-008e 已关闭，把 Cloud ASR provider 转写迁移到独立的同源 relay，同时保持 provider 验证 / readiness 仍为 browser-direct，浏览器本地媒体输入也继续留在浏览器本地。009a-009b 已关闭，生产 `/env.js` 所有权已切换为后端生成并使用显式浏览器安全白名单；服务端配置驻留在后端运行时环境中；开发环境静态 `public/env.js` 保留为模板。010 已关闭，可信代理客户端 IP 提取已就位；共享 helper 覆盖 `/api/proxy` 与 ASR relay 限速；`READIO_TRUSTED_PROXY_CIDRS` 后端配置及 Cloudflare -> nginx -> Go 信任链部署文档已发布。011 已关闭，`/api/proxy` 与 ASR relay 限速均完全可通过环境变量配置；`BURST <= 0` 在两个接口上一致禁用应用层限速器，禁用时输出 `slog.Warn`。012 已关闭，部署了面向 Groq 转写的 Cloudflare Workers ASR 代理，支持后端鉴权、流式透传与自动 direct fallback。
 
 ---
 

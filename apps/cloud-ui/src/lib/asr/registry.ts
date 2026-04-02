@@ -72,8 +72,6 @@ export type AsrConfigErrorCode = (typeof ASR_CONFIG_ERROR)[keyof typeof ASR_CONF
 export type AsrProviderModelSelectionInput = {
   asrProvider?: string | null
   asrModel?: string | null
-  asrUseCustomModel?: boolean | null
-  asrCustomModelId?: string | null
 }
 
 function trimValue(value: string | null | undefined): string {
@@ -101,8 +99,6 @@ export function isAsrModelSupportedForProvider(
 }
 
 export function resolveAsrEffectiveModel(input: AsrProviderModelSelectionInput): string {
-  const useCustom = input.asrUseCustomModel === true
-  if (useCustom) return trimValue(input.asrCustomModelId)
   return trimValue(input.asrModel)
 }
 
@@ -115,15 +111,6 @@ export function validateAsrProviderModelSelection(input: AsrProviderModelSelecti
   const provider = trimValue(input.asrProvider)
   if (!provider || !isAsrProvider(provider)) {
     return { ok: false, code: ASR_CONFIG_ERROR.UNCONFIGURED_PROVIDER }
-  }
-
-  const useCustom = input.asrUseCustomModel === true
-  if (useCustom) {
-    const customModel = trimValue(input.asrCustomModelId)
-    if (!customModel) {
-      return { ok: false, code: ASR_CONFIG_ERROR.UNCONFIGURED_MODEL }
-    }
-    return { ok: true, provider, model: customModel }
   }
 
   const model = trimValue(input.asrModel)

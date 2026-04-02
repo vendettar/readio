@@ -25,6 +25,8 @@ function isEnableAllToken(value: string | null | undefined): boolean {
   return normalized === '' || normalized === '*' || normalized === 'all'
 }
 
+export const defaultAsrProvider = 'groq' as const
+
 export function resolveEnabledAsrProviders(configLike: ProviderToggleConfigLike): ASRProvider[] {
   const enabledRaw = configLike.ENABLED_ASR_PROVIDERS
   const disabledRaw = configLike.DISABLED_ASR_PROVIDERS
@@ -48,7 +50,9 @@ export function resolveEnabledAsrProviders(configLike: ProviderToggleConfigLike)
     }
   }
 
-  return ASR_PROVIDER_IDS.filter((provider) => baseSet.has(provider))
+  const resolved = ASR_PROVIDER_IDS.filter((provider) => baseSet.has(provider))
+  // TODO: Temporarily block providers except Groq until they are fully stabilized.
+  return resolved.filter((p) => p === 'groq')
 }
 
 export function isAsrProviderEnabled(

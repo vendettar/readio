@@ -65,8 +65,6 @@ export function useSettingsForm() {
     defaultValues: {
       asrProvider: '',
       asrModel: '',
-      asrUseCustomModel: false,
-      asrCustomModelId: '',
       asrKey: '',
       translateKey: '',
       proxyUrl: '',
@@ -119,8 +117,6 @@ export function useSettingsForm() {
     const normalizedAsr = normalizeAsrPreferenceValues({
       asrProvider: values.asrProvider,
       asrModel: values.asrModel,
-      asrUseCustomModel: values.asrUseCustomModel,
-      asrCustomModelId: values.asrCustomModelId,
     })
 
     const preferences: SettingsPreferenceValues = {
@@ -196,8 +192,6 @@ export function useSettingsForm() {
     const normalizedAsr = normalizeAsrPreferenceValues({
       asrProvider: values.asrProvider,
       asrModel: values.asrModel,
-      asrUseCustomModel: values.asrUseCustomModel,
-      asrCustomModelId: values.asrCustomModelId,
     })
     const currentSnapshot = getSettingsSnapshot()
     const asrScopedPreferences: SettingsPreferenceValues = {

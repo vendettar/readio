@@ -59,8 +59,6 @@ export async function getAsrReadiness(): Promise<AsrReadinessResult> {
   const selection = validateAsrProviderModelSelection({
     asrProvider: settings.asrProvider,
     asrModel: settings.asrModel,
-    asrUseCustomModel: settings.asrUseCustomModel,
-    asrCustomModelId: settings.asrCustomModelId,
   })
   if (!selection.ok) {
     return { ready: false, reasonCode: selection.code }

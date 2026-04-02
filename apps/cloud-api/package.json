@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "dev": "go run .",
-    "build": "go build -o /tmp/readio-cloud ."
+    "build": "go build -o /tmp/readio-cloud .",
+    "lint": "golangci-lint run"
   }
 }

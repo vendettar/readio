@@ -52,6 +52,9 @@ vi.mock('../../lib/toast', () => ({
   },
 }))
 
+// VALID_GROQ_KEY: gsk_ + 52 chars = 56 chars total
+const VALID_GROQ_KEY = `gsk_${'s'.repeat(52)}`
+
 describe('useSettingsForm', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -73,7 +76,7 @@ describe('useSettingsForm', () => {
     )
     getAllCredentialsMock.mockResolvedValue({
       provider_translate_key: 'sk-hydrated',
-      provider_asr_key: 'gsk_hydrated',
+      provider_asr_key: VALID_GROQ_KEY,
     })
 
     const { result } = renderHook(() => useSettingsForm())
@@ -87,7 +90,7 @@ describe('useSettingsForm', () => {
       asrModel: 'whisper-large-v3-turbo',
       proxyUrl: 'https://proxy.local',
       translateKey: 'sk-hydrated',
-      asrKey: 'gsk_hydrated',
+      asrKey: VALID_GROQ_KEY,
     })
   })
 
@@ -100,7 +103,7 @@ describe('useSettingsForm', () => {
     act(() => {
       result.current.form.setValue('proxyUrl', 'https://save.local')
       result.current.form.setValue('translateKey', 'sk-save')
-      result.current.form.setValue('asrKey', 'gsk_save')
+      result.current.form.setValue('asrKey', VALID_GROQ_KEY)
     })
 
     await act(async () => {
@@ -110,16 +113,18 @@ describe('useSettingsForm', () => {
     expect(setCredentialsMock).toHaveBeenCalledWith(
       {
         provider_translate_key: 'sk-save',
-        provider_asr_key: 'gsk_save',
+        provider_asr_key: VALID_GROQ_KEY,
       },
       0 // Credential epoch from mock
     )
+
+    // TODO: When non-Groq providers are lifted, asrProvider/asrModel might become empty strings if not selected.
+    // Currently they are auto-selected to Groq because it is the only enabled provider.
     expect(localStorage.getItem(SETTINGS_STORAGE_KEY)).toBe(
       JSON.stringify({
-        asrProvider: '',
-        asrModel: '',
-        asrUseCustomModel: false,
-        asrCustomModelId: '',
+        asrProvider: 'groq',
+        asrModel: 'whisper-large-v3-turbo',
+
         proxyUrl: 'https://save.local',
         proxyAuthHeader: 'x-proxy-token',
         proxyAuthValue: '',
@@ -144,37 +149,6 @@ describe('useSettingsForm', () => {
 
     expect(result.current.form.getValues('asrProvider')).toBe('groq')
     expect(result.current.form.getValues('asrModel')).toBe('')
-  })
-
-  it('clears stale custom model when custom mode is disabled and saved', async () => {
-    const { result } = renderHook(() => useSettingsForm())
-    await waitFor(() => {
-      expect(result.current.credentialsLoaded).toBe(true)
-    })
-
-    act(() => {
-      result.current.form.setValue('asrProvider', 'qwen')
-      result.current.form.setValue('asrUseCustomModel', false)
-      result.current.form.setValue('asrCustomModelId', 'legacy-custom-id')
-      result.current.form.setValue('asrModel', 'qwen3-asr-flash')
-    })
-
-    await act(async () => {
-      await result.current.onSubmit()
-    })
-
-    expect(localStorage.getItem(SETTINGS_STORAGE_KEY)).toBe(
-      JSON.stringify({
-        asrProvider: 'qwen',
-        asrModel: 'qwen3-asr-flash',
-        asrUseCustomModel: false,
-        asrCustomModelId: '',
-        proxyUrl: '',
-        proxyAuthHeader: 'x-proxy-token',
-        proxyAuthValue: '',
-        pauseOnDictionaryLookup: true,
-      })
-    )
   })
 
   it('aborts save if settings epoch has changed (wipeAll happened during edit)', async () => {
@@ -207,8 +181,6 @@ describe('useSettingsForm', () => {
     act(() => {
       result.current.form.setValue('asrProvider', 'groq')
       result.current.form.setValue('asrModel', '')
-      result.current.form.setValue('asrUseCustomModel', false)
-      result.current.form.setValue('asrCustomModelId', '')
     })
 
     await act(async () => {
@@ -220,8 +192,7 @@ describe('useSettingsForm', () => {
       JSON.stringify({
         asrProvider: 'groq',
         asrModel: '',
-        asrUseCustomModel: false,
-        asrCustomModelId: '',
+
         proxyUrl: '',
         proxyAuthHeader: 'x-proxy-token',
         proxyAuthValue: '',
@@ -239,8 +210,6 @@ describe('useSettingsForm', () => {
     act(() => {
       result.current.form.setValue('asrProvider', 'groq')
       result.current.form.setValue('asrModel', '')
-      result.current.form.setValue('asrUseCustomModel', false)
-      result.current.form.setValue('asrCustomModelId', '')
     })
 
     await act(async () => {
@@ -257,8 +226,7 @@ describe('useSettingsForm', () => {
       JSON.stringify({
         asrProvider: '',
         asrModel: '',
-        asrUseCustomModel: false,
-        asrCustomModelId: '',
+
         proxyUrl: 'https://persisted.proxy',
         proxyAuthHeader: 'x-proxy-token',
         proxyAuthValue: 'persisted-secret',
@@ -266,7 +234,7 @@ describe('useSettingsForm', () => {
     )
     getAllCredentialsMock.mockResolvedValue({
       provider_translate_key: 'sk_translate_existing',
-      provider_asr_key: 'gsk_existing',
+      provider_asr_key: VALID_GROQ_KEY,
     })
 
     const { result } = renderHook(() => useSettingsForm())
@@ -277,9 +245,8 @@ describe('useSettingsForm', () => {
     act(() => {
       result.current.form.setValue('asrProvider', 'groq')
       result.current.form.setValue('asrModel', 'whisper-large-v3')
-      result.current.form.setValue('asrUseCustomModel', false)
-      result.current.form.setValue('asrCustomModelId', '')
-      result.current.form.setValue('asrKey', 'gsk_new')
+
+      result.current.form.setValue('asrKey', VALID_GROQ_KEY)
       result.current.form.setValue('proxyUrl', 'not-a-url')
       result.current.form.setValue('translateKey', 'invalid-translate-key')
     })
@@ -292,8 +259,7 @@ describe('useSettingsForm', () => {
       JSON.stringify({
         asrProvider: 'groq',
         asrModel: 'whisper-large-v3',
-        asrUseCustomModel: false,
-        asrCustomModelId: '',
+
         proxyUrl: 'https://persisted.proxy',
         proxyAuthHeader: 'x-proxy-token',
         proxyAuthValue: 'persisted-secret',
@@ -302,7 +268,7 @@ describe('useSettingsForm', () => {
     )
     expect(setCredentialsMock).toHaveBeenLastCalledWith(
       {
-        provider_asr_key: 'gsk_new',
+        provider_asr_key: VALID_GROQ_KEY,
       },
       0
     )

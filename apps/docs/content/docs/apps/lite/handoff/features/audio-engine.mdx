@@ -157,12 +157,11 @@ The system implements the following automated policies to maintain database heal
 - **Settings Contract**:
   - `asrProvider`
   - `asrModel` (allowlist mode)
-  - `asrUseCustomModel: boolean`
-  - `asrCustomModelId: string` (custom mode)
+
   - ASR API key is read from `credentials` table first, runtime env fallback second.
 - **Validation + Normalization Contract (Instruction 126)**:
   - provider must be selected before model.
-  - model must belong to the selected provider allowlist unless custom mode is explicitly enabled.
+  - model must belong to the selected provider allowlist.
   - persisted invalid provider/model combinations are normalized fail-closed at read/write/runtime boundaries (no legacy migration/backfill path in first-release policy).
 - **Key Precedence**:
   - IndexedDB `credentials` is authoritative once user-saved.

@@ -51,8 +51,15 @@ jobs:
       - name: Install Ripgrep for DB Guard
         run: sudo apt-get update && sudo apt-get install -y ripgrep
 
-      - name: Lint
+      - name: Lint (Lite)
         run: pnpm --filter @readio/lite lint
+
+      - name: Go Lint (Cloud API)
+        uses: golangci/golangci-lint-action@55c2c1448f86e01eaae002a5a3a9624417608d84
+        with:
+          version: v1.64.8
+          working-directory: apps/cloud-api
+          args: --timeout=5m
 
       - name: DB Access Guard
         run: pnpm --filter @readio/lite lint:db-guard
