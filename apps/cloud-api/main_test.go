@@ -1335,8 +1335,46 @@ func TestProxyServiceMediaFallbackContract(t *testing.T) {
 		if rr.Header().Get("Accept-Ranges") != "bytes" {
 			t.Fatalf("accept-ranges = %q, want %q", rr.Header().Get("Accept-Ranges"), "bytes")
 		}
+		if rr.Header().Get("Content-Length") != "" {
+			t.Fatalf("content-length = %q, want empty for streamed GET proxy response", rr.Header().Get("Content-Length"))
+		}
 		if rr.Header().Get("X-Blocked") != "" {
 			t.Fatalf("unexpected disallowed header passthrough: %q", rr.Header().Get("X-Blocked"))
+		}
+	})
+
+	t.Run("full get omits content-length to avoid downstream length mismatches", func(t *testing.T) {
+		proxy, dialedAddress := newMediaProxyTestService(t, func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				t.Fatalf("method = %q, want %q", r.Method, http.MethodGet)
+			}
+
+			w.Header().Set("Content-Type", "audio/mpeg")
+			w.Header().Set("Content-Length", "56719585")
+			w.Header().Set("Accept-Ranges", "bytes")
+			w.WriteHeader(http.StatusOK)
+			_, _ = io.WriteString(w, "audio-bytes")
+		}, testPublicLookupIP)
+
+		rr := httptest.NewRecorder()
+		req := newProxyJSONRequest(t, http.MethodGet, "http://feeds.example.com/audio.mp3", nil)
+		req.RemoteAddr = "198.51.100.10:12345"
+		proxy.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+		}
+		if *dialedAddress != "203.0.113.10:80" {
+			t.Fatalf("dialed address = %q, want %q", *dialedAddress, "203.0.113.10:80")
+		}
+		if rr.Body.String() != "audio-bytes" {
+			t.Fatalf("body = %q, want %q", rr.Body.String(), "audio-bytes")
+		}
+		if rr.Header().Get("Content-Length") != "" {
+			t.Fatalf("content-length = %q, want empty for streamed GET proxy response", rr.Header().Get("Content-Length"))
+		}
+		if rr.Header().Get("Accept-Ranges") != "bytes" {
+			t.Fatalf("accept-ranges = %q, want %q", rr.Header().Get("Accept-Ranges"), "bytes")
 		}
 	})
 

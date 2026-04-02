@@ -359,7 +359,80 @@ READIO_ASR_WORKER_SHARED_SECRET=your-high-entropy-secret-string
 - **密钥卫生**：Worker 共享密钥和 provider API key 均不出现在日志或响应体中。
 - **性能**：Worker 使用流式透传模式处理音频 Body，支持大体积音频文件。
 
-## 10. 运维总结与边界
+## 10. 管理后台可观测性
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `READIO_ADMIN_TOKEN` | (空 = 禁用) | `/admin/*` 端点的 Bearer token |
+| `READIO_ADMIN_LOG_BUFFER` | 2000 | 环形缓冲区容量 (最小 100，最大 10000) |
+
+### 10.1 访问入口
+
+- 浏览器 UI：`/ops`
+- 后端 JSON API：
+  - `/admin/logs`
+  - `/admin/health`
+  - `/admin/metrics/summary`
+- `/ops` 只是运维查看界面，不替代 `/admin/*` 的后端 token 校验
+
+### 10.2 启用条件与鉴权
+
+- 当 `READIO_ADMIN_TOKEN` 未设置或为空时：
+  - `/admin/*` 返回 `404`
+  - `/ops` 页面即使能打开，也无法拿到任何 admin 数据
+- 当 `READIO_ADMIN_TOKEN` 已设置时：
+  - `/admin/*` 需要 `Authorization: Bearer <token>`
+  - 缺失或错误的 bearer token 返回 `401`
+
+### 10.3 Token 使用规则
+
+- `READIO_ADMIN_TOKEN` 只存在于服务端
+- 不会通过 `/env.js` 输出
+- 浏览器 token 只在 `/ops` 页面手动输入
+- `/ops` 页面只把 token 存在 `sessionStorage`
+- 不要把 token 放进 query 参数、路由参数或硬编码前端配置
+
+### 10.4 推荐的外围收口
+
+- nginx 层建议：
+  - 保证 `/ops` 与 `/admin/*` 不可缓存
+  - 作为 defense in depth，可在反向代理层额外加 `Cache-Control: no-store`
+  - 强烈建议对 `/ops` 与 `/admin/*` 加 IP allowlist
+- Cloudflare 层建议：
+  - 对 `/ops*` 与 `/admin/*` 做更严格的路径级控制
+  - 视情况增加 WAF / rate limit / 国家或 IP 限制
+- 这些外围限制不能替代 `READIO_ADMIN_TOKEN`，只是额外加固
+
+### 10.5 运维操作
+
+- 用高熵随机值生成 token，例如：
+
+```bash
+openssl rand -base64 48
+```
+
+- 将 `READIO_ADMIN_TOKEN` 放到服务端 env file，通常是：
+  - `/etc/readio/readio-cloud.env`
+- 新增或修改 token 后，重启服务：
+
+```bash
+sudo systemctl restart readio-cloud
+```
+
+- 如果 token 泄露：
+  1. 生成新 token
+  2. 更新 `/etc/readio/readio-cloud.env` 中的 `READIO_ADMIN_TOKEN`
+  3. 重启服务
+  4. 视为所有旧的 `/ops` 会话全部失效
+
+### 10.6 Env 示例
+
+```bash
+READIO_ADMIN_TOKEN=replace-with-a-long-random-token
+READIO_ADMIN_LOG_BUFFER=2000
+```
+
+## 11. 运维总结与边界
 
 - 该工作流假设 VPS 已经存在并完成基础系统初始化。
 - 运维人员负责管理 Cloudflare Workers 的生命周期及其 Secrets 同步。

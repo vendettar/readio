@@ -220,6 +220,7 @@ func runCloudServer(parent context.Context) error {
 	addr := ":" + port
 
 	mux := newCloudMux(handler, proxy, asrRelay, discovery)
+	_ = setupAdminHandler(mux)
 
 	server := &http.Server{
 		Addr:              addr,
@@ -507,13 +508,30 @@ func newRateLimiter(limit int, window time.Duration, now func() time.Time) *rate
 }
 
 func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	spec, err := p.parseProxyRequest(w, r)
-	if err != nil {
-		p.respondProxyError(w, err)
+	start := time.Now()
+	var errClass string
+	var httpStatus int
+
+	defer func() {
+		slog.Info("proxy request",
+			"route", "proxy/media",
+			"elapsed_ms", time.Since(start).Milliseconds(),
+			"error_class", errClass,
+			"status", httpStatus,
+		)
+	}()
+
+	spec, pErr := p.parseProxyRequest(w, r)
+	if pErr != nil {
+		httpStatus = http.StatusBadRequest
+		errClass = "invalid_request"
+		p.respondProxyError(w, pErr)
 		return
 	}
 
 	if !p.allowRequest(effectiveClientIP(r, p.trustedProxies)) {
+		httpStatus = http.StatusTooManyRequests
+		errClass = "rate_limit"
 		writeProxyError(w, http.StatusTooManyRequests, "rate limit exceeded")
 		return
 	}
@@ -523,6 +541,8 @@ func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	validatedAddrs, err := p.resolveProxyTargetAddresses(ctx, spec.targetURL)
 	if err != nil {
+		httpStatus = http.StatusBadGateway
+		errClass = "ssrf"
 		p.respondProxyError(w, err)
 		return
 	}
@@ -534,6 +554,8 @@ func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	req, err := http.NewRequestWithContext(ctx, spec.method, spec.targetURL.String(), nil)
 	if err != nil {
+		httpStatus = http.StatusBadGateway
+		errClass = "create_request"
 		writeProxyError(w, http.StatusBadGateway, "unable to create upstream request")
 		return
 	}
@@ -551,32 +573,44 @@ func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	resp, err := client.Do(req)
 	if err != nil {
 		if ctx.Err() != nil || errors.Is(err, context.DeadlineExceeded) {
+			httpStatus = http.StatusGatewayTimeout
+			errClass = "timeout"
 			writeProxyError(w, http.StatusGatewayTimeout, "upstream request timed out")
 			return
 		}
 
 		var proxyErr *proxyError
 		if errors.As(err, &proxyErr) {
+			httpStatus = proxyErr.status
+			errClass = "upstream"
 			writeProxyError(w, proxyErr.status, proxyErr.message)
 			return
 		}
 
+		httpStatus = http.StatusBadGateway
+		errClass = "upstream"
 		writeProxyError(w, http.StatusBadGateway, "upstream request failed")
 		return
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	copyProxyResponseHeaders(w.Header(), resp.Header)
+	copyProxyResponseHeaders(w.Header(), resp.Header, spec.method)
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Expose-Headers", strings.Join(proxyAllowedResponseHeaders, ", "))
+	httpStatus = resp.StatusCode
 	w.WriteHeader(resp.StatusCode)
 
 	if spec.method == http.MethodHead {
 		return
 	}
 
-	if _, err := io.Copy(w, resp.Body); err != nil && ctx.Err() != nil {
-		slog.Warn("proxy body copy interrupted", "error", err)
+	if _, err := io.Copy(w, resp.Body); err != nil {
+		if ctx.Err() != nil {
+			slog.Warn("proxy body copy interrupted", "error", err, "target_host", spec.targetURL.Host)
+			return
+		}
+		slog.Warn("proxy body copy failed", "error", err, "target_host", spec.targetURL.Host)
+		return
 	}
 }
 
@@ -723,8 +757,11 @@ func validateProxyForwardHeaders(headers map[string]string) (http.Header, error)
 	return forwarded, nil
 }
 
-func copyProxyResponseHeaders(dst http.Header, src http.Header) {
+func copyProxyResponseHeaders(dst http.Header, src http.Header, method string) {
 	for _, headerName := range proxyAllowedResponseHeaders {
+		if headerName == "Content-Length" && method != http.MethodHead {
+			continue
+		}
 		value := strings.TrimSpace(src.Get(headerName))
 		if value != "" {
 			dst.Set(headerName, value)
@@ -967,7 +1004,6 @@ func (p *proxyService) dialTarget(ctx context.Context, network, address string) 
 	var d net.Dialer
 	return d.DialContext(ctx, network, address)
 }
-
 
 func writeProxyError(w http.ResponseWriter, status int, message string) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")

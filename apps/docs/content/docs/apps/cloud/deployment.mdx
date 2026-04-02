@@ -359,7 +359,80 @@ To rollback: clear or remove these two values and restart the service. The brows
 - **Secret hygiene**: Neither the Worker shared secret nor the provider API key appear in logs or response bodies on either side.
 - **Performance**: The Worker uses a stream-through pattern for audio bodies, ensuring it stays well within the CPU limit and supports large audio files.
 
-## 10. Operational Boundaries
+## 10. Admin Observability
+
+| Var | Default | Description |
+|---|---|---|
+| `READIO_ADMIN_TOKEN` | (empty = disabled) | Bearer token for `/admin/*` endpoints |
+| `READIO_ADMIN_LOG_BUFFER` | 2000 | Ring buffer capacity (min 100, max 10000) |
+
+### 10.1 Access Surface
+
+- Browser UI: `/ops`
+- Backend JSON APIs:
+  - `/admin/logs`
+  - `/admin/health`
+  - `/admin/metrics/summary`
+- `/ops` is only the operator UI. It does not replace backend token checks on `/admin/*`.
+
+### 10.2 Enablement and Authentication
+
+- If `READIO_ADMIN_TOKEN` is unset or empty:
+  - `/admin/*` returns `404`
+  - the UI route may still render, but no admin data can be fetched
+- If `READIO_ADMIN_TOKEN` is set:
+  - `/admin/*` requires `Authorization: Bearer <token>`
+  - missing or invalid bearer token returns `401`
+
+### 10.3 Token Handling Rules
+
+- `READIO_ADMIN_TOKEN` is server-only
+- It must never be emitted via `/env.js`
+- The browser token is entered manually on `/ops`
+- The `/ops` page stores the token in `sessionStorage` only
+- Do not put the token in query params, route params, or hard-coded frontend config
+
+### 10.4 Recommended Outer Restrictions
+
+- For nginx:
+  - keep `/ops` and `/admin/*` non-cacheable
+  - add `Cache-Control: no-store` at the reverse-proxy layer as a defense-in-depth measure
+  - strongly consider an IP allowlist for `/ops` and `/admin/*`
+- For Cloudflare:
+  - apply stricter path-based controls to `/ops*` and `/admin/*`
+  - add WAF / rate limiting / country or IP restrictions as appropriate
+- These outer controls do not replace `READIO_ADMIN_TOKEN`; they are additive hardening
+
+### 10.5 Operations
+
+- Generate the token with a high-entropy random value, for example:
+
+```bash
+openssl rand -base64 48
+```
+
+- Put `READIO_ADMIN_TOKEN` in the server env file, typically:
+  - `/etc/readio/readio-cloud.env`
+- After adding or changing the token, restart the service:
+
+```bash
+sudo systemctl restart readio-cloud
+```
+
+- If the token leaks:
+  1. generate a new token
+  2. replace `READIO_ADMIN_TOKEN` in `/etc/readio/readio-cloud.env`
+  3. restart the service
+  4. treat all previously entered `/ops` sessions as invalidated
+
+### 10.6 Example Env Snippet
+
+```bash
+READIO_ADMIN_TOKEN=replace-with-a-long-random-token
+READIO_ADMIN_LOG_BUFFER=2000
+```
+
+## 11. Operational Boundaries
 
 - This workflow assumes the VPS already exists and has undergone basic system initialization.
 - The operator is responsible for managing the Cloudflare Workers lifecycle and its secrets.

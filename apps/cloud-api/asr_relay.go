@@ -197,58 +197,103 @@ func defaultASRRelayProviders() map[string]asrRelayProviderConfig {
 }
 
 func (s *asrRelayService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	var route string
+	var errClass string
+	var httpStatus int
+
+	defer func() {
+		if route == "" {
+			return
+		}
+		slog.Info("asr-relay request",
+			"route", route,
+			"elapsed_ms", time.Since(start).Milliseconds(),
+			"error_class", errClass,
+			"status", httpStatus,
+		)
+	}()
+
 	if r.Method != http.MethodPost {
+		httpStatus = http.StatusMethodNotAllowed
+		errClass = "invalid_method"
+		route = "asr-relay"
 		writeASRRelayError(w, http.StatusMethodNotAllowed, "only POST is allowed", "invalid_method", nil)
 		return
 	}
 	if relayErr := s.authorizeRequest(r); relayErr != nil {
+		httpStatus = relayErr.Status
+		errClass = relayErr.Code
+		route = "asr-relay"
 		writeASRRelayError(w, relayErr.Status, relayErr.Message, relayErr.Code, relayErr.RetryAfterMs)
 		return
 	}
 
 	switch r.URL.Path {
 	case asrRelayRoute:
+		route = "asr-relay/transcriptions"
 		payload, relayErr := s.decodeMultipartRelayPayload(w, r)
 		if relayErr != nil {
+			httpStatus = relayErr.Status
+			errClass = relayErr.Code
 			writeASRRelayError(w, relayErr.Status, relayErr.Message, relayErr.Code, relayErr.RetryAfterMs)
 			return
 		}
 		result, relayErr := s.transcribe(r.Context(), *payload)
 		if relayErr != nil {
+			httpStatus = relayErr.Status
+			errClass = relayErr.Code
 			writeASRRelayError(w, relayErr.Status, relayErr.Message, relayErr.Code, relayErr.RetryAfterMs)
 			return
 		}
+		httpStatus = http.StatusOK
 		writeJSON(w, http.StatusOK, result)
 	case asrVerifyRoute:
+		route = "asr-relay/verify"
 		if ct := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type"))); ct == "" || !strings.HasPrefix(ct, "application/json") {
+			httpStatus = http.StatusBadRequest
+			errClass = "invalid_payload"
 			writeASRRelayError(w, http.StatusBadRequest, "content-type must be application/json", "invalid_payload", nil)
 			return
 		}
 		body, err := io.ReadAll(io.LimitReader(r.Body, s.bodyLimit+1))
 		if err != nil {
+			httpStatus = http.StatusBadRequest
+			errClass = "invalid_payload"
 			writeASRRelayError(w, http.StatusBadRequest, "invalid relay request payload", "invalid_payload", nil)
 			return
 		}
 		if int64(len(body)) > s.bodyLimit {
+			httpStatus = http.StatusRequestEntityTooLarge
+			errClass = "payload_too_large"
 			writeASRRelayError(w, http.StatusRequestEntityTooLarge, "relay request body too large", "payload_too_large", nil)
 			return
 		}
 		var payload asrVerifyRequestPayload
 		if err := decodeStrictJSON(body, &payload); err != nil {
+			httpStatus = http.StatusBadRequest
+			errClass = "invalid_payload"
 			writeASRRelayError(w, http.StatusBadRequest, "invalid relay request payload", "invalid_payload", nil)
 			return
 		}
 		ok, relayErr := s.verify(r.Context(), payload)
 		if relayErr != nil {
+			httpStatus = relayErr.Status
+			errClass = relayErr.Code
 			writeASRRelayError(w, relayErr.Status, relayErr.Message, relayErr.Code, relayErr.RetryAfterMs)
 			return
 		}
 		if !ok {
+			httpStatus = http.StatusUnauthorized
+			errClass = "unauthorized"
 			writeASRRelayError(w, http.StatusUnauthorized, "provider rejected credentials", "unauthorized", nil)
 			return
 		}
+		httpStatus = http.StatusOK
 		writeJSON(w, http.StatusOK, asrVerifyResponsePayload{OK: ok})
 	default:
+		httpStatus = http.StatusNotFound
+		route = "asr-relay"
 		http.NotFound(w, r)
 		return
 	}
