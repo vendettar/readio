@@ -616,7 +616,7 @@ func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (p *proxyService) parseProxyRequest(_ http.ResponseWriter, r *http.Request) (*proxyRequestSpec, error) {
 	switch r.Method {
-	case http.MethodGet:
+	case http.MethodGet, http.MethodHead:
 		rawTarget := strings.TrimSpace(r.URL.Query().Get("url"))
 		if rawTarget == "" {
 			return nil, &proxyError{status: http.StatusBadRequest, message: "missing url"}
@@ -631,11 +631,22 @@ func (p *proxyService) parseProxyRequest(_ http.ResponseWriter, r *http.Request)
 			return nil, &proxyError{status: http.StatusBadRequest, message: err.Error()}
 		}
 
+		headers := make(http.Header)
+		if rng := r.Header.Get("Range"); rng != "" {
+			if !proxyRangePattern.MatchString(rng) {
+				return nil, &proxyError{status: http.StatusBadRequest, message: "invalid range header"}
+			}
+			headers.Set("Range", rng)
+		}
+		if ifRange := r.Header.Get("If-Range"); ifRange != "" {
+			headers.Set("If-Range", ifRange)
+		}
+
 		return &proxyRequestSpec{
 			targetURL: parsedURL,
-			method:    http.MethodGet,
-			headers:   make(http.Header),
-			legacyGET: true,
+			method:    r.Method,
+			headers:   headers,
+			legacyGET: r.Method == http.MethodGet,
 		}, nil
 	case http.MethodPost:
 		if ct := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type"))); ct != "" && !strings.HasPrefix(ct, "application/json") {

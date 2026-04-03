@@ -282,7 +282,7 @@ export default function AdminLogsPage() {
   }, [token, levelFilter, routeFilter])
 
   useEffect(() => {
-    if (hasToken) loadData()
+    if (hasToken) void loadData()
   }, [hasToken, loadData])
 
   useEffect(() => {
@@ -329,7 +329,7 @@ export default function AdminLogsPage() {
           value={token}
           onChange={(e) => saveToken(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') loadData()
+            if (e.key === 'Enter') void loadData()
           }}
         />
       </div>

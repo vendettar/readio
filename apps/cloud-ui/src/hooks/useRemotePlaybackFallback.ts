@@ -1,0 +1,135 @@
+import type React from 'react'
+import { useCallback, useEffect, useRef } from 'react'
+import {
+  BOOTSTRAP_TIMEOUT_MS,
+  buildProxyPlaybackUrl,
+  extractHost,
+  isEligibleForBootstrapFallback,
+  remoteFallbackBreaker,
+} from '../lib/player/remotePlaybackFallback'
+
+type PlaybackSourceMode = 'direct' | 'proxy-fallback' | null
+
+let playbackSourceMode: PlaybackSourceMode = null
+
+export function getPlaybackSourceMode(): PlaybackSourceMode {
+  return playbackSourceMode
+}
+
+interface UseRemotePlaybackFallbackParams {
+  audioRef: React.RefObject<HTMLAudioElement | null>
+  audioUrl: string | null
+  isPlaying: boolean
+}
+
+export function useRemotePlaybackFallback({
+  audioRef,
+  audioUrl,
+  isPlaying,
+}: UseRemotePlaybackFallbackParams): void {
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const proxiedRef = useRef(false)
+  const prevUrlRef = useRef<string | null>(null)
+
+  const clearBootstrapTimeout = useCallback((): void => {
+    if (timeoutRef.current !== null) {
+      clearTimeout(timeoutRef.current)
+      timeoutRef.current = null
+    }
+  }, [])
+
+  // Reset state when audioUrl changes (new track)
+  if (audioUrl !== prevUrlRef.current) {
+    prevUrlRef.current = audioUrl
+    proxiedRef.current = false
+    playbackSourceMode = null
+    clearBootstrapTimeout()
+  }
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      clearBootstrapTimeout()
+    }
+  }, [clearBootstrapTimeout])
+
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio || !audioUrl || !isPlaying) {
+      clearBootstrapTimeout()
+      return
+    }
+
+    // Only activate for eligible remote URLs
+    if (!isEligibleForBootstrapFallback(audioUrl)) {
+      clearBootstrapTimeout()
+      return
+    }
+
+    // Don't start a second timeout if already proxied for this URL
+    if (proxiedRef.current) return
+
+    // Check host breaker — if threshold met, go proxy-first immediately
+    const host = extractHost(audioUrl)
+    if (host && remoteFallbackBreaker.shouldProxyFirst(host)) {
+      proxiedRef.current = true
+      playbackSourceMode = 'proxy-fallback'
+      clearBootstrapTimeout()
+      const proxyUrl = buildProxyPlaybackUrl(audioUrl)
+      // Set both property and attribute so useAudioElementSync won't overwrite
+      // it back to the original remote URL on the next render cycle.
+      audio.src = proxyUrl
+      audio.setAttribute('src', proxyUrl)
+      audio.load()
+      const playPromise = audio.play()
+      if (playPromise !== undefined) {
+        playPromise.catch(() => {
+          // Autoplay may be blocked — let useAutoplayRetry handle it
+        })
+      }
+      return
+    }
+
+    // Start bootstrap timeout
+    playbackSourceMode = 'direct'
+    clearBootstrapTimeout()
+    timeoutRef.current = setTimeout(() => {
+      if (proxiedRef.current) return
+
+      const h = extractHost(audioUrl)
+      if (h) {
+        remoteFallbackBreaker.recordFailure(h)
+      }
+
+      proxiedRef.current = true
+      playbackSourceMode = 'proxy-fallback'
+      clearBootstrapTimeout()
+
+      const proxyUrl = buildProxyPlaybackUrl(audioUrl)
+      // Set both property and attribute so useAudioElementSync won't overwrite
+      // it back to the original remote URL on the next render cycle.
+      audio.src = proxyUrl
+      audio.setAttribute('src', proxyUrl)
+      audio.load()
+      const playPromise = audio.play()
+      if (playPromise !== undefined) {
+        playPromise.catch(() => {
+          // Autoplay may be blocked — let useAutoplayRetry handle it
+        })
+      }
+    }, BOOTSTRAP_TIMEOUT_MS)
+
+    // Listen for actual playback success — loadedmetadata alone is not enough
+    // (a stream can expose metadata quickly and still hang before canplay/playing)
+    const onPlaying = () => {
+      clearBootstrapTimeout()
+    }
+
+    audio.addEventListener('playing', onPlaying)
+
+    return () => {
+      clearBootstrapTimeout()
+      audio.removeEventListener('playing', onPlaying)
+    }
+  }, [audioRef, audioUrl, isPlaying, clearBootstrapTimeout])
+}
