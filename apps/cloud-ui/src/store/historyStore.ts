@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { PlaybackSession } from '../lib/dexieDb'
-import { logError } from '../lib/logger'
+import { isAbortLikeError } from '../lib/fetchUtils'
+import { warn } from '../lib/logger'
 import { FilesRepository } from '../lib/repositories/FilesRepository'
 import { PlaybackRepository } from '../lib/repositories/PlaybackRepository'
 import { abortRequestsWithPrefix, deduplicatedFetchWithCallerAbort } from '../lib/requestManager'
@@ -34,7 +35,7 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
         const sessions = await PlaybackRepository.getAllPlaybackSessions()
         set({ sessions, isLoading: false })
       } catch (err) {
-        logError('[HistoryStore] Failed to load sessions:', err)
+        if (!isAbortLikeError(err)) warn('[HistoryStore] Failed to load sessions:', err)
         set({ isLoading: false })
       }
     })
@@ -51,7 +52,7 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
         }))
       } catch (err) {
         if (sharedSignal.aborted) return
-        logError('[HistoryStore] Failed to delete session:', id, err)
+        if (!isAbortLikeError(err)) warn('[HistoryStore] Failed to delete session:', id, err)
         throw err
       }
     })
@@ -74,7 +75,8 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
       }
     } catch (err) {
       if (signal?.aborted) return
-      logError('[HistoryStore] Failed to resolve artwork for session:', session.id, err)
+      if (!isAbortLikeError(err))
+        warn('[HistoryStore] Failed to resolve artwork for session:', session.id, err)
     }
   },
 
@@ -83,7 +85,7 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
       const audioBlob = await PlaybackRepository.getAudioBlob(audioId)
       return audioBlob?.blob || null
     } catch (err) {
-      logError('[HistoryStore] Failed to get audio blob:', err)
+      if (!isAbortLikeError(err)) warn('[HistoryStore] Failed to get audio blob:', err)
       return null
     }
   },

@@ -293,7 +293,7 @@ function clearCloudBackendBreaker(fallbackClass: CloudBackendFallbackClass, targ
   cloudBackendBreaker.delete(getCloudBackendBreakerKey(fallbackClass, targetUrl))
 }
 
-function isAbortLikeError(error: unknown): boolean {
+export function isAbortLikeError(error: unknown): boolean {
   return (
     (error instanceof Error && error.name === 'AbortError') ||
     (!!error && typeof error === 'object' && 'name' in error && error.name === 'AbortError')

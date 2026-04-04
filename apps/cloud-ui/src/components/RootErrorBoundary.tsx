@@ -7,6 +7,30 @@ import { ErrorBoundary } from './ErrorBoundary'
 
 const IS_DEV = import.meta.env.DEV
 
+const reportedErrors = new Map<string, number>()
+const DEDUP_WINDOW_MS = 5000
+
+function getErrorDedupKey(error: Error): string {
+  return `${error.name}:${error.message}`
+}
+
+function isDuplicateError(error: Error): boolean {
+  const key = getErrorDedupKey(error)
+  const lastReported = reportedErrors.get(key)
+  const now = Date.now()
+  if (lastReported && now - lastReported < DEDUP_WINDOW_MS) {
+    return true
+  }
+  reportedErrors.set(key, now)
+  // Clean up old entries
+  for (const [k, ts] of reportedErrors) {
+    if (now - ts > DEDUP_WINDOW_MS * 2) {
+      reportedErrors.delete(k)
+    }
+  }
+  return false
+}
+
 export function RootErrorBoundary({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation()
   const [lastErrorText, setLastErrorText] = useState('')
@@ -39,7 +63,7 @@ export function RootErrorBoundary({ children }: { children: React.ReactNode }) {
             </Button>
           </div>
 
-          {/* Keep technical diagnostics out of user-facing UI in production. */}
+          {/* Diagnostics stay developer-only even when the fallback itself is user-visible. */}
           {IS_DEV && (
             <div className="mt-3">
               <details>
@@ -72,6 +96,7 @@ export function RootErrorBoundary({ children }: { children: React.ReactNode }) {
     <ErrorBoundary
       fallback={fallback}
       onError={(error, info) => {
+        if (isDuplicateError(error)) return
         const text = [
           `Readio crashed at ${new Date().toISOString()}`,
           '',

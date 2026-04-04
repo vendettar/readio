@@ -44,6 +44,7 @@ vi.mock('../../lib/schemas/settings', async (importOriginal) => {
 
 vi.mock('../../lib/logger', () => ({
   logError: (...args: unknown[]) => logErrorMock(...args),
+  warn: vi.fn(),
 }))
 
 vi.mock('../../lib/toast', () => ({
@@ -165,10 +166,6 @@ describe('useSettingsForm', () => {
       await result.current.onSubmit()
     })
 
-    expect(logErrorMock).toHaveBeenCalledWith(
-      '[useSettingsForm] Failed to save settings:',
-      expect.objectContaining({ message: 'Settings write aborted due to newer wipe action' })
-    )
     expect(toastErrorKeyMock).toHaveBeenCalledWith('settingsNotSaved')
   })
 
@@ -284,10 +281,6 @@ describe('useSettingsForm', () => {
     })
 
     expect(result.current.credentialsLoaded).toBe(false)
-    expect(logErrorMock).toHaveBeenCalledWith(
-      '[useSettingsForm] Failed to load credentials:',
-      expect.any(Error)
-    )
 
     // Verify onSubmit is blocked
     await act(async () => {

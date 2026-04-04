@@ -94,8 +94,35 @@ type asrRelayErrorPayload struct {
 	Code         string `json:"code"`
 	Message      string `json:"message"`
 	Status       int    `json:"status"`
+	RequestID    string `json:"request_id,omitempty"`
 	RetryAfterMs *int64 `json:"retryAfterMs,omitempty"`
 }
+
+func (e *asrRelayErrorPayload) Error() string { return e.Message }
+
+// Sentinel ASR error values for use with errors.Is().
+// Only errors with fully static messages are exposed as sentinels.
+// Errors with dynamic messages (e.g., err.Error()) must be constructed inline.
+var (
+	ErrASRInvalidMethod           = &asrRelayErrorPayload{Status: http.StatusMethodNotAllowed, Code: "ASR_INVALID_METHOD", Message: "only POST is allowed"}
+	ErrASRUnsupportedProvider     = &asrRelayErrorPayload{Status: http.StatusBadRequest, Code: "ASR_UNSUPPORTED_PROVIDER", Message: "unsupported ASR provider"}
+	ErrASRMissingModel            = &asrRelayErrorPayload{Status: http.StatusBadRequest, Code: "ASR_INVALID_PAYLOAD", Message: "missing model"}
+	ErrASRUnsupportedModel        = &asrRelayErrorPayload{Status: http.StatusBadRequest, Code: "ASR_INVALID_PAYLOAD", Message: "unsupported ASR model"}
+	ErrASRMissingAPIKey           = &asrRelayErrorPayload{Status: http.StatusUnauthorized, Code: "ASR_UNAUTHORIZED", Message: "missing ASR API key"}
+	ErrASRInvalidAudio            = &asrRelayErrorPayload{Status: http.StatusBadRequest, Code: "ASR_INVALID_PAYLOAD", Message: "invalid audio payload"}
+	ErrASRUnsupportedTransport    = &asrRelayErrorPayload{Status: http.StatusBadRequest, Code: "ASR_INVALID_PAYLOAD", Message: "unsupported provider transport"}
+	ErrASRProviderRejectedCreds   = &asrRelayErrorPayload{Status: http.StatusUnauthorized, Code: "ASR_UNAUTHORIZED", Message: "provider rejected credentials"}
+	ErrASRProviderRejectedPayload = &asrRelayErrorPayload{Status: http.StatusRequestEntityTooLarge, Code: "ASR_PAYLOAD_TOO_LARGE", Message: "provider rejected payload"}
+	ErrASRProviderRateLimited     = &asrRelayErrorPayload{Status: http.StatusTooManyRequests, Code: "ASR_RATE_LIMITED", Message: "provider rate limited the request"}
+	ErrASRProviderUnavailable     = &asrRelayErrorPayload{Status: http.StatusServiceUnavailable, Code: "ASR_SERVICE_UNAVAILABLE", Message: "provider service unavailable"}
+	ErrASRProviderClientError     = &asrRelayErrorPayload{Status: http.StatusBadRequest, Code: "ASR_CLIENT_ERROR", Message: "provider rejected the request"}
+	ErrASRUpstreamTimeout         = &asrRelayErrorPayload{Status: http.StatusServiceUnavailable, Code: "ASR_SERVICE_UNAVAILABLE", Message: "upstream request timed out"}
+	ErrASRRequestCanceled         = &asrRelayErrorPayload{Status: http.StatusBadRequest, Code: "ASR_CLIENT_ERROR", Message: "request canceled"}
+	ErrASRUpstreamFailed          = &asrRelayErrorPayload{Status: http.StatusServiceUnavailable, Code: "ASR_SERVICE_UNAVAILABLE", Message: "upstream request failed"}
+	ErrASRVolcengineUnavailable   = &asrRelayErrorPayload{Status: http.StatusServiceUnavailable, Code: "ASR_SERVICE_UNAVAILABLE", Message: "Volcengine service unavailable"}
+	ErrASRVolcengineUnknown       = &asrRelayErrorPayload{Status: http.StatusServiceUnavailable, Code: "ASR_SERVICE_UNAVAILABLE", Message: "Volcengine returned an unknown status"}
+	ErrASRVolcengineClientError   = &asrRelayErrorPayload{Status: http.StatusBadRequest, Code: "ASR_CLIENT_ERROR", Message: "Volcengine client error"}
+)
 
 type asrRelayService struct {
 	client             *http.Client
@@ -198,14 +225,11 @@ func defaultASRRelayProviders() map[string]asrRelayProviderConfig {
 
 func (s *asrRelayService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
-	var route string
+	route := "asr-relay" // Default route to ensure error logging works even before route is determined
 	var errClass string
 	var httpStatus int
 
 	defer func() {
-		if route == "" {
-			return
-		}
 		slog.Info("asr-relay request",
 			"route", route,
 			"elapsed_ms", time.Since(start).Milliseconds(),
@@ -218,12 +242,12 @@ func (s *asrRelayService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		httpStatus = http.StatusMethodNotAllowed
 		errClass = "invalid_method"
 		route = "asr-relay"
-		writeASRRelayError(w, http.StatusMethodNotAllowed, "only POST is allowed", "invalid_method", nil)
+		writeASRRelayError(w, http.StatusMethodNotAllowed, "only POST is allowed", "ASR_INVALID_METHOD", nil)
 		return
 	}
 	if relayErr := s.authorizeRequest(r); relayErr != nil {
 		httpStatus = relayErr.Status
-		errClass = relayErr.Code
+		errClass = asrErrClass(relayErr.Code)
 		route = "asr-relay"
 		writeASRRelayError(w, relayErr.Status, relayErr.Message, relayErr.Code, relayErr.RetryAfterMs)
 		return
@@ -235,14 +259,14 @@ func (s *asrRelayService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		payload, relayErr := s.decodeMultipartRelayPayload(w, r)
 		if relayErr != nil {
 			httpStatus = relayErr.Status
-			errClass = relayErr.Code
+			errClass = asrErrClass(relayErr.Code)
 			writeASRRelayError(w, relayErr.Status, relayErr.Message, relayErr.Code, relayErr.RetryAfterMs)
 			return
 		}
 		result, relayErr := s.transcribe(r.Context(), *payload)
 		if relayErr != nil {
 			httpStatus = relayErr.Status
-			errClass = relayErr.Code
+			errClass = asrErrClass(relayErr.Code)
 			writeASRRelayError(w, relayErr.Status, relayErr.Message, relayErr.Code, relayErr.RetryAfterMs)
 			return
 		}
@@ -253,40 +277,40 @@ func (s *asrRelayService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if ct := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type"))); ct == "" || !strings.HasPrefix(ct, "application/json") {
 			httpStatus = http.StatusBadRequest
 			errClass = "invalid_payload"
-			writeASRRelayError(w, http.StatusBadRequest, "content-type must be application/json", "invalid_payload", nil)
+			writeASRRelayError(w, http.StatusBadRequest, "content-type must be application/json", "ASR_INVALID_PAYLOAD", nil)
 			return
 		}
 		body, err := io.ReadAll(io.LimitReader(r.Body, s.bodyLimit+1))
 		if err != nil {
 			httpStatus = http.StatusBadRequest
 			errClass = "invalid_payload"
-			writeASRRelayError(w, http.StatusBadRequest, "invalid relay request payload", "invalid_payload", nil)
+			writeASRRelayError(w, http.StatusBadRequest, "invalid relay request payload", "ASR_INVALID_PAYLOAD", nil)
 			return
 		}
 		if int64(len(body)) > s.bodyLimit {
 			httpStatus = http.StatusRequestEntityTooLarge
 			errClass = "payload_too_large"
-			writeASRRelayError(w, http.StatusRequestEntityTooLarge, "relay request body too large", "payload_too_large", nil)
+			writeASRRelayError(w, http.StatusRequestEntityTooLarge, "relay request body too large", "ASR_PAYLOAD_TOO_LARGE", nil)
 			return
 		}
 		var payload asrVerifyRequestPayload
 		if err := decodeStrictJSON(body, &payload); err != nil {
 			httpStatus = http.StatusBadRequest
 			errClass = "invalid_payload"
-			writeASRRelayError(w, http.StatusBadRequest, "invalid relay request payload", "invalid_payload", nil)
+			writeASRRelayError(w, http.StatusBadRequest, "invalid relay request payload", "ASR_INVALID_PAYLOAD", nil)
 			return
 		}
 		ok, relayErr := s.verify(r.Context(), payload)
 		if relayErr != nil {
 			httpStatus = relayErr.Status
-			errClass = relayErr.Code
+			errClass = asrErrClass(relayErr.Code)
 			writeASRRelayError(w, relayErr.Status, relayErr.Message, relayErr.Code, relayErr.RetryAfterMs)
 			return
 		}
 		if !ok {
 			httpStatus = http.StatusUnauthorized
 			errClass = "unauthorized"
-			writeASRRelayError(w, http.StatusUnauthorized, "provider rejected credentials", "unauthorized", nil)
+			writeASRRelayError(w, http.StatusUnauthorized, "provider rejected credentials", "ASR_UNAUTHORIZED", nil)
 			return
 		}
 		httpStatus = http.StatusOK
@@ -308,7 +332,7 @@ func (s *asrRelayService) authorizeRequest(r *http.Request) *asrRelayErrorPayloa
 		if subtle.ConstantTimeCompare([]byte(r.Header.Get(asrRelayPublicTokenHeader)), []byte(token)) != 1 {
 			return &asrRelayErrorPayload{
 				Status:  http.StatusUnauthorized,
-				Code:    "unauthorized",
+				Code:    "ASR_UNAUTHORIZED",
 				Message: "invalid relay token",
 			}
 		}
@@ -317,7 +341,7 @@ func (s *asrRelayService) authorizeRequest(r *http.Request) *asrRelayErrorPayloa
 	if s.limiter != nil && !s.limiter.allow(effectiveClientIP(r, s.trustedProxies)) {
 		return &asrRelayErrorPayload{
 			Status:  http.StatusTooManyRequests,
-			Code:    "rate_limited",
+			Code:    "ASR_RATE_LIMITED",
 			Message: "rate limit exceeded",
 		}
 	}
@@ -330,14 +354,14 @@ func (s *asrRelayService) originAuthorizationError(r *http.Request) *asrRelayErr
 	if origin == "" {
 		return &asrRelayErrorPayload{
 			Status:  http.StatusForbidden,
-			Code:    "missing_or_disallowed_origin",
+			Code:    "ASR_MISSING_OR_DISALLOWED_ORIGIN",
 			Message: "missing or disallowed origin",
 		}
 	}
 	if !s.isAllowedOrigin(r) {
 		return &asrRelayErrorPayload{
 			Status:  http.StatusForbidden,
-			Code:    "origin_not_allowed",
+			Code:    "ASR_ORIGIN_NOT_ALLOWED",
 			Message: "missing or disallowed origin",
 		}
 	}
@@ -475,7 +499,7 @@ func (s *asrRelayService) decodeMultipartRelayPayload(
 	if ct == "" || !strings.HasPrefix(ct, "multipart/form-data") {
 		return nil, &asrRelayErrorPayload{
 			Status:  http.StatusBadRequest,
-			Code:    "invalid_payload",
+			Code:    "ASR_INVALID_PAYLOAD",
 			Message: "content-type must be multipart/form-data",
 		}
 	}
@@ -486,13 +510,13 @@ func (s *asrRelayService) decodeMultipartRelayPayload(
 		if errors.As(err, &maxBytesErr) {
 			return nil, &asrRelayErrorPayload{
 				Status:  http.StatusRequestEntityTooLarge,
-				Code:    "payload_too_large",
+				Code:    "ASR_PAYLOAD_TOO_LARGE",
 				Message: "relay request body too large",
 			}
 		}
 		return nil, &asrRelayErrorPayload{
 			Status:  http.StatusBadRequest,
-			Code:    "invalid_payload",
+			Code:    "ASR_INVALID_PAYLOAD",
 			Message: "invalid relay request payload",
 		}
 	}
@@ -506,7 +530,7 @@ func (s *asrRelayService) decodeMultipartRelayPayload(
 	if err != nil {
 		return nil, &asrRelayErrorPayload{
 			Status:  http.StatusBadRequest,
-			Code:    "invalid_payload",
+			Code:    "ASR_INVALID_PAYLOAD",
 			Message: "missing audio payload",
 		}
 	}
@@ -514,11 +538,7 @@ func (s *asrRelayService) decodeMultipartRelayPayload(
 
 	audioBytes, err := io.ReadAll(file)
 	if err != nil || len(audioBytes) == 0 {
-		return nil, &asrRelayErrorPayload{
-			Status:  http.StatusBadRequest,
-			Code:    "invalid_payload",
-			Message: "invalid audio payload",
-		}
+		return nil, ErrASRInvalidAudio
 	}
 
 	return &asrRelayRequestPayload{
@@ -546,25 +566,25 @@ func decodeStrictJSON[T any](body []byte, out *T) error {
 func (s *asrRelayService) transcribe(ctx context.Context, payload asrRelayRequestPayload) (*asrRelayResponsePayload, *asrRelayErrorPayload) {
 	provider, ok := s.providers[strings.ToLower(strings.TrimSpace(payload.Provider))]
 	if !ok {
-		return nil, &asrRelayErrorPayload{Status: http.StatusBadRequest, Code: "unsupported_provider", Message: "unsupported ASR provider"}
+		return nil, ErrASRUnsupportedProvider
 	}
 
 	model := strings.TrimSpace(payload.Model)
 	if model == "" {
-		return nil, &asrRelayErrorPayload{Status: http.StatusBadRequest, Code: "invalid_payload", Message: "missing model"}
+		return nil, ErrASRMissingModel
 	}
 	if _, ok := provider.allowedModels[model]; !ok {
-		return nil, &asrRelayErrorPayload{Status: http.StatusBadRequest, Code: "invalid_payload", Message: "unsupported ASR model"}
+		return nil, ErrASRUnsupportedModel
 	}
 
 	apiKey := strings.TrimSpace(payload.APIKey)
 	if apiKey == "" {
-		return nil, &asrRelayErrorPayload{Status: http.StatusUnauthorized, Code: "unauthorized", Message: "missing ASR API key"}
+		return nil, ErrASRMissingAPIKey
 	}
 
 	audioBytes := payload.AudioBytes
 	if len(audioBytes) == 0 {
-		return nil, &asrRelayErrorPayload{Status: http.StatusBadRequest, Code: "invalid_payload", Message: "invalid audio payload"}
+		return nil, ErrASRInvalidAudio
 	}
 
 	audioMimeType := strings.TrimSpace(payload.AudioMimeType)
@@ -642,7 +662,7 @@ func (s *asrRelayService) transcribe(ctx context.Context, payload asrRelayReques
 	case "volcengine-asr":
 		return s.transcribeVolcengine(reqCtx, client, provider, model, apiKey, audioBytes, audioMimeType)
 	default:
-		return nil, &asrRelayErrorPayload{Status: http.StatusBadRequest, Code: "invalid_payload", Message: "unsupported provider transport"}
+		return nil, ErrASRUnsupportedTransport
 	}
 }
 
@@ -721,7 +741,7 @@ func (s *asrRelayService) transcribeViaWorker(
 	if resp.StatusCode >= 500 {
 		return nil, &asrRelayErrorPayload{
 			Status:  http.StatusServiceUnavailable,
-			Code:    "service_unavailable",
+			Code:    "ASR_SERVICE_UNAVAILABLE",
 			Message: "worker hop failed or upstream unavailable",
 		}, true
 	}
@@ -738,7 +758,7 @@ func (s *asrRelayService) transcribeViaWorker(
 				// Worker rejected our secret or is misconfigured — hop error.
 				return nil, &asrRelayErrorPayload{
 					Status:  http.StatusServiceUnavailable,
-					Code:    "service_unavailable",
+					Code:    "ASR_SERVICE_UNAVAILABLE",
 					Message: "worker auth failed or misconfigured",
 				}, true
 			}
@@ -746,7 +766,7 @@ func (s *asrRelayService) transcribeViaWorker(
 		// Otherwise it's Groq's 401 forwarded through the Worker.
 		return nil, &asrRelayErrorPayload{
 			Status:  http.StatusUnauthorized,
-			Code:    "unauthorized",
+			Code:    "ASR_UNAUTHORIZED",
 			Message: "provider rejected credentials",
 		}, false
 	}
@@ -763,12 +783,12 @@ func (s *asrRelayService) transcribeViaWorker(
 func (s *asrRelayService) verify(ctx context.Context, payload asrVerifyRequestPayload) (bool, *asrRelayErrorPayload) {
 	provider, ok := s.providers[strings.ToLower(strings.TrimSpace(payload.Provider))]
 	if !ok {
-		return false, &asrRelayErrorPayload{Status: http.StatusBadRequest, Code: "unsupported_provider", Message: "unsupported ASR provider"}
+		return false, ErrASRUnsupportedProvider
 	}
 
 	apiKey := strings.TrimSpace(payload.APIKey)
 	if apiKey == "" {
-		return false, &asrRelayErrorPayload{Status: http.StatusUnauthorized, Code: "unauthorized", Message: "missing ASR API key"}
+		return false, ErrASRMissingAPIKey
 	}
 
 	client := s.client
@@ -794,7 +814,7 @@ func (s *asrRelayService) verify(ctx context.Context, payload asrVerifyRequestPa
 	case "volcengine-asr":
 		return s.verifyVolcengine(reqCtx, client, provider, apiKey)
 	default:
-		return false, &asrRelayErrorPayload{Status: http.StatusBadRequest, Code: "invalid_payload", Message: "unsupported provider transport"}
+		return false, ErrASRUnsupportedTransport
 	}
 }
 
@@ -939,7 +959,7 @@ func (s *asrRelayService) transcribeVolcengine(
 ) (*asrRelayResponsePayload, *asrRelayErrorPayload) {
 	appID, accessToken, err := parseVolcengineRelayCredentials(apiKey)
 	if err != nil {
-		return nil, &asrRelayErrorPayload{Status: http.StatusUnauthorized, Code: "unauthorized", Message: err.Error()}
+		return nil, &asrRelayErrorPayload{Status: http.StatusUnauthorized, Code: "ASR_UNAUTHORIZED", Message: err.Error()}
 	}
 
 	body := map[string]any{
@@ -1039,7 +1059,7 @@ func (s *asrRelayService) verifyVolcengine(
 ) (bool, *asrRelayErrorPayload) {
 	appID, accessToken, err := parseVolcengineRelayCredentials(apiKey)
 	if err != nil {
-		return false, &asrRelayErrorPayload{Status: http.StatusUnauthorized, Code: "unauthorized", Message: err.Error()}
+		return false, &asrRelayErrorPayload{Status: http.StatusUnauthorized, Code: "ASR_UNAUTHORIZED", Message: err.Error()}
 	}
 
 	body := map[string]any{
@@ -1076,12 +1096,12 @@ func (s *asrRelayService) verifyVolcengine(
 		return true, nil
 	}
 	if strings.HasPrefix(statusCode, "550") {
-		return false, &asrRelayErrorPayload{Status: http.StatusServiceUnavailable, Code: "service_unavailable", Message: "Volcengine service unavailable"}
+		return false, ErrASRVolcengineUnavailable
 	}
 	if strings.HasPrefix(statusCode, "450") {
 		return false, nil
 	}
-	return false, &asrRelayErrorPayload{Status: http.StatusServiceUnavailable, Code: "service_unavailable", Message: "Volcengine returned an unknown status"}
+	return false, ErrASRVolcengineUnknown
 }
 
 func parseOpenAICompatibleRelayResponse(resp *http.Response, provider asrRelayProviderConfig, model string) (*asrRelayResponsePayload, *asrRelayErrorPayload) {
@@ -1272,12 +1292,12 @@ func parseVolcengineRelayResponse(resp *http.Response, provider asrRelayProvider
 	}
 	if statusCode != "" && statusCode != "20000000" && statusCode != "20000003" {
 		if strings.HasPrefix(statusCode, "450") {
-			return nil, &asrRelayErrorPayload{Status: http.StatusBadRequest, Code: "client_error", Message: "Volcengine client error"}
+			return nil, ErrASRVolcengineClientError
 		}
 		if strings.HasPrefix(statusCode, "550") {
-			return nil, &asrRelayErrorPayload{Status: http.StatusServiceUnavailable, Code: "service_unavailable", Message: "Volcengine service unavailable"}
+			return nil, ErrASRVolcengineUnavailable
 		}
-		return nil, &asrRelayErrorPayload{Status: http.StatusServiceUnavailable, Code: "service_unavailable", Message: "Volcengine returned an unknown status"}
+		return nil, ErrASRVolcengineUnknown
 	}
 
 	var payload struct {
@@ -1385,23 +1405,34 @@ func minimalSilentWAVBytes() []byte {
 
 func asrRelayStatusToError(resp *http.Response) *asrRelayErrorPayload {
 	retryAfterMs := parseRetryAfterHeader(resp.Header.Get("Retry-After"))
+	var base *asrRelayErrorPayload
 	switch resp.StatusCode {
 	case http.StatusUnauthorized, http.StatusForbidden:
-		return &asrRelayErrorPayload{Status: http.StatusUnauthorized, Code: "unauthorized", Message: "provider rejected credentials", RetryAfterMs: retryAfterMs}
+		base = ErrASRProviderRejectedCreds
 	case http.StatusRequestEntityTooLarge:
-		return &asrRelayErrorPayload{Status: http.StatusRequestEntityTooLarge, Code: "payload_too_large", Message: "provider rejected payload", RetryAfterMs: retryAfterMs}
+		base = ErrASRProviderRejectedPayload
 	case http.StatusTooManyRequests:
-		return &asrRelayErrorPayload{Status: http.StatusTooManyRequests, Code: "rate_limited", Message: "provider rate limited the request", RetryAfterMs: retryAfterMs}
+		base = ErrASRProviderRateLimited
+	default:
+		if resp.StatusCode >= 500 {
+			base = ErrASRProviderUnavailable
+		} else {
+			base = ErrASRProviderClientError
+		}
 	}
-
-	if resp.StatusCode >= 500 {
-		return &asrRelayErrorPayload{Status: http.StatusServiceUnavailable, Code: "service_unavailable", Message: "provider service unavailable", RetryAfterMs: retryAfterMs}
+	if retryAfterMs != nil && *retryAfterMs > 0 {
+		return &asrRelayErrorPayload{
+			Status:       base.Status,
+			Code:         base.Code,
+			Message:      base.Message,
+			RetryAfterMs: retryAfterMs,
+		}
 	}
-	return &asrRelayErrorPayload{Status: http.StatusBadRequest, Code: "client_error", Message: "provider rejected the request", RetryAfterMs: retryAfterMs}
+	return base
 }
 
 func asrRelayInternalError(message string) *asrRelayErrorPayload {
-	return &asrRelayErrorPayload{Status: http.StatusServiceUnavailable, Code: "service_unavailable", Message: message}
+	return &asrRelayErrorPayload{Status: http.StatusServiceUnavailable, Code: "ASR_SERVICE_UNAVAILABLE", Message: message}
 }
 
 func mapASRRelayTransportError(err error) *asrRelayErrorPayload {
@@ -1409,16 +1440,16 @@ func mapASRRelayTransportError(err error) *asrRelayErrorPayload {
 		return asrRelayInternalError("upstream request failed")
 	}
 	if errors.Is(err, context.DeadlineExceeded) {
-		return &asrRelayErrorPayload{Status: http.StatusServiceUnavailable, Code: "service_unavailable", Message: "upstream request timed out"}
+		return ErrASRUpstreamTimeout
 	}
 	if errors.Is(err, context.Canceled) {
-		return &asrRelayErrorPayload{Status: http.StatusBadRequest, Code: "client_error", Message: "request canceled"}
+		return ErrASRRequestCanceled
 	}
 	var urlErr *url.Error
 	if errors.As(err, &urlErr) && errors.Is(urlErr.Err, context.DeadlineExceeded) {
-		return &asrRelayErrorPayload{Status: http.StatusServiceUnavailable, Code: "service_unavailable", Message: "upstream request timed out"}
+		return ErrASRUpstreamTimeout
 	}
-	return &asrRelayErrorPayload{Status: http.StatusServiceUnavailable, Code: "service_unavailable", Message: "upstream request failed"}
+	return ErrASRUpstreamFailed
 }
 
 func parseRetryAfterHeader(value string) *int64 {
@@ -1475,20 +1506,45 @@ func jsonRequest(ctx context.Context, method, target string, body any) (*http.Re
 }
 
 func writeASRRelayError(w http.ResponseWriter, status int, message string, code string, retryAfterMs *int64) {
+	requestID := generateRequestID()
 	payload := asrRelayErrorPayload{
-		Status:  status,
-		Code:    code,
-		Message: message,
+		Status:    status,
+		Code:      code,
+		Message:   message,
+		RequestID: requestID,
 	}
 	if retryAfterMs != nil {
 		payload.RetryAfterMs = retryAfterMs
 		w.Header().Set("Retry-After", strconv.FormatInt(*retryAfterMs/1000, 10))
 	}
 	writeJSON(w, status, payload)
+	slog.Info("asr relay error response", "request_id", requestID, "code", code, "status", status)
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(payload)
+}
+
+// asrErrClass maps public ASR error codes to low-cardinality observability classes.
+// Public codes (ASR_*) must never leak into error_class, which is used for
+// metrics aggregation and must remain stable and bounded.
+func asrErrClass(code string) string {
+	switch code {
+	case "ASR_INVALID_METHOD", "ASR_INVALID_PAYLOAD":
+		return "invalid_request"
+	case "ASR_UNAUTHORIZED", "ASR_MISSING_OR_DISALLOWED_ORIGIN", "ASR_ORIGIN_NOT_ALLOWED":
+		return "unauthorized"
+	case "ASR_RATE_LIMITED":
+		return "rate_limit"
+	case "ASR_UNSUPPORTED_PROVIDER", "ASR_CLIENT_ERROR":
+		return "client_error"
+	case "ASR_SERVICE_UNAVAILABLE":
+		return "service_unavailable"
+	case "ASR_PAYLOAD_TOO_LARGE":
+		return "payload_too_large"
+	default:
+		return "unknown"
+	}
 }

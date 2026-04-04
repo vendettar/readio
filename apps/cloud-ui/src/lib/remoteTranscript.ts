@@ -21,8 +21,9 @@ import {
   FetchError,
   fetchTextWithFallback,
   fetchWithFallback,
+  isAbortLikeError,
 } from './fetchUtils'
-import { log, logError } from './logger'
+import { log, logError, warn } from './logger'
 import { normalizePodcastAudioUrl, sha256, unwrapPodcastTrackingUrl } from './networking/urlUtils'
 import { DownloadsRepository } from './repositories/DownloadsRepository'
 import { FilesRepository } from './repositories/FilesRepository'
@@ -1006,7 +1007,7 @@ async function startOnlineASRForTrack(options: {
                 log('[asr] auto-save persisted download', { trackKey, trackId: res.trackId })
               }
             })
-            .catch((err) => logError('[asr] auto-save failed', err))
+            .catch((err) => warn('[asr] auto-save failed', err))
         }
         if (!isTrackStillCurrent(expectedAudioUrl, requestId)) return
         useTranscriptStore
@@ -1219,7 +1220,9 @@ export async function retranscribeDownloadedTrackWithCurrentSettings(
           asrProviderCooldowns.set(asrConfig.asrProvider, Date.now() + error.retryAfterMs)
         }
         handleAsrFailure(error, 'manual')
-        logError('[asr] retranscribe download failed', { trackId, error })
+        if (!isAbortLikeError(error)) {
+          warn('[asr] retranscribe download failed', { trackId, error })
+        }
         resolve({ ok: false, reason: RETRANSCRIBE_DOWNLOAD_REASON.FAILED })
       } finally {
         inFlightAsrTasks.delete(trackKey)
@@ -1230,7 +1233,9 @@ export async function retranscribeDownloadedTrackWithCurrentSettings(
       void backgroundAsrQueue.enqueuePriority(task)
     } catch (error) {
       inFlightAsrTasks.delete(trackKey)
-      logError('[asr] failed to enqueue download retranscribe task', { trackId, error })
+      if (!isAbortLikeError(error)) {
+        warn('[asr] failed to enqueue download retranscribe task', { trackId, error })
+      }
       resolve({ ok: false, reason: RETRANSCRIBE_DOWNLOAD_REASON.ENQUEUE_FAILED })
     }
   })
@@ -1335,7 +1340,9 @@ export async function retranscribeFileTrackWithCurrentSettings(
           asrProviderCooldowns.set(asrConfig.asrProvider, Date.now() + error.retryAfterMs)
         }
         handleAsrFailure(error, 'manual')
-        logError('[asr] retranscribe file failed', { trackId, error })
+        if (!isAbortLikeError(error)) {
+          warn('[asr] retranscribe file failed', { trackId, error })
+        }
         resolve({ ok: false, reason: RETRANSCRIBE_FILE_REASON.FAILED })
       } finally {
         inFlightAsrTasks.delete(trackKey)
@@ -1346,7 +1353,9 @@ export async function retranscribeFileTrackWithCurrentSettings(
       void backgroundAsrQueue.enqueuePriority(task)
     } catch (error) {
       inFlightAsrTasks.delete(trackKey)
-      logError('[asr] failed to enqueue file retranscribe task', { trackId, error })
+      if (!isAbortLikeError(error)) {
+        warn('[asr] failed to enqueue file retranscribe task', { trackId, error })
+      }
       resolve({ ok: false, reason: RETRANSCRIBE_FILE_REASON.ENQUEUE_FAILED })
     }
   })

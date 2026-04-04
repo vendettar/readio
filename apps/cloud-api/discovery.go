@@ -191,7 +191,7 @@ func newDiscoveryService() *discoveryService {
 func (s *discoveryService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		w.Header().Set("Allow", http.MethodGet)
-		writeDiscoveryError(w, http.StatusMethodNotAllowed, "method_not_allowed", "only GET is allowed")
+		writeDiscoveryError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "only GET is allowed")
 		return
 	}
 
@@ -213,7 +213,7 @@ func (s *discoveryService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	case discoveryLookupPodcastsRoute:
 		s.handleLookupPodcasts(w, r)
 	default:
-		writeDiscoveryError(w, http.StatusNotFound, "not_found", "unknown discovery endpoint")
+		writeDiscoveryError(w, http.StatusNotFound, "NOT_FOUND", "unknown discovery endpoint")
 	}
 }
 
@@ -295,7 +295,7 @@ func parseDiscoveryCountry(values url.Values) (string, error) {
 	}
 	if !discoveryCountryPattern.MatchString(country) {
 		return "", &discoveryParamError{
-			code:    "invalid_country",
+			code:    "INVALID_COUNTRY",
 			message: "country must be a 2-letter lowercase code",
 		}
 	}
@@ -306,13 +306,13 @@ func parseDiscoveryID(values url.Values, key string) (string, error) {
 	value := strings.TrimSpace(values.Get(key))
 	if value == "" {
 		return "", &discoveryParamError{
-			code:    "missing_" + key,
+			code:    "MISSING_" + strings.ToUpper(key),
 			message: key + " is required",
 		}
 	}
 	if !discoveryIDPattern.MatchString(value) {
 		return "", &discoveryParamError{
-			code:    "invalid_" + key,
+			code:    "INVALID_" + strings.ToUpper(key),
 			message: key + " must be a positive integer",
 		}
 	}
@@ -323,7 +323,7 @@ func parseDiscoveryTerm(values url.Values) (string, error) {
 	term := strings.ToLower(strings.TrimSpace(values.Get("term")))
 	if term == "" {
 		return "", &discoveryParamError{
-			code:    "invalid_term",
+			code:    "INVALID_TERM",
 			message: "term must not be empty",
 		}
 	}
@@ -334,7 +334,7 @@ func parseDiscoveryFeedURL(values url.Values) (string, error) {
 	raw := strings.TrimSpace(values.Get("url"))
 	if raw == "" {
 		return "", &discoveryParamError{
-			code:    "missing_url",
+			code:    "MISSING_URL",
 			message: "url is required",
 		}
 	}
@@ -356,7 +356,7 @@ func parseDiscoveryIDs(values url.Values, key string) ([]string, error) {
 		}
 		if !discoveryIDPattern.MatchString(value) {
 			return nil, &discoveryParamError{
-				code:    "invalid_" + key,
+				code:    "INVALID_" + strings.ToUpper(key),
 				message: key + " must be a comma-separated list of positive integers",
 			}
 		}
@@ -374,7 +374,7 @@ func parseDiscoveryLimit(values url.Values, key string, fallback, maxLimit int) 
 	value, err := strconv.Atoi(raw)
 	if err != nil || value < 1 || value > maxLimit {
 		return 0, &discoveryParamError{
-			code:    "invalid_" + key,
+			code:    "INVALID_" + strings.ToUpper(key),
 			message: fmt.Sprintf("%s must be between 1 and %d", key, maxLimit),
 		}
 	}
@@ -388,10 +388,13 @@ func writeDiscoveryJSON(w http.ResponseWriter, status int, payload any) {
 }
 
 func writeDiscoveryError(w http.ResponseWriter, status int, code, message string) {
+	requestID := generateRequestID()
 	writeDiscoveryJSON(w, status, map[string]string{
-		"error":   code,
-		"message": message,
+		"code":       code,
+		"message":    message,
+		"request_id": requestID,
 	})
+	slog.Warn("discovery error response", "request_id", requestID, "code", code, "status", status)
 }
 
 func writeDiscoveryMappedError(w http.ResponseWriter, err error) {
@@ -403,21 +406,21 @@ func writeDiscoveryMappedError(w http.ResponseWriter, err error) {
 
 	var statusErr *discoveryUpstreamStatusError
 	if errors.As(err, &statusErr) {
-		writeDiscoveryError(w, http.StatusBadGateway, "upstream_invalid_response", "discovery upstream returned a non-success status")
+		writeDiscoveryError(w, http.StatusBadGateway, "UPSTREAM_INVALID_RESPONSE", "discovery upstream returned a non-success status")
 		return
 	}
 
 	switch {
 	case errors.Is(err, errDiscoveryTimeout):
-		writeDiscoveryError(w, http.StatusGatewayTimeout, "upstream_timeout", "discovery upstream request timed out")
+		writeDiscoveryError(w, http.StatusGatewayTimeout, "UPSTREAM_TIMEOUT", "discovery upstream request timed out")
 	case errors.Is(err, errDiscoveryTooLarge):
-		writeDiscoveryError(w, http.StatusBadGateway, "upstream_too_large", "discovery upstream response exceeded the allowed size")
+		writeDiscoveryError(w, http.StatusBadGateway, "UPSTREAM_TOO_LARGE", "discovery upstream response exceeded the allowed size")
 	case errors.Is(err, errDiscoveryXMLDecode):
-		writeDiscoveryError(w, http.StatusBadGateway, "invalid_upstream_xml", "discovery upstream response was not valid XML")
+		writeDiscoveryError(w, http.StatusBadGateway, "INVALID_UPSTREAM_XML", "discovery upstream response was not valid XML")
 	case errors.Is(err, errDiscoveryDecode):
-		writeDiscoveryError(w, http.StatusBadGateway, "invalid_upstream_payload", "discovery upstream response was not valid JSON")
+		writeDiscoveryError(w, http.StatusBadGateway, "INVALID_UPSTREAM_PAYLOAD", "discovery upstream response was not valid JSON")
 	default:
-		writeDiscoveryError(w, http.StatusBadGateway, "upstream_request_failed", "discovery upstream request failed")
+		writeDiscoveryError(w, http.StatusBadGateway, "UPSTREAM_REQUEST_FAILED", "discovery upstream request failed")
 	}
 }
 

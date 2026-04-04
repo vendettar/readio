@@ -1,0 +1,96 @@
+---
+title: Cloud Error Codes
+description: Error code reference for Cloud API surfaces (ASR Relay, Discovery, Proxy).
+---
+
+# Cloud Error Codes
+
+This page documents all error codes returned by the Cloud API. Each error response is a JSON object with the following shape:
+
+```json
+{
+  "code": "ERROR_CODE",
+  "message": "Human-readable description",
+  "request_id": "hex timestamp",
+  "retryAfterMs": 5000
+}
+```
+
+All error responses use `Content-Type: application/json; charset=utf-8`.
+
+## ASR Relay (`/api/v1/asr/transcriptions`, `/api/v1/asr/verify`)
+
+| Code | HTTP Status | Trigger | Troubleshooting |
+|------|-------------|---------|-----------------|
+| `ASR_INVALID_METHOD` | 405 | Request method is not POST | Use POST for ASR endpoints |
+| `ASR_MISSING_OR_DISALLOWED_ORIGIN` | 403 | Missing `Origin` header | Browser must send Origin header |
+| `ASR_ORIGIN_NOT_ALLOWED` | 403 | Origin not in allowlist | Check `READIO_ASR_ALLOWED_ORIGINS` env |
+| `ASR_UNAUTHORIZED` | 401 | Invalid relay token or missing ASR API key | Verify `READIO_ASR_RELAY_PUBLIC_TOKEN` and user's ASR credentials |
+| `ASR_RATE_LIMITED` | 429 | Rate limit exceeded | Check `READIO_ASR_RATE_LIMIT_BURST` and `READIO_ASR_RATE_LIMIT_WINDOW_MS` |
+| `ASR_INVALID_PAYLOAD` | 400 | Missing/invalid multipart body, missing model, unsupported model/transport, empty audio | Verify request includes valid `audio` file, `provider`, `model`, and `apiKey` fields |
+| `ASR_PAYLOAD_TOO_LARGE` | 413 | Request body exceeds 20MB limit | Reduce audio file size |
+| `ASR_UNSUPPORTED_PROVIDER` | 400 | ASR provider not configured | Check enabled providers in server config |
+| `ASR_CLIENT_ERROR` | 400 | Request canceled or Volcengine client error | Retry the request |
+| `ASR_SERVICE_UNAVAILABLE` | 503 | Upstream timeout, provider unavailable, or internal error | Check upstream provider status and worker configuration |
+
+## Discovery (`/api/v1/discovery/*`)
+
+| Code | HTTP Status | Trigger | Troubleshooting |
+|------|-------------|---------|-----------------|
+| `METHOD_NOT_ALLOWED` | 405 | Non-GET request | Use GET for discovery endpoints |
+| `NOT_FOUND` | 404 | Unknown discovery endpoint | Check the URL path against available routes |
+| `INVALID_COUNTRY` | 400 | Country code not 2-letter lowercase | Use ISO 3166-1 alpha-2 code (e.g., `us`, `gb`) |
+| `INVALID_TERM` | 400 | Search term is empty | Provide a non-empty search query |
+| `MISSING_URL` | 400 | URL parameter required for feed lookup | Include `url` query parameter |
+| `INVALID_URL` | 400 | Invalid or disallowed feed URL | Ensure URL is valid http/https and not a private/reserved host |
+| `MISSING_ID` | 400 | Required `id` parameter missing | Include the `id` query parameter |
+| `INVALID_ID` | 400 | `id` is not a positive integer | ID must be a positive integer |
+| `INVALID_IDS` | 400 | `ids` list contains non-integer values | IDs must be a comma-separated list of positive integers |
+| `INVALID_LIMIT` | 400 | `limit` is out of allowed range | Limit must be between 1 and the maximum for the endpoint |
+| `UPSTREAM_TIMEOUT` | 504 | iTunes/RSS upstream request timed out | Retry after a delay; check upstream availability |
+| `UPSTREAM_TOO_LARGE` | 502 | Upstream response exceeded size limit | Feed may be too large; contact upstream |
+| `INVALID_UPSTREAM_PAYLOAD` | 502 | Upstream response not valid JSON | Upstream API may be returning HTML error page |
+| `INVALID_UPSTREAM_XML` | 502 | Upstream response not valid XML | RSS feed may be malformed |
+| `UPSTREAM_INVALID_RESPONSE` | 502 | Upstream returned non-success status | Check upstream API health |
+| `UPSTREAM_REQUEST_FAILED` | 502 | Upstream request failed (network error) | Check network connectivity to upstream |
+
+## Proxy (`/api/proxy`)
+
+| Code | HTTP Status | Trigger | Troubleshooting |
+|------|-------------|---------|-----------------|
+| `PROXY_MISSING_URL` | 400 | No URL provided in request | Include `url` parameter or JSON body field |
+| `PROXY_INVALID_URL` | 400 | URL is not a valid http/https URL | Ensure URL format is correct |
+| `PROXY_USERINFO_NOT_ALLOWED` | 400 | URL contains userinfo (`user:pass@host`) | Remove credentials from URL |
+| `PROXY_INVALID_RANGE` | 400 | Range header doesn't match expected pattern | Use standard `bytes=start-end` format |
+| `PROXY_INVALID_CONTENT_TYPE` | 400 | POST Content-Type is not application/json | Set `Content-Type: application/json` for POST requests |
+| `PROXY_INVALID_PAYLOAD` | 400 | Request body is malformed or too large | Verify JSON structure and size (< 2MB) |
+| `PROXY_MISSING_METHOD` | 400 | No method specified in JSON body | Include `method` field (GET or HEAD) |
+| `PROXY_UNSUPPORTED_METHOD` | 400 | Method is not GET or HEAD | Only GET and HEAD are supported |
+| `PROXY_INVALID_HEADERS` | 400 | Header name or value is empty | Ensure all forwarded headers have non-empty names and values |
+| `PROXY_UNSUPPORTED_HEADER` | 400 | Header not in allowlist | Only safe headers (Accept, Range, etc.) are forwarded |
+| `PROXY_HOST_NOT_ALLOWED` | 400 | Target resolves to loopback/private IP | SSRF protection blocks internal addresses |
+| `PROXY_RATE_LIMIT_EXCEEDED` | 429 | Rate limit burst exceeded | Check `READIO_PROXY_RATE_LIMIT_BURST` |
+| `PROXY_UPSTREAM_TIMEOUT` | 504 | Upstream request timed out (10s) | Upstream is slow; consider retry |
+| `PROXY_CREATE_REQUEST_FAILED` | 502 | Failed to create upstream request | Internal error; check server logs |
+| `PROXY_UPSTREAM_FAILED` | 502 | Upstream request failed | Network error or upstream unavailable |
+| `PROXY_METHOD_NOT_ALLOWED` | 405 | HTTP method not GET/HEAD/POST | Use supported methods |
+| `PROXY_REDIRECT_TOO_LONG` | 502 | Redirect chain exceeds 5 hops | Target URL has too many redirects |
+| `PROXY_RESOLVE_FAILED` | 400 | DNS resolution failed | Target hostname cannot be resolved |
+| `PROXY_DIAL_FAILED` | 502 | TCP connection to upstream failed | Upstream host is unreachable |
+| `PROXY_UNKNOWN_ERROR` | 502 | Unclassified proxy error | Check server logs for details |
+
+## Error Response Fields
+
+- `code`: Machine-readable error code (UPPER_SNAKE_CASE). Stable across releases.
+- `message`: Human-readable description. Safe for display.
+- `request_id`: Unique identifier for this request (hex timestamp). Use when reporting issues.
+- `retryAfterMs`: (Optional) Suggested wait time in milliseconds before retrying. Only present for rate-limited responses.
+
+## `error_class` vs `code`
+
+The Cloud API maintains two separate error dimensions:
+
+- **`error_class`**: Internal observability field used in `slog` for metrics aggregation. Low-cardinality, stable categories like `timeout`, `rate_limit`, `upstream`. Not returned in API responses.
+- **`code`**: Public API error code returned in JSON responses. Used for frontend logic, operator debugging, and documentation. UPPER_SNAKE_CASE format.
+
+These are never mixed or substituted for each other.

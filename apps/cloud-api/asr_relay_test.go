@@ -30,7 +30,7 @@ func TestASRRelayRouteOwnershipAndContracts(t *testing.T) {
 		if rr.Code != http.StatusBadRequest {
 			t.Fatalf("status = %d, want %d", rr.Code, http.StatusBadRequest)
 		}
-		expectRelayErrorCode(t, rr.Body.Bytes(), "unsupported_provider")
+		expectRelayErrorCode(t, rr.Body.Bytes(), "ASR_UNSUPPORTED_PROVIDER")
 	})
 
 	t.Run("rejects oversized requests", func(t *testing.T) {
@@ -135,8 +135,8 @@ func TestASRRelayRouteOwnershipAndContracts(t *testing.T) {
 			wantStatus int
 			wantCode   string
 		}{
-			{name: "unauthorized", statusCode: http.StatusUnauthorized, wantStatus: http.StatusUnauthorized, wantCode: "unauthorized"},
-			{name: "rate limited", statusCode: http.StatusTooManyRequests, wantStatus: http.StatusTooManyRequests, wantCode: "rate_limited"},
+			{name: "unauthorized", statusCode: http.StatusUnauthorized, wantStatus: http.StatusUnauthorized, wantCode: "ASR_UNAUTHORIZED"},
+			{name: "rate limited", statusCode: http.StatusTooManyRequests, wantStatus: http.StatusTooManyRequests, wantCode: "ASR_RATE_LIMITED"},
 		}
 
 		for _, tc := range tests {
@@ -195,7 +195,7 @@ func TestASRRelayRouteOwnershipAndContracts(t *testing.T) {
 		if rr.Code != http.StatusServiceUnavailable {
 			t.Fatalf("status = %d, want %d", rr.Code, http.StatusServiceUnavailable)
 		}
-		expectRelayErrorCode(t, rr.Body.Bytes(), "service_unavailable")
+		expectRelayErrorCode(t, rr.Body.Bytes(), "ASR_SERVICE_UNAVAILABLE")
 	})
 
 	t.Run("routes groq verify through same-origin relay and preserves boolean success shape", func(t *testing.T) {
@@ -266,7 +266,7 @@ func TestASRRelayRouteOwnershipAndContracts(t *testing.T) {
 		if rr.Code != http.StatusUnauthorized {
 			t.Fatalf("status = %d, want %d", rr.Code, http.StatusUnauthorized)
 		}
-		expectRelayErrorCode(t, rr.Body.Bytes(), "unauthorized")
+		expectRelayErrorCode(t, rr.Body.Bytes(), "ASR_UNAUTHORIZED")
 	})
 
 	t.Run("rejects requests from disallowed origin", func(t *testing.T) {
@@ -289,7 +289,7 @@ func TestASRRelayRouteOwnershipAndContracts(t *testing.T) {
 		if rr.Code != http.StatusForbidden {
 			t.Fatalf("status = %d, want %d", rr.Code, http.StatusForbidden)
 		}
-		expectRelayErrorCode(t, rr.Body.Bytes(), "origin_not_allowed")
+		expectRelayErrorCode(t, rr.Body.Bytes(), "ASR_ORIGIN_NOT_ALLOWED")
 	})
 
 	t.Run("rejects requests with missing origin", func(t *testing.T) {
@@ -312,7 +312,7 @@ func TestASRRelayRouteOwnershipAndContracts(t *testing.T) {
 		if rr.Code != http.StatusForbidden {
 			t.Fatalf("status = %d, want %d", rr.Code, http.StatusForbidden)
 		}
-		expectRelayErrorCode(t, rr.Body.Bytes(), "missing_or_disallowed_origin")
+		expectRelayErrorCode(t, rr.Body.Bytes(), "ASR_MISSING_OR_DISALLOWED_ORIGIN")
 	})
 
 	t.Run("rejects requests with missing relay token when configured", func(t *testing.T) {
@@ -336,7 +336,7 @@ func TestASRRelayRouteOwnershipAndContracts(t *testing.T) {
 		if rr.Code != http.StatusUnauthorized {
 			t.Fatalf("status = %d, want %d", rr.Code, http.StatusUnauthorized)
 		}
-		expectRelayErrorCode(t, rr.Body.Bytes(), "unauthorized")
+		expectRelayErrorCode(t, rr.Body.Bytes(), "ASR_UNAUTHORIZED")
 	})
 
 	t.Run("rate limits repeated relay requests from same ip", func(t *testing.T) {
@@ -388,7 +388,7 @@ func TestASRRelayRouteOwnershipAndContracts(t *testing.T) {
 		if second.Code != http.StatusTooManyRequests {
 			t.Fatalf("second status = %d, want %d", second.Code, http.StatusTooManyRequests)
 		}
-		expectRelayErrorCode(t, second.Body.Bytes(), "rate_limited")
+		expectRelayErrorCode(t, second.Body.Bytes(), "ASR_RATE_LIMITED")
 	})
 }
 
@@ -481,7 +481,7 @@ func TestASRRelayCredentialsStayTransient(t *testing.T) {
 		if strings.Contains(logs.String(), secretAPIKey) {
 			t.Fatalf("logs leaked api key: %s", logs.String())
 		}
-		expectRelayErrorCode(t, rr.Body.Bytes(), "unauthorized")
+		expectRelayErrorCode(t, rr.Body.Bytes(), "ASR_UNAUTHORIZED")
 	})
 }
 
@@ -1009,7 +1009,6 @@ func TestASRWorkerTransport(t *testing.T) {
 	})
 }
 
-
 func newMultipartASRRelayRequest(t *testing.T, payload multipartASRRelayRequestPayload) *http.Request {
 	t.Helper()
 
@@ -1253,7 +1252,7 @@ func TestASRRelaySameOriginFallback(t *testing.T) {
 		if rr.Code != http.StatusForbidden {
 			t.Fatalf("status = %d, want %d", rr.Code, http.StatusForbidden)
 		}
-		expectRelayErrorCode(t, rr.Body.Bytes(), "origin_not_allowed")
+		expectRelayErrorCode(t, rr.Body.Bytes(), "ASR_ORIGIN_NOT_ALLOWED")
 	})
 
 	t.Run("https origin rejects request on non-default port 8080", func(t *testing.T) {
@@ -1276,7 +1275,7 @@ func TestASRRelaySameOriginFallback(t *testing.T) {
 		if rr.Code != http.StatusForbidden {
 			t.Fatalf("status = %d, want %d", rr.Code, http.StatusForbidden)
 		}
-		expectRelayErrorCode(t, rr.Body.Bytes(), "origin_not_allowed")
+		expectRelayErrorCode(t, rr.Body.Bytes(), "ASR_ORIGIN_NOT_ALLOWED")
 	})
 
 	t.Run("explicit allowlist still works unchanged", func(t *testing.T) {

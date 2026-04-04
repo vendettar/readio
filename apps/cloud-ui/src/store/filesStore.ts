@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import type { FileFolder, FileSubtitle, FileTrack } from '../lib/dexieDb'
-import { logError } from '../lib/logger'
+import { isAbortLikeError } from '../lib/fetchUtils'
+import { warn } from '../lib/logger'
 import { FilesRepository } from '../lib/repositories/FilesRepository'
 import { abortRequestsWithPrefix, deduplicatedFetchWithCallerAbort } from '../lib/requestManager'
 
@@ -66,7 +67,7 @@ export const useFilesStore = create<FilesState>((set) => ({
         const folders = await FilesRepository.getAllFolders()
         set({ folders, isLoading: false })
       } catch (err) {
-        logError('[FilesStore] Failed to load folders:', err)
+        if (!isAbortLikeError(err)) warn('[FilesStore] Failed to load folders:', err)
         set({ isLoading: false })
       }
     })
@@ -78,7 +79,7 @@ export const useFilesStore = create<FilesState>((set) => ({
       if (signal?.aborted) return []
       return folders
     } catch (err) {
-      logError('[FilesStore] Failed to load all folders:', err)
+      if (!isAbortLikeError(err)) warn('[FilesStore] Failed to load all folders:', err)
       return []
     }
   },
@@ -89,7 +90,7 @@ export const useFilesStore = create<FilesState>((set) => ({
       if (signal?.aborted) return []
       return tracks
     } catch (err) {
-      logError('[FilesStore] Failed to load all tracks:', err)
+      if (!isAbortLikeError(err)) warn('[FilesStore] Failed to load all tracks:', err)
       return []
     }
   },
@@ -101,7 +102,7 @@ export const useFilesStore = create<FilesState>((set) => ({
       set({ tracks })
     } catch (err) {
       if (signal?.aborted) return
-      logError('[FilesStore] Failed to load tracks for folder:', err)
+      if (!isAbortLikeError(err)) warn('[FilesStore] Failed to load tracks for folder:', err)
       throw err
     }
   },
@@ -111,7 +112,7 @@ export const useFilesStore = create<FilesState>((set) => ({
       const folder = await FilesRepository.getFolder(folderId)
       return folder || null
     } catch (err) {
-      logError('[FilesStore] Failed to get folder:', err)
+      if (!isAbortLikeError(err)) warn('[FilesStore] Failed to get folder:', err)
       return null
     }
   },
@@ -121,7 +122,7 @@ export const useFilesStore = create<FilesState>((set) => ({
       const audioBlob = await FilesRepository.getAudioBlob(blobId)
       return audioBlob?.blob || null
     } catch (err) {
-      logError('[FilesStore] Failed to get audio blob:', err)
+      if (!isAbortLikeError(err)) warn('[FilesStore] Failed to get audio blob:', err)
       return null
     }
   },
@@ -131,7 +132,7 @@ export const useFilesStore = create<FilesState>((set) => ({
       const setting = await FilesRepository.getSetting(key)
       return setting || null
     } catch (err) {
-      logError('[FilesStore] Failed to get setting:', err)
+      if (!isAbortLikeError(err)) warn('[FilesStore] Failed to get setting:', err)
       return null
     }
   },
@@ -140,7 +141,7 @@ export const useFilesStore = create<FilesState>((set) => ({
     try {
       await FilesRepository.setSetting(key, value)
     } catch (err) {
-      logError('[FilesStore] Failed to set setting:', err)
+      if (!isAbortLikeError(err)) warn('[FilesStore] Failed to set setting:', err)
       throw err
     }
   },
@@ -151,7 +152,7 @@ export const useFilesStore = create<FilesState>((set) => ({
       if (signal?.aborted) return []
       return subs
     } catch (err) {
-      logError('[FilesStore] Failed to get subtitles for track:', err)
+      if (!isAbortLikeError(err)) warn('[FilesStore] Failed to get subtitles for track:', err)
       return []
     }
   },
@@ -167,7 +168,7 @@ export const useFilesStore = create<FilesState>((set) => ({
         await FilesRepository.updateFolder(id, updates)
       } catch (err) {
         if (sharedSignal.aborted) return
-        logError('[FilesStore] Failed to update folder:', err)
+        if (!isAbortLikeError(err)) warn('[FilesStore] Failed to update folder:', err)
         throw err
       }
     })
@@ -180,7 +181,7 @@ export const useFilesStore = create<FilesState>((set) => ({
         await FilesRepository.updateFileTrack(id, updates)
       } catch (err) {
         if (sharedSignal.aborted) return
-        logError('[FilesStore] Failed to update track:', err)
+        if (!isAbortLikeError(err)) warn('[FilesStore] Failed to update track:', err)
         throw err
       }
     })
@@ -193,7 +194,7 @@ export const useFilesStore = create<FilesState>((set) => ({
         await FilesRepository.deleteFileTrack(id)
       } catch (err) {
         if (sharedSignal.aborted) return
-        logError('[FilesStore] Failed to delete track:', err)
+        if (!isAbortLikeError(err)) warn('[FilesStore] Failed to delete track:', err)
         throw err
       }
     })
@@ -206,7 +207,7 @@ export const useFilesStore = create<FilesState>((set) => ({
         await FilesRepository.deleteFileSubtitle(id)
       } catch (err) {
         if (sharedSignal.aborted) return
-        logError('[FilesStore] Failed to delete subtitle:', err)
+        if (!isAbortLikeError(err)) warn('[FilesStore] Failed to delete subtitle:', err)
         throw err
       }
     })

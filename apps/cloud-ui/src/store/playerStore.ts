@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { log, logError } from '../lib/logger'
+import { isAbortLikeError } from '../lib/fetchUtils'
+import { log, logError, warn } from '../lib/logger'
 import type { PlaybackRequestMode } from '../lib/player/playbackMode'
 import { __dropPlaybackSourceObjectUrl } from '../lib/player/playbackSource'
 import { FilesRepository } from '../lib/repositories/FilesRepository'
@@ -343,10 +344,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     }),
   setStatus: (status) => set({ status }),
   setPlayerError: (message) => {
-    logError('[PlayerStore] Player Error:', message)
     if (message === 'NotAllowedError') {
+      warn('[PlayerStore] Player autoplay blocked:', message)
       set({ status: 'paused', isPlaying: false })
     } else {
+      logError('[PlayerStore] Player Error:', message)
       set({ status: 'error', isPlaying: false })
     }
   },
@@ -390,7 +392,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
           })
         }
       } catch (err) {
-        logError('[PlayerStore] Failed to save audio to IndexedDB:', err)
+        if (!isAbortLikeError(err)) warn('[PlayerStore] Failed to save audio to IndexedDB:', err)
       }
     }
     void saveToDb()
@@ -480,7 +482,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
           })
         }
       } catch (err) {
-        logError('[PlayerStore] Failed to save subtitle to IndexedDB:', err)
+        if (!isAbortLikeError(err)) warn('[PlayerStore] Failed to save subtitle to IndexedDB:', err)
       }
     }
 
@@ -524,7 +526,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
           set({ sessionId: null, sessionPersistenceSuspended: true })
           return
         }
-        logError('[PlayerStore] Failed to save progress:', err)
+        if (!isAbortLikeError(err)) warn('[PlayerStore] Failed to save progress:', err)
       })
   },
 
@@ -554,7 +556,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         set({ sessionId: null, sessionPersistenceSuspended: true })
         return
       }
-      logError('[PlayerStore] Failed to persist ended playback completion:', err)
+      if (!isAbortLikeError(err))
+        warn('[PlayerStore] Failed to persist ended playback completion:', err)
     }
   },
 
@@ -577,7 +580,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         set({ sessionId: null, sessionPersistenceSuspended: true })
         return
       }
-      logError('[PlayerStore] Failed to save progress on unmount:', err)
+      if (!isAbortLikeError(err)) warn('[PlayerStore] Failed to save progress on unmount:', err)
     }
   },
 
@@ -620,7 +623,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
             try {
               artwork = await FilesRepository.resolveTrackArtwork(lastSession.localTrackId)
             } catch (err) {
-              logError('[PlayerStore] Failed to restore artwork for local track', err)
+              if (!isAbortLikeError(err))
+                warn('[PlayerStore] Failed to restore artwork for local track', err)
             }
           }
 
@@ -705,7 +709,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
       set({ initializationStatus: 'ready' })
     } catch (err) {
-      logError('[PlayerStore] Session restoration failed:', err)
+      warn('[PlayerStore] Session restoration failed:', err)
       usePlayerSurfaceStore.getState().setPlayableContext(false)
       set({ initializationStatus: 'failed' })
       // Keep it as failed so we can potentially retry or show error UI

@@ -4,7 +4,8 @@ import { normalizeCountryCode } from '../constants/app'
 import type { Favorite, Subscription } from '../lib/dexieDb'
 import discovery, { type Episode, type ParsedFeed, type Podcast } from '../lib/discovery'
 import { normalizeFeedUrl } from '../lib/discovery/feedUrl'
-import { logError } from '../lib/logger'
+import { isAbortLikeError } from '../lib/fetchUtils'
+import { warn } from '../lib/logger'
 import type { MinimalSubscription } from '../lib/opmlParser'
 import { LibraryRepository } from '../lib/repositories/LibraryRepository'
 import { abortRequestsWithPrefix, deduplicatedFetchWithCallerAbort } from '../lib/requestManager'
@@ -32,13 +33,15 @@ function hashStableString(input: string): string {
  * Logs the error for debugging and shows a user-friendly toast.
  */
 function handleDbWriteError(operation: string, toastKey: TranslationKey, error: unknown): void {
-  logError(`[ExploreStore] Failed to ${operation}:`, error)
+  if (!isAbortLikeError(error)) {
+    warn(`[ExploreStore] Failed to ${operation}:`, error)
+  }
   toast.errorKey(toastKey)
 }
 
 function requireCountryAtSave(country: string | undefined, operation: string): string | null {
   if (!country) {
-    logError(`[ExploreStore] Rejecting ${operation}: missing countryAtSave`)
+    warn(`[ExploreStore] Rejecting ${operation}: missing countryAtSave`)
     return null
   }
   return country
@@ -191,7 +194,9 @@ function hydrateCountryFromDb(): void {
       if (useExploreStore.getState().country === normalizedCountry) return
       useExploreStore.setState({ country: normalizedCountry })
     })
-    .catch((err) => logError('[ExploreStore] Failed to hydrate country setting:', err))
+    .catch((err) => {
+      if (!isAbortLikeError(err)) warn('[ExploreStore] Failed to hydrate country setting:', err)
+    })
 }
 
 /** Test-only helper to reset module-scoped in-flight state between specs. */
@@ -243,10 +248,15 @@ export const useExploreStore = create<ExploreState>((set, get) => ({
     // Load data from IDB
     void get()
       .loadSubscriptions()
-      .catch((err) => logError('[ExploreStore] Failed to load subscriptions on open:', err))
+      .catch((err) => {
+        if (!isAbortLikeError(err))
+          warn('[ExploreStore] Failed to load subscriptions on open:', err)
+      })
     void get()
       .loadFavorites()
-      .catch((err) => logError('[ExploreStore] Failed to load favorites on open:', err))
+      .catch((err) => {
+        if (!isAbortLikeError(err)) warn('[ExploreStore] Failed to load favorites on open:', err)
+      })
   },
   close: () => {
     abortAll() // Abort all pending requests when closing modal
@@ -266,7 +276,7 @@ export const useExploreStore = create<ExploreState>((set, get) => ({
 
     set({ country: normalizedCountry })
     void LibraryRepository.setSetting(SETTING_KEY_COUNTRY, normalizedCountry).catch((err) => {
-      logError('[ExploreStore] Failed to save setting:', err)
+      if (!isAbortLikeError(err)) warn('[ExploreStore] Failed to save setting:', err)
     })
   },
 
@@ -304,7 +314,9 @@ export const useExploreStore = create<ExploreState>((set, get) => ({
         return
       }
       if (get().searchRequestId !== requestId || internalSignal.aborted) return // Ignore stale response
-      logError('[ExploreStore] Search failed:', error)
+      if (!isAbortLikeError(error)) {
+        warn('[ExploreStore] Search failed:', error)
+      }
       set({
         searchErrorKey: 'errorSearchFailed',
         searchLoading: false,
@@ -350,7 +362,9 @@ export const useExploreStore = create<ExploreState>((set, get) => ({
         return
       }
       if (get().podcastRequestId !== requestId || internalSignal.aborted) return // Ignore stale response
-      logError('[ExploreStore] Failed to load podcast feed:', error)
+      if (!isAbortLikeError(error)) {
+        warn('[ExploreStore] Failed to load podcast feed:', error)
+      }
       set({
         podcastErrorKey: 'errorLoadEpisodesFailed',
         podcastLoading: false,
@@ -380,7 +394,7 @@ export const useExploreStore = create<ExploreState>((set, get) => ({
         const subs = await LibraryRepository.getAllSubscriptions()
         set({ subscriptions: subs, subscriptionsLoaded: true })
       } catch (error) {
-        logError('[ExploreStore] Failed to load subscriptions:', error)
+        if (!isAbortLikeError(error)) warn('[ExploreStore] Failed to load subscriptions:', error)
         set({ subscriptionsLoaded: false })
       }
     })
@@ -392,7 +406,7 @@ export const useExploreStore = create<ExploreState>((set, get) => ({
         const subs = await LibraryRepository.getAllSubscriptions()
         set({ subscriptions: subs, subscriptionsLoaded: true })
       } catch (error) {
-        logError('[ExploreStore] Failed to refresh subscriptions:', error)
+        if (!isAbortLikeError(error)) warn('[ExploreStore] Failed to refresh subscriptions:', error)
       }
     })
   },
@@ -530,7 +544,7 @@ export const useExploreStore = create<ExploreState>((set, get) => ({
         const favs = await LibraryRepository.getAllFavorites()
         set({ favorites: favs, favoritesLoaded: true })
       } catch (error) {
-        logError('[ExploreStore] Failed to load favorites:', error)
+        if (!isAbortLikeError(error)) warn('[ExploreStore] Failed to load favorites:', error)
         set({ favoritesLoaded: false })
       }
     })
@@ -542,7 +556,7 @@ export const useExploreStore = create<ExploreState>((set, get) => ({
         const favs = await LibraryRepository.getAllFavorites()
         set({ favorites: favs, favoritesLoaded: true })
       } catch (error) {
-        logError('[ExploreStore] Failed to refresh favorites:', error)
+        if (!isAbortLikeError(error)) warn('[ExploreStore] Failed to refresh favorites:', error)
       }
     })
   },
