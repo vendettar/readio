@@ -1016,11 +1016,71 @@ func (p *proxyService) dialTarget(ctx context.Context, network, address string) 
 	return d.DialContext(ctx, network, address)
 }
 
+func generateRequestID() string {
+	return fmt.Sprintf("%x", time.Now().UnixNano())
+}
+
 func writeProxyError(w http.ResponseWriter, status int, message string) {
+	code := mapProxyErrorToCode(message)
+	requestID := generateRequestID()
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
-	_, _ = w.Write([]byte(message))
+	payload := map[string]string{
+		"code":       code,
+		"message":    message,
+		"request_id": requestID,
+	}
+	_ = json.NewEncoder(w).Encode(payload)
+	slog.Info("proxy error response", "request_id", requestID, "code", code, "status", status)
+}
+
+func mapProxyErrorToCode(message string) string {
+	msg := strings.ToLower(strings.TrimSpace(message))
+	switch {
+	case strings.Contains(msg, "missing url"):
+		return "PROXY_MISSING_URL"
+	case strings.Contains(msg, "invalid url"):
+		return "PROXY_INVALID_URL"
+	case strings.Contains(msg, "only http and https"):
+		return "PROXY_INVALID_URL"
+	case strings.Contains(msg, "userinfo"):
+		return "PROXY_USERINFO_NOT_ALLOWED"
+	case strings.Contains(msg, "invalid range"):
+		return "PROXY_INVALID_RANGE"
+	case strings.Contains(msg, "content-type must be"):
+		return "PROXY_INVALID_CONTENT_TYPE"
+	case strings.Contains(msg, "invalid proxy request payload"):
+		return "PROXY_INVALID_PAYLOAD"
+	case strings.Contains(msg, "missing method"):
+		return "PROXY_MISSING_METHOD"
+	case strings.Contains(msg, "unsupported proxy method"):
+		return "PROXY_UNSUPPORTED_METHOD"
+	case strings.Contains(msg, "invalid proxy headers"):
+		return "PROXY_INVALID_HEADERS"
+	case strings.Contains(msg, "unsupported proxy header"):
+		return "PROXY_UNSUPPORTED_HEADER"
+	case strings.Contains(msg, "target host is not allowed"):
+		return "PROXY_HOST_NOT_ALLOWED"
+	case strings.Contains(msg, "rate limit"):
+		return "PROXY_RATE_LIMIT_EXCEEDED"
+	case strings.Contains(msg, "timed out"):
+		return "PROXY_UPSTREAM_TIMEOUT"
+	case strings.Contains(msg, "unable to create upstream"):
+		return "PROXY_CREATE_REQUEST_FAILED"
+	case strings.Contains(msg, "upstream request failed"):
+		return "PROXY_UPSTREAM_FAILED"
+	case strings.Contains(msg, "only get and post"):
+		return "PROXY_METHOD_NOT_ALLOWED"
+	case strings.Contains(msg, "redirect chain too long"):
+		return "PROXY_REDIRECT_TOO_LONG"
+	case strings.Contains(msg, "unable to resolve"):
+		return "PROXY_RESOLVE_FAILED"
+	case strings.Contains(msg, "unable to dial"):
+		return "PROXY_DIAL_FAILED"
+	default:
+		return "PROXY_UNKNOWN_ERROR"
+	}
 }
 
 func candidateRoots() []string {

@@ -14,8 +14,8 @@
 import { create } from 'zustand'
 import { DB, DB_TABLE_NAMES, type PodcastDownload } from './dexieDb'
 import { checkDownloadCapacity } from './downloadCapacity'
-import { CLOUD_BACKEND_FALLBACK_CLASSES, fetchWithFallback } from './fetchUtils'
-import { log, error as logError } from './logger'
+import { CLOUD_BACKEND_FALLBACK_CLASSES, fetchWithFallback, isAbortLikeError } from './fetchUtils'
+import { log, error as logError, warn } from './logger'
 import { normalizePodcastAudioUrl, unwrapPodcastTrackingUrl } from './networking/urlUtils'
 import { DownloadsRepository } from './repositories/DownloadsRepository'
 import { deduplicatedFetch, isRequestInflight } from './requestManager'
@@ -272,7 +272,9 @@ export async function persistAudioBlobAsDownload(
       toast.errorKey('downloadStorageLimitPhysical')
       return { ok: false, reason: 'quota_error' }
     }
-    logError('[download] Failed to persist ASR blob:', err)
+    if (!isAbortLikeError(err)) {
+      warn('[download] Failed to persist ASR blob:', err)
+    }
     return { ok: false, reason: 'network_error' }
   }
 }
@@ -455,7 +457,9 @@ async function executeDownload(options: DownloadJobOptions): Promise<DownloadRes
       return { ok: false, reason: 'quota_error' }
     }
 
-    logError('[download] Failed:', err)
+    if (!isAbortLikeError(err)) {
+      warn('[download] Failed:', err)
+    }
     return { ok: false, reason: 'network_error' }
   } finally {
     const normalizedUrlKey = normalizePodcastAudioUrl(options.audioUrl)

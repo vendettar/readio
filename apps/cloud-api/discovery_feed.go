@@ -88,7 +88,6 @@ type rssHrefElement struct {
 	Text string `xml:",chardata"`
 }
 
-
 type rssChannelImageInfo struct {
 	URL string `xml:"url"`
 }
@@ -130,19 +129,19 @@ func (s *discoveryService) fetchFeed(ctx context.Context, requestURL string) (pa
 	parsedURL, err := url.ParseRequestURI(requestURL)
 	if err != nil {
 		return parsedFeedResponse{}, &discoveryParamError{
-			code:    "invalid_url",
+			code:    "INVALID_URL",
 			message: "url must be a valid absolute http or https URL",
 		}
 	}
 	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
 		return parsedFeedResponse{}, &discoveryParamError{
-			code:    "invalid_url",
+			code:    "INVALID_URL",
 			message: "url must be a valid absolute http or https URL",
 		}
 	}
 	if err := validateProxyTarget(parsedURL); err != nil {
 		return parsedFeedResponse{}, &discoveryParamError{
-			code:    "invalid_url",
+			code:    "INVALID_URL",
 			message: err.Error(),
 		}
 	}
@@ -157,7 +156,7 @@ func (s *discoveryService) fetchFeed(ctx context.Context, requestURL string) (pa
 	validatedAddrs, err := proxy.resolveProxyTargetAddresses(ctx, parsedURL)
 	if err != nil {
 		return parsedFeedResponse{}, &discoveryParamError{
-			code:    "invalid_url",
+			code:    "INVALID_URL",
 			message: err.Error(),
 		}
 	}

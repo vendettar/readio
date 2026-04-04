@@ -17,7 +17,18 @@ import {
 } from '../lib/adminApi'
 
 const SESSION_KEY = 'readio_admin_token'
-const MAX_401S = 3
+type TokenUiState = 'empty' | 'loaded' | 'editing' | 'invalid'
+
+const adminTimestampFormatter = new Intl.DateTimeFormat('en-CA', {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+  timeZoneName: 'short',
+})
 
 function formatUptime(seconds: number): string {
   const d = Math.floor(seconds / 86400)
@@ -39,6 +50,16 @@ function levelClass(level: string): string {
     default:
       return 'text-foreground/60'
   }
+}
+
+function formatAdminTimestamp(timestamp: string): string {
+  const date = new Date(timestamp)
+  if (Number.isNaN(date.getTime())) return timestamp
+
+  const parts = adminTimestampFormatter.formatToParts(date)
+  const lookup = Object.fromEntries(parts.map((part) => [part.type, part.value]))
+
+  return `${lookup.year}-${lookup.month}-${lookup.day} ${lookup.hour}:${lookup.minute}:${lookup.second} ${lookup.timeZoneName ?? ''}`
 }
 
 function HealthBar({ health }: { health: AdminHealthResponse }) {
@@ -68,8 +89,6 @@ function HealthBar({ health }: { health: AdminHealthResponse }) {
 }
 
 function FilterBar({
-  token,
-  onTokenChange,
   levelFilter,
   onLevelFilterChange,
   routeFilter,
@@ -79,8 +98,6 @@ function FilterBar({
   onAutoRefreshChange,
   onRefresh,
 }: {
-  token: string
-  onTokenChange: (val: string) => void
   levelFilter: string
   onLevelFilterChange: (val: string) => void
   routeFilter: string
@@ -92,14 +109,6 @@ function FilterBar({
 }) {
   return (
     <div className="mb-4 flex flex-wrap items-center gap-3">
-      <Input
-        type="password"
-        placeholder="Token"
-        className="w-48"
-        value={token}
-        onChange={(e) => onTokenChange(e.target.value)}
-      />
-
       <Select
         value={levelFilter || 'all'}
         onValueChange={(v) => onLevelFilterChange(v === 'all' ? '' : v)}
@@ -148,6 +157,86 @@ function FilterBar({
   )
 }
 
+function TokenPanel({
+  state,
+  draftToken,
+  isLoading,
+  error,
+  onDraftChange,
+  onSubmit,
+  onChange,
+  onCancelEdit,
+  onClear,
+}: {
+  state: TokenUiState
+  draftToken: string
+  isLoading: boolean
+  error: string | null
+  onDraftChange: (val: string) => void
+  onSubmit: () => void
+  onChange: () => void
+  onCancelEdit: () => void
+  onClear: () => void
+}) {
+  const showInput = state === 'empty' || state === 'editing' || state === 'invalid'
+
+  return (
+    <div className="mb-4 rounded-md border p-3">
+      {state === 'loaded' ? (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm font-medium">Admin token loaded</p>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={onChange}>
+              Change
+            </Button>
+            <Button variant="outline" size="sm" onClick={onClear}>
+              Clear
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {state === 'empty' ? (
+            <p className="text-sm text-muted-foreground">
+              Enter the admin bearer token to access /ops.
+            </p>
+          ) : null}
+
+          {error ? <div className="text-sm text-red-700">{error}</div> : null}
+
+          {showInput ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                type="password"
+                placeholder="Bearer token"
+                className="max-w-md"
+                value={draftToken}
+                onChange={(e) => onDraftChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') onSubmit()
+                }}
+              />
+              <Button size="sm" onClick={onSubmit} disabled={!draftToken.trim() || isLoading}>
+                Use token
+              </Button>
+              {state === 'editing' ? (
+                <Button variant="outline" size="sm" onClick={onCancelEdit}>
+                  Cancel
+                </Button>
+              ) : null}
+              {state === 'editing' ? (
+                <Button variant="outline" size="sm" onClick={onClear}>
+                  Clear
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function LogTable({
   entries,
   expandedKey,
@@ -185,7 +274,9 @@ function LogTable({
                 className="cursor-pointer border-b hover:bg-muted/30"
                 onClick={() => onToggleExpand(entry._key)}
               >
-                <td className="whitespace-nowrap px-3 py-1.5 font-mono text-xs">{entry.ts}</td>
+                <td className="whitespace-nowrap px-3 py-1.5 font-mono text-xs">
+                  {formatAdminTimestamp(entry.ts)}
+                </td>
                 <td className="px-3 py-1.5">
                   <span
                     className={`inline-block rounded px-1.5 py-0.5 font-mono text-xs ${levelClass(entry.level)}`}
@@ -225,7 +316,11 @@ function LogTable({
 }
 
 export default function AdminLogsPage() {
-  const [token, setToken] = useState(() => sessionStorage.getItem(SESSION_KEY) ?? '')
+  const [token, setToken] = useState(() => sessionStorage.getItem(SESSION_KEY)?.trim() ?? '')
+  const [draftToken, setDraftToken] = useState('')
+  const [tokenUiState, setTokenUiState] = useState<TokenUiState>(() =>
+    sessionStorage.getItem(SESSION_KEY)?.trim() ? 'loaded' : 'empty'
+  )
   const [health, setHealth] = useState<AdminHealthResponse | null>(null)
   const [entries, setEntries] = useState<AdminLogEntry[]>([])
   const [total, setTotal] = useState(0)
@@ -236,64 +331,106 @@ export default function AdminLogsPage() {
   const [autoRefresh, setAutoRefresh] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [consecutive401s, setConsecutive401s] = useState(0)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const skipNextAutoLoadRef = useRef(false)
 
   const hasToken = token.trim().length > 0
 
-  const saveToken = useCallback((val: string) => {
-    setToken(val)
-    if (val.trim()) {
-      sessionStorage.setItem(SESSION_KEY, val.trim())
-    } else {
+  const resetData = useCallback(() => {
+    setHealth(null)
+    setEntries([])
+    setTotal(0)
+    setBufferCapacity(0)
+    setExpandedKey(null)
+  }, [])
+
+  const clearToken = useCallback(
+    (nextState: TokenUiState = 'empty', nextError: string | null = null) => {
       sessionStorage.removeItem(SESSION_KEY)
-    }
-    setConsecutive401s(0)
+      setToken('')
+      setDraftToken('')
+      setTokenUiState(nextState)
+      setAutoRefresh(false)
+      setError(nextError)
+      setIsLoading(false)
+      resetData()
+    },
+    [resetData]
+  )
+
+  const loadData = useCallback(
+    async (candidateToken = token.trim()) => {
+      if (!candidateToken) return false
+      setIsLoading(true)
+      try {
+        const [logs, h] = await Promise.all([
+          fetchAdminLogs(candidateToken, {
+            level: levelFilter || undefined,
+            route: routeFilter || undefined,
+          }),
+          fetchAdminHealth(candidateToken),
+        ])
+        setEntries(logs.entries)
+        setTotal(logs.total)
+        setBufferCapacity(logs.buffer_capacity)
+        setHealth(h)
+        setError(null)
+        return true
+      } catch (e) {
+        if (e instanceof Error && e.message === 'UNAUTHORIZED') {
+          clearToken('invalid', 'Unauthorized — check your token')
+        } else {
+          setError(e instanceof Error ? e.message : 'Unknown error')
+        }
+        return false
+      } finally {
+        setIsLoading(false)
+      }
+    },
+    [token, levelFilter, routeFilter, clearToken]
+  )
+
+  const applyToken = useCallback(async () => {
+    const nextToken = draftToken.trim()
+    if (!nextToken) return
+
+    const ok = await loadData(nextToken)
+    if (!ok) return
+
+    sessionStorage.setItem(SESSION_KEY, nextToken)
+    skipNextAutoLoadRef.current = true
+    setToken(nextToken)
+    setDraftToken('')
+    setTokenUiState('loaded')
+    setError(null)
+  }, [draftToken, loadData])
+
+  const openTokenEditor = useCallback(() => {
+    setDraftToken('')
+    setTokenUiState('editing')
     setError(null)
   }, [])
 
-  const loadData = useCallback(async () => {
-    if (!token.trim()) return
-    setIsLoading(true)
-    try {
-      const [logs, h] = await Promise.all([
-        fetchAdminLogs(token.trim(), {
-          level: levelFilter || undefined,
-          route: routeFilter || undefined,
-        }),
-        fetchAdminHealth(token.trim()),
-      ])
-      setEntries(logs.entries)
-      setTotal(logs.total)
-      setBufferCapacity(logs.buffer_capacity)
-      setHealth(h)
-      setConsecutive401s(0)
-      setError(null)
-    } catch (e) {
-      if (e instanceof Error && e.message === 'UNAUTHORIZED') {
-        setConsecutive401s((prev) => prev + 1)
-        setError('Unauthorized — check your token')
-      } else {
-        setError(e instanceof Error ? e.message : 'Unknown error')
-      }
-    } finally {
-      setIsLoading(false)
-    }
-  }, [token, levelFilter, routeFilter])
+  const closeTokenEditor = useCallback(() => {
+    setDraftToken('')
+    setTokenUiState(hasToken ? 'loaded' : 'empty')
+    setError(null)
+  }, [hasToken])
 
   useEffect(() => {
-    if (hasToken) void loadData()
+    if (!hasToken) return
+    if (skipNextAutoLoadRef.current) {
+      skipNextAutoLoadRef.current = false
+      return
+    }
+    void loadData()
   }, [hasToken, loadData])
 
   useEffect(() => {
-    if (consecutive401s >= MAX_401S) {
-      setAutoRefresh(false)
-    }
-  }, [consecutive401s])
-
-  useEffect(() => {
-    if (autoRefresh && hasToken && consecutive401s < MAX_401S) {
-      intervalRef.current = setInterval(loadData, 10000)
+    if (autoRefresh && hasToken) {
+      intervalRef.current = setInterval(() => {
+        void loadData()
+      }, 10000)
     }
     return () => {
       if (intervalRef.current) {
@@ -301,7 +438,7 @@ export default function AdminLogsPage() {
         intervalRef.current = null
       }
     }
-  }, [autoRefresh, hasToken, consecutive401s, loadData])
+  }, [autoRefresh, hasToken, loadData])
 
   const entriesWithKeys = useMemo(
     () => entries.map((e, i) => ({ ...e, _key: `${e.ts}-${e.level}-${e.msg}-${i}` })),
@@ -318,19 +455,20 @@ export default function AdminLogsPage() {
 
   if (!hasToken) {
     return (
-      <div className="mx-auto max-w-md py-16 text-center">
-        <h1 className="mb-4 text-xl font-semibold">Admin Logs</h1>
-        <p className="text-muted-foreground mb-4 text-sm">
-          Enter the admin bearer token to access /ops.
-        </p>
-        <Input
-          type="password"
-          placeholder="Bearer token"
-          value={token}
-          onChange={(e) => saveToken(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') void loadData()
+      <div className="mx-auto max-w-md py-16">
+        <h1 className="mb-4 text-center text-xl font-semibold">Admin Logs</h1>
+        <TokenPanel
+          state={tokenUiState}
+          draftToken={draftToken}
+          isLoading={isLoading}
+          error={error}
+          onDraftChange={setDraftToken}
+          onSubmit={() => {
+            void applyToken()
           }}
+          onChange={openTokenEditor}
+          onCancelEdit={closeTokenEditor}
+          onClear={() => clearToken('empty')}
         />
       </div>
     )
@@ -340,7 +478,21 @@ export default function AdminLogsPage() {
     <div className="mx-auto max-w-6xl px-4 py-6">
       <h1 className="mb-4 text-xl font-semibold">Admin Logs</h1>
 
-      {error && (
+      <TokenPanel
+        state={tokenUiState}
+        draftToken={draftToken}
+        isLoading={isLoading}
+        error={error}
+        onDraftChange={setDraftToken}
+        onSubmit={() => {
+          void applyToken()
+        }}
+        onChange={openTokenEditor}
+        onCancelEdit={closeTokenEditor}
+        onClear={() => clearToken('empty')}
+      />
+
+      {error && tokenUiState === 'loaded' && (
         <div className="mb-4 rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-700">{error}</div>
       )}
 
@@ -353,19 +505,16 @@ export default function AdminLogsPage() {
       {health && <HealthBar health={health} />}
 
       <FilterBar
-        token={token}
-        onTokenChange={saveToken}
         levelFilter={levelFilter}
         onLevelFilterChange={setLevelFilter}
         routeFilter={routeFilter}
         onRouteFilterChange={setRouteFilter}
         routes={routes}
         autoRefresh={autoRefresh}
-        onAutoRefreshChange={(checked) => {
-          setConsecutive401s(0)
-          setAutoRefresh(checked)
+        onAutoRefreshChange={setAutoRefresh}
+        onRefresh={() => {
+          void loadData()
         }}
-        onRefresh={loadData}
       />
 
       <LogTable

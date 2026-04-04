@@ -12,7 +12,8 @@ import {
   setCredentials,
   TRANSLATE_CREDENTIAL_KEY,
 } from '../lib/db/credentialsRepository'
-import { logError } from '../lib/logger'
+import { isAbortLikeError } from '../lib/fetchUtils'
+import { warn } from '../lib/logger'
 
 import {
   createSettingsFormSchema,
@@ -93,7 +94,7 @@ export function useSettingsForm() {
       })
       .catch((error) => {
         if (!isMounted) return
-        logError('[useSettingsForm] Failed to load credentials:', error)
+        if (!isAbortLikeError(error)) warn('[useSettingsForm] Failed to load credentials:', error)
         setLoadError(error instanceof Error ? error : new Error(String(error)))
         setCredentialsLoaded(false) // Strictly fail-closed
       })
@@ -158,7 +159,7 @@ export function useSettingsForm() {
     try {
       await saveSettings(form.getValues(), expectedCredentialEpoch, expectedSettingsEpoch)
     } catch (error) {
-      logError('[useSettingsForm] Failed to save settings:', error)
+      if (!isAbortLikeError(error)) warn('[useSettingsForm] Failed to save settings:', error)
       toast.errorKey('settingsNotSaved')
     }
   }
@@ -173,7 +174,7 @@ export function useSettingsForm() {
       try {
         await saveSettings(form.getValues(), expectedCredentialEpoch, expectedSettingsEpoch)
       } catch (error) {
-        logError('[useSettingsForm] Failed to auto-save settings:', error)
+        if (!isAbortLikeError(error)) warn('[useSettingsForm] Failed to auto-save settings:', error)
         toast.errorKey('settingsNotSaved')
       }
     }
@@ -223,7 +224,8 @@ export function useSettingsForm() {
     try {
       await saveAsrDraftSettings(form.getValues(), expectedCredentialEpoch, expectedSettingsEpoch)
     } catch (error) {
-      logError('[useSettingsForm] Failed to auto-save ASR settings:', error)
+      if (!isAbortLikeError(error))
+        warn('[useSettingsForm] Failed to auto-save ASR settings:', error)
       toast.errorKey('settingsNotSaved')
     }
   }

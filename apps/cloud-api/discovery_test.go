@@ -807,8 +807,8 @@ func TestDiscoveryServiceRejectsInvalidParamsAndMapsUpstreamErrors(t *testing.T)
 
 		var payload map[string]string
 		decodeResponseJSON(t, rr.Body, &payload)
-		if payload["error"] != "invalid_country" {
-			t.Fatalf("error = %q, want invalid_country", payload["error"])
+		if payload["code"] != "INVALID_COUNTRY" {
+			t.Fatalf("code = %q, want INVALID_COUNTRY", payload["code"])
 		}
 	})
 
@@ -838,8 +838,8 @@ func TestDiscoveryServiceRejectsInvalidParamsAndMapsUpstreamErrors(t *testing.T)
 
 		var payload map[string]string
 		decodeResponseJSON(t, rr.Body, &payload)
-		if payload["error"] != "upstream_timeout" {
-			t.Fatalf("error = %q, want upstream_timeout", payload["error"])
+		if payload["code"] != "UPSTREAM_TIMEOUT" {
+			t.Fatalf("code = %q, want UPSTREAM_TIMEOUT", payload["code"])
 		}
 	})
 
@@ -856,8 +856,8 @@ func TestDiscoveryServiceRejectsInvalidParamsAndMapsUpstreamErrors(t *testing.T)
 
 		var payload map[string]string
 		decodeResponseJSON(t, rr.Body, &payload)
-		if payload["error"] != "invalid_term" {
-			t.Fatalf("error = %q, want invalid_term", payload["error"])
+		if payload["code"] != "INVALID_TERM" {
+			t.Fatalf("code = %q, want INVALID_TERM", payload["code"])
 		}
 	})
 
@@ -874,8 +874,8 @@ func TestDiscoveryServiceRejectsInvalidParamsAndMapsUpstreamErrors(t *testing.T)
 
 		var payload map[string]string
 		decodeResponseJSON(t, rr.Body, &payload)
-		if payload["error"] != "invalid_url" {
-			t.Fatalf("error = %q, want invalid_url", payload["error"])
+		if payload["code"] != "INVALID_URL" {
+			t.Fatalf("code = %q, want INVALID_URL", payload["code"])
 		}
 	})
 
@@ -888,7 +888,7 @@ func TestDiscoveryServiceRejectsInvalidParamsAndMapsUpstreamErrors(t *testing.T)
 			lookupIP: func(context.Context, string) ([]net.IPAddr, error) {
 				return []net.IPAddr{{IP: net.ParseIP("93.184.216.34")}}, nil
 			},
-			dialContext: func(ctx context.Context, _ , _ string) (net.Conn, error) {
+			dialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
 				<-ctx.Done()
 				return nil, ctx.Err()
 			},
@@ -904,8 +904,8 @@ func TestDiscoveryServiceRejectsInvalidParamsAndMapsUpstreamErrors(t *testing.T)
 
 		var payload map[string]string
 		decodeResponseJSON(t, rr.Body, &payload)
-		if payload["error"] != "upstream_timeout" {
-			t.Fatalf("error = %q, want upstream_timeout", payload["error"])
+		if payload["code"] != "UPSTREAM_TIMEOUT" {
+			t.Fatalf("code = %q, want UPSTREAM_TIMEOUT", payload["code"])
 		}
 	})
 
@@ -935,8 +935,8 @@ func TestDiscoveryServiceRejectsInvalidParamsAndMapsUpstreamErrors(t *testing.T)
 
 		var payload map[string]string
 		decodeResponseJSON(t, rr.Body, &payload)
-		if payload["error"] != "upstream_invalid_response" {
-			t.Fatalf("error = %q, want upstream_invalid_response", payload["error"])
+		if payload["code"] != "UPSTREAM_INVALID_RESPONSE" {
+			t.Fatalf("code = %q, want UPSTREAM_INVALID_RESPONSE", payload["code"])
 		}
 	})
 
@@ -969,8 +969,8 @@ func TestDiscoveryServiceRejectsInvalidParamsAndMapsUpstreamErrors(t *testing.T)
 
 		var payload map[string]string
 		decodeResponseJSON(t, rr.Body, &payload)
-		if payload["error"] != "invalid_upstream_xml" {
-			t.Fatalf("error = %q, want invalid_upstream_xml", payload["error"])
+		if payload["code"] != "INVALID_UPSTREAM_XML" {
+			t.Fatalf("code = %q, want INVALID_UPSTREAM_XML", payload["code"])
 		}
 		if payload["message"] != "discovery upstream response was not valid XML" {
 			t.Fatalf("message = %q, want discovery upstream response was not valid XML", payload["message"])

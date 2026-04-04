@@ -39,7 +39,7 @@ export function RootErrorBoundary({ children }: { children: React.ReactNode }) {
             </Button>
           </div>
 
-          {/* Keep technical diagnostics out of user-facing UI in production. */}
+          {/* Diagnostics stay developer-only even when the fallback itself is user-visible. */}
           {IS_DEV && (
             <div className="mt-3">
               <details>
