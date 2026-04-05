@@ -79,8 +79,14 @@ jobs:
       - name: Typecheck
         run: pnpm --filter @readio/lite typecheck
 
+      - name: Typecheck (Cloud UI)
+        run: pnpm -C apps/cloud-ui exec tsc --noEmit
+
       - name: Build
         run: pnpm --filter @readio/lite build
+
+      - name: Build (Cloud UI)
+        run: pnpm -C apps/cloud-ui build
 
       # - name: Lighthouse CI
       #   run: pnpm --filter @readio/lite exec lhci autorun --config=apps/lite/.lighthouserc.json
