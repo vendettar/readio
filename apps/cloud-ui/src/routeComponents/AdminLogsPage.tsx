@@ -62,6 +62,15 @@ function formatAdminTimestamp(timestamp: string): string {
   return `${lookup.year}-${lookup.month}-${lookup.day} ${lookup.hour}:${lookup.minute}:${lookup.second} ${lookup.timeZoneName ?? ''}`
 }
 
+function formatUpstream(entry: AdminLogEntry): string {
+  if (entry.upstream_kind && entry.upstream_host) {
+    return `${entry.upstream_kind} · ${entry.upstream_host}`
+  }
+  if (entry.upstream_host) return entry.upstream_host
+  if (entry.upstream_kind) return entry.upstream_kind
+  return '—'
+}
+
 function HealthBar({ health }: { health: AdminHealthResponse }) {
   return (
     <div className="mb-4 flex flex-wrap gap-4 rounded-md border p-3 text-sm">
@@ -237,6 +246,22 @@ function TokenPanel({
   )
 }
 
+function TokenStatusBar({ onChange, onClear }: { onChange: () => void; onClear: () => void }) {
+  return (
+    <div className="flex flex-wrap items-center gap-3 rounded-md border bg-muted/30 px-3 py-2 text-sm">
+      <span className="font-medium text-foreground/80">Token loaded</span>
+      <div className="flex gap-2">
+        <Button variant="outline" size="sm" onClick={onChange}>
+          Change
+        </Button>
+        <Button variant="outline" size="sm" onClick={onClear}>
+          Clear
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 function LogTable({
   entries,
   expandedKey,
@@ -289,7 +314,7 @@ function LogTable({
                   {entry.route ?? '—'}
                 </td>
                 <td className="whitespace-nowrap px-3 py-1.5 font-mono text-xs">
-                  {entry.upstream_host ?? '—'}
+                  {formatUpstream(entry)}
                 </td>
                 <td className="whitespace-nowrap px-3 py-1.5 font-mono text-xs">
                   {entry.elapsed_ms != null ? `${entry.elapsed_ms}ms` : '—'}
@@ -476,21 +501,28 @@ export default function AdminLogsPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
-      <h1 className="mb-4 text-xl font-semibold">Admin Logs</h1>
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <h1 className="text-xl font-semibold">Admin Logs</h1>
+        {tokenUiState === 'loaded' ? (
+          <TokenStatusBar onChange={openTokenEditor} onClear={() => clearToken('empty')} />
+        ) : null}
+      </div>
 
-      <TokenPanel
-        state={tokenUiState}
-        draftToken={draftToken}
-        isLoading={isLoading}
-        error={error}
-        onDraftChange={setDraftToken}
-        onSubmit={() => {
-          void applyToken()
-        }}
-        onChange={openTokenEditor}
-        onCancelEdit={closeTokenEditor}
-        onClear={() => clearToken('empty')}
-      />
+      {tokenUiState !== 'loaded' ? (
+        <TokenPanel
+          state={tokenUiState}
+          draftToken={draftToken}
+          isLoading={isLoading}
+          error={error}
+          onDraftChange={setDraftToken}
+          onSubmit={() => {
+            void applyToken()
+          }}
+          onChange={openTokenEditor}
+          onCancelEdit={closeTokenEditor}
+          onClear={() => clearToken('empty')}
+        />
+      ) : null}
 
       {error && tokenUiState === 'loaded' && (
         <div className="mb-4 rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-700">{error}</div>

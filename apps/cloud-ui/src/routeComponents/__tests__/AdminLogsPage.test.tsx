@@ -143,9 +143,10 @@ describe('AdminLogsPage token UX', () => {
     render(<AdminLogsPage />)
 
     expect(screen.queryByPlaceholderText('Bearer token')).toBeNull()
-    expect(screen.getByText('Admin token loaded')).not.toBeNull()
+    expect(screen.getByText('Token loaded')).not.toBeNull()
     expect(screen.getByRole('button', { name: 'Change' })).not.toBeNull()
     expect(screen.getByRole('button', { name: 'Clear' })).not.toBeNull()
+    expect(screen.queryByRole('button', { name: 'Use token' })).toBeNull()
 
     await waitFor(() => {
       expect(fetchAdminLogsMock).toHaveBeenCalledWith('stored-token', {
@@ -160,7 +161,7 @@ describe('AdminLogsPage token UX', () => {
 
     render(<AdminLogsPage />)
 
-    await screen.findByText('Admin token loaded')
+    await screen.findByText('Token loaded')
     fireEvent.click(screen.getByRole('button', { name: 'Change' }))
 
     expect(screen.getByPlaceholderText('Bearer token')).not.toBeNull()
@@ -172,12 +173,12 @@ describe('AdminLogsPage token UX', () => {
 
     render(<AdminLogsPage />)
 
-    await screen.findByText('Admin token loaded')
+    await screen.findByText('Token loaded')
     fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
 
     expect(sessionStorage.getItem(SESSION_KEY)).toBeNull()
     expect(screen.getByPlaceholderText('Bearer token')).not.toBeNull()
-    expect(screen.queryByText('Admin token loaded')).toBeNull()
+    expect(screen.queryByText('Token loaded')).toBeNull()
   })
 
   it('moves to invalid/editing state when the backend rejects the current token', async () => {
@@ -270,6 +271,32 @@ describe('AdminLogsPage token UX', () => {
 
     render(<AdminLogsPage />)
 
-    expect(await screen.findByText('2026-04-04 08:05:06')).not.toBeNull()
+    expect(await screen.findByText('2026-04-04 08:05:06 GMT+8')).not.toBeNull()
+  })
+
+  it('renders canonical upstream fields and explicit none error class', async () => {
+    sessionStorage.setItem(SESSION_KEY, 'stored-token')
+    fetchAdminLogsMock.mockResolvedValueOnce({
+      entries: [
+        {
+          ts: '2026-04-04T00:05:06Z',
+          level: 'INFO',
+          msg: 'proxy request',
+          route: 'proxy/media',
+          upstream_kind: 'media',
+          upstream_host: 'cdn.example.com',
+          elapsed_ms: 42,
+          error_class: 'none',
+        },
+      ],
+      total: 1,
+      buffer_capacity: 100,
+    })
+
+    render(<AdminLogsPage />)
+
+    expect(await screen.findByText('media · cdn.example.com')).not.toBeNull()
+    expect(screen.getByText('none')).not.toBeNull()
+    expect(screen.getByText('42ms')).not.toBeNull()
   })
 })

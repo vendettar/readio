@@ -13,15 +13,12 @@ description: Cloud CD 工作流与远程发布布局的运维说明。
 在生产环境 Cloud 中：
 
 - `apps/cloud-api` 动态提供 `/env.js`，**优先于** SPA/静态资源回退。
-- 生产环境 Cloud **不使用** `apps/cloud-ui/public/env.js` 或 `dist/env.js` 作为运行时配置基准。
+- Cloud **不使用** `apps/cloud-ui/public/env.js` 或 `dist/env.js` 作为运行时配置基准。
 - 后端仅通过显式浏览器安全 allowlist 发出运行时配置。
 - 服务端所有的运行时值（监听端口、路径、滥用控制设置）保留在 VPS 环境或 systemd 环境文件（`/etc/readio/readio-cloud.env`）中。
 
-在前端独立开发时：
-
-- `apps/cloud-ui/public/env.js` 仍是开发用默认模板。
-- `apps/cloud-ui/public/env.local.js` 仍是本地覆盖路径。
-- 前端在两种环境下都读取 `window.__READIO_ENV__`。
+当前契约下不存在单独的静态 Cloud `public/env.js` 模板。
+前端读取 `window.__READIO_ENV__`，而 Cloud 的运行时配置所有权来自后端动态生成的 `/env.js`。
 
 浏览器公开的运行时配置字段不是密钥。如果字段被发出到 `/env.js`，假设每个浏览器用户都能读取它。
 

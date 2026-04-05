@@ -226,12 +226,16 @@ func defaultASRRelayProviders() map[string]asrRelayProviderConfig {
 func (s *asrRelayService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	route := "asr-relay" // Default route to ensure error logging works even before route is determined
-	var errClass string
+	errClass := "none"
 	var httpStatus int
+	var upstreamKind string
+	var upstreamHost string
 
 	defer func() {
 		slog.Info("asr-relay request",
 			"route", route,
+			"upstream_kind", upstreamKind,
+			"upstream_host", upstreamHost,
 			"elapsed_ms", time.Since(start).Milliseconds(),
 			"error_class", errClass,
 			"status", httpStatus,
@@ -263,6 +267,7 @@ func (s *asrRelayService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			writeASRRelayError(w, relayErr.Status, relayErr.Message, relayErr.Code, relayErr.RetryAfterMs)
 			return
 		}
+		upstreamKind, upstreamHost = s.asrRequestUpstream(payload.Provider, false)
 		result, relayErr := s.transcribe(r.Context(), *payload)
 		if relayErr != nil {
 			httpStatus = relayErr.Status
@@ -300,6 +305,7 @@ func (s *asrRelayService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			writeASRRelayError(w, http.StatusBadRequest, "invalid relay request payload", "ASR_INVALID_PAYLOAD", nil)
 			return
 		}
+		upstreamKind, upstreamHost = s.asrRequestUpstream(payload.Provider, true)
 		ok, relayErr := s.verify(r.Context(), payload)
 		if relayErr != nil {
 			httpStatus = relayErr.Status
@@ -1547,4 +1553,28 @@ func asrErrClass(code string) string {
 	default:
 		return "unknown"
 	}
+}
+
+func (s *asrRelayService) asrRequestUpstream(providerID string, verify bool) (string, string) {
+	providerKey := strings.ToLower(strings.TrimSpace(providerID))
+	if providerKey == "" {
+		return "", ""
+	}
+	provider, ok := s.providers[providerKey]
+	if !ok {
+		return "asr-" + providerKey, ""
+	}
+	targetURL := provider.transcribeURL
+	if verify {
+		targetURL = provider.verifyURL
+	}
+	return "asr-" + provider.id, hostFromURL(targetURL)
+}
+
+func hostFromURL(raw string) string {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	return parsed.Host
 }

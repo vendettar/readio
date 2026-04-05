@@ -29,14 +29,16 @@ const adminMaxLimit = 500
 const p95Quantile = 0.95
 
 type adminLogEntry struct {
-	Ts         time.Time         `json:"ts"`
-	Level      string            `json:"level"`
-	Msg        string            `json:"msg"`
-	Route      string            `json:"route,omitempty"`
-	ElapsedMs  float64           `json:"elapsed_ms,omitempty"`
-	ErrorClass string            `json:"error_class,omitempty"`
-	Status     int               `json:"status,omitempty"`
-	Attrs      map[string]string `json:"attrs,omitempty"`
+	Ts           time.Time         `json:"ts"`
+	Level        string            `json:"level"`
+	Msg          string            `json:"msg"`
+	Route        string            `json:"route,omitempty"`
+	UpstreamKind string            `json:"upstream_kind,omitempty"`
+	UpstreamHost string            `json:"upstream_host,omitempty"`
+	ElapsedMs    float64           `json:"elapsed_ms,omitempty"`
+	ErrorClass   string            `json:"error_class,omitempty"`
+	Status       int               `json:"status,omitempty"`
+	Attrs        map[string]string `json:"attrs,omitempty"`
 }
 
 type adminRingBuffer struct {
@@ -190,6 +192,14 @@ func (h *adminSlogHandler) Handle(ctx context.Context, r slog.Record) error {
 	if ec, ok := flat["error_class"]; ok {
 		entry.ErrorClass = ec
 		delete(flat, "error_class")
+	}
+	if uk, ok := flat["upstream_kind"]; ok {
+		entry.UpstreamKind = uk
+		delete(flat, "upstream_kind")
+	}
+	if uh, ok := flat["upstream_host"]; ok {
+		entry.UpstreamHost = uh
+		delete(flat, "upstream_host")
 	}
 	if ems, ok := flat["elapsed_ms"]; ok {
 		if v, err := strconv.ParseFloat(ems, 64); err == nil {
@@ -403,7 +413,7 @@ func (h *adminHandler) handleAdminMetricsSummary(w http.ResponseWriter, _ *http.
 		}
 		rs.count++
 
-		if e.ErrorClass != "" {
+		if e.ErrorClass != "" && e.ErrorClass != "none" {
 			rs.errorCount++
 			errorByClass[e.ErrorClass]++
 		}
