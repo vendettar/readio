@@ -12,7 +12,7 @@ Cloud 生产环境运行时配置所有权分为三个桶：
 
 1. **服务端所有运行时配置**：保留在后端运行时环境（VPS env/systemd env 文件）中的值。包括服务监听地址、静态资源路径、数据库路径和后端滥用控制设置（`PORT`、`READIO_CLOUD_UI_DIST_DIR`、`READIO_CLOUD_DB_PATH`、`READIO_ASR_ALLOWED_ORIGINS`、`READIO_ASR_RATE_LIMIT_BURST`、`READIO_ASR_RATE_LIMIT_WINDOW_MS`）。
 
-2. **浏览器公开运行时配置**：由 `apps/cloud-api` 通过 `/env.js` 使用显式 allowlist 发出的值。在生产环境中，Cloud **不**使用 `apps/cloud-ui/public/env.js` 或 `dist/env.js` 作为运行时基准。后端动态提供 `/env.js`，仅包含浏览器安全字段。浏览器公开字段包括应用名称/版本、同源后端 URL、ASR relay token（仅为滥用控制，非密钥）、ASR provider/model 默认值、功能开关和 UI 默认值。
+2. **浏览器公开运行时配置**：由 `apps/cloud-api` 通过 `/env.js` 使用显式 allowlist 发出的值。Cloud **不**使用 `apps/cloud-ui/public/env.js` 或 `dist/env.js` 作为运行时基准。后端动态提供 `/env.js`，仅包含浏览器安全字段。浏览器公开字段包括应用名称/版本、同源后端 URL、ASR relay token（仅为滥用控制，非密钥）、ASR provider/model 默认值、功能开关和 UI 默认值。
 
 3. **浏览器本地/用户本地配置**：保留在浏览器端、不迁移到后端运行时的值（`READIO_ASR_API_KEY`、`READIO_OPENAI_API_KEY`、IndexedDB/Dexie 持久化、播放/会话状态）。
 

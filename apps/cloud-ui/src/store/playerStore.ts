@@ -1,8 +1,10 @@
 import { create } from 'zustand'
 import { isAbortLikeError } from '../lib/fetchUtils'
 import { log, logError, warn } from '../lib/logger'
+import { normalizePodcastAudioUrl } from '../lib/networking/urlUtils'
 import type { PlaybackRequestMode } from '../lib/player/playbackMode'
 import { __dropPlaybackSourceObjectUrl } from '../lib/player/playbackSource'
+import { DownloadsRepository } from '../lib/repositories/DownloadsRepository'
 import { FilesRepository } from '../lib/repositories/FilesRepository'
 import { PlaybackRepository } from '../lib/repositories/PlaybackRepository'
 import { getAppConfig } from '../lib/runtimeConfig'
@@ -663,35 +665,105 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         }
       }
       // 2b. Restore remote audio (Podcasts / Explore page)
+      // Prefer local download if available before falling back to remote URL
       else if (lastSession.audioUrl) {
         if (get().loadRequestId !== requestId || signal?.aborted) {
           if (get().loadRequestId === requestId) set({ initializationStatus: 'ready' })
           return
         }
-        log('[PlayerStore] Restoring remote podcast session:', lastSession.audioUrl)
-        set({
-          sessionId: lastSession.id,
-          audioUrl: lastSession.audioUrl,
-          audioLoaded: true,
-          audioTitle: lastSession.title || '',
-          progress: lastSession.progress,
-          coverArtUrl: lastSession.artworkUrl || '',
-          status: 'paused',
-          isPlaying: false,
-          episodeMetadata: {
-            description: lastSession.description,
-            podcastTitle: lastSession.podcastTitle,
-            podcastFeedUrl: lastSession.podcastFeedUrl,
-            transcriptUrl: lastSession.transcriptUrl,
-            artworkUrl: lastSession.artworkUrl,
-            publishedAt: lastSession.publishedAt,
-            episodeId: lastSession.episodeId,
-            providerPodcastId: lastSession.providerPodcastId,
-            providerEpisodeId: lastSession.providerEpisodeId,
-          },
-        })
-        useTranscriptStore.getState().resetTranscript()
-        usePlayerSurfaceStore.getState().setPlayableContext(true)
+
+        const normalizedUrl = normalizePodcastAudioUrl(lastSession.audioUrl)
+        const downloadedTrack = await DownloadsRepository.findTrackByUrl(normalizedUrl)
+
+        if (downloadedTrack) {
+          const audioData = await PlaybackRepository.getAudioBlob(downloadedTrack.audioId)
+          if (audioData) {
+            const restoredLocalTrackId = downloadedTrack.id
+            log(
+              '[PlayerStore] Restoring remote session from local download:',
+              downloadedTrack.audioId
+            )
+            const file = new File([audioData.blob], audioData.filename, {
+              type: audioData.type,
+            })
+            const url = URL.createObjectURL(file)
+
+            let artwork: string | Blob | null = null
+            if (restoredLocalTrackId) {
+              try {
+                artwork = await FilesRepository.resolveTrackArtwork(restoredLocalTrackId)
+              } catch (err) {
+                if (!isAbortLikeError(err))
+                  warn('[PlayerStore] Failed to restore artwork for local track', err)
+              }
+            }
+
+            if (get().loadRequestId !== requestId || signal?.aborted) {
+              if (get().loadRequestId === requestId) set({ initializationStatus: 'ready' })
+              return
+            }
+
+            set((state) => {
+              state.activeBlobUrls.forEach((u) => {
+                revokeBlobUrl(u)
+              })
+
+              return {
+                sessionId: lastSession.id,
+                audioUrl: url,
+                audioLoaded: true,
+                audioTitle: lastSession.title || '',
+                coverArtUrl: artwork || lastSession.artworkUrl || '',
+                activeBlobUrls: [url],
+                localTrackId: restoredLocalTrackId,
+                progress: lastSession.progress,
+                status: 'paused',
+                isPlaying: false,
+                episodeMetadata: {
+                  description: lastSession.description,
+                  podcastTitle: lastSession.podcastTitle,
+                  podcastFeedUrl: lastSession.podcastFeedUrl,
+                  transcriptUrl: lastSession.transcriptUrl,
+                  artworkUrl: lastSession.artworkUrl,
+                  publishedAt: lastSession.publishedAt,
+                  episodeId: lastSession.episodeId,
+                  providerPodcastId: lastSession.providerPodcastId,
+                  providerEpisodeId: lastSession.providerEpisodeId,
+                },
+              }
+            })
+            useTranscriptStore.getState().resetTranscript()
+            usePlayerSurfaceStore.getState().setPlayableContext(true)
+          }
+        }
+
+        // Fallback: no matching download or blob missing — restore from remote URL
+        if (!get().audioLoaded || get().sessionId !== lastSession.id) {
+          log('[PlayerStore] Restoring remote podcast session:', lastSession.audioUrl)
+          set({
+            sessionId: lastSession.id,
+            audioUrl: lastSession.audioUrl,
+            audioLoaded: true,
+            audioTitle: lastSession.title || '',
+            progress: lastSession.progress,
+            coverArtUrl: lastSession.artworkUrl || '',
+            status: 'paused',
+            isPlaying: false,
+            episodeMetadata: {
+              description: lastSession.description,
+              podcastTitle: lastSession.podcastTitle,
+              podcastFeedUrl: lastSession.podcastFeedUrl,
+              transcriptUrl: lastSession.transcriptUrl,
+              artworkUrl: lastSession.artworkUrl,
+              publishedAt: lastSession.publishedAt,
+              episodeId: lastSession.episodeId,
+              providerPodcastId: lastSession.providerPodcastId,
+              providerEpisodeId: lastSession.providerEpisodeId,
+            },
+          })
+          useTranscriptStore.getState().resetTranscript()
+          usePlayerSurfaceStore.getState().setPlayableContext(true)
+        }
       }
 
       // 3. Restore subtitle file from IndexedDB

@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -121,6 +123,56 @@ func TestAppHandlerServesStaticFilesAndSPA(t *testing.T) {
 			t.Fatalf("status = %d, want %d", rr.Code, http.StatusNotFound)
 		}
 	})
+}
+
+func TestProxyRequestSummaryEmitsCanonicalUpstreamFields(t *testing.T) {
+	rb := newAdminRingBuffer(10)
+	oldLogger := slog.Default()
+	slog.SetDefault(slog.New(&adminSlogHandler{
+		Handler: slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelInfo}),
+		buffer:  rb,
+	}))
+	t.Cleanup(func() {
+		slog.SetDefault(oldLogger)
+	})
+
+	proxy, _ := newMediaProxyTestService(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/audio.mp3" {
+			t.Fatalf("path = %q, want %q", r.URL.Path, "/audio.mp3")
+		}
+		w.Header().Set("Content-Type", "audio/mpeg")
+		_, _ = io.WriteString(w, "ok")
+	}), nil)
+
+	reqURL := "http://media.example.com/audio.mp3"
+	req := httptest.NewRequest(http.MethodGet, "/api/proxy?url="+url.QueryEscape(reqURL), nil)
+	rr := httptest.NewRecorder()
+	proxy.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	snap := rb.snapshot()
+	if len(snap) != 1 {
+		t.Fatalf("snapshot len = %d, want 1", len(snap))
+	}
+	entry := snap[0]
+	if entry.Route != "proxy/media" {
+		t.Fatalf("route = %q, want %q", entry.Route, "proxy/media")
+	}
+	if entry.UpstreamKind != "proxy" {
+		t.Fatalf("upstream_kind = %q, want %q", entry.UpstreamKind, "proxy")
+	}
+	if entry.UpstreamHost != "media.example.com" {
+		t.Fatalf("upstream_host = %q, want %q", entry.UpstreamHost, "media.example.com")
+	}
+	if entry.ErrorClass != "none" {
+		t.Fatalf("error_class = %q, want %q", entry.ErrorClass, "none")
+	}
+	if entry.Status != http.StatusOK {
+		t.Fatalf("status = %d, want %d", entry.Status, http.StatusOK)
+	}
 }
 
 func TestCloudMuxServesDynamicEnvBeforeStaticFallback(t *testing.T) {

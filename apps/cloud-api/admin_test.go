@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -182,9 +183,9 @@ func TestAdminHealth(t *testing.T) {
 func TestAdminMetricsSummary(t *testing.T) {
 	rb := newAdminRingBuffer(100)
 	now := time.Now()
-	rb.push(adminLogEntry{Ts: now, Level: "INFO", Msg: "ok", Route: "proxy/media", ElapsedMs: 10})
+	rb.push(adminLogEntry{Ts: now, Level: "INFO", Msg: "ok", Route: "proxy/media", ElapsedMs: 10, ErrorClass: "none"})
 	rb.push(adminLogEntry{Ts: now, Level: "ERROR", Msg: "fail", Route: "proxy/media", ElapsedMs: 200, ErrorClass: "timeout"})
-	rb.push(adminLogEntry{Ts: now, Level: "INFO", Msg: "ok2", Route: "proxy/media", ElapsedMs: 50})
+	rb.push(adminLogEntry{Ts: now, Level: "INFO", Msg: "ok2", Route: "proxy/media", ElapsedMs: 50, ErrorClass: "none"})
 	rb.push(adminLogEntry{Ts: now, Level: "INFO", Msg: "no_route", ElapsedMs: 5})
 
 	h := &adminHandler{token: "tok", buffer: rb, start: time.Now()}
@@ -210,6 +211,41 @@ func TestAdminMetricsSummary(t *testing.T) {
 	}
 	if int(re["errors"].(float64)) != 1 {
 		t.Fatalf("errors = %v", re["errors"])
+	}
+}
+
+func TestAdminMetricsSummaryIgnoresErrorClassNone(t *testing.T) {
+	rb := newAdminRingBuffer(100)
+	now := time.Now()
+	rb.push(adminLogEntry{Ts: now, Level: "INFO", Msg: "ok", Route: "proxy/media", ElapsedMs: 10, ErrorClass: "none"})
+	rb.push(adminLogEntry{Ts: now, Level: "INFO", Msg: "ok2", Route: "proxy/media", ElapsedMs: 20, ErrorClass: "none"})
+
+	h := &adminHandler{token: "tok", buffer: rb, start: time.Now()}
+	req := httptest.NewRequest(http.MethodGet, "/admin/metrics/summary", nil)
+	req.Header.Set("Authorization", "Bearer tok")
+	rr := httptest.NewRecorder()
+	h.authMiddleware(h.handleAdminMetricsSummary)(rr, req)
+
+	var resp map[string]any
+	_ = json.NewDecoder(rr.Body).Decode(&resp)
+
+	byRoute, ok := resp["by_route"].(map[string]any)
+	if !ok {
+		t.Fatalf("by_route not a map, got %T", resp["by_route"])
+	}
+	re, ok := byRoute["proxy/media"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected proxy/media in by_route")
+	}
+	if int(re["errors"].(float64)) != 0 {
+		t.Fatalf("errors = %v, want 0", re["errors"])
+	}
+	byErrorClass, ok := resp["by_error_class"].(map[string]any)
+	if !ok {
+		t.Fatalf("by_error_class not a map, got %T", resp["by_error_class"])
+	}
+	if _, exists := byErrorClass["none"]; exists {
+		t.Fatalf("by_error_class should not contain none: %v", byErrorClass)
 	}
 }
 
@@ -419,6 +455,66 @@ func TestSlogHandlerExcludesAdminFromRing(t *testing.T) {
 
 	if rb.size() != 1 {
 		t.Fatalf("non-admin request should be in ring buffer, size=%d", rb.size())
+	}
+}
+
+func TestAdminSlogHandlerPromotesCanonicalFields(t *testing.T) {
+	rb := newAdminRingBuffer(10)
+	h := &adminSlogHandler{
+		Handler: slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelInfo}),
+		buffer:  rb,
+	}
+
+	now := time.Now()
+	r := slog.Record{Time: now, Level: slog.LevelInfo, Message: "request"}
+	r.AddAttrs(
+		slog.String("route", "proxy/media"),
+		slog.String("upstream_kind", "proxy"),
+		slog.String("upstream_host", "example.com"),
+		slog.String("error_class", "none"),
+		slog.String("elapsed_ms", "12.5"),
+		slog.String("status", "200"),
+		slog.String("secret_token", "should-not-leak"),
+	)
+
+	if err := h.Handle(context.Background(), r); err != nil {
+		t.Fatalf("handle record: %v", err)
+	}
+
+	snap := rb.snapshot()
+	if len(snap) != 1 {
+		t.Fatalf("snapshot len = %d, want 1", len(snap))
+	}
+	entry := snap[0]
+	if entry.Route != "proxy/media" {
+		t.Fatalf("route = %q, want %q", entry.Route, "proxy/media")
+	}
+	if entry.UpstreamKind != "proxy" {
+		t.Fatalf("upstream_kind = %q, want %q", entry.UpstreamKind, "proxy")
+	}
+	if entry.UpstreamHost != "example.com" {
+		t.Fatalf("upstream_host = %q, want %q", entry.UpstreamHost, "example.com")
+	}
+	if entry.ErrorClass != "none" {
+		t.Fatalf("error_class = %q, want %q", entry.ErrorClass, "none")
+	}
+	if entry.ElapsedMs != 12.5 {
+		t.Fatalf("elapsed_ms = %v, want 12.5", entry.ElapsedMs)
+	}
+	if entry.Status != 200 {
+		t.Fatalf("status = %d, want 200", entry.Status)
+	}
+	if _, ok := entry.Attrs["route"]; ok {
+		t.Fatal("route should be removed from attrs")
+	}
+	if _, ok := entry.Attrs["upstream_kind"]; ok {
+		t.Fatal("upstream_kind should be removed from attrs")
+	}
+	if _, ok := entry.Attrs["upstream_host"]; ok {
+		t.Fatal("upstream_host should be removed from attrs")
+	}
+	if entry.Attrs["secret_token"] != "[REDACTED]" {
+		t.Fatalf("secret_token = %q, want redacted", entry.Attrs["secret_token"])
 	}
 }
 

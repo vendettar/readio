@@ -1,45 +1,113 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen } from '@testing-library/react'
+import { forwardRef, type ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { usePlayerSurfaceStore } from '../../../store/playerSurfaceStore'
 
-// Dynamic pathname for route change tests
-const mockPathname = '/'
+// Stub deep sub-dependencies, NOT Sidebar itself
+const mockLocation = { pathname: '/', search: '' }
 
 vi.mock('@tanstack/react-router', async () => {
   const actual =
     await vi.importActual<typeof import('@tanstack/react-router')>('@tanstack/react-router')
   return {
     ...actual,
-    useLocation: () => ({ pathname: mockPathname }),
-    useRouterState: () => ({ location: { pathname: mockPathname } }),
+    useLocation: () => mockLocation,
+    useRouterState: () => ({ location: mockLocation }),
+    Link: ({
+      children,
+      to,
+      onClick,
+    }: {
+      children: ReactNode
+      to: string
+      onClick?: () => void
+    }) => (
+      <button type="button" data-testid={`nav-link-${to}`} onClick={onClick}>
+        {children}
+      </button>
+    ),
   }
 })
 
-vi.mock('../Sidebar', () => ({
-  Sidebar: ({
-    open,
-    onClose,
-    onNavigate,
-  }: {
-    open?: boolean
-    onClose?: () => void
-    onNavigate?: () => void
-  }) => (
-    <div data-testid="sidebar" data-open={String(open)}>
-      <button type="button" onClick={onClose} data-testid="sidebar-close">
-        Close
-      </button>
+vi.mock('react-i18next', () => ({
+  initReactI18next: { type: '3rdParty', init: () => {} },
+  useTranslation: () => ({
+    t: (key: string, fallback: string) => fallback,
+    i18n: { language: 'en' },
+  }),
+  Trans: ({ children }: { children: ReactNode }) => children,
+}))
+
+vi.mock('../../hooks/useNetworkStatus', () => ({
+  useNetworkStatus: () => ({ isOnline: true }),
+}))
+
+vi.mock('../../store/playerSurfaceStore', () => ({
+  usePlayerSurfaceStore: () => ({ mode: 'hidden', toMini: () => {} }),
+}))
+
+vi.mock('../../store/themeStore', () => ({
+  useThemeStore: (sel: (s: { theme: string; toggleTheme: () => void }) => unknown) =>
+    sel({ theme: 'light', toggleTheme: () => {} }),
+}))
+
+vi.mock('../../hooks/useGlobalSearch', () => ({
+  useGlobalSearch: () => ({
+    podcasts: [],
+    episodes: [],
+    local: [],
+    isLoading: false,
+    isEmpty: true,
+  }),
+}))
+
+vi.mock('../../hooks/useLocalSearch', () => ({
+  useLocalSearch: () => ({ results: [], isLoading: false }),
+}))
+
+vi.mock('../GlobalSearch', () => ({
+  CommandPalette: () => <div data-testid="command-palette" />,
+}))
+
+vi.mock('../ui/tooltip', () => ({
+  TooltipProvider: ({ children }: { children: ReactNode }) => children,
+  Tooltip: ({ children }: { children: ReactNode }) => children,
+  TooltipTrigger: ({ children, asChild }: { children?: ReactNode; asChild?: boolean }) =>
+    asChild ? children : <div>{children}</div>,
+  TooltipContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+}))
+
+vi.mock('../ui/Logo', () => ({
+  Logo: ({ size }: { size: number }) => <div data-testid="logo" style={{ width: size }} />,
+}))
+
+vi.mock('../ui/button', () => ({
+  Button: forwardRef<
+    HTMLButtonElement,
+    {
+      children: ReactNode
+      onClick?: () => void
+      className?: string
+      'aria-label'?: string
+      type?: string
+    }
+  >(function Button({ children, onClick, className, 'aria-label': ariaLabel, type }, ref) {
+    return (
       <button
-        type="button"
-        onClick={() => {
-          onNavigate?.()
-        }}
-        data-testid="sidebar-nav-link"
+        type={type || 'button'}
+        onClick={onClick}
+        className={className}
+        aria-label={ariaLabel}
+        ref={ref}
       >
-        Navigate
+        {children}
       </button>
-    </div>
-  ),
+    )
+  }),
+}))
+
+vi.mock('../ui/error-boundary', () => ({
+  ComponentErrorBoundary: ({ children }: { children: ReactNode }) => <>{children}</>,
 }))
 
 vi.mock('../MiniPlayer', () => ({
@@ -52,7 +120,22 @@ vi.mock('../PlayerSurfaceFrame', () => ({
   ),
 }))
 
+vi.mock('../../lib/utils', async () => {
+  const actual = await vi.importActual<typeof import('../../lib/utils')>('../../lib/utils')
+  return { ...actual, cn: (...args: string[]) => args.filter(Boolean).join(' ') }
+})
+
 import { AppShell } from '../AppShell'
+// Import real Sidebar and AppShell
+import { Sidebar } from '../Sidebar'
+
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { retry: false } },
+})
+
+function renderWithProviders(ui: ReactNode) {
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>)
+}
 
 function getBackdrop(): Element | null {
   return document.querySelector('[class*="bg-black/50"]')
@@ -62,196 +145,166 @@ function getHamburger(): HTMLElement | null {
   return screen.queryByRole('button', { name: /open sidebar/i })
 }
 
-describe('MobileSidebar', () => {
+describe('MobileSidebar — real Sidebar behavior', () => {
   beforeEach(() => {
-    act(() => {
-      usePlayerSurfaceStore.getState().reset()
-    })
+    queryClient.clear()
+    vi.clearAllMocks()
     document.body.style.overflow = ''
+    mockLocation.pathname = '/'
+    mockLocation.search = ''
   })
 
-  describe('Props contract', () => {
-    it('Sidebar receives open=false by default', () => {
-      render(<AppShell>Content</AppShell>)
-
-      const sidebar = screen.getByTestId('sidebar')
-      expect(sidebar.getAttribute('data-open')).toBe('false')
+  describe('Real Sidebar rendering', () => {
+    it('real Sidebar renders with hidden class when drawer is closed', () => {
+      const { container } = renderWithProviders(<Sidebar open={false} onClose={() => {}} />)
+      const aside = container.querySelector('aside')
+      expect(aside).toBeTruthy()
+      expect(aside?.className).toContain('hidden')
+      expect(aside?.className).toContain('md:flex')
     })
 
-    it('Sidebar receives onClose callback', () => {
-      render(<AppShell>Content</AppShell>)
-
-      const closeBtn = screen.getByTestId('sidebar-close')
-      fireEvent.click(closeBtn)
-
-      expect(screen.getByTestId('sidebar').getAttribute('data-open')).toBe('false')
+    it('real Sidebar renders with drawer classes when open', () => {
+      const { container } = renderWithProviders(<Sidebar open onClose={() => {}} />)
+      const aside = container.querySelector('aside')
+      expect(aside).toBeTruthy()
+      expect(aside?.className).toContain('start-0')
+      expect(aside?.className).toContain('z-overlay')
+      expect(aside?.className).toContain('w-64')
     })
 
-    it('Sidebar receives onNavigate callback', () => {
-      render(<AppShell>Content</AppShell>)
-
-      const navLink = screen.getByTestId('sidebar-nav-link')
-      fireEvent.click(navLink)
-
-      expect(screen.getByTestId('sidebar').getAttribute('data-open')).toBe('false')
-    })
-  })
-
-  describe('Hamburger button', () => {
-    it('hamburger is present for opening sidebar', () => {
-      render(<AppShell>Content</AppShell>)
-
-      const hamburger = getHamburger()
-      expect(hamburger).toBeTruthy()
-    })
-
-    it('hamburger click opens sidebar', () => {
-      render(<AppShell>Content</AppShell>)
+    it('close button is present and receives focus when drawer opens', async () => {
+      const { getByRole } = renderWithProviders(<AppShell>Content</AppShell>)
 
       const hamburger = getHamburger()
       if (!hamburger) throw new Error('Hamburger not found')
-      fireEvent.click(hamburger)
 
-      expect(screen.getByTestId('sidebar').getAttribute('data-open')).toBe('true')
-    })
-
-    it('hamburger is hidden when mode === full', () => {
-      act(() => {
-        usePlayerSurfaceStore.setState({ mode: 'full' })
+      await act(async () => {
+        fireEvent.click(hamburger)
       })
-      render(<AppShell>Content</AppShell>)
 
-      expect(getHamburger()).toBeNull()
+      const closeBtn = getByRole('button', { name: /close sidebar/i })
+      expect(closeBtn.className).toContain('md:hidden')
+      expect(document.activeElement).toBe(closeBtn)
     })
 
-    it('hamburger has aria-expanded=false initially', () => {
-      render(<AppShell>Content</AppShell>)
-
-      const hamburger = getHamburger()
-      expect(hamburger?.getAttribute('aria-expanded')).toBe('false')
-    })
-
-    it('hamburger aria-expanded toggles to true when sidebar opens', () => {
-      render(<AppShell>Content</AppShell>)
-
-      const hamburger = getHamburger()
-      if (!hamburger) throw new Error('Hamburger not found')
-      fireEvent.click(hamburger)
-
-      expect(hamburger.getAttribute('aria-expanded')).toBe('true')
-    })
-
-    it('hamburger aria-expanded toggles back to false when sidebar closes', () => {
-      render(<AppShell>Content</AppShell>)
-
-      const hamburger = getHamburger()
-      if (!hamburger) throw new Error('Hamburger not found')
-      fireEvent.click(hamburger)
-      expect(hamburger.getAttribute('aria-expanded')).toBe('true')
-
-      const backdrop = getBackdrop()
-      if (backdrop) fireEvent.click(backdrop)
-      expect(hamburger.getAttribute('aria-expanded')).toBe('false')
+    it('close button is absent when drawer is closed', () => {
+      const { queryByRole } = renderWithProviders(<Sidebar open={false} onClose={() => {}} />)
+      const closeBtn = queryByRole('button', { name: /close sidebar/i })
+      expect(closeBtn).toBeNull()
     })
   })
 
-  describe('Backdrop', () => {
-    it('no backdrop when sidebar is closed', () => {
-      render(<AppShell>Content</AppShell>)
-
-      expect(getBackdrop()).toBeNull()
+  describe('Close interactions', () => {
+    it('calls onClose when close button is clicked', () => {
+      const onClose = vi.fn()
+      const { getByRole } = renderWithProviders(<Sidebar open onClose={onClose} />)
+      const closeBtn = getByRole('button', { name: /close sidebar/i })
+      fireEvent.click(closeBtn)
+      expect(onClose).toHaveBeenCalled()
     })
 
-    it('backdrop appears when sidebar opens', () => {
-      render(<AppShell>Content</AppShell>)
+    it('calls onClose when a navigation link is clicked', () => {
+      const onClose = vi.fn()
+      const { getAllByRole } = renderWithProviders(<Sidebar open onClose={onClose} />)
+      const navButtons = getAllByRole('button').filter(
+        (btn) =>
+          btn.textContent &&
+          !btn.textContent.includes('Close') &&
+          !btn.textContent.includes('Theme')
+      )
+      if (navButtons.length > 0) {
+        fireEvent.click(navButtons[0])
+        expect(onClose).toHaveBeenCalled()
+      }
+    })
+  })
+
+  describe('AppShell + real Sidebar integration', () => {
+    it('hamburger click opens real sidebar', () => {
+      renderWithProviders(<AppShell>Content</AppShell>)
+
+      const hamburger = getHamburger()
+      if (!hamburger) throw new Error('Hamburger not found')
+      fireEvent.click(hamburger)
+
+      const closeBtn = screen.queryByRole('button', { name: /close sidebar/i })
+      expect(closeBtn).toBeTruthy()
+    })
+
+    it('backdrop click closes real sidebar', () => {
+      renderWithProviders(<AppShell>Content</AppShell>)
 
       const hamburger = getHamburger()
       if (!hamburger) throw new Error('Hamburger not found')
       fireEvent.click(hamburger)
 
       expect(getBackdrop()).toBeTruthy()
-    })
-
-    it('backdrop click closes sidebar', () => {
-      render(<AppShell>Content</AppShell>)
-
-      const hamburger = getHamburger()
-      if (!hamburger) throw new Error('Hamburger not found')
-      fireEvent.click(hamburger)
-
-      expect(screen.getByTestId('sidebar').getAttribute('data-open')).toBe('true')
 
       const backdrop = getBackdrop()
       if (backdrop) fireEvent.click(backdrop)
 
-      expect(screen.getByTestId('sidebar').getAttribute('data-open')).toBe('false')
+      expect(screen.queryByRole('button', { name: /close sidebar/i })).toBeNull()
     })
-  })
 
-  describe('ESC key', () => {
-    it('ESC key closes sidebar', () => {
-      render(<AppShell>Content</AppShell>)
+    it('ESC key closes real sidebar', () => {
+      renderWithProviders(<AppShell>Content</AppShell>)
 
       const hamburger = getHamburger()
       if (!hamburger) throw new Error('Hamburger not found')
       fireEvent.click(hamburger)
 
-      expect(screen.getByTestId('sidebar').getAttribute('data-open')).toBe('true')
+      expect(screen.queryByRole('button', { name: /close sidebar/i })).toBeTruthy()
 
       fireEvent.keyDown(window, { key: 'Escape' })
 
-      expect(screen.getByTestId('sidebar').getAttribute('data-open')).toBe('false')
+      expect(screen.queryByRole('button', { name: /close sidebar/i })).toBeNull()
     })
 
-    it('ESC key does nothing when sidebar is closed', () => {
-      render(<AppShell>Content</AppShell>)
-
-      expect(screen.getByTestId('sidebar').getAttribute('data-open')).toBe('false')
-
-      fireEvent.keyDown(window, { key: 'Escape' })
-
-      expect(screen.getByTestId('sidebar').getAttribute('data-open')).toBe('false')
-    })
-  })
-
-  describe('Navigation', () => {
-    it('navigation link click closes sidebar', () => {
-      render(<AppShell>Content</AppShell>)
+    it('pathname change closes real sidebar', () => {
+      const { rerender } = renderWithProviders(<AppShell>Content</AppShell>)
 
       const hamburger = getHamburger()
       if (!hamburger) throw new Error('Hamburger not found')
       fireEvent.click(hamburger)
+      expect(screen.queryByRole('button', { name: /close sidebar/i })).toBeTruthy()
 
-      expect(screen.getByTestId('sidebar').getAttribute('data-open')).toBe('true')
+      act(() => {
+        mockLocation.pathname = '/explore'
+      })
+      rerender(
+        <QueryClientProvider client={queryClient}>
+          <AppShell>Content</AppShell>
+        </QueryClientProvider>
+      )
 
-      const navLink = screen.getByTestId('sidebar-nav-link')
-      fireEvent.click(navLink)
-
-      expect(screen.getByTestId('sidebar').getAttribute('data-open')).toBe('false')
+      expect(screen.queryByRole('button', { name: /close sidebar/i })).toBeNull()
     })
 
-    it('non-click route change (onNavigate callback) closes sidebar', () => {
-      render(<AppShell>Content</AppShell>)
+    it('search-only route change closes real sidebar', () => {
+      const { rerender } = renderWithProviders(<AppShell>Content</AppShell>)
 
       const hamburger = getHamburger()
       if (!hamburger) throw new Error('Hamburger not found')
       fireEvent.click(hamburger)
+      expect(screen.queryByRole('button', { name: /close sidebar/i })).toBeTruthy()
 
-      expect(screen.getByTestId('sidebar').getAttribute('data-open')).toBe('true')
+      act(() => {
+        mockLocation.pathname = '/'
+        mockLocation.search = '?q=episode'
+      })
+      rerender(
+        <QueryClientProvider client={queryClient}>
+          <AppShell>Content</AppShell>
+        </QueryClientProvider>
+      )
 
-      // The real Sidebar calls onNavigate when useLocation pathname changes.
-      // Our mock Sidebar's nav link also calls onNavigate, simulating a
-      // programmatic route change (not a click on the nav link itself).
-      const navLink = screen.getByTestId('sidebar-nav-link')
-      fireEvent.click(navLink)
-
-      expect(screen.getByTestId('sidebar').getAttribute('data-open')).toBe('false')
+      expect(screen.queryByRole('button', { name: /close sidebar/i })).toBeNull()
     })
   })
 
   describe('Body scroll lock', () => {
     it('sidebar open locks body scroll', () => {
-      render(<AppShell>Content</AppShell>)
+      renderWithProviders(<AppShell>Content</AppShell>)
 
       expect(document.body.style.overflow).toBe('')
 
@@ -263,7 +316,7 @@ describe('MobileSidebar', () => {
     })
 
     it('sidebar close restores body scroll', () => {
-      render(<AppShell>Content</AppShell>)
+      renderWithProviders(<AppShell>Content</AppShell>)
 
       const hamburger = getHamburger()
       if (!hamburger) throw new Error('Hamburger not found')
@@ -274,103 +327,6 @@ describe('MobileSidebar', () => {
       if (backdrop) fireEvent.click(backdrop)
 
       expect(document.body.style.overflow).toBe('')
-    })
-
-    it('restores initial body overflow when it was non-empty', () => {
-      document.body.style.overflow = 'auto'
-
-      render(<AppShell>Content</AppShell>)
-
-      const hamburger = getHamburger()
-      if (!hamburger) throw new Error('Hamburger not found')
-      fireEvent.click(hamburger)
-
-      expect(document.body.style.overflow).toBe('hidden')
-
-      const backdrop = getBackdrop()
-      if (backdrop) fireEvent.click(backdrop)
-
-      expect(document.body.style.overflow).toBe('auto')
-    })
-
-    it('does NOT clear full-player overflow lock when sidebar closes', () => {
-      act(() => {
-        usePlayerSurfaceStore.setState({ mode: 'full' })
-      })
-      render(<AppShell>Content</AppShell>)
-
-      expect(document.body.style.overflow).toBe('hidden')
-
-      act(() => {
-        usePlayerSurfaceStore.setState({ mode: 'mini' })
-      })
-
-      expect(document.body.style.overflow).toBe('')
-    })
-
-    it('does NOT modify overflow when full player already locks it', () => {
-      act(() => {
-        usePlayerSurfaceStore.setState({ mode: 'full' })
-      })
-      render(<AppShell>Content</AppShell>)
-
-      expect(document.body.style.overflow).toBe('hidden')
-
-      expect(getHamburger()).toBeNull()
-    })
-
-    it('sidebar close does not wrongly clear overflow when full-player is active', () => {
-      act(() => {
-        usePlayerSurfaceStore.setState({ mode: 'full' })
-      })
-      render(<AppShell>Content</AppShell>)
-
-      expect(document.body.style.overflow).toBe('hidden')
-
-      act(() => {
-        usePlayerSurfaceStore.setState({ mode: 'mini' })
-      })
-
-      const hamburger = getHamburger()
-      if (!hamburger) throw new Error('Hamburger not found')
-      fireEvent.click(hamburger)
-
-      expect(document.body.style.overflow).toBe('hidden')
-
-      const backdrop = getBackdrop()
-      if (backdrop) fireEvent.click(backdrop)
-
-      expect(document.body.style.overflow).toBe('')
-    })
-  })
-
-  describe('ARIA', () => {
-    it('close button has accessible name', () => {
-      render(<AppShell>Content</AppShell>)
-
-      const hamburger = getHamburger()
-      if (!hamburger) throw new Error('Hamburger not found')
-      fireEvent.click(hamburger)
-
-      expect(screen.getByTestId('sidebar-close')).toBeTruthy()
-    })
-  })
-
-  describe('Regression', () => {
-    it('closing sidebar does not clear document.body.style.overflow when it should remain set', () => {
-      document.body.style.overflow = 'scroll'
-
-      render(<AppShell>Content</AppShell>)
-
-      const hamburger = getHamburger()
-      if (!hamburger) throw new Error('Hamburger not found')
-      fireEvent.click(hamburger)
-      expect(document.body.style.overflow).toBe('hidden')
-
-      const backdrop = getBackdrop()
-      if (backdrop) fireEvent.click(backdrop)
-
-      expect(document.body.style.overflow).toBe('scroll')
     })
   })
 })

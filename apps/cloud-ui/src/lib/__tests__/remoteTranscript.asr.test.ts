@@ -11,6 +11,13 @@ import {
 } from '../remoteTranscript'
 import { SETTINGS_STORAGE_KEY } from '../schemas/settings'
 
+const { logMock, logErrorMock, warnMock, errorMock } = vi.hoisted(() => ({
+  logMock: vi.fn(),
+  logErrorMock: vi.fn(),
+  warnMock: vi.fn(),
+  errorMock: vi.fn(),
+}))
+
 // Save original to restore after tests — prevents cross-file prototype pollution
 const _originalArrayBuffer = Blob.prototype.arrayBuffer
 beforeAll(() => {
@@ -37,10 +44,10 @@ vi.mock('../toast', () => ({
 }))
 
 vi.mock('../logger', () => ({
-  log: vi.fn(),
-  logError: vi.fn(),
-  warn: vi.fn(),
-  error: vi.fn(),
+  log: (...args: unknown[]) => logMock(...args),
+  logError: (...args: unknown[]) => logErrorMock(...args),
+  warn: (...args: unknown[]) => warnMock(...args),
+  error: (...args: unknown[]) => errorMock(...args),
 }))
 
 function seedAsrSettings() {
@@ -57,6 +64,10 @@ function seedAsrSettings() {
 describe('remoteTranscript ASR integration', () => {
   beforeEach(async () => {
     vi.restoreAllMocks()
+    logMock.mockReset()
+    logErrorMock.mockReset()
+    warnMock.mockReset()
+    errorMock.mockReset()
     localStorage.clear()
     sessionStorage.clear()
     window.__READIO_ENV__ = {
@@ -395,6 +406,134 @@ Transcript line
     expect(proxyCalls).toHaveLength(1)
     expect(asrCalls).toHaveLength(0)
     expect(useTranscriptStore.getState().subtitles[0]?.text).toBe('Transcript line')
+  })
+
+  it('short-circuits before automatic ASR when transcript exists, even with ASR configured', async () => {
+    const transcriptUrl = 'https://example.com/transcript.srt'
+    const audioUrl = 'https://example.com/audio.mp3'
+
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url = typeof input === 'string' ? input : input.toString()
+
+      if (url === transcriptUrl) {
+        return Promise.resolve(
+          new Response(
+            `1
+00:00:00,000 --> 00:00:01,000
+Direct transcript line
+`,
+            {
+              status: 200,
+              headers: { 'content-type': 'text/plain' },
+            }
+          )
+        )
+      }
+
+      if (
+        url === audioUrl ||
+        url === '/api/proxy' ||
+        url === '/api/v1/asr/transcriptions' ||
+        url === 'https://api.groq.com/openai/v1/audio/transcriptions'
+      ) {
+        return Promise.reject(new Error(`unexpected automatic ASR/download path: ${url}`))
+      }
+
+      return Promise.resolve(new Response('{}', { status: 200 }))
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    act(() => {
+      usePlayerStore.getState().setAudioUrl(audioUrl, 'Episode')
+    })
+
+    autoIngestEpisodeTranscript(transcriptUrl, audioUrl)
+
+    await waitFor(() => {
+      expect(useTranscriptStore.getState().subtitlesLoaded).toBe(true)
+    })
+
+    expect(useTranscriptStore.getState().subtitles[0]?.text).toBe('Direct transcript line')
+    expect(fetchMock).toHaveBeenCalledWith(transcriptUrl, expect.any(Object))
+    expect(fetchMock.mock.calls.some((call) => call[0] === audioUrl)).toBe(false)
+    expect(fetchMock.mock.calls.some((call) => call[0] === '/api/proxy')).toBe(false)
+    expect(fetchMock.mock.calls.some((call) => call[0] === '/api/v1/asr/transcriptions')).toBe(
+      false
+    )
+    expect(
+      fetchMock.mock.calls.some(
+        (call) => call[0] === 'https://api.groq.com/openai/v1/audio/transcriptions'
+      )
+    ).toBe(false)
+    expect(logMock).toHaveBeenCalledWith(
+      '[remoteTranscript] Transcript-first branch active; automatic ASR disabled because transcript exists',
+      expect.objectContaining({
+        expectedAudioUrl: audioUrl,
+        transcriptSourceHost: 'example.com',
+      })
+    )
+  })
+
+  it('does not auto-start ASR when transcript-bearing playback transcript fetch fails', async () => {
+    const transcriptUrl = 'https://example.com/transcript.srt'
+    const audioUrl = 'https://example.com/audio.mp3'
+
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === 'string' ? input : input.toString()
+
+      if (url === transcriptUrl) {
+        return Promise.resolve(new Response('transcript upstream error', { status: 500 }))
+      }
+
+      if (url === '/api/proxy') {
+        const body = JSON.parse(String(init?.body ?? '{}')) as { url: string; method: string }
+        if (body.url === transcriptUrl) {
+          return Promise.resolve(new Response('proxy transcript error', { status: 500 }))
+        }
+        if (body.url === audioUrl) {
+          return Promise.reject(new Error('audio should not be fetched for automatic ASR'))
+        }
+      }
+
+      if (url === audioUrl || url === '/api/v1/asr/transcriptions') {
+        return Promise.reject(new Error(`unexpected automatic ASR path: ${url}`))
+      }
+
+      return Promise.resolve(new Response('{}', { status: 200 }))
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    act(() => {
+      usePlayerStore.getState().setAudioUrl(audioUrl, 'Episode')
+    })
+
+    autoIngestEpisodeTranscript(transcriptUrl, audioUrl)
+
+    await waitFor(() => {
+      expect(useTranscriptStore.getState().transcriptIngestionStatus).toBe('idle')
+    })
+
+    const transcriptFetchCalls = fetchMock.mock.calls.filter((call) => call[0] === transcriptUrl)
+    const proxyCalls = fetchMock.mock.calls.filter((call) => call[0] === '/api/proxy')
+    const audioCalls = fetchMock.mock.calls.filter((call) => call[0] === audioUrl)
+    const transcribeCalls = fetchMock.mock.calls.filter(
+      (call) => call[0] === '/api/v1/asr/transcriptions'
+    )
+
+    expect(transcriptFetchCalls).toHaveLength(1)
+    expect(proxyCalls).toHaveLength(1)
+    expect(audioCalls).toHaveLength(0)
+    expect(transcribeCalls).toHaveLength(0)
+    expect(useTranscriptStore.getState().subtitlesLoaded).toBe(false)
+    expect(logMock).toHaveBeenCalledWith(
+      '[remoteTranscript] Transcript fetch failed; skipping automatic ASR because transcript exists',
+      expect.objectContaining({
+        expectedAudioUrl: audioUrl,
+        transcriptSourceHost: 'example.com',
+      })
+    )
   })
 
   it('enters cooldown window after ASPH error and prevents subsequent requests', async () => {

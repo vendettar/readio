@@ -61,17 +61,12 @@ These values remain browser-owned and are not migrated into backend runtime env 
 
 ## 4. Production vs development contract
 
-### Production Cloud
+### Cloud runtime contract
 
 - `apps/cloud-api` serves `/env.js` before SPA/static fallback.
-- Production Cloud no longer depends on `dist/env.js` as runtime truth.
+- Cloud no longer depends on `dist/env.js` as runtime truth.
 - Backend emits only the explicit browser-safe allowlist.
-
-### Frontend-only development
-
-- `apps/cloud-ui/public/env.js` remains the safe default template.
-- `apps/cloud-ui/public/env.local.js` remains the local override path.
-- `apps/cloud-ui/src/lib/runtimeConfig.ts` still reads `window.__READIO_ENV__` in both environments.
+- `apps/cloud-ui/src/lib/runtimeConfig.ts` reads `window.__READIO_ENV__`, but Cloud no longer carries a separate static `public/env.js` template.
 
 ## 5. Current risk notes
 

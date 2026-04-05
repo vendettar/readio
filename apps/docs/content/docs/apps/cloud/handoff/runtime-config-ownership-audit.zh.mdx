@@ -61,17 +61,12 @@
 
 ## 4. 生产与开发契约
 
-### 生产 Cloud
+### Cloud 运行时契约
 
 - `apps/cloud-api` 会在 SPA/static fallback 之前提供 `/env.js`。
-- 生产 Cloud 不再把 `dist/env.js` 视为运行时真相。
+- Cloud 不再把 `dist/env.js` 视为运行时真相。
 - 后端只发出显式 browser-safe allowlist。
-
-### 仅前端开发
-
-- `apps/cloud-ui/public/env.js` 继续作为安全默认模板。
-- `apps/cloud-ui/public/env.local.js` 继续作为本地 override 路径。
-- `apps/cloud-ui/src/lib/runtimeConfig.ts` 在两种环境下都继续读取 `window.__READIO_ENV__`。
+- `apps/cloud-ui/src/lib/runtimeConfig.ts` 继续读取 `window.__READIO_ENV__`，但当前 Cloud 契约不再保留单独的静态 `public/env.js` 模板。
 
 ## 5. 当前风险说明
 

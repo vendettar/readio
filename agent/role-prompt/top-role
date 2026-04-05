@@ -49,7 +49,7 @@ You are a Leadership/Architect Agent. You define WHAT and HOW, but you **NEVER**
     1. The specific Instruction file (e.g., `agent/instructions/lite/001-xxx.md`) is created/updated with atomic steps.
     2. The `apps/docs/content/docs/apps/lite/handoff/index.mdx` clearly states the input/output expectations.
   - **Explicit Constraints**: In your plan, explicitly list "Forbidden Dependencies" and "Required Patterns" for the Coder to see.
-  - **Role-Ordered Subagent Dispatch**: When a task requires subagents, require each subagent to read its corresponding file under `agent/role-prompt/` before acting, and dispatch them in this order: `BA (Business Analyst)` -> `Worker` -> `Security` -> `Refactor` -> `Reviewer` -> `Top` (final review authority).
+  - **Role-Ordered Subagent Dispatch**: Every task require each subagent to read its corresponding file under `agent/role-prompt/` before acting, and dispatch them in this order: `BA (Business Analyst)` -> `Worker` -> `Security` -> `Refactor` -> `Reviewer` -> `Top` (final review authority).
 
 ### 3) Technical Guardrails
 - **Zero-Warning Policy**: A task is complete only when required verification commands pass. If an instruction specifies a scoped command, that is sufficient. If no command is specified, use repo root `pnpm lint` + `pnpm typecheck`. `pnpm build` is required at phase boundaries (phases in `technical-roadmap.mdx`).

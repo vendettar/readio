@@ -13,15 +13,12 @@ It does not provision the VPS, nginx, TLS, firewall rules, or `systemd`.
 In production Cloud:
 
 - `apps/cloud-api` serves `/env.js` dynamically **before** the SPA/static fallback.
-- Production Cloud does **not** use `apps/cloud-ui/public/env.js` or `dist/env.js` as runtime configuration truth.
+- Cloud does **not** use `apps/cloud-ui/public/env.js` or `dist/env.js` as runtime configuration truth.
 - The backend emits runtime config from an explicit browser-safe allowlist only.
 - Server-owned runtime values (listen port, paths, abuse-control settings) stay in VPS env or systemd env files (`/etc/readio/readio-cloud.env`).
 
-In frontend-only development:
-
-- `apps/cloud-ui/public/env.js` remains the dev/default template.
-- `apps/cloud-ui/public/env.local.js` remains the local override path.
-- The frontend reads `window.__READIO_ENV__` in both environments.
+There is no separate static Cloud `public/env.js` template in the current contract.
+The frontend reads `window.__READIO_ENV__`, and Cloud runtime ownership comes from backend-generated `/env.js`.
 
 Browser-public runtime config fields are not secrets. If a field is emitted to `/env.js`, assume every browser user can read it.
 

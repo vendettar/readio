@@ -509,12 +509,16 @@ func newRateLimiter(limit int, window time.Duration, now func() time.Time) *rate
 
 func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
-	var errClass string
+	errClass := "none"
 	var httpStatus int
+	var upstreamKind string
+	var upstreamHost string
 
 	defer func() {
 		slog.Info("proxy request",
 			"route", "proxy/media",
+			"upstream_kind", upstreamKind,
+			"upstream_host", upstreamHost,
 			"elapsed_ms", time.Since(start).Milliseconds(),
 			"error_class", errClass,
 			"status", httpStatus,
@@ -528,6 +532,8 @@ func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		p.respondProxyError(w, pErr)
 		return
 	}
+	upstreamKind = "proxy"
+	upstreamHost = spec.targetURL.Host
 
 	if !p.allowRequest(effectiveClientIP(r, p.trustedProxies)) {
 		httpStatus = http.StatusTooManyRequests

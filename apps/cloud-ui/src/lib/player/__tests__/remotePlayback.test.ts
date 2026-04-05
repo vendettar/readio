@@ -110,6 +110,7 @@ describe('remotePlayback', () => {
       'https://example.com/ep.srt',
       'https://example.com/audio.mp3'
     )
+    expect(downloadEpisodeMock).not.toHaveBeenCalled()
   })
 
   it('enforces ASR download blocking logic and passes AbortSignal when ASR is configured', async () => {
@@ -190,6 +191,7 @@ describe('remotePlayback', () => {
       'https://example.com/favorite.srt',
       'https://example.com/favorite.mp3'
     )
+    expect(downloadEpisodeMock).not.toHaveBeenCalled()
   })
 
   it('preserves history session semantics for setSessionId and setPlaybackTrackId', async () => {
@@ -230,6 +232,7 @@ describe('remotePlayback', () => {
       'https://example.com/history.srt',
       'https://example.com/history.mp3'
     )
+    expect(downloadEpisodeMock).not.toHaveBeenCalled()
   })
 
   it('implements latest-request-wins via epoch guard', async () => {

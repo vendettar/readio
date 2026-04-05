@@ -128,6 +128,81 @@ func TestASRRelayRouteOwnershipAndContracts(t *testing.T) {
 		}
 	})
 
+	t.Run("emits canonical request summary fields on transcription success", func(t *testing.T) {
+		rb := newAdminRingBuffer(10)
+		oldLogger := slog.Default()
+		slog.SetDefault(slog.New(&adminSlogHandler{
+			Handler: slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelInfo}),
+			buffer:  rb,
+		}))
+		t.Cleanup(func() {
+			slog.SetDefault(oldLogger)
+		})
+
+		backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodPost {
+				t.Fatalf("method = %q, want %q", r.Method, http.MethodPost)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"language": "en",
+				"duration": 12.5,
+				"segments": []map[string]any{
+					{"start": 0, "end": 1.5, "text": "hello groq"},
+				},
+			})
+		}))
+		t.Cleanup(backend.Close)
+
+		relay := newASRRelayService()
+		provider := relay.providers["groq"]
+		provider.transcribeURL = backend.URL + "/openai/v1/audio/transcriptions"
+		relay.providers["groq"] = provider
+
+		rr := httptest.NewRecorder()
+		req := newMultipartASRRelayRequest(t, multipartASRRelayRequestPayload{
+			Provider:      "groq",
+			Model:         "whisper-large-v3",
+			APIKey:        "groq-key",
+			AudioBytes:    []byte("test-audio"),
+			AudioMimeType: "audio/mpeg",
+		})
+		relay.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+		}
+
+		snap := rb.snapshot()
+		if len(snap) == 0 {
+			t.Fatal("expected at least one admin log entry")
+		}
+		var entry adminLogEntry
+		found := false
+		for _, e := range snap {
+			if e.Route == "asr-relay/transcriptions" {
+				entry = e
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("expected asr-relay/transcriptions entry, got %#v", snap)
+		}
+		if entry.UpstreamKind != "asr-groq" {
+			t.Fatalf("upstream_kind = %q, want %q", entry.UpstreamKind, "asr-groq")
+		}
+		if entry.UpstreamHost != hostFromURL(backend.URL) {
+			t.Fatalf("upstream_host = %q, want %q", entry.UpstreamHost, hostFromURL(backend.URL))
+		}
+		if entry.ErrorClass != "none" {
+			t.Fatalf("error_class = %q, want %q", entry.ErrorClass, "none")
+		}
+		if entry.Status != http.StatusOK {
+			t.Fatalf("status = %d, want %d", entry.Status, http.StatusOK)
+		}
+	})
+
 	t.Run("maps provider unauthorized and rate-limited errors", func(t *testing.T) {
 		tests := []struct {
 			name       string

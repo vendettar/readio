@@ -1382,6 +1382,28 @@ export function autoIngestEpisodeTranscript(
     return true
   }
 
+  const transcriptSourceHost = (() => {
+    if (!normalizedUrl) return null
+    try {
+      return new URL(normalizedUrl).host || null
+    } catch {
+      return null
+    }
+  })()
+
+  const logTranscriptFirstSkip = (reason: string, details?: Record<string, unknown>): void => {
+    setIngestionStatusIfCurrentTrack(TRANSCRIPT_INGESTION_STATUS.IDLE)
+    log(
+      '[remoteTranscript] Transcript fetch failed; skipping automatic ASR because transcript exists',
+      {
+        expectedAudioUrl,
+        transcriptSourceHost,
+        reason,
+        ...details,
+      }
+    )
+  }
+
   if (!normalizedUrl) {
     void startOnlineASRForTrack({
       expectedAudioUrl,
@@ -1392,16 +1414,23 @@ export function autoIngestEpisodeTranscript(
     return
   }
 
+  log(
+    '[remoteTranscript] Transcript-first branch active; automatic ASR disabled because transcript exists',
+    {
+      expectedAudioUrl,
+      transcriptSourceHost,
+    }
+  )
+
   if (!setIngestionStatusIfCurrentTrack(TRANSCRIPT_INGESTION_STATUS.LOADING)) return
 
   void loadRemoteTranscriptWithCache(normalizedUrl)
     .then((result) => {
       if (!result.ok || result.cues.length === 0) {
-        void startOnlineASRForTrack({
-          expectedAudioUrl,
-          requestId,
-          localTrackId: startState.localTrackId,
-          trigger: 'auto',
+        logTranscriptFirstSkip('transcript_fetch_failed', {
+          source: result.source,
+          cacheStatus: result.status,
+          failureReason: result.reason ?? 'unknown',
         })
         return
       }
@@ -1431,11 +1460,8 @@ export function autoIngestEpisodeTranscript(
       })
     })
     .catch((error) => {
-      void startOnlineASRForTrack({
-        expectedAudioUrl,
-        requestId,
-        localTrackId: startState.localTrackId,
-        trigger: 'auto',
+      logTranscriptFirstSkip('transcript_ingest_exception', {
+        error: error instanceof Error ? error.message : String(error),
       })
       log('[remoteTranscript] auto-ingest failed', error)
     })
