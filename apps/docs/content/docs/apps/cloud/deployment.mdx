@@ -398,6 +398,8 @@ To rollback: clear or remove these two values and restart the service. The brows
   - keep `/ops` and `/admin/*` non-cacheable
   - add `Cache-Control: no-store` at the reverse-proxy layer as a defense-in-depth measure
   - strongly consider an IP allowlist for `/ops` and `/admin/*`
+  - **required**: Set `client_max_body_size 20m;` in your site config (`/etc/nginx/sites-enabled/default`) under `location /api/v1/asr/` to allow ASR audio uploads (per-request, must match or exceed backend limit; Readio frontend limits chunks to 10MB, backend allows 20MB). Test with `sudo nginx -t` and reload with `sudo systemctl reload nginx`.
+
 - For Cloudflare:
   - apply stricter path-based controls to `/ops*` and `/admin/*`
   - add WAF / rate limiting / country or IP restrictions as appropriate
