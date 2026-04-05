@@ -16,13 +16,13 @@ vi.mock('@tanstack/react-router', async () => {
     Link: ({
       children,
       to,
-      onClick,
+      onClick: _onClick,
     }: {
       children: ReactNode
       to: string
       onClick?: () => void
     }) => (
-      <button type="button" data-testid={`nav-link-${to}`} onClick={onClick}>
+      <button type="button" data-testid={`nav-link-${to}`} onClick={_onClick}>
         {children}
       </button>
     ),
@@ -32,7 +32,7 @@ vi.mock('@tanstack/react-router', async () => {
 vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
   useTranslation: () => ({
-    t: (key: string, fallback: string) => fallback,
+    t: (_key: string, fallback: string) => fallback,
     i18n: { language: 'en' },
   }),
   Trans: ({ children }: { children: ReactNode }) => children,
@@ -89,7 +89,7 @@ vi.mock('../ui/button', () => ({
       onClick?: () => void
       className?: string
       'aria-label'?: string
-      type?: string
+      type?: 'button' | 'submit' | 'reset'
     }
   >(function Button({ children, onClick, className, 'aria-label': ariaLabel, type }, ref) {
     return (
@@ -121,7 +121,8 @@ vi.mock('../PlayerSurfaceFrame', () => ({
 }))
 
 vi.mock('../../lib/utils', async () => {
-  const actual = await vi.importActual<typeof import('../../lib/utils')>('../../lib/utils')
+  const actual =
+    await vi.importActual<typeof import('../../../lib/utils')>('../../../lib/utils')
   return { ...actual, cn: (...args: string[]) => args.filter(Boolean).join(' ') }
 })
 
