@@ -398,6 +398,7 @@ READIO_ASR_WORKER_SHARED_SECRET=your-high-entropy-secret-string
   - 保证 `/ops` 与 `/admin/*` 不可缓存
   - 作为 defense in depth，可在反向代理层额外加 `Cache-Control: no-store`
   - 强烈建议对 `/ops` 与 `/admin/*` 加 IP allowlist
+  - **必须**：在站点配置（`/etc/nginx/sites-enabled/default`）的 `location /api/v1/asr/` 下设置 `client_max_body_size 20m;` 以允许 ASR 音频上传（单次请求，需匹配或超过后端限制；Readio 前端限制分块 10MB，后端允许 20MB）。用 `sudo nginx -t` 测试，用 `sudo systemctl reload nginx` 重载
 - Cloudflare 层建议：
   - 对 `/ops*` 与 `/admin/*` 做更严格的路径级控制
   - 视情况增加 WAF / rate limit / 国家或 IP 限制

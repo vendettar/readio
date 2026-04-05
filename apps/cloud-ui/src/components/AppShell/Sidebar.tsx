@@ -1,4 +1,4 @@
-import { Link, useRouterState } from '@tanstack/react-router'
+import { Link, useLocation, useRouterState } from '@tanstack/react-router'
 import {
   Clock,
   Disc,
@@ -10,8 +10,10 @@ import {
   Star,
   Sun,
   WifiOff,
+  X,
 } from 'lucide-react'
 import type { ElementType } from 'react'
+import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNetworkStatus } from '../../hooks/useNetworkStatus'
 import { cn } from '../../lib/utils'
@@ -25,6 +27,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/
 
 interface SidebarProps {
   className?: string
+  open?: boolean
+  onClose?: () => void
+  onNavigate?: () => void
 }
 
 interface SidebarItemProps {
@@ -34,13 +39,22 @@ interface SidebarItemProps {
   isActive: boolean
 }
 
-function SidebarItem({ to, icon: Icon, label, isActive }: SidebarItemProps) {
+function SidebarItem({
+  to,
+  icon: Icon,
+  label,
+  isActive,
+  onNavigate,
+}: SidebarItemProps & { onNavigate?: () => void }) {
   const toMini = usePlayerSurfaceStore((s) => s.toMini)
 
   return (
     <Link
       to={to}
-      onClick={toMini}
+      onClick={() => {
+        toMini()
+        onNavigate?.()
+      }}
       className={cn(
         'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer',
         isActive
@@ -58,21 +72,55 @@ function SidebarItem({ to, icon: Icon, label, isActive }: SidebarItemProps) {
   )
 }
 
-function SidebarInner({ className = '' }: SidebarProps) {
+function SidebarInner({ className = '', open = true, onClose, onNavigate }: SidebarProps) {
   const { t } = useTranslation()
   const router = useRouterState()
+  const location = useLocation()
   const currentPath = router.location.pathname
   const { isOnline } = useNetworkStatus()
+  const closeRef = useRef<HTMLButtonElement>(null)
+
+  useEffect(() => {
+    if (open && closeRef.current) {
+      closeRef.current.focus()
+    }
+  }, [open])
+
+  const routeKey = `${location.pathname}${location.search}`
+  const prevRouteKeyRef = useRef(routeKey)
+
+  useEffect(() => {
+    if (prevRouteKeyRef.current !== routeKey && open) {
+      onClose?.()
+    }
+    prevRouteKeyRef.current = routeKey
+  }, [routeKey, open, onClose])
 
   return (
     <aside
       className={cn(
-        'w-sidebar h-screen bg-background border-e border-border flex flex-col flex-shrink-0 relative z-sidebar',
+        'hidden md:flex md:w-sidebar md:flex-shrink-0 w-sidebar h-screen bg-background border-e border-border flex-col relative z-sidebar',
+        open && 'md:hidden fixed inset-y-0 start-0 z-overlay w-64 flex',
         className
       )}
+      aria-label={t('sidebarAriaLabel', 'Sidebar navigation')}
     >
+      {open && (
+        <Button
+          ref={closeRef}
+          variant="ghost"
+          size="icon"
+          type="button"
+          onClick={onClose}
+          className="md:hidden absolute top-4 end-4 h-8 w-8 text-muted-foreground hover:text-foreground"
+          aria-label={t('sidebarClose', 'Close sidebar')}
+        >
+          <X size={18} />
+        </Button>
+      )}
+
       {/* App Header */}
-      <div className="px-6 py-8 pb-3">
+      <div className="px-6 pt-8 pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="bg-primary/10 text-primary p-1.5 rounded-lg flex items-center justify-center">
@@ -120,6 +168,7 @@ function SidebarInner({ className = '' }: SidebarProps) {
             icon={Disc}
             label={t('sidebarExplore')}
             isActive={currentPath.startsWith('/explore')}
+            onNavigate={onNavigate}
           />
         </div>
 
@@ -141,6 +190,7 @@ function SidebarInner({ className = '' }: SidebarProps) {
               icon={item.icon}
               label={item.label}
               isActive={currentPath.startsWith(item.to)}
+              onNavigate={onNavigate}
             />
           ))}
         </div>
@@ -151,7 +201,10 @@ function SidebarInner({ className = '' }: SidebarProps) {
         <div className="flex items-center gap-2 flex-1">
           <Link
             to="/settings"
-            onClick={usePlayerSurfaceStore((s) => s.toMini)}
+            onClick={() => {
+              usePlayerSurfaceStore.getState().toMini()
+              onNavigate?.()
+            }}
             className={cn(
               'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 cursor-pointer flex-1',
               currentPath === '/settings'
