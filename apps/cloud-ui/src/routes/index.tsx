@@ -2,7 +2,7 @@ import { createFileRoute, redirect } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/')({
   beforeLoad: () => {
-    throw redirect({ to: '/files', replace: true })
+    throw redirect({ to: '/explore', replace: true })
   },
   component: () => null,
 })

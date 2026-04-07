@@ -175,6 +175,44 @@ func TestProxyRequestSummaryEmitsCanonicalUpstreamFields(t *testing.T) {
 	}
 }
 
+func TestProxyRequestSummaryUsesActualProxyErrorStatus(t *testing.T) {
+	rb := newAdminRingBuffer(10)
+	oldLogger := slog.Default()
+	slog.SetDefault(slog.New(&adminSlogHandler{
+		Handler: slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelInfo}),
+		buffer:  rb,
+	}))
+	t.Cleanup(func() {
+		slog.SetDefault(oldLogger)
+	})
+
+	proxy := newProxyService()
+	req := httptest.NewRequest(http.MethodPut, "/api/proxy?url="+url.QueryEscape("https://media.example.com/audio.mp3"), nil)
+	rr := httptest.NewRecorder()
+	proxy.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusMethodNotAllowed)
+	}
+
+	snap := rb.snapshot()
+	var entry *adminLogEntry
+	for i := range snap {
+		if snap[i].Route == "proxy/media" {
+			entry = &snap[i]
+		}
+	}
+	if entry == nil {
+		t.Fatalf("proxy/media log entry not found in snapshot: %#v", snap)
+	}
+	if entry.Status != http.StatusMethodNotAllowed {
+		t.Fatalf("logged status = %d, want %d", entry.Status, http.StatusMethodNotAllowed)
+	}
+	if entry.ErrorClass != "invalid_method" {
+		t.Fatalf("error_class = %q, want %q", entry.ErrorClass, "invalid_method")
+	}
+}
+
 func TestCloudMuxServesDynamicEnvBeforeStaticFallback(t *testing.T) {
 	indexDir := t.TempDir()
 	distDir := filepath.Join(indexDir, "dist")

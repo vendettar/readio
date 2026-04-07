@@ -2,7 +2,12 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { PLAYBACK_REQUEST_MODE } from '../../../lib/player/playbackMode'
-import { startOnlineASRForCurrentTrack } from '../../../lib/remoteTranscript'
+import {
+  autoIngestEpisodeTranscript,
+  hasStoredTranscriptSource,
+  startOnlineASRForCurrentTrack,
+  tryApplyCachedAsrTranscript,
+} from '../../../lib/remoteTranscript'
 import { usePlayerStore } from '../../../store/playerStore'
 import { usePlayerSurfaceStore } from '../../../store/playerSurfaceStore'
 import { useTranscriptStore } from '../../../store/transcriptStore'
@@ -33,9 +38,16 @@ vi.mock('../../hooks/useImageObjectUrl', () => ({
   useImageObjectUrl: () => null,
 }))
 
-vi.mock('../../../lib/remoteTranscript', () => ({
-  startOnlineASRForCurrentTrack: vi.fn(),
-}))
+vi.mock('../../../lib/remoteTranscript', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../lib/remoteTranscript')>()
+  return {
+    ...actual,
+    autoIngestEpisodeTranscript: vi.fn(),
+    hasStoredTranscriptSource: vi.fn().mockResolvedValue(false),
+    startOnlineASRForCurrentTrack: vi.fn(),
+    tryApplyCachedAsrTranscript: vi.fn().mockResolvedValue(false),
+  }
+})
 
 const isAsrReadyForGenerationMock = vi.fn().mockResolvedValue(true)
 
@@ -46,6 +58,7 @@ vi.mock('../../../lib/asr/readiness', () => ({
 
 vi.mock('lucide-react', () => ({
   ChevronDown: () => <svg />,
+  Eye: () => <svg />,
   Loader2: () => <svg />,
   Maximize2: () => <svg />,
   Minimize2: () => <svg />,
@@ -121,9 +134,13 @@ function createDeferred<T>(): { promise: Promise<T>; resolve: (value: T) => void
 describe('DockedPlayer Controls (via PlayerSurfaceFrame)', () => {
   beforeEach(() => {
     localStorage.clear()
+    vi.mocked(autoIngestEpisodeTranscript).mockReset()
+    vi.mocked(hasStoredTranscriptSource).mockReset().mockResolvedValue(false)
     vi.mocked(startOnlineASRForCurrentTrack).mockReset()
+    vi.mocked(tryApplyCachedAsrTranscript).mockReset().mockResolvedValue(false)
     isAsrReadyForGenerationMock.mockResolvedValue(true)
     act(() => {
+      usePlayerStore.getState().reset()
       usePlayerSurfaceStore.getState().reset()
       usePlayerStore.setState({
         audioLoaded: true,
@@ -239,7 +256,7 @@ describe('DockedPlayer Controls (via PlayerSurfaceFrame)', () => {
     expect(screen.getByTestId('no-transcript-artwork')).toBeTruthy()
     expect(screen.getByText('noTranscript')).toBeTruthy()
     return waitFor(() => {
-      expect(screen.getByRole('button', { name: 'asrGenerateSubtitles' })).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'asrGenerateTranscript' })).toBeTruthy()
     })
   })
 
@@ -257,7 +274,7 @@ describe('DockedPlayer Controls (via PlayerSurfaceFrame)', () => {
 
     render(<PlayerSurfaceFrame mode="docked" />)
 
-    fireEvent.click(await screen.findByRole('button', { name: 'asrGenerateSubtitles' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'asrGenerateTranscript' }))
     expect(startOnlineASRForCurrentTrack).toHaveBeenCalledWith('manual')
   })
 
@@ -277,8 +294,8 @@ describe('DockedPlayer Controls (via PlayerSurfaceFrame)', () => {
     render(<PlayerSurfaceFrame mode="docked" />)
 
     await waitFor(() => {
-      expect(screen.queryByRole('button', { name: 'asrGenerateSubtitles' })).toBeNull()
-      expect(screen.getByRole('button', { name: 'asrSetupSubtitleGeneration' })).toBeTruthy()
+      expect(screen.queryByRole('button', { name: 'asrGenerateTranscript' })).toBeNull()
+      expect(screen.getByRole('button', { name: 'asrSetupTranscriptGeneration' })).toBeTruthy()
     })
   })
 
@@ -298,13 +315,13 @@ describe('DockedPlayer Controls (via PlayerSurfaceFrame)', () => {
 
     render(<PlayerSurfaceFrame mode="docked" />)
 
-    expect(screen.queryByRole('button', { name: 'asrSetupSubtitleGeneration' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'asrGenerateSubtitles' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'asrSetupTranscriptGeneration' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'asrGenerateTranscript' })).toBeNull()
 
     readinessDeferred.resolve(false)
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'asrSetupSubtitleGeneration' })).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'asrSetupTranscriptGeneration' })).toBeTruthy()
     })
   })
 
@@ -327,7 +344,7 @@ describe('DockedPlayer Controls (via PlayerSurfaceFrame)', () => {
     render(<PlayerSurfaceFrame mode="docked" />)
 
     const setupButton = await screen.findByRole('button', {
-      name: 'asrSetupSubtitleGeneration',
+      name: 'asrSetupTranscriptGeneration',
     })
     fireEvent.click(setupButton)
 
@@ -342,11 +359,74 @@ describe('DockedPlayer Controls (via PlayerSurfaceFrame)', () => {
     dispatchSpy.mockRestore()
   })
 
-  it('shows centered large artwork in docked mode for stream-without-transcript request', () => {
+  it('shows transcript CTA in docked pure listening mode when transcript source exists', async () => {
     usePlayerSurfaceStore.setState({ mode: 'docked' })
     usePlayerStore.setState({
       audioTitle: 'Stream Track',
+      audioUrl: 'https://example.com/stream.mp3',
       coverArtUrl: 'https://example.com/artwork.jpg',
+      episodeMetadata: {
+        playbackRequestMode: PLAYBACK_REQUEST_MODE.STREAM_WITHOUT_TRANSCRIPT,
+        transcriptUrl: 'https://example.com/transcript.vtt',
+      },
+    })
+    useTranscriptStore.setState({
+      subtitlesLoaded: false,
+      transcriptIngestionStatus: 'idle',
+      subtitles: [],
+    })
+
+    await act(async () => {
+      render(<PlayerSurfaceFrame mode="docked" />)
+      await Promise.resolve()
+    })
+
+    expect(screen.getByTestId('no-transcript-artwork')).toBeTruthy()
+    expect(screen.getByText('transcriptAvailable')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'showTranscript' })).toBeTruthy()
+  })
+
+  it('uses transcript load path instead of manual ASR for docked show transcript CTA', async () => {
+    usePlayerSurfaceStore.setState({ mode: 'docked' })
+    usePlayerStore.setState({
+      audioTitle: 'Stream Track',
+      audioUrl: 'https://example.com/stream.mp3',
+      episodeMetadata: {
+        playbackRequestMode: PLAYBACK_REQUEST_MODE.STREAM_WITHOUT_TRANSCRIPT,
+        transcriptUrl: 'https://example.com/transcript.vtt',
+      },
+    })
+    useTranscriptStore.setState({
+      subtitlesLoaded: false,
+      transcriptIngestionStatus: 'idle',
+      subtitles: [],
+    })
+
+    render(<PlayerSurfaceFrame mode="docked" />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'showTranscript' }))
+
+    await waitFor(() => {
+      expect(autoIngestEpisodeTranscript).toHaveBeenCalledWith(
+        'https://example.com/transcript.vtt',
+        'https://example.com/stream.mp3'
+      )
+      expect(tryApplyCachedAsrTranscript).toHaveBeenCalledWith(
+        'https://example.com/stream.mp3',
+        null,
+        expect.any(Number)
+      )
+      expect(startOnlineASRForCurrentTrack).not.toHaveBeenCalled()
+    })
+  })
+
+  it('shows transcript CTA for stored local transcript source before cues are loaded', async () => {
+    vi.mocked(hasStoredTranscriptSource).mockResolvedValueOnce(true)
+    usePlayerSurfaceStore.setState({ mode: 'docked' })
+    usePlayerStore.setState({
+      audioTitle: 'Local Track',
+      audioUrl: 'blob:local-track',
+      localTrackId: 'local-track-1',
       episodeMetadata: {
         playbackRequestMode: PLAYBACK_REQUEST_MODE.STREAM_WITHOUT_TRANSCRIPT,
       },
@@ -359,18 +439,25 @@ describe('DockedPlayer Controls (via PlayerSurfaceFrame)', () => {
 
     render(<PlayerSurfaceFrame mode="docked" />)
 
-    expect(screen.getByTestId('docked-stream-only-artwork')).toBeTruthy()
-    expect(screen.getByTestId('docked-stream-only-artwork-image')).toBeTruthy()
-    expect(screen.queryByTestId('no-transcript-artwork')).toBeNull()
-    expect(screen.queryByText('noTranscript')).toBeNull()
+    await waitFor(() => {
+      expect(screen.getByText('transcriptAvailable')).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'showTranscript' })).toBeTruthy()
+    })
+    expect(screen.queryByRole('button', { name: 'asrGenerateTranscript' })).toBeNull()
   })
 
-  it('does not leak docked stream-only artwork on default playback', () => {
+  it('suppresses generate and setup CTA while stored transcript lookup is still pending', async () => {
+    const deferredStoredTranscriptLookup = createDeferred<boolean>()
+    vi.mocked(hasStoredTranscriptSource).mockReturnValueOnce(deferredStoredTranscriptLookup.promise)
+    isAsrReadyForGenerationMock.mockResolvedValue(false)
     usePlayerSurfaceStore.setState({ mode: 'docked' })
     usePlayerStore.setState({
-      audioTitle: 'Default Track',
-      coverArtUrl: 'https://example.com/artwork.jpg',
-      episodeMetadata: { playbackRequestMode: PLAYBACK_REQUEST_MODE.DEFAULT },
+      audioTitle: 'Local Track',
+      audioUrl: 'blob:local-track',
+      localTrackId: 'local-track-1',
+      episodeMetadata: {
+        playbackRequestMode: PLAYBACK_REQUEST_MODE.STREAM_WITHOUT_TRANSCRIPT,
+      },
     })
     useTranscriptStore.setState({
       subtitlesLoaded: false,
@@ -380,17 +467,152 @@ describe('DockedPlayer Controls (via PlayerSurfaceFrame)', () => {
 
     render(<PlayerSurfaceFrame mode="docked" />)
 
-    expect(screen.getByTestId('no-transcript-artwork')).toBeTruthy()
-    expect(screen.queryByTestId('docked-stream-only-artwork')).toBeNull()
-    expect(screen.getByText('noTranscript')).toBeTruthy()
+    await waitFor(() => {
+      expect(isAsrReadyForGenerationMock).toHaveBeenCalled()
+    })
+
+    expect(screen.queryByRole('button', { name: 'asrSetupTranscriptGeneration' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'asrGenerateTranscript' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'showTranscript' })).toBeNull()
+
+    act(() => {
+      deferredStoredTranscriptLookup.resolve(true)
+    })
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'showTranscript' })).toBeTruthy()
+    })
   })
 
-  it('has player-surface-frame data-testid', () => {
+  it('falls back to setup CTA when stored transcript lookup fails', async () => {
+    vi.mocked(hasStoredTranscriptSource).mockRejectedValueOnce(new Error('lookup failed'))
+    isAsrReadyForGenerationMock.mockResolvedValue(false)
+    usePlayerSurfaceStore.setState({ mode: 'docked' })
+    usePlayerStore.setState({
+      audioTitle: 'Local Track',
+      audioUrl: 'blob:local-track',
+      localTrackId: 'local-track-1',
+      episodeMetadata: {
+        playbackRequestMode: PLAYBACK_REQUEST_MODE.STREAM_WITHOUT_TRANSCRIPT,
+      },
+    })
+    useTranscriptStore.setState({
+      subtitlesLoaded: false,
+      transcriptIngestionStatus: 'idle',
+      subtitles: [],
+    })
+
+    render(<PlayerSurfaceFrame mode="docked" />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'asrSetupTranscriptGeneration' })).toBeTruthy()
+    })
+
+    expect(screen.queryByRole('button', { name: 'showTranscript' })).toBeNull()
+  })
+
+  it('does not trigger ASR when show transcript resolves a stored local transcript', async () => {
+    vi.mocked(hasStoredTranscriptSource).mockResolvedValueOnce(true)
+    vi.mocked(tryApplyCachedAsrTranscript).mockResolvedValueOnce(true)
+    usePlayerSurfaceStore.setState({ mode: 'docked' })
+    usePlayerStore.setState({
+      audioTitle: 'Local Track',
+      audioUrl: 'blob:local-track',
+      localTrackId: 'local-track-1',
+      episodeMetadata: {
+        playbackRequestMode: PLAYBACK_REQUEST_MODE.STREAM_WITHOUT_TRANSCRIPT,
+      },
+    })
+    useTranscriptStore.setState({
+      subtitlesLoaded: false,
+      transcriptIngestionStatus: 'idle',
+      subtitles: [],
+    })
+
+    render(<PlayerSurfaceFrame mode="docked" />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'showTranscript' }))
+
+    expect(tryApplyCachedAsrTranscript).toHaveBeenCalledWith(
+      'blob:local-track',
+      'local-track-1',
+      expect.any(Number)
+    )
+    expect(autoIngestEpisodeTranscript).not.toHaveBeenCalled()
+    expect(startOnlineASRForCurrentTrack).not.toHaveBeenCalled()
+  })
+
+  it('retries transcript loading instead of ASR when transcript source load previously failed', async () => {
+    vi.mocked(hasStoredTranscriptSource).mockResolvedValueOnce(false)
+    usePlayerSurfaceStore.setState({ mode: 'docked' })
+    usePlayerStore.setState({
+      audioTitle: 'Stream Track',
+      audioUrl: 'https://example.com/stream.mp3',
+      episodeMetadata: {
+        playbackRequestMode: PLAYBACK_REQUEST_MODE.STREAM_WITHOUT_TRANSCRIPT,
+        transcriptUrl: 'https://example.com/transcript.vtt',
+      },
+    })
+    useTranscriptStore.setState({
+      subtitlesLoaded: false,
+      transcriptIngestionStatus: 'failed',
+      transcriptIngestionError: {
+        code: 'transcript_fetch_failed',
+        message: 'Transcript available but could not be loaded',
+      },
+      subtitles: [],
+    })
+
+    render(<PlayerSurfaceFrame mode="docked" />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'retryTranscript' }))
+
+    await waitFor(() => {
+      expect(autoIngestEpisodeTranscript).toHaveBeenCalledWith(
+        'https://example.com/transcript.vtt',
+        'https://example.com/stream.mp3'
+      )
+    })
+    expect(startOnlineASRForCurrentTrack).not.toHaveBeenCalled()
+  })
+
+  it('does not treat malformed transcriptUrl as an available transcript source', async () => {
+    vi.mocked(hasStoredTranscriptSource).mockResolvedValueOnce(false)
+    isAsrReadyForGenerationMock.mockResolvedValue(false)
+    usePlayerSurfaceStore.setState({ mode: 'docked' })
+    usePlayerStore.setState({
+      audioTitle: 'Broken Transcript Metadata',
+      audioUrl: 'https://example.com/stream.mp3',
+      episodeMetadata: {
+        playbackRequestMode: PLAYBACK_REQUEST_MODE.STREAM_WITHOUT_TRANSCRIPT,
+        transcriptUrl: '  foo  ',
+      },
+    })
+    useTranscriptStore.setState({
+      subtitlesLoaded: false,
+      transcriptIngestionStatus: 'idle',
+      subtitles: [],
+    })
+
+    render(<PlayerSurfaceFrame mode="docked" />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'asrSetupTranscriptGeneration' })).toBeTruthy()
+    })
+
+    expect(screen.queryByRole('button', { name: 'showTranscript' })).toBeNull()
+    expect(screen.queryByText('transcriptAvailable')).toBeNull()
+  })
+
+  it('has player-surface-frame data-testid', async () => {
     act(() => {
       usePlayerSurfaceStore.setState({ mode: 'docked' })
     })
 
-    render(<PlayerSurfaceFrame mode="docked" />)
+    await act(async () => {
+      render(<PlayerSurfaceFrame mode="docked" />)
+      await Promise.resolve()
+    })
 
     expect(screen.getByTestId('player-surface-frame')).toBeTruthy()
   })
