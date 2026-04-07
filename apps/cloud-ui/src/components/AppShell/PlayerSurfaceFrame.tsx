@@ -12,6 +12,11 @@ import {
   createReadingContentTransitionSample,
   isReadingContentTransitionOverBudget,
 } from '../../lib/perf/readingContentPerf'
+import {
+  TRANSCRIPT_IMPORTED_EVENT,
+  type TranscriptImportedEventDetail,
+} from '../../lib/player/playbackExport'
+import { resolveCurrentPlaybackIdentity } from '../../lib/player/playbackIdentity'
 import { formatTimeLabel } from '../../lib/subtitles'
 import { cn } from '../../lib/utils'
 import { usePlayerStore } from '../../store/playerStore'
@@ -150,6 +155,24 @@ export function PlayerSurfaceFrame({ mode }: { mode: Exclude<SurfaceMode, 'mini'
 
   const handleFollowClick = useCallback(() => {
     setIsAutoScrolling(true)
+  }, [])
+
+  useEffect(() => {
+    const handleTranscriptImported = (event: Event) => {
+      const detail = (event as CustomEvent<TranscriptImportedEventDetail>).detail
+      const currentIdentity = resolveCurrentPlaybackIdentity()
+      if (!detail || !currentIdentity) return
+      if (detail.playbackIdentityKey !== currentIdentity.playbackIdentityKey) return
+      setIsAutoScrolling(true)
+    }
+
+    window.addEventListener(TRANSCRIPT_IMPORTED_EVENT, handleTranscriptImported as EventListener)
+    return () => {
+      window.removeEventListener(
+        TRANSCRIPT_IMPORTED_EVENT,
+        handleTranscriptImported as EventListener
+      )
+    }
   }, [])
 
   // TODO(player-surface): restore docked "Full Mode" entry when the product contract is defined again.

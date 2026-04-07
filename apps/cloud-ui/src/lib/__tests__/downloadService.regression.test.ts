@@ -4,6 +4,7 @@ import { DB } from '../dexieDb'
 const {
   checkDownloadCapacityMock,
   toastErrorKeyMock,
+  toastInfoKeyMock,
   podcastFirstMock,
   toArrayBlobsMock,
   toArrayTracksMock,
@@ -14,6 +15,7 @@ const {
 } = vi.hoisted(() => ({
   checkDownloadCapacityMock: vi.fn(),
   toastErrorKeyMock: vi.fn(),
+  toastInfoKeyMock: vi.fn(),
   podcastFirstMock: vi.fn(),
   toArrayBlobsMock: vi.fn(),
   toArrayTracksMock: vi.fn(),
@@ -30,7 +32,7 @@ vi.mock('../downloadCapacity', () => ({
 vi.mock('../toast', () => ({
   toast: {
     errorKey: (...args: unknown[]) => toastErrorKeyMock(...args),
-    infoKey: vi.fn(),
+    infoKey: (...args: unknown[]) => toastInfoKeyMock(...args),
     successKey: vi.fn(),
     warningKey: vi.fn(),
   },
@@ -115,7 +117,7 @@ vi.mock('../repositories/PlaybackRepository', () => ({
   },
 }))
 
-import { persistAudioBlobAsDownload, sweepOrphanedBlobs } from '../downloadService'
+import { downloadEpisode, persistAudioBlobAsDownload, sweepOrphanedBlobs } from '../downloadService'
 
 describe('downloadService regressions', () => {
   beforeEach(() => {
@@ -154,6 +156,26 @@ describe('downloadService regressions', () => {
     })
     expect(toastErrorKeyMock).toHaveBeenCalledWith('downloadStorageLimitApp')
     expect(transactionMock).not.toHaveBeenCalled()
+  })
+
+  it('does not emit downloadAlreadyExists toast when silent download callers hit an existing track', async () => {
+    podcastFirstMock.mockResolvedValue({
+      id: 'existing-track-1',
+    })
+
+    const result = await downloadEpisode({
+      audioUrl: 'https://example.com/audio.mp3',
+      episodeTitle: 'Episode',
+      countryAtSave: 'us',
+      silent: true,
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      trackId: 'existing-track-1',
+      reason: 'already_downloaded',
+    })
+    expect(toastInfoKeyMock).not.toHaveBeenCalledWith('downloadAlreadyExists')
   })
 
   it('rejects blob persistence when countryAtSave is missing', async () => {

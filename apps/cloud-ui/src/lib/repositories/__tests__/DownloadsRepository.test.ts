@@ -572,6 +572,56 @@ describe('DownloadsRepository', () => {
     })
   })
 
+  describe('exportActiveTranscriptVersion', () => {
+    it('exports the active ready transcript version for a download', async () => {
+      const { trackId } = await createDownloadWithSubtitles(2, {
+        activeId: 'file-sub-0',
+      })
+
+      const result = await DownloadsRepository.exportActiveTranscriptVersion(trackId, 'episode')
+
+      expect(result.ok).toBe(true)
+      expect(result.filename).toContain('episode')
+      expect(result.filename).toContain('.srt')
+      expect(result.blob).toBeDefined()
+      expect(result.blob?.type).toBe('text/plain;charset=utf-8')
+    })
+
+    it('exports the newest ready transcript when no active transcript is set', async () => {
+      const { trackId } = await createDownloadWithSubtitles(2)
+
+      const result = await DownloadsRepository.exportActiveTranscriptVersion(trackId, 'episode')
+
+      expect(result.ok).toBe(true)
+      expect(result.filename).toContain('episode')
+      expect(result.blob).toBeDefined()
+    })
+  })
+
+  describe('exportAudioFile', () => {
+    it('exports the audio blob for a download track', async () => {
+      const audioId = await DB.addAudioBlob(
+        new Blob(['download-audio'], { type: 'audio/mpeg' }),
+        'ep.mp3'
+      )
+      const trackId = await DB.addPodcastDownload({
+        name: 'Export Episode',
+        audioId,
+        sourceUrlNormalized: 'https://example.com/export.mp3',
+        lastAccessedAt: Date.now(),
+        downloadedAt: Date.now(),
+        sizeBytes: 1024,
+        countryAtSave: 'US',
+      })
+
+      const result = await DownloadsRepository.exportAudioFile(trackId, 'Export Episode')
+
+      expect(result.ok).toBe(true)
+      expect(result.filename).toMatch(/Export Episode|ep/)
+      expect(result.blob).toBeDefined()
+    })
+  })
+
   describe('importSubtitleVersion', () => {
     it('imports subtitle content as manual ready version', async () => {
       const { trackId } = await createDownloadWithSubtitles(0)
