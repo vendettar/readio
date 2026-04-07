@@ -119,17 +119,20 @@ export function useRemotePlaybackFallback({
       }
     }, BOOTSTRAP_TIMEOUT_MS)
 
-    // Listen for actual playback success — loadedmetadata alone is not enough
-    // (a stream can expose metadata quickly and still hang before canplay/playing)
-    const onPlaying = () => {
+    // Treat canplay as a successful direct bootstrap boundary.
+    // loadedmetadata is still too early, but canplay means the browser has
+    // decoded enough media to begin playback without forcing proxy fallback.
+    const onBootstrapReady = () => {
       clearBootstrapTimeout()
     }
 
-    audio.addEventListener('playing', onPlaying)
+    audio.addEventListener('canplay', onBootstrapReady)
+    audio.addEventListener('playing', onBootstrapReady)
 
     return () => {
       clearBootstrapTimeout()
-      audio.removeEventListener('playing', onPlaying)
+      audio.removeEventListener('canplay', onBootstrapReady)
+      audio.removeEventListener('playing', onBootstrapReady)
     }
   }, [audioRef, audioUrl, isPlaying, clearBootstrapTimeout])
 }

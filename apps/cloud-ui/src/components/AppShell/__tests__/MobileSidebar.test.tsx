@@ -121,8 +121,7 @@ vi.mock('../PlayerSurfaceFrame', () => ({
 }))
 
 vi.mock('../../lib/utils', async () => {
-  const actual =
-    await vi.importActual<typeof import('../../../lib/utils')>('../../../lib/utils')
+  const actual = await vi.importActual<typeof import('../../../lib/utils')>('../../../lib/utils')
   return { ...actual, cn: (...args: string[]) => args.filter(Boolean).join(' ') }
 })
 

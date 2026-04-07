@@ -4,6 +4,8 @@ import { buildProxyUrl, getCorsProxyConfig } from './networking/proxyUrl'
 import { createTimeoutController, sleepWithAbort } from './networking/timeouts'
 import { getAppConfig, isRuntimeConfigReady } from './runtimeConfig'
 
+const DEFAULT_PROXY_HEALTH_CHECK_TIMEOUT_MS = 8000
+
 export { buildProxyUrl }
 export { CircuitTripError, getCorsProxyConfig }
 
@@ -113,7 +115,7 @@ export async function checkCorsProxyHealth(options?: {
 }): Promise<ProxyHealthResult> {
   const { proxyUrl, authHeader, authValue } = resolveProxyConfig(options?.proxyConfig)
   const targetUrl = options?.targetUrl || 'https://example.com/'
-  const timeoutMs = options?.timeoutMs ?? 8000
+  const timeoutMs = options?.timeoutMs ?? DEFAULT_PROXY_HEALTH_CHECK_TIMEOUT_MS
   const at = Date.now()
 
   if (!proxyUrl) {
@@ -576,6 +578,7 @@ export async function fetchWithFallback<T = string>(
   // Track if the PARENT signal is aborted
   const isParentAborted = () => !!signal?.aborted
 
+  const correlationId = Math.random().toString(16).slice(2, 6)
   if (options.cloudBackendFallbackClass) {
     return fetchCloudBackendWithFallback<T>(url, options)
   }
@@ -732,7 +735,7 @@ export async function fetchWithFallback<T = string>(
 
         try {
           log(
-            `[fetchWithFallback]${retryLabel}${purposeLabel} [${name}] Attempt ${i + 1}/${attempts.length} for: ${url}`
+            `[fetchWithFallback][${correlationId}]${retryLabel}${purposeLabel} [${name}] Attempt ${i + 1}/${attempts.length} for: ${url}`
           )
 
           try {
@@ -799,7 +802,7 @@ export async function fetchWithFallback<T = string>(
             error.status < 500
           ) {
             log(
-              `[fetchWithFallback]${retryLabel} [Direct] 4xx status received (${error.status}), skipping proxies as requested.`
+              `[fetchWithFallback][${correlationId}]${retryLabel} [Direct] 4xx status received (${error.status}), skipping proxies as requested.`
             )
             throw error
           }
@@ -813,9 +816,20 @@ export async function fetchWithFallback<T = string>(
             throw error || new Error('AbortError')
           }
 
+          const errorType =
+            error instanceof NetworkError
+              ? 'Network Error/CORS'
+              : error instanceof FetchError
+                ? `HTTP ${error.status}`
+                : error instanceof Error
+                  ? error.message
+                  : 'Unknown'
+
           log(
-            `[fetchWithFallback]${retryLabel} [${name}] Attempt ${i + 1} failed ${
-              timeout.wasTimedOut() ? '(Timeout)' : ''
+            `[fetchWithFallback][${correlationId}]${retryLabel} [${name}] Attempt ${
+              i + 1
+            } failed (${errorType})${
+              timeout.wasTimedOut() ? ' (Timeout)' : ''
             }. Proceeding to next...`
           )
         }
@@ -842,7 +856,7 @@ export async function fetchWithFallback<T = string>(
 
     if (firstPassResult.all5xx && isProxyConfigured && proxyUrl && !isParentAborted()) {
       log(
-        `[fetchWithFallback] All attempts failed with 5xx. Custom proxy configured. Waiting ${UPSTREAM_RETRY_DELAY_MS}ms before retry...`
+        `[fetchWithFallback][${correlationId}] All attempts failed with 5xx. Custom proxy configured. Waiting ${UPSTREAM_RETRY_DELAY_MS}ms before retry...`
       )
 
       // Wait 3 seconds (or until parent signal aborts)

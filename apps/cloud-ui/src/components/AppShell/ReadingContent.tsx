@@ -1,4 +1,4 @@
-import { Loader2 } from 'lucide-react'
+import { Eye, Loader2 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useImageObjectUrl } from '../../hooks/useImageObjectUrl'
@@ -8,8 +8,15 @@ import { getAsrReadinessUpdatedEventName, isAsrReadyForGeneration } from '../../
 import { useDownloadProgressStore } from '../../lib/downloadService'
 import { normalizePodcastAudioUrl } from '../../lib/networking/urlUtils'
 import { PLAYBACK_REQUEST_MODE } from '../../lib/player/playbackMode'
-import { startOnlineASRForCurrentTrack } from '../../lib/remoteTranscript'
+import {
+  autoIngestEpisodeTranscript,
+  getValidTranscriptUrl,
+  hasStoredTranscriptSource,
+  startOnlineASRForCurrentTrack,
+  tryApplyCachedAsrTranscript,
+} from '../../lib/remoteTranscript'
 import { findSubtitleIndex } from '../../lib/subtitles'
+import { cn } from '../../lib/utils'
 import { usePlayerStore } from '../../store/playerStore'
 import { usePlayerSurfaceStore } from '../../store/playerSurfaceStore'
 import { TRANSCRIPT_INGESTION_STATUS, useTranscriptStore } from '../../store/transcriptStore'
@@ -18,6 +25,13 @@ import { Button } from '../ui/button'
 import { CircularProgress } from '../ui/circular-progress'
 import { ZoomControl } from '../ZoomControl'
 import styles from './FullPlayer.module.css'
+import {
+  deriveReadingContentCtaState,
+  READING_CONTENT_CTA_STATE,
+  STORED_TRANSCRIPT_SOURCE_STATE,
+  type StoredTranscriptSourceState,
+  TRANSCRIPT_LOADING_TIMEOUT_MS,
+} from './readingContentCta'
 
 interface ReadingContentProps {
   /** Whether to show the full-player style placeholder (larger, with emoji icons) */
@@ -26,6 +40,16 @@ interface ReadingContentProps {
   isAutoScrolling: boolean
   /** Shared setter for transcript auto-scrolling */
   setIsAutoScrolling: (val: boolean) => void
+}
+
+interface StoredTranscriptSourceLookupState {
+  key: string
+  state: StoredTranscriptSourceState
+}
+
+interface TranscriptLoadingTimeoutState {
+  key: string
+  timedOut: boolean
 }
 
 const NO_TRANSCRIPT_ARTWORK_SIZE_STYLE = {
@@ -94,6 +118,9 @@ export function ReadingContent({
   const audioTitle = usePlayerStore((s) => s.audioTitle)
   const coverArtUrl = usePlayerStore((s) => s.coverArtUrl)
   const episodeMetadata = usePlayerStore((s) => s.episodeMetadata)
+  const localTrackId = usePlayerStore((s) => s.localTrackId)
+  const loadRequestId = usePlayerStore((s) => s.loadRequestId)
+  const setEpisodeMetadata = usePlayerStore((s) => s.setEpisodeMetadata)
   const toMini = usePlayerSurfaceStore((s) => s.toMini)
   const { jumpToSubtitle } = usePlayerController()
 
@@ -105,35 +132,76 @@ export function ReadingContent({
   const downloadPercentage = currentProgress?.percent ?? null
 
   const isFull = variant === 'full'
+  const playbackRequestMode = episodeMetadata?.playbackRequestMode
   const displaySubtitles =
     subtitlesLoaded && subtitles.length > 0 ? subtitles : partialAsrCues || []
   const hasDisplaySubtitles = displaySubtitles.length > 0
   const isActiveTranscribing =
     transcriptIngestionStatus === TRANSCRIPT_INGESTION_STATUS.TRANSCRIBING
   const [asrGenerationReady, setAsrGenerationReady] = useState<boolean | null>(null)
+  const [storedTranscriptSourceLookupState, setStoredTranscriptSourceLookupState] =
+    useState<StoredTranscriptSourceLookupState>({
+      key: '',
+      state: STORED_TRANSCRIPT_SOURCE_STATE.UNKNOWN,
+    })
+  const [transcriptLoadingAttemptVersion, setTranscriptLoadingAttemptVersion] = useState(0)
+  const [transcriptLoadingTimeoutState, setTranscriptLoadingTimeoutState] =
+    useState<TranscriptLoadingTimeoutState>({
+      key: '',
+      timedOut: false,
+    })
   const [asrReadinessVersion, setAsrReadinessVersion] = useState(0)
   const asrReadinessVersionRef = useRef(0)
+  const transcriptSourceUrl = getValidTranscriptUrl(episodeMetadata?.transcriptUrl)
+  const hasDeclaredTranscriptSource = transcriptSourceUrl !== null
+  const storedTranscriptSourceLookupKey = `${localTrackId || ''}::${targetAudioUrl}`
+  const storedTranscriptSourceState =
+    storedTranscriptSourceLookupState.key === storedTranscriptSourceLookupKey
+      ? storedTranscriptSourceLookupState.state
+      : STORED_TRANSCRIPT_SOURCE_STATE.UNKNOWN
 
-  const isTranscriptLoading =
-    transcriptIngestionStatus === TRANSCRIPT_INGESTION_STATUS.LOADING ||
-    (isActiveTranscribing && !hasDisplaySubtitles)
+  const isTranscriptFirstLoading =
+    transcriptIngestionStatus === TRANSCRIPT_INGESTION_STATUS.LOADING &&
+    hasDeclaredTranscriptSource &&
+    episodeMetadata?.playbackRequestMode !== PLAYBACK_REQUEST_MODE.STREAM_WITHOUT_TRANSCRIPT
+  const shouldWatchTranscriptLoadingTimeout =
+    (transcriptIngestionStatus === TRANSCRIPT_INGESTION_STATUS.LOADING ||
+      transcriptIngestionStatus === TRANSCRIPT_INGESTION_STATUS.TRANSCRIBING) &&
+    playbackRequestMode !== PLAYBACK_REQUEST_MODE.STREAM_WITHOUT_TRANSCRIPT
+  const transcriptLoadingWatchKey = shouldWatchTranscriptLoadingTimeout
+    ? `${loadRequestId}:${targetAudioUrl}:${transcriptSourceUrl || localTrackId || 'none'}:${transcriptLoadingAttemptVersion}`
+    : ''
+  const hasTranscriptLoadingTimedOut =
+    transcriptLoadingTimeoutState.key === transcriptLoadingWatchKey &&
+    transcriptLoadingTimeoutState.timedOut
 
   const loadingLabel = isActiveTranscribing
     ? t('asrTranscribing')
-    : transcriptIngestionStatus === TRANSCRIPT_INGESTION_STATUS.LOADING
-      ? t('asrDownloading')
-      : t('loading')
+    : isTranscriptFirstLoading
+      ? t('loadingTranscript')
+      : transcriptIngestionStatus === TRANSCRIPT_INGESTION_STATUS.LOADING
+        ? t('asrDownloading')
+        : t('loading')
+  const shouldSuppressAsrReadinessForTranscriptFirst =
+    hasDeclaredTranscriptSource ||
+    storedTranscriptSourceState !== STORED_TRANSCRIPT_SOURCE_STATE.ABSENT
   const shouldEvaluateAsrReadiness =
-    !hasDisplaySubtitles && Boolean(targetAudioUrl) && !isActiveTranscribing
-  const canGenerateTranscript = shouldEvaluateAsrReadiness && asrGenerationReady === true
-  const shouldShowAsrSettingsCta =
-    shouldEvaluateAsrReadiness && asrGenerationReady !== null && asrGenerationReady === false
+    !hasDisplaySubtitles &&
+    Boolean(targetAudioUrl) &&
+    (!isActiveTranscribing || hasTranscriptLoadingTimedOut) &&
+    !shouldSuppressAsrReadinessForTranscriptFirst
   const blobUrl = useImageObjectUrl(coverArtUrl instanceof Blob ? coverArtUrl : null)
   const effectiveCoverArtUrl = typeof coverArtUrl === 'string' ? coverArtUrl : blobUrl
-  const isDockedStreamWithoutTranscript =
-    variant === 'docked' &&
-    episodeMetadata?.playbackRequestMode === PLAYBACK_REQUEST_MODE.STREAM_WITHOUT_TRANSCRIPT &&
-    Boolean(audioTitle)
+  const ctaState = deriveReadingContentCtaState({
+    hasTranscriptContent: hasDisplaySubtitles,
+    hasBuiltInTranscriptSource: hasDeclaredTranscriptSource,
+    storedTranscriptSourceState,
+    transcriptIngestionStatus,
+    hasTranscriptLoadingTimedOut,
+    asrGenerationReady: shouldEvaluateAsrReadiness ? asrGenerationReady : null,
+    hasTargetAudio: Boolean(targetAudioUrl),
+    playbackRequestMode,
+  })
   const openAsrSettings = useCallback(() => {
     if (variant === 'docked') {
       toMini()
@@ -144,6 +212,46 @@ export function ReadingContent({
       })
     )
   }, [toMini, variant])
+
+  const showTranscript = useCallback(() => {
+    if (episodeMetadata) {
+      setEpisodeMetadata({
+        ...episodeMetadata,
+        playbackRequestMode: PLAYBACK_REQUEST_MODE.DEFAULT,
+      })
+    }
+
+    if (hasDisplaySubtitles) {
+      return
+    }
+
+    setTranscriptLoadingAttemptVersion((version) => version + 1)
+
+    void (async () => {
+      const appliedStoredTranscript = await tryApplyCachedAsrTranscript(
+        targetAudioUrl,
+        localTrackId,
+        loadRequestId
+      )
+
+      if (appliedStoredTranscript) {
+        return
+      }
+
+      if (hasDeclaredTranscriptSource) {
+        autoIngestEpisodeTranscript(transcriptSourceUrl || undefined, targetAudioUrl)
+      }
+    })()
+  }, [
+    episodeMetadata,
+    hasDeclaredTranscriptSource,
+    hasDisplaySubtitles,
+    loadRequestId,
+    localTrackId,
+    setEpisodeMetadata,
+    targetAudioUrl,
+    transcriptSourceUrl,
+  ])
 
   useEffect(() => {
     const handleAsrReadinessUpdated = () => {
@@ -184,6 +292,77 @@ export function ReadingContent({
     }
   }, [shouldEvaluateAsrReadiness, asrReadinessVersion])
 
+  useEffect(() => {
+    if (!transcriptLoadingWatchKey) {
+      setTranscriptLoadingTimeoutState((state) =>
+        state.key || state.timedOut ? { key: '', timedOut: false } : state
+      )
+      return
+    }
+
+    setTranscriptLoadingTimeoutState((state) =>
+      state.key === transcriptLoadingWatchKey
+        ? state
+        : { key: transcriptLoadingWatchKey, timedOut: false }
+    )
+
+    const timeoutId = window.setTimeout(() => {
+      setTranscriptLoadingTimeoutState((state) =>
+        state.key === transcriptLoadingWatchKey
+          ? { key: transcriptLoadingWatchKey, timedOut: true }
+          : state
+      )
+    }, TRANSCRIPT_LOADING_TIMEOUT_MS)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+  }, [transcriptLoadingWatchKey])
+
+  useEffect(() => {
+    let isCancelled = false
+    setStoredTranscriptSourceLookupState({
+      key: storedTranscriptSourceLookupKey,
+      state: targetAudioUrl
+        ? STORED_TRANSCRIPT_SOURCE_STATE.UNKNOWN
+        : STORED_TRANSCRIPT_SOURCE_STATE.ABSENT,
+    })
+
+    if (!targetAudioUrl) {
+      return () => {
+        isCancelled = true
+      }
+    }
+
+    void (async () => {
+      try {
+        const storedTranscriptSourceExists = await hasStoredTranscriptSource(
+          targetAudioUrl,
+          localTrackId
+        )
+        if (!isCancelled) {
+          setStoredTranscriptSourceLookupState({
+            key: storedTranscriptSourceLookupKey,
+            state: storedTranscriptSourceExists
+              ? STORED_TRANSCRIPT_SOURCE_STATE.PRESENT
+              : STORED_TRANSCRIPT_SOURCE_STATE.ABSENT,
+          })
+        }
+      } catch {
+        if (!isCancelled) {
+          setStoredTranscriptSourceLookupState({
+            key: storedTranscriptSourceLookupKey,
+            state: STORED_TRANSCRIPT_SOURCE_STATE.ABSENT,
+          })
+        }
+      }
+    })()
+
+    return () => {
+      isCancelled = true
+    }
+  }, [localTrackId, storedTranscriptSourceLookupKey, targetAudioUrl])
+
   // Subtitle synchronization
   useEffect(() => {
     if (displaySubtitles.length > 0) {
@@ -194,31 +373,7 @@ export function ReadingContent({
     }
   }, [progress, displaySubtitles, currentIndex, setCurrentIndex])
 
-  if (isDockedStreamWithoutTranscript) {
-    return (
-      <div
-        data-testid="docked-stream-only-artwork"
-        className="flex h-full w-full items-center justify-center p-8"
-      >
-        <div className="relative h-72 w-72 overflow-hidden rounded-2xl bg-card shadow-xl ring-1 ring-border/50">
-          {effectiveCoverArtUrl ? (
-            <img
-              data-testid="docked-stream-only-artwork-image"
-              src={effectiveCoverArtUrl}
-              alt={audioTitle || t('untitled')}
-              className="absolute inset-0 h-full w-full max-w-none object-cover"
-            />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-muted-foreground/40">
-              <span className="text-3xl font-serif">Readio</span>
-            </div>
-          )}
-        </div>
-      </div>
-    )
-  }
-
-  if (hasDisplaySubtitles) {
+  if (ctaState.isTranscriptVisible) {
     return (
       <>
         {/* If transcribing AND showing partials, show a tiny pulsing indicator */}
@@ -251,10 +406,11 @@ export function ReadingContent({
     )
   }
 
-  if (isTranscriptLoading) {
+  if (ctaState.state === READING_CONTENT_CTA_STATE.LOADING_HIDDEN) {
     const showCircularProgress =
       transcriptIngestionStatus === TRANSCRIPT_INGESTION_STATUS.LOADING &&
-      downloadPercentage !== null
+      downloadPercentage !== null &&
+      !isTranscriptFirstLoading
 
     return isFull ? (
       <div className="flex flex-col items-center justify-center min-h-full-player-placeholder text-center opacity-80">
@@ -290,7 +446,10 @@ export function ReadingContent({
     )
   }
 
-  if (transcriptIngestionStatus === TRANSCRIPT_INGESTION_STATUS.FAILED) {
+  if (
+    transcriptIngestionStatus === TRANSCRIPT_INGESTION_STATUS.FAILED &&
+    ctaState.state !== READING_CONTENT_CTA_STATE.TRANSCRIPT_AVAILABLE_RETRY
+  ) {
     return isFull ? (
       <div className="flex flex-col items-center justify-center min-h-full-player-placeholder text-center p-6">
         <div className="w-16 h-16 mb-6 rounded-full bg-destructive/10 text-destructive flex items-center justify-center">
@@ -356,54 +515,64 @@ export function ReadingContent({
   }
 
   // No transcript available
-  return isFull ? (
-    <div className="flex flex-col items-center justify-center min-h-full-player-placeholder text-center">
+  return (
+    <div
+      className={cn(
+        'flex flex-col items-center justify-center p-8 text-center',
+        isFull ? 'min-h-full-player-placeholder' : 'h-full'
+      )}
+    >
       <NoTranscriptArtwork
         coverArtUrl={effectiveCoverArtUrl}
         audioTitle={audioTitle}
         untitledLabel={t('untitled')}
-        className="relative mb-6 overflow-hidden rounded-2xl bg-card shadow-xl ring-1 ring-border/50"
+        className={cn(
+          'relative overflow-hidden rounded-2xl bg-card shadow-xl ring-1 ring-border/50',
+          isFull ? 'mb-6' : 'mb-4'
+        )}
       />
-      <p className="text-xl font-serif text-muted-foreground/80 mb-2">{t('noTranscript')}</p>
-      <p className="text-sm text-muted-foreground/80">{t('pureListeningMode')}</p>
-      {canGenerateTranscript ? (
+      <p
+        className={cn(
+          'font-serif text-muted-foreground/80',
+          isFull ? 'text-xl mb-2' : 'text-sm mb-0'
+        )}
+      >
+        {ctaState.hasTranscriptSource ? t('transcriptAvailable') : t('noTranscript')}
+      </p>
+      {isFull && <p className="text-sm text-muted-foreground/80">{t('pureListeningMode')}</p>}
+      {ctaState.state === READING_CONTENT_CTA_STATE.TRANSCRIPT_AVAILABLE_SHOW ||
+      ctaState.state === READING_CONTENT_CTA_STATE.TRANSCRIPT_AVAILABLE_RETRY ? (
         <Button
+          variant={isFull ? 'default' : 'secondary'}
+          size={isFull ? 'default' : 'sm'}
+          className="mt-4"
+          onClick={showTranscript}
+        >
+          <Eye className="w-4 h-4 mr-2" />
+          {ctaState.state === READING_CONTENT_CTA_STATE.TRANSCRIPT_AVAILABLE_RETRY
+            ? t('retryTranscript')
+            : t('showTranscript')}
+        </Button>
+      ) : ctaState.state === READING_CONTENT_CTA_STATE.NO_TRANSCRIPT_GENERATE ? (
+        <Button
+          variant={isFull ? 'default' : 'secondary'}
+          size={isFull ? 'default' : 'sm'}
           className="mt-4"
           onClick={() => {
+            setTranscriptLoadingAttemptVersion((version) => version + 1)
             startOnlineASRForCurrentTrack('manual')
           }}
         >
-          {t('asrGenerateSubtitles')}
+          {t('asrGenerateTranscript')}
         </Button>
-      ) : shouldShowAsrSettingsCta ? (
-        <Button variant="secondary" className="mt-4" onClick={openAsrSettings}>
-          {t('asrSetupSubtitleGeneration')}
-        </Button>
-      ) : null}
-    </div>
-  ) : (
-    <div className="flex flex-col items-center justify-center h-full text-center p-8">
-      <NoTranscriptArtwork
-        coverArtUrl={effectiveCoverArtUrl}
-        audioTitle={audioTitle}
-        untitledLabel={t('untitled')}
-        className="relative mb-4 overflow-hidden rounded-2xl bg-card shadow-xl ring-1 ring-border/50"
-      />
-      <p className="text-muted-foreground/80">{t('noTranscript')}</p>
-      {canGenerateTranscript ? (
+      ) : ctaState.state === READING_CONTENT_CTA_STATE.NO_TRANSCRIPT_SETUP ? (
         <Button
           variant="secondary"
-          size="sm"
-          className="mt-3"
-          onClick={() => {
-            startOnlineASRForCurrentTrack('manual')
-          }}
+          size={isFull ? 'default' : 'sm'}
+          className="mt-4"
+          onClick={openAsrSettings}
         >
-          {t('asrGenerateSubtitles')}
-        </Button>
-      ) : shouldShowAsrSettingsCta ? (
-        <Button variant="secondary" size="sm" className="mt-3" onClick={openAsrSettings}>
-          {t('asrSetupSubtitleGeneration')}
+          {t('asrSetupTranscriptGeneration')}
         </Button>
       ) : null}
     </div>

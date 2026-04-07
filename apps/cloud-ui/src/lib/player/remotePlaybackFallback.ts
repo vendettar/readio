@@ -1,4 +1,4 @@
-const BOOTSTRAP_TIMEOUT_MS = 6000
+const BOOTSTRAP_TIMEOUT_MS = 10000
 
 const PROXY_PATH = '/api/proxy'
 

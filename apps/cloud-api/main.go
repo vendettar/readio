@@ -39,7 +39,7 @@ const proxyRateLimitBurst = 5
 const proxyRateLimitBurstEnv = "READIO_PROXY_RATE_LIMIT_BURST"
 const proxyRateLimitWindowMsEnv = "READIO_PROXY_RATE_LIMIT_WINDOW_MS"
 const proxyRoute = "/api/proxy"
-const proxyMaxRedirects = 5
+const proxyMaxRedirects = 20
 const cloudDBEnv = "READIO_CLOUD_DB_PATH"
 const cloudDBDefaultPath = "./data/readio.db"
 const defaultRuntimeAppName = "Readio"
@@ -529,6 +529,11 @@ func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if pErr != nil {
 		httpStatus = http.StatusBadRequest
 		errClass = "invalid_request"
+		var proxyErr *proxyError
+		if errors.As(pErr, &proxyErr) {
+			httpStatus = proxyErr.status
+			errClass = classifyProxyParseError(proxyErr)
+		}
 		p.respondProxyError(w, pErr)
 		return
 	}
@@ -729,6 +734,15 @@ func (p *proxyService) respondProxyError(w http.ResponseWriter, err error) {
 	}
 
 	writeProxyError(w, http.StatusBadGateway, err.Error())
+}
+
+func classifyProxyParseError(err *proxyError) string {
+	switch err.status {
+	case http.StatusMethodNotAllowed:
+		return "invalid_method"
+	default:
+		return "invalid_request"
+	}
 }
 
 func parseProxyTargetURL(raw string) (*url.URL, error) {

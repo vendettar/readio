@@ -183,6 +183,20 @@ describe('useRemotePlaybackFallback (hook)', () => {
     expect(getAudioSrc(audio)).toContain('/api/proxy')
   })
 
+  it('canplay clears timeout and preserves direct playback source', () => {
+    render(<Harness audioUrl="https://example.com/audio.mp3" isPlaying />)
+
+    const audio = screen.getByTestId('fallback-audio') as HTMLAudioElement
+
+    act(() => {
+      vi.advanceTimersByTime(3000)
+      audio.dispatchEvent(new Event('canplay'))
+      vi.advanceTimersByTime(BOOTSTRAP_TIMEOUT_MS)
+    })
+
+    expect(getAudioSrc(audio)).not.toContain('/api/proxy')
+  })
+
   it('pending direct playback switches to proxy and resumes playback after timeout', () => {
     render(<Harness audioUrl="https://example.com/audio.mp3" isPlaying />)
 
