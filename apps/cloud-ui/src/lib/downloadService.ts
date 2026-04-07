@@ -63,6 +63,7 @@ export interface DownloadJobOptions {
   podcastTitle?: string
   feedUrl?: string
   artworkUrl?: string
+  silent?: boolean
   signal?: AbortSignal
   onProgress?: (progress: DownloadProgress) => void
   countryAtSave: string
@@ -145,6 +146,7 @@ let globalDownloadSemaphore = Promise.resolve()
 export async function downloadEpisode(options: DownloadJobOptions): Promise<DownloadResult> {
   const normalizedUrl = normalizePodcastAudioUrl(options.audioUrl)
   const normalizedCountryAtSave = normalizeCountryParam(options.countryAtSave)
+  const silent = options.silent === true
   if (!normalizedUrl) {
     return { ok: false, reason: 'network_error' }
   }
@@ -155,7 +157,9 @@ export async function downloadEpisode(options: DownloadJobOptions): Promise<Down
   // Idempotency: check if already downloaded
   const existing = await findDownloadedTrack(normalizedUrl)
   if (existing) {
-    toast.infoKey('downloadAlreadyExists')
+    if (!silent) {
+      toast.infoKey('downloadAlreadyExists')
+    }
     return { ok: true, trackId: existing.id, reason: 'already_downloaded' }
   }
 
@@ -176,7 +180,9 @@ export async function downloadEpisode(options: DownloadJobOptions): Promise<Down
     globalDownloadSemaphore = p.catch(() => {}).then(() => {})
 
     failedDownloads.delete(normalizedUrl)
-    notifySubscribers()
+    if (!silent) {
+      notifySubscribers()
+    }
 
     try {
       const result = await p
@@ -185,7 +191,9 @@ export async function downloadEpisode(options: DownloadJobOptions): Promise<Down
       }
       return result
     } finally {
-      notifySubscribers()
+      if (!silent) {
+        notifySubscribers()
+      }
     }
   })
 }
@@ -281,6 +289,7 @@ export async function persistAudioBlobAsDownload(
 
 async function executeDownload(options: DownloadJobOptions): Promise<DownloadResult> {
   const { signal, onProgress } = options
+  const silent = options.silent === true
   const unwrappedUrl = unwrapPodcastTrackingUrl(options.audioUrl)
 
   try {
@@ -318,10 +327,12 @@ async function executeDownload(options: DownloadJobOptions): Promise<DownloadRes
     // Step 2: Capacity pre-flight
     const capacityResult = await checkDownloadCapacity(contentLength)
     if (!capacityResult.allowed) {
-      if (capacityResult.reason === 'physical_quota_insufficient') {
-        toast.errorKey('downloadStorageLimitPhysical')
-      } else {
-        toast.errorKey('downloadStorageLimitApp')
+      if (!silent) {
+        if (capacityResult.reason === 'physical_quota_insufficient') {
+          toast.errorKey('downloadStorageLimitPhysical')
+        } else {
+          toast.errorKey('downloadStorageLimitApp')
+        }
       }
       return { ok: false, reason: 'capacity_blocked' }
     }
@@ -453,7 +464,9 @@ async function executeDownload(options: DownloadJobOptions): Promise<DownloadRes
 
     // Check for QuotaExceededError
     if (err instanceof DOMException && err.name === 'QuotaExceededError') {
-      toast.errorKey('downloadStorageLimitPhysical')
+      if (!silent) {
+        toast.errorKey('downloadStorageLimitPhysical')
+      }
       return { ok: false, reason: 'quota_error' }
     }
 

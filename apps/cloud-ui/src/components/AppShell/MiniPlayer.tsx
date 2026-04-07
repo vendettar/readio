@@ -17,6 +17,7 @@ import { TransportPlayPauseButton } from '../Player/controls/TransportPlayPauseB
 import { TransportSkipButton } from '../Player/controls/TransportSkipButton'
 import { Button } from '../ui/button'
 import { Slider } from '../ui/slider'
+import { MiniPlayerMoreMenu, useMiniPlayerMoreMenuController } from './MiniPlayerMoreMenu'
 
 // Get appropriate volume icon based on level (0-1)
 function getVolumeIcon(volume: number) {
@@ -141,6 +142,7 @@ export function MiniPlayer() {
   }
 
   const volumeIcon = getVolumeIcon(volume)
+  const moreMenuController = useMiniPlayerMoreMenuController()
 
   return (
     <div
@@ -319,6 +321,8 @@ export function MiniPlayer() {
             className="w-20 xl:w-28"
           />
         </div>
+
+        <MiniPlayerMoreMenu controller={moreMenuController} />
 
         {/* TODO(miniplayer): restore Reading Background entry when mini-player requirements are defined. */}
         {/* TODO(miniplayer): restore Open Play Queue entry when queue behavior and UX are defined. */}

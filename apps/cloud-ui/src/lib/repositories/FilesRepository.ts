@@ -10,6 +10,7 @@ import type {
   Track,
 } from '../dexieDb'
 import { DB, db } from '../dexieDb'
+import { cuesToSrt, parseSubtitles } from '../subtitles'
 import { buildPrioritizedSubtitleCandidates } from './SubtitleCandidateBuilder'
 
 export const UPSERT_FILE_ASR_SUBTITLE_REASON = {
@@ -25,6 +26,27 @@ export interface UpsertFileAsrSubtitleResult {
   ok: boolean
   reason: UpsertFileAsrSubtitleReason
   fileSubtitleId?: string
+}
+
+export const IMPORT_FILE_TRANSCRIPT_REASON = {
+  IMPORTED: 'imported',
+  TRACK_NOT_FOUND: 'track_not_found',
+  INVALID_TRANSCRIPT_CONTENT: 'invalid_transcript_content',
+} as const
+
+export type ImportFileTranscriptReason =
+  (typeof IMPORT_FILE_TRANSCRIPT_REASON)[keyof typeof IMPORT_FILE_TRANSCRIPT_REASON]
+
+export interface ImportFileTranscriptResult {
+  ok: boolean
+  reason: ImportFileTranscriptReason
+  fileSubtitleId?: string
+}
+
+export interface FileExportResult {
+  ok: boolean
+  filename?: string
+  blob?: Blob
 }
 
 function normalizeProviderModelForMatch(value: string | undefined): string {
@@ -146,6 +168,84 @@ export const FilesRepository = {
     return DB.deleteFileSubtitle(id)
   },
 
+  async importTranscriptVersion(
+    trackId: string,
+    input: { filename: string; content: string }
+  ): Promise<ImportFileTranscriptResult> {
+    const cues = parseSubtitles(input.content)
+    if (cues.length === 0) {
+      return { ok: false, reason: IMPORT_FILE_TRANSCRIPT_REASON.INVALID_TRANSCRIPT_CONTENT }
+    }
+
+    return db.transaction('rw', [db.tracks, db.local_subtitles, db.subtitles], async () => {
+      const track = await db.tracks.get(trackId)
+      if (!isUserUploadTrack(track)) {
+        return { ok: false, reason: IMPORT_FILE_TRANSCRIPT_REASON.TRACK_NOT_FOUND }
+      }
+
+      const existing = await db.local_subtitles.where('trackId').equals(trackId).toArray()
+      const existingNames = existing.map((subtitle) => subtitle.name)
+      const versionName = resolveDuplicateName(input.filename, existingNames)
+
+      const subtitleId = await DB.addSubtitle(cues, versionName)
+      const fileSubtitleId = await DB.addFileSubtitle({
+        trackId,
+        name: versionName,
+        subtitleId,
+        sourceKind: 'manual_upload',
+        status: 'ready',
+        createdAt: Date.now(),
+      })
+
+      return {
+        ok: true,
+        reason: IMPORT_FILE_TRANSCRIPT_REASON.IMPORTED,
+        fileSubtitleId,
+      }
+    })
+  },
+
+  async exportActiveTranscriptVersion(
+    trackId: string,
+    trackName: string
+  ): Promise<FileExportResult> {
+    const track = await db.tracks.get(trackId)
+    if (!isUserUploadTrack(track)) {
+      return { ok: false }
+    }
+
+    const readySubtitles = await this.getReadySubtitlesByTrackId(trackId)
+    const activeTranscript = readySubtitles[0]
+    if (!activeTranscript) {
+      return { ok: false }
+    }
+
+    const filename = `${resolveFileExportBaseName(trackName, trackId)}.transcript.srt`
+    const blob = new Blob([cuesToSrt(activeTranscript.subtitle.cues)], {
+      type: 'text/plain;charset=utf-8',
+    })
+
+    return { ok: true, filename, blob }
+  },
+
+  async exportAudioFile(trackId: string, fallbackTrackName: string): Promise<FileExportResult> {
+    const track = await db.tracks.get(trackId)
+    if (!track || !isUserUploadTrack(track)) {
+      return { ok: false }
+    }
+
+    const audioBlob = await DB.getAudioBlob(track.audioId)
+    if (!audioBlob) {
+      return { ok: false }
+    }
+
+    return {
+      ok: true,
+      filename: resolveAudioExportFilename(audioBlob, fallbackTrackName, trackId),
+      blob: audioBlob.blob,
+    }
+  },
+
   async upsertAsrSubtitleVersion(input: {
     trackId: string
     cues: ASRCue[]
@@ -228,4 +328,67 @@ export const FilesRepository = {
       return { ok: true, reason: UPSERT_FILE_ASR_SUBTITLE_REASON.CREATED, fileSubtitleId }
     })
   },
+}
+
+function resolveDuplicateName(filename: string, existingNames: string[]): string {
+  const trimmed = filename.trim() || 'transcript.srt'
+  if (!existingNames.includes(trimmed)) {
+    return trimmed
+  }
+
+  const lastDotIndex = trimmed.lastIndexOf('.')
+  const hasExtension = lastDotIndex > 0
+  const basename = hasExtension ? trimmed.slice(0, lastDotIndex) : trimmed
+  const extension = hasExtension ? trimmed.slice(lastDotIndex) : ''
+
+  let suffix = 2
+  let candidate = `${basename} (${suffix})${extension}`
+  while (existingNames.includes(candidate)) {
+    suffix += 1
+    candidate = `${basename} (${suffix})${extension}`
+  }
+  return candidate
+}
+
+function sanitizeFilenameSegment(value: string): string {
+  return value
+    .replace(/[\\/:*?"<>|]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function stripExtension(filename: string): string {
+  const lastDotIndex = filename.lastIndexOf('.')
+  return lastDotIndex > 0 ? filename.slice(0, lastDotIndex) : filename
+}
+
+function resolveFileExportBaseName(trackName: string, trackId: string): string {
+  const safeName = sanitizeFilenameSegment(trackName) || 'track'
+  return `${safeName}.${trackId}`
+}
+
+function resolveAudioExportFilename(
+  audioBlob: AudioBlob,
+  fallbackTrackName: string,
+  trackId: string
+): string {
+  const audioFilename = audioBlob.filename?.trim()
+  if (audioFilename) {
+    return audioFilename
+  }
+
+  const baseName = resolveFileExportBaseName(fallbackTrackName, trackId)
+  const extension = inferAudioExtension(audioBlob)
+  return `${stripExtension(baseName)}${extension}`
+}
+
+function inferAudioExtension(audioBlob: AudioBlob): string {
+  const type = audioBlob.blob.type || audioBlob.type || ''
+  if (type.includes('mpeg')) return '.mp3'
+  if (type.includes('mp4')) return '.m4a'
+  if (type.includes('wav')) return '.wav'
+  if (type.includes('ogg')) return '.ogg'
+  if (type.includes('flac')) return '.flac'
+  if (type.includes('aac')) return '.aac'
+  return '.audio'
 }

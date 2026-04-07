@@ -485,6 +485,54 @@ export const DownloadsRepository = {
   },
 
   /**
+   * Export the active transcript version for a downloaded episode.
+   * Falls back to the newest ready subtitle when no explicit active subtitle exists.
+   */
+  async exportActiveTranscriptVersion(
+    trackId: string,
+    episodeTitle: string
+  ): Promise<ExportResult> {
+    const download = await db.tracks.get(trackId)
+    if (!isPodcastDownloadTrack(download)) {
+      return { ok: false }
+    }
+
+    const active = await this.getActiveSubtitleByTrackId(trackId)
+    if (!active) {
+      return { ok: false }
+    }
+
+    const exportData = buildSubtitleExportData(active.fileSub, active.subtitle, episodeTitle)
+    const blob = new Blob([exportData.content], { type: 'text/plain;charset=utf-8' })
+    return { ok: true, filename: exportData.filename, blob }
+  },
+
+  /**
+   * Export the audio blob for a downloaded episode track.
+   */
+  async exportAudioFile(trackId: string, fallbackTrackName: string): Promise<ExportResult> {
+    const download = await db.tracks.get(trackId)
+    if (!isPodcastDownloadTrack(download)) {
+      return { ok: false }
+    }
+
+    const audioBlob = await db.audioBlobs.get(download.audioId)
+    if (!audioBlob) {
+      return { ok: false }
+    }
+
+    return {
+      ok: true,
+      filename: resolveAudioBundleFilename(
+        audioBlob.filename,
+        fallbackTrackName,
+        audioBlob.blob.type
+      ),
+      blob: audioBlob.blob,
+    }
+  },
+
+  /**
    * Export all subtitle versions for a track as a zip file.
    * Allows partial success: failed items are reported but don't block export.
    */

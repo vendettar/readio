@@ -158,6 +158,9 @@ DB Reset Rule: Do NOT change the default DB name in source. Use `READIO_DB_NAME`
 - Review remediation: repo verification pipeline hardening (Instruction 137i).
 - Review remediation: doc SSOT drift reconciliation (Instruction 137j).
 - **Monorepo Layout Standardization (Instruction 005j)**: Established unified layout offset system (`pb-mini-player`) in Lite and Cloud AppShell and standardized `PageShell` to solve MiniPlayer occlusion while maintaining vertical rhythm.
+- **Cloud Transcript-First Playback (Instruction 019)**: Optimized playback/transcript orchestration for remote episodes with `transcriptUrl`; prioritizes existing transcript ingestion and suppresses automatic ASR/full-audio downloads; implements immediate transcript-loading UI and Omny Studio (TextWithTimestamps) format support.
+- **Cloud Playback Resilience Hardening (Instruction 020)**: Increased backend `proxyMaxRedirects` (20) to support complex podcast tracking chains and extended frontend `BOOTSTRAP_TIMEOUT_MS` (10s) to reduce premature proxy fallbacks.
+- **Cloud Reading Area Artwork Sizing (Instruction 021)**: Unified artwork sizing (600px via `NoTranscriptArtwork`) in the "Stream without transcript" mode to match the standard no-transcript playback UI consistency.
 
 ---
 
