@@ -1,0 +1,175 @@
+---
+title: Playback Transcript Contract
+---
+
+# Playback Transcript Contract
+
+This handoff records the current Cloud playback/transcript contract after the transcript-first playback work and the artwork CTA state-machine work.
+
+It is the reference document for:
+
+- remote playback behavior when an episode already exposes a transcript source
+- Reading Area artwork/CTA behavior when transcript content is not currently visible
+- the boundary between transcript-first playback, pure listening mode, and manual ASR generation
+
+## 1. Core Product Rule
+
+Cloud playback is now **transcript-first**.
+
+If the current playback payload already carries a usable transcript source:
+
+- the app must prefer transcript loading over automatic ASR
+- the app must not automatically download full audio only to feed ASR
+- the app must not reinterpret transcript-source failure as an ASR-setup problem
+
+Only transcript-missing playback may enter the automatic ASR readiness / download / generation path.
+
+## 2. Transcript Sources
+
+For the current Cloud contract, `transcript available` includes:
+
+1. built-in remote transcript
+   - e.g. `episodeMetadata.transcriptUrl`
+2. cached / previously ingested transcript
+   - e.g. remote transcript cache keyed to the current episode/audio identity
+3. local/downloaded transcript
+   - bound to the current `localTrackId`
+
+The contract explicitly distinguishes:
+
+- `transcript source exists`
+- `transcript currently loaded into the Reading Area`
+
+The second is not required for the first.
+
+## 3. Transcript-First Playback
+
+When playback starts for a transcript-bearing remote episode:
+
+- the transcript-bearing path becomes authoritative immediately
+- the first full-player state must be transcript-loading, not `No transcript yet`
+- automatic ASR must be skipped
+- full-audio download for ASR must be skipped
+- the player may continue independently if transcript loading later fails
+
+Transcript-bearing failure is still a transcript failure, not an ASR readiness failure.
+
+## 4. Reading Area CTA Contract
+
+The Reading Area can render either:
+
+- transcript content
+- loading/progress state
+- error state
+- artwork + CTA state
+
+The artwork + CTA state is governed by a transcript-first decision boundary.
+
+### If transcript source exists
+
+The Reading Area must prefer:
+
+- `Transcript available`
+- `Show Transcript`
+
+It must not incorrectly surface:
+
+- `Generate Transcript`
+- `Set up transcript generation`
+
+### If transcript source does not exist
+
+Then the CTA may branch by ASR readiness:
+
+- ASR ready -> `Generate Transcript`
+- ASR not ready -> `Set up transcript generation`
+
+## 5. Pure Listening Mode
+
+`stream_without_transcript` is a presentation choice, not a transcript-availability signal.
+
+It means:
+
+- the user is listening without automatically showing transcript content
+
+It does **not** mean:
+
+- transcript source is absent
+- transcript is unavailable
+- the UI should downgrade to `Generate Transcript`
+
+If transcript source exists while in pure listening mode, the Reading Area should still show:
+
+- `Transcript available`
+- `Show Transcript`
+
+## 6. Built-In vs Local Transcript Actions
+
+The `Show Transcript` CTA is source-aware.
+
+### Built-in / remote transcript
+
+Allowed behavior:
+
+- trigger the existing remote transcript ingest/load path
+
+### Local/downloaded transcript
+
+Allowed behavior:
+
+- load/select/display the stored local transcript
+
+Forbidden behavior:
+
+- falling back to automatic ASR because `transcriptUrl` is missing
+- treating a local transcript CTA as if it were a remote-only transcript fetch
+
+## 7. Local Download / Session Restore Contract
+
+If session restore resolves to a local/downloaded track and that track has transcript data in storage:
+
+- it counts as `transcript available`
+- it must not wait for cues to already be visible before the CTA can say `Show Transcript`
+- it must not flash `Generate Transcript` or `Set up transcript generation` first
+
+This keeps local restore aligned with the transcript-first contract.
+
+## 8. Failure Semantics
+
+If transcript source exists but the current fetch/load attempt fails:
+
+- playback must remain independent
+- the UI may move to a retry/show-transcript state
+- the UI must not automatically pivot into ASR generation
+
+In other words:
+
+- `source exists but load failed`
+  is not the same as
+- `no transcript source exists`
+
+## 9. Review Checklist
+
+Reviewer should verify:
+
+1. transcript-bearing playback never auto-escalates into ASR
+2. `stream_without_transcript` does not erase transcript availability
+3. local/downloaded transcript source is recognized before cues are already rendered
+4. `Show Transcript` dispatches by source type correctly
+5. built-in transcript failure does not surface ASR-setup CTA while transcript-first is still authoritative
+
+## 10. Boundaries
+
+This handoff does describe:
+
+- transcript-first playback semantics
+- artwork/CTA state semantics
+- pure listening mode semantics
+- local/downloaded transcript availability semantics
+
+This handoff does not describe:
+
+- backend `/api/proxy` transport contract
+- ASR provider transport details
+- transcript storage schema internals
+- full player visual redesign

@@ -63,7 +63,7 @@ vi.mock('../../../workers/metadata.worker?worker', () => {
 })
 
 // Now import the module after mocks are set up
-import { ingestFiles } from '../ingest'
+import { attachSubtitleToTrack, ingestFiles } from '../ingest'
 
 describe('ingestFiles', () => {
   beforeEach(async () => {
@@ -214,6 +214,25 @@ describe('ingestFiles', () => {
       const trackId = result.createdTrackIds[0]
       const subtitles = await DB.getFileSubtitlesForTrack(trackId)
       expect(subtitles).toHaveLength(0)
+    })
+  })
+
+  describe('attachSubtitleToTrack', () => {
+    it('attaches the subtitle and makes it active for the track', async () => {
+      const audioFile = createMockFile('attached.mp3', 'audio/mpeg')
+      const trackId = (await ingestFiles({ files: [audioFile], folderId: null })).createdTrackIds[0]
+      const srtBlob = new Blob(['1\n00:00:00,000 --> 00:00:01,000\nHello'], {
+        type: 'text/plain',
+      })
+      const srtFile = new File([srtBlob], 'attached.srt', { type: 'text/plain' })
+
+      const fileSubtitleId = await attachSubtitleToTrack(srtFile, trackId)
+      const track = await DB.getFileTrack(trackId)
+      const subtitles = await DB.getFileSubtitlesForTrack(trackId)
+
+      expect(fileSubtitleId).toBeDefined()
+      expect(subtitles).toHaveLength(1)
+      expect(track?.activeSubtitleId).toBe(fileSubtitleId)
     })
   })
 

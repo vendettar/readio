@@ -3,7 +3,7 @@
 
 import type { ParseResult } from '../../workers/metadata.worker'
 import MetadataWorker from '../../workers/metadata.worker?worker'
-import { DB, DB_TABLE_NAMES } from '../dexieDb'
+import { DB, DB_TABLE_NAMES, db } from '../dexieDb'
 import { log } from '../logger'
 import { parseSubtitles } from '../subtitles'
 
@@ -302,7 +302,7 @@ export async function attachSubtitleToTrack(file: File, trackId: string): Promis
   // --- ATOMIC TRANSACTION START ---
   return DB.transaction(
     'rw',
-    [DB_TABLE_NAMES.LOCAL_SUBTITLES, DB_TABLE_NAMES.SUBTITLES],
+    [DB_TABLE_NAMES.TRACKS, DB_TABLE_NAMES.LOCAL_SUBTITLES, DB_TABLE_NAMES.SUBTITLES],
     async () => {
       // Fetch existing subtitles to check duplicates (inside val)
       const existingSubtitles = await DB.getFileSubtitlesForTrack(trackId)
@@ -319,13 +319,15 @@ export async function attachSubtitleToTrack(file: File, trackId: string): Promis
       subName = resolveDuplicateName(subName, existingNames)
 
       const subtitleId = await DB.addSubtitle(parsedCues, subName)
-      await DB.addFileSubtitle({
+      const fileSubtitleId = await DB.addFileSubtitle({
         trackId,
         name: subName,
         subtitleId,
       })
 
-      return subtitleId
+      await db.tracks.update(trackId, { activeSubtitleId: fileSubtitleId })
+
+      return fileSubtitleId
     }
   )
 }

@@ -85,3 +85,13 @@ It records the implemented `apps/cloud-ui` + `apps/cloud-api` contracts and shou
 - Server-owned config stays in VPS env or systemd env files (e.g., `/etc/readio/readio-cloud.env`).
 - Browser-public fields (e.g., `READIO_ASR_RELAY_PUBLIC_TOKEN`) are not secrets; they are lightweight abuse-control tokens.
 - Keep this entry high-level; implementation details belong in the audit sub-doc.
+
+## 9. Playback Transcript Contract
+
+- The current transcript-first playback and Reading Area CTA contract is recorded in `playback-transcript-contract.mdx`.
+- It defines:
+  - when transcript-bearing playback must skip automatic ASR
+  - how artwork CTA behaves when transcript content is not currently visible
+  - how `stream_without_transcript` affects presentation without erasing transcript availability
+  - how local/downloaded transcript sources must be treated during restore and pure-listening flows
+- Keep this entry high-level; implementation details belong in the handoff sub-doc.

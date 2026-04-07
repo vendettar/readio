@@ -15,13 +15,17 @@ import {
 const autoIngestEpisodeTranscriptMock = vi.fn()
 const trackExistsMock = vi.fn().mockResolvedValue(true)
 
-vi.mock('../../remoteTranscript', () => ({
-  autoIngestEpisodeTranscript: (...args: unknown[]) => autoIngestEpisodeTranscriptMock(...args),
-  getAsrSettingsSnapshot: vi.fn().mockReturnValue({
-    asrProvider: 'groq',
-    asrModel: 'whisper-large-v3',
-  }),
-}))
+vi.mock('../../remoteTranscript', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../remoteTranscript')>()
+  return {
+    ...actual,
+    autoIngestEpisodeTranscript: (...args: unknown[]) => autoIngestEpisodeTranscriptMock(...args),
+    getAsrSettingsSnapshot: vi.fn().mockReturnValue({
+      asrProvider: 'groq',
+      asrModel: 'whisper-large-v3',
+    }),
+  }
+})
 
 vi.mock('../playbackSource', () => ({
   resolvePlaybackSource: vi.fn().mockImplementation((url: string) => Promise.resolve({ url })),
@@ -74,7 +78,7 @@ describe('remotePlayback', () => {
     useTranscriptStore.getState().resetTranscript()
   })
 
-  it('calls setAudioUrl before play for feed episodes and triggers transcript ingest', async () => {
+  it('starts transcript-bearing feed episode playback without blocking on transcript fetch', async () => {
     const setAudioUrl = vi.fn()
     const play = vi.fn()
     const pause = vi.fn()
@@ -87,7 +91,7 @@ describe('remotePlayback', () => {
     } as Episode
     const podcast = { collectionName: 'Podcast' } as Podcast
 
-    await playFeedEpisodeWithDeps(
+    const startPromise = playFeedEpisodeWithDeps(
       { setAudioUrl, play, pause, setPlaybackTrackId },
       episode,
       podcast,
@@ -96,14 +100,11 @@ describe('remotePlayback', () => {
       }
     )
 
-    // setAudioUrl is called twice:
-    // 1. Immediately with null URL (reset UI)
-    // 2. After resolution with final URL (in this case same as raw)
+    await startPromise
+
     expect(setAudioUrl).toHaveBeenCalledTimes(2)
     expect(pause).toHaveBeenCalledTimes(1)
     expect(play).toHaveBeenCalledTimes(1)
-    // setPlaybackTrackId is called ONLY if a local track is resolved.
-    // In this test, the mock resolvePlaybackSource returns no trackId.
     expect(setPlaybackTrackId).not.toHaveBeenCalled()
     expect(setAudioUrl.mock.invocationCallOrder[1]).toBeLessThan(play.mock.invocationCallOrder[0])
     expect(autoIngestEpisodeTranscriptMock).toHaveBeenCalledWith(
@@ -111,6 +112,7 @@ describe('remotePlayback', () => {
       'https://example.com/audio.mp3'
     )
     expect(downloadEpisodeMock).not.toHaveBeenCalled()
+    expect(useTranscriptStore.getState().transcriptIngestionStatus).toBe('loading')
   })
 
   it('enforces ASR download blocking logic and passes AbortSignal when ASR is configured', async () => {
@@ -183,9 +185,24 @@ describe('remotePlayback', () => {
     } as Favorite
 
     await playFavoriteWithDeps({ setAudioUrl, play, pause }, favorite)
-    // 1. Immediate reset (null URL)
-    // 2. Final resolution (remote URL)
     expect(setAudioUrl).toHaveBeenCalledTimes(2)
+    expect(setAudioUrl.mock.calls[0]).toEqual([
+      null,
+      'Favorite',
+      'https://example.com/art.jpg',
+      expect.objectContaining({
+        originalAudioUrl: 'https://example.com/favorite.mp3',
+        transcriptUrl: 'https://example.com/favorite.srt',
+      }),
+      true,
+    ])
+    expect(setAudioUrl.mock.calls[1]).toEqual([
+      'https://example.com/favorite.mp3',
+      'Favorite',
+      'https://example.com/art.jpg',
+      expect.any(Object),
+      true,
+    ])
     expect(play).toHaveBeenCalledTimes(1)
     expect(autoIngestEpisodeTranscriptMock).toHaveBeenCalledWith(
       'https://example.com/favorite.srt',

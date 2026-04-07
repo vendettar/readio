@@ -1,0 +1,175 @@
+---
+title: 播放与 Transcript 契约
+---
+
+# 播放与 Transcript 契约
+
+本文档记录 Cloud 当前的播放 / transcript 合同，覆盖 transcript-first 播放与 Reading Area 的 artwork/CTA 状态机。
+
+它是以下行为的参考文档：
+
+- 节目本身已带 transcript source 时的播放语义
+- 当前没有显示 transcript 时，Reading Area 如何显示 artwork + CTA
+- transcript-first、纯听模式与手动 ASR 生成之间的边界
+
+## 1. 核心产品规则
+
+Cloud 播放当前遵循 **transcript-first** 原则。
+
+如果当前播放 payload 已携带可用 transcript source：
+
+- 应优先走 transcript 加载路径，而不是 automatic ASR
+- 不得为了 ASR 自动下载整段音频
+- 不得把 transcript source 失败重新解释为 ASR 设置问题
+
+只有当前确实没有 transcript source 时，才允许进入 automatic ASR readiness / download / generation 路径。
+
+## 2. 什么算 Transcript Source
+
+当前 Cloud 契约中，以下都算 `transcript available`：
+
+1. built-in remote transcript
+   - 例如 `episodeMetadata.transcriptUrl`
+2. 已缓存 / 已 ingestion 的 transcript
+   - 例如基于当前 episode/audio identity 命中的 remote transcript cache
+3. 本地 / 已下载 transcript
+   - 与当前 `localTrackId` 绑定
+
+本合同明确区分：
+
+- `transcript source exists`
+- `transcript currently loaded into the Reading Area`
+
+后者并不是前者成立的前提。
+
+## 3. Transcript-First 播放
+
+当一个带 transcript 的远程节目开始播放时：
+
+- transcript-bearing path 必须立刻成为主路径
+- full-player 的第一个状态必须是 transcript-loading，而不是 `No transcript yet`
+- automatic ASR 必须被跳过
+- 为 ASR 而做的 full-audio download 必须被跳过
+- 即使 transcript 后续加载失败，播放也可继续独立运行
+
+transcript-bearing failure 仍然是 transcript failure，不应被解释成 ASR readiness failure。
+
+## 4. Reading Area CTA 合同
+
+Reading Area 当前可能渲染：
+
+- transcript 内容
+- loading / progress 状态
+- error 状态
+- artwork + CTA 状态
+
+其中 artwork + CTA 状态必须由 transcript-first 决策边界统一控制。
+
+### 如果 transcript source 存在
+
+Reading Area 必须优先显示：
+
+- `Transcript available`
+- `Show Transcript`
+
+不得错误显示：
+
+- `Generate Transcript`
+- `Set up transcript generation`
+
+### 如果 transcript source 不存在
+
+此时才允许按 ASR readiness 分流：
+
+- ASR ready -> `Generate Transcript`
+- ASR not ready -> `Set up transcript generation`
+
+## 5. 纯听模式
+
+`stream_without_transcript` 是一种展示模式，不是 transcript availability 信号。
+
+它表示：
+
+- 用户当前只听，不自动显示 transcript 内容
+
+它**不表示**：
+
+- transcript source 不存在
+- transcript 不可用
+- UI 应该降级成 `Generate Transcript`
+
+因此，只要 transcript source 仍存在，即使处于 pure listening mode，Reading Area 也应继续显示：
+
+- `Transcript available`
+- `Show Transcript`
+
+## 6. Built-In 与 Local Transcript 的动作边界
+
+`Show Transcript` 必须按 source type 分流。
+
+### Built-in / remote transcript
+
+允许：
+
+- 走既有 remote transcript ingest/load 路径
+
+### Local / downloaded transcript
+
+允许：
+
+- 走本地 transcript 的 load / select / display 路径
+
+禁止：
+
+- 因为缺少 `transcriptUrl` 而回退到 automatic ASR
+- 把 local transcript CTA 当成 remote-only transcript fetch
+
+## 7. Local Download / Session Restore 合同
+
+如果 session restore 最终命中一个 local/downloaded track，并且该 track 在存储层已有 transcript：
+
+- 它必须被视为 `transcript available`
+- 不得等到 cues 已经渲染后，CTA 才承认 transcript 存在
+- 不得先闪出 `Generate Transcript` 或 `Set up transcript generation`
+
+这条合同保证 local restore 与 transcript-first 语义保持一致。
+
+## 8. 失败语义
+
+如果 transcript source 存在，但当前 fetch/load 尝试失败：
+
+- 播放仍应独立继续
+- UI 可以进入 retry/show-transcript 状态
+- UI 不得自动转入 ASR generation
+
+也就是说：
+
+- `source exists but load failed`
+  不等于
+- `no transcript source exists`
+
+## 9. Reviewer Checklist
+
+Reviewer 应重点检查：
+
+1. 带 transcript 的播放不会自动升级成 ASR
+2. `stream_without_transcript` 不会抹掉 transcript availability
+3. local/downloaded transcript source 能在 cues 尚未渲染时被正确识别
+4. `Show Transcript` 会按 source type 正确分流
+5. built-in transcript failure 不会错误显示 ASR setup CTA
+
+## 10. 边界
+
+本文档会描述：
+
+- transcript-first 播放语义
+- artwork/CTA 状态语义
+- pure listening mode 语义
+- local/downloaded transcript availability 语义
+
+本文档不描述：
+
+- 后端 `/api/proxy` transport contract
+- ASR provider transport 细节
+- transcript storage schema 内部实现
+- full player 视觉重设计

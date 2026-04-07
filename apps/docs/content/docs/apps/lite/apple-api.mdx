@@ -240,6 +240,66 @@ curl "https://itunes.apple.com/search?term=The+Daily&country=us&media=podcast&en
 }
 ```
 
+## 2.5 Transcript Metadata Gap
+
+`transcriptUrl` is not currently symmetric across the Apple discovery surfaces used by Readio.
+
+- RSS/feed parsing can expose transcript metadata through the Podcasting 2.0 `podcast:transcript` tag.
+- Apple Search episode results do **not** currently expose an equivalent transcript field in the payload we receive and map.
+
+This matters because:
+
+- feed/detail/favorite/history playback paths can become transcript-bearing
+- search-direct playback cannot become transcript-bearing unless transcript metadata is recovered through a later lookup/feed step
+
+### Feed/RSS Example With Transcript Metadata
+
+The feed parser can extract `transcriptUrl` from a real feed response like this:
+
+```json
+{
+  "title": "Stuff You Should Know",
+  "episodes": [
+    {
+      "id": "62e06b83-685e-47fb-ab42-b42001040745",
+      "title": "Selects: The Skinny on Lyme Disease",
+      "audioUrl": "https://podtrac.com/pts/redirect.mp3/pscrb.fm/rss/p/traffic.omny.fm/d/clips/...",
+      "transcriptUrl": "https://api.omny.fm/orgs/e73c998e-6e60-432f-8610-ae210140c5b1/clips/62e06b83-685e-47fb-ab42-b42001040745/transcript?format=TextWithTimestamps&t=1775145077"
+    },
+    {
+      "id": "4925df4b-12a7-4e30-972d-b41d0115cbad",
+      "title": "The Colorado River Compact",
+      "audioUrl": "https://podtrac.com/pts/redirect.mp3/pscrb.fm/rss/p/traffic.omny.fm/d/clips/...",
+      "transcriptUrl": "https://api.omny.fm/orgs/e73c998e-6e60-432f-8610-ae210140c5b1/clips/4925df4b-12a7-4e30-972d-b41d0115cbad/transcript?format=TextWithTimestamps&t=1774889704"
+    }
+  ]
+}
+```
+
+In Readio's feed parser, this comes from the RSS item-level `podcast:transcript` tag.
+
+### Search Result Limitation
+
+By contrast, the current Apple Search episode result payload includes fields such as:
+
+- `trackName`
+- `episodeUrl`
+- `feedUrl`
+- `description`
+- `releaseDate`
+
+But it does **not** include transcript metadata in the mapped `SearchEpisode` payload.
+
+As a result:
+
+- playing an episode from feed/detail data may have `transcriptUrl`
+- playing the same episode directly from Search may not
+
+If Readio wants transcript-first playback parity for search-direct playback, it must either:
+
+1. receive transcript metadata directly from the search provider, or
+2. enrich the search result through a follow-up feed/lookup step before playback
+
 ---
 
 ## 3. Metadata Lookup (Provider Lookup API)

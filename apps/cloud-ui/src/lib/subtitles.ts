@@ -8,11 +8,58 @@ import type { ASRCue } from './asr/types'
 export type { ASRCue, ASRWord } from './asr/types'
 
 /**
- * Parse subtitle content (supports SRT and VTT) into structured cues
+ * Parse transcript/subtitle content (supports JSON, SRT, and VTT) into structured cues.
  */
 export function parseSubtitles(content: string): ASRCue[] {
   // Normalize line endings and remove byte-order mark
   const normalized = content.replace(/\uFEFF/g, '').replace(/\r\n/g, '\n')
+  const trimmed = normalized.trim()
+
+  if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(trimmed) as unknown
+      const rows = extractTranscriptRows(parsed)
+      const cues: ASRCue[] = []
+
+      for (const row of rows) {
+        if (!row || typeof row !== 'object') continue
+        const item = row as Record<string, unknown>
+        const textValue =
+          item.text ?? item.body ?? item.value ?? item.transcript ?? item.caption ?? item.line
+        const text = typeof textValue === 'string' ? textValue.trim() : ''
+        if (!text) continue
+
+        const start =
+          parseFlexibleTimestamp(
+            item.start ??
+              item.startTime ??
+              item.start_time ??
+              item.begin ??
+              item.offset ??
+              item.time ??
+              item.ts
+          ) ?? null
+        if (start === null) continue
+
+        const endFromField = parseFlexibleTimestamp(
+          item.end ?? item.endTime ?? item.end_time ?? item.stop
+        )
+        const duration = parseFlexibleTimestamp(item.duration)
+        const end = endFromField ?? (duration !== null ? start + duration : start + 2)
+
+        cues.push({
+          start,
+          end,
+          text,
+        })
+      }
+
+      return normalizeCueRange(cues)
+    } catch {
+      // Fall through to subtitle parsing when JSON parsing fails.
+    }
+  }
+
   const lines = normalized.split('\n')
   const cues: ASRCue[] = []
   let i = 0
@@ -69,6 +116,75 @@ export function parseSubtitles(content: string): ASRCue[] {
   }
 
   return cues
+}
+
+function normalizeCueRange(cues: ASRCue[]): ASRCue[] {
+  if (cues.length === 0) return []
+  const sorted = [...cues].sort((a, b) => a.start - b.start)
+  return sorted
+    .map((cue, index) => {
+      const next = sorted[index + 1]
+      const safeStart = Math.max(0, cue.start)
+      const fallbackEnd = next ? Math.max(next.start, safeStart + 0.5) : safeStart + 2
+      const safeEnd = cue.end > safeStart ? cue.end : fallbackEnd
+      return { ...cue, start: safeStart, end: safeEnd, text: cue.text.trim() }
+    })
+    .filter((cue) => cue.text.length > 0)
+}
+
+function extractTranscriptRows(json: unknown): unknown[] {
+  if (Array.isArray(json)) return json
+  if (!json || typeof json !== 'object') return []
+
+  const obj = json as Record<string, unknown>
+  const directCandidates = ['cues', 'segments', 'items', 'results', 'entries', 'transcript']
+  for (const key of directCandidates) {
+    const value = obj[key]
+    if (Array.isArray(value)) return value
+    if (value && typeof value === 'object') {
+      const nested = value as Record<string, unknown>
+      for (const nestedKey of directCandidates) {
+        if (Array.isArray(nested[nestedKey])) {
+          return nested[nestedKey] as unknown[]
+        }
+      }
+    }
+  }
+
+  return []
+}
+
+function parseFlexibleTimestamp(value: unknown): number | null {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null
+  }
+  if (typeof value !== 'string') return null
+  const raw = value.trim()
+  if (!raw) return null
+
+  const numeric = Number(raw)
+  if (Number.isFinite(numeric)) return numeric
+
+  const normalized = raw.replace(',', '.')
+  const match = normalized.match(/^(?:(\d+):)?(?:(\d{1,2}):)?(\d{1,2})(?:\.(\d{1,3}))?$/)
+  if (match) {
+    const hasHours = match[2] !== undefined
+    const hours = Number(hasHours ? match[1] || 0 : 0)
+    const minutes = Number(hasHours ? match[2] || 0 : match[1] || 0)
+    const seconds = Number(match[3] || 0)
+    const ms = Number((match[4] || '0').padEnd(3, '0'))
+    return hours * 3600 + minutes * 60 + seconds + ms / 1000
+  }
+
+  const iso = raw.match(/^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?$/i)
+  if (iso) {
+    const hours = Number(iso[1] || 0)
+    const minutes = Number(iso[2] || 0)
+    const seconds = Number(iso[3] || 0)
+    return hours * 3600 + minutes * 60 + seconds
+  }
+
+  return null
 }
 
 /**

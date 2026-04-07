@@ -46,6 +46,7 @@ export const REMOTE_TRANSCRIPT_FORMAT = {
   SRT: 'srt',
   VTT: 'vtt',
   JSON: 'json',
+  TIMESTAMPED_TEXT: 'timestamped_text',
 } as const
 export type RemoteTranscriptFormat =
   (typeof REMOTE_TRANSCRIPT_FORMAT)[keyof typeof REMOTE_TRANSCRIPT_FORMAT]
@@ -146,6 +147,28 @@ export function normalizeTranscriptUrl(url: string): string {
     return parsed.toString()
   } catch {
     return trimmed
+  }
+}
+
+export function getValidTranscriptUrl(url?: string | null): string | null {
+  if (typeof url !== 'string') return null
+  const normalizedUrl = normalizeTranscriptUrl(url)
+  if (!normalizedUrl) return null
+  if (normalizedUrl.startsWith('//') || normalizedUrl.startsWith('/')) {
+    try {
+      return new URL(normalizedUrl, window.location.origin).toString()
+    } catch {
+      return null
+    }
+  }
+  try {
+    const parsed = new URL(normalizedUrl)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return null
+    }
+    return parsed.toString()
+  } catch {
+    return null
   }
 }
 
@@ -373,9 +396,90 @@ function parsePodcastTranscriptJson(content: string): ASRCue[] {
   return normalizeCueRange(cues)
 }
 
+const TIMESTAMPED_TEXT_TOKEN = '(?:\\d+:)?\\d{1,2}:\\d{2}(?:[.,]\\d{1,3})?'
+const TIMESTAMPED_TEXT_ONLY_RE = new RegExp(
+  `^(?:\\[(?<timeBracketed>${TIMESTAMPED_TEXT_TOKEN})\\]|(?<timeBare>${TIMESTAMPED_TEXT_TOKEN}))$`
+)
+const TIMESTAMPED_TEXT_INLINE_RE = new RegExp(
+  `^(?:\\[(?<timeBracketed>${TIMESTAMPED_TEXT_TOKEN})\\]|(?<timeBare>${TIMESTAMPED_TEXT_TOKEN}))(?:\\s*[-–—:]\\s*|\\s+)(?<text>\\S.*)$`
+)
+
+function parseTimestampedTextTranscript(content: string): ASRCue[] {
+  const cues: ASRCue[] = []
+  const lines = content
+    .replace(/\uFEFF/g, '')
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+  let pendingStart: number | null = null
+  let pendingTextLines: string[] = []
+
+  const flushPending = () => {
+    if (pendingStart === null || pendingTextLines.length === 0) {
+      pendingStart = null
+      pendingTextLines = []
+      return
+    }
+
+    cues.push({
+      start: pendingStart,
+      end: pendingStart,
+      text: pendingTextLines.join(' ').trim(),
+    })
+    pendingStart = null
+    pendingTextLines = []
+  }
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim()
+    if (!line) continue
+
+    const timestampOnlyMatch = line.match(TIMESTAMPED_TEXT_ONLY_RE)
+    if (timestampOnlyMatch?.groups) {
+      flushPending()
+      pendingStart = parseTimestamp(
+        timestampOnlyMatch.groups.timeBracketed ?? timestampOnlyMatch.groups.timeBare
+      )
+      pendingTextLines = []
+      continue
+    }
+
+    const inlineMatch = line.match(TIMESTAMPED_TEXT_INLINE_RE)
+    if (inlineMatch?.groups) {
+      flushPending()
+      const start = parseTimestamp(inlineMatch.groups.timeBracketed ?? inlineMatch.groups.timeBare)
+      const text = inlineMatch.groups.text.trim()
+      if (start !== null && text) {
+        cues.push({
+          start,
+          end: start,
+          text,
+        })
+      }
+      continue
+    }
+
+    if (pendingStart !== null) {
+      pendingTextLines.push(line)
+    }
+  }
+
+  flushPending()
+  return normalizeCueRange(cues)
+}
+
 function detectTranscriptFormat(url: string, content: string): RemoteTranscriptFormat | null {
   const loweredUrl = url.toLowerCase()
   const trimmed = content.trimStart()
+  const timestampedTextLines = trimmed
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => TIMESTAMPED_TEXT_ONLY_RE.test(line) || TIMESTAMPED_TEXT_INLINE_RE.test(line))
+
+  if (loweredUrl.includes('format=textwithtimestamps') && timestampedTextLines.length >= 1) {
+    return 'timestamped_text'
+  }
   if (trimmed.startsWith('{') || trimmed.startsWith('[') || loweredUrl.endsWith('.json')) {
     return 'json'
   }
@@ -384,6 +488,9 @@ function detectTranscriptFormat(url: string, content: string): RemoteTranscriptF
   }
   if (trimmed.includes('-->')) {
     return loweredUrl.endsWith('.vtt') ? 'vtt' : 'srt'
+  }
+  if (timestampedTextLines.length >= 2) {
+    return 'timestamped_text'
   }
   return null
 }
@@ -406,7 +513,9 @@ export function parseRemoteTranscriptContent(
     const cues =
       detectedFormat === 'json'
         ? parsePodcastTranscriptJson(normalized)
-        : parseSubtitles(normalized)
+        : detectedFormat === 'timestamped_text'
+          ? parseTimestampedTextTranscript(normalized)
+          : parseSubtitles(normalized)
     if (cues.length === 0) {
       return { ok: false, reason: 'invalid' }
     }
@@ -747,6 +856,48 @@ export async function tryApplyCachedAsrTranscript(
   }
 
   return false
+}
+
+export async function hasStoredTranscriptSource(
+  expectedAudioUrl: string,
+  localTrackId: string | null
+): Promise<boolean> {
+  if (localTrackId) {
+    const track = await FilesRepository.getTrackById(localTrackId)
+    const readySubtitles = isUserUploadTrack(track)
+      ? await FilesRepository.getReadySubtitlesByTrackId(localTrackId)
+      : await DownloadsRepository.getReadySubtitlesByTrackId(localTrackId)
+
+    return readySubtitles.some(({ subtitle }) => subtitle.cues.length > 0)
+  }
+
+  const normalizedAudioUrl = normalizeAsrAudioUrl(expectedAudioUrl)
+  if (!normalizedAudioUrl) return false
+
+  const cached = await DB.getRemoteTranscriptByUrl(normalizedAudioUrl)
+  return Boolean(cached && cached.cues.length > 0)
+}
+
+export async function persistImportedTranscriptForPlaybackIdentity(
+  expectedAudioUrl: string,
+  cues: ASRCue[]
+): Promise<boolean> {
+  const normalizedAudioUrl = normalizeAsrAudioUrl(expectedAudioUrl)
+  if (!normalizedAudioUrl || cues.length === 0) return false
+
+  const fetchedAt = Date.now()
+  await DB.upsertRemoteTranscript({
+    id: deriveRemoteTranscriptCacheId(normalizedAudioUrl),
+    url: normalizedAudioUrl,
+    cues,
+    cueSchemaVersion: 1,
+    fetchedAt,
+    cueCount: cues.length,
+    source: 'manual_upload',
+  })
+  setMemoryTranscriptCache(normalizedAudioUrl, cues, fetchedAt)
+  await DB.pruneRemoteTranscripts(REMOTE_TRANSCRIPT_MAX_ENTRIES, REMOTE_TRANSCRIPT_MAX_AGE_MS)
+  return true
 }
 
 async function persistAsrResult(options: {
@@ -1365,7 +1516,7 @@ export function autoIngestEpisodeTranscript(
   transcriptUrl?: string,
   expectedAudioUrl?: string
 ): void {
-  const normalizedUrl = transcriptUrl ? normalizeTranscriptUrl(transcriptUrl) : ''
+  const normalizedUrl = getValidTranscriptUrl(transcriptUrl) || ''
   if (!expectedAudioUrl) return
 
   const startState = getPlayerStoreStateSafe()
@@ -1382,6 +1533,26 @@ export function autoIngestEpisodeTranscript(
     return true
   }
 
+  const setTranscriptFailureIfCurrentTrack = (
+    code: string,
+    message: string,
+    details?: Record<string, unknown>
+  ): void => {
+    const current = getPlayerStoreStateSafe()
+    if (!current) return
+    const identityUrl = current.episodeMetadata?.originalAudioUrl || current.audioUrl
+    const samePlayback = current.loadRequestId === requestId && identityUrl === expectedAudioUrl
+    if (!samePlayback) return
+    useTranscriptStore.getState().setTranscriptIngestionError({ code, message })
+    useTranscriptStore.getState().setTranscriptIngestionStatus(TRANSCRIPT_INGESTION_STATUS.FAILED)
+    log('[remoteTranscript] Transcript fetch failed; transcript source remains available', {
+      expectedAudioUrl,
+      transcriptSourceHost,
+      code,
+      ...details,
+    })
+  }
+
   const transcriptSourceHost = (() => {
     if (!normalizedUrl) return null
     try {
@@ -1390,19 +1561,6 @@ export function autoIngestEpisodeTranscript(
       return null
     }
   })()
-
-  const logTranscriptFirstSkip = (reason: string, details?: Record<string, unknown>): void => {
-    setIngestionStatusIfCurrentTrack(TRANSCRIPT_INGESTION_STATUS.IDLE)
-    log(
-      '[remoteTranscript] Transcript fetch failed; skipping automatic ASR because transcript exists',
-      {
-        expectedAudioUrl,
-        transcriptSourceHost,
-        reason,
-        ...details,
-      }
-    )
-  }
 
   if (!normalizedUrl) {
     void startOnlineASRForTrack({
@@ -1427,11 +1585,15 @@ export function autoIngestEpisodeTranscript(
   void loadRemoteTranscriptWithCache(normalizedUrl)
     .then((result) => {
       if (!result.ok || result.cues.length === 0) {
-        logTranscriptFirstSkip('transcript_fetch_failed', {
-          source: result.source,
-          cacheStatus: result.status,
-          failureReason: result.reason ?? 'unknown',
-        })
+        setTranscriptFailureIfCurrentTrack(
+          'transcript_fetch_failed',
+          'Transcript available but could not be loaded',
+          {
+            source: result.source,
+            cacheStatus: result.status,
+            failureReason: result.reason ?? 'unknown',
+          }
+        )
         return
       }
 
@@ -1460,9 +1622,13 @@ export function autoIngestEpisodeTranscript(
       })
     })
     .catch((error) => {
-      logTranscriptFirstSkip('transcript_ingest_exception', {
-        error: error instanceof Error ? error.message : String(error),
-      })
+      setTranscriptFailureIfCurrentTrack(
+        'transcript_fetch_failed',
+        'Transcript available but could not be loaded',
+        {
+          error: error instanceof Error ? error.message : String(error),
+        }
+      )
       log('[remoteTranscript] auto-ingest failed', error)
     })
 }

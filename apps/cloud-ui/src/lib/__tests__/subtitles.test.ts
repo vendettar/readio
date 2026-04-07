@@ -1,6 +1,6 @@
 // src/__tests__/subtitles.test.ts
 import { describe, expect, it } from 'vitest'
-import { findSubtitleIndex, formatTimeLabel, parseSrt } from '../subtitles'
+import { findSubtitleIndex, formatTimeLabel, parseSrt, parseSubtitles } from '../subtitles'
 
 describe('Subtitle Module', () => {
   describe('parseSrt', () => {
@@ -131,6 +131,36 @@ Long movie`
       expect(result).toHaveLength(1)
       expect(result[0].start).toBe(2 * 3600 + 30 * 60 + 15.5)
       expect(result[0].end).toBe(2 * 3600 + 30 * 60 + 20)
+    })
+  })
+
+  describe('parseSubtitles JSON payloads', () => {
+    it('should parse transcript cues from JSON arrays', () => {
+      const jsonContent = JSON.stringify({
+        cues: [
+          { start: 0, end: 1.25, text: 'Alpha' },
+          { startTime: '00:00:01.250', duration: 0.75, transcript: 'Beta' },
+        ],
+      })
+
+      const result = parseSubtitles(jsonContent)
+
+      expect(result).toHaveLength(2)
+      expect(result[0]).toMatchObject({ start: 0, end: 1.25, text: 'Alpha' })
+      expect(result[1]).toMatchObject({ start: 1.25, end: 2, text: 'Beta' })
+    })
+
+    it('should parse top-level JSON transcript arrays', () => {
+      const jsonContent = JSON.stringify([
+        { start: 2, end: 3.5, value: 'Gamma' },
+        { start: '00:00:04.000', stop: '00:00:05.500', line: 'Delta' },
+      ])
+
+      const result = parseSubtitles(jsonContent)
+
+      expect(result).toHaveLength(2)
+      expect(result[0]).toMatchObject({ start: 2, end: 3.5, text: 'Gamma' })
+      expect(result[1]).toMatchObject({ start: 4, end: 5.5, text: 'Delta' })
     })
   })
 
