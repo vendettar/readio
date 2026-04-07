@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   deriveRemoteTranscriptCacheId,
+  getValidTranscriptUrl,
   normalizeAsrAudioUrl,
   normalizeTranscriptUrl,
   parseRemoteTranscriptContent,
@@ -13,6 +14,19 @@ describe('remoteTranscript parser', () => {
     expect(deriveRemoteTranscriptCacheId(url)).toBe(
       'remote-transcript:https://example.com/transcript.vtt'
     )
+  })
+
+  it('accepts absolute, root-relative, and protocol-relative transcript URLs but rejects junk', () => {
+    expect(getValidTranscriptUrl('https://example.com/transcript.vtt')).toBe(
+      'https://example.com/transcript.vtt'
+    )
+    expect(getValidTranscriptUrl('/transcripts/episode.vtt')).toBe(
+      `${window.location.origin}/transcripts/episode.vtt`
+    )
+    expect(getValidTranscriptUrl('//cdn.example.com/transcript.vtt')).toBe(
+      `${window.location.protocol}//cdn.example.com/transcript.vtt`
+    )
+    expect(getValidTranscriptUrl('  foo  ')).toBeNull()
   })
 
   it('normalizes ASR audio cache keys by removing tracking params', () => {
@@ -66,6 +80,78 @@ First line
       expect(result.cues[0].text).toBe('Segment A')
       expect(result.cues[1].text).toBe('Segment B')
       expect(result.cues[1].start).toBeGreaterThanOrEqual(result.cues[0].end)
+    }
+  })
+
+  it('parses timestamped plain-text transcript payloads', () => {
+    const payload = `00:00 Intro line
+00:05 Follow-up line
+01:12 Closing line`
+
+    const result = parseRemoteTranscriptContent(
+      'https://api.omny.fm/transcript?format=TextWithTimestamps',
+      payload
+    )
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.cues).toHaveLength(3)
+      expect(result.cues[0]).toMatchObject({ start: 0, text: 'Intro line' })
+      expect(result.cues[1]).toMatchObject({ start: 5, text: 'Follow-up line' })
+      expect(result.cues[2]).toMatchObject({ start: 72, text: 'Closing line' })
+      expect(result.cues[0].end).toBe(5)
+      expect(result.cues[1].end).toBe(72)
+    }
+  })
+
+  it('parses bracketed timestamped plain-text transcript payloads from TextWithTimestamps URLs', () => {
+    const payload = `[00:00] Intro line
+[00:05] Follow-up line
+[01:12] Closing line`
+
+    const result = parseRemoteTranscriptContent(
+      'https://api.omny.fm/transcript?format=TextWithTimestamps',
+      payload
+    )
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.cues).toHaveLength(3)
+      expect(result.cues[0]).toMatchObject({ start: 0, text: 'Intro line' })
+      expect(result.cues[1]).toMatchObject({ start: 5, text: 'Follow-up line' })
+      expect(result.cues[2]).toMatchObject({ start: 72, text: 'Closing line' })
+    }
+  })
+
+  it('parses timestamp-only lines followed by transcript text blocks', () => {
+    const payload = `00:00:48
+If you live in the Northeastern U.S. then you may know someone who has had Lyme disease.
+
+00:01:04
+But it's spreading all over the country and parts of the world.
+
+00:01:25
+Learn all about this tick-borne disease in this classic episode.`
+
+    const result = parseRemoteTranscriptContent(
+      'https://api.omny.fm/transcript?format=TextWithTimestamps',
+      payload
+    )
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.cues).toHaveLength(3)
+      expect(result.cues[0]).toMatchObject({
+        start: 48,
+        text: 'If you live in the Northeastern U.S. then you may know someone who has had Lyme disease.',
+      })
+      expect(result.cues[1]).toMatchObject({
+        start: 64,
+        text: "But it's spreading all over the country and parts of the world.",
+      })
+      expect(result.cues[2]).toMatchObject({
+        start: 85,
+        text: 'Learn all about this tick-borne disease in this classic episode.',
+      })
+      expect(result.cues[0].end).toBe(64)
+      expect(result.cues[1].end).toBe(85)
     }
   })
 

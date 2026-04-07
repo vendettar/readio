@@ -5,7 +5,11 @@ import type { Favorite, PlaybackSession } from '../dexieDb'
 import type { Episode, Podcast, SearchEpisode } from '../discovery'
 import { downloadEpisode, removeDownloadedTrack } from '../downloadService'
 import { log, logError } from '../logger'
-import { autoIngestEpisodeTranscript, getAsrSettingsSnapshot } from '../remoteTranscript'
+import {
+  autoIngestEpisodeTranscript,
+  getAsrSettingsSnapshot,
+  getValidTranscriptUrl,
+} from '../remoteTranscript'
 import { PlaybackRepository } from '../repositories/PlaybackRepository'
 import { normalizeCountryParam } from '../routes/podcastRoutes'
 import { DEFAULTS } from '../runtimeConfig.defaults'
@@ -396,6 +400,10 @@ async function runPlaybackFlow(
 ): Promise<PlaybackStartResult> {
   const mode = options.mode
   const isStreamWithoutTranscript = mode === PLAYBACK_REQUEST_MODE.STREAM_WITHOUT_TRANSCRIPT
+  const transcriptSourceUrl = !isStreamWithoutTranscript
+    ? getValidTranscriptUrl(payload.transcriptUrl)
+    : null
+  const hasTranscriptSource = transcriptSourceUrl !== null
   const currentEpoch = bumpPlaybackEpoch()
 
   const metadata = mergeMetadata(
@@ -409,7 +417,12 @@ async function runPlaybackFlow(
   const playableTitle = resolvePlayableTitle(payload.title, metadata)
 
   deps.pause()
-  deps.setAudioUrl(null, playableTitle, payload.artwork, metadata, true)
+  if (hasTranscriptSource) {
+    deps.setAudioUrl(null, playableTitle, payload.artwork, metadata, true)
+    useTranscriptStore.getState().setTranscriptIngestionStatus(TRANSCRIPT_INGESTION_STATUS.LOADING)
+  } else {
+    deps.setAudioUrl(null, playableTitle, payload.artwork, metadata, true)
+  }
 
   const sourceResolution = await resolveSourceForPlaybackMode(
     currentEpoch,
@@ -418,6 +431,9 @@ async function runPlaybackFlow(
     payload.streamTarget
   )
   if (!sourceResolution.ok) {
+    if (hasTranscriptSource && sourceResolution.reason !== PLAYBACK_START_REASON.STALE) {
+      useTranscriptStore.getState().setTranscriptIngestionStatus(TRANSCRIPT_INGESTION_STATUS.IDLE)
+    }
     if (sourceResolution.reason === PLAYBACK_START_REASON.NO_PLAYABLE_SOURCE) {
       deps.setAudioUrl(null)
     }
@@ -427,8 +443,8 @@ async function runPlaybackFlow(
 
   const shouldBlockForAsr =
     !isStreamWithoutTranscript &&
-    !payload.transcriptUrl &&
-    (await needsAsrDownloadBlocking(source, payload.transcriptUrl))
+    !hasTranscriptSource &&
+    (await needsAsrDownloadBlocking(source, transcriptSourceUrl || undefined))
   if (shouldBlockForAsr) {
     const downloadedSource = await downloadAndResolve(currentEpoch, payload)
     if (isEpochStale(currentEpoch)) {
@@ -454,7 +470,7 @@ async function runPlaybackFlow(
   deps.play()
 
   if (!isStreamWithoutTranscript) {
-    autoIngestEpisodeTranscript(payload.transcriptUrl, payload.audioUrl)
+    autoIngestEpisodeTranscript(transcriptSourceUrl || undefined, payload.audioUrl)
   }
   return createStartedResult()
 }

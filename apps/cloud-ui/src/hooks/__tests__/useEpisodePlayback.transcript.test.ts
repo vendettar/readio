@@ -142,9 +142,62 @@ Delayed transcript
       expect(state.audioUrl).toBe('https://example.com/ep-2.mp3')
     })
     const state = usePlayerStore.getState()
+    const transcriptState = useTranscriptStore.getState()
     expect(state.audioLoaded).toBe(true)
     expect(state.episodeMetadata?.transcriptUrl).toBe('https://example.com/ep-2.srt')
-    expect(useTranscriptStore.getState().transcriptIngestionStatus).toBe('loading')
+    expect(transcriptState.transcriptIngestionStatus).toBe('loading')
+    expect(transcriptState.subtitlesLoaded).toBe(false)
+
+    await waitFor(() => {
+      const playerState = usePlayerStore.getState()
+      const transcriptState = useTranscriptStore.getState()
+      expect(playerState.audioUrl).toBe('https://example.com/ep-2.mp3')
+      expect(playerState.audioLoaded).toBe(true)
+      expect(playerState.episodeMetadata?.transcriptUrl).toBe('https://example.com/ep-2.srt')
+      expect(transcriptState.subtitlesLoaded).toBe(true)
+      expect(transcriptState.subtitles[0]?.text).toContain('Delayed transcript')
+    })
+  })
+
+  it('enters transcript-loading immediately for transcript-bearing playback before preload resolves', async () => {
+    fetchTextWithFallbackMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          setTimeout(
+            () =>
+              resolve(`1
+00:00:00,000 --> 00:00:01,000
+Delayed transcript
+`),
+            80
+          )
+        })
+    )
+
+    const episode = makeEpisode({
+      id: 'ep-loading',
+      audioUrl: 'https://example.com/ep-loading.mp3',
+      title: 'Loading Episode',
+      description: 'Desc',
+      pubDate: 'Mon, 01 Jan 2024 00:00:00 GMT',
+      transcriptUrl: 'https://example.com/ep-loading.srt',
+    })
+
+    const { result } = renderHook(() => useEpisodePlayback())
+    act(() => {
+      result.current.playEpisode(episode, makePodcast())
+    })
+
+    await waitFor(() => {
+      expect(usePlayerStore.getState().audioUrl).toBe('https://example.com/ep-loading.mp3')
+    })
+
+    const playerState = usePlayerStore.getState()
+    const transcriptState = useTranscriptStore.getState()
+    expect(playerState.audioTitle).toBe('Loading Episode')
+    expect(playerState.episodeMetadata?.transcriptUrl).toBe('https://example.com/ep-loading.srt')
+    expect(transcriptState.transcriptIngestionStatus).toBe('loading')
+    expect(transcriptState.subtitlesLoaded).toBe(false)
   })
 
   it('prevents late transcript response from overriding the newer track', async () => {
@@ -209,7 +262,7 @@ Delayed transcript
     dateSpy.mockRestore()
   })
 
-  it('keeps playback action flow working when transcript ingestion fails without ASR fallback', async () => {
+  it('keeps playback active and marks transcript source as retryable when ingestion fails', async () => {
     fetchTextWithFallbackMock.mockRejectedValueOnce(new Error('network error'))
 
     const episode = makeEpisode({
@@ -227,15 +280,20 @@ Delayed transcript
     })
 
     await waitFor(() =>
-      expect(useTranscriptStore.getState().transcriptIngestionStatus).toBe('idle')
+      expect(useTranscriptStore.getState().transcriptIngestionStatus).toBe('loading')
+    )
+    await waitFor(() =>
+      expect(useTranscriptStore.getState().transcriptIngestionStatus).toBe('failed')
     )
     await waitFor(() => {
       const state = usePlayerStore.getState()
       expect(state.audioUrl).toBe('https://example.com/ep-3.mp3')
     })
     const state = usePlayerStore.getState()
+    const transcriptState = useTranscriptStore.getState()
     expect(state.audioLoaded).toBe(true)
     expect(state.status).not.toBe('error')
+    expect(transcriptState.transcriptIngestionError?.code).toBe('transcript_fetch_failed')
   })
 
   it('triggers transcript ingestion when favorite includes transcriptUrl', async () => {
@@ -257,5 +315,41 @@ Favorite transcript
     expect(usePlayerStore.getState().episodeMetadata?.transcriptUrl).toBe(
       'https://example.com/fav.srt'
     )
+  })
+
+  it('applies Omny TextWithTimestamps transcript payloads to transcript-bearing playback', async () => {
+    fetchTextWithFallbackMock.mockResolvedValueOnce(`00:00:48
+If you live in the Northeastern U.S. then you may know someone who has had Lyme disease.
+
+00:01:04
+But it's spreading all over the country and parts of the world.
+
+00:01:25
+Learn all about this tick-borne disease in this classic episode.`)
+
+    const episode = makeEpisode({
+      id: 'ep-omny',
+      audioUrl: 'https://example.com/ep-omny.mp3',
+      title: 'Episode Omny',
+      description: 'Desc',
+      pubDate: 'Mon, 01 Jan 2024 00:00:00 GMT',
+      transcriptUrl: 'https://api.omny.fm/transcript?format=TextWithTimestamps',
+    })
+
+    const { result } = renderHook(() => useEpisodePlayback())
+    act(() => {
+      result.current.playEpisode(episode, makePodcast())
+    })
+
+    await waitFor(() => {
+      const transcriptState = useTranscriptStore.getState()
+      expect(transcriptState.subtitlesLoaded).toBe(true)
+      expect(transcriptState.subtitles[0]?.start).toBe(48)
+      expect(transcriptState.subtitles[0]?.text).toContain('Lyme disease')
+      expect(transcriptState.subtitles[1]?.start).toBe(64)
+      expect(transcriptState.subtitles[1]?.text).toContain('parts of the world')
+      expect(transcriptState.subtitles[2]?.start).toBe(85)
+      expect(transcriptState.subtitles[2]?.text).toContain('classic episode')
+    })
   })
 })

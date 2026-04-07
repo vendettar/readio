@@ -1,4 +1,4 @@
-# Instruction 019: Cloud Transcript-First Playback — No Automatic ASR When Transcript Exists
+# Instruction 019: Cloud Transcript-First Playback — No Automatic ASR When Transcript Exists [COMPLETED]
 
 > Focused playback/transcript contract fix only. Do not redesign generic playback, download architecture, `/api/proxy`, or ASR provider transport.
 
@@ -24,12 +24,16 @@ This causes:
 Establish a transcript-first playback contract:
 
 1. If an episode has `transcriptUrl`
-   - start normal streaming playback directly
-   - load transcript from `transcriptUrl`
+   - treat transcript loading as the primary preparation path for transcript-bearing playback
+   - load transcript from `transcriptUrl` before committing the normal transcript-bearing reading playback surface
    - cache/store transcript through the existing transcript path
    - short-circuit before any ASR readiness/configuration check
    - do **not** automatically invoke ASR
    - do **not** automatically download full audio for ASR
+   - do **not** show generic ASR/download placeholder UX as the primary state when the transcript-bearing path is active
+   - do **not** show `Set up subtitle generation` CTA while still inside the transcript-bearing branch
+   - while transcript preload is pending, the first user-visible full-player state must be a dedicated transcript-loading state, not `No transcript yet`
+   - this transcript-loading requirement is triggered by the current playback payload carrying a non-empty `transcriptUrl`; if the payload has the field, clicking play must enter transcript-loading immediately
 
 2. Only when an episode does **not** have `transcriptUrl`
    - and ASR is configured
@@ -71,13 +75,16 @@ Out of scope:
 When playback is requested for a remote episode with a non-empty, usable `transcriptUrl`
 already present in the playback request / episode metadata:
 
-- playback may start as normal remote streaming playback
+- transcript loading is the primary preparation step for transcript-bearing playback
+- playback commit for the transcript-bearing reading path must not happen until transcript preload has either succeeded or definitively failed
 - transcript ingestion must prefer `transcriptUrl`
 - transcript result may be cached/stored via existing transcript persistence
 - ASR readiness/configuration must not be consulted for this branch
 - this branch must short-circuit before provider/model/API-key gating
 - automatic fallback to online ASR is **not allowed**
 - automatic full-audio download for ASR input is **not allowed**
+- the UI must not present transcript-bearing preload as a generic ASR setup/readiness problem
+- the UI must not show `Set up subtitle generation` while the transcript-bearing branch is still authoritative
 
 Usable `transcriptUrl` means:
 
@@ -92,6 +99,8 @@ If transcript loading fails:
 - keep playback behavior independent
 - treat it as transcript-source failure, not an automatic reason to escalate into ASR
 - do not auto-trigger ASR unless a separate explicit user action or future instruction reopens that behavior
+- do not convert transcript-bearing failure into an ASR readiness/settings CTA
+- fall through to transcript-unavailable / no-transcript display semantics, not ASR setup semantics
 - this applies to transcript fetch failure classes including:
   - network/CORS failure
   - timeout
@@ -105,6 +114,7 @@ For transcript-bearing playback:
 - transcript-bearing playback must not create a Downloads entry merely because transcript ingestion started
 - transcript-bearing playback must not trigger remote full-audio fetch solely to feed ASR
 - transcript-bearing playback must not enter an ASR retry/backoff path automatically
+- transcript-bearing playback must not transiently fall back to the generic artwork + `No transcript yet` empty state before transcript preload has definitively succeeded or failed
 
 ### B. ASR branch
 
@@ -138,9 +148,24 @@ No other implicit fallback or convenience branch may bypass transcript-first sem
 
 ### E. Playback independence
 
-Transcript loading state must not be presented as if playback itself is blocked when streaming playback has already started successfully.
+Transcript loading state must not be presented as if playback itself has entered the ASR/download branch.
 
-This task does not require a UI redesign, but implementation must preserve this semantic boundary.
+Required semantic boundary:
+
+- transcript-bearing preload is distinct from ASR/download preparation
+- a transcript-bearing episode must not momentarily fall into the generic `Downloading...` / ASR-oriented placeholder if the branch is still transcript-first
+- a transcript-bearing episode must instead enter a transcript-loading placeholder immediately after play is requested
+- once transcript-bearing preload succeeds, the user-visible state should enter the reading surface directly
+- if preload fails, playback may continue independently, but the UI must not reinterpret that failure as "set up ASR"
+
+Required first-screen rule:
+
+- if the episode payload passed into playback already includes `transcriptUrl`, the first full-player screen after clicking play must be transcript-loading
+- the first-screen copy/semantics should read as transcript-loading (for example, `Loading transcript...`), not as audio download or empty transcript state
+- `No transcript yet` is only valid after the transcript-bearing preload branch has definitively concluded without usable cues
+- merely hiding `Set up subtitle generation` is insufficient; the loading state itself is part of the contract
+
+This task still does not require a full UI redesign, but the implementation must preserve this stronger transcript-first semantic boundary.
 
 ### F. Minimal observability
 
@@ -198,6 +223,29 @@ Do not log transcript contents, secrets, or full sensitive payloads.
 7. transcript-bearing playback does not auto-create a download/audio-cache side effect
 8. transcript-bearing playback may begin while transcript fetch is pending; transcript loading must not be treated as playback-blocking
 9. transcript-bearing playback must not consult ASR readiness/configuration in the transcript-first branch
+10. transcript-bearing playback must not show `Set up subtitle generation`
+11. transcript-bearing playback must not commit the transcript-bearing reading playback path before transcript preload finishes
+12. transcript-bearing transcript-fetch failure must not be reinterpreted as an ASR setup/readiness problem
+13. transcript-bearing feed playback must enter transcript-loading immediately, before any `No transcript yet` empty-state render
+14. transcript-bearing playback must not show artwork + `No transcript yet` while transcript preload is still pending
+
+## Post-Implementation Clarification
+
+The original wording of `transcript-first` was too easy to misread as:
+
+- "start playback immediately"
+- "fetch transcript later"
+- "as long as automatic ASR is disabled, the contract is satisfied"
+
+That interpretation is incomplete.
+
+For completed `019`, the intended product contract is:
+
+1. transcript-bearing playback is a distinct, transcript-first user-visible path
+2. the app must not briefly route transcript-bearing playback through generic ASR/download placeholder UX
+3. the app must not show `Set up subtitle generation` for transcript-bearing playback
+4. transcript-bearing playback may continue independently when transcript preload fails, but that failure must remain a transcript-source failure, not an ASR-setup failure
+5. only the explicit `stream-without-transcript` path may bypass these semantics
 
 ## Verification
 
@@ -229,9 +277,12 @@ Reviewer must verify:
 
 ## Non-goals
 
-- No UI copy overhaul
-- No `/api/proxy` redesign
-- No session-restore changes
-- No download-manager redesign
 - No generic ASR refactor
 - No backend API changes
+
+## Completion
+
+- **Completed by**: Antigravity (Leadership Review)
+- **Commands**: `pnpm -C apps/cloud-ui test:run -- src/lib/player/__tests__/remotePlayback.test.ts`
+- **Date**: 2026-04-07
+- **Reviewed by**: Antigravity (Top)

@@ -85,3 +85,13 @@ title: Cloud 交接
 - 服务端所有配置保留在 VPS 环境或 systemd 环境文件（例如 `/etc/readio/readio-cloud.env`）。
 - 浏览器公开字段（例如 `READIO_ASR_RELAY_PUBLIC_TOKEN`）不是密钥；它们是轻量级滥用控制 token。
 - 这一页只保留高层映射；实现细节放在审计子文档里。
+
+## 9. 播放与 Transcript 契约
+
+- 当前 transcript-first 播放与 Reading Area CTA 契约记录在 `playback-transcript-contract.zh.mdx`。
+- 它定义了：
+  - 带 transcript 的播放何时必须跳过 automatic ASR
+  - 当前没有显示 transcript 时，artwork CTA 应如何表现
+  - `stream_without_transcript` 如何只影响展示，而不抹掉 transcript availability
+  - local/downloaded transcript source 在 restore 与 pure listening 流程中应如何被视为 transcript available
+- 本页只保留高层映射；实现细节放在 handoff 子文档里。
