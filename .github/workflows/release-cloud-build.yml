@@ -1,0 +1,64 @@
+name: Release Cloud Build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Cloud UI
+        run: pnpm -C apps/cloud-ui build
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: Build Cloud Linux binary
+        run: |
+          cd apps/cloud-api
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o "$GITHUB_WORKSPACE/readio-cloud" .
+
+      - name: Create manifest.json
+        run: |
+          cat > manifest.json <<EOF
+          {
+            "commit_sha": "${{ github.sha }}",
+            "build_timestamp": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "workflow_run_id": "${{ github.run_id }}",
+            "workflow_name": "Release Cloud Build",
+            "ref": "${{ github.ref }}"
+          }
+          EOF
+
+      - name: Upload release artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloud-release-${{ github.sha }}
+          path: |
+            readio-cloud
+            apps/cloud-ui/dist/
+            manifest.json
+          retention-days: 30
