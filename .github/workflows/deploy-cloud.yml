@@ -1,0 +1,154 @@
+name: Deploy Cloud
+
+on:
+  workflow_run:
+    workflows: ["Release Cloud Build"]
+    types:
+      - completed
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      artifact_sha:
+        description: 'Commit SHA of the release artifact to deploy (leave empty for latest)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: cloud-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: cloud-production
+    env:
+      SSH_HOST: ${{ secrets.CLOUD_SSH_HOST }}
+      SSH_PORT: ${{ secrets.CLOUD_SSH_PORT || '22' }}
+      SSH_USER: ${{ secrets.CLOUD_SSH_USER }}
+      REMOTE_ROOT: /opt/readio
+      REMOTE_CURRENT_DIR: /opt/readio/current
+      REMOTE_SHARED_DATA_DIR: /opt/readio/shared/data
+      SERVICE_NAME: ${{ vars.CLOUD_SERVICE_NAME || 'readio-cloud' }}
+      CLOUD_PORT: ${{ vars.CLOUD_PORT || '8080' }}
+
+    steps:
+      - name: Resolve release artifact source
+        id: resolve-artifact
+        uses: actions/github-script@v7
+        env:
+          REQUESTED_SHA: ${{ inputs.artifact_sha || '' }}
+        with:
+          script: |
+            if (context.eventName === 'workflow_run') {
+              core.setOutput('run_id', String(context.payload.workflow_run.id))
+              core.setOutput('sha', context.payload.workflow_run.head_sha)
+              return
+            }
+
+            const requestedSha = process.env.REQUESTED_SHA.trim()
+            const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'release-cloud-build.yml',
+              branch: 'main',
+              status: 'completed',
+              per_page: 100,
+            })
+
+            const successfulRuns = runs.filter((run) => run.conclusion === 'success')
+            const resolvedRun = requestedSha
+              ? successfulRuns.find((run) => run.head_sha === requestedSha)
+              : successfulRuns[0]
+
+            if (!resolvedRun) {
+              core.setFailed(
+                requestedSha
+                  ? `No successful Release Cloud Build run found for commit ${requestedSha}`
+                  : 'No successful Release Cloud Build run found on main',
+              )
+              return
+            }
+
+            core.setOutput('run_id', String(resolvedRun.id))
+            core.setOutput('sha', resolvedRun.head_sha)
+
+      - name: Download release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: cloud-release-${{ steps.resolve-artifact.outputs.sha }}
+          run-id: ${{ steps.resolve-artifact.outputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Display artifact contents
+        run: |
+          echo "=== Release Artifact ==="
+          ls -la
+          echo ""
+          echo "=== Manifest ==="
+          cat manifest.json
+
+      - name: Setup SSH known hosts
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.CLOUD_SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          printf '%s\n' "${{ secrets.CLOUD_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/known_hosts ~/.ssh/id_ed25519
+
+      - name: Create remote release directory
+        env:
+          RESOLVED_RELEASE_DIR: /opt/readio/releases/${{ steps.resolve-artifact.outputs.sha }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519 \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -p "$SSH_PORT" \
+            "$SSH_USER@$SSH_HOST" \
+            "mkdir -p '$REMOTE_ROOT' '$REMOTE_SHARED_DATA_DIR' '$RESOLVED_RELEASE_DIR'"
+
+      - name: Transfer release artifacts
+        env:
+          RESOLVED_RELEASE_DIR: /opt/readio/releases/${{ steps.resolve-artifact.outputs.sha }}
+        run: |
+          rsync -a \
+            -e "ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts -p $SSH_PORT" \
+            ./ \
+            "$SSH_USER@$SSH_HOST:$RESOLVED_RELEASE_DIR/"
+
+      - name: Publish release and restart
+        env:
+          RESOLVED_RELEASE_DIR: /opt/readio/releases/${{ steps.resolve-artifact.outputs.sha }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519 \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -p "$SSH_PORT" \
+            "$SSH_USER@$SSH_HOST" \
+            "set -euo pipefail; ln -sfn '$RESOLVED_RELEASE_DIR' '$REMOTE_CURRENT_DIR'; sudo -n /usr/bin/systemctl restart '$SERVICE_NAME'; sudo -n /usr/bin/systemctl is-active --quiet '$SERVICE_NAME'"
+
+      - name: Smoke test
+        run: |
+          echo "=== Smoke Tests ==="
+          echo "1. Checking binary exists on server..."
+          ssh -i ~/.ssh/id_ed25519 \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -p "$SSH_PORT" \
+            "$SSH_USER@$SSH_HOST" \
+            "test -x '$REMOTE_CURRENT_DIR/readio-cloud' && echo 'Binary: OK' || (echo 'Binary: MISSING' && exit 1)"
+
+          echo "2. Checking healthz endpoint..."
+          curl -f "https://${{ secrets.CLOUD_SSH_HOST }}/healthz" >/dev/null 2>&1 && echo "healthz: OK" || (echo "healthz: FAILED" && exit 1)
+
+          echo "3. Checking env.js endpoint..."
+          curl -f "https://${{ secrets.CLOUD_SSH_HOST }}/env.js" >/dev/null 2>&1 && echo "env.js: OK" || (echo "env.js: FAILED" && exit 1)
+
+          echo "=== All smoke tests passed ==="
