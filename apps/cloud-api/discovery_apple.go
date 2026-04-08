@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -224,13 +225,13 @@ func (s *discoveryService) handleSearchPodcasts(w http.ResponseWriter, r *http.R
 	term, err := parseDiscoveryTerm(r.URL.Query())
 	if err != nil {
 		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, "apple-search", s.searchBaseURL, time.Since(start), err)
+		logDiscoveryRequest(route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), err, CacheStatusUncached)
 		return
 	}
 	country, err := parseDiscoveryCountry(r.URL.Query())
 	if err != nil {
 		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, "apple-search", s.searchBaseURL, time.Since(start), err)
+		logDiscoveryRequest(route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), err, CacheStatusUncached)
 		return
 	}
 	limit, err := parseDiscoveryLimit(
@@ -241,7 +242,7 @@ func (s *discoveryService) handleSearchPodcasts(w http.ResponseWriter, r *http.R
 	)
 	if err != nil {
 		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, "apple-search", s.searchBaseURL, time.Since(start), err)
+		logDiscoveryRequest(route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), err, CacheStatusUncached)
 		return
 	}
 
@@ -253,7 +254,7 @@ func (s *discoveryService) handleSearchPodcasts(w http.ResponseWriter, r *http.R
 	var payload rawAppleLookupResponse
 	if err := s.fetchJSON(ctx, upstreamURL, &payload); err != nil {
 		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, "apple-search", s.searchBaseURL, time.Since(start), err)
+		logDiscoveryRequest(route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), err, CacheStatusMissError)
 		return
 	}
 
@@ -272,7 +273,7 @@ func (s *discoveryService) handleSearchPodcasts(w http.ResponseWriter, r *http.R
 	}
 
 	writeDiscoveryJSON(w, http.StatusOK, items)
-	logDiscoveryRequest(route, "apple-search", s.searchBaseURL, time.Since(start), nil)
+	logDiscoveryRequest(route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), nil, CacheStatusUncached)
 }
 
 func (s *discoveryService) handleSearchEpisodes(w http.ResponseWriter, r *http.Request) {
@@ -282,13 +283,13 @@ func (s *discoveryService) handleSearchEpisodes(w http.ResponseWriter, r *http.R
 	term, err := parseDiscoveryTerm(r.URL.Query())
 	if err != nil {
 		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, "apple-search", s.searchBaseURL, time.Since(start), err)
+		logDiscoveryRequest(route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), err, CacheStatusUncached)
 		return
 	}
 	country, err := parseDiscoveryCountry(r.URL.Query())
 	if err != nil {
 		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, "apple-search", s.searchBaseURL, time.Since(start), err)
+		logDiscoveryRequest(route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), err, CacheStatusUncached)
 		return
 	}
 	limit, err := parseDiscoveryLimit(
@@ -299,7 +300,7 @@ func (s *discoveryService) handleSearchEpisodes(w http.ResponseWriter, r *http.R
 	)
 	if err != nil {
 		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, "apple-search", s.searchBaseURL, time.Since(start), err)
+		logDiscoveryRequest(route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), err, CacheStatusUncached)
 		return
 	}
 
@@ -311,7 +312,7 @@ func (s *discoveryService) handleSearchEpisodes(w http.ResponseWriter, r *http.R
 	var payload rawAppleLookupResponse
 	if err := s.fetchJSON(ctx, upstreamURL, &payload); err != nil {
 		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, "apple-search", s.searchBaseURL, time.Since(start), err)
+		logDiscoveryRequest(route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), err, CacheStatusMissError)
 		return
 	}
 
@@ -330,7 +331,7 @@ func (s *discoveryService) handleSearchEpisodes(w http.ResponseWriter, r *http.R
 	}
 
 	writeDiscoveryJSON(w, http.StatusOK, items)
-	logDiscoveryRequest(route, "apple-search", s.searchBaseURL, time.Since(start), nil)
+	logDiscoveryRequest(route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), nil, CacheStatusUncached)
 }
 
 func (s *discoveryService) handleTopPodcasts(w http.ResponseWriter, r *http.Request) {
@@ -340,45 +341,47 @@ func (s *discoveryService) handleTopPodcasts(w http.ResponseWriter, r *http.Requ
 	country, err := parseDiscoveryCountry(r.URL.Query())
 	if err != nil {
 		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, "apple-feed", s.rssBaseURL, time.Since(start), err)
+		logDiscoveryRequest(route, UpstreamKindAppleFeed, s.rssBaseURL, time.Since(start), err, CacheStatusMissError)
 		return
 	}
 	limit, err := parseDiscoveryLimit(r.URL.Query(), "limit", defaultDiscoveryTopLimit, maxDiscoveryTopLimit)
 	if err != nil {
 		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, "apple-feed", s.rssBaseURL, time.Since(start), err)
+		logDiscoveryRequest(route, UpstreamKindAppleFeed, s.rssBaseURL, time.Since(start), err, CacheStatusMissError)
 		return
 	}
 
 	cacheKey := fmt.Sprintf("top-podcasts:%s:%d", country, limit)
-	if cached, ok := s.cache.get(cacheKey); ok {
-		writeDiscoveryJSON(w, http.StatusOK, cached)
-		logDiscoveryRequest(route, "apple-feed", s.rssBaseURL, time.Since(start), nil)
-		return
-	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), s.timeout)
 	defer cancel()
 
-	upstreamURL := buildAppleFeedURL(s.rssBaseURL, country, limit, "podcasts")
-	var payload rawAppleFeedResponse
-	if err := s.fetchJSON(ctx, upstreamURL, &payload); err != nil {
+	fetch := func(ctx context.Context) (any, error) {
+		upstreamURL := buildAppleFeedURL(s.rssBaseURL, country, limit, "podcasts")
+		var payload rawAppleFeedResponse
+		if err := s.fetchJSON(ctx, upstreamURL, &payload); err != nil {
+			return nil, errors.Join(errDiscoveryUpstreamError, err)
+		}
+		items := make([]discoveryPodcastResponse, 0, len(payload.Feed.Results))
+		for _, item := range payload.Feed.Results {
+			mapped, ok := mapTopPodcast(item)
+			if ok {
+				items = append(items, mapped)
+			}
+		}
+		return items, nil
+	}
+
+	data, cacheStatus, err := s.getWithGracefulDegradation(ctx, cacheKey, discoveryCacheTTLTopPodcasts, fetch)
+	if err != nil {
 		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, "apple-feed", s.rssBaseURL, time.Since(start), err)
+		logDiscoveryRequest(route, UpstreamKindAppleFeed, s.rssBaseURL, time.Since(start), err, cacheStatus)
 		return
 	}
 
-	items := make([]discoveryPodcastResponse, 0, len(payload.Feed.Results))
-	for _, item := range payload.Feed.Results {
-		mapped, ok := mapTopPodcast(item)
-		if ok {
-			items = append(items, mapped)
-		}
-	}
-
-	s.cache.set(cacheKey, items, discoveryCacheTTLTopPodcasts)
+	items := data.([]discoveryPodcastResponse)
 	writeDiscoveryJSON(w, http.StatusOK, items)
-	logDiscoveryRequest(route, "apple-feed", s.rssBaseURL, time.Since(start), nil)
+	logDiscoveryRequest(route, UpstreamKindAppleFeed, s.rssBaseURL, time.Since(start), nil, cacheStatus)
 }
 
 func (s *discoveryService) handleTopEpisodes(w http.ResponseWriter, r *http.Request) {
@@ -388,45 +391,47 @@ func (s *discoveryService) handleTopEpisodes(w http.ResponseWriter, r *http.Requ
 	country, err := parseDiscoveryCountry(r.URL.Query())
 	if err != nil {
 		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, "apple-feed", s.rssBaseURL, time.Since(start), err)
+		logDiscoveryRequest(route, UpstreamKindAppleFeed, s.rssBaseURL, time.Since(start), err, CacheStatusMissError)
 		return
 	}
 	limit, err := parseDiscoveryLimit(r.URL.Query(), "limit", defaultDiscoveryTopLimit, maxDiscoveryTopLimit)
 	if err != nil {
 		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, "apple-feed", s.rssBaseURL, time.Since(start), err)
+		logDiscoveryRequest(route, UpstreamKindAppleFeed, s.rssBaseURL, time.Since(start), err, CacheStatusMissError)
 		return
 	}
 
 	cacheKey := fmt.Sprintf("top-episodes:%s:%d", country, limit)
-	if cached, ok := s.cache.get(cacheKey); ok {
-		writeDiscoveryJSON(w, http.StatusOK, cached)
-		logDiscoveryRequest(route, "apple-feed", s.rssBaseURL, time.Since(start), nil)
-		return
-	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), s.timeout)
 	defer cancel()
 
-	upstreamURL := buildAppleFeedURL(s.rssBaseURL, country, limit, "podcast-episodes")
-	var payload rawAppleFeedResponse
-	if err := s.fetchJSON(ctx, upstreamURL, &payload); err != nil {
+	fetch := func(ctx context.Context) (any, error) {
+		upstreamURL := buildAppleFeedURL(s.rssBaseURL, country, limit, "podcast-episodes")
+		var payload rawAppleFeedResponse
+		if err := s.fetchJSON(ctx, upstreamURL, &payload); err != nil {
+			return nil, errors.Join(errDiscoveryUpstreamError, err)
+		}
+		items := make([]discoveryPodcastResponse, 0, len(payload.Feed.Results))
+		for _, item := range payload.Feed.Results {
+			mapped, ok := mapTopEpisode(item)
+			if ok {
+				items = append(items, mapped)
+			}
+		}
+		return items, nil
+	}
+
+	data, cacheStatus, err := s.getWithGracefulDegradation(ctx, cacheKey, discoveryCacheTTLTopEpisodes, fetch)
+	if err != nil {
 		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, "apple-feed", s.rssBaseURL, time.Since(start), err)
+		logDiscoveryRequest(route, UpstreamKindAppleFeed, s.rssBaseURL, time.Since(start), err, cacheStatus)
 		return
 	}
 
-	items := make([]discoveryPodcastResponse, 0, len(payload.Feed.Results))
-	for _, item := range payload.Feed.Results {
-		mapped, ok := mapTopEpisode(item)
-		if ok {
-			items = append(items, mapped)
-		}
-	}
-
-	s.cache.set(cacheKey, items, discoveryCacheTTLTopEpisodes)
+	items := data.([]discoveryPodcastResponse)
 	writeDiscoveryJSON(w, http.StatusOK, items)
-	logDiscoveryRequest(route, "apple-feed", s.rssBaseURL, time.Since(start), nil)
+	logDiscoveryRequest(route, UpstreamKindAppleFeed, s.rssBaseURL, time.Since(start), nil, cacheStatus)
 }
 
 func (s *discoveryService) handleLookupPodcast(w http.ResponseWriter, r *http.Request) {
@@ -436,49 +441,47 @@ func (s *discoveryService) handleLookupPodcast(w http.ResponseWriter, r *http.Re
 	id, err := parseDiscoveryID(r.URL.Query(), "id")
 	if err != nil {
 		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, "apple-lookup", s.lookupBaseURL, time.Since(start), err)
+		logDiscoveryRequest(route, UpstreamKindAppleLookup, s.lookupBaseURL, time.Since(start), err, CacheStatusMissError)
 		return
 	}
 	country, err := parseDiscoveryCountry(r.URL.Query())
 	if err != nil {
 		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, "apple-lookup", s.lookupBaseURL, time.Since(start), err)
+		logDiscoveryRequest(route, UpstreamKindAppleLookup, s.lookupBaseURL, time.Since(start), err, CacheStatusMissError)
 		return
 	}
 
 	cacheKey := fmt.Sprintf("lookup-podcast:%s:%s", id, country)
-	if cached, ok := s.cache.get(cacheKey); ok {
-		writeDiscoveryJSON(w, http.StatusOK, cached)
-		logDiscoveryRequest(route, "apple-lookup", s.lookupBaseURL, time.Since(start), nil)
-		return
-	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), s.timeout)
 	defer cancel()
 
-	upstreamURL := buildAppleLookupURL(s.lookupBaseURL, id, country, "podcast", 0)
+	fetch := func(ctx context.Context) (any, error) {
+		upstreamURL := buildAppleLookupURL(s.lookupBaseURL, id, country, "podcast", 0)
+		var payload rawAppleLookupResponse
+		if err := s.fetchJSON(ctx, upstreamURL, &payload); err != nil {
+			return nil, errors.Join(errDiscoveryUpstreamError, err)
+		}
+		for _, item := range payload.Results {
+			if item.Kind != "podcast" && item.WrapperType != "collection" {
+				continue
+			}
+			if mapped, ok := mapLookupPodcast(item); ok {
+				return mapped, nil
+			}
+		}
+		return nil, nil
+	}
 
-	var payload rawAppleLookupResponse
-	if err := s.fetchJSON(ctx, upstreamURL, &payload); err != nil {
+	data, cacheStatus, err := s.getWithGracefulDegradation(ctx, cacheKey, discoveryCacheTTLLookup, fetch)
+	if err != nil {
 		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, "apple-lookup", s.lookupBaseURL, time.Since(start), err)
+		logDiscoveryRequest(route, UpstreamKindAppleLookup, s.lookupBaseURL, time.Since(start), err, cacheStatus)
 		return
 	}
 
-	for _, item := range payload.Results {
-		if item.Kind != "podcast" && item.WrapperType != "collection" {
-			continue
-		}
-		if mapped, ok := mapLookupPodcast(item); ok {
-			s.cache.set(cacheKey, mapped, discoveryCacheTTLLookup)
-			writeDiscoveryJSON(w, http.StatusOK, mapped)
-			logDiscoveryRequest(route, "apple-lookup", s.lookupBaseURL, time.Since(start), nil)
-			return
-		}
-	}
-
-	writeDiscoveryJSON(w, http.StatusOK, nil)
-	logDiscoveryRequest(route, "apple-lookup", s.lookupBaseURL, time.Since(start), nil)
+	writeDiscoveryJSON(w, http.StatusOK, data)
+	logDiscoveryRequest(route, UpstreamKindAppleLookup, s.lookupBaseURL, time.Since(start), nil, cacheStatus)
 }
 
 func (s *discoveryService) handleLookupPodcasts(w http.ResponseWriter, r *http.Request) {
@@ -488,19 +491,19 @@ func (s *discoveryService) handleLookupPodcasts(w http.ResponseWriter, r *http.R
 	ids, err := parseDiscoveryIDs(r.URL.Query(), "ids")
 	if err != nil {
 		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, "apple-lookup", s.lookupBaseURL, time.Since(start), err)
+		logDiscoveryRequest(route, UpstreamKindAppleLookup, s.lookupBaseURL, time.Since(start), err, CacheStatusMissError)
 		return
 	}
 	if len(ids) == 0 {
 		writeDiscoveryJSON(w, http.StatusOK, []discoveryPodcastResponse{})
-		logDiscoveryRequest(route, "apple-lookup", s.lookupBaseURL, time.Since(start), nil)
+		logDiscoveryRequest(route, UpstreamKindAppleLookup, s.lookupBaseURL, time.Since(start), nil, CacheStatusUncached)
 		return
 	}
 
 	country, err := parseDiscoveryCountry(r.URL.Query())
 	if err != nil {
 		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, "apple-lookup", s.lookupBaseURL, time.Since(start), err)
+		logDiscoveryRequest(route, UpstreamKindAppleLookup, s.lookupBaseURL, time.Since(start), err, CacheStatusMissError)
 		return
 	}
 
@@ -513,7 +516,7 @@ func (s *discoveryService) handleLookupPodcasts(w http.ResponseWriter, r *http.R
 	var payload rawAppleLookupResponse
 	if err := s.fetchJSON(ctx, upstreamURL, &payload); err != nil {
 		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, "apple-lookup", s.lookupBaseURL, time.Since(start), err)
+		logDiscoveryRequest(route, UpstreamKindAppleLookup, s.lookupBaseURL, time.Since(start), err, CacheStatusUncached)
 		return
 	}
 
@@ -537,7 +540,7 @@ func (s *discoveryService) handleLookupPodcasts(w http.ResponseWriter, r *http.R
 	}
 
 	writeDiscoveryJSON(w, http.StatusOK, items)
-	logDiscoveryRequest(route, "apple-lookup", s.lookupBaseURL, time.Since(start), nil)
+	logDiscoveryRequest(route, UpstreamKindAppleLookup, s.lookupBaseURL, time.Since(start), nil, CacheStatusUncached)
 }
 
 func (s *discoveryService) handleLookupPodcastEpisodes(w http.ResponseWriter, r *http.Request) {
@@ -547,55 +550,56 @@ func (s *discoveryService) handleLookupPodcastEpisodes(w http.ResponseWriter, r 
 	id, err := parseDiscoveryID(r.URL.Query(), "id")
 	if err != nil {
 		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, "apple-lookup", s.lookupBaseURL, time.Since(start), err)
+		logDiscoveryRequest(route, UpstreamKindAppleLookup, s.lookupBaseURL, time.Since(start), err, CacheStatusMissError)
 		return
 	}
 	country, err := parseDiscoveryCountry(r.URL.Query())
 	if err != nil {
 		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, "apple-lookup", s.lookupBaseURL, time.Since(start), err)
+		logDiscoveryRequest(route, UpstreamKindAppleLookup, s.lookupBaseURL, time.Since(start), err, CacheStatusMissError)
 		return
 	}
 	limit, err := parseDiscoveryLimit(r.URL.Query(), "limit", defaultDiscoveryLookupEpisodesLimit, maxDiscoveryLookupEpisodesLimit)
 	if err != nil {
 		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, "apple-lookup", s.lookupBaseURL, time.Since(start), err)
+		logDiscoveryRequest(route, UpstreamKindAppleLookup, s.lookupBaseURL, time.Since(start), err, CacheStatusMissError)
 		return
 	}
 
 	cacheKey := fmt.Sprintf("lookup-episodes:%s:%s:%d", id, country, limit)
-	if cached, ok := s.cache.get(cacheKey); ok {
-		writeDiscoveryJSON(w, http.StatusOK, cached)
-		logDiscoveryRequest(route, "apple-lookup", s.lookupBaseURL, time.Since(start), nil)
-		return
-	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), s.timeout)
 	defer cancel()
 
-	upstreamURL := buildAppleLookupURL(s.lookupBaseURL, id, country, "podcastEpisode", limit)
+	fetch := func(ctx context.Context) (any, error) {
+		upstreamURL := buildAppleLookupURL(s.lookupBaseURL, id, country, "podcastEpisode", limit)
+		var payload rawAppleLookupResponse
+		if err := s.fetchJSON(ctx, upstreamURL, &payload); err != nil {
+			return nil, errors.Join(errDiscoveryUpstreamError, err)
+		}
+		items := make([]episodeLookupResponse, 0, len(payload.Results))
+		for _, item := range payload.Results {
+			if item.WrapperType != "podcastEpisode" {
+				continue
+			}
+			mapped, ok := mapLookupEpisode(item)
+			if ok {
+				items = append(items, mapped)
+			}
+		}
+		return items, nil
+	}
 
-	var payload rawAppleLookupResponse
-	if err := s.fetchJSON(ctx, upstreamURL, &payload); err != nil {
+	data, cacheStatus, err := s.getWithGracefulDegradation(ctx, cacheKey, discoveryCacheTTLLookup, fetch)
+	if err != nil {
 		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, "apple-lookup", s.lookupBaseURL, time.Since(start), err)
+		logDiscoveryRequest(route, UpstreamKindAppleLookup, s.lookupBaseURL, time.Since(start), err, cacheStatus)
 		return
 	}
 
-	items := make([]episodeLookupResponse, 0, len(payload.Results))
-	for _, item := range payload.Results {
-		if item.WrapperType != "podcastEpisode" {
-			continue
-		}
-		mapped, ok := mapLookupEpisode(item)
-		if ok {
-			items = append(items, mapped)
-		}
-	}
-
-	s.cache.set(cacheKey, items, discoveryCacheTTLLookup)
+	items := data.([]episodeLookupResponse)
 	writeDiscoveryJSON(w, http.StatusOK, items)
-	logDiscoveryRequest(route, "apple-lookup", s.lookupBaseURL, time.Since(start), nil)
+	logDiscoveryRequest(route, UpstreamKindAppleLookup, s.lookupBaseURL, time.Since(start), nil, cacheStatus)
 }
 
 // Mapping functions.

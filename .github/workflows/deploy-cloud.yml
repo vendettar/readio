@@ -31,6 +31,7 @@ jobs:
       SSH_HOST: ${{ secrets.CLOUD_SSH_HOST }}
       SSH_PORT: ${{ secrets.CLOUD_SSH_PORT || '22' }}
       SSH_USER: ${{ secrets.CLOUD_SSH_USER }}
+      CLOUD_PUBLIC_BASE_URL: ${{ vars.CLOUD_PUBLIC_BASE_URL }}
       REMOTE_ROOT: /opt/readio
       REMOTE_CURRENT_DIR: /opt/readio/current
       REMOTE_SHARED_DATA_DIR: /opt/readio/shared/data
@@ -150,6 +151,11 @@ jobs:
 
       - name: Smoke test
         run: |
+          if [ -z "${CLOUD_PUBLIC_BASE_URL:-}" ]; then
+            echo "CLOUD_PUBLIC_BASE_URL is not configured"
+            exit 1
+          fi
+
           echo "=== Smoke Tests ==="
           echo "1. Checking binary exists on server..."
           ssh -i ~/.ssh/id_ed25519 \
@@ -161,9 +167,9 @@ jobs:
             "test -x '$REMOTE_CURRENT_DIR/readio-cloud' && echo 'Binary: OK' || (echo 'Binary: MISSING' && exit 1)"
 
           echo "2. Checking healthz endpoint..."
-          curl -f "https://${{ secrets.CLOUD_SSH_HOST }}/healthz" >/dev/null 2>&1 && echo "healthz: OK" || (echo "healthz: FAILED" && exit 1)
+          curl -f "${CLOUD_PUBLIC_BASE_URL%/}/healthz" >/dev/null 2>&1 && echo "healthz: OK" || (echo "healthz: FAILED" && exit 1)
 
           echo "3. Checking env.js endpoint..."
-          curl -f "https://${{ secrets.CLOUD_SSH_HOST }}/env.js" >/dev/null 2>&1 && echo "env.js: OK" || (echo "env.js: FAILED" && exit 1)
+          curl -f "${CLOUD_PUBLIC_BASE_URL%/}/env.js" >/dev/null 2>&1 && echo "env.js: OK" || (echo "env.js: FAILED" && exit 1)
 
           echo "=== All smoke tests passed ==="

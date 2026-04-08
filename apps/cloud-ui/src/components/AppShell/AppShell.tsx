@@ -145,15 +145,15 @@ export function AppShell({ children }: AppShellProps) {
         {isSurfaceVisible && <PlayerSurfaceFrame mode={mode} />}
       </AnimatePresence>
 
-      <Sidebar open={sidebarOpen} onClose={handleSidebarClose} onNavigate={handleSidebarClose} />
-
       {sidebarOpen && (
         <div
-          className="md:hidden fixed inset-0 bg-black/50 z-sidebar"
+          className="md:hidden fixed inset-0 bg-black/50 z-overlay"
           onClick={handleSidebarClose}
           aria-hidden="true"
         />
       )}
+
+      <Sidebar open={sidebarOpen} onClose={handleSidebarClose} onNavigate={handleSidebarClose} />
 
       <main className="flex-1 flex flex-col relative bg-background overflow-hidden">
         {/* Hamburger menu button - mobile only */}

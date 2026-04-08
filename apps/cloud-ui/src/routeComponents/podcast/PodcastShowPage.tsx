@@ -167,7 +167,7 @@ export default function PodcastShowPage() {
         <div className="w-full max-w-content mx-auto px-page pt-page pb-32">
           {/* Hero skeleton */}
           <div className="flex flex-col md:flex-row gap-8 mb-10">
-            <Skeleton className="w-full md:w-64 aspect-square rounded-2xl flex-shrink-0" />
+            <Skeleton className="w-40 sm:w-48 md:w-64 aspect-square rounded-2xl flex-shrink-0" />
             <div className="flex-1 flex flex-col justify-between py-2">
               <div className="space-y-4">
                 <div className="space-y-2">
@@ -282,7 +282,7 @@ export default function PodcastShowPage() {
         {/* Hero Section */}
         <div className="flex flex-col md:flex-row gap-8 mb-10">
           {/* Artwork */}
-          <div className="w-full md:w-64 flex-shrink-0">
+          <div className="w-40 sm:w-48 md:w-64 flex-shrink-0">
             <motion.div
               layoutId={
                 fromLayoutPrefix

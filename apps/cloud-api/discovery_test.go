@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -1442,6 +1443,246 @@ func TestDiscoveryCacheBehavior(t *testing.T) {
 
 		if upstreamCalls != 1 {
 			t.Fatalf("upstreamCalls = %d, want 1 (lookup podcast should be cached)", upstreamCalls)
+		}
+	})
+}
+
+func TestDiscoveryCacheGracefulDegradation(t *testing.T) {
+	t.Run("fresh cache returns fresh status", func(t *testing.T) {
+		service := &discoveryService{
+			client: &http.Client{
+				Transport: discoveryRoundTripper(func(_ *http.Request) (*http.Response, error) {
+					return jsonResponse(http.StatusOK, `{
+						"feed": {
+							"results": [
+								{"id": "1", "name": "Show", "url": "https://example.com/1"}
+							]
+						}
+					}`), nil
+				}),
+			},
+			timeout:       time.Second,
+			rssBaseURL:    discoveryRSSBaseURL,
+			lookupBaseURL: discoveryLookupBaseURL,
+			userAgent:     discoveryUserAgent,
+			bodyLimit:     discoveryBodyLimit,
+			cache:         newDiscoveryCache(256),
+		}
+
+		req := httptest.NewRequest(http.MethodGet, discoveryTopPodcastsRoute+"?country=us&limit=25", nil)
+
+		rr := httptest.NewRecorder()
+		service.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+		}
+
+		var items []discoveryPodcastResponse
+		decodeResponseJSON(t, rr.Body, &items)
+		if len(items) != 1 || items[0].Name != "Show" {
+			t.Fatalf("unexpected response body")
+		}
+	})
+
+	t.Run("stale cache returns stale data when refresh fails", func(t *testing.T) {
+		upstreamCalls := 0
+		service := &discoveryService{
+			client: &http.Client{
+				Transport: discoveryRoundTripper(func(_ *http.Request) (*http.Response, error) {
+					upstreamCalls++
+					if upstreamCalls == 1 {
+						return jsonResponse(http.StatusOK, `{
+							"feed": {
+								"results": [
+									{"id": "1", "name": "Stale Show", "url": "https://example.com/1"}
+								]
+							}
+						}`), nil
+					}
+					return nil, errors.New("upstream failed")
+				}),
+			},
+			timeout:       time.Second,
+			rssBaseURL:    discoveryRSSBaseURL,
+			lookupBaseURL: discoveryLookupBaseURL,
+			userAgent:     discoveryUserAgent,
+			bodyLimit:     discoveryBodyLimit,
+			cache:         newDiscoveryCache(256),
+		}
+
+		origTTL := discoveryCacheTTLTopPodcasts
+		discoveryCacheTTLTopPodcasts = 50 * time.Millisecond
+		defer func() { discoveryCacheTTLTopPodcasts = origTTL }()
+
+		req := httptest.NewRequest(http.MethodGet, discoveryTopPodcastsRoute+"?country=us&limit=25", nil)
+
+		rr1 := httptest.NewRecorder()
+		service.ServeHTTP(rr1, req)
+		if rr1.Code != http.StatusOK {
+			t.Fatalf("first request: status = %d", rr1.Code)
+		}
+
+		time.Sleep(100 * time.Millisecond)
+
+		rr2 := httptest.NewRecorder()
+		service.ServeHTTP(rr2, req)
+		if rr2.Code != http.StatusOK {
+			t.Fatalf("second request: status = %d, want %d (should return stale data)", rr2.Code, http.StatusOK)
+		}
+
+		if upstreamCalls != 2 {
+			t.Fatalf("upstreamCalls = %d, want 2", upstreamCalls)
+		}
+
+		var items []discoveryPodcastResponse
+		decodeResponseJSON(t, rr2.Body, &items)
+		if len(items) != 1 || items[0].Name != "Stale Show" {
+			t.Fatalf("expected stale data to be returned, got %v", items)
+		}
+	})
+
+	t.Run("stale cache refreshes successfully", func(t *testing.T) {
+		upstreamCalls := 0
+		service := &discoveryService{
+			client: &http.Client{
+				Transport: discoveryRoundTripper(func(_ *http.Request) (*http.Response, error) {
+					upstreamCalls++
+					name := fmt.Sprintf("Show-%d", upstreamCalls)
+					return jsonResponse(http.StatusOK, fmt.Sprintf(`{
+						"feed": {
+							"results": [
+								{"id": "1", "name": %q, "url": "https://example.com/1"}
+							]
+						}
+					}`, name)), nil
+				}),
+			},
+			timeout:       time.Second,
+			rssBaseURL:    discoveryRSSBaseURL,
+			lookupBaseURL: discoveryLookupBaseURL,
+			userAgent:     discoveryUserAgent,
+			bodyLimit:     discoveryBodyLimit,
+			cache:         newDiscoveryCache(256),
+		}
+
+		origTTL := discoveryCacheTTLTopPodcasts
+		discoveryCacheTTLTopPodcasts = 50 * time.Millisecond
+		defer func() { discoveryCacheTTLTopPodcasts = origTTL }()
+
+		req := httptest.NewRequest(http.MethodGet, discoveryTopPodcastsRoute+"?country=us&limit=25", nil)
+
+		rr1 := httptest.NewRecorder()
+		service.ServeHTTP(rr1, req)
+		if rr1.Code != http.StatusOK {
+			t.Fatalf("first request: status = %d", rr1.Code)
+		}
+
+		time.Sleep(100 * time.Millisecond)
+
+		rr2 := httptest.NewRecorder()
+		service.ServeHTTP(rr2, req)
+		if rr2.Code != http.StatusOK {
+			t.Fatalf("second request: status = %d", rr2.Code)
+		}
+
+		if upstreamCalls != 2 {
+			t.Fatalf("upstreamCalls = %d, want 2", upstreamCalls)
+		}
+
+		var first, second []discoveryPodcastResponse
+		decodeResponseJSON(t, rr1.Body, &first)
+		decodeResponseJSON(t, rr2.Body, &second)
+		if first[0].Name == second[0].Name {
+			t.Fatalf("expected fresh data after refresh, got same data")
+		}
+	})
+
+	t.Run("cache miss triggers upstream fetch", func(t *testing.T) {
+		upstreamCalls := 0
+		service := &discoveryService{
+			client: &http.Client{
+				Transport: discoveryRoundTripper(func(_ *http.Request) (*http.Response, error) {
+					upstreamCalls++
+					return jsonResponse(http.StatusOK, `{
+						"feed": {
+							"results": [
+								{"id": "1", "name": "New Show", "url": "https://example.com/1"}
+							]
+						}
+					}`), nil
+				}),
+			},
+			timeout:       time.Second,
+			rssBaseURL:    discoveryRSSBaseURL,
+			lookupBaseURL: discoveryLookupBaseURL,
+			userAgent:     discoveryUserAgent,
+			bodyLimit:     discoveryBodyLimit,
+			cache:         newDiscoveryCache(256),
+		}
+
+		req := httptest.NewRequest(http.MethodGet, discoveryTopPodcastsRoute+"?country=us&limit=25", nil)
+
+		rr := httptest.NewRecorder()
+		service.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+		}
+		if upstreamCalls != 1 {
+			t.Fatalf("upstreamCalls = %d, want 1", upstreamCalls)
+		}
+	})
+
+	t.Run("singleflight prevents concurrent refresh", func(t *testing.T) {
+		concurrentCalls := 0
+		service := &discoveryService{
+			client: &http.Client{
+				Transport: discoveryRoundTripper(func(_ *http.Request) (*http.Response, error) {
+					concurrentCalls++
+					time.Sleep(50 * time.Millisecond)
+					return jsonResponse(http.StatusOK, `{
+						"feed": {
+							"results": [
+								{"id": "1", "name": "Show", "url": "https://example.com/1"}
+							]
+						}
+					}`), nil
+				}),
+			},
+			timeout:       time.Second,
+			rssBaseURL:    discoveryRSSBaseURL,
+			lookupBaseURL: discoveryLookupBaseURL,
+			userAgent:     discoveryUserAgent,
+			bodyLimit:     discoveryBodyLimit,
+			cache:         newDiscoveryCache(256),
+		}
+
+		origTTL := discoveryCacheTTLTopPodcasts
+		discoveryCacheTTLTopPodcasts = 50 * time.Millisecond
+		defer func() { discoveryCacheTTLTopPodcasts = origTTL }()
+
+		req := httptest.NewRequest(http.MethodGet, discoveryTopPodcastsRoute+"?country=us&limit=25", nil)
+
+		rr1 := httptest.NewRecorder()
+		service.ServeHTTP(rr1, req)
+		if rr1.Code != http.StatusOK {
+			t.Fatalf("first request: status = %d", rr1.Code)
+		}
+
+		time.Sleep(100 * time.Millisecond)
+
+		var wg sync.WaitGroup
+		for i := 0; i < 3; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				rr := httptest.NewRecorder()
+				service.ServeHTTP(rr, req)
+			}()
+		}
+		wg.Wait()
+
+		if concurrentCalls != 2 {
+			t.Fatalf("concurrentCalls = %d, want 2 (initial + one refresh due to singleflight)", concurrentCalls)
 		}
 	})
 }
