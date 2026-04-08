@@ -149,7 +149,7 @@ export function MiniPlayer() {
       className={cn(
         'fixed bottom-0 end-0 bg-card border-t border-border z-mini-player',
         'flex items-center justify-between px-6',
-        'w-shell-content h-mini-player'
+        'w-full md:w-shell-content h-mini-player'
       )}
     >
       {/* Left Section: Playback Speed + Controls */}

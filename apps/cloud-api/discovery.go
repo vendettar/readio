@@ -15,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"golang.org/x/sync/singleflight"
 )
 
 const (
@@ -58,13 +60,14 @@ const (
 // Error responses (upstream failures, param errors, timeouts) are NEVER cached.
 // Feed responses are NOT cached (deferred).
 // Search responses are NOT cached (high cardinality).
-var discoveryCacheTTLTopPodcasts = 30 * time.Minute
-var discoveryCacheTTLTopEpisodes = 30 * time.Minute
-var discoveryCacheTTLLookup = 15 * time.Minute
+var discoveryCacheTTLTopPodcasts = 24 * time.Hour
+var discoveryCacheTTLTopEpisodes = 24 * time.Hour
+var discoveryCacheTTLLookup = 24 * time.Hour
 
 type discoveryCacheEntry struct {
-	data      any
-	expiresAt time.Time
+	data        any
+	expiresAt   time.Time
+	cacheStatus string
 }
 
 type discoveryCache struct {
@@ -80,11 +83,25 @@ func newDiscoveryCache(maxKeys int) *discoveryCache {
 	}
 }
 
-func (c *discoveryCache) get(key string) (any, bool) {
+
+func (c *discoveryCache) getWithStatus(key string) (any, string, bool) {
 	c.mu.RLock()
 	entry, ok := c.entries[key]
 	c.mu.RUnlock()
-	if !ok || time.Now().After(entry.expiresAt) {
+	if !ok {
+		return nil, "miss", false
+	}
+	if time.Now().Before(entry.expiresAt) {
+		return entry.data, "fresh", true
+	}
+	return entry.data, "stale", true
+}
+
+func (c *discoveryCache) getStale(key string) (any, bool) {
+	c.mu.RLock()
+	entry, ok := c.entries[key]
+	c.mu.RUnlock()
+	if !ok {
 		return nil, false
 	}
 	return entry.data, true
@@ -104,7 +121,6 @@ func (c *discoveryCache) set(key string, data any, ttl time.Duration) {
 			}
 		}
 		if !evicted {
-			// Cache full with all valid entries — evict the entry nearest to expiry to stay bounded.
 			var nearestKey string
 			var nearestExpiry time.Time
 			first := true
@@ -119,9 +135,61 @@ func (c *discoveryCache) set(key string, data any, ttl time.Duration) {
 		}
 	}
 	c.entries[key] = discoveryCacheEntry{
-		data:      data,
-		expiresAt: time.Now().Add(ttl),
+		data:        data,
+		expiresAt:   time.Now().Add(ttl),
+		cacheStatus: "fresh",
 	}
+}
+
+
+func (s *discoveryService) getWithGracefulDegradation(
+	ctx context.Context,
+	cacheKey string,
+	ttl time.Duration,
+	fetch func(context.Context) (any, error),
+) (any, string, error) {
+	data, status, ok := s.cache.getWithStatus(cacheKey)
+	if ok && status == "fresh" {
+		return data, CacheStatusFreshHit, nil
+	}
+
+	if !ok {
+		result, err, _ := s.cacheOwner.Do(cacheKey, func() (any, error) {
+			return fetch(ctx)
+		})
+		if err != nil {
+			isUpstream := errors.Is(err, errDiscoveryUpstreamError) ||
+				errors.Is(err, errDiscoveryTimeout) ||
+				errors.Is(err, errDiscoveryTooLarge) ||
+				errors.Is(err, &discoveryUpstreamStatusError{})
+			if isUpstream {
+				if staleData, staleOk := s.cache.getStale(cacheKey); staleOk {
+					return staleData, CacheStatusStaleFallback, nil
+				}
+			}
+			return nil, CacheStatusMissError, err
+		}
+		s.cache.set(cacheKey, result, ttl)
+		return result, CacheStatusRefreshed, nil
+	}
+
+	result, err, _ := s.cacheOwner.Do(cacheKey, func() (any, error) {
+		return fetch(ctx)
+	})
+	if err != nil {
+		isUpstream := errors.Is(err, errDiscoveryUpstreamError) ||
+			errors.Is(err, errDiscoveryTimeout) ||
+			errors.Is(err, errDiscoveryTooLarge) ||
+			errors.Is(err, &discoveryUpstreamStatusError{})
+		if isUpstream {
+			if staleData, staleOk := s.cache.getStale(cacheKey); staleOk {
+				return staleData, CacheStatusStaleFallback, nil
+			}
+		}
+		return nil, CacheStatusMissError, err
+	}
+	s.cache.set(cacheKey, result, ttl)
+	return result, CacheStatusRefreshed, nil
 }
 
 var (
@@ -132,11 +200,30 @@ var (
 	errDiscoveryTooLarge       = errors.New("discovery upstream response too large")
 	errDiscoveryDecode         = errors.New("discovery upstream response invalid")
 	errDiscoveryXMLDecode      = errors.New("discovery upstream response invalid XML")
-	discoveryStopWords         = map[string]struct{}{
+
+	errDiscoveryUpstreamError = errors.New("discovery upstream error")
+	discoveryStopWords        = map[string]struct{}{
 		"the": {}, "a": {}, "an": {}, "and": {}, "or": {}, "of": {}, "in": {}, "on": {},
 		"at": {}, "to": {}, "for": {}, "with": {}, "by": {}, "is": {}, "it": {}, "that": {},
 		"this": {}, "podcast": {}, "audio": {}, "episode": {}, "episodes": {},
 	}
+)
+
+// Cache status constants for observability (low cardinality).
+const (
+	CacheStatusFreshHit      = "fresh_hit"
+	CacheStatusRefreshed     = "refreshed"
+	CacheStatusStaleFallback = "stale_fallback"
+	CacheStatusMissError     = "miss_error"
+	CacheStatusUncached      = "uncached"
+)
+
+// Upstream kind constants for observability.
+const (
+	UpstreamKindAppleSearch = "apple-search"
+	UpstreamKindAppleFeed   = "apple-feed"
+	UpstreamKindAppleLookup = "apple-lookup"
+	UpstreamKindFeed        = "feed"
 )
 
 type discoveryService struct {
@@ -150,6 +237,7 @@ type discoveryService struct {
 	lookupIP      func(context.Context, string) ([]net.IPAddr, error)
 	dialContext   func(context.Context, string, string) (net.Conn, error)
 	cache         *discoveryCache
+	cacheOwner    singleflight.Group
 }
 
 type discoveryParamError struct {
@@ -217,7 +305,7 @@ func (s *discoveryService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func logDiscoveryRequest(route, upstreamKind, upstreamHost string, elapsed time.Duration, err error) {
+func logDiscoveryRequest(route, upstreamKind, upstreamHost string, elapsed time.Duration, err error, cacheStatus string) {
 	// Extract hostname if a full URL was passed.
 	if parsed, parseErr := url.Parse(upstreamHost); parseErr == nil && parsed.Host != "" {
 		upstreamHost = parsed.Host
@@ -245,6 +333,7 @@ func logDiscoveryRequest(route, upstreamKind, upstreamHost string, elapsed time.
 		slog.String("error_class", errorClass),
 		slog.Int("upstream_status", upstreamStatus),
 		slog.Bool("timed_out", timedOut),
+		slog.String("cache_status", cacheStatus),
 	}
 
 	if elapsed >= discoverySlowRequestThreshold || err != nil {

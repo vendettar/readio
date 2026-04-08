@@ -99,8 +99,8 @@ function SidebarInner({ className = '', open = true, onClose, onNavigate }: Side
   return (
     <aside
       className={cn(
-        'hidden md:flex md:w-sidebar md:flex-shrink-0 w-sidebar h-screen bg-background border-e border-border flex-col relative z-sidebar',
-        open && 'md:hidden fixed inset-y-0 start-0 z-overlay w-64 flex',
+        'hidden md:flex md:w-sidebar md:flex-shrink-0 w-sidebar h-screen bg-background border-e border-border flex-col',
+        open ? 'md:hidden fixed inset-y-0 start-0 z-modal w-64 flex' : 'relative z-sidebar',
         className
       )}
       aria-label={t('sidebarAriaLabel', 'Sidebar navigation')}

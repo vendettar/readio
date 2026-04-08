@@ -109,12 +109,12 @@ export function useCarouselLayout(
     }
 
     // 2. Calculate Item Width
-    if (viewportWidth < effectiveFixedBreakpoint) {
-      // Mobile view: items should be smaller (industry standard is ~140-150px for these cards)
-      // This ensures that on a phone, we still see 2+ items comfortably.
+    if (viewportWidth < effectiveFixedBreakpoint && rows === 1) {
+      // Mobile view: standard carousels should be fixed small widths (~150px) to allow horizontal scroll
       newItemWidth = 150
     } else {
-      // Dynamic view: stretch to fill the container with exactly newVisibleCount items
+      // Dynamic view (desktop) OR Multi-row Grids (mobile):
+      // Stretch to fill the container with exactly newVisibleCount items
       const totalGaps = (newVisibleCount - 1) * gap
       newItemWidth = (containerWidth - totalGaps) / newVisibleCount
     }

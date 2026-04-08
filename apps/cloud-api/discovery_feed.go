@@ -98,31 +98,31 @@ func (s *discoveryService) handleFeed(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	route := discoveryFeedRoute
 
-	feedURL, err := parseDiscoveryFeedURL(r.URL.Query())
+	UpstreamKindFeedURL, err := parseDiscoveryFeedURL(r.URL.Query())
 	if err != nil {
 		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, "feed", "", time.Since(start), err)
+		logDiscoveryRequest(route, UpstreamKindFeed, "", time.Since(start), err, CacheStatusUncached)
 		return
 	}
 
 	ctx, cancel := context.WithTimeout(r.Context(), s.timeout)
 	defer cancel()
 
-	parsedURL, _ := url.ParseRequestURI(feedURL)
+	parsedURL, _ := url.ParseRequestURI(UpstreamKindFeedURL)
 	host := ""
 	if parsedURL != nil {
 		host = parsedURL.Host
 	}
 
-	payload, err := s.fetchFeed(ctx, feedURL)
+	payload, err := s.fetchFeed(ctx, UpstreamKindFeedURL)
 	if err != nil {
 		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, "feed", host, time.Since(start), err)
+		logDiscoveryRequest(route, UpstreamKindFeed, host, time.Since(start), err, CacheStatusUncached)
 		return
 	}
 
 	writeDiscoveryJSON(w, http.StatusOK, payload)
-	logDiscoveryRequest(route, "feed", host, time.Since(start), nil)
+	logDiscoveryRequest(route, UpstreamKindFeed, host, time.Since(start), nil, CacheStatusUncached)
 }
 
 func (s *discoveryService) fetchFeed(ctx context.Context, requestURL string) (parsedFeedResponse, error) {
@@ -165,7 +165,7 @@ func (s *discoveryService) fetchFeed(ctx context.Context, requestURL string) (pa
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, parsedURL.String(), nil)
 	if err != nil {
-		return parsedFeedResponse{}, fmt.Errorf("create feed upstream request: %w", err)
+		return parsedFeedResponse{}, fmt.Errorf("create UpstreamKindFeed upstream request: %w", err)
 	}
 	req.Header.Set("Accept", "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8")
 	req.Header.Set("Accept-Language", "en-US,en;q=0.9,zh-CN;q=0.8,zh;q=0.7")
@@ -178,7 +178,7 @@ func (s *discoveryService) fetchFeed(ctx context.Context, requestURL string) (pa
 		if ctx.Err() != nil {
 			return parsedFeedResponse{}, errDiscoveryTimeout
 		}
-		return parsedFeedResponse{}, fmt.Errorf("perform discovery feed request: %w", err)
+		return parsedFeedResponse{}, fmt.Errorf("perform discovery UpstreamKindFeed request: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -291,7 +291,7 @@ func decodeDiscoveryFeed(body io.Reader, limit int64) (parsedFeedResponse, error
 
 	var document rssDocument
 	if err := decoder.Decode(&document); err != nil {
-		slog.Warn("discovery feed XML decode failed", "snippet_prefix", string(data[:min(len(data), 100)]))
+		slog.Warn("discovery UpstreamKindFeed XML decode failed", "snippet_prefix", string(data[:min(len(data), 100)]))
 		return parsedFeedResponse{}, errDiscoveryXMLDecode
 	}
 

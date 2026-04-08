@@ -34,7 +34,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.24'
+          go-version: '1.26.2'
           cache-dependency-path: apps/cloud-api/go.sum
 
       - name: Build Cloud Linux binary
