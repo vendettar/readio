@@ -32,14 +32,20 @@ jobs:
         run: pnpm -C apps/cloud-ui build
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: '1.24'
+          cache-dependency-path: apps/cloud-api/go.sum
 
       - name: Build Cloud Linux binary
         run: |
           cd apps/cloud-api
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o "$GITHUB_WORKSPACE/readio-cloud" .
+
+      - name: Assemble release layout
+        run: |
+          mkdir -p dist
+          cp -R apps/cloud-ui/dist/. dist/
 
       - name: Create manifest.json
         run: |
@@ -59,6 +65,6 @@ jobs:
           name: cloud-release-${{ github.sha }}
           path: |
             readio-cloud
-            apps/cloud-ui/dist/
+            dist/
             manifest.json
           retention-days: 30
