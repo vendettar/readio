@@ -22,6 +22,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu'
+import { useNestedOverflowMenu } from '../ui/useNestedOverflowMenu'
 
 type Step = 'menu' | 'move' | 'confirm'
 
@@ -47,12 +48,9 @@ export function TrackOverflowMenu({
   disabled = false,
 }: TrackOverflowMenuProps) {
   const { t } = useTranslation()
-  const triggerRef = useRef<HTMLButtonElement>(null)
-  const [isMenuOpen, setIsMenuOpen] = useState(false)
   // Track if we are closing because of a rename to prevent focus restoration conflict
   const isClosingForRenameRef = useRef(false)
   const [isDeleting, setIsDeleting] = useState(false)
-  const [step, setStep] = useState<Step>('menu')
 
   // Refs for focus management
   const moveItemRef = useRef<HTMLDivElement>(null)
@@ -60,12 +58,15 @@ export function TrackOverflowMenu({
   const cancelButtonRef = useRef<HTMLButtonElement>(null)
   const moveBackButtonRef = useRef<HTMLButtonElement>(null)
   const prevStepRef = useRef<Step>('menu')
+  const { closeMenu, handleOpenChange, isMenuOpen, menuContentRef, setStep, step, triggerRef } =
+    useNestedOverflowMenu<Step>({
+      initialStep: 'menu',
+    })
 
   const handleMenuOpenChange = (open: boolean) => {
-    setIsMenuOpen(open)
+    handleOpenChange(open)
     if (!open) {
       setIsDeleting(false)
-      setStep('menu')
     }
   }
 
@@ -95,7 +96,7 @@ export function TrackOverflowMenu({
 
   const handleMove = (folderId: string | null) => {
     onMove(folderId)
-    setIsMenuOpen(false)
+    closeMenu()
   }
 
   return (
@@ -131,7 +132,7 @@ export function TrackOverflowMenu({
         }}
       >
         {/* Grid container - single cell overlay, all panels in same cell */}
-        <div className="grid [grid-template-areas:'panel'] p-0 gap-0">
+        <div ref={menuContentRef} className="grid [grid-template-areas:'panel'] p-0 gap-0">
           {/* Menu Panel */}
           <div
             className={cn(
@@ -147,7 +148,7 @@ export function TrackOverflowMenu({
               onSelect={(e) => {
                 e.preventDefault()
                 isClosingForRenameRef.current = true
-                setIsMenuOpen(false)
+                closeMenu()
               }}
             >
               <span>{t('trackRename')}</span>
@@ -173,11 +174,11 @@ export function TrackOverflowMenu({
                   e.preventDefault()
                   e.stopPropagation()
                   onTranscribe()
-                  setIsMenuOpen(false)
+                  closeMenu()
                 }}
               >
                 <span>
-                  {isRetranscribe ? t('asrRegenerateSubtitles') : t('asrGenerateSubtitles')}
+                  {isRetranscribe ? t('asrRegenerateTranscript') : t('asrGenerateTranscript')}
                 </span>
                 <FileText className="h-4 w-4" />
               </DropdownMenuItem>
@@ -315,7 +316,7 @@ export function TrackOverflowMenu({
                     setIsDeleting(true)
                     const ok = await onDeleteTrack()
                     if (ok) {
-                      setIsMenuOpen(false)
+                      closeMenu()
                     } else {
                       setIsDeleting(false)
                     }

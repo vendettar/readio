@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { type FileSubtitle, type PodcastDownload, TRACK_SOURCE } from '../../../lib/db/types'
+import { SUPPORTED_SUBTITLE_EXPORT_FORMATS } from '../../../lib/subtitles'
 import { DownloadTrackCard } from '../DownloadTrackCard'
 
 vi.mock('../../../lib/logger', () => ({
@@ -72,7 +73,7 @@ describe('DownloadTrackCard artwork play visibility wiring', () => {
     ).toBe('hover-or-touch')
   })
 
-  it('calls onExportSubtitle from subtitle row action', () => {
+  it('opens subtitle row export menu and routes the selected format', async () => {
     const onExportSubtitle = vi.fn()
     const subtitles: FileSubtitle[] = [
       {
@@ -98,8 +99,15 @@ describe('DownloadTrackCard artwork play visibility wiring', () => {
       />
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'subtitleVersionExport' }))
-    expect(onExportSubtitle).toHaveBeenCalledWith('track-1', 'sub-1')
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'exportOptions' }))
+    for (const format of SUPPORTED_SUBTITLE_EXPORT_FORMATS) {
+      expect(await screen.findByRole('menuitem', { name: format })).toBeTruthy()
+    }
+    fireEvent.click(screen.getByRole('menuitem', { name: 'vtt' }))
+    expect(onExportSubtitle).toHaveBeenCalledWith('track-1', 'sub-1', 'vtt')
+    await waitFor(() => {
+      expect(screen.queryByRole('menuitem', { name: 'srt' })).toBeNull()
+    })
   })
 
   it('calls onImportSubtitle from overflow menu action', async () => {
@@ -120,12 +128,73 @@ describe('DownloadTrackCard artwork play visibility wiring', () => {
     )
 
     fireEvent.pointerDown(screen.getByLabelText('ariaMoreActions'))
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'downloadsImportSubtitle' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'importTranscript' }))
 
     expect(onImportSubtitle).toHaveBeenCalledTimes(1)
   })
 
-  it('shows Generate subtitles in overflow menu when no subtitles exist', async () => {
+  it('closes the overflow menu on outside click without firing outside actions', async () => {
+    const outsideClick = vi.fn()
+    const onPlay = vi.fn()
+
+    render(
+      <div>
+        <button type="button" onClick={outsideClick}>
+          outside
+        </button>
+        <DownloadTrackCard
+          track={buildPodcastDownload()}
+          artworkBlob={null}
+          subtitles={[]}
+          onPlay={onPlay}
+          onRemove={vi.fn()}
+          onSetActiveSubtitle={vi.fn()}
+          onDeleteSubtitle={vi.fn()}
+          onExportSubtitle={vi.fn()}
+          onExportAudio={vi.fn()}
+          onImportSubtitle={vi.fn()}
+        />
+      </div>
+    )
+
+    fireEvent.pointerDown(screen.getByLabelText('ariaMoreActions'))
+    expect(await screen.findByRole('menuitem', { name: 'exportAudio' })).toBeDefined()
+
+    const outsideButton = screen.getByRole('button', { name: 'outside' })
+    fireEvent.pointerDown(outsideButton)
+
+    await waitFor(() => {
+      expect(screen.queryByRole('menuitem', { name: 'exportAudio' })).toBeNull()
+    })
+    expect(screen.queryByRole('menuitem', { name: 'importTranscript' })).toBeNull()
+    expect(outsideClick).not.toHaveBeenCalled()
+    expect(onPlay).not.toHaveBeenCalled()
+  })
+
+  it('routes download-card export audio action through the matching handler', async () => {
+    const onExportAudio = vi.fn()
+
+    render(
+      <DownloadTrackCard
+        track={buildPodcastDownload()}
+        artworkBlob={null}
+        subtitles={[]}
+        onPlay={vi.fn()}
+        onRemove={vi.fn()}
+        onSetActiveSubtitle={vi.fn()}
+        onDeleteSubtitle={vi.fn()}
+        onExportSubtitle={vi.fn()}
+        onExportAudio={onExportAudio}
+      />
+    )
+
+    fireEvent.pointerDown(screen.getByLabelText('ariaMoreActions'))
+    fireEvent.click(await screen.findByTestId('downloads-export-audio'))
+
+    expect(onExportAudio).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows Generate transcript in overflow menu when no subtitles exist', async () => {
     render(
       <DownloadTrackCard
         track={buildPodcastDownload()}
@@ -141,10 +210,10 @@ describe('DownloadTrackCard artwork play visibility wiring', () => {
     )
 
     fireEvent.pointerDown(screen.getByLabelText('ariaMoreActions'))
-    expect(await screen.findByRole('menuitem', { name: 'asrGenerateSubtitles' })).toBeDefined()
+    expect(await screen.findByRole('menuitem', { name: 'asrGenerateTranscript' })).toBeDefined()
   })
 
-  it('shows Regenerate subtitles in overflow menu when subtitles already exist', async () => {
+  it('shows Regenerate transcript in overflow menu when subtitles already exist', async () => {
     render(
       <DownloadTrackCard
         track={buildPodcastDownload()}
@@ -170,7 +239,7 @@ describe('DownloadTrackCard artwork play visibility wiring', () => {
     )
 
     fireEvent.pointerDown(screen.getByLabelText('ariaMoreActions'))
-    expect(await screen.findByRole('menuitem', { name: 'asrRegenerateSubtitles' })).toBeDefined()
+    expect(await screen.findByRole('menuitem', { name: 'asrRegenerateTranscript' })).toBeDefined()
   })
 
   it('renders provider and model badges on subtitle row when metadata exists', () => {
@@ -263,6 +332,36 @@ describe('DownloadTrackCard artwork play visibility wiring', () => {
 
     expect(screen.getByText('imported-caption.vtt')).toBeDefined()
     expect(screen.queryByText('Episode Title')).not.toBeNull()
+    expect(screen.getByText('subtitleVersionSourceManual')).toBeDefined()
+  })
+
+  it('renders built-in subtitle source badge on subtitle row', () => {
+    const subtitles: FileSubtitle[] = [
+      {
+        id: 'sub-1',
+        trackId: 'track-1',
+        subtitleId: 'subtitle-1',
+        name: 'Built-in transcript',
+        sourceKind: 'built_in',
+        createdAt: 1,
+        status: 'ready',
+      },
+    ]
+
+    render(
+      <DownloadTrackCard
+        track={buildPodcastDownload({ sourceEpisodeTitle: 'Episode Title' })}
+        artworkBlob={null}
+        subtitles={subtitles}
+        onPlay={vi.fn()}
+        onRemove={vi.fn()}
+        onSetActiveSubtitle={vi.fn()}
+        onDeleteSubtitle={vi.fn()}
+        onExportSubtitle={vi.fn()}
+      />
+    )
+
+    expect(screen.getByText('subtitleVersionSourceBuiltIn')).toBeDefined()
   })
 
   it('requires confirm before deleting subtitle row', async () => {

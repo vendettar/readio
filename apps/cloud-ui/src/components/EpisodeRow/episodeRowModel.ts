@@ -38,6 +38,7 @@ export interface EpisodeRowModel {
     podcastTitle: string
     feedUrl?: string
     audioUrl: string
+    transcriptUrl?: string
     artworkUrl?: string
     countryAtSave?: string
     providerPodcastId?: string
@@ -128,6 +129,7 @@ export function fromEpisode({
       podcastTitle: podcast.collectionName,
       feedUrl: podcast.feedUrl,
       audioUrl: episode.audioUrl,
+      transcriptUrl: episode.transcriptUrl,
       artworkUrl: episode.artworkUrl || podcast.artworkUrl600 || podcast.artworkUrl100,
       countryAtSave: routeCountry || undefined,
       providerPodcastId: podcast.providerPodcastId?.toString(),
@@ -218,6 +220,7 @@ export function fromFavorite({
           podcastTitle: favorite.podcastTitle || '',
           feedUrl: favorite.feedUrl,
           audioUrl: favorite.audioUrl,
+          transcriptUrl: favorite.transcriptUrl,
           artworkUrl: artworkSrc || favorite.artworkUrl,
           countryAtSave: favorite.countryAtSave || undefined,
           providerPodcastId: favorite.providerPodcastId,
@@ -264,6 +267,7 @@ export function fromPlaybackSession({
           podcastTitle: session.podcastTitle || '',
           feedUrl: session.podcastFeedUrl,
           audioUrl: session.audioUrl,
+          transcriptUrl: session.transcriptUrl,
           artworkUrl: session.artworkUrl,
           countryAtSave: session.countryAtSave || undefined,
           providerPodcastId: session.providerPodcastId,

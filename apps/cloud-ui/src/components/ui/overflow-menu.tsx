@@ -40,6 +40,8 @@ export interface OverflowMenuProps {
   iconSize?: number
   /** Custom icon component (overrides orientation) */
   icon?: React.ReactNode
+  /** Forwarded ref for trigger button */
+  triggerRef?: React.Ref<HTMLButtonElement>
 }
 
 export function OverflowMenu({
@@ -61,6 +63,7 @@ export function OverflowMenu({
   collisionPadding = 16,
   iconSize = 18,
   icon,
+  triggerRef,
 }: OverflowMenuProps) {
   const [internalOpen, setInternalOpen] = useState(false)
   const isControlled = controlledOpen !== undefined
@@ -79,6 +82,7 @@ export function OverflowMenu({
     <DropdownMenu open={isOpen} onOpenChange={handleOpenChange} modal={modal}>
       <DropdownMenuTrigger asChild>
         <Button
+          ref={triggerRef}
           variant={triggerVariant}
           size={triggerSize}
           disabled={disabled}

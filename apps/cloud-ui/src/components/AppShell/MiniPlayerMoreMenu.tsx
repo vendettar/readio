@@ -1,18 +1,19 @@
-import { FilePlus } from 'lucide-react'
+import { FilePlus, FileType } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
-  exportCurrentAudioForPlayback,
-  exportCurrentTranscriptAndAudioBundle,
   exportCurrentTranscriptForPlayback,
   importTranscriptForCurrentPlayback,
   resolveCurrentPlaybackExportContext,
+  type SubtitleExportFormat,
 } from '../../lib/player/playbackExport'
+import { SUPPORTED_SUBTITLE_EXPORT_FORMATS } from '../../lib/subtitles'
 import { cn } from '../../lib/utils'
 import { usePlayerStore } from '../../store/playerStore'
 import { useTranscriptStore } from '../../store/transcriptStore'
 import { DropdownMenuItem, DropdownMenuSeparator } from '../ui/dropdown-menu'
 import { OverflowMenu } from '../ui/overflow-menu'
+import { useNestedOverflowMenu } from '../ui/useNestedOverflowMenu'
 
 const TRANSCRIPT_IMPORT_ACCEPT = '.json,.srt,.vtt,application/json,text/plain,text/vtt'
 
@@ -30,22 +31,17 @@ export interface MiniPlayerMoreMenuImportAction {
 export interface MiniPlayerMoreMenuController {
   triggerDisabled: boolean
   importTranscript: MiniPlayerMoreMenuImportAction
-  exportTranscript: MiniPlayerMoreMenuAction
-  exportAudio: MiniPlayerMoreMenuAction
-  exportAll: MiniPlayerMoreMenuAction
+  exportTranscriptDisabled: boolean
+  exportTranscript: Record<SubtitleExportFormat, MiniPlayerMoreMenuAction>
 }
 
 type MiniPlayerMoreMenuStep = 'menu' | 'export'
 
 type ExportAvailabilityState = {
-  exportAudioDisabled: boolean
-  exportAllDisabled: boolean
   exportTranscriptDisabled: boolean
 }
 
 const DEFAULT_EXPORT_AVAILABILITY: ExportAvailabilityState = {
-  exportAudioDisabled: true,
-  exportAllDisabled: true,
   exportTranscriptDisabled: true,
 }
 
@@ -82,8 +78,6 @@ export function useMiniPlayerMoreMenuController(): MiniPlayerMoreMenuController 
 
         setAvailability({
           exportTranscriptDisabled: !context?.canExportTranscript,
-          exportAudioDisabled: !context?.canExportAudio,
-          exportAllDisabled: !context?.canExportBundle,
         })
       })
       .catch(() => {
@@ -104,17 +98,16 @@ export function useMiniPlayerMoreMenuController(): MiniPlayerMoreMenuController 
       disabled: !hasActiveTrack,
       onFileSelected: (file) => void importTranscriptForCurrentPlayback(file),
     },
+    exportTranscriptDisabled: !hasActiveTrack || availability.exportTranscriptDisabled,
     exportTranscript: {
-      disabled: !hasActiveTrack || availability.exportTranscriptDisabled,
-      onSelect: () => void exportCurrentTranscriptForPlayback(),
-    },
-    exportAudio: {
-      disabled: !hasActiveTrack || availability.exportAudioDisabled,
-      onSelect: () => void exportCurrentAudioForPlayback(),
-    },
-    exportAll: {
-      disabled: !hasActiveTrack || availability.exportAllDisabled,
-      onSelect: () => void exportCurrentTranscriptAndAudioBundle(),
+      srt: {
+        disabled: !hasActiveTrack || availability.exportTranscriptDisabled,
+        onSelect: () => void exportCurrentTranscriptForPlayback('srt'),
+      },
+      vtt: {
+        disabled: !hasActiveTrack || availability.exportTranscriptDisabled,
+        onSelect: () => void exportCurrentTranscriptForPlayback('vtt'),
+      },
     },
   }
 }
@@ -122,27 +115,21 @@ export function useMiniPlayerMoreMenuController(): MiniPlayerMoreMenuController 
 export function MiniPlayerMoreMenu({ controller }: { controller: MiniPlayerMoreMenuController }) {
   const { t } = useTranslation()
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const [isMenuOpen, setIsMenuOpen] = useState(false)
-  const [step, setStep] = useState<MiniPlayerMoreMenuStep>('menu')
-
-  const handleOpenChange = (open: boolean) => {
-    setIsMenuOpen(open)
-    if (!open) {
-      setStep('menu')
-    }
-  }
+  const { closeMenu, handleOpenChange, isMenuOpen, menuContentRef, setStep, step, triggerRef } =
+    useNestedOverflowMenu<MiniPlayerMoreMenuStep>({
+      initialStep: 'menu',
+      outsideInteractionBehavior: 'dismiss-and-allow-click-through',
+    })
 
   const runAction = (action: MiniPlayerMoreMenuAction) => {
     if (action.disabled) return
-    setIsMenuOpen(false)
-    setStep('menu')
+    closeMenu()
     void action.onSelect()
   }
 
   const triggerImportPicker = () => {
     if (controller.importTranscript.disabled) return
-    setIsMenuOpen(false)
-    setStep('menu')
+    closeMenu()
     window.setTimeout(() => {
       fileInputRef.current?.click()
     }, 0)
@@ -170,14 +157,16 @@ export function MiniPlayerMoreMenu({ controller }: { controller: MiniPlayerMoreM
         onOpenChange={handleOpenChange}
         disabled={controller.triggerDisabled}
         triggerAriaLabel={t('miniPlayerMore')}
+        triggerRef={triggerRef}
         iconOrientation="vertical"
         stopPropagation
         align="end"
         contentClassName="w-52 p-0 rounded-xl shadow-2xl overflow-hidden"
         triggerClassName="h-8 w-8 text-muted-foreground hover:text-foreground"
       >
-        <div className="grid [grid-template-areas:'panel'] p-0 gap-0">
+        <div ref={menuContentRef} className="grid [grid-template-areas:'panel'] p-0 gap-0">
           <div
+            data-testid="mini-player-menu-panel"
             className={cn(
               '[grid-area:panel] overflow-hidden transition-all duration-150 ease-out',
               step === 'menu'
@@ -203,18 +192,21 @@ export function MiniPlayerMoreMenu({ controller }: { controller: MiniPlayerMoreM
 
             <DropdownMenuItem
               data-testid="mini-player-export-options"
+              disabled={controller.exportTranscriptDisabled}
               onSelect={(event) => {
                 event.preventDefault()
+                if (controller.exportTranscriptDisabled) return
                 setStep('export')
               }}
               className="cursor-pointer whitespace-nowrap justify-between"
             >
-              <span>{t('exportOptions')}</span>
+              <span>{`${t('exportTranscript')}...`}</span>
               <span aria-hidden="true">›</span>
             </DropdownMenuItem>
           </div>
 
           <div
+            data-testid="mini-player-export-panel"
             className={cn(
               '[grid-area:panel] overflow-hidden transition-all duration-150 ease-out',
               step === 'export'
@@ -232,46 +224,26 @@ export function MiniPlayerMoreMenu({ controller }: { controller: MiniPlayerMoreM
               className="cursor-pointer whitespace-nowrap"
             >
               <span aria-hidden="true">‹</span>
-              <span>{t('exportOptions')}</span>
+              <span>{`${t('exportTranscript')}...`}</span>
             </DropdownMenuItem>
 
             <DropdownMenuSeparator className="m-0" />
 
-            <DropdownMenuItem
-              data-testid="mini-player-export-transcript"
-              disabled={controller.exportTranscript.disabled}
-              onSelect={(event) => {
-                event.preventDefault()
-                runAction(controller.exportTranscript)
-              }}
-              className="cursor-pointer whitespace-nowrap"
-            >
-              <span>{t('exportTranscript')}</span>
-            </DropdownMenuItem>
-
-            <DropdownMenuItem
-              data-testid="mini-player-export-audio"
-              disabled={controller.exportAudio.disabled}
-              onSelect={(event) => {
-                event.preventDefault()
-                runAction(controller.exportAudio)
-              }}
-              className="cursor-pointer whitespace-nowrap"
-            >
-              <span>{t('exportAudio')}</span>
-            </DropdownMenuItem>
-
-            <DropdownMenuItem
-              data-testid="mini-player-export-all"
-              disabled={controller.exportAll.disabled}
-              onSelect={(event) => {
-                event.preventDefault()
-                runAction(controller.exportAll)
-              }}
-              className="cursor-pointer whitespace-nowrap"
-            >
-              <span>{t('exportAll')}</span>
-            </DropdownMenuItem>
+            {SUPPORTED_SUBTITLE_EXPORT_FORMATS.map((format) => (
+              <DropdownMenuItem
+                key={format}
+                data-testid={`mini-player-export-transcript-${format}`}
+                disabled={controller.exportTranscript[format].disabled}
+                onSelect={(event) => {
+                  event.preventDefault()
+                  runAction(controller.exportTranscript[format])
+                }}
+                className="cursor-pointer whitespace-nowrap justify-between"
+              >
+                <span>{format}</span>
+                <FileType size={14} />
+              </DropdownMenuItem>
+            ))}
           </div>
         </div>
       </OverflowMenu>

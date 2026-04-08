@@ -19,8 +19,30 @@ import { isPodcastDownloadTrack, TRACK_SOURCE } from '../db/types'
 import type { FileSubtitle, PodcastDownload, SubtitleText } from '../dexieDb'
 import { DB, db } from '../dexieDb'
 import { log, error as logError } from '../logger'
-import { cuesToSrt, cuesToVtt, parseSubtitles } from '../subtitles'
+import {
+  getSubtitleExportMimeType,
+  parseSubtitles,
+  type SubtitleExportFormat,
+  serializeSubtitleExport,
+} from '../subtitles'
 import { buildPrioritizedSubtitleCandidates } from './SubtitleCandidateBuilder'
+
+type DownloadSubtitleListener = (trackId: string) => void
+
+const downloadSubtitleListeners = new Set<DownloadSubtitleListener>()
+
+export function subscribeToDownloadSubtitles(listener: DownloadSubtitleListener): () => void {
+  downloadSubtitleListeners.add(listener)
+  return () => {
+    downloadSubtitleListeners.delete(listener)
+  }
+}
+
+export function emitDownloadSubtitleChange(trackId: string): void {
+  for (const listener of downloadSubtitleListeners) {
+    listener(trackId)
+  }
+}
 
 // ─── Summary Types ───────────────────────────────────────────────────
 
@@ -83,6 +105,12 @@ export type UpsertAsrSubtitleReason =
 export interface UpsertAsrSubtitleResult {
   ok: boolean
   reason: UpsertAsrSubtitleReason
+  fileSubtitleId?: string
+}
+
+export interface UpsertBuiltInSubtitleResult {
+  ok: boolean
+  reason: 'track_not_found' | 'created' | 'replaced'
   fileSubtitleId?: string
 }
 
@@ -195,7 +223,7 @@ export const DownloadsRepository = {
     subtitleId: string,
     isManual: boolean
   ): Promise<boolean> {
-    return db.transaction('rw', [db.tracks, db.local_subtitles], async () => {
+    const updated = await db.transaction('rw', [db.tracks, db.local_subtitles], async () => {
       const download = await db.tracks.get(trackId)
       if (!isPodcastDownloadTrack(download)) {
         logError('[DownloadsRepo] setActive: download not found or wrong type', trackId)
@@ -228,6 +256,10 @@ export const DownloadsRepository = {
       log('[DownloadsRepo] setActive OK', { trackId, subtitleId, isManual })
       return true
     })
+    if (updated) {
+      emitDownloadSubtitleChange(trackId)
+    }
+    return updated
   },
 
   /**
@@ -260,6 +292,7 @@ export const DownloadsRepository = {
     }
 
     log('[DownloadsRepo] deleteVersion OK', { trackId, fileSubtitleId })
+    emitDownloadSubtitleChange(trackId)
     return true
   },
 
@@ -276,29 +309,116 @@ export const DownloadsRepository = {
       return { ok: false, reason: IMPORT_SUBTITLE_REASON.INVALID_SUBTITLE_CONTENT }
     }
 
-    return db.transaction('rw', [db.tracks, db.local_subtitles, db.subtitles], async () => {
-      const download = await db.tracks.get(trackId)
-      if (!isPodcastDownloadTrack(download)) {
-        logError('[DownloadsRepo] importSubtitleVersion: download not found or wrong type', trackId)
-        return { ok: false, reason: IMPORT_SUBTITLE_REASON.TRACK_NOT_FOUND }
+    const result = await db.transaction(
+      'rw',
+      [db.tracks, db.local_subtitles, db.subtitles],
+      async () => {
+        const download = await db.tracks.get(trackId)
+        if (!isPodcastDownloadTrack(download)) {
+          logError(
+            '[DownloadsRepo] importSubtitleVersion: download not found or wrong type',
+            trackId
+          )
+          return { ok: false, reason: IMPORT_SUBTITLE_REASON.TRACK_NOT_FOUND }
+        }
+
+        const existing = await db.local_subtitles.where('trackId').equals(trackId).toArray()
+        const existingNames = existing.map((sub) => sub.name)
+        const versionName = resolveDuplicateName(input.filename, existingNames)
+
+        const subtitleId = await DB.addSubtitle(cues, versionName)
+        const fileSubtitleId = await DB.addFileSubtitle({
+          trackId,
+          name: versionName,
+          subtitleId,
+          sourceKind: 'manual_upload',
+          status: 'ready',
+          createdAt: Date.now(),
+        })
+
+        return { ok: true, reason: IMPORT_SUBTITLE_REASON.IMPORTED, fileSubtitleId }
       }
+    )
+    if (result.ok) {
+      emitDownloadSubtitleChange(trackId)
+    }
+    return result
+  },
 
-      const existing = await db.local_subtitles.where('trackId').equals(trackId).toArray()
-      const existingNames = existing.map((sub) => sub.name)
-      const versionName = resolveDuplicateName(input.filename, existingNames)
+  async upsertBuiltInSubtitleVersion(input: {
+    trackId: string
+    cues: ASRCue[]
+    subtitleName: string
+    subtitleFilename: string
+    transcriptUrl: string
+    setActive?: boolean
+  }): Promise<UpsertBuiltInSubtitleResult> {
+    const result = await db.transaction(
+      'rw',
+      [db.tracks, db.local_subtitles, db.subtitles],
+      async (): Promise<UpsertBuiltInSubtitleResult> => {
+        const track = await db.tracks.get(input.trackId)
+        if (!isPodcastDownloadTrack(track)) {
+          return { ok: false, reason: 'track_not_found' as const }
+        }
 
-      const subtitleId = await DB.addSubtitle(cues, versionName)
-      const fileSubtitleId = await DB.addFileSubtitle({
-        trackId,
-        name: versionName,
-        subtitleId,
-        sourceKind: 'manual_upload',
-        status: 'ready',
-        createdAt: Date.now(),
-      })
+        const now = Date.now()
+        const existingBuiltIn = (
+          await db.local_subtitles.where('trackId').equals(input.trackId).toArray()
+        )
+          .filter((version) => version.sourceKind === 'built_in')
+          .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0]
 
-      return { ok: true, reason: IMPORT_SUBTITLE_REASON.IMPORTED, fileSubtitleId }
-    })
+        const subtitleId = await DB.addSubtitle(input.cues, input.subtitleFilename)
+
+        if (existingBuiltIn) {
+          const oldSubtitleId = existingBuiltIn.subtitleId
+
+          await db.local_subtitles.update(existingBuiltIn.id, {
+            subtitleId,
+            name: input.subtitleName,
+            sourceKind: 'built_in',
+            createdAt: now,
+            status: 'ready',
+          })
+
+          const oldRefCount = await db.local_subtitles
+            .where('subtitleId')
+            .equals(oldSubtitleId)
+            .count()
+          if (oldRefCount === 0) {
+            await db.subtitles.delete(oldSubtitleId)
+          }
+
+          await db.tracks.update(input.trackId, {
+            transcriptUrl: input.transcriptUrl,
+            ...(input.setActive !== false ? { activeSubtitleId: existingBuiltIn.id } : {}),
+          } as Partial<PodcastDownload>)
+
+          return { ok: true, reason: 'replaced' as const, fileSubtitleId: existingBuiltIn.id }
+        }
+
+        const fileSubtitleId = await DB.addFileSubtitle({
+          trackId: input.trackId,
+          subtitleId,
+          name: input.subtitleName,
+          sourceKind: 'built_in',
+          createdAt: now,
+          status: 'ready',
+        })
+
+        await db.tracks.update(input.trackId, {
+          transcriptUrl: input.transcriptUrl,
+          ...(input.setActive !== false ? { activeSubtitleId: fileSubtitleId } : {}),
+        } as Partial<PodcastDownload>)
+
+        return { ok: true, reason: 'created' as const, fileSubtitleId }
+      }
+    )
+    if (result.ok) {
+      emitDownloadSubtitleChange(input.trackId)
+    }
+    return result
   },
 
   async upsertAsrSubtitleVersion(input: {
@@ -311,33 +431,76 @@ export const DownloadsRepository = {
     fingerprint?: string
     setActive?: boolean
   }): Promise<UpsertAsrSubtitleResult> {
-    return db.transaction('rw', [db.tracks, db.local_subtitles, db.subtitles], async () => {
-      const track = await db.tracks.get(input.trackId)
-      if (!isPodcastDownloadTrack(track)) {
-        return { ok: false, reason: UPSERT_ASR_SUBTITLE_REASON.TRACK_NOT_FOUND }
-      }
+    const result = await db.transaction(
+      'rw',
+      [db.tracks, db.local_subtitles, db.subtitles],
+      async () => {
+        const track = await db.tracks.get(input.trackId)
+        if (!isPodcastDownloadTrack(track)) {
+          return { ok: false, reason: UPSERT_ASR_SUBTITLE_REASON.TRACK_NOT_FOUND }
+        }
 
-      const providerKey = normalizeProviderModelForMatch(input.provider)
-      const modelKey = normalizeProviderModelForMatch(input.model)
-      const now = Date.now()
+        const providerKey = normalizeProviderModelForMatch(input.provider)
+        const modelKey = normalizeProviderModelForMatch(input.model)
+        const now = Date.now()
 
-      const allVersions = await db.local_subtitles.where('trackId').equals(input.trackId).toArray()
-      const matchedVersion = [...allVersions]
-        .filter((version) => {
-          if (version.sourceKind === 'manual_upload') return false
-          return (
-            normalizeProviderModelForMatch(version.provider) === providerKey &&
-            normalizeProviderModelForMatch(version.model) === modelKey
-          )
-        })
-        .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0]
+        const allVersions = await db.local_subtitles
+          .where('trackId')
+          .equals(input.trackId)
+          .toArray()
+        const matchedVersion = [...allVersions]
+          .filter((version) => {
+            if (version.sourceKind === 'manual_upload') return false
+            return (
+              normalizeProviderModelForMatch(version.provider) === providerKey &&
+              normalizeProviderModelForMatch(version.model) === modelKey
+            )
+          })
+          .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0]
 
-      const subtitleId = await DB.addSubtitle(input.cues, input.subtitleFilename, input.fingerprint)
+        const subtitleId = await DB.addSubtitle(
+          input.cues,
+          input.subtitleFilename,
+          input.fingerprint
+        )
 
-      if (matchedVersion) {
-        const oldSubtitleId = matchedVersion.subtitleId
+        if (matchedVersion) {
+          const oldSubtitleId = matchedVersion.subtitleId
 
-        await db.local_subtitles.update(matchedVersion.id, {
+          await db.local_subtitles.update(matchedVersion.id, {
+            subtitleId,
+            name: input.subtitleName,
+            sourceKind: 'asr_online',
+            provider: input.provider,
+            model: input.model,
+            createdAt: now,
+            status: 'ready',
+          })
+
+          const oldRefCount = await db.local_subtitles
+            .where('subtitleId')
+            .equals(oldSubtitleId)
+            .count()
+          if (oldRefCount === 0) {
+            await db.subtitles.delete(oldSubtitleId)
+          }
+
+          if (input.setActive !== false) {
+            await db.tracks.update(input.trackId, {
+              activeSubtitleId: matchedVersion.id,
+              manualPinnedAt: now,
+            } as Partial<PodcastDownload>)
+          }
+
+          return {
+            ok: true,
+            reason: UPSERT_ASR_SUBTITLE_REASON.REPLACED,
+            fileSubtitleId: matchedVersion.id,
+          }
+        }
+
+        const fileSubtitleId = await DB.addFileSubtitle({
+          trackId: input.trackId,
           subtitleId,
           name: input.subtitleName,
           sourceKind: 'asr_online',
@@ -347,48 +510,20 @@ export const DownloadsRepository = {
           status: 'ready',
         })
 
-        const oldRefCount = await db.local_subtitles
-          .where('subtitleId')
-          .equals(oldSubtitleId)
-          .count()
-        if (oldRefCount === 0) {
-          await db.subtitles.delete(oldSubtitleId)
-        }
-
         if (input.setActive !== false) {
           await db.tracks.update(input.trackId, {
-            activeSubtitleId: matchedVersion.id,
+            activeSubtitleId: fileSubtitleId,
             manualPinnedAt: now,
           } as Partial<PodcastDownload>)
         }
 
-        return {
-          ok: true,
-          reason: UPSERT_ASR_SUBTITLE_REASON.REPLACED,
-          fileSubtitleId: matchedVersion.id,
-        }
+        return { ok: true, reason: UPSERT_ASR_SUBTITLE_REASON.CREATED, fileSubtitleId }
       }
-
-      const fileSubtitleId = await DB.addFileSubtitle({
-        trackId: input.trackId,
-        subtitleId,
-        name: input.subtitleName,
-        sourceKind: 'asr_online',
-        provider: input.provider,
-        model: input.model,
-        createdAt: now,
-        status: 'ready',
-      })
-
-      if (input.setActive !== false) {
-        await db.tracks.update(input.trackId, {
-          activeSubtitleId: fileSubtitleId,
-          manualPinnedAt: now,
-        } as Partial<PodcastDownload>)
-      }
-
-      return { ok: true, reason: UPSERT_ASR_SUBTITLE_REASON.CREATED, fileSubtitleId }
-    })
+    )
+    if (result.ok) {
+      emitDownloadSubtitleChange(input.trackId)
+    }
+    return result
   },
 
   async getTrackSnapshot(trackId: string): Promise<PodcastDownload | undefined> {
@@ -461,7 +596,8 @@ export const DownloadsRepository = {
   async exportSubtitleVersion(
     trackId: string,
     fileSubtitleId: string,
-    episodeTitle: string
+    episodeTitle: string,
+    format?: SubtitleExportFormat
   ): Promise<ExportResult> {
     const download = await db.tracks.get(trackId)
     if (!isPodcastDownloadTrack(download)) {
@@ -478,8 +614,8 @@ export const DownloadsRepository = {
       return { ok: false }
     }
 
-    const exportData = buildSubtitleExportData(fileSub, subtitle, episodeTitle)
-    const blob = new Blob([exportData.content], { type: 'text/plain;charset=utf-8' })
+    const exportData = buildSubtitleExportData(fileSub, subtitle, episodeTitle, format)
+    const blob = new Blob([exportData.content], { type: exportData.mimeType })
 
     return { ok: true, filename: exportData.filename, blob }
   },
@@ -490,7 +626,8 @@ export const DownloadsRepository = {
    */
   async exportActiveTranscriptVersion(
     trackId: string,
-    episodeTitle: string
+    episodeTitle: string,
+    format?: SubtitleExportFormat
   ): Promise<ExportResult> {
     const download = await db.tracks.get(trackId)
     if (!isPodcastDownloadTrack(download)) {
@@ -502,8 +639,13 @@ export const DownloadsRepository = {
       return { ok: false }
     }
 
-    const exportData = buildSubtitleExportData(active.fileSub, active.subtitle, episodeTitle)
-    const blob = new Blob([exportData.content], { type: 'text/plain;charset=utf-8' })
+    const exportData = buildSubtitleExportData(
+      active.fileSub,
+      active.subtitle,
+      episodeTitle,
+      format
+    )
+    const blob = new Blob([exportData.content], { type: exportData.mimeType })
     return { ok: true, filename: exportData.filename, blob }
   },
 
@@ -767,18 +909,18 @@ function resolveDuplicateName(name: string, existingNames: string[]): string {
   return finalName
 }
 
-type SubtitleExportFormat = 'srt' | 'vtt'
-
 function buildSubtitleExportData(
   fileSub: FileSubtitle,
   subtitle: SubtitleText,
-  episodeTitle: string
-): { filename: string; content: string } {
+  episodeTitle: string,
+  formatOverride?: SubtitleExportFormat
+): { filename: string; content: string; mimeType: string } {
   const originalFilename = resolveSubtitleExportFilename(fileSub, episodeTitle)
-  const format = resolveSubtitleExportFormat(fileSub, originalFilename)
+  const format = formatOverride ?? resolveSubtitleExportFormat(fileSub, originalFilename)
   return {
     filename: normalizeExportFilenameExtension(originalFilename, format),
-    content: format === 'vtt' ? cuesToVtt(subtitle.cues) : cuesToSrt(subtitle.cues),
+    content: serializeSubtitleExport(subtitle.cues, format),
+    mimeType: getSubtitleExportMimeType(format),
   }
 }
 

@@ -48,6 +48,7 @@ export const EDITOR_PICKS_BY_REGION = {
   us: [
     '1200361736', // The Daily - NYT's flagship daily news podcast
     '201671138', // This American Life
+    '1065559535', // Modern Love
     '1521578868', // SmartLess - Comedy interview show (Jason Bateman, Will Arnett, Sean Hayes)
     '278981407', // Stuff You Should Know - Educational entertainment
     '1545953110', // Huberman Lab - Neuroscience and health

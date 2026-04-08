@@ -27,14 +27,38 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: License Check
+        run: pnpm --filter @readio/lite exec license-checker-rseidelsohn --summary --failOn 'GPL;AGPL;LGPL'
+
+      - name: Install Ripgrep for DB Guard
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+
       - name: Lint (Lite)
         run: pnpm --filter @readio/lite lint
+
+      - name: DB Access Guard
+        run: pnpm --filter @readio/lite lint:db-guard
+
+      - name: I18n Coverage Audit
+        run: pnpm --filter @readio/lite i18n:check
+
+      - name: Selector Optimization Audit
+        run: pnpm --filter @readio/lite lint:selectors
+
+      - name: Route Country Guard
+        run: pnpm --filter @readio/lite lint:route-guards
+
+      - name: Legacy Podcast Route Ban
+        run: pnpm --filter @readio/lite lint:legacy-route-ban
 
       - name: Typecheck (Lite)
         run: pnpm --filter @readio/lite typecheck
 
       - name: Build (Lite)
         run: pnpm --filter @readio/lite build
+
+      - name: Bundle Size Budget
+        run: pnpm --filter @readio/lite check-size
 
   # ─── Cloud UI ───────────────────────────────────────────────────────
   cloud-ui:
@@ -72,14 +96,14 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: '1.24'
 
       - name: Go Lint (golangci-lint)
         uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20
         with:
-          version: v1.64.8
+          version: v2.11.4
           working-directory: apps/cloud-api
           args: --timeout=5m
 

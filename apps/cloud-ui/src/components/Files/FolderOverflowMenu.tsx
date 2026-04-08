@@ -12,6 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu'
+import { useNestedOverflowMenu } from '../ui/useNestedOverflowMenu'
 
 interface FolderOverflowMenuProps {
   isPinned: boolean
@@ -33,24 +34,24 @@ export function FolderOverflowMenu({
   disabled = false,
 }: FolderOverflowMenuProps) {
   const { t } = useTranslation()
-  const triggerRef = useRef<HTMLButtonElement>(null)
-  const [isMenuOpen, setIsMenuOpen] = useState(false)
   // Track if we are closing because of a rename to prevent focus restoration conflict
   const isClosingForRenameRef = useRef(false)
   const [isDeleting, setIsDeleting] = useState(false)
-  const [step, setStep] = useState<'menu' | 'confirm'>('menu')
 
   // Refs for focus management
   const deleteItemRef = useRef<HTMLDivElement>(null)
   const cancelButtonRef = useRef<HTMLButtonElement>(null)
   const prevStepRef = useRef<'menu' | 'confirm'>('menu')
+  const { closeMenu, handleOpenChange, isMenuOpen, menuContentRef, setStep, step, triggerRef } =
+    useNestedOverflowMenu<'menu' | 'confirm'>({
+      initialStep: 'menu',
+    })
 
   const handleMenuOpenChange = (open: boolean) => {
-    setIsMenuOpen(open)
+    handleOpenChange(open)
     onOpenChange?.(open)
     if (!open) {
       setIsDeleting(false)
-      setStep('menu')
     }
   }
 
@@ -107,7 +108,7 @@ export function FolderOverflowMenu({
         }}
       >
         {/* Grid container - single cell overlay, both panels in same cell */}
-        <div className="grid [grid-template-areas:'panel'] p-0 gap-0">
+        <div ref={menuContentRef} className="grid [grid-template-areas:'panel'] p-0 gap-0">
           {/* Menu Panel */}
           <div
             className={cn(
@@ -127,7 +128,8 @@ export function FolderOverflowMenu({
                 } else {
                   onPin()
                 }
-                handleMenuOpenChange(false)
+                closeMenu()
+                onOpenChange?.(false)
               }}
             >
               <span>{isPinned ? t('folderUnpin') : t('folderPinToTop')}</span>
@@ -139,7 +141,8 @@ export function FolderOverflowMenu({
               onSelect={(e) => {
                 e.preventDefault()
                 isClosingForRenameRef.current = true
-                handleMenuOpenChange(false)
+                closeMenu()
+                onOpenChange?.(false)
               }}
             >
               <span>{t('folderRename')}</span>
@@ -205,7 +208,8 @@ export function FolderOverflowMenu({
                     setIsDeleting(true)
                     const ok = await onDelete()
                     if (ok) {
-                      handleMenuOpenChange(false)
+                      closeMenu()
+                      onOpenChange?.(false)
                     } else {
                       setIsDeleting(false)
                     }

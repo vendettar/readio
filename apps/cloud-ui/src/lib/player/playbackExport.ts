@@ -17,7 +17,15 @@ import { DownloadsRepository } from '../repositories/DownloadsRepository'
 import { FilesRepository } from '../repositories/FilesRepository'
 import { normalizeCountryParam } from '../routes/podcastRoutes'
 import { getAppConfig } from '../runtimeConfig'
-import { parseSubtitles } from '../subtitles'
+import {
+  getSubtitleExportMimeType,
+  parseSubtitles,
+  type SubtitleExportFormat,
+  serializeSubtitleExport,
+} from '../subtitles'
+
+export type { SubtitleExportFormat } from '../subtitles'
+
 import {
   type PlaybackIdentitySnapshot,
   resolveCurrentPlaybackIdentity,
@@ -241,12 +249,14 @@ export async function importTranscriptForCurrentPlayback(
   return result
 }
 
-export async function exportCurrentTranscriptForPlayback(): Promise<ExportActionResult> {
+export async function exportCurrentTranscriptForPlayback(
+  format: SubtitleExportFormat = 'srt'
+): Promise<ExportActionResult> {
   const context = await resolveCurrentPlaybackExportContext()
   if (!context) return { ok: false, reason: 'no_playback_identity' }
   if (!context.canExportTranscript) return { ok: false, reason: 'no_transcript' }
 
-  const asset = await resolveTranscriptExportAsset(context)
+  const asset = await resolveTranscriptExportAsset(context, format)
   if (!asset) {
     return {
       ok: false,
@@ -303,7 +313,7 @@ export async function exportCurrentTranscriptAndAudioBundle(): Promise<ExportAct
   if (!context.canExportAudio) return { ok: false, reason: 'no_audio' }
 
   const [transcriptAsset, audioAsset] = await Promise.all([
-    resolveTranscriptExportAsset(context),
+    resolveTranscriptExportAsset(context, 'srt'),
     resolveAudioExportAsset(context),
   ])
 
@@ -344,12 +354,14 @@ export async function exportCurrentTranscriptAndAudioBundle(): Promise<ExportAct
 }
 
 async function resolveTranscriptExportAsset(
-  context: PlaybackExportContext
+  context: PlaybackExportContext,
+  format: SubtitleExportFormat
 ): Promise<ExportAsset | null> {
   if (context.trackKind === 'user-upload' && context.identity.localTrackId) {
     const result = await FilesRepository.exportActiveTranscriptVersion(
       context.identity.localTrackId,
-      context.identity.audioTitle
+      context.identity.audioTitle,
+      format
     )
     return result.ok && result.filename && result.blob
       ? { filename: result.filename, blob: result.blob }
@@ -359,7 +371,8 @@ async function resolveTranscriptExportAsset(
   if (context.trackKind === 'podcast-download' && context.identity.localTrackId) {
     const result = await DownloadsRepository.exportActiveTranscriptVersion(
       context.identity.localTrackId,
-      context.identity.audioTitle
+      context.identity.audioTitle,
+      format
     )
     return result.ok && result.filename && result.blob
       ? { filename: result.filename, blob: result.blob }
@@ -371,6 +384,7 @@ async function resolveTranscriptExportAsset(
     return buildTranscriptBlobAsset({
       cues: loadedSubtitles,
       fileNameBase: resolvePlaybackExportBaseName(context.identity),
+      format,
     })
   }
 
@@ -381,6 +395,7 @@ async function resolveTranscriptExportAsset(
       return buildTranscriptBlobAsset({
         cues: cached.cues,
         fileNameBase: resolvePlaybackExportBaseName(context.identity),
+        format,
       })
     }
   }
@@ -391,6 +406,7 @@ async function resolveTranscriptExportAsset(
       return buildTranscriptBlobAsset({
         cues: loaded.cues,
         fileNameBase: resolvePlaybackExportBaseName(context.identity),
+        format,
       })
     }
   }
@@ -530,23 +546,18 @@ async function readFileAsText(file: File): Promise<string> {
   })
 }
 
-function buildTranscriptBlobAsset(input: { cues: ASRCue[]; fileNameBase: string }): ExportAsset {
-  const filename = `${input.fileNameBase}.transcript.srt`
+function buildTranscriptBlobAsset(input: {
+  cues: ASRCue[]
+  fileNameBase: string
+  format: SubtitleExportFormat
+}): ExportAsset {
+  const filename = `${input.fileNameBase}.transcript.${input.format}`
   return {
     filename,
-    blob: new Blob([cuesToSrt(input.cues)], { type: 'text/plain;charset=utf-8' }),
+    blob: new Blob([serializeSubtitleExport(input.cues, input.format)], {
+      type: getSubtitleExportMimeType(input.format),
+    }),
   }
-}
-
-function cuesToSrt(cues: ASRCue[]): string {
-  const parts: string[] = []
-  cues.forEach((cue, index) => {
-    parts.push(String(index + 1))
-    parts.push(`${formatCueTime(cue.start)} --> ${formatCueTime(cue.end)}`)
-    parts.push(cue.text)
-    parts.push('')
-  })
-  return parts.join('\n')
 }
 
 async function blobToZipBytes(blob: Blob): Promise<Uint8Array> {
@@ -560,16 +571,6 @@ async function blobToZipBytes(blob: Blob): Promise<Uint8Array> {
     reader.onerror = () => reject(reader.error)
     reader.readAsArrayBuffer(blob)
   })
-}
-
-function formatCueTime(time: number): string {
-  const totalMillis = Math.max(0, Math.round(time * 1000))
-  const hours = Math.floor(totalMillis / 3_600_000)
-  const minutes = Math.floor((totalMillis % 3_600_000) / 60_000)
-  const seconds = Math.floor((totalMillis % 60_000) / 1000)
-  const millis = totalMillis % 1000
-  const pad = (value: number, length: number) => String(value).padStart(length, '0')
-  return `${pad(hours, 2)}:${pad(minutes, 2)}:${pad(seconds, 2)},${pad(millis, 3)}`
 }
 
 function buildSimpleZip(files: ZipEntry[]): Blob {

@@ -15,7 +15,7 @@ import type { ASRCue } from './asr/types'
 import { getAsrCredentialKey, getCredential } from './db/credentialsRepository'
 import { isPodcastDownloadTrack, isUserUploadTrack } from './db/types'
 import { DB } from './dexieDb'
-import { emitDownloadChange, persistAudioBlobAsDownload } from './downloadService'
+import { persistAudioBlobAsDownload } from './downloadService'
 import {
   CLOUD_BACKEND_FALLBACK_CLASSES,
   FetchError,
@@ -949,8 +949,6 @@ async function persistAsrResult(options: {
       if (await DownloadsRepository.shouldAutoSetActive(localTrackId, taskStartedAt)) {
         await DownloadsRepository.setActiveSubtitle(localTrackId, fileSubtitleId, false)
       }
-      // Notify Downloads page to refresh summaries
-      emitDownloadChange()
     }
     return
   }
@@ -1359,7 +1357,6 @@ export async function retranscribeDownloadedTrackWithCurrentSettings(
           useTranscriptStore.getState().setSubtitles(result.cues)
         }
 
-        emitDownloadChange()
         toast.successKey('asrSuccess')
         resolve({
           ok: true,

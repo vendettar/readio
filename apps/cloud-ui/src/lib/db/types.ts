@@ -191,6 +191,7 @@ export interface UserUploadTrack extends TrackBase {
 export interface PodcastDownloadTrack extends TrackBase {
   sourceType: typeof TRACK_SOURCE.PODCAST_DOWNLOAD
   sourceUrlNormalized: string // Normalized episode audio URL for dedup
+  transcriptUrl?: string // Podcast transcript source URL (Podcasting 2.0)
   sourceFeedUrl?: string // Source RSS feed URL for favorite/navigation
   lastAccessedAt: number // Last playback access timestamp (throttled)
   sourcePodcastTitle?: string // Display podcast title
@@ -226,7 +227,7 @@ export function isPodcastDownloadTrack(
 export type FileTrack = UserUploadTrack
 export type PodcastDownload = PodcastDownloadTrack
 
-export type SubtitleSourceKind = 'manual_upload' | 'asr_online' | 'asr_background'
+export type SubtitleSourceKind = 'manual_upload' | 'asr_online' | 'asr_background' | 'built_in'
 export type SubtitleVersionStatus = 'ready' | 'failed'
 
 export interface FileSubtitle {

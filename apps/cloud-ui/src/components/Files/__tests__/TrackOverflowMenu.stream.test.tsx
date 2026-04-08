@@ -70,7 +70,7 @@ describe('TrackOverflowMenu actions', () => {
       />
     )
 
-    fireEvent.click(screen.getByRole('button', { name: 'asrGenerateSubtitles' }))
+    fireEvent.click(screen.getByRole('button', { name: 'asrGenerateTranscript' }))
     expect(onTranscribe).toHaveBeenCalledTimes(1)
   })
 
@@ -87,6 +87,6 @@ describe('TrackOverflowMenu actions', () => {
       />
     )
 
-    expect(screen.getByRole('button', { name: 'asrRegenerateSubtitles' })).toBeDefined()
+    expect(screen.getByRole('button', { name: 'asrRegenerateTranscript' })).toBeDefined()
   })
 })

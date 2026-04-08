@@ -3,7 +3,6 @@ import {
   Check,
   ChevronLeft,
   Clock,
-  Download,
   FileAudio,
   FilePlus,
   FileType,
@@ -11,6 +10,7 @@ import {
   Package,
   Play,
   RefreshCcw,
+  SquareArrowRight,
   Star,
   Trash2,
 } from 'lucide-react'
@@ -22,6 +22,7 @@ import type { FileSubtitle, PodcastDownload } from '../../lib/db/types'
 import { formatFileSize } from '../../lib/formatters'
 import { stripHtml } from '../../lib/htmlUtils'
 import { logError } from '../../lib/logger'
+import { SUPPORTED_SUBTITLE_EXPORT_FORMATS, type SubtitleExportFormat } from '../../lib/subtitles'
 import { cn } from '../../lib/utils'
 import type { ViewDensity } from '../Files/types'
 import { InteractiveArtwork } from '../interactive/InteractiveArtwork'
@@ -36,6 +37,7 @@ import {
 } from '../ui/dropdown-menu'
 import { InlineConfirmSlot } from '../ui/inline-confirm-slot'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
+import { useNestedOverflowMenu } from '../ui/useNestedOverflowMenu'
 
 const trackCardContentVariants = cva('flex items-center bg-card transition-colors', {
   variants: {
@@ -146,8 +148,8 @@ interface DownloadTrackCardProps {
   onRemove: () => Promise<boolean> | boolean
   onSetActiveSubtitle: (trackId: string, subtitleId: string) => void
   onDeleteSubtitle: (trackId: string, fileSubtitleId: string) => Promise<boolean> | boolean
-  onExportSubtitle: (trackId: string, fileSubtitleId: string) => void
-  onDownloadBundle?: () => void
+  onExportSubtitle: (trackId: string, fileSubtitleId: string, format: SubtitleExportFormat) => void
+  onExportAudio?: () => void
   onImportSubtitle?: () => void
   onRetranscribe?: () => void
   episodeRoute?: {
@@ -169,21 +171,24 @@ export function DownloadTrackCard({
   onSetActiveSubtitle,
   onDeleteSubtitle,
   onExportSubtitle,
-  onDownloadBundle,
+  onExportAudio,
   onImportSubtitle,
   onRetranscribe,
   episodeRoute,
 }: DownloadTrackCardProps) {
   const { t, i18n } = useTranslation()
   const language = i18n.language
-  const [isMenuOpen, setIsMenuOpen] = useState(false)
-  const [step, setStep] = useState<OverflowStep>('menu')
   const [isRemoving, setIsRemoving] = useState(false)
   const [deletingSubtitleId, setDeletingSubtitleId] = useState<string | null>(null)
+  const [openSubtitleExportMenuId, setOpenSubtitleExportMenuId] = useState<string | null>(null)
   const deleteItemRef = useRef<HTMLDivElement>(null)
   const cancelButtonRef = useRef<HTMLButtonElement>(null)
   const prevStepRef = useRef<OverflowStep>('menu')
   const subtitleDeleteConfirm = useInlineDangerConfirm<HTMLDivElement>()
+  const { closeMenu, handleOpenChange, isMenuOpen, menuContentRef, setStep, step, triggerRef } =
+    useNestedOverflowMenu<OverflowStep>({
+      initialStep: 'menu',
+    })
 
   const sizeLabel = formatFileSize(track.sizeBytes ?? 0, language)
   const durationLabel = track.durationSeconds ? formatDuration(track.durationSeconds, t) : ''
@@ -199,6 +204,7 @@ export function DownloadTrackCard({
   const description = stripHtml(track.sourceDescription || '')
 
   const isCompact = density === 'compact'
+  const hasAudioExportAction = Boolean(onExportAudio)
 
   useLayoutEffect(() => {
     if (!isMenuOpen) {
@@ -216,11 +222,10 @@ export function DownloadTrackCard({
     }
   }, [isMenuOpen, step])
 
-  const handleMenuOpenChange = (open: boolean) => {
-    setIsMenuOpen(open)
+  const handleMenuChange = (open: boolean) => {
+    handleOpenChange(open)
     if (!open) {
       setIsRemoving(false)
-      setStep('menu')
     }
   }
 
@@ -344,9 +349,10 @@ export function DownloadTrackCard({
               </Button>
             )}
 
-            <DropdownMenu open={isMenuOpen} onOpenChange={handleMenuOpenChange} modal={false}>
+            <DropdownMenu open={isMenuOpen} onOpenChange={handleMenuChange} modal={false}>
               <DropdownMenuTrigger asChild>
                 <Button
+                  ref={triggerRef}
                   variant="ghost"
                   size="icon"
                   className="h-9 w-9 text-muted-foreground hover:text-foreground shrink-0"
@@ -367,8 +373,9 @@ export function DownloadTrackCard({
                 onMouseDown={(e) => e.stopPropagation()}
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="grid [grid-template-areas:'panel'] p-0 gap-0">
+                <div ref={menuContentRef} className="grid [grid-template-areas:'panel'] p-0 gap-0">
                   <div
+                    data-testid="downloads-overflow-menu-panel"
                     className={cn(
                       '[grid-area:panel] overflow-hidden transition-all duration-150 ease-out',
                       step === 'menu'
@@ -382,7 +389,7 @@ export function DownloadTrackCard({
                         onSelect={(e) => {
                           e.preventDefault()
                           onPlayWithoutTranscript()
-                          setIsMenuOpen(false)
+                          closeMenu()
                         }}
                         className="cursor-pointer whitespace-nowrap justify-between"
                       >
@@ -395,25 +402,26 @@ export function DownloadTrackCard({
                         onSelect={(e) => {
                           e.preventDefault()
                           onImportSubtitle()
-                          setIsMenuOpen(false)
+                          closeMenu()
                         }}
                         className="cursor-pointer whitespace-nowrap justify-between"
                       >
-                        <span>{t('downloadsImportSubtitle')}</span>
+                        <span>{t('importTranscript')}</span>
                         <FilePlus size={14} />
                       </DropdownMenuItem>
                     )}
-                    {onDownloadBundle && (
+                    {hasAudioExportAction && (
                       <DropdownMenuItem
+                        data-testid="downloads-export-audio"
                         onSelect={(e) => {
                           e.preventDefault()
-                          onDownloadBundle()
-                          setIsMenuOpen(false)
+                          onExportAudio?.()
+                          closeMenu()
                         }}
                         className="cursor-pointer whitespace-nowrap justify-between"
                       >
-                        <span>{t('downloadEpisode')}</span>
-                        <Download size={14} />
+                        <span>{t('exportAudio')}</span>
+                        <FileAudio size={14} />
                       </DropdownMenuItem>
                     )}
                     {onRetranscribe && (
@@ -421,21 +429,21 @@ export function DownloadTrackCard({
                         onSelect={(e) => {
                           e.preventDefault()
                           onRetranscribe()
-                          setIsMenuOpen(false)
+                          closeMenu()
                         }}
                         className="cursor-pointer whitespace-nowrap justify-between"
                       >
                         <span>
                           {subtitles.length > 0
-                            ? t('asrRegenerateSubtitles')
-                            : t('asrGenerateSubtitles')}
+                            ? t('asrRegenerateTranscript')
+                            : t('asrGenerateTranscript')}
                         </span>
                         <RefreshCcw size={14} />
                       </DropdownMenuItem>
                     )}
                     {(showPlayWithoutTranscriptAction && onPlayWithoutTranscript) ||
                     onImportSubtitle ||
-                    onDownloadBundle ||
+                    hasAudioExportAction ||
                     onRetranscribe ? (
                       <DropdownMenuSeparator className="m-0" />
                     ) : null}
@@ -453,6 +461,7 @@ export function DownloadTrackCard({
                   </div>
 
                   <div
+                    data-testid="downloads-overflow-confirm-panel"
                     className={cn(
                       '[grid-area:panel] overflow-hidden transition-all duration-150 ease-out',
                       step === 'confirm'
@@ -508,7 +517,7 @@ export function DownloadTrackCard({
                             try {
                               const ok = await onRemove()
                               if (ok) {
-                                setIsMenuOpen(false)
+                                closeMenu()
                               }
                             } catch (error) {
                               logError('Error removing download', error)
@@ -562,6 +571,13 @@ export function DownloadTrackCard({
                 <div className="flex items-center gap-3 relative ms-12">
                   <div className="flex items-center text-muted-foreground me-0 sm:me-1 md:me-2 min-w-0 w-[4.5rem] sm:w-24 lg:w-56">
                     <div className="flex items-center gap-1 min-w-0">
+                      {(sub.sourceKind === 'built_in' || sub.sourceKind === 'manual_upload') && (
+                        <span className="inline-flex max-w-full items-center rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-muted text-muted-foreground border border-border/60 truncate">
+                          {sub.sourceKind === 'built_in'
+                            ? t('subtitleVersionSourceBuiltIn')
+                            : t('subtitleVersionSourceManual')}
+                        </span>
+                      )}
                       {sub.provider?.trim() && (
                         <span className="inline-flex max-w-full items-center rounded px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide bg-muted text-muted-foreground border border-border/60 truncate">
                           {sub.provider.trim()}
@@ -583,7 +599,10 @@ export function DownloadTrackCard({
                           onClick={() => {
                             onSetActiveSubtitle(track.id, sub.id)
                           }}
-                          className="h-7 w-7 text-primary hover:bg-primary/20 opacity-0 group-hover:opacity-100"
+                          className={cn(
+                            'h-7 w-7 text-primary hover:bg-primary/20 opacity-0 group-hover:opacity-100',
+                            openSubtitleExportMenuId === sub.id && 'opacity-100'
+                          )}
                           aria-label={t('filesPlayWithThis')}
                         >
                           <Play size={DOWNLOAD_SUBTITLE_ACTION_ICON_SIZE} fill="currentColor" />
@@ -591,20 +610,60 @@ export function DownloadTrackCard({
                       </TooltipTrigger>
                       <TooltipContent sideOffset={5}>{t('filesPlayWithThis')}</TooltipContent>
                     </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => onExportSubtitle(track.id, sub.id)}
-                          className="h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-accent/40 opacity-0 group-hover:opacity-100"
-                          aria-label={t('subtitleVersionExport')}
-                        >
-                          <Download size={14} />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent sideOffset={5}>{t('subtitleVersionExport')}</TooltipContent>
-                    </Tooltip>
+                    <DropdownMenu
+                      open={openSubtitleExportMenuId === sub.id}
+                      onOpenChange={(open) => {
+                        setOpenSubtitleExportMenuId(open ? sub.id : null)
+                      }}
+                    >
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={(event) => event.stopPropagation()}
+                              onPointerDown={(event) => event.stopPropagation()}
+                              onMouseDown={(event) => event.stopPropagation()}
+                              className={cn(
+                                'h-7 w-7 text-muted-foreground hover:text-foreground hover:bg-muted opacity-0 group-hover:opacity-100',
+                                openSubtitleExportMenuId === sub.id &&
+                                  'opacity-100 bg-muted text-foreground'
+                              )}
+                              aria-label={t('exportOptions')}
+                            >
+                              <SquareArrowRight size={14} />
+                            </Button>
+                          </DropdownMenuTrigger>
+                        </TooltipTrigger>
+                        <TooltipContent sideOffset={5}>{t('exportOptions')}</TooltipContent>
+                      </Tooltip>
+                      <DropdownMenuContent
+                        side="bottom"
+                        align="end"
+                        sideOffset={6}
+                        collisionPadding={12}
+                        className="w-24 rounded-xl overflow-hidden p-0"
+                        onCloseAutoFocus={(event) => event.preventDefault()}
+                        onClick={(event) => event.stopPropagation()}
+                        onMouseDown={(event) => event.stopPropagation()}
+                        onPointerDown={(event) => event.stopPropagation()}
+                      >
+                        {SUPPORTED_SUBTITLE_EXPORT_FORMATS.map((format) => (
+                          <DropdownMenuItem
+                            key={format}
+                            onSelect={() => {
+                              onExportSubtitle(track.id, sub.id, format)
+                              setOpenSubtitleExportMenuId(null)
+                            }}
+                            className="cursor-pointer justify-between whitespace-nowrap"
+                          >
+                            <span>{format}</span>
+                            <FileType size={DOWNLOAD_SUBTITLE_ACTION_ICON_SIZE} />
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                     <InlineConfirmSlot
                       active={subtitleDeleteConfirm.isActive(sub.id)}
                       slotClassName="w-7 overflow-visible"
@@ -617,7 +676,10 @@ export function DownloadTrackCard({
                               size="icon"
                               type="button"
                               onClick={() => subtitleDeleteConfirm.openConfirm(sub.id)}
-                              className="h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100"
+                              className={cn(
+                                'h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100',
+                                openSubtitleExportMenuId === sub.id && 'opacity-100'
+                              )}
                               aria-label={t('commonDelete')}
                             >
                               <Trash2 size={DOWNLOAD_SUBTITLE_ACTION_ICON_SIZE} />

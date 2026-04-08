@@ -3,6 +3,8 @@ import { DB } from '../dexieDb'
 
 const {
   checkDownloadCapacityMock,
+  loadRemoteTranscriptWithCacheMock,
+  upsertBuiltInSubtitleVersionMock,
   toastErrorKeyMock,
   toastInfoKeyMock,
   podcastFirstMock,
@@ -14,6 +16,8 @@ const {
   transactionMock,
 } = vi.hoisted(() => ({
   checkDownloadCapacityMock: vi.fn(),
+  loadRemoteTranscriptWithCacheMock: vi.fn(),
+  upsertBuiltInSubtitleVersionMock: vi.fn(),
   toastErrorKeyMock: vi.fn(),
   toastInfoKeyMock: vi.fn(),
   podcastFirstMock: vi.fn(),
@@ -48,6 +52,14 @@ vi.mock('../logger', () => ({
 vi.mock('../networking/urlUtils', () => ({
   normalizePodcastAudioUrl: (url: string) => url,
   unwrapPodcastTrackingUrl: (url: string) => url,
+}))
+
+vi.mock('../remoteTranscript', () => ({
+  getValidTranscriptUrl: (url?: string | null) => {
+    const normalized = url?.trim()
+    return normalized ? normalized : null
+  },
+  loadRemoteTranscriptWithCache: (...args: unknown[]) => loadRemoteTranscriptWithCacheMock(...args),
 }))
 
 vi.mock('../dexieDb', () => ({
@@ -88,6 +100,7 @@ vi.mock('../repositories/DownloadsRepository', () => ({
     findTrackByUrl: (...args: unknown[]) => podcastFirstMock(...args),
     getAllTracks: (...args: unknown[]) => toArrayDownloadsMock(...args),
     removeTrack: vi.fn().mockResolvedValue(true),
+    upsertBuiltInSubtitleVersion: (...args: unknown[]) => upsertBuiltInSubtitleVersionMock(...args),
   },
 }))
 
@@ -123,11 +136,17 @@ describe('downloadService regressions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     podcastFirstMock.mockResolvedValue(undefined)
+    loadRemoteTranscriptWithCacheMock.mockResolvedValue({
+      ok: true,
+      cues: [{ start: 0, end: 1000, text: 'hello' }],
+    })
+    upsertBuiltInSubtitleVersionMock.mockResolvedValue(true)
     checkDownloadCapacityMock.mockResolvedValue({
       allowed: true,
       currentUsageBytes: 0,
       capBytes: 1024,
     })
+    vi.mocked(DB.addPodcastDownload).mockResolvedValue('track-built-in')
     toArrayBlobsMock.mockResolvedValue([])
     toArrayTracksMock.mockResolvedValue([])
     toArrayDownloadsMock.mockResolvedValue([])
@@ -176,6 +195,37 @@ describe('downloadService regressions', () => {
       reason: 'already_downloaded',
     })
     expect(toastInfoKeyMock).not.toHaveBeenCalledWith('downloadAlreadyExists')
+  })
+
+  it('persists a built-in transcript version after saving a download with transcriptUrl', async () => {
+    const result = await persistAudioBlobAsDownload(new Blob(['audio']), {
+      audioUrl: 'https://example.com/audio.mp3',
+      episodeTitle: 'Episode',
+      podcastTitle: 'Podcast',
+      countryAtSave: 'us',
+      transcriptUrl: 'https://example.com/transcript.vtt',
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      trackId: 'track-built-in',
+    })
+    expect(DB.addPodcastDownload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        transcriptUrl: 'https://example.com/transcript.vtt',
+      })
+    )
+    expect(loadRemoteTranscriptWithCacheMock).toHaveBeenCalledWith(
+      'https://example.com/transcript.vtt'
+    )
+    expect(upsertBuiltInSubtitleVersionMock).toHaveBeenCalledWith({
+      trackId: 'track-built-in',
+      cues: [{ start: 0, end: 1000, text: 'hello' }],
+      subtitleName: 'Episode transcript',
+      subtitleFilename: 'Episode.transcript.vtt',
+      transcriptUrl: 'https://example.com/transcript.vtt',
+      setActive: true,
+    })
   })
 
   it('rejects blob persistence when countryAtSave is missing', async () => {
