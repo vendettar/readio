@@ -49,6 +49,7 @@ export function PlayerDownloadAction({ className }: { className?: string }) {
       podcastTitle: episodeMetadata?.podcastTitle || '',
       feedUrl: episodeMetadata?.podcastFeedUrl,
       artworkUrl: episodeMetadata?.artworkUrl,
+      transcriptUrl: episodeMetadata?.transcriptUrl,
       countryAtSave: normalizedCountryAtSave,
       providerPodcastId: episodeMetadata?.providerPodcastId,
       providerEpisodeId: episodeMetadata?.providerEpisodeId || episodeMetadata?.episodeId,

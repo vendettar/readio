@@ -15,6 +15,7 @@ interface DownloadEpisodeButtonProps {
   podcastTitle: string
   feedUrl?: string
   audioUrl: string
+  transcriptUrl?: string
   artworkUrl?: string
   countryAtSave?: string
   providerPodcastId?: string
@@ -31,6 +32,7 @@ export function DownloadEpisodeButton({
   podcastTitle,
   feedUrl,
   audioUrl,
+  transcriptUrl,
   artworkUrl,
   countryAtSave,
   providerPodcastId,
@@ -56,6 +58,7 @@ export function DownloadEpisodeButton({
       podcastTitle,
       feedUrl,
       artworkUrl,
+      transcriptUrl,
       countryAtSave: normalizedCountryAtSave,
       providerPodcastId,
       providerEpisodeId,
@@ -70,6 +73,7 @@ export function DownloadEpisodeButton({
     podcastTitle,
     feedUrl,
     artworkUrl,
+    transcriptUrl,
     countryAtSave,
     defaultCountry,
     providerPodcastId,

@@ -317,6 +317,39 @@ describe('playbackExport helper routing', () => {
     expect(downloadBlob).toHaveBeenCalledWith(expect.any(Blob), 'Local Track.transcript.srt')
   })
 
+  it('passes the selected transcript export format through the current playback identity', async () => {
+    const track = makeUserUploadTrack()
+    vi.mocked(FilesRepository.getTrackById).mockResolvedValue(track as never)
+    vi.mocked(FilesRepository.exportActiveTranscriptVersion).mockResolvedValue({
+      ok: true,
+      filename: 'Local Track.transcript.vtt',
+      blob: new Blob(['WEBVTT\n\n00:00.000 --> 00:00:01.000\nHello'], {
+        type: 'text/vtt;charset=utf-8',
+      }),
+    })
+
+    usePlayerStore.setState({
+      audioUrl: 'blob:user-track',
+      audioTitle: 'Local Track',
+      localTrackId: track.id,
+      episodeMetadata: {
+        originalAudioUrl: 'blob:user-track',
+        playbackRequestMode: 'default',
+      },
+    })
+    useTranscriptStore.getState().setSubtitles([{ start: 0, end: 1, text: 'Hello' }])
+
+    const result = await exportCurrentTranscriptForPlayback('vtt')
+
+    expect(result.ok).toBe(true)
+    expect(FilesRepository.exportActiveTranscriptVersion).toHaveBeenCalledWith(
+      track.id,
+      'Local Track',
+      'vtt'
+    )
+    expect(downloadBlob).toHaveBeenCalledWith(expect.any(Blob), 'Local Track.transcript.vtt')
+  })
+
   it('exports remote-only audio through the existing download contract', async () => {
     vi.mocked(hasStoredTranscriptSource).mockResolvedValue(true)
     vi.mocked(downloadEpisode).mockResolvedValue({

@@ -200,7 +200,9 @@ export function SubtitleVersionSheet({
                           <Languages size={11} />
                           {version.sourceKind === 'manual_upload'
                             ? t('subtitleVersionSourceManual')
-                            : t('subtitleVersionSourceAsr')}
+                            : version.sourceKind === 'built_in'
+                              ? t('subtitleVersionSourceBuiltIn')
+                              : t('subtitleVersionSourceAsr')}
                         </span>
                       )}
                       {version.provider && (

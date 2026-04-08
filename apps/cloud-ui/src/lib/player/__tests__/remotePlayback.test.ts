@@ -115,6 +115,31 @@ describe('remotePlayback', () => {
     expect(useTranscriptStore.getState().transcriptIngestionStatus).toBe('loading')
   })
 
+  it('does not enter blocking download when transcriptUrl exists even if ASR is configured', async () => {
+    getJsonMock.mockReturnValue({ asrProvider: 'groq', asrModel: 'whisper-large-v3' })
+    const setAudioUrl = vi.fn()
+    const play = vi.fn()
+    const pause = vi.fn()
+    const setPlaybackTrackId = vi.fn()
+    const episode = {
+      id: 'ep-transcript-first',
+      title: 'Transcript First Episode',
+      audioUrl: 'https://example.com/transcript-first.mp3',
+      transcriptUrl: 'https://example.com/transcript-first.vtt',
+    } as Episode
+
+    await playFeedEpisodeWithDeps({ setAudioUrl, play, pause, setPlaybackTrackId }, episode, {
+      collectionName: 'Podcast',
+    } as Podcast)
+
+    expect(downloadEpisodeMock).not.toHaveBeenCalled()
+    expect(play).toHaveBeenCalledTimes(1)
+    expect(autoIngestEpisodeTranscriptMock).toHaveBeenCalledWith(
+      'https://example.com/transcript-first.vtt',
+      'https://example.com/transcript-first.mp3'
+    )
+  })
+
   it('enforces ASR download blocking logic and passes AbortSignal when ASR is configured', async () => {
     getJsonMock.mockReturnValue({ asrProvider: 'groq', asrModel: 'whisper' })
     const setAudioUrl = vi.fn()

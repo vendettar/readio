@@ -35,10 +35,12 @@ import {
 import {
   DownloadsRepository,
   IMPORT_SUBTITLE_REASON,
+  subscribeToDownloadSubtitles,
 } from '../lib/repositories/DownloadsRepository'
 import { buildPodcastEpisodeRoute } from '../lib/routes/podcastRoutes'
 import { createSubtitleFileSchema, SUBTITLE_EXTENSIONS } from '../lib/schemas/files'
 import { generateSlugWithId } from '../lib/slugUtils'
+import type { SubtitleExportFormat } from '../lib/subtitles'
 import { toast } from '../lib/toast'
 import type { TranslationKey } from '../lib/translations'
 import { useExploreStore } from '../store/exploreStore'
@@ -93,6 +95,7 @@ function buildPlaybackMetadata(track: PodcastDownload) {
     podcastTitle: track.sourcePodcastTitle,
     artworkUrl: track.sourceArtworkUrl,
     originalAudioUrl: track.sourceUrlNormalized,
+    transcriptUrl: track.transcriptUrl,
     durationSeconds: track.durationSeconds,
     countryAtSave: track.countryAtSave,
     podcastFeedUrl: track.sourceFeedUrl,
@@ -113,7 +116,7 @@ function DownloadedTrackItem({
   onSetActiveSubtitle,
   onDeleteSubtitle,
   onExportSubtitle,
-  onDownloadBundle,
+  onExportAudio,
   onImportSubtitle,
   onRetranscribe,
   density,
@@ -127,8 +130,12 @@ function DownloadedTrackItem({
   subtitles: FileSubtitle[]
   onSetActiveSubtitle: (trackId: string, subtitleId: string) => Promise<void> | void
   onDeleteSubtitle: (trackId: string, fileSubtitleId: string) => Promise<boolean> | boolean
-  onExportSubtitle: (trackId: string, fileSubtitleId: string) => Promise<void> | void
-  onDownloadBundle: (trackId: string) => Promise<void> | void
+  onExportSubtitle: (
+    trackId: string,
+    fileSubtitleId: string,
+    format: SubtitleExportFormat
+  ) => Promise<void> | void
+  onExportAudio: (trackId: string) => Promise<void> | void
   onImportSubtitle: (trackId: string) => void
   onRetranscribe: (trackId: string) => Promise<void> | void
   density?: ViewDensity
@@ -308,11 +315,11 @@ function DownloadedTrackItem({
       onRemove={() => onRemove(track.id)}
       onSetActiveSubtitle={handleSetActiveWithPlay}
       onDeleteSubtitle={onDeleteSubtitle}
-      onExportSubtitle={(trackId, fileSubtitleId) => {
-        void onExportSubtitle(trackId, fileSubtitleId)
+      onExportSubtitle={(trackId, fileSubtitleId, format) => {
+        void onExportSubtitle(trackId, fileSubtitleId, format)
       }}
-      onDownloadBundle={() => {
-        void onDownloadBundle(track.id)
+      onExportAudio={() => {
+        void onExportAudio(track.id)
       }}
       onImportSubtitle={() => onImportSubtitle(track.id)}
       onRetranscribe={() => {
@@ -333,6 +340,7 @@ export default function DownloadsPage() {
   const [targetTrackId, setTargetTrackId] = useState<string | null>(null)
   const targetTrackIdRef = useRef<string | null>(null)
   const loadSeqRef = useRef(0)
+  const reloadQueuedRef = useRef(false)
 
   const getSetting = useFilesStore((s) => s.getSetting)
   const setSetting = useFilesStore((s) => s.setSetting)
@@ -418,6 +426,15 @@ export default function DownloadsPage() {
     }
   }, [])
 
+  const requestReload = useCallback(() => {
+    if (reloadQueuedRef.current) return
+    reloadQueuedRef.current = true
+    void Promise.resolve().then(() => {
+      reloadQueuedRef.current = false
+      void loadTracks()
+    })
+  }, [loadTracks])
+
   // Favorites logic (Best Practice: same pattern as HistoryPage)
   const favorites = useExploreStore((s) => s.favorites)
   const addFavorite = useExploreStore((s) => s.addFavorite)
@@ -444,10 +461,13 @@ export default function DownloadsPage() {
 
   useEffect(() => {
     void loadTracks()
-    return subscribeToDownloads(() => {
-      void loadTracks()
-    })
-  }, [loadTracks])
+    const unsubscribeDownloads = subscribeToDownloads(requestReload)
+    const unsubscribeSubtitles = subscribeToDownloadSubtitles(requestReload)
+    return () => {
+      unsubscribeDownloads()
+      unsubscribeSubtitles()
+    }
+  }, [loadTracks, requestReload])
 
   const groups = useMemo(() => groupByPodcast(tracks), [tracks])
 
@@ -493,14 +513,15 @@ export default function DownloadsPage() {
   )
 
   const handleExportSubtitle = useCallback(
-    async (trackId: string, fileSubtitleId: string) => {
+    async (trackId: string, fileSubtitleId: string, format: SubtitleExportFormat) => {
       const track = tracks.find((item) => item.id === trackId)
       if (!track) return
 
       const result = await DownloadsRepository.exportSubtitleVersion(
         trackId,
         fileSubtitleId,
-        track.sourceEpisodeTitle || track.name
+        track.sourceEpisodeTitle || track.name,
+        format
       )
       if (result.ok && result.blob && result.filename) {
         downloadBlob(result.blob, result.filename)
@@ -518,12 +539,12 @@ export default function DownloadsPage() {
     subtitleInputRef.current?.click()
   }, [])
 
-  const handleDownloadBundle = useCallback(
+  const handleExportAudio = useCallback(
     async (trackId: string) => {
       const track = tracks.find((item) => item.id === trackId)
       if (!track) return
 
-      const result = await DownloadsRepository.exportTrackBundle(
+      const result = await DownloadsRepository.exportAudioFile(
         trackId,
         track.sourceEpisodeTitle || track.name
       )
@@ -683,7 +704,7 @@ export default function DownloadsPage() {
                         onSetActiveSubtitle={handleSetActiveSubtitle}
                         onDeleteSubtitle={handleDeleteSubtitle}
                         onExportSubtitle={handleExportSubtitle}
-                        onDownloadBundle={handleDownloadBundle}
+                        onExportAudio={handleExportAudio}
                         onImportSubtitle={handleImportSubtitle}
                         onRetranscribe={handleRetranscribe}
                         density={density}

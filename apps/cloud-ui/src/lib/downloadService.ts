@@ -14,13 +14,17 @@
 import { create } from 'zustand'
 import { DB, DB_TABLE_NAMES, type PodcastDownload } from './dexieDb'
 import { checkDownloadCapacity } from './downloadCapacity'
+import { emitDownloadChange } from './downloadLibraryEvents'
 import { CLOUD_BACKEND_FALLBACK_CLASSES, fetchWithFallback, isAbortLikeError } from './fetchUtils'
 import { log, error as logError, warn } from './logger'
 import { normalizePodcastAudioUrl, unwrapPodcastTrackingUrl } from './networking/urlUtils'
+import { getValidTranscriptUrl, loadRemoteTranscriptWithCache } from './remoteTranscript'
 import { DownloadsRepository } from './repositories/DownloadsRepository'
 import { deduplicatedFetch, isRequestInflight } from './requestManager'
 import { normalizeCountryParam } from './routes/podcastRoutes'
 import { toast } from './toast'
+
+export { emitDownloadChange, subscribeToDownloads } from './downloadLibraryEvents'
 
 export interface DownloadProgress {
   loadedBytes: number
@@ -70,6 +74,7 @@ export interface DownloadJobOptions {
   providerPodcastId?: string
   providerEpisodeId?: string
   durationSeconds?: number
+  transcriptUrl?: string
 }
 
 export interface DownloadResult {
@@ -101,22 +106,6 @@ export async function findDownloadedTrack(
  */
 export async function getAllDownloadedTracks(): Promise<PodcastDownload[]> {
   return DownloadsRepository.getAllTracks()
-}
-
-type Listener = () => void
-const listeners = new Set<Listener>()
-
-export function subscribeToDownloads(l: Listener) {
-  listeners.add(l)
-  return () => {
-    listeners.delete(l)
-  }
-}
-
-export function emitDownloadChange() {
-  for (const l of listeners) {
-    l()
-  }
 }
 
 const notifySubscribers = emitDownloadChange
@@ -255,6 +244,7 @@ export async function persistAudioBlobAsDownload(
           audioId: realAudioBlobId,
           sizeBytes: blob.size,
           sourceUrlNormalized: normalizedUrl,
+          transcriptUrl: getValidTranscriptUrl(options.transcriptUrl) || undefined,
           sourceFeedUrl: options.feedUrl || undefined,
           lastAccessedAt: now,
           sourcePodcastTitle: options.podcastTitle || undefined,
@@ -272,6 +262,8 @@ export async function persistAudioBlobAsDownload(
         return id
       }
     )
+
+    await persistBuiltInTranscriptForTrack(trackId, options)
 
     notifySubscribers()
     return { ok: true, trackId }
@@ -599,4 +591,51 @@ function deriveFilename(normalizedUrl: string, episodeTitle: string): string {
   }
 
   return `download-${Date.now()}.mp3`
+}
+
+async function persistBuiltInTranscriptForTrack(
+  trackId: string,
+  options: Pick<DownloadJobOptions, 'transcriptUrl' | 'episodeTitle'>
+): Promise<void> {
+  const transcriptUrl = getValidTranscriptUrl(options.transcriptUrl)
+  if (!transcriptUrl) return
+
+  try {
+    const loaded = await loadRemoteTranscriptWithCache(transcriptUrl)
+    if (!loaded.ok || loaded.cues.length === 0) return
+
+    const { subtitleFilename, subtitleName } = deriveBuiltInTranscriptMetadata(
+      transcriptUrl,
+      options.episodeTitle
+    )
+
+    await DownloadsRepository.upsertBuiltInSubtitleVersion({
+      trackId,
+      cues: loaded.cues,
+      subtitleName,
+      subtitleFilename,
+      transcriptUrl,
+      setActive: true,
+    })
+  } catch (err) {
+    warn('[download] Failed to persist built-in transcript for download', {
+      trackId,
+      transcriptUrl,
+      err,
+    })
+  }
+}
+
+function deriveBuiltInTranscriptMetadata(
+  transcriptUrl: string,
+  episodeTitle?: string
+): { subtitleFilename: string; subtitleName: string } {
+  const baseTitle = episodeTitle?.trim() || 'episode'
+  const safeTitle = baseTitle.replace(/[^a-zA-Z0-9\s\-_.]/g, '').trim() || 'episode'
+  const extension = transcriptUrl.toLowerCase().endsWith('.vtt') ? 'vtt' : 'srt'
+
+  return {
+    subtitleName: `${baseTitle} transcript`,
+    subtitleFilename: `${safeTitle.slice(0, 100)}.transcript.${extension}`,
+  }
 }

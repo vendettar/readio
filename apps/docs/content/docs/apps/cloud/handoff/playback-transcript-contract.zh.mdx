@@ -134,7 +134,27 @@ Reading Area 必须优先显示：
 
 这条合同保证 local restore 与 transcript-first 语义保持一致。
 
-## 8. 失败语义
+补充一条 Downloads 页面规则：
+
+- `play without transcript` 必须保留 transcript source identity
+- 如果一个 downloaded podcast track 本身带有 built-in `transcriptUrl`，那么从 Downloads 入口进入时，仍应显示 `Transcript available` / `Show Transcript`
+- `play without transcript` 只是不自动展示 transcript，不等于抹掉 transcript availability
+
+## 8. 下载时持久化 Built-In Transcript
+
+如果一个 podcast episode 在下载时已经暴露 built-in transcript source：
+
+- 下载流程应先按正常路径持久化音频 track
+- 同一条流程还应抓取并解析 built-in transcript 为 cues
+- 该 built-in transcript 应作为该 downloaded track 的一条本地 subtitle version 持久化
+- 因此，Downloads 卡片在下载完成后应能直接显示一条 subtitle row，而不需要先播放或手动导入
+
+失败边界：
+
+- built-in transcript 持久化是附加步骤，不是主下载成功条件
+- 即使 built-in transcript fetch/parse 失败，音频下载成功仍应保持有效
+
+## 9. 失败语义
 
 如果 transcript source 存在，但当前 fetch/load 尝试失败：
 
@@ -148,7 +168,67 @@ Reading Area 必须优先显示：
   不等于
 - `no transcript source exists`
 
-## 9. Reviewer Checklist
+## 10. Transcript 导出兼容性说明
+
+Cloud transcript 导出的是纯文本字幕内容，不是可执行内容。
+
+当前在 macOS 上已观察到的行为：
+
+- 浏览器驱动的 `Blob` 下载，与“先在浏览器打开 transcript，再用 Command+S 保存”并不是同一种保存路径
+- Chrome 的 `Blob` 下载可能带有 `com.apple.quarantine` 元数据，因此即使是 transcript 文件，也可能触发 Gatekeeper 风格的验证提示
+- 这类提示更像平台/下载路径差异，不代表 SRT 内容本身损坏或格式非法
+
+当前导出兼容性规则：
+
+- SRT 导出不应继续使用通用 `text/plain`
+- 当前 playback transcript 导出路径对 SRT 使用 `application/x-subrip;charset=utf-8`
+- VTT 导出应使用 `text/vtt;charset=utf-8`
+- 当前 transcript 导出在 player surface 上已经改为按目标格式导出，而不是继续绑定原始来源文件名
+
+操作说明：
+
+- 如果用户可以直接在浏览器打开 transcript 链接，并通过 Command+S 正常保存，但自动导出的 transcript 文件会触发 macOS 验证提示，更可能的差异点是下载元数据 / quarantine 处理，而不是 transcript parse 失败
+- 这类问题应优先视为下载路径兼容性问题，而不是 transcript 质量问题
+
+## 11. Export 菜单契约
+
+Cloud 当前按 surface 区分 export 入口：
+
+- MiniPlayer 使用 `Export transcript...`
+- Downloads 字幕行 hover 动作使用 `Export`
+- Downloads 卡片 overflow 仍是另一条独立的音频/export surface
+
+菜单内容：
+
+- MiniPlayer 的二级菜单暴露 transcript 格式：
+  - `srt`
+  - `vtt`
+- Downloads 字幕行的 export 菜单暴露相同的 transcript 格式：
+  - `srt`
+  - `vtt`
+- 这两处应消费同一份 transcript export-format contract，避免未来新增格式时出现 surface 漂移
+- Downloads 卡片 overflow 上的 audio export 与 transcript 格式选择仍是分离能力
+
+交互规则：
+
+- 当嵌套 overflow step 处于打开状态时，点击外部区域应直接关闭整个 overflow 菜单
+- 这次外部点击不得顺带触发落点下方的页面控件
+
+## 12. Downloads 字幕来源 Badge
+
+Downloads 字幕行应一致地暴露来源身份：
+
+- ASR 生成版本在 metadata 存在时继续显示 provider / model badge
+- 节目自带的 built-in transcript 版本应显示 `Built-in` badge
+- 用户导入的 transcript 版本应显示 `Imported` badge
+
+展示规则：
+
+- `Built-in` 与 `Imported` 属于来源 badge
+- provider / model 仍然是 ASR metadata badge，不应被混作来源 badge
+- Downloads 字幕行与 subtitle-version sheet 应使用同一套来源术语
+
+## 13. Reviewer Checklist
 
 Reviewer 应重点检查：
 
@@ -157,8 +237,10 @@ Reviewer 应重点检查：
 3. local/downloaded transcript source 能在 cues 尚未渲染时被正确识别
 4. `Show Transcript` 会按 source type 正确分流
 5. built-in transcript failure 不会错误显示 ASR setup CTA
+6. 下载时 built-in transcript 的持久化不会阻塞或否决主音频下载成功
+7. MiniPlayer 与 Downloads transcript export 菜单暴露相同的格式集合
 
-## 10. 边界
+## 13. 边界
 
 本文档会描述：
 
@@ -166,6 +248,8 @@ Reviewer 应重点检查：
 - artwork/CTA 状态语义
 - pure listening mode 语义
 - local/downloaded transcript availability 语义
+- 下载时 built-in transcript 持久化语义
+- transcript export surface / format 语义
 
 本文档不描述：
 

@@ -332,6 +332,7 @@ export default function PodcastEpisodeDetailPage() {
                   podcastTitle={podcast.collectionName}
                   feedUrl={podcast.feedUrl}
                   audioUrl={episode.audioUrl}
+                  transcriptUrl={episode.transcriptUrl}
                   artworkUrl={primaryArtwork}
                   countryAtSave={normalizedRouteCountry || undefined}
                   providerPodcastId={

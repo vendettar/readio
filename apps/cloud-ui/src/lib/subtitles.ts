@@ -1,6 +1,17 @@
 // src/lib/subtitles.ts
 import type { ASRCue } from './asr/types'
 
+export type SubtitleExportFormat = 'srt' | 'vtt'
+export const SUPPORTED_SUBTITLE_EXPORT_FORMATS = [
+  'srt',
+  'vtt',
+] as const satisfies readonly SubtitleExportFormat[]
+
+const SUBTITLE_EXPORT_MIME_TYPES: Record<SubtitleExportFormat, string> = {
+  srt: 'application/x-subrip;charset=utf-8',
+  vtt: 'text/vtt;charset=utf-8',
+}
+
 /**
  * Single source of truth for subtitle structure.
  * UI components and hooks should consume ASRCue[].
@@ -300,6 +311,14 @@ export function cuesToVtt(cues: ASRCue[]): string {
     })
     .join('\n')
   return `WEBVTT\n\n${body}`
+}
+
+export function serializeSubtitleExport(cues: ASRCue[], format: SubtitleExportFormat): string {
+  return format === 'vtt' ? cuesToVtt(cues) : cuesToSrt(cues)
+}
+
+export function getSubtitleExportMimeType(format: SubtitleExportFormat): string {
+  return SUBTITLE_EXPORT_MIME_TYPES[format]
 }
 
 function formatSrtTimestamp(seconds: number): string {

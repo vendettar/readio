@@ -3,12 +3,11 @@ import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PlaybackExportContext } from '../../../lib/player/playbackExport'
 import {
-  exportCurrentAudioForPlayback,
-  exportCurrentTranscriptAndAudioBundle,
   exportCurrentTranscriptForPlayback,
   importTranscriptForCurrentPlayback,
   resolveCurrentPlaybackExportContext,
 } from '../../../lib/player/playbackExport'
+import { SUPPORTED_SUBTITLE_EXPORT_FORMATS } from '../../../lib/subtitles'
 import { usePlayerStore } from '../../../store/playerStore'
 import { usePlayerSurfaceStore } from '../../../store/playerSurfaceStore'
 import { useTranscriptStore } from '../../../store/transcriptStore'
@@ -78,11 +77,14 @@ vi.mock('lucide-react', () => {
   return {
     ChevronDown: () => <svg />,
     ChevronUp: () => <svg />,
+    FileAudio: () => <svg />,
     FilePlus: () => <svg />,
+    FileType: () => <svg />,
     Info: () => <svg />,
     ListMusic: () => <svg />,
     Loader2: () => <svg />,
     MoreVertical: () => <svg />,
+    Package: () => <svg />,
     Pause: () => <svg />,
     Play: () => <svg />,
     Podcast: () => <svg />,
@@ -117,8 +119,6 @@ vi.mock('../../../lib/player/playbackExport', () => ({
   resolveCurrentPlaybackExportContext: vi.fn(),
   importTranscriptForCurrentPlayback: vi.fn(),
   exportCurrentTranscriptForPlayback: vi.fn(),
-  exportCurrentAudioForPlayback: vi.fn(),
-  exportCurrentTranscriptAndAudioBundle: vi.fn(),
 }))
 
 global.ResizeObserver = class ResizeObserver {
@@ -186,14 +186,6 @@ describe('MiniPlayer Controls', () => {
       reason: 'imported',
     })
     vi.mocked(exportCurrentTranscriptForPlayback).mockResolvedValue({
-      ok: true,
-      reason: 'exported',
-    })
-    vi.mocked(exportCurrentAudioForPlayback).mockResolvedValue({
-      ok: true,
-      reason: 'exported',
-    })
-    vi.mocked(exportCurrentTranscriptAndAudioBundle).mockResolvedValue({
       ok: true,
       reason: 'exported',
     })
@@ -331,9 +323,33 @@ describe('MiniPlayer Controls', () => {
 
     fireEvent.click(screen.getByTestId('mini-player-export-options'))
 
-    expect(await screen.findByRole('menuitem', { name: 'exportTranscript' })).toBeTruthy()
-    expect(screen.getByRole('menuitem', { name: 'exportAudio' })).toBeTruthy()
-    expect(screen.getByRole('menuitem', { name: 'exportAll' })).toBeTruthy()
+    for (const format of SUPPORTED_SUBTITLE_EXPORT_FORMATS) {
+      expect(await screen.findByRole('menuitem', { name: format })).toBeTruthy()
+    }
+    expect(screen.queryByRole('menuitem', { name: 'exportTranscript' })).toBeNull()
+  })
+
+  it('disables top-level export transcript when no transcript is exportable', async () => {
+    vi.mocked(resolveCurrentPlaybackExportContext).mockResolvedValue(
+      makePlaybackExportContext({
+        hasLoadedTranscript: false,
+        hasStoredTranscriptSource: false,
+        hasBuiltInTranscriptSource: false,
+        canExportTranscript: false,
+        canExportBundle: false,
+      })
+    )
+
+    await renderMiniPlayerAndWaitForMenuController()
+
+    openMoreMenu()
+
+    const exportOption = await screen.findByTestId('mini-player-export-options')
+    expect(exportOption.hasAttribute('disabled')).toBe(true)
+
+    fireEvent.click(exportOption)
+
+    expect(exportCurrentTranscriptForPlayback).not.toHaveBeenCalled()
   })
 
   it('disables the more menu trigger when the controller marks it unavailable', () => {
@@ -393,20 +409,60 @@ describe('MiniPlayer Controls', () => {
 
     openMoreMenu()
     fireEvent.click(await screen.findByTestId('mini-player-export-options'))
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'exportTranscript' }))
+    fireEvent.click(
+      await screen.findByRole('menuitem', { name: SUPPORTED_SUBTITLE_EXPORT_FORMATS[0] })
+    )
 
     expect(exportCurrentTranscriptForPlayback).not.toHaveBeenCalled()
   })
 
-  it('routes enabled export actions through playback export helpers', async () => {
+  it('routes enabled export actions through playback export helpers with the selected format', async () => {
     render(<MiniPlayer />)
 
     openMoreMenu()
     fireEvent.click(await screen.findByTestId('mini-player-export-options'))
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'exportTranscript' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'vtt' }))
 
     await waitFor(() => {
-      expect(exportCurrentTranscriptForPlayback).toHaveBeenCalledTimes(1)
+      expect(exportCurrentTranscriptForPlayback).toHaveBeenCalledWith('vtt')
     })
+  })
+
+  it('closes the export submenu on outside click without firing outside actions', async () => {
+    const outsideClick = vi.fn()
+
+    render(
+      <div>
+        <button type="button" onClick={outsideClick}>
+          outside
+        </button>
+        <MiniPlayer />
+      </div>
+    )
+
+    await waitFor(() => {
+      expect(resolveCurrentPlaybackExportContext).toHaveBeenCalled()
+    })
+
+    openMoreMenu()
+    fireEvent.click(await screen.findByTestId('mini-player-export-options'))
+
+    expect(
+      await screen.findByRole('menuitem', { name: SUPPORTED_SUBTITLE_EXPORT_FORMATS[0] })
+    ).toBeTruthy()
+    expect(screen.getByTestId('mini-player-export-panel').className).not.toContain(
+      'pointer-events-none'
+    )
+
+    const outsideButton = screen.getByRole('button', { name: 'outside' })
+    fireEvent.mouseDown(outsideButton)
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('menuitem', { name: SUPPORTED_SUBTITLE_EXPORT_FORMATS[0] })
+      ).toBeNull()
+    })
+    expect(screen.queryByRole('menuitem', { name: 'importTranscript' })).toBeNull()
+    expect(outsideClick).not.toHaveBeenCalled()
   })
 })

@@ -129,6 +129,7 @@ function EpisodeListItemImpl({
               podcastTitle={model.downloadArgs.podcastTitle}
               feedUrl={model.downloadArgs.feedUrl}
               audioUrl={model.downloadArgs.audioUrl}
+              transcriptUrl={model.downloadArgs.transcriptUrl}
               artworkUrl={model.downloadArgs.artworkUrl}
               countryAtSave={model.downloadArgs.countryAtSave}
               providerPodcastId={model.downloadArgs.providerPodcastId}

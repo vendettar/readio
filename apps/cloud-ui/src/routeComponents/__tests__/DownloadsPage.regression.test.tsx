@@ -1,15 +1,18 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PlaybackSession, PodcastDownload } from '../../lib/db/types'
-import { downloadBlob } from '../../lib/download'
 import { getAllDownloadedTracks } from '../../lib/downloadService'
 import { selectPlaybackSubtitle } from '../../lib/downloads/subtitleSelection'
 import { canPlayRemoteStreamWithoutTranscript } from '../../lib/player/remotePlayback'
-import { DownloadsRepository } from '../../lib/repositories/DownloadsRepository'
+import {
+  DownloadsRepository,
+  subscribeToDownloadSubtitles,
+} from '../../lib/repositories/DownloadsRepository'
 import { toast } from '../../lib/toast'
 import DownloadsPage from '../DownloadsPage'
 
 const downloadTrackCardPropsSpy = vi.fn()
+let subtitleChangeCallback: ((trackId: string) => void) | null = null
 
 vi.mock('@tanstack/react-router', () => ({
   // biome-ignore lint/suspicious/noExplicitAny: mock
@@ -47,15 +50,6 @@ vi.mock('../../components/Downloads/DownloadTrackCard', () => ({
             aria-label="import-subtitle"
           >
             ImportSubtitle
-          </button>
-        ) : null}
-        {props.onDownloadBundle ? (
-          <button
-            type="button"
-            onClick={() => props.onDownloadBundle()}
-            aria-label="download-bundle"
-          >
-            DownloadBundle
           </button>
         ) : null}
         {props.onRetranscribe ? (
@@ -187,13 +181,22 @@ vi.mock('../../lib/download', () => ({
 }))
 
 vi.mock('../../lib/repositories/DownloadsRepository', () => ({
+  subscribeToDownloadSubtitles: vi.fn((listener: (trackId: string) => void) => {
+    subtitleChangeCallback = listener
+    return () => {
+      if (subtitleChangeCallback === listener) {
+        subtitleChangeCallback = null
+      }
+    }
+  }),
   DownloadsRepository: {
     getReadySubtitlesByTrackId: vi.fn(),
     getRestoreSessionByTrackId: vi.fn(),
     getTrackArtworkBlob: vi.fn(),
     getTrackSubtitles: vi.fn(),
     importSubtitleVersion: vi.fn(),
-    exportTrackBundle: vi.fn(),
+    exportActiveTranscriptVersion: vi.fn(),
+    exportAudioFile: vi.fn(),
   },
 }))
 
@@ -259,6 +262,7 @@ describe('DownloadsPage Regression', () => {
     vi.mocked(DownloadsRepository.getRestoreSessionByTrackId).mockResolvedValue(undefined)
     vi.mocked(DownloadsRepository.getTrackArtworkBlob).mockResolvedValue(null)
     vi.mocked(DownloadsRepository.getTrackSubtitles).mockResolvedValue([])
+    subtitleChangeCallback = null
     playStreamWithoutTranscriptWithDepsMock.mockResolvedValue({ started: true, reason: 'started' })
     retranscribeDownloadedTrackWithCurrentSettingsMock.mockResolvedValue({
       ok: true,
@@ -268,11 +272,6 @@ describe('DownloadsPage Regression', () => {
       ok: true,
       reason: 'imported',
       fileSubtitleId: 'new-subtitle-id',
-    })
-    vi.mocked(DownloadsRepository.exportTrackBundle).mockResolvedValue({
-      ok: true,
-      filename: 'track.download.zip',
-      blob: new Blob(['zip-bytes'], { type: 'application/zip' }),
     })
   })
 
@@ -367,6 +366,50 @@ describe('DownloadsPage Regression', () => {
     })
   })
 
+  it('refreshes subtitle rows when download subtitle mutations are notified', async () => {
+    const mockTrack = {
+      id: 'track-subscription-refresh',
+      name: 'Subscription Refresh Track',
+      sourceUrlNormalized: 'http://example.com/audio.mp3',
+    }
+    const subtitleMutationListeners: Array<(trackId: string) => void> = []
+
+    vi.mocked(getAllDownloadedTracks).mockResolvedValue([mockTrack as PodcastDownload])
+    vi.mocked(DownloadsRepository.getTrackSubtitles)
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          id: 'sub-1',
+          trackId: 'track-subscription-refresh',
+          subtitleId: 'subtitle-1',
+          name: 'Imported subtitle',
+          sourceKind: 'manual_upload',
+          status: 'ready',
+          createdAt: Date.now(),
+        },
+      ])
+    vi.mocked(subscribeToDownloadSubtitles).mockImplementation((cb) => {
+      subtitleMutationListeners.push(cb)
+      return () => {}
+    })
+
+    render(<DownloadsPage />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Subs: 0')).toBeDefined()
+    })
+
+    await waitFor(() => {
+      expect(subtitleMutationListeners).toHaveLength(1)
+    })
+
+    subtitleMutationListeners[0]?.('track-subscription-refresh')
+
+    await waitFor(() => {
+      expect(screen.getByText('Subs: 1')).toBeDefined()
+    })
+  })
+
   it('triggers retranscribe action for the selected download track', async () => {
     const mockTrack = {
       id: 'track-1',
@@ -390,78 +433,6 @@ describe('DownloadsPage Regression', () => {
     await waitFor(() => {
       expect(retranscribeDownloadedTrackWithCurrentSettingsMock).toHaveBeenCalledWith('track-1')
     })
-  })
-
-  it('downloads bundle from downloads card action', async () => {
-    const mockTrack: PodcastDownload = {
-      id: 'track-download-bundle',
-      name: 'Bundle Track',
-      audioId: 'audio-download-bundle',
-      sizeBytes: 1024,
-      createdAt: 1,
-      sourceType: 'podcast_download',
-      sourceUrlNormalized: 'http://example.com/audio.mp3',
-      lastAccessedAt: 1,
-      downloadedAt: 1,
-      countryAtSave: 'US',
-    }
-
-    vi.mocked(getAllDownloadedTracks).mockResolvedValue([mockTrack])
-    vi.mocked(DownloadsRepository.getReadySubtitlesByTrackId).mockResolvedValue([])
-    vi.mocked(selectPlaybackSubtitle).mockReturnValue(undefined)
-
-    render(<DownloadsPage />)
-
-    await waitFor(() => {
-      expect(screen.getByLabelText('download-bundle')).toBeDefined()
-    })
-
-    fireEvent.click(screen.getByLabelText('download-bundle'))
-
-    await waitFor(() => {
-      expect(DownloadsRepository.exportTrackBundle).toHaveBeenCalledWith(
-        'track-download-bundle',
-        'Bundle Track'
-      )
-      expect(downloadBlob).toHaveBeenCalledWith(expect.any(Blob), 'track.download.zip')
-    })
-  })
-
-  it('shows export error toast when bundle export fails', async () => {
-    const mockTrack: PodcastDownload = {
-      id: 'track-download-bundle-fail',
-      name: 'Bundle Fail Track',
-      audioId: 'audio-download-bundle-fail',
-      sizeBytes: 2048,
-      createdAt: 2,
-      sourceType: 'podcast_download',
-      sourceUrlNormalized: 'http://example.com/audio.mp3',
-      lastAccessedAt: 2,
-      downloadedAt: 2,
-      countryAtSave: 'US',
-    }
-
-    vi.mocked(DownloadsRepository.exportTrackBundle).mockResolvedValue({ ok: false })
-    vi.mocked(getAllDownloadedTracks).mockResolvedValue([mockTrack])
-    vi.mocked(DownloadsRepository.getReadySubtitlesByTrackId).mockResolvedValue([])
-    vi.mocked(selectPlaybackSubtitle).mockReturnValue(undefined)
-
-    render(<DownloadsPage />)
-
-    await waitFor(() => {
-      expect(screen.getByLabelText('download-bundle')).toBeDefined()
-    })
-
-    fireEvent.click(screen.getByLabelText('download-bundle'))
-
-    await waitFor(() => {
-      expect(DownloadsRepository.exportTrackBundle).toHaveBeenCalledWith(
-        'track-download-bundle-fail',
-        'Bundle Fail Track'
-      )
-      expect(toast.errorKey).toHaveBeenCalledWith('subtitleVersionExportFailed')
-    })
-    expect(downloadBlob).not.toHaveBeenCalled()
   })
 
   it('shows ASR settings error and navigates when retranscribe is unconfigured', async () => {
@@ -633,6 +604,39 @@ describe('DownloadsPage Regression', () => {
       expect(setSessionIdMock).toHaveBeenCalledWith('local-track-track-stream')
       expect(queueAutoplayAfterPendingSeekMock).toHaveBeenCalledTimes(1)
       expect(seekToMock).toHaveBeenCalledWith(66)
+    })
+  })
+
+  it('preserves built-in transcriptUrl when playing without transcript from downloads', async () => {
+    const mockTrack = {
+      id: 'track-stream-transcript',
+      name: 'Stream Track With Transcript',
+      sourceUrlNormalized: 'https://example.com/stream.mp3',
+      transcriptUrl: 'https://example.com/transcript.vtt',
+      durationSeconds: 300,
+    }
+    // biome-ignore lint/suspicious/noExplicitAny: mock
+    vi.mocked(getAllDownloadedTracks).mockResolvedValue([mockTrack as any])
+    vi.mocked(DownloadsRepository.getReadySubtitlesByTrackId).mockResolvedValue([])
+    vi.mocked(selectPlaybackSubtitle).mockReturnValue(undefined)
+
+    render(<DownloadsPage />)
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('playWithoutTranscript')).toBeDefined()
+    })
+
+    fireEvent.click(screen.getByLabelText('playWithoutTranscript'))
+
+    await waitFor(() => {
+      expect(playStreamWithoutTranscriptWithDepsMock).toHaveBeenCalledWith(
+        expect.any(Object),
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            transcriptUrl: 'https://example.com/transcript.vtt',
+          }),
+        })
+      )
     })
   })
 

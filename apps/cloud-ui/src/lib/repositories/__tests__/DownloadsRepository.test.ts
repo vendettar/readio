@@ -4,6 +4,7 @@ import { DB, db } from '../../dexieDb'
 import {
   DownloadsRepository,
   IMPORT_SUBTITLE_REASON,
+  subscribeToDownloadSubtitles,
   UPSERT_ASR_SUBTITLE_REASON,
 } from '../DownloadsRepository'
 
@@ -499,8 +500,33 @@ describe('DownloadsRepository', () => {
       expect(result.filename).toContain('test-episode')
       expect(result.filename).toContain('.srt')
       expect(result.blob).toBeDefined()
-      expect(result.blob?.type).toBe('text/plain;charset=utf-8')
+      expect(result.blob?.type).toBe('application/x-subrip;charset=utf-8')
       expect(result.blob?.size).toBeGreaterThan(0)
+    })
+
+    it('exports a generated subtitle as VTT when explicitly requested', async () => {
+      const { trackId } = await createDownloadWithSubtitles(1)
+      await db.local_subtitles.update('file-sub-0', {
+        provider: 'groq',
+        model: 'whisper-large-v3',
+        createdAt: Date.UTC(2026, 2, 3, 12, 0, 0),
+      })
+
+      const result = await DownloadsRepository.exportSubtitleVersion(
+        trackId,
+        'file-sub-0',
+        'my-episode',
+        'vtt'
+      )
+
+      expect(result.ok).toBe(true)
+      expect(result.filename).toBe('my-episode.groq.whisper-large-v3.2026-03-03.vtt')
+      expect(result.blob?.type).toBe('text/vtt;charset=utf-8')
+      if (!result.blob) {
+        throw new Error('Expected subtitle export blob to be defined')
+      }
+      const content = await blobToRawText(result.blob)
+      expect(content).toContain('WEBVTT')
     })
 
     it('uses episode.provider.model.yyyy-MM-dd.srt naming contract', async () => {
@@ -584,7 +610,7 @@ describe('DownloadsRepository', () => {
       expect(result.filename).toContain('episode')
       expect(result.filename).toContain('.srt')
       expect(result.blob).toBeDefined()
-      expect(result.blob?.type).toBe('text/plain;charset=utf-8')
+      expect(result.blob?.type).toBe('application/x-subrip;charset=utf-8')
     })
 
     it('exports the newest ready transcript when no active transcript is set', async () => {
@@ -643,6 +669,24 @@ describe('DownloadsRepository', () => {
       expect(imported?.name).toBe('imported.srt')
       expect(imported?.sourceKind).toBe('manual_upload')
       expect(imported?.status).toBe('ready')
+    })
+
+    it('emits a subtitle change event after import succeeds', async () => {
+      const { trackId } = await createDownloadWithSubtitles(0)
+      const listener = vi.fn()
+      const unsubscribe = subscribeToDownloadSubtitles(listener)
+
+      try {
+        const result = await DownloadsRepository.importSubtitleVersion(trackId, {
+          filename: 'imported.srt',
+          content: '1\n00:00:00,000 --> 00:00:01,000\nhello\n',
+        })
+
+        expect(result.ok).toBe(true)
+        expect(listener).toHaveBeenCalledTimes(1)
+      } finally {
+        unsubscribe()
+      }
     })
 
     it('suffixes duplicate imported subtitle names deterministically', async () => {

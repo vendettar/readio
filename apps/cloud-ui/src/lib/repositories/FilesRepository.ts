@@ -10,7 +10,12 @@ import type {
   Track,
 } from '../dexieDb'
 import { DB, db } from '../dexieDb'
-import { cuesToSrt, parseSubtitles } from '../subtitles'
+import {
+  getSubtitleExportMimeType,
+  parseSubtitles,
+  type SubtitleExportFormat,
+  serializeSubtitleExport,
+} from '../subtitles'
 import { buildPrioritizedSubtitleCandidates } from './SubtitleCandidateBuilder'
 
 export const UPSERT_FILE_ASR_SUBTITLE_REASON = {
@@ -207,7 +212,8 @@ export const FilesRepository = {
 
   async exportActiveTranscriptVersion(
     trackId: string,
-    trackName: string
+    trackName: string,
+    format: SubtitleExportFormat = 'srt'
   ): Promise<FileExportResult> {
     const track = await db.tracks.get(trackId)
     if (!isUserUploadTrack(track)) {
@@ -220,9 +226,9 @@ export const FilesRepository = {
       return { ok: false }
     }
 
-    const filename = `${resolveFileExportBaseName(trackName, trackId)}.transcript.srt`
-    const blob = new Blob([cuesToSrt(activeTranscript.subtitle.cues)], {
-      type: 'text/plain;charset=utf-8',
+    const filename = `${resolveFileExportBaseName(trackName, trackId)}.transcript.${format}`
+    const blob = new Blob([serializeSubtitleExport(activeTranscript.subtitle.cues, format)], {
+      type: getSubtitleExportMimeType(format),
     })
 
     return { ok: true, filename, blob }
