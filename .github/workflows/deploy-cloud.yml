@@ -40,7 +40,7 @@ jobs:
     steps:
       - name: Resolve release artifact source
         id: resolve-artifact
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         env:
           REQUESTED_SHA: ${{ inputs.artifact_sha || '' }}
         with:
@@ -79,7 +79,7 @@ jobs:
             core.setOutput('sha', resolvedRun.head_sha)
 
       - name: Download release artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: cloud-release-${{ steps.resolve-artifact.outputs.sha }}
           run-id: ${{ steps.resolve-artifact.outputs.run_id }}
@@ -131,7 +131,22 @@ jobs:
             -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
             -p "$SSH_PORT" \
             "$SSH_USER@$SSH_HOST" \
-            "set -euo pipefail; ln -sfn '$RESOLVED_RELEASE_DIR' '$REMOTE_CURRENT_DIR'; sudo -n /usr/bin/systemctl restart '$SERVICE_NAME'; sudo -n /usr/bin/systemctl is-active --quiet '$SERVICE_NAME'"
+            "set -euo pipefail
+            chmod 755 '$RESOLVED_RELEASE_DIR/readio-cloud'
+            test -d '$RESOLVED_RELEASE_DIR/dist'
+            ln -sfn '$RESOLVED_RELEASE_DIR' '$REMOTE_CURRENT_DIR'
+
+            if ! sudo -n /usr/bin/systemctl restart '$SERVICE_NAME'; then
+              sudo -n /usr/bin/systemctl status '$SERVICE_NAME' --no-pager -l || true
+              sudo -n /usr/bin/journalctl -u '$SERVICE_NAME' -n 100 --no-pager || true
+              exit 1
+            fi
+
+            if ! sudo -n /usr/bin/systemctl is-active --quiet '$SERVICE_NAME'; then
+              sudo -n /usr/bin/systemctl status '$SERVICE_NAME' --no-pager -l || true
+              sudo -n /usr/bin/journalctl -u '$SERVICE_NAME' -n 100 --no-pager || true
+              exit 1
+            fi"
 
       - name: Smoke test
         run: |
