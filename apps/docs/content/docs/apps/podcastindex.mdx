@@ -1,0 +1,235 @@
+---
+title: Podcast Index API
+---
+
+# Podcast Index API Reference
+
+This document provides a reference for the Podcast Index APIs used in the Readio project. Podcast Index is an open alternative to the Apple/iTunes directory, providing tools and data for the podcasting ecosystem.
+
+---
+
+## 1. Authentication & Security
+
+Most API calls (except Apple Replacement endpoints) require authentication headers. Readio's backend handles these headers automatically.
+
+- **API Key**: Required for most `api/1.0` endpoints.
+- **API Secret**: Used to generate the `Authorization` hash.
+- **Headers**:
+  - `X-Auth-Key`: Your API Key.
+  - `X-Auth-Date`: Current Unix timestamp.
+  - `Authorization`: `sha1(api_key + api_secret + timestamp)`.
+  - `User-Agent`: A descriptive user agent for your app.
+
+---
+
+## 2. Apple Replacement APIs (No Key Needed)
+
+These endpoints are designed to be drop-in replacements for the Apple iTunes Search and Lookup APIs, but they return data from the Podcast Index database.
+
+### 🔍 Search (Apple Replacement)
+Replaces the Apple search API but returns data from the Podcast Index.
+- **URL**: `https://api.podcastindex.org/search`
+- **Params**: `term`, `pretty`
+- **Example**: Search for "batman".
+```bash
+curl "https://api.podcastindex.org/search?term=batman"
+```
+**Full Response**:
+```json
+{
+  "resultCount": 1,
+  "results": [
+    {
+      "wrapperType": "track",
+      "kind": "podcast",
+      "artistName": "Batman University",
+      "collectionName": "Batman University",
+      "trackName": "Batman University",
+      "feedUrl": "https://feeds.theincomparable.com/batmanuniversity",
+      "artworkUrl100": "https://www.theincomparable.com/imgs/logos/logo-batmanuniversity-300.png",
+      "genres": ["TV & Film", "Podcasts"],
+      "primaryGenreName": "TV & Film"
+    }
+  ]
+}
+```
+
+### 📖 Lookup (Apple Replacement)
+Replaces the Apple podcast lookup API but returns data from the Podcast Index.
+- **URL**: `https://api.podcastindex.org/lookup`
+- **Params**: `id`, `entity`, `pretty`
+- **Example**: Lookup by iTunes ID.
+```bash
+curl "https://api.podcastindex.org/lookup?entity=podcast&id=1636765656"
+```
+**Full Response**:
+```json
+{
+  "resultCount": 1,
+  "results": [
+    {
+      "wrapperType": "track",
+      "kind": "podcast",
+      "collectionId": 1636765656,
+      "trackId": 1636765656,
+      "artistName": "Podcast Index",
+      "collectionName": "The Podcasting 2.0 Podcast",
+      "feedUrl": "https://feeds.podcastindex.org/pc20",
+      "artworkUrl100": "https://podcastindex.org/apple-touch-icon.png"
+    }
+  ]
+}
+```
+
+---
+
+## 3. Native Search & Discovery
+
+Used for advanced keyword-based searching within the Podcast Index.
+
+### 🔎 Search Podcasts by Term
+Returns feeds matching the search terms in title, author, or owner.
+- **URL**: `https://api.podcastindex.org/api/1.0/search/byterm`
+- **Params**: `q`, `max`, `clean`, `fulltext`
+```bash
+# Example: Search for "batman university"
+curl "https://api.podcastindex.org/api/1.0/search/byterm?q=batman+university"
+```
+**Full Response**:
+```json
+{
+  "status": "true",
+  "feeds": [
+    {
+      "id": 75075,
+      "title": "Batman University",
+      "url": "https://feeds.theincomparable.com/batmanuniversity",
+      "originalUrl": "https://feeds.theincomparable.com/batmanuniversity",
+      "link": "https://www.theincomparable.com/batmanuniversity/",
+      "description": "Learn about the Dark Knight from the world's leading Bat-experts.",
+      "author": "The Incomparable",
+      "ownerName": "The Incomparable",
+      "image": "https://www.theincomparable.com/imgs/logos/logo-batmanuniversity-300.png",
+      "artwork": "https://www.theincomparable.com/imgs/logos/logo-batmanuniversity-300.png",
+      "lastUpdate": 1615152000,
+      "contentType": "audio/mpeg",
+      "itunesId": 1441923632,
+      "language": "en-us"
+    }
+  ],
+  "count": 1,
+  "query": "batman university"
+}
+```
+
+### 📜 Search Episodes by Person
+Returns episodes where the specified person is mentioned (Person tags, title, description, etc.).
+- **URL**: `https://api.podcastindex.org/api/1.0/search/byperson`
+- **Params**: `q`, `max`, `pretty`
+```bash
+# Example: Search for "adam curry"
+curl "https://api.podcastindex.org/api/1.0/search/byperson?q=adam%20curry"
+```
+
+---
+
+## 4. Feed & Episode Data
+
+### 📻 Get Podcast by Feed ID
+Returns full metadata for a feed using its Podcast Index ID.
+- **URL**: `https://api.podcastindex.org/api/1.0/podcasts/byfeedid`
+- **Params**: `id`, `pretty`
+```bash
+# Example: Lookup Feed 75075
+curl "https://api.podcastindex.org/api/1.0/podcasts/byfeedid?id=75075"
+```
+**Full Response**:
+```json
+{
+  "status": "true",
+  "feed": {
+    "id": 75075,
+    "podguid": "917393e3-1b1e-5cef-ace4-edaa54e1f810",
+    "title": "Batman University",
+    "url": "https://feeds.theincomparable.com/batmanuniversity",
+    "description": "Learn about the Dark Knight from the world's leading Bat-experts.",
+    "author": "The Incomparable",
+    "image": "https://www.theincomparable.com/imgs/logos/logo-batmanuniversity-300.png",
+    "itunesId": 1441923632
+  }
+}
+```
+
+### 🎯 Get Episodes by Feed ID
+Returns all episodes for a feed, sorted in reverse chronological order.
+- **URL**: `https://api.podcastindex.org/api/1.0/episodes/byfeedid`
+- **Params**: `id`, `since`, `max`, `fulltext`
+```bash
+# Example: Episodes for Feed 75075
+curl "https://api.podcastindex.org/api/1.0/episodes/byfeedid?id=75075"
+```
+**Full Response**:
+```json
+{
+  "status": "true",
+  "items": [
+    {
+      "id": 16795090,
+      "title": "Batman University 41: Bat-Inception",
+      "link": "https://www.theincomparable.com/batmanuniversity/41/",
+      "description": "The Batman is a movie about a man who's a detective...",
+      "guid": "incomparable:batmanuniversity:41",
+      "datePublished": 1646611200,
+      "enclosureUrl": "https://traffic.libsyn.com/batmanuniversity/batmanuniversity41.mp3",
+      "duration": 3456,
+      "explicit": 0,
+      "episode": 41
+    }
+  ],
+  "count": 1
+}
+```
+
+---
+
+## 5. Trending & Recent Content
+
+### 📈 Trending Podcasts
+Returns podcasts that are currently trending in the index.
+- **URL**: `https://api.podcastindex.org/api/1.0/podcasts/trending`
+- **Params**: `max`, `since`, `lang`, `cat`
+```bash
+curl "https://api.podcastindex.org/api/1.0/podcasts/trending?max=10"
+```
+
+### 🆕 Recent Episodes
+Returns the most recent episodes globally across the index.
+- **URL**: `https://api.podcastindex.org/api/1.0/recent/episodes`
+- **Params**: `max`, `before`, `fulltext`
+```bash
+curl "https://api.podcastindex.org/api/1.0/recent/episodes?max=20"
+```
+
+---
+
+## 6. Known Features & Limitations
+
+| Feature | Podcast Index Status | Notes |
+|---------|---------------------|-------|
+| **V4V Support** | ✅ Native | Provides `value` block data for Lightning payments. |
+| **Diarization** | ⚠️ Partial | Depends on whether the feed includes `podcast:transcript` with speaker tags. |
+| **Live Items** | ✅ Native | Supports `podcast:liveitem` for live broadcasts. |
+| **Open Access** | ✅ High | No platform-specific lock-in; supports the Podcasting 2.0 namespace. |
+
+---
+
+## Parameters Summary
+
+| Parameter | Description | Common Values |
+| :--- | :--- | :--- |
+| `q` | Search query (native API) | `term1+term2` |
+| `term` | Search term (replacement API) | `query` |
+| `max` | Max results to return | `10`, `50`, `100` |
+| `id` | Feed or Episode ID | Numeric PI ID or iTunes ID |
+| `lang` | Language filter | `en`, `zh`, `ja` |
+| `cat` | Category filter | See Category List API |

@@ -167,6 +167,26 @@ export function getPodcastEpisodes(
   )
 }
 
+export function getPodcastIndexEpisodes(
+  itunesId: string,
+  limit = 300,
+  signal?: AbortSignal
+): Promise<Episode[]> {
+  return fetchDiscoveryJSON(
+    buildDiscoveryURL(
+      '/api/v1/discovery/podcast-index/episodes',
+      new URLSearchParams({ itunesId, limit: String(limit) })
+    ),
+    (value) => {
+      if (!Array.isArray(value)) {
+        throw new Error('Invalid podcast index episodes payload')
+      }
+      return value.map((item) => EpisodeSchema.parse(item))
+    },
+    signal
+  )
+}
+
 export function lookupPodcastsByIds(
   ids: string[],
   country = 'us',

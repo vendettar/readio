@@ -844,6 +844,161 @@ func TestDiscoveryServiceRejectsInvalidParamsAndMapsUpstreamErrors(t *testing.T)
 		}
 	})
 
+	t.Run("podcastindex episodes honors limit param", func(t *testing.T) {
+		t.Setenv(podcastIndexAPIKeyEnv, "test-key")
+		t.Setenv(podcastIndexAPISecretEnv, "test-secret")
+		t.Setenv(podcastIndexUserAgentEnv, "readio-test")
+
+		service := &discoveryService{
+			client: &http.Client{
+				Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+					if req.URL.String() != podcastIndexBaseURL+"/episodes/byitunesid?id=123&max=50" {
+						t.Fatalf("upstream url = %q", req.URL.String())
+					}
+					return jsonResponse(http.StatusOK, `{
+						"status":"true",
+						"items":[
+							{
+								"id":123,
+								"guid":"episode-guid-123",
+								"title":"PI Episode",
+								"datePublished":1764547200,
+								"enclosureUrl":"https://example.com/audio.mp3"
+							}
+						],
+						"count":1
+					}`), nil
+				}),
+			},
+			timeout:   time.Second,
+			userAgent: discoveryUserAgent,
+			bodyLimit: discoveryBodyLimit,
+			cache:     newDiscoveryCache(discoveryCacheMaxKeys),
+		}
+
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, discoveryPodcastIndexEpisodesRoute+"?itunesId=123&limit=50", nil)
+		service.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+		}
+
+		var payload []episodeLookupResponse
+		decodeResponseJSON(t, rr.Body, &payload)
+		if len(payload) != 1 {
+			t.Fatalf("payload length = %d, want 1", len(payload))
+		}
+		if payload[0].ID != "episode-guid-123" {
+			t.Fatalf("payload[0].ID = %q, want episode-guid-123", payload[0].ID)
+		}
+	})
+
+	t.Run("podcastindex episodes rejects missing itunes id", func(t *testing.T) {
+		service := newDiscoveryService()
+
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, discoveryPodcastIndexEpisodesRoute, nil)
+		service.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusBadRequest)
+		}
+
+		var payload map[string]string
+		decodeResponseJSON(t, rr.Body, &payload)
+		if payload["code"] != "MISSING_ITUNES_ID" {
+			t.Fatalf("code = %q, want MISSING_ITUNES_ID", payload["code"])
+		}
+	})
+
+	t.Run("podcastindex episodes rejects invalid itunes id", func(t *testing.T) {
+		service := newDiscoveryService()
+
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, discoveryPodcastIndexEpisodesRoute+"?itunesId=not-a-number", nil)
+		service.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusBadRequest)
+		}
+
+		var payload map[string]string
+		decodeResponseJSON(t, rr.Body, &payload)
+		if payload["code"] != "INVALID_ITUNES_ID" {
+			t.Fatalf("code = %q, want INVALID_ITUNES_ID", payload["code"])
+		}
+	})
+
+	t.Run("podcastindex episodes rejects invalid limit", func(t *testing.T) {
+		service := newDiscoveryService()
+
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, discoveryPodcastIndexEpisodesRoute+"?itunesId=123&limit=999", nil)
+		service.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusBadRequest)
+		}
+
+		var payload map[string]string
+		decodeResponseJSON(t, rr.Body, &payload)
+		if payload["code"] != "INVALID_LIMIT" {
+			t.Fatalf("code = %q, want INVALID_LIMIT", payload["code"])
+		}
+	})
+
+	t.Run("podcastindex timeout maps to gateway timeout json", func(t *testing.T) {
+		t.Setenv(podcastIndexAPIKeyEnv, "test-key")
+		t.Setenv(podcastIndexAPISecretEnv, "test-secret")
+		t.Setenv(podcastIndexUserAgentEnv, "readio-test")
+
+		service := &discoveryService{
+			client: &http.Client{
+				Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+					<-req.Context().Done()
+					return nil, req.Context().Err()
+				}),
+			},
+			timeout:   20 * time.Millisecond,
+			userAgent: discoveryUserAgent,
+			bodyLimit: discoveryBodyLimit,
+			cache:     newDiscoveryCache(discoveryCacheMaxKeys),
+		}
+
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, discoveryPodcastIndexEpisodesRoute+"?itunesId=123", nil)
+		service.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusGatewayTimeout {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusGatewayTimeout)
+		}
+
+		var payload map[string]string
+		decodeResponseJSON(t, rr.Body, &payload)
+		if payload["code"] != "UPSTREAM_TIMEOUT" {
+			t.Fatalf("code = %q, want UPSTREAM_TIMEOUT", payload["code"])
+		}
+	})
+
+	t.Run("podcastindex missing credentials maps to service config error", func(t *testing.T) {
+		service := newDiscoveryService()
+
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, discoveryPodcastIndexEpisodesRoute+"?itunesId=123", nil)
+		service.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusServiceUnavailable {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusServiceUnavailable)
+		}
+
+		var payload map[string]string
+		decodeResponseJSON(t, rr.Body, &payload)
+		if payload["code"] != "DISCOVERY_PROVIDER_NOT_CONFIGURED" {
+			t.Fatalf("code = %q, want DISCOVERY_PROVIDER_NOT_CONFIGURED", payload["code"])
+		}
+	})
+
 	t.Run("rejects empty search term", func(t *testing.T) {
 		service := newDiscoveryService()
 

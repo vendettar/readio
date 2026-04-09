@@ -173,6 +173,17 @@ func (s *discoveryService) fetchJSON(ctx context.Context, requestURL string, des
 	req.Header.Set("Accept", "application/json")
 	req.Header.Set("User-Agent", s.userAgent)
 
+	return s.executeJSONRequest(req, dest)
+}
+
+func (s *discoveryService) executeJSONRequest(req *http.Request, dest any) error {
+	if req.Header.Get("Accept") == "" {
+		req.Header.Set("Accept", "application/json")
+	}
+	if req.Header.Get("User-Agent") == "" {
+		req.Header.Set("User-Agent", s.userAgent)
+	}
+
 	client := s.client
 	if client == nil {
 		client = newDiscoveryService().client
@@ -180,7 +191,7 @@ func (s *discoveryService) fetchJSON(ctx context.Context, requestURL string, des
 
 	resp, err := client.Do(req)
 	if err != nil {
-		if ctx.Err() != nil {
+		if req.Context().Err() != nil {
 			return errDiscoveryTimeout
 		}
 		return fmt.Errorf("perform discovery upstream request: %w", err)

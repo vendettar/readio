@@ -29,6 +29,7 @@ const (
 	discoveryLookupPodcastRoute               = "/api/v1/discovery/lookup/podcast"
 	discoveryLookupPodcastEpisodesRoute       = "/api/v1/discovery/lookup/podcast-episodes"
 	discoveryLookupPodcastsRoute              = "/api/v1/discovery/lookup/podcasts"
+	discoveryPodcastIndexEpisodesRoute        = "/api/v1/discovery/podcast-index/episodes"
 	discoveryRSSBaseURL                       = "https://rss.marketingtools.apple.com/api/v2"
 	discoverySearchBaseURL                    = "https://itunes.apple.com/search"
 	discoveryLookupBaseURL                    = "https://itunes.apple.com/lookup"
@@ -83,7 +84,6 @@ func newDiscoveryCache(maxKeys int) *discoveryCache {
 	}
 }
 
-
 func (c *discoveryCache) getWithStatus(key string) (any, string, bool) {
 	c.mu.RLock()
 	entry, ok := c.entries[key]
@@ -95,16 +95,6 @@ func (c *discoveryCache) getWithStatus(key string) (any, string, bool) {
 		return entry.data, "fresh", true
 	}
 	return entry.data, "stale", true
-}
-
-func (c *discoveryCache) getStale(key string) (any, bool) {
-	c.mu.RLock()
-	entry, ok := c.entries[key]
-	c.mu.RUnlock()
-	if !ok {
-		return nil, false
-	}
-	return entry.data, true
 }
 
 func (c *discoveryCache) set(key string, data any, ttl time.Duration) {
@@ -141,7 +131,6 @@ func (c *discoveryCache) set(key string, data any, ttl time.Duration) {
 	}
 }
 
-
 func (s *discoveryService) getWithGracefulDegradation(
 	ctx context.Context,
 	cacheKey string,
@@ -153,43 +142,25 @@ func (s *discoveryService) getWithGracefulDegradation(
 		return data, CacheStatusFreshHit, nil
 	}
 
-	if !ok {
-		result, err, _ := s.cacheOwner.Do(cacheKey, func() (any, error) {
-			return fetch(ctx)
-		})
-		if err != nil {
-			isUpstream := errors.Is(err, errDiscoveryUpstreamError) ||
-				errors.Is(err, errDiscoveryTimeout) ||
-				errors.Is(err, errDiscoveryTooLarge) ||
-				errors.Is(err, &discoveryUpstreamStatusError{})
-			if isUpstream {
-				if staleData, staleOk := s.cache.getStale(cacheKey); staleOk {
-					return staleData, CacheStatusStaleFallback, nil
-				}
-			}
-			return nil, CacheStatusMissError, err
-		}
-		s.cache.set(cacheKey, result, ttl)
-		return result, CacheStatusRefreshed, nil
-	}
-
 	result, err, _ := s.cacheOwner.Do(cacheKey, func() (any, error) {
 		return fetch(ctx)
 	})
 	if err != nil {
-		isUpstream := errors.Is(err, errDiscoveryUpstreamError) ||
-			errors.Is(err, errDiscoveryTimeout) ||
-			errors.Is(err, errDiscoveryTooLarge) ||
-			errors.Is(err, &discoveryUpstreamStatusError{})
-		if isUpstream {
-			if staleData, staleOk := s.cache.getStale(cacheKey); staleOk {
-				return staleData, CacheStatusStaleFallback, nil
-			}
+		if ok && isGracefulDegradationUpstreamError(err) {
+			return data, CacheStatusStaleFallback, nil
 		}
 		return nil, CacheStatusMissError, err
 	}
+
 	s.cache.set(cacheKey, result, ttl)
 	return result, CacheStatusRefreshed, nil
+}
+
+func isGracefulDegradationUpstreamError(err error) bool {
+	return errors.Is(err, errDiscoveryUpstreamError) ||
+		errors.Is(err, errDiscoveryTimeout) ||
+		errors.Is(err, errDiscoveryTooLarge) ||
+		errors.Is(err, &discoveryUpstreamStatusError{})
 }
 
 var (
@@ -220,10 +191,11 @@ const (
 
 // Upstream kind constants for observability.
 const (
-	UpstreamKindAppleSearch = "apple-search"
-	UpstreamKindAppleFeed   = "apple-feed"
-	UpstreamKindAppleLookup = "apple-lookup"
-	UpstreamKindFeed        = "feed"
+	UpstreamKindAppleSearch  = "apple-search"
+	UpstreamKindAppleFeed    = "apple-feed"
+	UpstreamKindAppleLookup  = "apple-lookup"
+	UpstreamKindFeed         = "feed"
+	UpstreamKindPodcastIndex = "podcastindex"
 )
 
 type discoveryService struct {
@@ -300,6 +272,8 @@ func (s *discoveryService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.handleLookupPodcastEpisodes(w, r)
 	case discoveryLookupPodcastsRoute:
 		s.handleLookupPodcasts(w, r)
+	case discoveryPodcastIndexEpisodesRoute:
+		s.handlePodcastIndexEpisodes(w, r)
 	default:
 		writeDiscoveryError(w, http.StatusNotFound, "NOT_FOUND", "unknown discovery endpoint")
 	}

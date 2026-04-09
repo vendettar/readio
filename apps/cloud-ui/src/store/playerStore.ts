@@ -3,7 +3,11 @@ import { isAbortLikeError } from '../lib/fetchUtils'
 import { log, logError, warn } from '../lib/logger'
 import { normalizePodcastAudioUrl } from '../lib/networking/urlUtils'
 import type { PlaybackRequestMode } from '../lib/player/playbackMode'
-import { __dropPlaybackSourceObjectUrl } from '../lib/player/playbackSource'
+import { collectPlaybackBlobUrls, revokePlaybackBlobUrls } from '../lib/player/playerBlobUrls'
+import {
+  buildRestoredLocalBlobState,
+  buildRestoredRemoteSessionState,
+} from '../lib/player/playerSessionRestore'
 import { DownloadsRepository } from '../lib/repositories/DownloadsRepository'
 import { FilesRepository } from '../lib/repositories/FilesRepository'
 import { PlaybackRepository } from '../lib/repositories/PlaybackRepository'
@@ -168,16 +172,6 @@ function isSessionNotFoundError(error: unknown): boolean {
   return error.message.includes('Playback session') && error.message.includes('not found')
 }
 
-function revokeBlobUrl(url: string): void {
-  try {
-    URL.revokeObjectURL(url)
-  } catch {
-    // Ignore revocation errors
-  } finally {
-    __dropPlaybackSourceObjectUrl(url)
-  }
-}
-
 export const usePlayerStore = create<PlayerState>((set, get) => ({
   ...initialState,
   volume: getInitialVolume(),
@@ -223,14 +217,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     }
 
     if (isSameTrackButDifferentUrl) {
-      state.activeBlobUrls.forEach((u) => {
-        revokeBlobUrl(u)
-      })
-      const isAudioBlob = normalizedUrl ? normalizedUrl.startsWith('blob:') : false
-      const isCoverBlob = typeof coverArt === 'string' && coverArt.startsWith('blob:')
-      const newBlobUrls: string[] = []
-      if (isAudioBlob && normalizedUrl) newBlobUrls.push(normalizedUrl)
-      if (isCoverBlob && coverArt) newBlobUrls.push(coverArt as string)
+      revokePlaybackBlobUrls(state.activeBlobUrls)
+      const newBlobUrls = collectPlaybackBlobUrls(normalizedUrl, coverArt)
 
       set({
         audioUrl: normalizedUrl,
@@ -249,16 +237,8 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     }
 
     // New Track Implementation
-    state.activeBlobUrls.forEach((u) => {
-      revokeBlobUrl(u)
-    })
-
-    const isAudioBlob = normalizedUrl ? normalizedUrl.startsWith('blob:') : false
-    const isCoverBlob = typeof coverArt === 'string' && coverArt.startsWith('blob:')
-
-    const newBlobUrls: string[] = []
-    if (isAudioBlob && normalizedUrl) newBlobUrls.push(normalizedUrl)
-    if (isCoverBlob && coverArt) newBlobUrls.push(coverArt as string)
+    revokePlaybackBlobUrls(state.activeBlobUrls)
+    const newBlobUrls = collectPlaybackBlobUrls(normalizedUrl, coverArt)
 
     const shouldResetSession = (!!identityUrl && identityUrl !== stateIdentityUrl) || !identityUrl
 
@@ -357,9 +337,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
   reset: () => {
     set((state) => {
-      state.activeBlobUrls.forEach((u) => {
-        revokeBlobUrl(u)
-      })
+      revokePlaybackBlobUrls(state.activeBlobUrls)
       return initialState
     })
     useTranscriptStore.getState().resetTranscript()
@@ -401,9 +379,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
     set((state) => {
       // CRITICAL: Revoke any existing local blob URLs inside the updater to prevent race conditions
-      state.activeBlobUrls.forEach((u) => {
-        revokeBlobUrl(u)
-      })
+      revokePlaybackBlobUrls(state.activeBlobUrls)
 
       return {
         audioUrl: url,
@@ -435,9 +411,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
     set((state) => {
       // CRITICAL: Revoke any existing local blob URLs inside the updater to prevent race conditions
-      state.activeBlobUrls.forEach((u) => {
-        revokeBlobUrl(u)
-      })
+      revokePlaybackBlobUrls(state.activeBlobUrls)
 
       return {
         audioUrl: url,
@@ -641,24 +615,14 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
           set((state) => {
             // CRITICAL: Revoke ANY existing blob URLs before setting new ones
-            state.activeBlobUrls.forEach((u) => {
-              revokeBlobUrl(u)
-            })
-
-            const newBlobUrls = [url]
-
-            return {
-              sessionId: lastSession.id,
+            revokePlaybackBlobUrls(state.activeBlobUrls)
+            return buildRestoredLocalBlobState({
+              session: lastSession,
               audioUrl: url,
-              audioLoaded: true,
               audioTitle: file.name,
               coverArtUrl: artwork,
-              activeBlobUrls: newBlobUrls,
-              localTrackId: lastSession.localTrackId ?? null,
-              progress: lastSession.progress,
-              status: 'paused',
-              isPlaying: false,
-            }
+              activeBlobUrls: [url],
+            })
           })
           useTranscriptStore.getState().resetTranscript()
           usePlayerSurfaceStore.getState().setPlayableContext(true)
@@ -704,33 +668,14 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
             }
 
             set((state) => {
-              state.activeBlobUrls.forEach((u) => {
-                revokeBlobUrl(u)
-              })
-
-              return {
-                sessionId: lastSession.id,
+              revokePlaybackBlobUrls(state.activeBlobUrls)
+              return buildRestoredRemoteSessionState({
+                session: lastSession,
                 audioUrl: url,
-                audioLoaded: true,
-                audioTitle: lastSession.title || '',
                 coverArtUrl: artwork || lastSession.artworkUrl || '',
                 activeBlobUrls: [url],
                 localTrackId: restoredLocalTrackId,
-                progress: lastSession.progress,
-                status: 'paused',
-                isPlaying: false,
-                episodeMetadata: {
-                  description: lastSession.description,
-                  podcastTitle: lastSession.podcastTitle,
-                  podcastFeedUrl: lastSession.podcastFeedUrl,
-                  transcriptUrl: lastSession.transcriptUrl,
-                  artworkUrl: lastSession.artworkUrl,
-                  publishedAt: lastSession.publishedAt,
-                  episodeId: lastSession.episodeId,
-                  providerPodcastId: lastSession.providerPodcastId,
-                  providerEpisodeId: lastSession.providerEpisodeId,
-                },
-              }
+              })
             })
             useTranscriptStore.getState().resetTranscript()
             usePlayerSurfaceStore.getState().setPlayableContext(true)
@@ -740,27 +685,13 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
         // Fallback: no matching download or blob missing — restore from remote URL
         if (!get().audioLoaded || get().sessionId !== lastSession.id) {
           log('[PlayerStore] Restoring remote podcast session:', lastSession.audioUrl)
-          set({
-            sessionId: lastSession.id,
-            audioUrl: lastSession.audioUrl,
-            audioLoaded: true,
-            audioTitle: lastSession.title || '',
-            progress: lastSession.progress,
-            coverArtUrl: lastSession.artworkUrl || '',
-            status: 'paused',
-            isPlaying: false,
-            episodeMetadata: {
-              description: lastSession.description,
-              podcastTitle: lastSession.podcastTitle,
-              podcastFeedUrl: lastSession.podcastFeedUrl,
-              transcriptUrl: lastSession.transcriptUrl,
-              artworkUrl: lastSession.artworkUrl,
-              publishedAt: lastSession.publishedAt,
-              episodeId: lastSession.episodeId,
-              providerPodcastId: lastSession.providerPodcastId,
-              providerEpisodeId: lastSession.providerEpisodeId,
-            },
-          })
+          set(
+            buildRestoredRemoteSessionState({
+              session: lastSession,
+              audioUrl: lastSession.audioUrl,
+              coverArtUrl: lastSession.artworkUrl || '',
+            })
+          )
           useTranscriptStore.getState().resetTranscript()
           usePlayerSurfaceStore.getState().setPlayableContext(true)
         }

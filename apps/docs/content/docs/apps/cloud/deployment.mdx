@@ -16,6 +16,7 @@ In production Cloud:
 - Cloud does **not** use `apps/cloud-ui/public/env.js` or `dist/env.js` as runtime configuration truth.
 - The backend emits runtime config from an explicit browser-safe allowlist only.
 - Server-owned runtime values (listen port, paths, abuse-control settings) stay in VPS env or systemd env files (`/etc/readio/readio-cloud.env`).
+- PodcastIndex server credentials also stay in the VPS/systemd runtime env file (`/etc/readio/readio-cloud.env`), not in GitHub Actions variables and not in `/env.js`.
 
 There is no separate static Cloud `public/env.js` template in the current contract.
 The frontend reads `window.__READIO_ENV__`, and Cloud runtime ownership comes from backend-generated `/env.js`.
@@ -107,6 +108,21 @@ Prefer an env file for mutable runtime configuration instead of hard-coding ever
 - Put secrets and operational knobs into `/etc/readio/readio-cloud.env`.
 - This keeps the `systemd` unit stable while allowing runtime-only changes without rewriting the service definition.
 
+PodcastIndex Phase 1 uses the same env-file contract:
+
+- `PODCAST_INDEX_API_KEY`
+- `PODCAST_INDEX_API_SECRET`
+- `PODCAST_INDEX_USER_AGENT`
+
+These values belong in `/etc/readio/readio-cloud.env` because they are backend-only runtime configuration for `apps/cloud-api`.
+
+Do not place them in:
+
+- GitHub Actions variables
+- browser runtime config (`/env.js`)
+- frontend `.env` files
+- `apps/cloud-ui`
+
 Example bootstrap script:
 
 ```bash
@@ -138,6 +154,13 @@ READIO_PROXY_RATE_LIMIT_WINDOW_MS=60000
 # ASR Proxy Worker config (optional)
 READIO_ASR_WORKER_BASE_URL=https://asr-proxy.example.workers.dev
 READIO_ASR_WORKER_SHARED_SECRET=your-high-entropy-secret-string
+# Built-in Cloudflare ASR config (required for "system-provided" Cloudflare ASR)
+READIO_CF_ACCOUNT_ID=your-cloudflare-account-id
+READIO_CF_API_TOKEN=your-cloudflare-api-token
+# PodcastIndex supplementary hydration config (required for PodcastIndex cutover)
+PODCAST_INDEX_API_KEY=your-podcastindex-api-key
+PODCAST_INDEX_API_SECRET=your-podcastindex-api-secret
+PODCAST_INDEX_USER_AGENT=Readio/1.0 (+https://www.readio.top)
 EOF
 sudo chmod 600 /etc/readio/readio-cloud.env
 
@@ -178,6 +201,8 @@ Important details:
 - The static Cloud UI assets are served from `/opt/readio/current/dist`.
 - The SQLite file stays outside release directories, for example `/opt/readio/shared/data/readio.db`.
 - `/etc/readio/readio-cloud.env` is the recommended home for mutable Cloud runtime configuration.
+- PodcastIndex supplementary hydration credentials and user agent also belong in `/etc/readio/readio-cloud.env`.
+- If `PODCAST_INDEX_API_KEY` or `PODCAST_INDEX_API_SECRET` is missing, `/api/v1/discovery/podcast-index/episodes` will return `503 DISCOVERY_PROVIDER_NOT_CONFIGURED`.
 - Cloud ASR relay protection is driven by `READIO_ASR_ALLOWED_ORIGINS`, `READIO_ASR_RELAY_PUBLIC_TOKEN`, `READIO_ASR_RATE_LIMIT_BURST`, and `READIO_ASR_RATE_LIMIT_WINDOW_MS`.
 - Cloud proxy rate limiting is driven by `READIO_PROXY_RATE_LIMIT_BURST` and `READIO_PROXY_RATE_LIMIT_WINDOW_MS`.
 - Configure `READIO_ASR_RELAY_PUBLIC_TOKEN` once in backend runtime env. In production Cloud, `apps/cloud-api` emits the same browser-public value through dynamic `/env.js`, so the browser can send `X-Readio-Relay-Public-Token` without a separately maintained frontend runtime token. This is a lightweight abuse-control value, not a secret boundary.

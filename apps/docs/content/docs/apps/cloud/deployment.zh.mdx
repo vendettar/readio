@@ -16,6 +16,7 @@ description: Cloud CD 工作流与远程发布布局的运维说明。
 - Cloud **不使用** `apps/cloud-ui/public/env.js` 或 `dist/env.js` 作为运行时配置基准。
 - 后端仅通过显式浏览器安全 allowlist 发出运行时配置。
 - 服务端所有的运行时值（监听端口、路径、滥用控制设置）保留在 VPS 环境或 systemd 环境文件（`/etc/readio/readio-cloud.env`）中。
+- PodcastIndex 的服务端凭证也保留在 VPS/systemd 运行时环境文件（`/etc/readio/readio-cloud.env`）中，不放到 GitHub Actions variables，也不发到 `/env.js`。
 
 当前契约下不存在单独的静态 Cloud `public/env.js` 模板。
 前端读取 `window.__READIO_ENV__`，而 Cloud 的运行时配置所有权来自后端动态生成的 `/env.js`。
@@ -107,6 +108,21 @@ SSH 安全规则：
 - secrets 和可调运维参数放到 `/etc/readio/readio-cloud.env`。
 - 这样可以保持 `systemd` unit 稳定，同时允许你只修改运行时配置而不反复重写服务定义。
 
+PodcastIndex Phase 1 也使用同一套 env-file 契约：
+
+- `PODCAST_INDEX_API_KEY`
+- `PODCAST_INDEX_API_SECRET`
+- `PODCAST_INDEX_USER_AGENT`
+
+这些值属于 `apps/cloud-api` 的后端运行时配置，应写入 `/etc/readio/readio-cloud.env`。
+
+不要放到：
+
+- GitHub Actions variables
+- 浏览器运行时配置（`/env.js`）
+- 前端 `.env` 文件
+- `apps/cloud-ui`
+
 示例启动脚本：
 
 ```bash
@@ -138,6 +154,13 @@ READIO_PROXY_RATE_LIMIT_WINDOW_MS=60000
 # ASR Proxy Worker 配置 (可选)
 READIO_ASR_WORKER_BASE_URL=https://asr-proxy.example.workers.dev
 READIO_ASR_WORKER_SHARED_SECRET=your-high-entropy-secret-string
+# 内置 Cloudflare ASR 配置 (使用“系统提供”模式时必填)
+READIO_CF_ACCOUNT_ID=your-cloudflare-account-id
+READIO_CF_API_TOKEN=your-cloudflare-api-token
+# PodcastIndex 补充历史 episode 配置 (切换到 PodcastIndex supplementary hydration 时必填)
+PODCAST_INDEX_API_KEY=your-podcastindex-api-key
+PODCAST_INDEX_API_SECRET=your-podcastindex-api-secret
+PODCAST_INDEX_USER_AGENT=Readio/1.0 (+https://www.readio.top)
 EOF
 sudo chmod 600 /etc/readio/readio-cloud.env
 
@@ -178,6 +201,8 @@ sudo "$SYSTEMCTL_BIN" enable "$SERVICE_NAME"
 - Cloud UI 静态资源从 `/opt/readio/current/dist` 提供。
 - SQLite 文件应保留在发布目录之外，例如 `/opt/readio/shared/data/readio.db`。
 - `/etc/readio/readio-cloud.env` 是推荐的 Cloud 可变运行时配置位置。
+- PodcastIndex supplementary hydration 的凭证和 user agent 也应写在 `/etc/readio/readio-cloud.env`。
+- 如果缺少 `PODCAST_INDEX_API_KEY` 或 `PODCAST_INDEX_API_SECRET`，`/api/v1/discovery/podcast-index/episodes` 会返回 `503 DISCOVERY_PROVIDER_NOT_CONFIGURED`。
 - Cloud ASR relay 的防滥用边界依赖 `READIO_ASR_ALLOWED_ORIGINS`、`READIO_ASR_RELAY_PUBLIC_TOKEN`、`READIO_ASR_RATE_LIMIT_BURST`、`READIO_ASR_RATE_LIMIT_WINDOW_MS`。
 - Cloud `/api/proxy` 的应用级速率限制由 `READIO_PROXY_RATE_LIMIT_BURST` 和 `READIO_PROXY_RATE_LIMIT_WINDOW_MS` 控制。
 - `READIO_ASR_RELAY_PUBLIC_TOKEN` 只需要在后端运行时环境中配置一次。生产 Cloud 会由 `apps/cloud-api` 动态生成 `/env.js`，把同一个浏览器可见值下发给前端，因此不再需要额外维护一份前端运行时 token。它只是轻量级防滥用值，不是强 secret 边界。

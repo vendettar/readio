@@ -14,7 +14,7 @@ import { Button } from '../../components/ui/button'
 import { ExpandableDescription } from '../../components/ui/expandable-description'
 import { Skeleton } from '../../components/ui/skeleton'
 import { useEpisodePlayback } from '../../hooks/useEpisodePlayback'
-import discovery from '../../lib/discovery'
+import discovery, { type Episode } from '../../lib/discovery'
 import {
   buildPodcastFeedQueryKey,
   buildPodcastLookupQueryKey,
@@ -23,6 +23,33 @@ import {
 import { formatCompactNumber } from '../../lib/formatters'
 import { getDiscoveryArtworkUrl } from '../../lib/imageUtils'
 import { logError } from '../../lib/logger'
+import { normalizePodcastAudioUrl } from '../../lib/networking/urlUtils'
+
+function getEpisodeIdentities(ep: Episode): string[] {
+  const identities: string[] = []
+  const normalizedAudio = normalizePodcastAudioUrl(ep.audioUrl)
+  if (normalizedAudio) identities.push(`audio:${normalizedAudio}`)
+  if (ep.id) identities.push(`guid:${ep.id}`)
+  if (ep.pubDate && ep.title) identities.push(`title:${ep.title.toLowerCase()}:${ep.pubDate}`)
+  return identities
+}
+
+function isNewEpisode(addedIdentities: Set<string>, ep: Episode): boolean {
+  const identities = getEpisodeIdentities(ep)
+  if (identities.length === 0) return false
+  if (identities.some((identity) => addedIdentities.has(identity))) return false
+  for (const identity of identities) {
+    addedIdentities.add(identity)
+  }
+  return true
+}
+
+function getFeedDataHash(feed: { episodes?: Episode[] } | undefined): string {
+  if (!feed?.episodes?.length) return 'empty'
+  const ids = feed.episodes.map((ep) => ep.id).join(',')
+  return `${feed.episodes.length}-${ids.slice(0, 64)}`
+}
+
 import {
   buildPodcastEpisodesRoute,
   buildPodcastShowRoute,
@@ -128,6 +155,97 @@ export default function PodcastShowPage() {
     staleTime: PODCAST_QUERY_CACHE_POLICY.feed.staleTime,
     gcTime: PODCAST_QUERY_CACHE_POLICY.feed.gcTime,
   })
+
+  const feedDataHash = getFeedDataHash(feed)
+  const appleTotal = podcast?.trackCount ?? 0
+  const rssCount = feed?.episodes?.length ?? 0
+  const podcastItunesId = String(podcast?.providerPodcastId ?? id ?? '').trim()
+  const shouldHydrate =
+    rssCount < 10 &&
+    appleTotal >= 20 &&
+    appleTotal > rssCount &&
+    appleTotal > 0 &&
+    rssCount / appleTotal < 0.8 &&
+    podcastItunesId.length > 0
+
+  const { data: hydratedEpisodes } = useQuery({
+    queryKey: [
+      'podcast-hydration',
+      id,
+      normalizedRouteCountry,
+      podcastItunesId || null,
+      feedDataHash,
+      appleTotal,
+    ],
+    queryFn: async ({ signal }) => {
+      if (!shouldHydrate || !podcastItunesId) {
+        return null
+      }
+
+      try {
+        const piEpisodes = await discovery.getPodcastIndexEpisodes(
+          podcastItunesId,
+          Math.min(appleTotal, 300),
+          signal
+        )
+
+        if (!piEpisodes || piEpisodes.length === 0) {
+          return null
+        }
+
+        const addedIdentities = new Set<string>()
+        const merged: Episode[] = []
+
+        for (const ep of feed?.episodes ?? []) {
+          if (isNewEpisode(addedIdentities, ep)) {
+            merged.push(ep)
+          }
+        }
+
+        for (const ep of piEpisodes) {
+          if (isNewEpisode(addedIdentities, ep)) {
+            merged.push(ep)
+          }
+        }
+
+        if (merged.length <= rssCount) {
+          return null
+        }
+
+        merged.sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime())
+
+        if (import.meta.env.DEV) {
+          logError('[PodcastShowPage] episodes_hydration_applied', {
+            reason: 'applied',
+            source: 'podcastindex',
+            podcastId: id,
+            country: normalizedRouteCountry,
+            rssCount,
+            appleTotal,
+            mergedCount: merged.length,
+          })
+        }
+
+        return merged
+      } catch (err) {
+        if (import.meta.env.DEV) {
+          logError('[PodcastShowPage] episodes_hydration_failed', {
+            reason: 'fetch_failed',
+            source: 'podcastindex',
+            podcastId: id,
+            country: normalizedRouteCountry,
+            error: err,
+          })
+        }
+        return null
+      }
+    },
+    enabled: shouldHydrate && rssCount > 0,
+  })
+
+  const episodes = shouldHydrate
+    ? (hydratedEpisodes ?? feed?.episodes ?? [])
+    : (feed?.episodes ?? [])
 
   // Subscription state
   const subscriptions = useExploreStore((state) => state.subscriptions)
@@ -247,7 +365,7 @@ export default function PodcastShowPage() {
     Boolean(feed) &&
     !isLoadingFeed &&
     Boolean(normalizedRouteCountry && globalCountry && normalizedRouteCountry !== globalCountry) &&
-    !((feed?.episodes?.length ?? 0) > 0)
+    !(episodes.length > 0)
 
   if (isRegionUnavailable) {
     if (import.meta.env.DEV) {
@@ -334,10 +452,10 @@ export default function PodcastShowPage() {
 
             {/* Primary Interactions - Aligned to bottom */}
             <div className="flex items-end gap-3 pt-6 pe-4">
-              {feed?.episodes?.[0] && (
+              {episodes[0] && (
                 <Button
                   onClick={() =>
-                    playEpisode(feed.episodes[0], podcast, normalizedRouteCountry ?? undefined)
+                    playEpisode(episodes[0], podcast, normalizedRouteCountry ?? undefined)
                   }
                   className="rounded-md bg-primary hover:opacity-90 text-primary-foreground px-5 h-8 font-bold text-xs flex items-center gap-1.5 shadow-none transition-all active:scale-95"
                 >
@@ -363,7 +481,7 @@ export default function PodcastShowPage() {
         {/* Episodes Section */}
         <section>
           <div className="flex items-center justify-between mb-4">
-            {feed?.episodes && feed.episodes.length > 8 ? (
+            {episodes.length > 8 ? (
               <Button asChild variant="ghost" className="p-0 h-auto hover:bg-transparent">
                 {episodesRoute ? (
                   <Link
@@ -394,9 +512,9 @@ export default function PodcastShowPage() {
             </div>
           ) : feedError ? (
             <p className="text-muted-foreground py-8 text-center">{t('errorFeedLoadFailed')}</p>
-          ) : feed?.episodes && feed.episodes.length > 0 ? (
+          ) : episodes.length > 0 ? (
             <div className="flex flex-col">
-              {feed.episodes.slice(0, 8).map((episode, index) => (
+              {episodes.slice(0, 8).map((episode, index) => (
                 <EpisodeRow
                   key={episode.id}
                   episode={episode}
@@ -407,7 +525,7 @@ export default function PodcastShowPage() {
               ))}
 
               {/* See All Button - Only show if there are more than 8 episodes */}
-              {feed?.episodes && feed.episodes.length > 8 && (
+              {episodes.length > 8 && (
                 <div className="pt-2">
                   <Button
                     asChild
@@ -418,7 +536,7 @@ export default function PodcastShowPage() {
                       <Link to={episodesRoute.to} params={episodesRoute.params}>
                         {t('seeAll', {
                           total: formatCompactNumber(
-                            podcast.trackCount || feed.episodes.length,
+                            podcast.trackCount || episodes.length,
                             language
                           ),
                         })}
@@ -427,7 +545,7 @@ export default function PodcastShowPage() {
                       <span>
                         {t('seeAll', {
                           total: formatCompactNumber(
-                            podcast.trackCount || feed.episodes.length,
+                            podcast.trackCount || episodes.length,
                             language
                           ),
                         })}

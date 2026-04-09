@@ -4,6 +4,7 @@ import {
   fetchTopPodcasts as fetchCloudTopPodcasts,
   getPodcast as getCloudPodcast,
   getPodcastEpisodes as getCloudPodcastEpisodes,
+  getPodcastIndexEpisodes as getCloudPodcastIndexEpisodes,
   lookupPodcastsByIds as lookupCloudPodcastsByIds,
   searchEpisodes as searchCloudEpisodes,
   searchPodcasts as searchCloudPodcasts,
@@ -77,6 +78,10 @@ const discovery = {
   ) => {
     void options
     return getCloudPodcastEpisodes(id, country, limit, signal)
+  },
+
+  getPodcastIndexEpisodes: (itunesId: string, limit = 300, signal?: AbortSignal) => {
+    return getCloudPodcastIndexEpisodes(itunesId, limit, signal)
   },
 
   // Legacy/Helper methods (exposed for compatibility, can be refactored later)
