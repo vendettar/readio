@@ -1,0 +1,445 @@
+import { Eye, EyeOff, Loader2, X } from 'lucide-react'
+import { memo, useEffect, useRef, useState } from 'react'
+import { type UseFormReturn, useWatch } from 'react-hook-form'
+import { useTranslation } from 'react-i18next'
+import { type ASRProvider, getAsrProviderConfig, verifyAsrKey } from '@/lib/asr'
+import { clearAsrVerification, markAsrVerificationSucceeded } from '@/lib/asr/readiness'
+import {
+  ASR_CONFIG_ERROR,
+  getAsrModelsForProvider,
+  isAsrModelSupportedForProvider,
+  validateAsrProviderModelSelection,
+} from '@/lib/asr/registry'
+import { ASRClientError } from '@/lib/asr/types'
+import { getEnabledAsrProviders, type SettingsFormValues } from '@/lib/schemas/settings'
+import { cn } from '@/lib/utils'
+import { Button } from '../../ui/button'
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '../../ui/form'
+import { Input } from '../../ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
+import { SettingsSectionCard } from '../SettingsSectionCard'
+
+interface AsrSettingsSectionProps {
+  form: UseFormReturn<SettingsFormValues>
+  onFieldBlur: () => Promise<void>
+}
+
+const VERIFY_STATUS = {
+  IDLE: 'idle',
+  VERIFYING: 'verifying',
+  SUCCESS: 'success',
+  FAIL: 'fail',
+} as const
+
+type VerifyStatus = (typeof VERIFY_STATUS)[keyof typeof VERIFY_STATUS]
+
+const VERIFY_RESET_DELAY_MS = 2000
+const SELECT_CLEAR_ICON_CLASS = 'h-2.5 w-2.5'
+
+export const AsrSettingsSection = memo(function AsrSettingsSection({
+  form,
+  onFieldBlur,
+}: AsrSettingsSectionProps) {
+  const { t } = useTranslation()
+  const [showKey, setShowKey] = useState(false)
+  const [verifyStatus, setVerifyStatus] = useState<VerifyStatus>(VERIFY_STATUS.IDLE)
+
+  const asrProvider = useWatch({ control: form.control, name: 'asrProvider' }) ?? ''
+  const asrModel = useWatch({ control: form.control, name: 'asrModel' }) ?? ''
+  const apiKeyValue = useWatch({ control: form.control, name: 'asrKey' })
+  const models = getAsrModelsForProvider(asrProvider)
+  const enabledProviders = getEnabledAsrProviders()
+  const hasSelectedProvider = enabledProviders.includes(asrProvider as ASRProvider)
+  const providerDocsUrl = hasSelectedProvider
+    ? getAsrProviderConfig(asrProvider as ASRProvider).docsUrl
+    : null
+  const asrVerificationSignature = [
+    asrProvider.trim(),
+    asrModel.trim(),
+    apiKeyValue?.trim() ?? '',
+  ].join('|')
+  const previousAsrVerificationSignatureRef = useRef<string | null>(null)
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset status on ASR config changes that invalidate prior verify state
+  useEffect(() => {
+    setVerifyStatus(VERIFY_STATUS.IDLE)
+  }, [apiKeyValue, asrProvider, asrModel])
+
+  useEffect(() => {
+    if (previousAsrVerificationSignatureRef.current === null) {
+      previousAsrVerificationSignatureRef.current = asrVerificationSignature
+      return
+    }
+
+    if (previousAsrVerificationSignatureRef.current !== asrVerificationSignature) {
+      clearAsrVerification()
+      previousAsrVerificationSignatureRef.current = asrVerificationSignature
+    }
+  }, [asrVerificationSignature])
+
+  // Automatically reset verify status back to idle after a delay
+  useEffect(() => {
+    if (verifyStatus === VERIFY_STATUS.SUCCESS || verifyStatus === VERIFY_STATUS.FAIL) {
+      const timer = setTimeout(() => {
+        setVerifyStatus(VERIFY_STATUS.IDLE)
+      }, VERIFY_RESET_DELAY_MS)
+      return () => clearTimeout(timer)
+    }
+  }, [verifyStatus])
+
+  const handleVerify = async () => {
+    const values = form.getValues()
+    const provider = values.asrProvider.trim()
+    const model = values.asrModel.trim()
+    const apiKey = values.asrKey?.trim()
+
+    const validation = validateAsrProviderModelSelection({
+      asrProvider: provider,
+      asrModel: model,
+    })
+
+    if (!validation.ok && validation.code === ASR_CONFIG_ERROR.UNCONFIGURED_PROVIDER) {
+      form.setError('asrProvider', {
+        type: 'manual',
+        message: t('validationProviderRequired', { defaultValue: 'Provider is required' }),
+      })
+      return
+    }
+    if (!validation.ok && validation.code === ASR_CONFIG_ERROR.UNCONFIGURED_MODEL) {
+      form.setError('asrModel', {
+        type: 'manual',
+        message: t('validationModelRequired', { defaultValue: 'Model is required' }),
+      })
+      return
+    }
+    if (!validation.ok && validation.code === ASR_CONFIG_ERROR.INVALID_PROVIDER_MODEL_PAIR) {
+      form.setError('asrModel', {
+        type: 'manual',
+        message: t('validationProviderModelPairInvalid', {
+          defaultValue: 'Model is not supported by the selected provider',
+        }),
+      })
+      return
+    }
+    if (!validation.ok) return
+
+    if (!apiKey || verifyStatus !== VERIFY_STATUS.IDLE) return
+
+    setVerifyStatus(VERIFY_STATUS.VERIFYING)
+    try {
+      const ok = await verifyAsrKey({ apiKey, provider: provider as ASRProvider })
+      if (ok) {
+        await markAsrVerificationSucceeded({
+          provider: validation.provider,
+          model: validation.model,
+          apiKey,
+        })
+      } else {
+        clearAsrVerification()
+      }
+      setVerifyStatus(ok ? VERIFY_STATUS.SUCCESS : VERIFY_STATUS.FAIL)
+    } catch (error: unknown) {
+      clearAsrVerification()
+      if (error instanceof ASRClientError) {
+        console.error('[asr] verify failed', {
+          provider: validation.provider,
+          code: error.code,
+          status: error.status,
+          message: error.message,
+        })
+      } else {
+        console.error('[asr] verify failed', {
+          provider: validation.provider,
+          error,
+        })
+      }
+      setVerifyStatus(VERIFY_STATUS.FAIL)
+    }
+  }
+
+  // Reset model when provider changes (models are provider-specific)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: intentionally only react to provider changes
+  useEffect(() => {
+    const currentModel = form.getValues('asrModel')
+    if (currentModel && !isAsrModelSupportedForProvider(asrProvider, currentModel)) {
+      form.setValue('asrModel', '')
+      void onFieldBlur()
+    }
+  }, [asrProvider])
+
+  return (
+    <SettingsSectionCard title={t('settingsAsrTitle')} description={t('settingsAsrDesc')}>
+      <Form {...form}>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between rounded-lg border border-border/70 px-3 py-2.5">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <p className="text-xs text-muted-foreground">{t('settingsAsrCostNote')}</p>
+                {providerDocsUrl ? (
+                  <Button variant="link" size="sm" asChild className="h-auto px-0 py-0">
+                    <a href={providerDocsUrl} target="_blank" rel="noopener noreferrer">
+                      {t('settingsAsrPricingLink')}
+                    </a>
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-col gap-4 sm:flex-row sm:max-w-5xl">
+            <div className="flex-1">
+              <FormField
+                control={form.control}
+                name="asrProvider"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="mb-2 block text-sm font-medium">
+                      {t('settingsAsrProvider')}
+                    </FormLabel>
+                    <div className="group/provider-clear relative max-w-md">
+                      <Select
+                        value={field.value}
+                        onValueChange={(value) => {
+                          field.onChange(value)
+                          void form.trigger(['asrProvider', 'asrModel'])
+                          void onFieldBlur()
+                        }}
+                        // TODO: Temporarily disable selection when only one provider is supported.
+                        disabled={enabledProviders.length <= 1}
+                      >
+                        <FormControl>
+                          <SelectTrigger
+                            className={cn(
+                              field.value &&
+                                '[&>svg]:transition-opacity [&>svg]:duration-150 data-[state=open]:[&>svg]:opacity-0 group-has-[.x-btn:hover]/provider-clear:[&>svg]:opacity-0',
+                              // TODO: Temporarily hide chevron icon when selection is locked to a single provider.
+                              enabledProviders.length <= 1 && '[&>svg]:hidden'
+                            )}
+                          >
+                            <SelectValue
+                              placeholder={t('settingsAsrProviderPlaceholder', {
+                                defaultValue: 'Select a provider',
+                              })}
+                            />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {enabledProviders.map((provider) => (
+                            <SelectItem key={provider} value={provider}>
+                              {getAsrProviderConfig(provider).label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {/* TODO: Temporarily hide clear button when selection is locked/forced to a single provider. */}
+                      {field.value && enabledProviders.length > 1 ? (
+                        <Button
+                          type="button"
+                          variant="text"
+                          size="sm"
+                          className="x-btn absolute right-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 p-0 opacity-0 pointer-events-none transition-all duration-150 group-hover/provider-clear:pointer-events-auto hover:!opacity-100"
+                          aria-label="Clear ASR provider"
+                          onPointerDown={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                          }}
+                          onClick={(event) => {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            form.setValue('asrProvider', '', {
+                              shouldDirty: true,
+                              shouldTouch: true,
+                            })
+                            form.setValue('asrModel', '', { shouldDirty: true, shouldTouch: true })
+                            void onFieldBlur()
+                          }}
+                        >
+                          <X className={SELECT_CLEAR_ICON_CLASS} />
+                        </Button>
+                      ) : null}
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+
+            <div className="flex-1">
+              <FormField
+                control={form.control}
+                name="asrModel"
+                render={({ field }) => {
+                  const currentProvider = form.getValues('asrProvider').trim()
+                  const isModelDisabled = !currentProvider
+
+                  return (
+                    <FormItem>
+                      <FormLabel className="mb-2 block text-sm font-medium">
+                        {t('settingsAsrModel')}
+                      </FormLabel>
+                      <div className="group/model-clear relative max-w-md">
+                        <Select
+                          value={field.value}
+                          onValueChange={(value) => {
+                            field.onChange(value)
+                            void form.trigger(['asrProvider', 'asrModel'])
+                            void onFieldBlur()
+                          }}
+                          disabled={isModelDisabled}
+                        >
+                          <FormControl>
+                            <SelectTrigger
+                              className={
+                                field.value
+                                  ? '[&>svg]:transition-opacity [&>svg]:duration-150 data-[state=open]:[&>svg]:opacity-0 group-has-[.x-btn:hover]/model-clear:[&>svg]:opacity-0'
+                                  : undefined
+                              }
+                            >
+                              <SelectValue
+                                placeholder={t('settingsAsrModelPlaceholder', {
+                                  defaultValue: 'Select a model',
+                                })}
+                              />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {models.map((model) => (
+                              <SelectItem key={model} value={model}>
+                                {model}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {field.value && currentProvider ? (
+                          <Button
+                            type="button"
+                            variant="text"
+                            size="sm"
+                            className="x-btn absolute right-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 p-0 opacity-0 pointer-events-none transition-all duration-150 group-hover/model-clear:pointer-events-auto hover:!opacity-100"
+                            aria-label="Clear ASR model"
+                            onPointerDown={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                            }}
+                            onClick={(event) => {
+                              event.preventDefault()
+                              event.stopPropagation()
+                              form.setValue('asrModel', '', {
+                                shouldDirty: true,
+                                shouldTouch: true,
+                              })
+                              void onFieldBlur()
+                            }}
+                          >
+                            <X className={SELECT_CLEAR_ICON_CLASS} />
+                          </Button>
+                        ) : null}
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )
+                }}
+              />
+            </div>
+          </div>
+
+          <FormField
+            control={form.control}
+            name="asrKey"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="mb-2 block text-sm font-medium">
+                  {t('settingsAsrApiKey')}
+                </FormLabel>
+                <div className="flex max-w-md items-center gap-2">
+                  <div className="group/key-clear relative flex-1">
+                    <FormControl>
+                      <Input
+                        type={showKey ? 'text' : 'password'}
+                        placeholder={
+                          asrProvider === 'groq'
+                            ? t('settingsAsrGroqKeyPlaceholder')
+                            : asrProvider === 'volcengine'
+                              ? t('settingsAsrVolcengineKeyPlaceholder')
+                              : t('placeholderApiKey')
+                        }
+                        className="pr-8"
+                        {...field}
+                        onBlur={() => {
+                          field.onBlur()
+                          void onFieldBlur()
+                        }}
+                      />
+                    </FormControl>
+                    {field.value ? (
+                      <Button
+                        type="button"
+                        variant="text"
+                        size="sm"
+                        className="x-btn absolute right-1 top-1/2 z-10 h-6 w-6 -translate-y-1/2 p-0 opacity-0 pointer-events-none transition-all duration-150 group-hover/key-clear:pointer-events-auto hover:!opacity-100"
+                        onClick={() => {
+                          form.setValue('asrKey', '', {
+                            shouldDirty: true,
+                            shouldTouch: true,
+                          })
+                          void onFieldBlur()
+                          void form.trigger('asrKey')
+                        }}
+                      >
+                        <X size={14} />
+                      </Button>
+                    ) : null}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    aria-label={t('settingsShowHideApiKey')}
+                    disabled={!field.value?.trim()}
+                    onClick={() => setShowKey((value) => !value)}
+                  >
+                    {showKey ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={
+                      verifyStatus === VERIFY_STATUS.VERIFYING ||
+                      !field.value?.trim() ||
+                      (asrProvider === 'groq' &&
+                        (!field.value.trim().startsWith('gsk_') ||
+                          field.value.trim().length !== 56))
+                    }
+                    onClick={() => {
+                      if (verifyStatus === VERIFY_STATUS.IDLE) {
+                        void handleVerify()
+                      }
+                    }}
+                    className={`min-w-20 transition-all ${
+                      verifyStatus === VERIFY_STATUS.SUCCESS
+                        ? 'border-green-500/50 bg-green-50/50 dark:bg-green-500/10'
+                        : verifyStatus === VERIFY_STATUS.FAIL
+                          ? 'border-red-500/50 bg-red-50/50 dark:bg-red-500/10'
+                          : ''
+                    }`}
+                    aria-label={t('settingsVerify')}
+                  >
+                    {verifyStatus === VERIFY_STATUS.VERIFYING ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : verifyStatus === VERIFY_STATUS.SUCCESS ? (
+                      <span className="text-sm font-bold text-green-600">✓</span>
+                    ) : verifyStatus === VERIFY_STATUS.FAIL ? (
+                      <X className="h-5 w-5 text-red-600" strokeWidth={3} />
+                    ) : (
+                      t('settingsVerify')
+                    )}
+                  </Button>
+                </div>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+      </Form>
+    </SettingsSectionCard>
+  )
+})
