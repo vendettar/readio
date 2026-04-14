@@ -1,0 +1,44 @@
+const DEFAULT_RUNTIME_ORIGIN =
+  typeof globalThis !== 'undefined' && globalThis.location?.origin
+    ? globalThis.location.origin
+    : 'http://localhost:3000'
+
+const SAME_ORIGIN_DISCOVERY_BASE = `${DEFAULT_RUNTIME_ORIGIN}/api/v1/discovery`
+
+export const DEFAULTS = {
+  APP_NAME: 'Readio',
+  APP_VERSION: '1.0.0',
+  CORS_PROXY_URL: '',
+  CORS_PROXY_AUTH_HEADER: 'x-proxy-token',
+  CORS_PROXY_AUTH_VALUE: '',
+  ASR_API_KEY: '',
+  ASR_RELAY_PUBLIC_TOKEN: '',
+  ASR_PROVIDER: '',
+  ASR_MODEL: '',
+  ENABLED_ASR_PROVIDERS: '',
+  DISABLED_ASR_PROVIDERS: '',
+  PROXY_TIMEOUT_MS: 10000,
+  DIRECT_TIMEOUT_MS: 5000,
+  MAX_CONCURRENT_REQUESTS: 6,
+  DB_NAME: 'readio-lite',
+  EN_DICTIONARY_API_URL: 'https://api.dictionaryapi.dev/api/v2/entries/en/',
+  EN_DICTIONARY_API_TRANSPORT: 'direct',
+  RSS_FEED_BASE_URL: SAME_ORIGIN_DISCOVERY_BASE,
+  MAX_AUDIO_CACHE_GB: 10,
+  DICT_CACHE_MAX_ENTRIES: 500,
+  DICT_CACHE_KEY: 'readio-lite-dict-cache',
+  SAVE_PROGRESS_INTERVAL_MS: 5000,
+  MIN_ZOOM: 0.5,
+  MAX_ZOOM: 3.0,
+  ZOOM_STEP: 0.1,
+  ZOOM_HIDE_DELAY_MS: 2000,
+  DEFAULT_COUNTRY: 'us',
+  DEFAULT_LANGUAGE: 'en',
+  FALLBACK_PODCAST_IMAGE: '/placeholder-podcast.svg',
+  CACHE_TTL_EPISODES_MS: 3600000,
+  RECOMMENDED_TTL_MS: 86400000,
+  USE_MOCK_DATA: false,
+  SEARCH_SUGGESTIONS_LIMIT: 3,
+  SEARCH_PODCASTS_LIMIT: 5,
+  SEARCH_EPISODES_LIMIT: 5,
+} as const
