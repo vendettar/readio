@@ -1,0 +1,1580 @@
+// Package main provides the cloud-api server.
+package main
+
+import (
+	"bytes"
+	"context"
+	"crypto/rand"
+	"crypto/subtle"
+	"encoding/base64"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"log/slog"
+	"mime/multipart"
+	"net"
+	"net/http"
+	"net/url"
+	"os"
+	"strconv"
+	"strings"
+	"time"
+)
+
+const asrRelayRoute = "/api/v1/asr/transcriptions"
+const asrVerifyRoute = "/api/v1/asr/verify"
+const asrRelayPublicTokenHeader = "X-Readio-Relay-Public-Token"
+const asrRelayPublicTokenEnv = "READIO_ASR_RELAY_PUBLIC_TOKEN"
+const asrRelayAllowedOriginsEnv = "READIO_ASR_ALLOWED_ORIGINS"
+const asrRelayRateLimitBurstEnv = "READIO_ASR_RATE_LIMIT_BURST"
+const asrRelayRateLimitWindowMsEnv = "READIO_ASR_RATE_LIMIT_WINDOW_MS"
+
+const asrWorkerBaseURLEnv = "READIO_ASR_WORKER_BASE_URL"
+const asrWorkerSharedSecretEnv = "READIO_ASR_WORKER_SHARED_SECRET"
+const asrWorkerSecretHeader = "X-Readio-Cloud-Secret"
+const asrWorkerGroqRoute = "/relay/groq/transcriptions"
+
+const asrRelayBodyLimit = 20 << 20
+const asrRelayRequestTimeout = 60 * time.Second
+const asrRelayRateLimitWindow = time.Minute
+const asrRelayRateLimitBurst = 60
+
+type asrRelayProviderConfig struct {
+	id             string
+	label          string
+	transcribeURL  string
+	verifyURL      string
+	responseFormat string
+	allowedModels  map[string]struct{}
+	transport      string
+}
+
+type asrRelayRequestPayload struct {
+	Provider      string
+	Model         string
+	APIKey        string
+	AudioBytes    []byte
+	AudioMimeType string
+}
+
+type asrRelayResponsePayload struct {
+	Cues            []asrRelayCue `json:"cues"`
+	Language        string        `json:"language,omitempty"`
+	DurationSeconds *float64      `json:"durationSeconds,omitempty"`
+	Provider        string        `json:"provider"`
+	Model           string        `json:"model"`
+}
+
+type asrVerifyRequestPayload struct {
+	Provider string `json:"provider"`
+	APIKey   string `json:"apiKey"`
+}
+
+type asrVerifyResponsePayload struct {
+	OK bool `json:"ok"`
+}
+
+type asrRelayCue struct {
+	Start     float64        `json:"start"`
+	End       float64        `json:"end"`
+	Text      string         `json:"text"`
+	Words     []asrRelayWord `json:"words,omitempty"`
+	SpeakerID string         `json:"speakerId,omitempty"`
+}
+
+type asrRelayWord struct {
+	Word       string   `json:"word"`
+	Start      float64  `json:"start"`
+	End        float64  `json:"end"`
+	Confidence *float64 `json:"confidence,omitempty"`
+}
+
+type asrRelayErrorPayload struct {
+	Code         string `json:"code"`
+	Message      string `json:"message"`
+	Status       int    `json:"status"`
+	RequestID    string `json:"request_id,omitempty"`
+	RetryAfterMs *int64 `json:"retryAfterMs,omitempty"`
+}
+
+func (e *asrRelayErrorPayload) Error() string { return e.Message }
+
+// Sentinel ASR error values for use with errors.Is().
+// Only errors with fully static messages are exposed as sentinels.
+// Errors with dynamic messages (e.g., err.Error()) must be constructed inline.
+var (
+	ErrASRInvalidMethod           = &asrRelayErrorPayload{Status: http.StatusMethodNotAllowed, Code: "ASR_INVALID_METHOD", Message: "only POST is allowed"}
+	ErrASRUnsupportedProvider     = &asrRelayErrorPayload{Status: http.StatusBadRequest, Code: "ASR_UNSUPPORTED_PROVIDER", Message: "unsupported ASR provider"}
+	ErrASRMissingModel            = &asrRelayErrorPayload{Status: http.StatusBadRequest, Code: "ASR_INVALID_PAYLOAD", Message: "missing model"}
+	ErrASRUnsupportedModel        = &asrRelayErrorPayload{Status: http.StatusBadRequest, Code: "ASR_INVALID_PAYLOAD", Message: "unsupported ASR model"}
+	ErrASRMissingAPIKey           = &asrRelayErrorPayload{Status: http.StatusUnauthorized, Code: "ASR_UNAUTHORIZED", Message: "missing ASR API key"}
+	ErrASRInvalidAudio            = &asrRelayErrorPayload{Status: http.StatusBadRequest, Code: "ASR_INVALID_PAYLOAD", Message: "invalid audio payload"}
+	ErrASRUnsupportedTransport    = &asrRelayErrorPayload{Status: http.StatusBadRequest, Code: "ASR_INVALID_PAYLOAD", Message: "unsupported provider transport"}
+	ErrASRProviderRejectedCreds   = &asrRelayErrorPayload{Status: http.StatusUnauthorized, Code: "ASR_UNAUTHORIZED", Message: "provider rejected credentials"}
+	ErrASRProviderRejectedPayload = &asrRelayErrorPayload{Status: http.StatusRequestEntityTooLarge, Code: "ASR_PAYLOAD_TOO_LARGE", Message: "provider rejected payload"}
+	ErrASRProviderRateLimited     = &asrRelayErrorPayload{Status: http.StatusTooManyRequests, Code: "ASR_RATE_LIMITED", Message: "provider rate limited the request"}
+	ErrASRProviderUnavailable     = &asrRelayErrorPayload{Status: http.StatusServiceUnavailable, Code: "ASR_SERVICE_UNAVAILABLE", Message: "provider service unavailable"}
+	ErrASRProviderClientError     = &asrRelayErrorPayload{Status: http.StatusBadRequest, Code: "ASR_CLIENT_ERROR", Message: "provider rejected the request"}
+	ErrASRUpstreamTimeout         = &asrRelayErrorPayload{Status: http.StatusServiceUnavailable, Code: "ASR_SERVICE_UNAVAILABLE", Message: "upstream request timed out"}
+	ErrASRRequestCanceled         = &asrRelayErrorPayload{Status: http.StatusBadRequest, Code: "ASR_CLIENT_ERROR", Message: "request canceled"}
+	ErrASRUpstreamFailed          = &asrRelayErrorPayload{Status: http.StatusServiceUnavailable, Code: "ASR_SERVICE_UNAVAILABLE", Message: "upstream request failed"}
+	ErrASRVolcengineUnavailable   = &asrRelayErrorPayload{Status: http.StatusServiceUnavailable, Code: "ASR_SERVICE_UNAVAILABLE", Message: "Volcengine service unavailable"}
+	ErrASRVolcengineUnknown       = &asrRelayErrorPayload{Status: http.StatusServiceUnavailable, Code: "ASR_SERVICE_UNAVAILABLE", Message: "Volcengine returned an unknown status"}
+	ErrASRVolcengineClientError   = &asrRelayErrorPayload{Status: http.StatusBadRequest, Code: "ASR_CLIENT_ERROR", Message: "Volcengine client error"}
+)
+
+type asrRelayService struct {
+	client             *http.Client
+	timeout            time.Duration
+	bodyLimit          int64
+	providers          map[string]asrRelayProviderConfig
+	limiter            *rateLimiter
+	allowedOrigins     map[string]struct{}
+	relayPublicToken   string
+	trustedProxies     trustedProxySet
+	workerBaseURL      string
+	workerSharedSecret string
+}
+
+func newASRRelayService() *asrRelayService {
+	burst := resolveASRRelayRateLimitBurst()
+	if burst <= 0 {
+		slog.Warn("application-layer rate limiting disabled for ASR relay", "READIO_ASR_RATE_LIMIT_BURST", burst)
+	}
+
+	workerBase := strings.TrimSpace(os.Getenv(asrWorkerBaseURLEnv))
+	workerSecret := strings.TrimSpace(os.Getenv(asrWorkerSharedSecretEnv))
+	if workerBase != "" && workerSecret != "" {
+		slog.Info("ASR worker transport enabled", "baseURL", workerBase)
+	} else {
+		slog.Info("ASR worker transport disabled (env not configured)")
+	}
+
+	return &asrRelayService{
+		client:             &http.Client{},
+		timeout:            asrRelayRequestTimeout,
+		bodyLimit:          asrRelayBodyLimit,
+		providers:          defaultASRRelayProviders(),
+		limiter:            newRateLimiter(burst, resolveASRRelayRateLimitWindow(), time.Now),
+		allowedOrigins:     resolveASRRelayAllowedOrigins(),
+		relayPublicToken:   strings.TrimSpace(os.Getenv(asrRelayPublicTokenEnv)),
+		trustedProxies:     loadTrustedProxySet(slog.Default()),
+		workerBaseURL:      workerBase,
+		workerSharedSecret: workerSecret,
+	}
+}
+
+func defaultASRRelayProviders() map[string]asrRelayProviderConfig {
+	return map[string]asrRelayProviderConfig{
+		"groq": {
+			id:             "groq",
+			label:          "Groq",
+			transcribeURL:  "https://api.groq.com/openai/v1/audio/transcriptions",
+			verifyURL:      "https://api.groq.com/openai/v1/models",
+			responseFormat: "verbose_json",
+			allowedModels: map[string]struct{}{
+				"whisper-large-v3-turbo": {},
+				"whisper-large-v3":       {},
+			},
+			transport: "openai-compatible",
+		},
+		// TODO: Temporarily block other providers until they are fully stabilized.
+		/*
+			"qwen": {
+				id:             "qwen",
+				label:          "Qwen",
+				transcribeURL:  "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+				verifyURL:      "https://dashscope.aliyuncs.com/compatible-mode/v1/models",
+				responseFormat: "chat",
+				allowedModels: map[string]struct{}{
+					"qwen3-asr-flash":    {},
+					"qwen3-asr-flash-us": {},
+				},
+				transport: "qwen-chat-completions",
+			},
+			"deepgram": {
+				id:             "deepgram",
+				label:          "Deepgram",
+				transcribeURL:  "https://api.deepgram.com/v1/listen",
+				verifyURL:      "https://api.deepgram.com/v1/projects",
+				responseFormat: "json",
+				allowedModels: map[string]struct{}{
+					"nova-3":  {},
+					"nova-2":  {},
+					"nova":    {},
+					"base":    {},
+					"whisper": {},
+				},
+				transport: "deepgram-native",
+			},
+			"volcengine": {
+				id:             "volcengine",
+				label:          "Volcengine",
+				transcribeURL:  "https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash",
+				verifyURL:      "https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash",
+				responseFormat: "json",
+				allowedModels: map[string]struct{}{
+					"bigmodel": {},
+				},
+				transport: "volcengine-asr",
+			},
+		*/
+	}
+}
+
+func (s *asrRelayService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	route := "asr-relay" // Default route to ensure error logging works even before route is determined
+	errClass := "none"
+	var httpStatus int
+	var upstreamKind string
+	var upstreamHost string
+
+	defer func() {
+		slog.Info("asr-relay request",
+			"route", route,
+			"upstream_kind", upstreamKind,
+			"upstream_host", upstreamHost,
+			"elapsed_ms", time.Since(start).Milliseconds(),
+			"error_class", errClass,
+			"status", httpStatus,
+		)
+	}()
+
+	if r.Method != http.MethodPost {
+		httpStatus = http.StatusMethodNotAllowed
+		errClass = "invalid_method"
+		route = "asr-relay"
+		writeASRRelayError(w, http.StatusMethodNotAllowed, "only POST is allowed", "ASR_INVALID_METHOD", nil)
+		return
+	}
+	if relayErr := s.authorizeRequest(r); relayErr != nil {
+		httpStatus = relayErr.Status
+		errClass = asrErrClass(relayErr.Code)
+		route = "asr-relay"
+		writeASRRelayError(w, relayErr.Status, relayErr.Message, relayErr.Code, relayErr.RetryAfterMs)
+		return
+	}
+
+	switch r.URL.Path {
+	case asrRelayRoute:
+		route = "asr-relay/transcriptions"
+		payload, relayErr := s.decodeMultipartRelayPayload(w, r)
+		if relayErr != nil {
+			httpStatus = relayErr.Status
+			errClass = asrErrClass(relayErr.Code)
+			writeASRRelayError(w, relayErr.Status, relayErr.Message, relayErr.Code, relayErr.RetryAfterMs)
+			return
+		}
+		upstreamKind, upstreamHost = s.asrRequestUpstream(payload.Provider, false)
+		result, relayErr := s.transcribe(r.Context(), *payload)
+		if relayErr != nil {
+			httpStatus = relayErr.Status
+			errClass = asrErrClass(relayErr.Code)
+			writeASRRelayError(w, relayErr.Status, relayErr.Message, relayErr.Code, relayErr.RetryAfterMs)
+			return
+		}
+		httpStatus = http.StatusOK
+		writeJSON(w, http.StatusOK, result)
+	case asrVerifyRoute:
+		route = "asr-relay/verify"
+		if ct := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type"))); ct == "" || !strings.HasPrefix(ct, "application/json") {
+			httpStatus = http.StatusBadRequest
+			errClass = "invalid_payload"
+			writeASRRelayError(w, http.StatusBadRequest, "content-type must be application/json", "ASR_INVALID_PAYLOAD", nil)
+			return
+		}
+		body, err := io.ReadAll(io.LimitReader(r.Body, s.bodyLimit+1))
+		if err != nil {
+			httpStatus = http.StatusBadRequest
+			errClass = "invalid_payload"
+			writeASRRelayError(w, http.StatusBadRequest, "invalid relay request payload", "ASR_INVALID_PAYLOAD", nil)
+			return
+		}
+		if int64(len(body)) > s.bodyLimit {
+			httpStatus = http.StatusRequestEntityTooLarge
+			errClass = "payload_too_large"
+			writeASRRelayError(w, http.StatusRequestEntityTooLarge, "relay request body too large", "ASR_PAYLOAD_TOO_LARGE", nil)
+			return
+		}
+		var payload asrVerifyRequestPayload
+		if err := decodeStrictJSON(body, &payload); err != nil {
+			httpStatus = http.StatusBadRequest
+			errClass = "invalid_payload"
+			writeASRRelayError(w, http.StatusBadRequest, "invalid relay request payload", "ASR_INVALID_PAYLOAD", nil)
+			return
+		}
+		upstreamKind, upstreamHost = s.asrRequestUpstream(payload.Provider, true)
+		ok, relayErr := s.verify(r.Context(), payload)
+		if relayErr != nil {
+			httpStatus = relayErr.Status
+			errClass = asrErrClass(relayErr.Code)
+			writeASRRelayError(w, relayErr.Status, relayErr.Message, relayErr.Code, relayErr.RetryAfterMs)
+			return
+		}
+		if !ok {
+			httpStatus = http.StatusUnauthorized
+			errClass = "unauthorized"
+			writeASRRelayError(w, http.StatusUnauthorized, "provider rejected credentials", "ASR_UNAUTHORIZED", nil)
+			return
+		}
+		httpStatus = http.StatusOK
+		writeJSON(w, http.StatusOK, asrVerifyResponsePayload{OK: ok})
+	default:
+		httpStatus = http.StatusNotFound
+		route = "asr-relay"
+		http.NotFound(w, r)
+		return
+	}
+}
+
+func (s *asrRelayService) authorizeRequest(r *http.Request) *asrRelayErrorPayload {
+	if originErr := s.originAuthorizationError(r); originErr != nil {
+		return originErr
+	}
+
+	if token := strings.TrimSpace(s.relayPublicToken); token != "" {
+		if subtle.ConstantTimeCompare([]byte(r.Header.Get(asrRelayPublicTokenHeader)), []byte(token)) != 1 {
+			return &asrRelayErrorPayload{
+				Status:  http.StatusUnauthorized,
+				Code:    "ASR_UNAUTHORIZED",
+				Message: "invalid relay token",
+			}
+		}
+	}
+
+	if s.limiter != nil && !s.limiter.allow(effectiveClientIP(r, s.trustedProxies)) {
+		return &asrRelayErrorPayload{
+			Status:  http.StatusTooManyRequests,
+			Code:    "ASR_RATE_LIMITED",
+			Message: "rate limit exceeded",
+		}
+	}
+
+	return nil
+}
+
+func (s *asrRelayService) originAuthorizationError(r *http.Request) *asrRelayErrorPayload {
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	if origin == "" {
+		return &asrRelayErrorPayload{
+			Status:  http.StatusForbidden,
+			Code:    "ASR_MISSING_OR_DISALLOWED_ORIGIN",
+			Message: "missing or disallowed origin",
+		}
+	}
+	if !s.isAllowedOrigin(r) {
+		return &asrRelayErrorPayload{
+			Status:  http.StatusForbidden,
+			Code:    "ASR_ORIGIN_NOT_ALLOWED",
+			Message: "missing or disallowed origin",
+		}
+	}
+	return nil
+}
+
+// normalizeHostPort returns (hostname, effectivePort) from a host:port string.
+// If no port is specified, returns the default port for the given scheme.
+func normalizeHostPort(hostPort string, scheme string) (string, int) {
+	host, portStr, err := net.SplitHostPort(hostPort)
+	if err != nil {
+		host = hostPort
+		portStr = ""
+	}
+	if portStr == "" {
+		switch scheme {
+		case "https":
+			return host, 443
+		case "http":
+			return host, 80
+		default:
+			return host, 0
+		}
+	}
+	port, err := strconv.Atoi(portStr)
+	if err != nil {
+		return host, 0
+	}
+	return host, port
+}
+
+// isSameOrigin compares two origins accounting for default port normalization.
+func isSameOrigin(originScheme, originHost string, requestScheme, requestHost string) bool {
+	originHostname, originPort := normalizeHostPort(originHost, originScheme)
+	requestHostname, requestPort := normalizeHostPort(requestHost, requestScheme)
+	return strings.EqualFold(originHostname, requestHostname) && originPort == requestPort && originScheme == requestScheme
+}
+
+func (s *asrRelayService) isAllowedOrigin(r *http.Request) bool {
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	if origin == "" {
+		return false
+	}
+
+	parsed, err := url.Parse(origin)
+	if err != nil || parsed.Host == "" || parsed.User != nil {
+		return false
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return false
+	}
+
+	normalized := parsed.Scheme + "://" + parsed.Host
+	if len(s.allowedOrigins) > 0 {
+		_, ok := s.allowedOrigins[normalized]
+		return ok
+	}
+
+	requestHost := strings.TrimSpace(r.Host)
+	if requestHost == "" {
+		return false
+	}
+	requestScheme := "http"
+	if r.TLS != nil {
+		requestScheme = "https"
+	}
+	// Only trust X-Forwarded-Proto from trusted proxies.
+	if peerHost, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		if peerIP := net.ParseIP(peerHost); peerIP != nil && s.trustedProxies.contains(peerIP) {
+			if proto := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")); proto == "https" || proto == "http" {
+				requestScheme = proto
+			}
+		}
+	}
+	return isSameOrigin(parsed.Scheme, parsed.Host, requestScheme, requestHost)
+}
+
+func resolveASRRelayAllowedOrigins() map[string]struct{} {
+	raw := strings.TrimSpace(os.Getenv(asrRelayAllowedOriginsEnv))
+	if raw == "" {
+		return nil
+	}
+
+	origins := make(map[string]struct{})
+	for _, part := range strings.Split(raw, ",") {
+		candidate := strings.TrimSpace(part)
+		if candidate == "" {
+			continue
+		}
+		parsed, err := url.Parse(candidate)
+		if err != nil || parsed.Host == "" || parsed.User != nil {
+			continue
+		}
+		if parsed.Scheme != "http" && parsed.Scheme != "https" {
+			continue
+		}
+		origins[parsed.Scheme+"://"+parsed.Host] = struct{}{}
+	}
+
+	if len(origins) == 0 {
+		return nil
+	}
+	return origins
+}
+
+func resolveASRRelayRateLimitBurst() int {
+	raw := strings.TrimSpace(os.Getenv(asrRelayRateLimitBurstEnv))
+	if raw == "" {
+		return asrRelayRateLimitBurst
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return asrRelayRateLimitBurst
+	}
+	return value
+}
+
+func resolveASRRelayRateLimitWindow() time.Duration {
+	raw := strings.TrimSpace(os.Getenv(asrRelayRateLimitWindowMsEnv))
+	if raw == "" {
+		return asrRelayRateLimitWindow
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 {
+		return asrRelayRateLimitWindow
+	}
+	return time.Duration(value) * time.Millisecond
+}
+
+func (s *asrRelayService) decodeMultipartRelayPayload(
+	w http.ResponseWriter,
+	r *http.Request,
+) (*asrRelayRequestPayload, *asrRelayErrorPayload) {
+	ct := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type")))
+	if ct == "" || !strings.HasPrefix(ct, "multipart/form-data") {
+		return nil, &asrRelayErrorPayload{
+			Status:  http.StatusBadRequest,
+			Code:    "ASR_INVALID_PAYLOAD",
+			Message: "content-type must be multipart/form-data",
+		}
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, s.bodyLimit)
+	if err := r.ParseMultipartForm(s.bodyLimit); err != nil {
+		var maxBytesErr *http.MaxBytesError
+		if errors.As(err, &maxBytesErr) {
+			return nil, &asrRelayErrorPayload{
+				Status:  http.StatusRequestEntityTooLarge,
+				Code:    "ASR_PAYLOAD_TOO_LARGE",
+				Message: "relay request body too large",
+			}
+		}
+		return nil, &asrRelayErrorPayload{
+			Status:  http.StatusBadRequest,
+			Code:    "ASR_INVALID_PAYLOAD",
+			Message: "invalid relay request payload",
+		}
+	}
+	defer func() {
+		if r.MultipartForm != nil {
+			_ = r.MultipartForm.RemoveAll()
+		}
+	}()
+
+	file, _, err := r.FormFile("audio")
+	if err != nil {
+		return nil, &asrRelayErrorPayload{
+			Status:  http.StatusBadRequest,
+			Code:    "ASR_INVALID_PAYLOAD",
+			Message: "missing audio payload",
+		}
+	}
+	defer func() { _ = file.Close() }()
+
+	audioBytes, err := io.ReadAll(file)
+	if err != nil || len(audioBytes) == 0 {
+		return nil, ErrASRInvalidAudio
+	}
+
+	return &asrRelayRequestPayload{
+		Provider:      r.FormValue("provider"),
+		Model:         r.FormValue("model"),
+		APIKey:        r.FormValue("apiKey"),
+		AudioBytes:    audioBytes,
+		AudioMimeType: r.FormValue("audioMimeType"),
+	}, nil
+}
+
+func decodeStrictJSON[T any](body []byte, out *T) error {
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(out); err != nil {
+		return err
+	}
+	var trailing json.RawMessage
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		return err
+	}
+	return nil
+}
+
+func (s *asrRelayService) transcribe(ctx context.Context, payload asrRelayRequestPayload) (*asrRelayResponsePayload, *asrRelayErrorPayload) {
+	provider, ok := s.providers[strings.ToLower(strings.TrimSpace(payload.Provider))]
+	if !ok {
+		return nil, ErrASRUnsupportedProvider
+	}
+
+	model := strings.TrimSpace(payload.Model)
+	if model == "" {
+		return nil, ErrASRMissingModel
+	}
+	if _, ok := provider.allowedModels[model]; !ok {
+		return nil, ErrASRUnsupportedModel
+	}
+
+	apiKey := strings.TrimSpace(payload.APIKey)
+	if apiKey == "" {
+		return nil, ErrASRMissingAPIKey
+	}
+
+	audioBytes := payload.AudioBytes
+	if len(audioBytes) == 0 {
+		return nil, ErrASRInvalidAudio
+	}
+
+	audioMimeType := strings.TrimSpace(payload.AudioMimeType)
+	if audioMimeType == "" {
+		audioMimeType = "audio/mpeg"
+	}
+
+	transportMode := "direct"
+	if s.asrWorkerTransportEnabled() && provider.id == "groq" {
+		transportMode = "worker"
+	}
+
+	logger := slog.Default()
+	logger.Info("asr relay request", "provider", provider.id, "model", model, "audioBytes", len(audioBytes), "transport", transportMode)
+
+	client := s.client
+	if client == nil {
+		client = &http.Client{}
+	}
+
+	timeout := s.timeout
+	if timeout <= 0 {
+		timeout = asrRelayRequestTimeout
+	}
+
+	reqCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	// Worker transport: only Groq transcription submit.
+	if transportMode == "worker" {
+		start := time.Now()
+		result, relayErr, hopError := s.transcribeViaWorker(reqCtx, client, provider, model, apiKey, audioBytes, audioMimeType)
+		duration := time.Since(start)
+		if relayErr != nil {
+			if hopError {
+				// Worker hop itself failed (network, auth, misconfigured).
+				// Fall through to direct transport.
+				logger.Warn("asr worker hop failed, falling back to direct",
+					"provider", provider.id, "duration_ms", duration.Milliseconds(),
+					"status", relayErr.Status, "code", relayErr.Code)
+			} else {
+				// Groq upstream error transparently forwarded by Worker.
+				// Do NOT retry via direct — same Groq error would recur,
+				// wasting rate-limit budget and duplicating paid upstream work.
+				logger.Warn("asr worker transport returned upstream error",
+					"provider", provider.id, "duration_ms", duration.Milliseconds(),
+					"status", relayErr.Status, "code", relayErr.Code)
+				return nil, relayErr
+			}
+		} else {
+			logger.Info("asr worker transport success",
+				"provider", provider.id, "duration_ms", duration.Milliseconds())
+			return result, nil
+		}
+	}
+
+	switch provider.transport {
+	case "openai-compatible":
+		start := time.Now()
+		result, relayErr := s.transcribeOpenAICompatible(reqCtx, client, provider, model, apiKey, audioBytes, audioMimeType)
+		duration := time.Since(start)
+		if relayErr != nil {
+			logger.Warn("asr direct transport failed",
+				"provider", provider.id, "duration_ms", duration.Milliseconds(),
+				"status", relayErr.Status, "code", relayErr.Code)
+		} else {
+			logger.Info("asr direct transport success",
+				"provider", provider.id, "duration_ms", duration.Milliseconds())
+		}
+		return result, relayErr
+	case "qwen-chat-completions":
+		return s.transcribeQwen(reqCtx, client, provider, model, apiKey, audioBytes, audioMimeType)
+	case "deepgram-native":
+		return s.transcribeDeepgram(reqCtx, client, provider, model, apiKey, audioBytes, audioMimeType)
+	case "volcengine-asr":
+		return s.transcribeVolcengine(reqCtx, client, provider, model, apiKey, audioBytes, audioMimeType)
+	default:
+		return nil, ErrASRUnsupportedTransport
+	}
+}
+
+// asrWorkerTransportEnabled returns true when both Worker base URL
+// and shared secret are configured, enabling the Worker egress hop.
+func (s *asrRelayService) asrWorkerTransportEnabled() bool {
+	return s.workerBaseURL != "" && s.workerSharedSecret != ""
+}
+
+// transcribeViaWorker sends audio to the Cloudflare Worker egress hop,
+// which forwards to the Groq upstream. The request body is built as
+// the same multipart/form-data that Groq expects, so the Worker can
+// stream it through without buffering or parsing.
+//
+// The third return value (hopError) distinguishes Worker-hop failures
+// (network, auth, misconfigured — fallback-eligible) from transparent
+// Groq upstream errors (not fallback-eligible, since direct would fail
+// the same way and waste rate-limit budget).
+func (s *asrRelayService) transcribeViaWorker(
+	ctx context.Context,
+	client *http.Client,
+	provider asrRelayProviderConfig,
+	model string,
+	apiKey string,
+	audioBytes []byte,
+	audioMimeType string,
+) (*asrRelayResponsePayload, *asrRelayErrorPayload, bool) {
+	// Build the same multipart body that transcribeOpenAICompatible builds.
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	fileName := "input.mp3"
+	if strings.Contains(strings.ToLower(audioMimeType), "wav") {
+		fileName = "input.wav"
+	}
+	part, err := writer.CreateFormFile("file", fileName)
+	if err != nil {
+		return nil, asrRelayInternalError("failed to build worker transcription request"), true
+	}
+	if _, err := part.Write(audioBytes); err != nil {
+		return nil, asrRelayInternalError("failed to build worker transcription request"), true
+	}
+	_ = writer.WriteField("model", model)
+	_ = writer.WriteField("response_format", provider.responseFormat)
+	_ = writer.WriteField("temperature", "0")
+	_ = writer.WriteField("timestamp_granularities[]", "segment")
+	_ = writer.WriteField("timestamp_granularities[]", "word")
+	if err := writer.Close(); err != nil {
+		return nil, asrRelayInternalError("failed to build worker transcription request"), true
+	}
+
+	workerURL := strings.TrimRight(s.workerBaseURL, "/") + asrWorkerGroqRoute
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, workerURL, &body)
+	if err != nil {
+		return nil, asrRelayInternalError("failed to create worker request"), true
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set(asrWorkerSecretHeader, s.workerSharedSecret)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		// Network-level failure reaching the Worker: hop error, fallback-eligible.
+		return nil, mapASRRelayTransportError(err), true
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	// Detect Worker-hop errors vs transparent Groq responses.
+	//
+	// Rule: 401 (with Worker's own body) and any 5xx are treated as
+	// hop errors (fallback-eligible).
+	// We treat 5xx as hop errors because even if it's a real Groq 5xx,
+	// retrying direct is safer than assuming the Worker's 5xx is from Groq.
+	// (Groq only returns 5xx for rare infra issues).
+	// Most notably, 502/504 from the Worker itself reaching Groq must be retried.
+	if resp.StatusCode >= 500 {
+		return nil, &asrRelayErrorPayload{
+			Status:  http.StatusServiceUnavailable,
+			Code:    "ASR_SERVICE_UNAVAILABLE",
+			Message: "worker hop failed or upstream unavailable",
+		}, true
+	}
+
+	// Also treat Worker's own auth failure as a hop error.
+	if resp.StatusCode == http.StatusUnauthorized {
+		// Peek at the body to distinguish Worker auth error vs Groq auth error.
+		bodyBytes, readErr := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		if readErr == nil {
+			var workerErr struct {
+				Error string `json:"error"`
+			}
+			if json.Unmarshal(bodyBytes, &workerErr) == nil && (workerErr.Error == "unauthorized" || workerErr.Error == "misconfigured") {
+				// Worker rejected our secret or is misconfigured — hop error.
+				return nil, &asrRelayErrorPayload{
+					Status:  http.StatusServiceUnavailable,
+					Code:    "ASR_SERVICE_UNAVAILABLE",
+					Message: "worker auth failed or misconfigured",
+				}, true
+			}
+		}
+		// Otherwise it's Groq's 401 forwarded through the Worker.
+		return nil, &asrRelayErrorPayload{
+			Status:  http.StatusUnauthorized,
+			Code:    "ASR_UNAUTHORIZED",
+			Message: "provider rejected credentials",
+		}, false
+	}
+
+	// All other responses: parse as transparent Groq response.
+	result, relayErr := parseOpenAICompatibleRelayResponse(resp, provider, model)
+	if relayErr != nil {
+		// All non-500 upstream errors (429, 400, etc.) are NOT fallback-eligible.
+		return nil, relayErr, false
+	}
+	return result, nil, false
+}
+
+func (s *asrRelayService) verify(ctx context.Context, payload asrVerifyRequestPayload) (bool, *asrRelayErrorPayload) {
+	provider, ok := s.providers[strings.ToLower(strings.TrimSpace(payload.Provider))]
+	if !ok {
+		return false, ErrASRUnsupportedProvider
+	}
+
+	apiKey := strings.TrimSpace(payload.APIKey)
+	if apiKey == "" {
+		return false, ErrASRMissingAPIKey
+	}
+
+	client := s.client
+	if client == nil {
+		client = &http.Client{}
+	}
+
+	timeout := s.timeout
+	if timeout <= 0 {
+		timeout = asrRelayRequestTimeout
+	}
+
+	reqCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	switch provider.transport {
+	case "openai-compatible":
+		return s.verifyOpenAICompatible(reqCtx, client, provider, apiKey)
+	case "qwen-chat-completions":
+		return s.verifyQwen(reqCtx, client, provider, apiKey)
+	case "deepgram-native":
+		return s.verifyDeepgram(reqCtx, client, provider, apiKey)
+	case "volcengine-asr":
+		return s.verifyVolcengine(reqCtx, client, provider, apiKey)
+	default:
+		return false, ErrASRUnsupportedTransport
+	}
+}
+
+func (s *asrRelayService) transcribeOpenAICompatible(
+	ctx context.Context,
+	client *http.Client,
+	provider asrRelayProviderConfig,
+	model string,
+	apiKey string,
+	audioBytes []byte,
+	audioMimeType string,
+) (*asrRelayResponsePayload, *asrRelayErrorPayload) {
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
+	fileName := "input.mp3"
+	if strings.Contains(strings.ToLower(audioMimeType), "wav") {
+		fileName = "input.wav"
+	}
+	part, err := writer.CreateFormFile("file", fileName)
+	if err != nil {
+		return nil, asrRelayInternalError("failed to build transcription request")
+	}
+	if _, err := part.Write(audioBytes); err != nil {
+		return nil, asrRelayInternalError("failed to build transcription request")
+	}
+	_ = writer.WriteField("model", model)
+	_ = writer.WriteField("response_format", provider.responseFormat)
+	_ = writer.WriteField("temperature", "0")
+	_ = writer.WriteField("timestamp_granularities[]", "segment")
+	_ = writer.WriteField("timestamp_granularities[]", "word")
+	if err := writer.Close(); err != nil {
+		return nil, asrRelayInternalError("failed to build transcription request")
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, provider.transcribeURL, &body)
+	if err != nil {
+		return nil, asrRelayInternalError("failed to create upstream request")
+	}
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, mapASRRelayTransportError(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	return parseOpenAICompatibleRelayResponse(resp, provider, model)
+}
+
+func (s *asrRelayService) transcribeQwen(
+	ctx context.Context,
+	client *http.Client,
+	provider asrRelayProviderConfig,
+	model string,
+	apiKey string,
+	audioBytes []byte,
+	audioMimeType string,
+) (*asrRelayResponsePayload, *asrRelayErrorPayload) {
+	dataURI := "data:" + audioMimeType + ";base64," + base64.StdEncoding.EncodeToString(audioBytes)
+	body := map[string]any{
+		"model": model,
+		"messages": []map[string]any{
+			{
+				"role": "user",
+				"content": []map[string]any{
+					{
+						"type": "input_audio",
+						"input_audio": map[string]any{
+							"data": dataURI,
+						},
+					},
+				},
+			},
+		},
+		"stream": false,
+		"asr_options": map[string]any{
+			"enable_itn": false,
+		},
+	}
+
+	req, err := jsonRequest(ctx, http.MethodPost, provider.transcribeURL, body)
+	if err != nil {
+		return nil, asrRelayInternalError("failed to create upstream request")
+	}
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, mapASRRelayTransportError(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	return parseQwenRelayResponse(resp, provider, model)
+}
+
+func (s *asrRelayService) transcribeDeepgram(
+	ctx context.Context,
+	client *http.Client,
+	provider asrRelayProviderConfig,
+	model string,
+	apiKey string,
+	audioBytes []byte,
+	audioMimeType string,
+) (*asrRelayResponsePayload, *asrRelayErrorPayload) {
+	u, err := url.Parse(provider.transcribeURL)
+	if err != nil {
+		return nil, asrRelayInternalError("invalid upstream url")
+	}
+	q := u.Query()
+	q.Set("model", model)
+	q.Set("smart_format", "true")
+	q.Set("punctuate", "true")
+	q.Set("paragraphs", "true")
+	q.Set("diarize", "false")
+	u.RawQuery = q.Encode()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), bytes.NewReader(audioBytes))
+	if err != nil {
+		return nil, asrRelayInternalError("failed to create upstream request")
+	}
+	req.Header.Set("Authorization", "Token "+apiKey)
+	req.Header.Set("Content-Type", audioMimeType)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, mapASRRelayTransportError(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	return parseDeepgramRelayResponse(resp, provider, model)
+}
+
+func (s *asrRelayService) transcribeVolcengine(
+	ctx context.Context,
+	client *http.Client,
+	provider asrRelayProviderConfig,
+	model string,
+	apiKey string,
+	audioBytes []byte,
+	_ string,
+) (*asrRelayResponsePayload, *asrRelayErrorPayload) {
+	appID, accessToken, err := parseVolcengineRelayCredentials(apiKey)
+	if err != nil {
+		return nil, &asrRelayErrorPayload{Status: http.StatusUnauthorized, Code: "ASR_UNAUTHORIZED", Message: err.Error()}
+	}
+
+	body := map[string]any{
+		"user":    map[string]any{"uid": appID},
+		"audio":   map[string]any{"data": base64.StdEncoding.EncodeToString(audioBytes)},
+		"request": map[string]any{"model_name": model},
+	}
+
+	req, err := jsonRequest(ctx, http.MethodPost, provider.transcribeURL, body)
+	if err != nil {
+		return nil, asrRelayInternalError("failed to create upstream request")
+	}
+	req.Header.Set("X-Api-App-Key", appID)
+	req.Header.Set("X-Api-Access-Key", accessToken)
+	req.Header.Set("X-Api-Resource-Id", "volc.bigasr.auc_turbo")
+	req.Header.Set("X-Api-Request-Id", newRelayRequestID())
+	req.Header.Set("X-Api-Sequence", "-1")
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, mapASRRelayTransportError(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	return parseVolcengineRelayResponse(resp, provider, model)
+}
+
+func (s *asrRelayService) verifyOpenAICompatible(
+	ctx context.Context,
+	client *http.Client,
+	provider asrRelayProviderConfig,
+	apiKey string,
+) (bool, *asrRelayErrorPayload) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, provider.verifyURL, nil)
+	if err != nil {
+		return false, asrRelayInternalError("failed to create upstream request")
+	}
+	req.Header.Set("Authorization", "Bearer "+apiKey)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return false, mapASRRelayTransportError(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		return false, nil
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return false, asrRelayStatusToError(resp)
+	}
+	return true, nil
+}
+
+func (s *asrRelayService) verifyQwen(
+	ctx context.Context,
+	client *http.Client,
+	provider asrRelayProviderConfig,
+	apiKey string,
+) (bool, *asrRelayErrorPayload) {
+	return s.verifyOpenAICompatible(ctx, client, provider, apiKey)
+}
+
+func (s *asrRelayService) verifyDeepgram(
+	ctx context.Context,
+	client *http.Client,
+	provider asrRelayProviderConfig,
+	apiKey string,
+) (bool, *asrRelayErrorPayload) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, provider.verifyURL, nil)
+	if err != nil {
+		return false, asrRelayInternalError("failed to create upstream request")
+	}
+	req.Header.Set("Authorization", "Token "+apiKey)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return false, mapASRRelayTransportError(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		return false, nil
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return false, asrRelayStatusToError(resp)
+	}
+	return true, nil
+}
+
+func (s *asrRelayService) verifyVolcengine(
+	ctx context.Context,
+	client *http.Client,
+	provider asrRelayProviderConfig,
+	apiKey string,
+) (bool, *asrRelayErrorPayload) {
+	appID, accessToken, err := parseVolcengineRelayCredentials(apiKey)
+	if err != nil {
+		return false, &asrRelayErrorPayload{Status: http.StatusUnauthorized, Code: "ASR_UNAUTHORIZED", Message: err.Error()}
+	}
+
+	body := map[string]any{
+		"user":    map[string]any{"uid": appID},
+		"audio":   map[string]any{"data": base64.StdEncoding.EncodeToString(minimalSilentWAVBytes())},
+		"request": map[string]any{"model_name": "bigmodel"},
+	}
+
+	req, err := jsonRequest(ctx, http.MethodPost, provider.verifyURL, body)
+	if err != nil {
+		return false, asrRelayInternalError("failed to create upstream request")
+	}
+	req.Header.Set("X-Api-App-Key", appID)
+	req.Header.Set("X-Api-Access-Key", accessToken)
+	req.Header.Set("X-Api-Resource-Id", "volc.bigasr.auc_turbo")
+	req.Header.Set("X-Api-Request-Id", newRelayRequestID())
+	req.Header.Set("X-Api-Sequence", "-1")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return false, mapASRRelayTransportError(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+		return false, nil
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return false, asrRelayStatusToError(resp)
+	}
+
+	statusCode := strings.TrimSpace(resp.Header.Get("X-Api-Status-Code"))
+	if statusCode == "" || statusCode == "20000000" || statusCode == "20000003" {
+		return true, nil
+	}
+	if strings.HasPrefix(statusCode, "550") {
+		return false, ErrASRVolcengineUnavailable
+	}
+	if strings.HasPrefix(statusCode, "450") {
+		return false, nil
+	}
+	return false, ErrASRVolcengineUnknown
+}
+
+func parseOpenAICompatibleRelayResponse(resp *http.Response, provider asrRelayProviderConfig, model string) (*asrRelayResponsePayload, *asrRelayErrorPayload) {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, asrRelayStatusToError(resp)
+	}
+
+	var payload struct {
+		Language string  `json:"language"`
+		Duration float64 `json:"duration"`
+		Segments []struct {
+			Start float64 `json:"start"`
+			End   float64 `json:"end"`
+			Text  string  `json:"text"`
+			Words []struct {
+				Word       string   `json:"word"`
+				Start      float64  `json:"start"`
+				End        float64  `json:"end"`
+				Confidence *float64 `json:"confidence"`
+			} `json:"words"`
+		} `json:"segments"`
+		Text string `json:"text"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return nil, asrRelayInternalError("invalid provider response payload")
+	}
+
+	cues := make([]asrRelayCue, 0, len(payload.Segments))
+	for _, seg := range payload.Segments {
+		if strings.TrimSpace(seg.Text) == "" {
+			continue
+		}
+		cue := asrRelayCue{Start: seg.Start, End: seg.End, Text: strings.TrimSpace(seg.Text)}
+		if len(seg.Words) > 0 {
+			cue.Words = make([]asrRelayWord, 0, len(seg.Words))
+			for _, word := range seg.Words {
+				if strings.TrimSpace(word.Word) == "" {
+					continue
+				}
+				cue.Words = append(cue.Words, asrRelayWord{
+					Word:       strings.TrimSpace(word.Word),
+					Start:      word.Start,
+					End:        word.End,
+					Confidence: word.Confidence,
+				})
+			}
+		}
+		cues = append(cues, cue)
+	}
+	if len(cues) == 0 && strings.TrimSpace(payload.Text) != "" {
+		duration := payload.Duration
+		cues = append(cues, asrRelayCue{Start: 0, End: duration, Text: strings.TrimSpace(payload.Text)})
+	}
+
+	var durationSeconds *float64
+	if payload.Duration > 0 {
+		durationSeconds = &payload.Duration
+	}
+
+	return &asrRelayResponsePayload{
+		Cues:            cues,
+		Language:        payload.Language,
+		DurationSeconds: durationSeconds,
+		Provider:        provider.id,
+		Model:           model,
+	}, nil
+}
+
+func parseQwenRelayResponse(resp *http.Response, provider asrRelayProviderConfig, model string) (*asrRelayResponsePayload, *asrRelayErrorPayload) {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, asrRelayStatusToError(resp)
+	}
+
+	var payload struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return nil, asrRelayInternalError("invalid provider response payload")
+	}
+
+	text := ""
+	if len(payload.Choices) > 0 {
+		text = strings.TrimSpace(payload.Choices[0].Message.Content)
+	}
+	cues := make([]asrRelayCue, 0, 1)
+	if text != "" {
+		cues = append(cues, asrRelayCue{Start: 0, End: 0, Text: text})
+	}
+
+	return &asrRelayResponsePayload{
+		Cues:     cues,
+		Provider: provider.id,
+		Model:    model,
+	}, nil
+}
+
+func parseDeepgramRelayResponse(resp *http.Response, provider asrRelayProviderConfig, model string) (*asrRelayResponsePayload, *asrRelayErrorPayload) {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, asrRelayStatusToError(resp)
+	}
+
+	var payload struct {
+		Results struct {
+			Channels []struct {
+				Alternatives []struct {
+					Transcript string `json:"transcript"`
+					Words      []struct {
+						Word       string   `json:"word"`
+						Start      float64  `json:"start"`
+						End        float64  `json:"end"`
+						Confidence *float64 `json:"confidence"`
+					} `json:"words"`
+					Paragraphs struct {
+						Paragraphs []struct {
+							Sentences []struct {
+								Text  string  `json:"text"`
+								Start float64 `json:"start"`
+								End   float64 `json:"end"`
+							} `json:"sentences"`
+						} `json:"paragraphs"`
+					} `json:"paragraphs"`
+				} `json:"alternatives"`
+			} `json:"channels"`
+		} `json:"results"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return nil, asrRelayInternalError("invalid provider response payload")
+	}
+
+	alternative := payload.Results.Channels
+	if len(alternative) == 0 || len(alternative[0].Alternatives) == 0 {
+		return nil, asrRelayInternalError("empty provider response payload")
+	}
+	alt := alternative[0].Alternatives[0]
+	cues := make([]asrRelayCue, 0)
+	for _, paragraph := range alt.Paragraphs.Paragraphs {
+		for _, sentence := range paragraph.Sentences {
+			text := strings.TrimSpace(sentence.Text)
+			if text == "" {
+				continue
+			}
+			cues = append(cues, asrRelayCue{Start: sentence.Start, End: sentence.End, Text: text})
+		}
+	}
+	if len(cues) == 0 {
+		words := make([]asrRelayWord, 0, len(alt.Words))
+		for _, word := range alt.Words {
+			if strings.TrimSpace(word.Word) == "" {
+				continue
+			}
+			words = append(words, asrRelayWord{
+				Word:       strings.TrimSpace(word.Word),
+				Start:      word.Start,
+				End:        word.End,
+				Confidence: word.Confidence,
+			})
+		}
+		if len(words) > 0 {
+			start := words[0].Start
+			end := words[len(words)-1].End
+			cues = append(cues, asrRelayCue{Start: start, End: end, Text: strings.TrimSpace(alt.Transcript), Words: words})
+		} else if text := strings.TrimSpace(alt.Transcript); text != "" {
+			cues = append(cues, asrRelayCue{Start: 0, End: 0, Text: text})
+		}
+	}
+	if len(cues) == 0 {
+		return nil, asrRelayInternalError("empty transcript")
+	}
+
+	lastCue := cues[len(cues)-1]
+	duration := lastCue.End
+	return &asrRelayResponsePayload{
+		Cues:            cues,
+		DurationSeconds: &duration,
+		Provider:        provider.id,
+		Model:           model,
+	}, nil
+}
+
+func parseVolcengineRelayResponse(resp *http.Response, provider asrRelayProviderConfig, model string) (*asrRelayResponsePayload, *asrRelayErrorPayload) {
+	statusCode := strings.TrimSpace(resp.Header.Get("X-Api-Status-Code"))
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, asrRelayStatusToError(resp)
+	}
+	if statusCode != "" && statusCode != "20000000" && statusCode != "20000003" {
+		if strings.HasPrefix(statusCode, "450") {
+			return nil, ErrASRVolcengineClientError
+		}
+		if strings.HasPrefix(statusCode, "550") {
+			return nil, ErrASRVolcengineUnavailable
+		}
+		return nil, ErrASRVolcengineUnknown
+	}
+
+	var payload struct {
+		AudioInfo struct {
+			Duration float64 `json:"duration"`
+		} `json:"audio_info"`
+		Result struct {
+			Text       string `json:"text"`
+			Utterances []struct {
+				Text      string  `json:"text"`
+				StartTime float64 `json:"start_time"`
+				EndTime   float64 `json:"end_time"`
+				Words     []struct {
+					Text       string   `json:"text"`
+					StartTime  float64  `json:"start_time"`
+					EndTime    float64  `json:"end_time"`
+					Confidence *float64 `json:"confidence"`
+				} `json:"words"`
+			} `json:"utterances"`
+			Additions struct {
+				Duration float64 `json:"duration"`
+			} `json:"additions"`
+		} `json:"result"`
+	}
+	if statusCode == "20000003" {
+		return &asrRelayResponsePayload{
+			Cues:     []asrRelayCue{},
+			Provider: provider.id,
+			Model:    model,
+		}, nil
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return nil, asrRelayInternalError("invalid provider response payload")
+	}
+
+	cues := make([]asrRelayCue, 0)
+	for _, utt := range payload.Result.Utterances {
+		text := strings.TrimSpace(utt.Text)
+		if text == "" {
+			continue
+		}
+		cue := asrRelayCue{Start: utt.StartTime / 1000, End: utt.EndTime / 1000, Text: text}
+		if len(utt.Words) > 0 {
+			cue.Words = make([]asrRelayWord, 0, len(utt.Words))
+			for _, word := range utt.Words {
+				if strings.TrimSpace(word.Text) == "" {
+					continue
+				}
+				cue.Words = append(cue.Words, asrRelayWord{
+					Word:       strings.TrimSpace(word.Text),
+					Start:      word.StartTime / 1000,
+					End:        word.EndTime / 1000,
+					Confidence: word.Confidence,
+				})
+			}
+		}
+		cues = append(cues, cue)
+	}
+	if len(cues) == 0 {
+		if text := strings.TrimSpace(payload.Result.Text); text != "" {
+			cues = append(cues, asrRelayCue{Start: 0, End: 0, Text: text})
+		}
+	}
+	if len(cues) == 0 {
+		return nil, asrRelayInternalError("empty transcript")
+	}
+
+	duration := payload.AudioInfo.Duration / 1000
+	if duration <= 0 {
+		duration = payload.Result.Additions.Duration / 1000
+	}
+	if duration <= 0 {
+		duration = cues[len(cues)-1].End
+	}
+	return &asrRelayResponsePayload{
+		Cues:            cues,
+		DurationSeconds: &duration,
+		Provider:        provider.id,
+		Model:           model,
+	}, nil
+}
+
+func minimalSilentWAVBytes() []byte {
+	header := []byte{
+		0x52, 0x49, 0x46, 0x46,
+		0xcc, 0x00, 0x00, 0x00,
+		0x57, 0x41, 0x56, 0x45,
+		0x66, 0x6d, 0x74, 0x20,
+		0x10, 0x00, 0x00, 0x00,
+		0x01, 0x00,
+		0x01, 0x00,
+		0x40, 0x1f, 0x00, 0x00,
+		0x80, 0x3e, 0x00, 0x00,
+		0x02, 0x00,
+		0x10, 0x00,
+		0x64, 0x61, 0x74, 0x61,
+		0xa0, 0x00, 0x00, 0x00,
+	}
+	silence := make([]byte, 160)
+	wav := make([]byte, 0, len(header)+len(silence))
+	wav = append(wav, header...)
+	wav = append(wav, silence...)
+	return wav
+}
+
+func asrRelayStatusToError(resp *http.Response) *asrRelayErrorPayload {
+	retryAfterMs := parseRetryAfterHeader(resp.Header.Get("Retry-After"))
+	var base *asrRelayErrorPayload
+	switch resp.StatusCode {
+	case http.StatusUnauthorized, http.StatusForbidden:
+		base = ErrASRProviderRejectedCreds
+	case http.StatusRequestEntityTooLarge:
+		base = ErrASRProviderRejectedPayload
+	case http.StatusTooManyRequests:
+		base = ErrASRProviderRateLimited
+	default:
+		if resp.StatusCode >= 500 {
+			base = ErrASRProviderUnavailable
+		} else {
+			base = ErrASRProviderClientError
+		}
+	}
+	if retryAfterMs != nil && *retryAfterMs > 0 {
+		return &asrRelayErrorPayload{
+			Status:       base.Status,
+			Code:         base.Code,
+			Message:      base.Message,
+			RetryAfterMs: retryAfterMs,
+		}
+	}
+	return base
+}
+
+func asrRelayInternalError(message string) *asrRelayErrorPayload {
+	return &asrRelayErrorPayload{Status: http.StatusServiceUnavailable, Code: "ASR_SERVICE_UNAVAILABLE", Message: message}
+}
+
+func mapASRRelayTransportError(err error) *asrRelayErrorPayload {
+	if err == nil {
+		return asrRelayInternalError("upstream request failed")
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return ErrASRUpstreamTimeout
+	}
+	if errors.Is(err, context.Canceled) {
+		return ErrASRRequestCanceled
+	}
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) && errors.Is(urlErr.Err, context.DeadlineExceeded) {
+		return ErrASRUpstreamTimeout
+	}
+	return ErrASRUpstreamFailed
+}
+
+func parseRetryAfterHeader(value string) *int64 {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil
+	}
+	if seconds, err := strconv.ParseInt(value, 10, 64); err == nil {
+		ms := seconds * 1000
+		return &ms
+	}
+	if t, err := http.ParseTime(value); err == nil {
+		ms := time.Until(t).Milliseconds()
+		if ms < 0 {
+			ms = 0
+		}
+		return &ms
+	}
+	return nil
+}
+
+func parseVolcengineRelayCredentials(apiKey string) (string, string, error) {
+	separator := strings.Index(apiKey, ":")
+	if separator <= 0 || separator >= len(apiKey)-1 {
+		return "", "", fmt.Errorf("volcengine API key must be in the format %q", "appId:accessToken")
+	}
+	appID := strings.TrimSpace(apiKey[:separator])
+	accessToken := strings.TrimSpace(apiKey[separator+1:])
+	if appID == "" || accessToken == "" {
+		return "", "", fmt.Errorf("volcengine API key must be in the format %q", "appId:accessToken")
+	}
+	return appID, accessToken, nil
+}
+
+func newRelayRequestID() string {
+	var buf [8]byte
+	if _, err := rand.Read(buf[:]); err == nil {
+		return fmt.Sprintf("relay-%x", buf[:])
+	}
+	return fmt.Sprintf("relay-%d", time.Now().UnixNano())
+}
+
+func jsonRequest(ctx context.Context, method, target string, body any) (*http.Request, error) {
+	payload, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, method, target, bytes.NewReader(payload))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	return req, nil
+}
+
+func writeASRRelayError(w http.ResponseWriter, status int, message string, code string, retryAfterMs *int64) {
+	requestID := generateRequestID()
+	payload := asrRelayErrorPayload{
+		Status:    status,
+		Code:      code,
+		Message:   message,
+		RequestID: requestID,
+	}
+	if retryAfterMs != nil {
+		payload.RetryAfterMs = retryAfterMs
+		w.Header().Set("Retry-After", strconv.FormatInt(*retryAfterMs/1000, 10))
+	}
+	writeJSON(w, status, payload)
+	slog.Info("asr relay error response", "request_id", requestID, "code", code, "status", status)
+}
+
+func writeJSON(w http.ResponseWriter, status int, payload any) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(payload)
+}
+
+// asrErrClass maps public ASR error codes to low-cardinality observability classes.
+// Public codes (ASR_*) must never leak into error_class, which is used for
+// metrics aggregation and must remain stable and bounded.
+func asrErrClass(code string) string {
+	switch code {
+	case "ASR_INVALID_METHOD", "ASR_INVALID_PAYLOAD":
+		return "invalid_request"
+	case "ASR_UNAUTHORIZED", "ASR_MISSING_OR_DISALLOWED_ORIGIN", "ASR_ORIGIN_NOT_ALLOWED":
+		return "unauthorized"
+	case "ASR_RATE_LIMITED":
+		return "rate_limit"
+	case "ASR_UNSUPPORTED_PROVIDER", "ASR_CLIENT_ERROR":
+		return "client_error"
+	case "ASR_SERVICE_UNAVAILABLE":
+		return "service_unavailable"
+	case "ASR_PAYLOAD_TOO_LARGE":
+		return "payload_too_large"
+	default:
+		return "unknown"
+	}
+}
+
+func (s *asrRelayService) asrRequestUpstream(providerID string, verify bool) (string, string) {
+	providerKey := strings.ToLower(strings.TrimSpace(providerID))
+	if providerKey == "" {
+		return "", ""
+	}
+	provider, ok := s.providers[providerKey]
+	if !ok {
+		return "asr-" + providerKey, ""
+	}
+	targetURL := provider.transcribeURL
+	if verify {
+		targetURL = provider.verifyURL
+	}
+	return "asr-" + provider.id, hostFromURL(targetURL)
+}
+
+func hostFromURL(raw string) string {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	return parsed.Host
+}
