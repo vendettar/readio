@@ -12,7 +12,12 @@
 
 // ─── Types ───────────────────────────────────────────────────────────
 import { create } from 'zustand'
-import { DB, DB_TABLE_NAMES, type PodcastDownload } from './dexieDb'
+import {
+  DB,
+  DB_TABLE_NAMES,
+  type PodcastDownload,
+  type PodcastDownloadCreateInput,
+} from './dexieDb'
 import { checkDownloadCapacity } from './downloadCapacity'
 import { emitDownloadChange } from './downloadLibraryEvents'
 import { CLOUD_BACKEND_FALLBACK_CLASSES, fetchWithFallback, isAbortLikeError } from './fetchUtils'
@@ -239,14 +244,13 @@ export async function persistAudioBlobAsDownload(
         const realAudioBlobId = await DB.addAudioBlob(blob, filename)
 
         const now = Date.now()
-        const download: Omit<PodcastDownload, 'id' | 'createdAt' | 'sourceType'> = {
+        const download: PodcastDownloadCreateInput = {
           name: options.episodeTitle || filename,
           audioId: realAudioBlobId,
           sizeBytes: blob.size,
           sourceUrlNormalized: normalizedUrl,
           transcriptUrl: getValidTranscriptUrl(options.transcriptUrl) || undefined,
           sourceFeedUrl: options.feedUrl || undefined,
-          lastAccessedAt: now,
           sourcePodcastTitle: options.showTitle || undefined,
           sourceEpisodeTitle: options.episodeTitle || undefined,
           sourceDescription: options.episodeDescription || undefined,

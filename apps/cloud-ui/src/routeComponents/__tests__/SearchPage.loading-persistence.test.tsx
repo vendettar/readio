@@ -64,7 +64,6 @@ describe('SearchPage Loading Persistence', () => {
     sourceUrlNormalized: 'https://example.com/audio.mp3',
     sizeBytes: 1,
     createdAt: 1,
-    lastAccessedAt: 1,
     downloadedAt: 1,
     countryAtSave: 'US',
   }

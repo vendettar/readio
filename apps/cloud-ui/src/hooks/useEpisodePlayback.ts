@@ -9,6 +9,7 @@ import {
   playFeedEpisodeWithDeps,
   playSearchEpisodeWithDeps,
 } from '../lib/player/remotePlayback'
+import { logError } from '../lib/logger'
 import {
   applySurfacePolicy,
   deriveSurfacePolicyFromEpisode,
@@ -31,6 +32,18 @@ export function useEpisodePlayback() {
   const pause = usePlayerStore((state) => state.pause)
   const setPlaybackTrackId = usePlayerStore((state) => state.setPlaybackTrackId)
 
+  const resolveRequiredCountryAtSave = useCallback(
+    (candidate?: string): string | null => {
+      const normalized = normalizeCountryParam(candidate)
+      if (normalized) return normalized
+      if (import.meta.env.DEV) {
+        logError('[useEpisodePlayback] Missing required countryAtSave for remote playback')
+      }
+      return null
+    },
+    []
+  )
+
   /**
    * Standard playback for FeedEpisode + Podcast objects
    */
@@ -41,7 +54,9 @@ export function useEpisodePlayback() {
       countryAtSave?: string,
       options?: { mode?: PlaybackRequestMode }
     ) => {
-      const globalCountry = normalizeCountryParam(useExploreStore.getState().country)
+      const globalCountry = useExploreStore.getState().country
+      const resolvedCountryAtSave = resolveRequiredCountryAtSave(countryAtSave ?? globalCountry)
+      if (!resolvedCountryAtSave) return
       const episodePolicy = deriveSurfacePolicyFromEpisode(episode)
       applySurfacePolicy({ setPlayableContext, toDocked, toMini }, episodePolicy)
 
@@ -50,12 +65,21 @@ export function useEpisodePlayback() {
         episode,
         podcast,
         {
-          countryAtSave: countryAtSave ?? globalCountry ?? undefined,
+          countryAtSave: resolvedCountryAtSave,
           mode: options?.mode ?? PLAYBACK_REQUEST_MODE.DEFAULT,
         }
       )
     },
-    [setAudioUrl, play, pause, setPlaybackTrackId, setPlayableContext, toDocked, toMini]
+    [
+      resolveRequiredCountryAtSave,
+      setAudioUrl,
+      play,
+      pause,
+      setPlaybackTrackId,
+      setPlayableContext,
+      toDocked,
+      toMini,
+    ]
   )
 
   /**
@@ -67,7 +91,9 @@ export function useEpisodePlayback() {
       countryAtSave?: string,
       options?: { mode?: PlaybackRequestMode }
     ) => {
-      const globalCountry = normalizeCountryParam(useExploreStore.getState().country)
+      const globalCountry = useExploreStore.getState().country
+      const resolvedCountryAtSave = resolveRequiredCountryAtSave(countryAtSave ?? globalCountry)
+      if (!resolvedCountryAtSave) return
       const searchPolicy = deriveSurfacePolicyFromSearchEpisode(episode)
       applySurfacePolicy({ setPlayableContext, toDocked, toMini }, searchPolicy)
       void (async () => {
@@ -88,13 +114,23 @@ export function useEpisodePlayback() {
           episode,
           {
             podcastFeedUrl,
-            countryAtSave: countryAtSave ?? globalCountry ?? undefined,
+            countryAtSave: resolvedCountryAtSave,
             mode: options?.mode ?? PLAYBACK_REQUEST_MODE.DEFAULT,
           }
         )
       })()
     },
-    [queryClient, setAudioUrl, play, pause, setPlaybackTrackId, setPlayableContext, toDocked, toMini]
+    [
+      queryClient,
+      resolveRequiredCountryAtSave,
+      setAudioUrl,
+      play,
+      pause,
+      setPlaybackTrackId,
+      setPlayableContext,
+      toDocked,
+      toMini,
+    ]
   )
 
   /**
@@ -102,16 +138,29 @@ export function useEpisodePlayback() {
    */
   const playFavorite = useCallback(
     (favorite: Favorite, countryAtSave?: string, options?: { mode?: PlaybackRequestMode }) => {
-      const globalCountry = normalizeCountryParam(useExploreStore.getState().country)
+      const globalCountry = useExploreStore.getState().country
+      const resolvedCountryAtSave = resolveRequiredCountryAtSave(
+        countryAtSave ?? favorite.countryAtSave ?? globalCountry
+      )
+      if (!resolvedCountryAtSave) return
       const favoritePolicy = deriveSurfacePolicyFromFavorite(favorite)
       applySurfacePolicy({ setPlayableContext, toDocked, toMini }, favoritePolicy)
 
       void playFavoriteWithDeps({ setAudioUrl, play, pause, setPlaybackTrackId }, favorite, {
-        countryAtSave: countryAtSave ?? favorite.countryAtSave ?? globalCountry ?? undefined,
+        countryAtSave: resolvedCountryAtSave,
         mode: options?.mode ?? PLAYBACK_REQUEST_MODE.DEFAULT,
       })
     },
-    [setAudioUrl, play, pause, setPlaybackTrackId, setPlayableContext, toDocked, toMini]
+    [
+      resolveRequiredCountryAtSave,
+      setAudioUrl,
+      play,
+      pause,
+      setPlaybackTrackId,
+      setPlayableContext,
+      toDocked,
+      toMini,
+    ]
   )
 
   return useMemo(

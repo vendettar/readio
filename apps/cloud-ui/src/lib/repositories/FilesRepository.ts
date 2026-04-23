@@ -271,7 +271,7 @@ export const FilesRepository = {
             normalizeProviderModelForMatch(version.model) === modelKey
           )
         })
-        .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0]
+        .sort((a, b) => b.createdAt - a.createdAt)[0]
 
       const subtitleId = await DB.addSubtitle(input.cues, input.subtitleFilename, input.fingerprint)
 

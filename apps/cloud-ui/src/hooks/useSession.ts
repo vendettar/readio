@@ -1,38 +1,16 @@
 // src/hooks/useSession.ts
 import { useCallback, useEffect, useRef } from 'react'
 import { DB, type PlaybackSession } from '../lib/dexieDb'
-import { normalizeFeedUrl } from '../lib/discovery/feedUrl'
 import { log, error as logError } from '../lib/logger'
-import { normalizeCountryParam } from '../lib/routes/podcastRoutes'
+import {
+  buildManagedPlaybackSessionCreateInput,
+  resolveSessionAudioSnapshot,
+} from '../lib/player/playbackSessionFactory'
 import { generateSessionId } from '../lib/session'
 import { usePlayerStore } from '../store/playerStore'
 import { useTranscriptStore } from '../store/transcriptStore'
 
 const COMPLETED_RESTORE_THRESHOLD_SECONDS = 2
-
-function normalizeCountrySnapshot(country: string | undefined): string | undefined {
-  return normalizeCountryParam(country) ?? undefined
-}
-
-function normalizeAudioSnapshot(audioUrl: string | null | undefined): string | undefined {
-  if (typeof audioUrl !== 'string') return undefined
-  const normalized = audioUrl.trim()
-  if (!normalized || normalized.startsWith('blob:')) return undefined
-  return normalized
-}
-
-function normalizePodcastFeedSnapshot(feedUrl: string | undefined): string | undefined {
-  if (typeof feedUrl !== 'string') return undefined
-  const normalized = normalizeFeedUrl(feedUrl)
-  return normalized || undefined
-}
-
-function resolveSessionAudioSnapshot(
-  audioUrl: string | null | undefined,
-  metadata?: { originalAudioUrl?: string } | null
-): string | undefined {
-  return normalizeAudioSnapshot(metadata?.originalAudioUrl) ?? normalizeAudioSnapshot(audioUrl)
-}
 
 function getCurrentPlaybackIdentity(): string {
   const state = usePlayerStore.getState()
@@ -135,44 +113,25 @@ export function useSession() {
             usePlayerStore.getState().setDuration(existingSession.durationSeconds)
           }
         } else {
-          // Precondition check before store commitment.
-          const countryAtSave = normalizeCountrySnapshot(effectiveMetadata?.countryAtSave)
-          if (effectiveMetadata && !countryAtSave) {
+          const { coverArtUrl, audioTitle } = usePlayerStore.getState()
+          const sessionInput = buildManagedPlaybackSessionCreateInput({
+            id: generateSessionId(),
+            audioTitle,
+            durationSeconds: duration || 0,
+            normalizedAudioUrl,
+            localTrackId: currentLocalTrackId,
+            coverArtUrl,
+            metadata: effectiveMetadata,
+          })
+          if (!sessionInput) {
             logError('[Session] Rejecting explore session persistence: missing countryAtSave')
             return
           }
 
-          // Create brand new session
-          const id = generateSessionId()
-
-          const { coverArtUrl, audioTitle } = usePlayerStore.getState()
-          const source = effectiveMetadata ? 'explore' : 'local'
-          const podcastFeedUrl = normalizePodcastFeedSnapshot(effectiveMetadata?.podcastFeedUrl)
-
-          await DB.upsertPlaybackSession({
-            id,
-            progress: 0,
-            durationSeconds: duration || 0,
-            source,
-            audioUrl: normalizedAudioUrl,
-            audioFilename: audioTitle,
-            title: audioTitle,
-            localTrackId: currentLocalTrackId || undefined,
-            artworkUrl:
-              effectiveMetadata?.artworkUrl ||
-              (typeof coverArtUrl === 'string' ? coverArtUrl : undefined),
-            description: effectiveMetadata?.description,
-            podcastTitle: effectiveMetadata?.showTitle,
-            podcastFeedUrl,
-            transcriptUrl: effectiveMetadata?.transcriptUrl,
-            publishedAt: effectiveMetadata?.publishedAt,
-            episodeGuid: effectiveMetadata?.episodeGuid,
-            podcastItunesId: effectiveMetadata?.podcastItunesId,
-            countryAtSave,
-          })
+          await DB.upsertPlaybackSession(sessionInput)
           if (getCurrentPlaybackIdentity() !== currentIdentity) return
-          setStoreSessionId(id)
-          log('[Session] Created new playback session:', id)
+          setStoreSessionId(sessionInput.id ?? null)
+          log('[Session] Created new playback session:', sessionInput.id)
         }
       } catch (err) {
         logError('[Session] Failed to manage session:', err)

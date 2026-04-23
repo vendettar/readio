@@ -34,7 +34,6 @@ describe('Track Type Guards and Delete Protection', () => {
         name: 'Download',
         audioId: 'a1',
         sourceUrlNormalized: 'url1',
-        lastAccessedAt: Date.now(),
         downloadedAt: Date.now(),
         sizeBytes: 100,
         countryAtSave: 'US',
@@ -72,7 +71,6 @@ describe('Track Type Guards and Delete Protection', () => {
         name: 'Download',
         audioId,
         sourceUrlNormalized: 'https://example.com/audio.mp3',
-        lastAccessedAt: Date.now(),
         downloadedAt: Date.now(),
         sizeBytes: 100,
         countryAtSave: 'US',
@@ -103,7 +101,6 @@ describe('Track Type Guards and Delete Protection', () => {
         name: 'Download',
         audioId,
         sourceUrlNormalized: 'https://example.com/shared.mp3',
-        lastAccessedAt: Date.now(),
         downloadedAt: Date.now(),
         sizeBytes: 100,
         countryAtSave: 'US',
@@ -116,6 +113,7 @@ describe('Track Type Guards and Delete Protection', () => {
         audioId,
         hasAudioBlob: true,
         localTrackId: null,
+        countryAtSave: 'us',
       })
 
       await DB.removePodcastDownloadWithCleanup(downloadId)

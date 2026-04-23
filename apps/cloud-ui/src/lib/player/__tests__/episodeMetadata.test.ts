@@ -178,7 +178,7 @@ describe('episodeMetadata mappers', () => {
     )
     expect(metadata.artworkUrl).toBe('https://example.com/override-art.jpg')
     expect(metadata.originalAudioUrl).toBe('https://example.com/local.mp3')
-    expect(metadata.countryAtSave).toBe('us')
+    expect(metadata.countryAtSave).toBeUndefined()
     expect(metadata.podcastItunesId).toBe('999')
     expect(metadata.publishedAt).toBe(new Date('2024-06-01T00:00:00.000Z').getTime())
   })

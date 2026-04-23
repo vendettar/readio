@@ -47,7 +47,6 @@ function buildPodcastDownload(overrides: Partial<PodcastDownload> = {}): Podcast
     sizeBytes: 1024,
     createdAt: 1,
     downloadedAt: 1,
-    lastAccessedAt: 1,
     countryAtSave: 'US',
     ...overrides,
   }

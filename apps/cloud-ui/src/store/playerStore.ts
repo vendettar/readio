@@ -17,12 +17,10 @@ import { parseSubtitles } from '../lib/subtitles'
 import { usePlayerSurfaceStore } from './playerSurfaceStore'
 import { useTranscriptStore } from './transcriptStore'
 
-// Episode metadata for session persistence
-export interface EpisodeMetadata {
+interface EpisodeMetadataBase {
   description?: string
   showTitle?: string
   podcastFeedUrl?: string
-  countryAtSave?: string
   transcriptUrl?: string
   artworkUrl?: string
   publishedAt?: number
@@ -32,6 +30,17 @@ export interface EpisodeMetadata {
   originalAudioUrl?: string // Network URL identity for offline playback
   playbackRequestMode?: PlaybackRequestMode // Request-scoped playback mode flag
 }
+
+export interface LocalEpisodeMetadata extends EpisodeMetadataBase {
+  countryAtSave?: undefined
+}
+
+export interface ExploreEpisodeMetadata extends EpisodeMetadataBase {
+  countryAtSave: string
+}
+
+// Episode metadata for session persistence.
+export type EpisodeMetadata = LocalEpisodeMetadata | ExploreEpisodeMetadata
 
 export const PLAYER_STATUS = {
   IDLE: 'idle',

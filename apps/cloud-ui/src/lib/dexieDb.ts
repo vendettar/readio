@@ -17,7 +17,10 @@ import type {
   FileSubtitle,
   FileTrack,
   PlaybackSession,
+  PlaybackSessionCreateInput,
+  PlaybackSessionUpdatePatch,
   PodcastDownload,
+  PodcastDownloadCreateInput,
   RemoteTranscriptCache,
   RuntimeCacheEntry,
   Setting,
@@ -46,7 +49,10 @@ export type {
   Track,
   FileTrack,
   PodcastDownload,
+  PodcastDownloadCreateInput,
   PlaybackSession,
+  PlaybackSessionCreateInput,
+  PlaybackSessionUpdatePatch,
   RemoteTranscriptCache,
   RuntimeCacheEntry,
   Setting,
@@ -73,24 +79,23 @@ export const DB_TABLE_NAMES = {
 } as const
 
 const TRACKS_SCHEMA =
-  'id, name, folderId, createdAt, audioId, artworkId, sourceType, sourceUrlNormalized, sourceEpisodeGuid, lastAccessedAt, &[sourceType+sourceUrlNormalized], [sourceType+createdAt], [sourceType+folderId], [sourceType+folderId+createdAt]'
+  'id, name, folderId, createdAt, audioId, artworkId, sourceType, sourceUrlNormalized, sourceEpisodeGuid, &[sourceType+sourceUrlNormalized], [sourceType+createdAt], [sourceType+folderId], [sourceType+folderId+createdAt]'
 
 function buildSchema(tracksSchema: string) {
   return {
     [DB_TABLE_NAMES.TRACKS]: tracksSchema,
     [DB_TABLE_NAMES.PLAYBACK_SESSIONS]:
-      'id, title, lastPlayedAt, source, createdAt, audioUrl, audioFilename, localTrackId, audioId, episodeGuid, countryAtSave',
+      'id, title, lastPlayedAt, audioUrl, localTrackId, audioId, episodeGuid, [audioUrl+lastPlayedAt], [localTrackId+lastPlayedAt]',
     [DB_TABLE_NAMES.AUDIO_BLOBS]: 'id, storedAt',
     [DB_TABLE_NAMES.SUBTITLES]: 'id, storedAt, asrFingerprint',
     [DB_TABLE_NAMES.REMOTE_TRANSCRIPTS]: 'id, &url, fetchedAt, asrFingerprint',
-    [DB_TABLE_NAMES.SUBSCRIPTIONS]: 'id, &feedUrl, addedAt, podcastItunesId, countryAtSave',
-    [DB_TABLE_NAMES.FAVORITES]: 'id, &key, addedAt, episodeGuid, audioUrl, countryAtSave',
+    [DB_TABLE_NAMES.SUBSCRIPTIONS]: 'id, &feedUrl, addedAt, podcastItunesId',
+    [DB_TABLE_NAMES.FAVORITES]: 'id, &key, addedAt, episodeGuid, audioUrl',
     [DB_TABLE_NAMES.SETTINGS]: 'key',
     [DB_TABLE_NAMES.CREDENTIALS]: 'key',
-    [DB_TABLE_NAMES.RUNTIME_CACHE]: '&key, namespace, at, [namespace+at]',
+    [DB_TABLE_NAMES.RUNTIME_CACHE]: '&key, namespace',
     [DB_TABLE_NAMES.FOLDERS]: 'id, name, createdAt',
-    [DB_TABLE_NAMES.LOCAL_SUBTITLES]:
-      'id, trackId, subtitleId, [trackId+createdAt], [trackId+status+createdAt]',
+    [DB_TABLE_NAMES.LOCAL_SUBTITLES]: 'id, trackId, subtitleId',
   }
 }
 
@@ -116,7 +121,7 @@ class ReadioDB extends Dexie {
   constructor() {
     super(getDbName())
 
-    this.version(8).stores(buildSchema(TRACKS_SCHEMA))
+    this.version(9).stores(buildSchema(TRACKS_SCHEMA))
   }
 }
 
@@ -164,26 +169,57 @@ function normalizeRequiredCountryAtSave(
 }
 
 function normalizeSessionCountryAtSave(
-  session: Pick<PlaybackSession, 'source' | 'countryAtSave' | 'episodeGuid' | 'podcastItunesId'>,
+  session: Pick<PlaybackSession, 'source' | 'countryAtSave'>,
   entityName: string
 ): string | undefined {
   if (session.source !== 'explore') {
     return session.countryAtSave
   }
-  // Only enforce for navigable explore records (history/favorites routing anchors).
-  const isNavigableExploreRecord = !!session.episodeGuid || !!session.podcastItunesId
-  if (!isNavigableExploreRecord) {
-    return session.countryAtSave
-  }
   return normalizeRequiredCountryAtSave(session.countryAtSave, entityName)
 }
 
-function getSubtitleCreatedAt(subtitle: FileSubtitle): number {
-  return subtitle.createdAt ?? 0
+function buildPlaybackSessionRecord(data: PlaybackSessionCreateInput): PlaybackSession {
+  const base = {
+    id: data.id ?? generateId(),
+    title: data.title ?? 'Untitled',
+    createdAt: data.createdAt ?? Date.now(),
+    lastPlayedAt: data.lastPlayedAt ?? Date.now(),
+    sizeBytes: data.sizeBytes ?? 0,
+    durationSeconds: data.durationSeconds ?? 0,
+    audioId: data.audioId ?? null,
+    subtitleId: data.subtitleId ?? null,
+    hasAudioBlob: data.hasAudioBlob ?? false,
+    progress: data.progress ?? 0,
+    audioFilename: data.audioFilename ?? '',
+    subtitleFilename: data.subtitleFilename ?? '',
+    audioUrl: data.audioUrl,
+    localTrackId: data.localTrackId,
+    artworkUrl: data.artworkUrl,
+    description: data.description,
+    podcastTitle: data.podcastTitle,
+    podcastFeedUrl: data.podcastFeedUrl,
+    publishedAt: data.publishedAt,
+    episodeGuid: data.episodeGuid,
+    podcastItunesId: data.podcastItunesId,
+    transcriptUrl: data.transcriptUrl,
+  }
+
+  if (data.source === 'explore') {
+    return {
+      ...base,
+      source: 'explore',
+      countryAtSave: normalizeRequiredCountryAtSave(data.countryAtSave, 'playback session'),
+    }
+  }
+
+  return {
+    ...base,
+    source: 'local',
+  }
 }
 
 function compareFileSubtitlesForDisplay(a: FileSubtitle, b: FileSubtitle): number {
-  const createdAtDelta = getSubtitleCreatedAt(a) - getSubtitleCreatedAt(b)
+  const createdAtDelta = a.createdAt - b.createdAt
   if (createdAtDelta !== 0) return createdAtDelta
 
   const nameDelta = a.name.localeCompare(b.name, undefined, {
@@ -304,30 +340,13 @@ async function deleteFileSubtitleWithBlobProtection(id: string): Promise<FileSub
 
 export const DB = {
   // ========== Playback Session CRUD ==========
-  async createPlaybackSession(data: Partial<PlaybackSession>): Promise<string> {
-    const item: PlaybackSession = {
-      id: generateId(),
-      source: 'local',
-      title: 'Untitled',
-      createdAt: Date.now(),
-      lastPlayedAt: Date.now(),
-      sizeBytes: 0,
-      durationSeconds: 0,
-      audioId: null,
-      subtitleId: null,
-      hasAudioBlob: false,
-      progress: 0,
-      audioFilename: '',
-      subtitleFilename: '',
-      // Spread incoming data to include new metadata fields and overrides
-      ...data,
-    }
-    item.countryAtSave = normalizeSessionCountryAtSave(item, 'playback session')
+  async createPlaybackSession(data: PlaybackSessionCreateInput): Promise<string> {
+    const item = buildPlaybackSessionRecord(data)
     await db.playback_sessions.put(item)
     return item.id
   },
 
-  async upsertPlaybackSession(data: Partial<PlaybackSession>): Promise<string> {
+  async upsertPlaybackSession(data: PlaybackSessionCreateInput): Promise<string> {
     const id = data.id || generateId()
     const existing = await db.playback_sessions.get(id)
 
@@ -351,7 +370,7 @@ export const DB = {
     return this.createPlaybackSession({ ...data, id })
   },
 
-  async updatePlaybackSession(id: string, updates: Partial<PlaybackSession>): Promise<void> {
+  async updatePlaybackSession(id: string, updates: PlaybackSessionUpdatePatch): Promise<void> {
     const existing = await db.playback_sessions.get(id)
     if (!existing) {
       throw new Error(`Playback session ${id} not found`)
@@ -391,25 +410,19 @@ export const DB = {
   },
 
   async findLastSessionByUrl(audioUrl: string): Promise<PlaybackSession | undefined> {
-    // Find most recent session for this specific audio URL
-    // CRITICAL: sortBy() ignores reverse(), so we sort then reverse the array
-    const sessions = await db.playback_sessions
-      .where('audioUrl')
-      .equals(audioUrl)
-      .sortBy('lastPlayedAt')
-    // Return the LAST item (newest)
-    return sessions.length > 0 ? sessions[sessions.length - 1] : undefined
+    if (!audioUrl) return undefined
+    return db.playback_sessions
+      .where('[audioUrl+lastPlayedAt]')
+      .between([audioUrl, Dexie.minKey], [audioUrl, Dexie.maxKey])
+      .last()
   },
 
   async findLastSessionByTrackId(trackId: string): Promise<PlaybackSession | undefined> {
-    // Find most recent session for this specific local track
-    // CRITICAL: sortBy() ignores reverse(), so we sort then reverse the array
-    const sessions = await db.playback_sessions
-      .where('localTrackId')
-      .equals(trackId)
-      .sortBy('lastPlayedAt')
-    // Return the LAST item (newest)
-    return sessions.length > 0 ? sessions[sessions.length - 1] : undefined
+    if (!trackId) return undefined
+    return db.playback_sessions
+      .where('[localTrackId+lastPlayedAt]')
+      .between([trackId, Dexie.minKey], [trackId, Dexie.maxKey])
+      .last()
   },
 
   async getPlaybackSessionCutoff(limit: number): Promise<number> {
@@ -1095,9 +1108,7 @@ export const DB = {
   },
 
   // Podcast Downloads (Mapped to tracks where sourceType = TRACK_SOURCE.PODCAST_DOWNLOAD)
-  async addPodcastDownload(
-    data: Omit<PodcastDownload, 'id' | 'createdAt' | 'sourceType'>
-  ): Promise<string> {
+  async addPodcastDownload(data: PodcastDownloadCreateInput): Promise<string> {
     const download: PodcastDownload = {
       id: generateId(),
       ...data,
@@ -1176,7 +1187,6 @@ export const DB = {
     const fileSub: FileSubtitle = {
       id: generateId(),
       ...data,
-      createdAt: data.createdAt ?? Date.now(),
     }
     await db.local_subtitles.add(fileSub)
     return fileSub.id
@@ -1240,7 +1250,7 @@ export const DB = {
         const remaining = await db.local_subtitles.where('trackId').equals(trackId).toArray()
         const readyVersions = remaining
           .filter((v) => v.status === 'ready' || v.status === undefined)
-          .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
+          .sort((a, b) => b.createdAt - a.createdAt)
 
         const fallbackId = readyVersions.length > 0 ? readyVersions[0].id : undefined
         await db.tracks.update(trackId, {

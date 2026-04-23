@@ -56,7 +56,7 @@ const playbackSessionSchema: z.ZodType<PlaybackSession> = z
     podcastFeedUrl: z.string().optional(),
     publishedAt: z.number().optional(),
     episodeGuid: z.string().optional(),
-    countryAtSave: z.preprocess(normalizeOptionalCountryAtSave, z.string().optional()),
+    countryAtSave: z.preprocess(normalizeOptionalCountryAtSave, z.string()),
     podcastItunesId: z.string().optional(),
     transcriptUrl: z.string().optional(),
   })
@@ -71,6 +71,7 @@ const subscriptionSchema: z.ZodType<Subscription> = z
     artworkUrl: z.string(),
     addedAt: z.number(),
     podcastItunesId: z.string().optional(),
+    countryAtSave: z.preprocess(normalizeOptionalCountryAtSave, z.string()),
   })
   .strict()
 
@@ -138,7 +139,6 @@ const podcastDownloadSchema: z.ZodType<PodcastDownload> = z
     artworkId: z.string().optional(),
     sourceUrlNormalized: z.string(),
     sourceFeedUrl: z.string().optional(),
-    lastAccessedAt: z.number(),
     sourcePodcastTitle: z.string().optional(),
     sourceEpisodeTitle: z.string().optional(),
     sourceDescription: z.string().optional(),
@@ -159,6 +159,7 @@ const localSubtitleSchema: z.ZodType<FileSubtitle> = z
     trackId: z.string(),
     name: z.string(),
     subtitleId: z.string(),
+    createdAt: z.number(),
   })
   .strict()
 

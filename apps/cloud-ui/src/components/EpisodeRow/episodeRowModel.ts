@@ -1,6 +1,6 @@
 import type { TFunction } from 'i18next'
 import { formatDateStandard, formatDuration, formatRelativeTime } from '@/lib/dateUtils'
-import type { Favorite, PlaybackSession } from '@/lib/db/types'
+import { isNavigableExplorePlaybackSession, type Favorite, type PlaybackSession } from '@/lib/db/types'
 import type { EditorPickPodcast, FeedEpisode, Podcast, SearchEpisode } from '@/lib/discovery'
 import {
   buildEpisodeCompactKey,
@@ -261,8 +261,12 @@ export function fromPlaybackSession({
   language,
   t,
 }: PlaybackSessionModelArgs): EpisodeRowModel {
-  const podcastId = session.podcastItunesId || subscriptionMap.get(session.podcastFeedUrl || '')
-  const route = buildEpisodeRoute(session.countryAtSave, podcastId, session.episodeGuid)
+  const podcastId = isNavigableExplorePlaybackSession(session)
+    ? session.podcastItunesId || subscriptionMap.get(session.podcastFeedUrl || '')
+    : undefined
+  const route = isNavigableExplorePlaybackSession(session)
+    ? buildEpisodeRoute(session.countryAtSave, podcastId, session.episodeGuid)
+    : null
 
   return {
     title: session.title,
@@ -283,13 +287,13 @@ export function fromPlaybackSession({
       ? {
           episodeTitle: session.title,
           podcastTitle: session.podcastTitle || '',
-          feedUrl: session.podcastFeedUrl,
+          feedUrl: session.source === 'explore' ? session.podcastFeedUrl : undefined,
           audioUrl: session.audioUrl,
           transcriptUrl: session.transcriptUrl,
           artworkUrl: session.artworkUrl,
-          countryAtSave: session.countryAtSave || undefined,
-          podcastItunesId: session.podcastItunesId,
-          episodeGuid: session.episodeGuid,
+          countryAtSave: session.source === 'explore' ? session.countryAtSave : undefined,
+          podcastItunesId: session.source === 'explore' ? session.podcastItunesId : undefined,
+          episodeGuid: session.source === 'explore' ? session.episodeGuid : undefined,
           durationSeconds: session.durationSeconds, // Populated duration
         }
       : undefined,

@@ -14,9 +14,6 @@ vi.mock('../../dexieDb', () => ({
     audioBlobs: {
       get: vi.fn(),
     },
-    tracks: {
-      update: vi.fn().mockResolvedValue(1),
-    },
   },
 }))
 
@@ -24,13 +21,10 @@ vi.mock('../../downloadService', () => ({
   findDownloadedTrack: vi.fn(),
 }))
 
-const mockNow = 1600000000000
-
 describe('resolvePlaybackSource', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     __resetPlaybackSourceCache()
-    vi.spyOn(Date, 'now').mockReturnValue(mockNow)
 
     // Mock only URL.createObjectURL and URL.revokeObjectURL
     vi.spyOn(global.URL, 'createObjectURL').mockImplementation(
@@ -95,55 +89,8 @@ describe('resolvePlaybackSource', () => {
 
     const result = await resolvePlaybackSource('https://example.com/audio.mp3')
 
-    // Should update lastAccessedAt because it was missing
-    expect(db.tracks.update).toHaveBeenCalledWith('track_1', { lastAccessedAt: mockNow })
-
     expect(result.url).toBe('blob:object_url_for_audio/mpeg')
     expect(result.trackId).toBe('track_1')
-  })
-
-  it('should throttle lastAccessedAt updates to once per 60s', async () => {
-    const trackMock = {
-      id: 'track_2',
-      audioId: 'blob_2',
-      name: 'Test Setup',
-      sizeBytes: 0,
-      createdAt: 0,
-      lastAccessedAt: mockNow - 1000, // accessed 1 second ago
-    }
-    vi.mocked(findDownloadedTrack).mockResolvedValue(
-      trackMock as unknown as import('../../db/types').PodcastDownload
-    )
-
-    const blobMock = new Blob([], { type: 'audio/mpeg' })
-    vi.mocked(db.audioBlobs.get as unknown as Mock).mockResolvedValue({ blob: blobMock })
-
-    await resolvePlaybackSource('https://example.com/audio.mp3')
-
-    // Should NOT update since only 1s has passed
-    expect(db.tracks.update).not.toHaveBeenCalled()
-  })
-
-  it('should update lastAccessedAt if more than 60s have passed', async () => {
-    const trackMock = {
-      id: 'track_3',
-      audioId: 'blob_3',
-      name: 'Test Setup',
-      sizeBytes: 0,
-      createdAt: 0,
-      lastAccessedAt: mockNow - 61000, // accessed 61 seconds ago
-    }
-    vi.mocked(findDownloadedTrack).mockResolvedValue(
-      trackMock as unknown as import('../../db/types').PodcastDownload
-    )
-
-    const blobMock = new Blob([], { type: 'audio/mpeg' })
-    vi.mocked(db.audioBlobs.get as unknown as Mock).mockResolvedValue({ blob: blobMock })
-
-    await resolvePlaybackSource('https://example.com/audio.mp3')
-
-    // Should update since > 60s
-    expect(db.tracks.update).toHaveBeenCalledWith('track_3', { lastAccessedAt: mockNow })
   })
 
   it('invalidates cached blob url when it has been revoked externally', async () => {

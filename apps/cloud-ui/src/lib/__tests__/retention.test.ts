@@ -128,7 +128,6 @@ describe('Retention Policy', () => {
         sizeBytes: 100,
         sourceUrlNormalized: 'http://test.com',
         downloadedAt: Date.now(),
-        lastAccessedAt: Date.now(),
       } as PodcastDownload)
 
       await db.audioBlobs.add({

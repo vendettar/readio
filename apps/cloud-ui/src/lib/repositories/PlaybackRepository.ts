@@ -1,4 +1,9 @@
-import type { AudioBlob, PlaybackSession, SubtitleText } from '../dexieDb'
+import type {
+  AudioBlob,
+  PlaybackSession,
+  PlaybackSessionUpdatePatch,
+  SubtitleText,
+} from '../dexieDb'
 import { DB } from '../dexieDb'
 
 export const PlaybackRepository = {
@@ -14,7 +19,7 @@ export const PlaybackRepository = {
     return DB.getLastPlaybackSession()
   },
 
-  updatePlaybackSession(id: string, updates: Partial<PlaybackSession>): Promise<void> {
+  updatePlaybackSession(id: string, updates: PlaybackSessionUpdatePatch): Promise<void> {
     return DB.updatePlaybackSession(id, updates)
   },
 

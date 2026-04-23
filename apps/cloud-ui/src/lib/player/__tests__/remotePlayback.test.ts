@@ -12,6 +12,8 @@ import {
   playStreamWithoutTranscriptWithDeps,
 } from '../remotePlayback'
 
+const TEST_COUNTRY = 'us'
+
 function makeFeedEpisode(overrides: Partial<FeedEpisode> = {}): FeedEpisode {
   return {
     episodeGuid: 'test-ep',
@@ -123,9 +125,7 @@ describe('remotePlayback', () => {
       { setAudioUrl, play, pause, setPlaybackTrackId },
       episode,
       podcast,
-      {
-        countryAtSave: 'us',
-      }
+      { countryAtSave: TEST_COUNTRY }
     )
 
     await startPromise
@@ -171,7 +171,8 @@ describe('remotePlayback', () => {
         language: 'en',
         genres: ['Technology'],
         dead: false,
-      })
+      }),
+      { countryAtSave: TEST_COUNTRY }
     )
 
     expect(downloadEpisodeMock).not.toHaveBeenCalled()
@@ -194,7 +195,8 @@ describe('remotePlayback', () => {
     await playFeedEpisodeWithDeps(
       { setAudioUrl, play, pause, setPlaybackTrackId },
       episode,
-      makePodcast()
+      makePodcast(),
+      { countryAtSave: TEST_COUNTRY }
     )
 
     expect(downloadEpisodeMock).toHaveBeenCalledTimes(1)
@@ -256,7 +258,9 @@ describe('remotePlayback', () => {
       transcriptUrl: 'https://example.com/favorite.srt',
     } as Favorite
 
-    await playFavoriteWithDeps({ setAudioUrl, play, pause }, favorite)
+    await playFavoriteWithDeps({ setAudioUrl, play, pause }, favorite, {
+      countryAtSave: TEST_COUNTRY,
+    })
     expect(setAudioUrl).toHaveBeenCalledTimes(2)
     expect(setAudioUrl.mock.calls[0]).toEqual([
       null,
@@ -344,8 +348,8 @@ describe('remotePlayback', () => {
     const pod = makePodcast({ title: 'Pod' })
 
     // Start slow playback, then immediately start fast playback
-    const p1 = playFeedEpisodeWithDeps(deps, ep1, pod)
-    const p2 = playFeedEpisodeWithDeps(deps, ep2, pod)
+    const p1 = playFeedEpisodeWithDeps(deps, ep1, pod, { countryAtSave: TEST_COUNTRY })
+    const p2 = playFeedEpisodeWithDeps(deps, ep2, pod, { countryAtSave: TEST_COUNTRY })
 
     await Promise.all([p1, p2])
 
@@ -397,9 +401,13 @@ describe('remotePlayback', () => {
       return { ok: true }
     })
 
-    const p1 = playFeedEpisodeWithDeps({ setAudioUrl, play, pause }, ep1, pod)
+    const p1 = playFeedEpisodeWithDeps({ setAudioUrl, play, pause }, ep1, pod, {
+      countryAtSave: TEST_COUNTRY,
+    })
     // Synchronously bump epoch by starting ep2 immediately
-    const p2 = playFeedEpisodeWithDeps({ setAudioUrl, play, pause }, ep2, pod)
+    const p2 = playFeedEpisodeWithDeps({ setAudioUrl, play, pause }, ep2, pod, {
+      countryAtSave: TEST_COUNTRY,
+    })
 
     await Promise.all([p1, p2])
 
@@ -432,7 +440,9 @@ describe('remotePlayback', () => {
       audioUrl: 'https://example.com/fail.mp3',
     })
 
-    await playFeedEpisodeWithDeps({ setAudioUrl, play, pause }, ep, makePodcast())
+    await playFeedEpisodeWithDeps({ setAudioUrl, play, pause }, ep, makePodcast(), {
+      countryAtSave: TEST_COUNTRY,
+    })
 
     // First call is the immediate reset, second call is the failure cleanup setAudioUrl(null)
     expect(setAudioUrl).toHaveBeenCalledTimes(2)
@@ -448,7 +458,9 @@ describe('remotePlayback', () => {
     const pause = vi.fn()
 
     const ep = makeFeedEpisode({ audioUrl: 'https://example.com/audio.mp3' })
-    await playFeedEpisodeWithDeps({ setAudioUrl, play, pause }, ep, makePodcast())
+    await playFeedEpisodeWithDeps({ setAudioUrl, play, pause }, ep, makePodcast(), {
+      countryAtSave: TEST_COUNTRY,
+    })
 
     // Should NOT trigger download because key is missing
     expect(downloadEpisodeMock).not.toHaveBeenCalled()
@@ -469,6 +481,7 @@ describe('remotePlayback', () => {
     })
 
     await playFeedEpisodeWithDeps({ setAudioUrl, play, pause }, episode, makePodcast(), {
+      countryAtSave: TEST_COUNTRY,
       mode: PLAYBACK_REQUEST_MODE.STREAM_WITHOUT_TRANSCRIPT,
     })
 
@@ -500,7 +513,7 @@ describe('remotePlayback', () => {
       { setAudioUrl, play, pause, setPlaybackTrackId },
       episode,
       makePodcast(),
-      { mode: PLAYBACK_REQUEST_MODE.STREAM_WITHOUT_TRANSCRIPT }
+      { countryAtSave: TEST_COUNTRY, mode: PLAYBACK_REQUEST_MODE.STREAM_WITHOUT_TRANSCRIPT }
     )
 
     expect(downloadEpisodeMock).not.toHaveBeenCalled()
@@ -529,7 +542,9 @@ describe('remotePlayback', () => {
     })
     const podcast = makePodcast({ title: 'Podcast Fallback Title' })
 
-    await playFeedEpisodeWithDeps({ setAudioUrl, play, pause }, episode, podcast)
+    await playFeedEpisodeWithDeps({ setAudioUrl, play, pause }, episode, podcast, {
+      countryAtSave: TEST_COUNTRY,
+    })
 
     expect(setAudioUrl).toHaveBeenLastCalledWith(
       'https://example.com/title-fallback.mp3',
@@ -558,7 +573,9 @@ describe('remotePlayback', () => {
       transcriptUrl: 'https://example.com/untitled.srt',
     })
 
-    await playFeedEpisodeWithDeps({ setAudioUrl, play, pause }, episode, makePodcast())
+    await playFeedEpisodeWithDeps({ setAudioUrl, play, pause }, episode, makePodcast(), {
+      countryAtSave: TEST_COUNTRY,
+    })
 
     expect(setAudioUrl).toHaveBeenLastCalledWith(
       'https://example.com/untitled-fallback.mp3',
@@ -634,7 +651,8 @@ describe('remotePlayback', () => {
     const supersedingRequest = playFeedEpisodeWithDeps(
       { setAudioUrl, play, pause },
       episode,
-      makePodcast()
+      makePodcast(),
+      { countryAtSave: TEST_COUNTRY }
     )
 
     const [startResult] = await Promise.all([staleRequest, supersedingRequest])
@@ -687,7 +705,8 @@ describe('remotePlayback', () => {
     const supersedingPlay = playFeedEpisodeWithDeps(
       { setAudioUrl, play, pause },
       supersedingEpisode,
-      makePodcast()
+      makePodcast(),
+      { countryAtSave: TEST_COUNTRY }
     )
 
     const [historyResult] = await Promise.all([slowHistory, supersedingPlay])

@@ -1,5 +1,5 @@
 import type { EpisodeMetadata } from '../../store/playerStore'
-import type { PlaybackSession } from '../dexieDb'
+import type { ExplorePlaybackSession, PlaybackSession } from '../dexieDb'
 
 export interface RestoredPlaybackState {
   sessionId: string
@@ -38,7 +38,7 @@ export function buildRestoredLocalBlobState(input: {
 }
 
 export function buildRestoredRemoteSessionState(input: {
-  session: PlaybackSession
+  session: ExplorePlaybackSession
   audioUrl: string
   coverArtUrl: string | Blob | null
   activeBlobUrls?: string[]

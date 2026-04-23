@@ -48,6 +48,7 @@ describe('playerStore - Session Restore Prefer Local Download', () => {
       source: 'explore',
       title: 'My Episode',
       podcastTitle: 'My Podcast',
+      countryAtSave: 'us',
     })
 
     const mockAudioBlob = new Blob(['downloaded audio'], { type: 'audio/mp3' })
@@ -58,7 +59,6 @@ describe('playerStore - Session Restore Prefer Local Download', () => {
       audioId,
       sizeBytes: mockAudioBlob.size,
       sourceUrlNormalized: remoteUrl,
-      lastAccessedAt: Date.now(),
       downloadedAt: Date.now(),
       countryAtSave: 'US',
     })
@@ -87,6 +87,7 @@ describe('playerStore - Session Restore Prefer Local Download', () => {
       progress: 60,
       source: 'explore',
       title: 'Unique Episode',
+      countryAtSave: 'us',
     })
 
     const { result } = renderHook(() => usePlayerStore())
@@ -111,6 +112,7 @@ describe('playerStore - Session Restore Prefer Local Download', () => {
       progress: 30,
       source: 'explore',
       title: 'Missing Blob Episode',
+      countryAtSave: 'us',
     })
 
     await DB.addPodcastDownload({
@@ -118,7 +120,6 @@ describe('playerStore - Session Restore Prefer Local Download', () => {
       audioId: 'non-existent-audio-id',
       sizeBytes: 0,
       sourceUrlNormalized: remoteUrl,
-      lastAccessedAt: Date.now(),
       downloadedAt: Date.now(),
       countryAtSave: 'US',
     })
@@ -193,7 +194,6 @@ describe('playerStore - Session Restore Prefer Local Download', () => {
       audioId,
       sizeBytes: mockBlob.size,
       sourceUrlNormalized: 'https://cdn.podcast.com/shows/ep42.mp3',
-      lastAccessedAt: Date.now(),
       downloadedAt: Date.now(),
       countryAtSave: 'US',
     })

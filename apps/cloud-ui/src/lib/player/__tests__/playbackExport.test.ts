@@ -80,7 +80,6 @@ function makePodcastTrack() {
     sizeBytes: 1024,
     createdAt: Date.now(),
     downloadedAt: Date.now(),
-    lastAccessedAt: Date.now(),
     countryAtSave: 'US',
     sourceUrlNormalized: 'https://example.com/episode.mp3',
     sourceEpisodeTitle: 'Downloaded Episode',

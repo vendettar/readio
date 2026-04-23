@@ -11,7 +11,10 @@ import { OverflowMenu } from '../components/ui/overflow-menu'
 import { useNetworkStatus } from '../hooks/useNetworkStatus'
 import { useSubscriptionMap } from '../hooks/useSubscriptionMap'
 import { formatTimeSmart } from '../lib/dateUtils'
-import type { PlaybackSession } from '../lib/db/types'
+import {
+  isNavigableExplorePlaybackSession,
+  type PlaybackSession,
+} from '../lib/db/types'
 import { mapSessionToDiscovery } from '../lib/discovery/mappers'
 import { formatDateShort } from '../lib/formatters'
 import { logError } from '../lib/logger'
@@ -211,7 +214,8 @@ export default function HistoryPage() {
 
   const handleToggleFavorite = useCallback(
     async (session: PlaybackSession, favorited: boolean) => {
-      if (!session.podcastFeedUrl || !session.audioUrl) return
+      if (!isNavigableExplorePlaybackSession(session) || !session.podcastFeedUrl || !session.audioUrl)
+        return
 
       const key = `${session.podcastFeedUrl}::${session.audioUrl}`
 
@@ -235,11 +239,16 @@ export default function HistoryPage() {
   const historyRows = React.useMemo(() => {
     return sessions.map((session, index) => {
       const favorited = !!(
+        isNavigableExplorePlaybackSession(session) &&
         session.podcastFeedUrl &&
         session.audioUrl &&
         favoriteKeysSet.has(`${session.podcastFeedUrl}::${session.audioUrl}`)
       )
-      const canFavorite = !!(session.podcastFeedUrl && session.audioUrl)
+      const canFavorite = !!(
+        isNavigableExplorePlaybackSession(session) &&
+        session.podcastFeedUrl &&
+        session.audioUrl
+      )
       const localBlob = artworkBlobs[session.id] || null
       const model = fromPlaybackSession({
         session,

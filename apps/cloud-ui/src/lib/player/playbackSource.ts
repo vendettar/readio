@@ -29,14 +29,6 @@ export async function resolvePlaybackSource(
     const objectUrl = URL.createObjectURL(audioBlobRecord.blob)
     lastResolved = { normalizedUrl, objectUrl }
 
-    // Fire and forget lastAccessedAt update
-    const now = Date.now()
-    if (!track.lastAccessedAt || now - (track.lastAccessedAt ?? 0) > 60000) {
-      db.tracks
-        .update(track.id, { lastAccessedAt: now } as import('../db/types').PodcastDownloadTrack)
-        .catch((err) => logError('[playbackSource] Failed to update lastAccessedAt:', err))
-    }
-
     return { url: objectUrl, trackId: track.id }
   } catch (error) {
     logError(

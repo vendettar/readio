@@ -84,7 +84,8 @@ describe('remotePlayback ASR-Fallback Regression', () => {
         setPlaybackTrackId: setPlaybackTrackIdSpy,
       },
       episode,
-      podcast
+      podcast,
+      { countryAtSave: 'us' }
     )
 
     // Verify it called removeDownloadedTrack for the dirty track

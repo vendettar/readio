@@ -23,7 +23,7 @@ import { PLAYBACK_REQUEST_MODE, type PlaybackRequestMode } from './playbackMode'
 import { resolvePlaybackSource } from './playbackSource'
 
 type MetadataPatch = {
-  countryAtSave?: string
+  countryAtSave: string
 }
 
 type PlaybackModeOptions = {
@@ -295,7 +295,7 @@ export async function playFeedEpisodeWithDeps(
   deps: RemotePlaybackDeps,
   episode: FeedEpisode,
   podcast: Podcast,
-  options?: MetadataPatch & PlaybackModeOptions
+  options: MetadataPatch & PlaybackModeOptions
 ): Promise<void> {
   const payload = mapFeedEpisodeToPlaybackPayload(episode, podcast)
   await playRemotePayload(deps, payload, options, options)
@@ -304,7 +304,7 @@ export async function playFeedEpisodeWithDeps(
 export async function playSearchEpisodeWithDeps(
   deps: RemotePlaybackDeps,
   episode: SearchEpisode,
-  options?: { podcastFeedUrl?: string; countryAtSave?: string; mode?: PlaybackRequestMode }
+  options: { podcastFeedUrl?: string; countryAtSave: string; mode?: PlaybackRequestMode }
 ): Promise<void> {
   const payload = mapSearchEpisodeToPlaybackPayload(episode, options?.podcastFeedUrl)
   await playRemotePayload(deps, payload, options, options)
@@ -313,7 +313,7 @@ export async function playSearchEpisodeWithDeps(
 export async function playFavoriteWithDeps(
   deps: RemotePlaybackDeps,
   favorite: Favorite,
-  options?: MetadataPatch & PlaybackModeOptions
+  options: MetadataPatch & PlaybackModeOptions
 ): Promise<void> {
   const payload = mapFavoriteToPlaybackPayload(favorite)
   await playRemotePayload(deps, payload, options, options)

@@ -3,6 +3,7 @@ import { useCallback } from 'react'
 import type { ASRCue } from '../lib/asr/types'
 import { DB, type FileSubtitle, type FileTrack } from '../lib/dexieDb'
 import { logError, warn as logWarn } from '../lib/logger'
+import { buildLocalTrackPlaybackSessionCreateInput } from '../lib/player/playbackSessionFactory'
 import { usePlayerStore } from '../store/playerStore'
 import { usePlayerSurfaceStore } from '../store/playerSurfaceStore'
 import { useTranscriptStore } from '../store/transcriptStore'
@@ -84,20 +85,14 @@ export function useFilePlayback({ onComplete }: UseFilePlaybackProps = {}) {
 
         play()
 
-        await DB.upsertPlaybackSession({
-          id: sessionId,
-          source: 'local',
-          title: track.name,
-          audioId: track.audioId, // Required for Last Played map
-          artworkUrl: typeof artwork === 'string' ? artwork : undefined, // History display helper
-          subtitleId: subToLoad?.subtitleId || null,
-          hasAudioBlob: true,
-          lastPlayedAt: Date.now(),
-          localTrackId: track.id,
-          description: track.album || undefined,
-          podcastTitle: track.artist || undefined,
-          durationSeconds: track.durationSeconds || 0,
-        })
+        await DB.upsertPlaybackSession(
+          buildLocalTrackPlaybackSessionCreateInput({
+            sessionId,
+            track,
+            subtitleId: subToLoad?.subtitleId || null,
+            artworkUrl: typeof artwork === 'string' ? artwork : undefined,
+          })
+        )
 
         // Navigate to home page (player)
         router.navigate({ to: '/' })

@@ -52,7 +52,6 @@ function makeDownloadedTrack(
     sourceType: 'podcast_download',
     sizeBytes: 1024,
     createdAt: 1,
-    lastAccessedAt: 1,
     downloadedAt: 1,
     countryAtSave: 'US',
     ...overrides,
@@ -518,7 +517,6 @@ describe('DownloadsPage Regression', () => {
       createdAt: 3,
       sourceType: 'podcast_download',
       sourceUrlNormalized: 'https://example.com/audio.mp3',
-      lastAccessedAt: 3,
       downloadedAt: 3,
       countryAtSave: 'US',
     }
@@ -954,7 +952,6 @@ describe('DownloadsPage Regression', () => {
       sourcePodcastItunesId: '12345',
       sourceEpisodeGuid: 'episode-abc',
       sourceEpisodeTitle: 'Episode Country Missing',
-      lastAccessedAt: 4,
       downloadedAt: 4,
       countryAtSave: '', // simulate missing even though type requires it
     }

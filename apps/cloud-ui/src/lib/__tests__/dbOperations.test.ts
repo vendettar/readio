@@ -56,6 +56,46 @@ describe('Dexie database operations', () => {
     expect(lastSession?.id).toBe(newId)
   })
 
+  it('finds the latest playback session by audioUrl', async () => {
+    await DB.createPlaybackSession({
+      id: 'audio-url-session-old',
+      title: 'Older URL Session',
+      audioUrl: 'https://example.com/audio.mp3',
+      lastPlayedAt: 1000,
+    })
+    await DB.createPlaybackSession({
+      id: 'audio-url-session-new',
+      title: 'Newer URL Session',
+      audioUrl: 'https://example.com/audio.mp3',
+      lastPlayedAt: 2000,
+    })
+
+    const latest = await DB.findLastSessionByUrl('https://example.com/audio.mp3')
+
+    expect(latest?.id).toBe('audio-url-session-new')
+  })
+
+  it('finds the latest playback session by localTrackId', async () => {
+    await DB.createPlaybackSession({
+      id: 'track-session-old',
+      source: 'local',
+      title: 'Older Track Session',
+      localTrackId: 'track-1',
+      lastPlayedAt: 1000,
+    })
+    await DB.createPlaybackSession({
+      id: 'track-session-new',
+      source: 'local',
+      title: 'Newer Track Session',
+      localTrackId: 'track-1',
+      lastPlayedAt: 2000,
+    })
+
+    const latest = await DB.findLastSessionByTrackId('track-1')
+
+    expect(latest?.id).toBe('track-session-new')
+  })
+
   it('supports remote transcript cache CRUD operations', async () => {
     const id = 'remote-transcript:https://example.com/ep-1.srt'
     await DB.upsertRemoteTranscript({
@@ -122,7 +162,7 @@ describe('Dexie database operations', () => {
     expect(remote?.source).toBe('asr-groq')
   })
 
-  it('auto-populates createdAt for file subtitle links when omitted', async () => {
+  it('persists explicit createdAt for file subtitle links', async () => {
     const trackId = await DB.addFileTrack({
       folderId: null,
       name: 'Track A',
@@ -130,16 +170,17 @@ describe('Dexie database operations', () => {
       sizeBytes: 123,
     })
     const subtitleId = await DB.addSubtitle([{ start: 0, end: 1, text: 'One' }], 'one.srt')
+    const createdAt = Date.now()
     await DB.addFileSubtitle({
       trackId,
       subtitleId,
       name: 'one.srt',
+      createdAt,
     })
 
     const subtitles = await DB.getFileSubtitlesForTrack(trackId)
     expect(subtitles).toHaveLength(1)
-    expect(typeof subtitles[0].createdAt).toBe('number')
-    expect((subtitles[0].createdAt ?? 0) > 0).toBe(true)
+    expect(subtitles[0].createdAt).toBe(createdAt)
   })
 
   it('returns file subtitles in stable display order (oldest first, then name tie-break)', async () => {
@@ -224,6 +265,7 @@ describe('Dexie database operations', () => {
       audioId,
       hasAudioBlob: true,
       localTrackId: null,
+      countryAtSave: 'us',
     })
 
     await DB.deleteFileTrack(trackId)

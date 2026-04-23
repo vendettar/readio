@@ -120,7 +120,7 @@ export function mapPlaybackSessionToEpisodeMetadata(
     episodeGuid: session.episodeGuid,
     podcastItunesId: normalizeStringId(session.podcastItunesId),
     transcriptUrl: session.transcriptUrl,
-    countryAtSave: session.countryAtSave,
+    countryAtSave: session.source === 'explore' ? session.countryAtSave : undefined,
     originalAudioUrl: session.audioUrl,
   }
 }

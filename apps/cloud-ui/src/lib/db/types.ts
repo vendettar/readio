@@ -14,7 +14,7 @@
  *   domain constants/helpers
  */
 
-export interface PlaybackSession {
+interface PlaybackSessionBase {
   id: string // Primary key
   source: 'local' | 'explore' // Origin of content
   title: string // Display name
@@ -53,8 +53,96 @@ export interface PlaybackSession {
   episodeGuid?: string // Stable episode identity for compact route generation
   podcastItunesId?: string // Platform-specific podcast ID for navigation
   transcriptUrl?: string // Podcast transcript source URL (Podcasting 2.0)
-  countryAtSave?: string // Country snapshot when the record was persisted
 }
+
+export interface LocalPlaybackSession extends PlaybackSessionBase {
+  source: 'local'
+  countryAtSave?: undefined
+}
+
+export interface ExplorePlaybackSession extends PlaybackSessionBase {
+  source: 'explore'
+  countryAtSave: string // Country snapshot when the record was persisted
+}
+
+export type PlaybackSession = LocalPlaybackSession | ExplorePlaybackSession
+
+export type NavigableExplorePlaybackSession = ExplorePlaybackSession &
+  ({ podcastItunesId: string } | { episodeGuid: string })
+
+export function isNavigableExplorePlaybackSession(
+  session: PlaybackSession
+): session is NavigableExplorePlaybackSession {
+  if (session.source !== 'explore') return false
+  if (!session.countryAtSave) return false
+  return !!session.podcastItunesId || !!session.episodeGuid
+}
+
+interface PlaybackSessionCreateInputBase {
+  id?: string
+  title?: string
+  createdAt?: number
+  lastPlayedAt?: number
+  sizeBytes?: number
+  durationSeconds?: number
+  audioId?: string | null
+  subtitleId?: string | null
+  hasAudioBlob?: boolean
+  progress?: number
+  audioFilename?: string
+  subtitleFilename?: string
+  audioUrl?: string
+  localTrackId?: string | null
+  artworkUrl?: string
+  description?: string
+  podcastTitle?: string
+  podcastFeedUrl?: string
+  publishedAt?: number
+  episodeGuid?: string
+  podcastItunesId?: string
+  transcriptUrl?: string
+}
+
+export interface LocalPlaybackSessionCreateInput extends PlaybackSessionCreateInputBase {
+  source?: 'local'
+  countryAtSave?: undefined
+}
+
+export interface ExplorePlaybackSessionCreateInput extends PlaybackSessionCreateInputBase {
+  source: 'explore'
+  countryAtSave: string
+}
+
+export type PlaybackSessionCreateInput =
+  | LocalPlaybackSessionCreateInput
+  | ExplorePlaybackSessionCreateInput
+
+export type PlaybackSessionUpdatePatch = Partial<
+  Pick<
+    PlaybackSession,
+    | 'title'
+    | 'lastPlayedAt'
+    | 'sizeBytes'
+    | 'durationSeconds'
+    | 'audioId'
+    | 'subtitleId'
+    | 'hasAudioBlob'
+    | 'progress'
+    | 'audioFilename'
+    | 'subtitleFilename'
+    | 'audioUrl'
+    | 'localTrackId'
+    | 'artworkUrl'
+    | 'description'
+    | 'podcastTitle'
+    | 'podcastFeedUrl'
+    | 'publishedAt'
+    | 'episodeGuid'
+    | 'podcastItunesId'
+    | 'transcriptUrl'
+    | 'countryAtSave'
+  >
+>
 
 export interface AudioBlob {
   id: string
@@ -85,7 +173,7 @@ export interface Subscription {
   artworkUrl: string
   addedAt: number
   podcastItunesId?: string // Apple provider collection ID for navigation
-  countryAtSave?: string // Country snapshot when subscribed
+  countryAtSave: string // Country snapshot when subscribed
 }
 
 export interface Favorite {
@@ -105,7 +193,7 @@ export interface Favorite {
   episodeGuid?: string // Stable episode identity for compact route generation
   podcastItunesId?: string // Platform-specific podcast ID for navigation
   transcriptUrl?: string // Podcast transcript source URL (Podcasting 2.0)
-  countryAtSave?: string // Country snapshot when favorited
+  countryAtSave: string // Country snapshot when favorited
 }
 
 export interface RemoteTranscriptCache {
@@ -176,32 +264,52 @@ export interface TrackBase {
   createdAt: number
   artworkId?: string // FK to audioBlobs (embedded cover art)
   isCorrupted?: boolean // Added by Self-Healing Sanitizer if audio blob is missing
+}
+
+export interface TrackSubtitleState {
   activeSubtitleId?: string // FK to local_subtitles.id - which subtitle version is active
 }
 
-export interface UserUploadTrack extends TrackBase {
+export interface UserUploadTrack extends TrackBase, TrackSubtitleState {
   sourceType: typeof TRACK_SOURCE.USER_UPLOAD
   folderId: string | null // Public contract: null = root folder
   album?: string // Album name from metadata
   artist?: string // Artist name from metadata
 }
 
-export interface PodcastDownloadTrack extends TrackBase {
-  sourceType: typeof TRACK_SOURCE.PODCAST_DOWNLOAD
+export interface PodcastDownloadIdentity {
   sourceUrlNormalized: string // Normalized episode audio URL for dedup
-  transcriptUrl?: string // Podcast transcript source URL (Podcasting 2.0)
   sourceFeedUrl?: string // Source RSS feed URL for favorite/navigation
-  lastAccessedAt: number // Last playback access timestamp (throttled)
+  countryAtSave: string // Country at time of download for routing (required invariant)
+  sourcePodcastItunesId?: string // Provider podcast ID
+  sourceEpisodeGuid?: string // Stable episode identity for compact route generation
+}
+
+export interface PodcastDownloadSnapshot {
+  transcriptUrl?: string // Podcast transcript source URL (Podcasting 2.0)
   sourcePodcastTitle?: string // Display podcast title
   sourceEpisodeTitle?: string // Display episode title
   sourceDescription?: string // Episode description
   sourceArtworkUrl?: string // Episode/podcast artwork URL
   downloadedAt: number // Download completion timestamp
-  countryAtSave: string // Country at time of download for routing (required invariant)
-  sourcePodcastItunesId?: string // Provider podcast ID
-  sourceEpisodeGuid?: string // Stable episode identity for compact route generation
+}
+
+export interface PodcastDownloadSubtitleState extends TrackSubtitleState {
   manualPinnedAt?: number // Timestamp when user manually selected active subtitle (Instruction 125b)
 }
+
+export interface PodcastDownloadTrack
+  extends TrackBase,
+    PodcastDownloadIdentity,
+    PodcastDownloadSnapshot,
+    PodcastDownloadSubtitleState {
+  sourceType: typeof TRACK_SOURCE.PODCAST_DOWNLOAD
+}
+
+export type PodcastDownloadCreateInput = Omit<
+  PodcastDownloadTrack,
+  'id' | 'createdAt' | 'sourceType'
+>
 
 export type Track = UserUploadTrack | PodcastDownloadTrack
 
@@ -245,6 +353,6 @@ export interface FileSubtitle {
   provider?: string // ASR provider name (e.g., 'groq')
   model?: string // ASR model name
   language?: string // Detected/declared language
-  createdAt?: number // Version creation timestamp
+  createdAt: number // Version creation timestamp
   status?: SubtitleVersionStatus // 'ready' or 'failed'
 }

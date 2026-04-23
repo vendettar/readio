@@ -113,7 +113,6 @@ describe('remoteTranscript local media input relay paths', () => {
       sizeBytes: audioBlob.size,
       durationSeconds: 1.2,
       sourceUrlNormalized: originalAudioUrl,
-      lastAccessedAt: Date.now(),
       downloadedAt: Date.now(),
       countryAtSave: 'us',
       sourcePodcastTitle: 'Podcast',

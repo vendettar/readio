@@ -172,7 +172,7 @@ export const DownloadsRepository = {
     const activeEntry = activeId ? versions.find((v) => v.id === activeId) : null
 
     // Latest by createdAt (descending)
-    const sorted = [...versions].sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
+    const sorted = [...versions].sort((a, b) => b.createdAt - a.createdAt)
     const latest = sorted[0]
 
     return {
@@ -207,7 +207,7 @@ export const DownloadsRepository = {
     }
 
     const versions = await db.local_subtitles.where('trackId').equals(trackId).toArray()
-    return versions.sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))
+    return versions.sort((a, b) => b.createdAt - a.createdAt)
   },
 
   /**
@@ -367,7 +367,7 @@ export const DownloadsRepository = {
           await db.local_subtitles.where('trackId').equals(input.trackId).toArray()
         )
           .filter((version) => version.sourceKind === 'built_in')
-          .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0]
+          .sort((a, b) => b.createdAt - a.createdAt)[0]
 
         const subtitleId = await DB.addSubtitle(input.cues, input.subtitleFilename)
 
@@ -456,7 +456,7 @@ export const DownloadsRepository = {
               normalizeProviderModelForMatch(version.model) === modelKey
             )
           })
-          .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0))[0]
+          .sort((a, b) => b.createdAt - a.createdAt)[0]
 
         const subtitleId = await DB.addSubtitle(
           input.cues,

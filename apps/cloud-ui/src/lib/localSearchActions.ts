@@ -3,7 +3,13 @@ import type { LocalSearchResult } from '../hooks/useGlobalSearch'
 import type { EpisodeMetadata } from '../store/playerStore'
 import { usePlayerSurfaceStore } from '../store/playerSurfaceStore'
 import type { ASRCue } from './asr/types'
-import { DB, type Favorite, type PlaybackSession, type Subscription } from './dexieDb'
+import {
+  DB,
+  isNavigableExplorePlaybackSession,
+  type Favorite,
+  type PlaybackSession,
+  type Subscription,
+} from './dexieDb'
 import { buildEpisodeCompactKey } from './discovery/editorPicks'
 import { logError } from './logger'
 import { mapPlaybackSessionToEpisodeMetadata } from './player/episodeMetadata'
@@ -49,13 +55,13 @@ export interface LocalSearchActionDeps {
 }
 
 function buildLibraryEpisodeRoute(params: {
-  countryAtSave?: string
-  podcastItunesId?: string
-  episodeGuid?: string
+  countryAtSave: string
+  podcastItunesId: string
+  episodeGuid: string
 }) {
   const country = normalizeCountryParam(params.countryAtSave)
-  const podcastId = params.podcastItunesId?.trim()
-  const guid = params.episodeGuid?.trim()
+  const podcastId = params.podcastItunesId.trim()
+  const guid = params.episodeGuid.trim()
 
   if (!country || !podcastId || !guid) return null
 
@@ -105,11 +111,14 @@ export async function executeLocalSearchAction(
     }
     case 'favorite': {
       const favorite = result.data as Favorite
-      const episodeRoute = buildLibraryEpisodeRoute({
-        countryAtSave: favorite.countryAtSave,
-        podcastItunesId: favorite.podcastItunesId,
-        episodeGuid: favorite.episodeGuid,
-      })
+      const episodeRoute =
+        favorite.podcastItunesId && favorite.episodeGuid
+          ? buildLibraryEpisodeRoute({
+              countryAtSave: favorite.countryAtSave,
+              podcastItunesId: favorite.podcastItunesId,
+              episodeGuid: favorite.episodeGuid,
+            })
+          : null
       if (episodeRoute) {
         void deps.navigate(episodeRoute)
         return
@@ -134,11 +143,13 @@ export async function executeLocalSearchAction(
     }
     case 'history': {
       const session = result.data as PlaybackSession
-      const episodeRoute = buildLibraryEpisodeRoute({
-        countryAtSave: session.countryAtSave,
-        podcastItunesId: session.podcastItunesId,
-        episodeGuid: session.episodeGuid,
-      })
+      const episodeRoute = isNavigableExplorePlaybackSession(session)
+        ? buildLibraryEpisodeRoute({
+            countryAtSave: session.countryAtSave,
+            podcastItunesId: session.podcastItunesId,
+            episodeGuid: session.episodeGuid,
+          })
+        : null
       if (episodeRoute) {
         void deps.navigate(episodeRoute)
         return

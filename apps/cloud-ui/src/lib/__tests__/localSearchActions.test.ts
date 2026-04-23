@@ -38,6 +38,15 @@ vi.mock('../dexieDb', () => ({
     getAudioBlob: vi.fn(),
     getSubtitle: vi.fn(),
   },
+  isNavigableExplorePlaybackSession: (session: {
+    source?: string
+    countryAtSave?: string
+    podcastItunesId?: string
+    episodeGuid?: string
+  }) =>
+    session.source === 'explore' &&
+    !!session.countryAtSave &&
+    (!!session.podcastItunesId || !!session.episodeGuid),
   db: {
     tracks: {
       where: vi.fn().mockReturnThis(),
