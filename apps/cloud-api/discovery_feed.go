@@ -50,31 +50,31 @@ type feedXMLDocument struct {
 }
 
 type feedChannel struct {
-	Title        string                 `xml:"title"`
-	Description  string                 `xml:"description"`
-	SubTitle     string                 `xml:"subtitle"`
-	Image        feedXMLElementWithURL  `xml:"http://www.itunes.com/dtds/podcast-1.0.dtd image"`
-	ChannelImage feedChannelImageInfo   `xml:"image"`
-	Items        []feedItem             `xml:"item"`
-	Link         string                 `xml:"link"`
+	Title        string                `xml:"title"`
+	Description  string                `xml:"description"`
+	SubTitle     string                `xml:"subtitle"`
+	Image        feedXMLElementWithURL `xml:"http://www.itunes.com/dtds/podcast-1.0.dtd image"`
+	ChannelImage feedChannelImageInfo  `xml:"image"`
+	Items        []feedItem            `xml:"item"`
+	Link         string                `xml:"link"`
 }
 
 type feedItem struct {
-	Title       string                 `xml:"title"`
-	Description string                 `xml:"description"`
-	Summary     string                 `xml:"summary"`
-	Encoded     string                 `xml:"encoded"`
-	GUID        string                 `xml:"guid"`
-	PubDate     string                 `xml:"pubDate"`
-	Link        string                 `xml:"link"`
-	Enclosure   feedEnclosure          `xml:"enclosure"`
-	Image       feedXMLElementWithURL  `xml:"http://www.itunes.com/dtds/podcast-1.0.dtd image"`
-	Duration    string                 `xml:"duration"`
-	Season      string                 `xml:"season"`
-	Episode     string                 `xml:"episode"`
-	EpisodeType string                 `xml:"episodeType"`
-	Explicit    string                 `xml:"explicit"`
-	Transcripts []feedTranscriptLink   `xml:"transcript"`
+	Title       string                `xml:"title"`
+	Description string                `xml:"description"`
+	Summary     string                `xml:"summary"`
+	Encoded     string                `xml:"encoded"`
+	GUID        string                `xml:"guid"`
+	PubDate     string                `xml:"pubDate"`
+	Link        string                `xml:"link"`
+	Enclosure   feedEnclosure         `xml:"enclosure"`
+	Image       feedXMLElementWithURL `xml:"http://www.itunes.com/dtds/podcast-1.0.dtd image"`
+	Duration    string                `xml:"duration"`
+	Season      string                `xml:"season"`
+	Episode     string                `xml:"episode"`
+	EpisodeType string                `xml:"episodeType"`
+	Explicit    string                `xml:"explicit"`
+	Transcripts []feedTranscriptLink  `xml:"transcript"`
 }
 
 type feedEnclosure struct {
@@ -105,6 +105,12 @@ type feedChannelImageInfo struct {
 func (s *discoveryService) handleFeed(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	route := discoveryFeedRoute
+
+	if !s.allowFeedRequest(effectiveClientIP(r, s.trustedProxies)) {
+		writeDiscoveryErrorSpec(w, http.StatusTooManyRequests, discoveryErrRateLimited)
+		logDiscoveryRequest(route, UpstreamKindFeed, "", time.Since(start), errDiscoveryRateLimited, CacheStatusUncached)
+		return
+	}
 
 	UpstreamKindFeedURL, err := parseDiscoveryFeedURL(r.URL.Query())
 	if err != nil {

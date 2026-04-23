@@ -53,6 +53,14 @@ const (
 	discoveryTopRateLimitWindow                         = time.Minute
 	discoveryTopRateLimitBurstEnv                       = "READIO_DISCOVERY_TOP_RATE_LIMIT_BURST"
 	discoveryTopRateLimitWindowMsEnv                    = "READIO_DISCOVERY_TOP_RATE_LIMIT_WINDOW_MS"
+	discoveryFeedRateLimitBurst                         = 20
+	discoveryFeedRateLimitWindow                        = time.Minute
+	discoveryFeedRateLimitBurstEnv                      = "READIO_DISCOVERY_FEED_RATE_LIMIT_BURST"
+	discoveryFeedRateLimitWindowMsEnv                   = "READIO_DISCOVERY_FEED_RATE_LIMIT_WINDOW_MS"
+	discoveryPodcastIndexRateLimitBurst                 = 20
+	discoveryPodcastIndexRateLimitWindow                = time.Minute
+	discoveryPodcastIndexRateLimitBurstEnv              = "READIO_DISCOVERY_PODCAST_INDEX_RATE_LIMIT_BURST"
+	discoveryPodcastIndexRateLimitWindowMsEnv           = "READIO_DISCOVERY_PODCAST_INDEX_RATE_LIMIT_WINDOW_MS"
 )
 
 // Shared Discovery Response Types
@@ -198,6 +206,11 @@ func getWithGracefulDegradation[T any](
 }
 
 func isGracefulDegradationUpstreamError(err error) bool {
+	var configErr *discoveryProviderConfigError
+	if errors.As(err, &configErr) {
+		return false
+	}
+
 	if errors.Is(err, errDiscoveryUpstreamError) ||
 		errors.Is(err, errDiscoveryTimeout) ||
 		errors.Is(err, errDiscoveryTooLarge) ||
@@ -212,9 +225,7 @@ func isGracefulDegradationUpstreamError(err error) bool {
 	}
 	if err != nil {
 		errStr := err.Error()
-		return strings.Contains(errStr, "podcastindex:") ||
-			strings.Contains(errStr, "missing API credentials") ||
-			strings.Contains(errStr, "upstream returned status") ||
+		return strings.Contains(errStr, "upstream returned status") ||
 			strings.Contains(errStr, "discovery chart payload invalid")
 	}
 	return false
@@ -273,20 +284,22 @@ const (
 )
 
 type discoveryService struct {
-	client             *http.Client
-	timeout            time.Duration
-	rssBaseURL         string
-	searchBaseURL      string
-	userAgent          string
-	bodyLimit          int64
-	lookupIP           func(context.Context, string) ([]net.IPAddr, error)
-	dialContext        func(context.Context, string, string) (net.Conn, error)
-	searchLimiter      *rateLimiter
-	topLimiter         *rateLimiter
-	trustedProxies     trustedProxySet
-	cache              *discoveryCache
-	cacheOwner         singleflight.Group
-	podcastIndexConfig podcastIndexConfig
+	client              *http.Client
+	timeout             time.Duration
+	rssBaseURL          string
+	searchBaseURL       string
+	userAgent           string
+	bodyLimit           int64
+	lookupIP            func(context.Context, string) ([]net.IPAddr, error)
+	dialContext         func(context.Context, string, string) (net.Conn, error)
+	searchLimiter       *rateLimiter
+	topLimiter          *rateLimiter
+	feedLimiter         *rateLimiter
+	podcastIndexLimiter *rateLimiter
+	trustedProxies      trustedProxySet
+	cache               *discoveryCache
+	cacheOwner          singleflight.Group
+	podcastIndexConfig  podcastIndexConfig
 }
 
 type discoveryParamError struct {
@@ -399,6 +412,22 @@ func newDiscoveryService() *discoveryService {
 			topBurst,
 		)
 	}
+	feedBurst := resolveDiscoveryFeedRateLimitBurst()
+	if feedBurst <= 0 {
+		slog.Warn(
+			"application-layer rate limiting disabled for discovery feed routes",
+			discoveryFeedRateLimitBurstEnv,
+			feedBurst,
+		)
+	}
+	podcastIndexBurst := resolveDiscoveryPodcastIndexRateLimitBurst()
+	if podcastIndexBurst <= 0 {
+		slog.Warn(
+			"application-layer rate limiting disabled for discovery podcastindex routes",
+			discoveryPodcastIndexRateLimitBurstEnv,
+			podcastIndexBurst,
+		)
+	}
 
 	return &discoveryService{
 		client: &http.Client{
@@ -407,17 +436,19 @@ func newDiscoveryService() *discoveryService {
 				return http.ErrUseLastResponse
 			},
 		},
-		timeout:            discoveryRequestTimeout,
-		searchBaseURL:      discoverySearchBaseURL,
-		rssBaseURL:         discoveryRSSBaseURL,
-		userAgent:          discoveryUserAgent,
-		bodyLimit:          discoveryBodyLimit,
-		lookupIP:           net.DefaultResolver.LookupIPAddr,
-		searchLimiter:      newRateLimiter(burst, resolveDiscoverySearchRateLimitWindow(), time.Now),
-		topLimiter:         newRateLimiter(topBurst, resolveDiscoveryTopRateLimitWindow(), time.Now),
-		trustedProxies:     loadTrustedProxySet(slog.Default()),
-		cache:              newDiscoveryCache(discoveryCacheMaxKeys),
-		podcastIndexConfig: getPodcastIndexConfig(),
+		timeout:             discoveryRequestTimeout,
+		searchBaseURL:       discoverySearchBaseURL,
+		rssBaseURL:          discoveryRSSBaseURL,
+		userAgent:           discoveryUserAgent,
+		bodyLimit:           discoveryBodyLimit,
+		lookupIP:            net.DefaultResolver.LookupIPAddr,
+		searchLimiter:       newRateLimiter(burst, resolveDiscoverySearchRateLimitWindow(), time.Now),
+		topLimiter:          newRateLimiter(topBurst, resolveDiscoveryTopRateLimitWindow(), time.Now),
+		feedLimiter:         newRateLimiter(feedBurst, resolveDiscoveryFeedRateLimitWindow(), time.Now),
+		podcastIndexLimiter: newRateLimiter(podcastIndexBurst, resolveDiscoveryPodcastIndexRateLimitWindow(), time.Now),
+		trustedProxies:      loadTrustedProxySet(slog.Default()),
+		cache:               newDiscoveryCache(discoveryCacheMaxKeys),
+		podcastIndexConfig:  getPodcastIndexConfig(),
 	}
 }
 
@@ -465,6 +496,54 @@ func resolveDiscoveryTopRateLimitWindow() time.Duration {
 	value, err := strconv.Atoi(raw)
 	if err != nil || value <= 0 {
 		return discoveryTopRateLimitWindow
+	}
+	return time.Duration(value) * time.Millisecond
+}
+
+func resolveDiscoveryFeedRateLimitBurst() int {
+	raw := strings.TrimSpace(os.Getenv(discoveryFeedRateLimitBurstEnv))
+	if raw == "" {
+		return discoveryFeedRateLimitBurst
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return discoveryFeedRateLimitBurst
+	}
+	return value
+}
+
+func resolveDiscoveryFeedRateLimitWindow() time.Duration {
+	raw := strings.TrimSpace(os.Getenv(discoveryFeedRateLimitWindowMsEnv))
+	if raw == "" {
+		return discoveryFeedRateLimitWindow
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 {
+		return discoveryFeedRateLimitWindow
+	}
+	return time.Duration(value) * time.Millisecond
+}
+
+func resolveDiscoveryPodcastIndexRateLimitBurst() int {
+	raw := strings.TrimSpace(os.Getenv(discoveryPodcastIndexRateLimitBurstEnv))
+	if raw == "" {
+		return discoveryPodcastIndexRateLimitBurst
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return discoveryPodcastIndexRateLimitBurst
+	}
+	return value
+}
+
+func resolveDiscoveryPodcastIndexRateLimitWindow() time.Duration {
+	raw := strings.TrimSpace(os.Getenv(discoveryPodcastIndexRateLimitWindowMsEnv))
+	if raw == "" {
+		return discoveryPodcastIndexRateLimitWindow
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 {
+		return discoveryPodcastIndexRateLimitWindow
 	}
 	return time.Duration(value) * time.Millisecond
 }
@@ -587,6 +666,22 @@ func (s *discoveryService) allowTopRequest(remoteAddr string) bool {
 	}
 
 	return s.topLimiter.allow(remoteAddr)
+}
+
+func (s *discoveryService) allowFeedRequest(remoteAddr string) bool {
+	if s == nil || s.feedLimiter == nil {
+		return true
+	}
+
+	return s.feedLimiter.allow(remoteAddr)
+}
+
+func (s *discoveryService) allowPodcastIndexRequest(remoteAddr string) bool {
+	if s == nil || s.podcastIndexLimiter == nil {
+		return true
+	}
+
+	return s.podcastIndexLimiter.allow(remoteAddr)
 }
 
 func parseDiscoveryCountry(values url.Values) (string, error) {

@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -173,6 +174,94 @@ func TestDiscoveryServiceTopEpisodesRateLimited(t *testing.T) {
 
 	rr := httptest.NewRecorder()
 	service.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, discoveryTopEpisodesRoute+"?country=us", nil))
+	if rr.Code != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusTooManyRequests)
+	}
+
+	assertDiscoveryErrorPayload(t, rr.Body, "RATE_LIMITED")
+}
+
+func TestDiscoveryServiceFeedRateLimited(t *testing.T) {
+	service, _ := newDiscoveryFeedFixtureService(
+		t,
+		"feeds.example.com",
+		"203.0.113.10",
+		time.Second,
+		func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/rss+xml")
+			_, _ = io.WriteString(w, `<rss><channel><title>Show</title><description>Desc</description></channel></rss>`)
+		},
+	)
+	service.feedLimiter = newRateLimiter(1, time.Minute, func() time.Time { return time.Now() })
+
+	req := httptest.NewRequest(http.MethodGet, discoveryFeedRoute+"?url="+url.QueryEscape("https://feeds.example.com/feed.xml"), nil)
+	service.ServeHTTP(httptest.NewRecorder(), req)
+
+	rr := httptest.NewRecorder()
+	service.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, discoveryFeedRoute+"?url="+url.QueryEscape("https://feeds.example.com/feed.xml"), nil))
+	if rr.Code != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusTooManyRequests)
+	}
+
+	assertDiscoveryErrorPayload(t, rr.Body, "RATE_LIMITED")
+}
+
+func TestDiscoveryServicePodcastIndexByItunesRateLimited(t *testing.T) {
+	t.Setenv(podcastIndexAPIKeyEnv, "test-key")
+	t.Setenv(podcastIndexAPISecretEnv, "test-secret")
+	t.Setenv(podcastIndexUserAgentEnv, "readio-test")
+
+	service := &discoveryService{
+		client: &http.Client{
+			Transport: discoveryRoundTripper(func(_ *http.Request) (*http.Response, error) {
+				return jsonResponse(http.StatusOK, `{
+					"feed": {
+						"title": "Show",
+						"url": "https://example.com/feed.xml",
+						"description": "Desc",
+						"author": "Host",
+						"artwork": "https://example.com/art.jpg",
+						"itunesId": 123,
+						"categories": {}
+					}
+				}`), nil
+			}),
+		},
+		timeout:             time.Second,
+		userAgent:           discoveryUserAgent,
+		bodyLimit:           discoveryBodyLimit,
+		cache:               newDiscoveryCache(discoveryCacheMaxKeys),
+		podcastIndexLimiter: newRateLimiter(1, time.Minute, func() time.Time { return time.Now() }),
+		podcastIndexConfig:  podcastIndexConfig{apiKey: "test-key", apiSecret: "test-secret", userAgent: "readio-test"},
+	}
+
+	req := httptest.NewRequest(http.MethodGet, discoveryPodcastIndexPodcastByItunesIDRoute+"?podcastItunesId=123", nil)
+	service.ServeHTTP(httptest.NewRecorder(), req)
+
+	rr := httptest.NewRecorder()
+	service.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, discoveryPodcastIndexPodcastByItunesIDRoute+"?podcastItunesId=123", nil))
+	if rr.Code != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusTooManyRequests)
+	}
+
+	assertDiscoveryErrorPayload(t, rr.Body, "RATE_LIMITED")
+}
+
+func TestDiscoveryServicePodcastIndexBatchRateLimited(t *testing.T) {
+	service := &discoveryService{
+		timeout:             time.Second,
+		userAgent:           discoveryUserAgent,
+		bodyLimit:           discoveryBodyLimit,
+		cache:               newDiscoveryCache(discoveryCacheMaxKeys),
+		podcastIndexLimiter: newRateLimiter(1, time.Minute, func() time.Time { return time.Now() }),
+	}
+
+	firstReq := httptest.NewRequest(http.MethodPost, discoveryPodcastIndexPodcastsBatchByGUIDRoute, strings.NewReader("[]"))
+	service.ServeHTTP(httptest.NewRecorder(), firstReq)
+
+	rr := httptest.NewRecorder()
+	secondReq := httptest.NewRequest(http.MethodPost, discoveryPodcastIndexPodcastsBatchByGUIDRoute, strings.NewReader("[]"))
+	service.ServeHTTP(rr, secondReq)
 	if rr.Code != http.StatusTooManyRequests {
 		t.Fatalf("status = %d, want %d", rr.Code, http.StatusTooManyRequests)
 	}
@@ -2617,6 +2706,122 @@ func TestDiscoveryCacheGracefulDegradation(t *testing.T) {
 		decodeResponseJSON(t, rr2.Body, &second)
 		if first[0].Title == second[0].Title {
 			t.Fatalf("expected fresh data after refresh, got same data")
+		}
+	})
+
+	t.Run("lookup podcast stale cache is not served when provider is not configured", func(t *testing.T) {
+		service := &discoveryService{
+			timeout:       time.Second,
+			rssBaseURL:    discoveryRSSBaseURL,
+			userAgent:     discoveryUserAgent,
+			bodyLimit:     discoveryBodyLimit,
+			cache:         newDiscoveryCache(256),
+			searchLimiter: newRateLimiter(10, time.Second, time.Now),
+			podcastIndexConfig: podcastIndexConfig{
+				userAgent: "test-agent",
+			},
+		}
+
+		origTTL := discoveryCacheTTLLookup
+		discoveryCacheTTLLookup = 50 * time.Millisecond
+		defer func() { discoveryCacheTTLLookup = origTTL }()
+
+		discoveryCacheSet(service.cache, "podcastindex-podcast-itunes:42", &piPodcastResponse{
+			Title:           "Stale Lookup",
+			Author:          "Host",
+			Artwork:         "https://example.com/art.jpg",
+			Description:     "desc",
+			FeedURL:         "https://example.com/feed.xml",
+			PodcastItunesID: "42",
+			Genres:          []string{"Tech"},
+		}, 10*time.Millisecond)
+
+		time.Sleep(20 * time.Millisecond)
+
+		req := httptest.NewRequest(http.MethodGet, discoveryPodcastIndexPodcastByItunesIDRoute+"?podcastItunesId=42", nil)
+		rr := httptest.NewRecorder()
+		service.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusServiceUnavailable {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusServiceUnavailable)
+		}
+
+		var payload map[string]string
+		decodeResponseJSON(t, rr.Body, &payload)
+		if payload["code"] != "DISCOVERY_PROVIDER_NOT_CONFIGURED" {
+			t.Fatalf("code = %q, want DISCOVERY_PROVIDER_NOT_CONFIGURED", payload["code"])
+		}
+	})
+
+	t.Run("lookup podcast stale cache is served on upstream failure", func(t *testing.T) {
+		t.Setenv(podcastIndexAPIKeyEnv, "test-key")
+		t.Setenv(podcastIndexAPISecretEnv, "test-secret")
+		t.Setenv(podcastIndexUserAgentEnv, "readio-test")
+
+		upstreamCalls := 0
+		service := &discoveryService{
+			client: &http.Client{
+				Transport: discoveryRoundTripper(func(_ *http.Request) (*http.Response, error) {
+					upstreamCalls++
+					if upstreamCalls == 1 {
+						return jsonResponse(http.StatusOK, `{
+							"status":"true",
+							"feed":{
+								"id":42,
+								"title":"Fresh Lookup",
+								"url":"https://example.com/feed.xml",
+								"description":"desc",
+								"author":"Host",
+								"artwork":"https://example.com/art.jpg",
+								"itunesId":42,
+								"categories":{"1":"Tech"}
+							}
+						}`), nil
+					}
+					return nil, errors.New("podcastindex upstream failed")
+				}),
+			},
+			timeout:       time.Second,
+			rssBaseURL:    discoveryRSSBaseURL,
+			userAgent:     discoveryUserAgent,
+			bodyLimit:     discoveryBodyLimit,
+			cache:         newDiscoveryCache(256),
+			searchLimiter: newRateLimiter(10, time.Second, time.Now),
+			podcastIndexConfig: podcastIndexConfig{
+				apiKey:    "test-key",
+				apiSecret: "test-secret",
+				userAgent: "test-agent",
+			},
+		}
+
+		origTTL := discoveryCacheTTLLookup
+		discoveryCacheTTLLookup = 50 * time.Millisecond
+		defer func() { discoveryCacheTTLLookup = origTTL }()
+
+		req := httptest.NewRequest(http.MethodGet, discoveryPodcastIndexPodcastByItunesIDRoute+"?podcastItunesId=42", nil)
+
+		rr1 := httptest.NewRecorder()
+		service.ServeHTTP(rr1, req)
+		if rr1.Code != http.StatusOK {
+			t.Fatalf("first request: status = %d, want %d", rr1.Code, http.StatusOK)
+		}
+
+		time.Sleep(100 * time.Millisecond)
+
+		rr2 := httptest.NewRecorder()
+		service.ServeHTTP(rr2, req)
+		if rr2.Code != http.StatusOK {
+			t.Fatalf("second request: status = %d, want %d", rr2.Code, http.StatusOK)
+		}
+
+		if upstreamCalls != 2 {
+			t.Fatalf("upstreamCalls = %d, want 2", upstreamCalls)
+		}
+
+		var payload piPodcastResponse
+		decodeResponseJSON(t, rr2.Body, &payload)
+		if payload.Title != "Fresh Lookup" {
+			t.Fatalf("expected stale lookup payload, got %+v", payload)
 		}
 	})
 

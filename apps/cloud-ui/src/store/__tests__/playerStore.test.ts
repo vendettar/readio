@@ -138,8 +138,10 @@ describe('playerStore - Session Restoration', () => {
       id: 'session-remote',
       audioUrl: 'https://example.com/episode.mp3',
       progress: 120,
+      durationSeconds: 180,
       source: 'explore',
       title: 'Remote Episode',
+      countryAtSave: 'us',
     })
 
     const { result } = renderHook(() => usePlayerStore())
@@ -150,6 +152,8 @@ describe('playerStore - Session Restoration', () => {
 
     expect(result.current.audioLoaded).toBe(true)
     expect(result.current.audioUrl).toBe('https://example.com/episode.mp3')
+    expect(result.current.episodeMetadata?.countryAtSave).toBe('us')
+    expect(result.current.episodeMetadata?.durationSeconds).toBe(180)
     expect(usePlayerSurfaceStore.getState().canDockedRestore).toBe(true)
   })
 })

@@ -175,12 +175,13 @@ export default function PodcastEpisodesPage() {
     country: globalCountry,
     podcastId: id,
   })
+  const hasEpisodes = groupedEpisodeData.flattenedEpisodes.length > 0
   const isRegionUnavailable =
     !feedError &&
     Boolean(feed) &&
     !isLoadingFeed &&
     Boolean(normalizedRouteCountry && globalCountry && normalizedRouteCountry !== globalCountry) &&
-    !((feed?.episodes?.length ?? 0) > 0)
+    !hasEpisodes
 
   if (isRegionUnavailable) {
     if (import.meta.env.DEV) {
@@ -209,6 +210,18 @@ export default function PodcastEpisodesPage() {
     )
   }
 
+  if (!hasEpisodes) {
+    return (
+      <div className="h-full overflow-y-auto bg-background text-foreground">
+        <div className="px-6 sm:px-12 py-10 sm:py-14 max-w-screen-2xl mx-auto">
+          <div className="text-center py-20">
+            <p className="text-lg text-muted-foreground">{t('noEpisodes')}</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div
       ref={setScrollContainer}
@@ -216,7 +229,7 @@ export default function PodcastEpisodesPage() {
     >
       <div className="w-full max-w-content mx-auto px-page pt-page">
         <div className="flex flex-col">
-          {scrollContainer && groupedEpisodeData.flattenedEpisodes.length > 0 && (
+          {scrollContainer && (
             <GroupedVirtuoso
               data={groupedEpisodeData.flattenedEpisodes}
               groupCounts={groupedEpisodeData.groupCounts}

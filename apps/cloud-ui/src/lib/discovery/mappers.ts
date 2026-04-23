@@ -67,7 +67,7 @@ export interface PlaybackPodcastStub {
  * still use it for deterministic matching even though canonical RSS episodes do not.
  */
 export interface PlaybackEpisodeStub {
-  episodeGuid: string
+  episodeGuid?: string
   title: string
   audioUrl: string
   description?: string
@@ -95,7 +95,7 @@ export function mapTrackToDiscovery(track: PodcastDownload): {
   }
 
   const episode: PlaybackEpisodeStub = {
-    episodeGuid: track.sourceEpisodeGuid || track.id,
+    episodeGuid: parseProviderId(track.sourceEpisodeGuid) || undefined,
     title: track.sourceEpisodeTitle || track.name,
     audioUrl: track.sourceUrlNormalized || '',
     description: track.sourceDescription,
@@ -127,7 +127,7 @@ export function mapSessionToDiscovery(session: PlaybackSession): {
   }
 
   const episode: PlaybackEpisodeStub = {
-    episodeGuid: session.episodeGuid || session.id,
+    episodeGuid: parseProviderId(session.episodeGuid) || undefined,
     title: session.title,
     audioUrl: session.audioUrl || '',
     description: session.description,

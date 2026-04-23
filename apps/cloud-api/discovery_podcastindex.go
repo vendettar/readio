@@ -108,7 +108,7 @@ type podcastIndexEpisode struct {
 }
 
 type podcastIndexEpisodesResponse struct {
-	Items  []podcastIndexEpisode `json:"items"`
+	Items []podcastIndexEpisode `json:"items"`
 }
 
 type podcastIndexCategoryNames []string
@@ -137,16 +137,16 @@ func (c *podcastIndexCategoryNames) UnmarshalJSON(data []byte) error {
 }
 
 type podcastIndexPodcastFeed struct {
-	Title          string                   `json:"title"`
-	URL            string                   `json:"url"`
-	Description    string                   `json:"description"`
-	Author         string                   `json:"author"`
-	Artwork        string                   `json:"artwork"`
-	LastUpdateTime int64                    `json:"lastUpdateTime"`
-	ItunesID       int64                    `json:"itunesId"`
-	Language       string                   `json:"language"`
-	EpisodeCount   int64                    `json:"episodeCount"`
-	Dead           int                      `json:"dead"`
+	Title          string                    `json:"title"`
+	URL            string                    `json:"url"`
+	Description    string                    `json:"description"`
+	Author         string                    `json:"author"`
+	Artwork        string                    `json:"artwork"`
+	LastUpdateTime int64                     `json:"lastUpdateTime"`
+	ItunesID       int64                     `json:"itunesId"`
+	Language       string                    `json:"language"`
+	EpisodeCount   int64                     `json:"episodeCount"`
+	Dead           int                       `json:"dead"`
 	Categories     podcastIndexCategoryNames `json:"categories"`
 }
 
@@ -298,6 +298,12 @@ func (s *discoveryService) handlePodcastIndexPodcastsBatchByGUID(w http.Response
 		return
 	}
 
+	if !s.allowPodcastIndexRequest(effectiveClientIP(r, s.trustedProxies)) {
+		writeDiscoveryErrorSpec(w, http.StatusTooManyRequests, discoveryErrRateLimited)
+		logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), errDiscoveryRateLimited, CacheStatusUncached)
+		return
+	}
+
 	if r.ContentLength > podcastIndexMaxBatchBodySize {
 		writeDiscoveryErrorSpec(w, http.StatusRequestEntityTooLarge, discoveryErrBodyTooLarge)
 		logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), errors.New("body too large"), CacheStatusMissError)
@@ -385,6 +391,12 @@ func (s *discoveryService) handlePodcastIndexPodcastsBatchByGUID(w http.Response
 func (s *discoveryService) handlePodcastIndexPodcastByItunesID(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	route := discoveryPodcastIndexPodcastByItunesIDRoute
+
+	if !s.allowPodcastIndexRequest(effectiveClientIP(r, s.trustedProxies)) {
+		writeDiscoveryErrorSpec(w, http.StatusTooManyRequests, discoveryErrRateLimited)
+		logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), errDiscoveryRateLimited, CacheStatusUncached)
+		return
+	}
 
 	podcastItunesID, err := normalizeItunesID(r.URL.Query().Get("podcastItunesId"))
 	if err != nil {

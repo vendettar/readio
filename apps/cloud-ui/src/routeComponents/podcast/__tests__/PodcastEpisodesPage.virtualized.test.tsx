@@ -253,4 +253,13 @@ describe('PodcastEpisodesPage virtualized grouped rendering', () => {
     expect(screen.queryByText('unknownTitle')).not.toBeNull()
     expect(screen.queryByTestId('episode-row-ep-invalid')).not.toBeNull()
   })
+
+  it('renders an explicit empty state for same-country zero-episode feeds', () => {
+    mockEpisodes = []
+
+    render(<PodcastEpisodesPage />)
+
+    expect(screen.queryByText('noEpisodes')).not.toBeNull()
+    expect(screen.queryByTestId('grouped-virtuoso')).toBeNull()
+  })
 })

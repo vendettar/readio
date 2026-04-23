@@ -213,6 +213,23 @@ func TestProxyRequestSummaryUsesActualProxyErrorStatus(t *testing.T) {
 	}
 }
 
+func assertProxyErrorPayload(t *testing.T, body interface{ String() string }, wantCode string) {
+	t.Helper()
+
+	var payload map[string]string
+	decodeResponseJSON(t, body, &payload)
+
+	if payload["code"] != wantCode {
+		t.Fatalf("code = %q, want %q", payload["code"], wantCode)
+	}
+	if strings.TrimSpace(payload["message"]) == "" {
+		t.Fatal("message is empty")
+	}
+	if strings.TrimSpace(payload["request_id"]) == "" {
+		t.Fatal("request_id is empty")
+	}
+}
+
 func TestCloudMuxServesDynamicEnvBeforeStaticFallback(t *testing.T) {
 	indexDir := t.TempDir()
 	distDir := filepath.Join(indexDir, "dist")
@@ -961,8 +978,8 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 		if called != 1 {
 			t.Fatalf("upstream call count = %d, want %d", called, 1)
 		}
-		if rr.Header().Get("Access-Control-Allow-Origin") != "*" {
-			t.Fatalf("acao = %q, want %q", rr.Header().Get("Access-Control-Allow-Origin"), "*")
+		if rr.Header().Get("Access-Control-Allow-Origin") != "" {
+			t.Fatalf("acao = %q, want empty", rr.Header().Get("Access-Control-Allow-Origin"))
 		}
 		if rr.Body.String() != "<rss>ok</rss>" {
 			t.Fatalf("body = %q, want %q", rr.Body.String(), "<rss>ok</rss>")
@@ -1205,14 +1222,73 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 		if gotUserAgent != proxyUserAgent {
 			t.Fatalf("user-agent = %q, want %q", gotUserAgent, proxyUserAgent)
 		}
-		if rr.Header().Get("Access-Control-Allow-Origin") != "*" {
-			t.Fatalf("acao = %q, want %q", rr.Header().Get("Access-Control-Allow-Origin"), "*")
+		if rr.Header().Get("Access-Control-Allow-Origin") != "" {
+			t.Fatalf("acao = %q, want empty", rr.Header().Get("Access-Control-Allow-Origin"))
 		}
 		if rr.Header().Get("Content-Type") != "application/rss+xml; charset=utf-8" {
 			t.Fatalf("content-type = %q, want %q", rr.Header().Get("Content-Type"), "application/rss+xml; charset=utf-8")
 		}
 		if rr.Body.String() != "<rss>feed</rss>" {
 			t.Fatalf("body = %q, want %q", rr.Body.String(), "<rss>feed</rss>")
+		}
+	})
+
+	t.Run("allows same-origin browser requests and reflects the origin", func(t *testing.T) {
+		proxy := &proxyService{
+			client: &http.Client{
+				Transport: &proxyRoundTripper{
+					statusCode: http.StatusOK,
+					body:       "<rss>same-origin</rss>",
+					headers: http.Header{
+						"Content-Type": []string{"application/rss+xml"},
+					},
+				},
+			},
+			lookupIP:  testPublicLookupIP,
+			limiter:   newRateLimiter(5, time.Minute, func() time.Time { return time.Unix(0, 0) }),
+			timeout:   100 * time.Millisecond,
+			userAgent: proxyUserAgent,
+			bodyLimit: proxyBodyLimit,
+		}
+
+		req := httptest.NewRequest(http.MethodGet, "/api/proxy?url=https://feeds.example.com/feed.xml", nil)
+		req.RemoteAddr = "198.51.100.10:12345"
+		req.Header.Set("Origin", "http://example.com")
+		rr := httptest.NewRecorder()
+		proxy.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+		}
+		if rr.Header().Get("Access-Control-Allow-Origin") != "http://example.com" {
+			t.Fatalf("acao = %q, want %q", rr.Header().Get("Access-Control-Allow-Origin"), "http://example.com")
+		}
+		if !strings.Contains(rr.Header().Get("Vary"), "Origin") {
+			t.Fatalf("vary = %q, want to contain Origin", rr.Header().Get("Vary"))
+		}
+	})
+
+	t.Run("rejects disallowed browser origin for proxy requests", func(t *testing.T) {
+		proxy := &proxyService{
+			lookupIP:  testPublicLookupIP,
+			limiter:   newRateLimiter(5, time.Minute, func() time.Time { return time.Unix(0, 0) }),
+			timeout:   100 * time.Millisecond,
+			userAgent: proxyUserAgent,
+			bodyLimit: proxyBodyLimit,
+		}
+
+		req := httptest.NewRequest(http.MethodGet, "/api/proxy?url=https://feeds.example.com/feed.xml", nil)
+		req.RemoteAddr = "198.51.100.10:12345"
+		req.Header.Set("Origin", "https://evil.example")
+		rr := httptest.NewRecorder()
+		proxy.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusForbidden {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusForbidden)
+		}
+		assertProxyErrorPayload(t, rr.Body, "PROXY_ORIGIN_NOT_ALLOWED")
+		if rr.Header().Get("Access-Control-Allow-Origin") != "" {
+			t.Fatalf("acao = %q, want empty", rr.Header().Get("Access-Control-Allow-Origin"))
 		}
 	})
 

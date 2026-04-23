@@ -220,6 +220,8 @@ describe('playerStore - Session Restore Prefer Local Download', () => {
     expect(meta?.podcastItunesId).toBe('pod-123')
     expect(meta?.providerEpisodeId).toBe('ep-456')
     expect(meta?.transcriptUrl).toBe('https://example.com/transcript.vtt')
+    expect(meta?.countryAtSave).toBe('us')
+    expect(meta?.durationSeconds).toBe(360)
 
     expect(result.current.audioUrl).toBe('blob:mock-local-url')
     expect(result.current.audioLoaded).toBe(true)

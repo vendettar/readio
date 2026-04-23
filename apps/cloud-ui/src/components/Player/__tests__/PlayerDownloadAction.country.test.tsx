@@ -7,6 +7,7 @@ const { downloadEpisodeMock, refreshMock } = vi.hoisted(() => ({
   refreshMock: vi.fn(),
 }))
 let currentCountryAtSave: string | undefined
+let currentDurationSeconds: number | undefined
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -44,6 +45,7 @@ vi.mock('../../../store/playerStore', () => ({
       episodeMetadata: {
         originalAudioUrl: 'https://example.com/source.mp3',
         countryAtSave: currentCountryAtSave,
+        durationSeconds: currentDurationSeconds,
         showTitle: 'Podcast',
       },
     }),
@@ -57,6 +59,7 @@ describe('PlayerDownloadAction country normalization', () => {
   beforeEach(() => {
     downloadEpisodeMock.mockClear()
     refreshMock.mockClear()
+    currentDurationSeconds = 245
   })
 
   it.each([
@@ -72,7 +75,7 @@ describe('PlayerDownloadAction country normalization', () => {
 
     expect(downloadEpisodeMock).toHaveBeenCalledTimes(1)
     expect(downloadEpisodeMock).toHaveBeenCalledWith(
-      expect.objectContaining({ countryAtSave: expected })
+      expect.objectContaining({ countryAtSave: expected, durationSeconds: 245 })
     )
   })
 })

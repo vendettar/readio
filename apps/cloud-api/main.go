@@ -38,6 +38,7 @@ const proxyRateLimitWindow = time.Minute
 const proxyRateLimitBurst = 5
 const proxyRateLimitBurstEnv = "READIO_PROXY_RATE_LIMIT_BURST"
 const proxyRateLimitWindowMsEnv = "READIO_PROXY_RATE_LIMIT_WINDOW_MS"
+const proxyAllowedOriginsEnv = "READIO_PROXY_ALLOWED_ORIGINS"
 const proxyRoute = "/api/proxy"
 const proxyMaxRedirects = 20
 const cloudDBEnv = "READIO_CLOUD_DB_PATH"
@@ -105,6 +106,7 @@ type appHandler struct {
 type proxyService struct {
 	client         *http.Client
 	limiter        *rateLimiter
+	allowedOrigins map[string]struct{}
 	timeout        time.Duration
 	userAgent      string
 	bodyLimit      int64
@@ -449,6 +451,7 @@ func newProxyService() *proxyService {
 	}
 	return &proxyService{
 		limiter:        newRateLimiter(burst, resolveProxyRateLimitWindow(), time.Now),
+		allowedOrigins: resolveProxyAllowedOrigins(),
 		timeout:        proxyRequestTimeout,
 		userAgent:      proxyUserAgent,
 		bodyLimit:      proxyBodyLimit,
@@ -476,6 +479,7 @@ func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var httpStatus int
 	var upstreamKind string
 	var upstreamHost string
+	allowedOrigin := ""
 
 	defer func() {
 		slog.Info("proxy request",
@@ -488,6 +492,15 @@ func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		)
 	}()
 
+	var originErr error
+	allowedOrigin, originErr = p.authorizeOrigin(r)
+	if originErr != nil {
+		httpStatus = http.StatusForbidden
+		errClass = "origin_not_allowed"
+		p.respondProxyError(w, originErr, allowedOrigin)
+		return
+	}
+
 	spec, pErr := p.parseProxyRequest(w, r)
 	if pErr != nil {
 		httpStatus = http.StatusBadRequest
@@ -497,7 +510,7 @@ func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			httpStatus = proxyErr.status
 			errClass = classifyProxyParseError(proxyErr)
 		}
-		p.respondProxyError(w, pErr)
+		p.respondProxyError(w, pErr, allowedOrigin)
 		return
 	}
 	upstreamKind = "proxy"
@@ -506,7 +519,7 @@ func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !p.allowRequest(effectiveClientIP(r, p.trustedProxies)) {
 		httpStatus = http.StatusTooManyRequests
 		errClass = "rate_limit"
-		writeProxyError(w, http.StatusTooManyRequests, "rate limit exceeded")
+		writeProxyError(w, http.StatusTooManyRequests, "rate limit exceeded", allowedOrigin)
 		return
 	}
 
@@ -517,7 +530,7 @@ func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		httpStatus = http.StatusBadGateway
 		errClass = "ssrf"
-		p.respondProxyError(w, err)
+		p.respondProxyError(w, err, allowedOrigin)
 		return
 	}
 
@@ -530,7 +543,7 @@ func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		httpStatus = http.StatusBadGateway
 		errClass = "create_request"
-		writeProxyError(w, http.StatusBadGateway, "unable to create upstream request")
+		writeProxyError(w, http.StatusBadGateway, "unable to create upstream request", allowedOrigin)
 		return
 	}
 
@@ -549,7 +562,7 @@ func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if ctx.Err() != nil || errors.Is(err, context.DeadlineExceeded) {
 			httpStatus = http.StatusGatewayTimeout
 			errClass = "timeout"
-			writeProxyError(w, http.StatusGatewayTimeout, "upstream request timed out")
+			writeProxyError(w, http.StatusGatewayTimeout, "upstream request timed out", allowedOrigin)
 			return
 		}
 
@@ -557,20 +570,19 @@ func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if errors.As(err, &proxyErr) {
 			httpStatus = proxyErr.status
 			errClass = "upstream"
-			writeProxyError(w, proxyErr.status, proxyErr.message)
+			writeProxyError(w, proxyErr.status, proxyErr.message, allowedOrigin)
 			return
 		}
 
 		httpStatus = http.StatusBadGateway
 		errClass = "upstream"
-		writeProxyError(w, http.StatusBadGateway, "upstream request failed")
+		writeProxyError(w, http.StatusBadGateway, "upstream request failed", allowedOrigin)
 		return
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	copyProxyResponseHeaders(w.Header(), resp.Header, spec.method)
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Expose-Headers", strings.Join(proxyAllowedResponseHeaders, ", "))
+	applyProxyCORSHeaders(w.Header(), allowedOrigin)
 	httpStatus = resp.StatusCode
 	w.WriteHeader(resp.StatusCode)
 
@@ -689,14 +701,14 @@ func (p *proxyService) parseProxyRequest(_ http.ResponseWriter, r *http.Request)
 	}
 }
 
-func (p *proxyService) respondProxyError(w http.ResponseWriter, err error) {
+func (p *proxyService) respondProxyError(w http.ResponseWriter, err error, allowedOrigin string) {
 	var proxyErr *proxyError
 	if errors.As(err, &proxyErr) {
-		writeProxyError(w, proxyErr.status, proxyErr.message)
+		writeProxyError(w, proxyErr.status, proxyErr.message, allowedOrigin)
 		return
 	}
 
-	writeProxyError(w, http.StatusBadGateway, err.Error())
+	writeProxyError(w, http.StatusBadGateway, err.Error(), allowedOrigin)
 }
 
 func classifyProxyParseError(err *proxyError) string {
@@ -831,6 +843,88 @@ func validateProxyTarget(target *url.URL) error {
 	}
 
 	return nil
+}
+
+func (p *proxyService) authorizeOrigin(r *http.Request) (string, error) {
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	if origin == "" {
+		return "", nil
+	}
+
+	parsed, err := url.Parse(origin)
+	if err != nil || parsed.Host == "" || parsed.User != nil {
+		return "", &proxyError{status: http.StatusForbidden, message: "origin not allowed"}
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return "", &proxyError{status: http.StatusForbidden, message: "origin not allowed"}
+	}
+
+	normalized := parsed.Scheme + "://" + parsed.Host
+	if len(p.allowedOrigins) > 0 {
+		if _, ok := p.allowedOrigins[normalized]; ok {
+			return normalized, nil
+		}
+		return "", &proxyError{status: http.StatusForbidden, message: "origin not allowed"}
+	}
+
+	requestHost := strings.TrimSpace(r.Host)
+	if requestHost == "" {
+		return "", &proxyError{status: http.StatusForbidden, message: "origin not allowed"}
+	}
+	requestScheme := "http"
+	if r.TLS != nil {
+		requestScheme = "https"
+	}
+	if peerHost, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		if peerIP := net.ParseIP(peerHost); peerIP != nil && p.trustedProxies.contains(peerIP) {
+			if proto := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")); proto == "https" || proto == "http" {
+				requestScheme = proto
+			}
+		}
+	}
+	if !isSameOrigin(parsed.Scheme, parsed.Host, requestScheme, requestHost) {
+		return "", &proxyError{status: http.StatusForbidden, message: "origin not allowed"}
+	}
+
+	return normalized, nil
+}
+
+func resolveProxyAllowedOrigins() map[string]struct{} {
+	raw := strings.TrimSpace(os.Getenv(proxyAllowedOriginsEnv))
+	if raw == "" {
+		return nil
+	}
+
+	origins := make(map[string]struct{})
+	for _, part := range strings.Split(raw, ",") {
+		candidate := strings.TrimSpace(part)
+		if candidate == "" {
+			continue
+		}
+		parsed, err := url.Parse(candidate)
+		if err != nil || parsed.Host == "" || parsed.User != nil {
+			continue
+		}
+		if parsed.Scheme != "http" && parsed.Scheme != "https" {
+			continue
+		}
+		origins[parsed.Scheme+"://"+parsed.Host] = struct{}{}
+	}
+
+	if len(origins) == 0 {
+		return nil
+	}
+	return origins
+}
+
+func applyProxyCORSHeaders(headers http.Header, allowedOrigin string) {
+	if strings.TrimSpace(allowedOrigin) == "" {
+		return
+	}
+
+	headers.Set("Access-Control-Allow-Origin", allowedOrigin)
+	headers.Set("Access-Control-Expose-Headers", strings.Join(proxyAllowedResponseHeaders, ", "))
+	headers.Add("Vary", "Origin")
 }
 
 func (p *proxyService) resolveProxyTargetAddresses(ctx context.Context, target *url.URL) ([]netip.Addr, error) {
@@ -1003,10 +1097,10 @@ func generateRequestID() string {
 	return fmt.Sprintf("%x", time.Now().UnixNano())
 }
 
-func writeProxyError(w http.ResponseWriter, status int, message string) {
+func writeProxyError(w http.ResponseWriter, status int, message string, allowedOrigin string) {
 	code := mapProxyErrorToCode(message)
 	requestID := generateRequestID()
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	applyProxyCORSHeaders(w.Header(), allowedOrigin)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
 	payload := map[string]string{
@@ -1043,6 +1137,8 @@ func mapProxyErrorToCode(message string) string {
 		return "PROXY_INVALID_HEADERS"
 	case strings.Contains(msg, "unsupported proxy header"):
 		return "PROXY_UNSUPPORTED_HEADER"
+	case strings.Contains(msg, "origin not allowed"):
+		return "PROXY_ORIGIN_NOT_ALLOWED"
 	case strings.Contains(msg, "target host is not allowed"):
 		return "PROXY_HOST_NOT_ALLOWED"
 	case strings.Contains(msg, "rate limit"):
