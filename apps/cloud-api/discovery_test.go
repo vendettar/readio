@@ -668,7 +668,7 @@ func TestDiscoveryServiceLookupPodcastNormalizesPayloadAndNullMiss(t *testing.T)
 					if !strings.Contains(req.URL.String(), "id=123") {
 						t.Fatalf("unexpected lookup url = %q", req.URL.String())
 					}
-					return jsonResponse(http.StatusOK, `{"status":"true","feed":{"title":"Show 123","url":"https://example.com/feed.xml","lastUpdateTime":1613394044,"author":"Test Author","artwork":"https://example.com/artwork.jpg","description":"A test podcast","itunesId":123,"language":"en","episodeCount":50,"dead":1,"categories":{"1":"Technology"}}}`), nil
+					return jsonResponse(http.StatusOK, `{"status":"true","feed":{"title":"Show 123","url":"https://example.com/feed.xml","lastUpdateTime":1613394044,"author":"Test Author","artwork":"https://example.com/artwork.jpg","description":"A test podcast","itunesId":123,"language":"en","episodeCount":50,"dead":0,"categories":{"1":"Technology"}}}`), nil
 				}),
 			},
 			timeout:            time.Second,
@@ -691,8 +691,8 @@ func TestDiscoveryServiceLookupPodcastNormalizesPayloadAndNullMiss(t *testing.T)
 		if payload["lastUpdateTime"] != float64(1613394044) {
 			t.Fatalf("lastUpdateTime = %v, want 1613394044", payload["lastUpdateTime"])
 		}
-		if payload["dead"] != true {
-			t.Fatalf("dead = %v, want true", payload["dead"])
+		if _, ok := payload["dead"]; ok {
+			t.Fatalf("dead should be omitted, payload = %+v", payload)
 		}
 	})
 
@@ -1403,7 +1403,7 @@ func TestPodcastIndexPayloadValidation(t *testing.T) {
 							"lastUpdateTime":1700000000,
 							"language":"en",
 							"episodeCount":10,
-							"dead":1,
+							"dead":0,
 							"categories":{"1":"Technology"}
 						}
 					}`), nil
@@ -1424,13 +1424,13 @@ func TestPodcastIndexPayloadValidation(t *testing.T) {
 			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
 		}
 
-		var payload piPodcastResponse
+		var payload map[string]any
 		decodeResponseJSON(t, rr.Body, &payload)
-		if payload.PodcastItunesID != "123" || payload.Title != "Test" {
+		if payload["podcastItunesId"] != "123" || payload["title"] != "Test" {
 			t.Fatalf("unexpected payload: %+v", payload)
 		}
-		if !payload.Dead {
-			t.Fatalf("dead = false, want true")
+		if _, ok := payload["dead"]; ok {
+			t.Fatalf("dead should be omitted, payload = %+v", payload)
 		}
 	})
 
@@ -1469,6 +1469,47 @@ func TestPodcastIndexPayloadValidation(t *testing.T) {
 		}
 	})
 
+	t.Run("podcast byitunesid returns null for dead feed", func(t *testing.T) {
+		t.Setenv(podcastIndexAPIKeyEnv, "test-key")
+		t.Setenv(podcastIndexAPISecretEnv, "test-secret")
+		t.Setenv(podcastIndexUserAgentEnv, "readio-test")
+
+		service := &discoveryService{
+			client: &http.Client{
+				Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+					return jsonResponse(http.StatusOK, `{
+						"feed":{
+							"title":"Dead Show",
+							"url":"https://example.com/dead.xml",
+							"author":"Author",
+							"artwork":"https://example.com/dead.jpg",
+							"description":"Description",
+							"itunesId":123,
+							"dead":1,
+							"categories":{"1":"Technology"}
+						}
+					}`), nil
+				}),
+			},
+			timeout:            time.Second,
+			userAgent:          discoveryUserAgent,
+			bodyLimit:          discoveryBodyLimit,
+			cache:              newDiscoveryCache(discoveryCacheMaxKeys),
+			podcastIndexConfig: podcastIndexConfig{apiKey: "test-key", apiSecret: "test-secret", userAgent: "test"},
+		}
+
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, discoveryPodcastIndexPodcastByItunesIDRoute+"?podcastItunesId=123", nil)
+		service.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+		}
+		if strings.TrimSpace(rr.Body.String()) != "null" {
+			t.Fatalf("body = %q, want null", rr.Body.String())
+		}
+	})
+
 	t.Run("batch byguid ignores upstream status field and trusts feeds payload", func(t *testing.T) {
 		t.Setenv(podcastIndexAPIKeyEnv, "test-key")
 		t.Setenv(podcastIndexAPISecretEnv, "test-secret")
@@ -1499,6 +1540,48 @@ func TestPodcastIndexPayloadValidation(t *testing.T) {
 		decodeResponseJSON(t, rr.Body, &resp)
 		if len(resp) != 0 {
 			t.Fatalf("response length = %d, want 0", len(resp))
+		}
+	})
+
+	t.Run("batch byguid filters dead feeds", func(t *testing.T) {
+		t.Setenv(podcastIndexAPIKeyEnv, "test-key")
+		t.Setenv(podcastIndexAPISecretEnv, "test-secret")
+		t.Setenv(podcastIndexUserAgentEnv, "readio-test")
+
+		service := &discoveryService{
+			client: &http.Client{
+				Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+					return jsonResponse(http.StatusOK, `{"feeds":[
+						{"podcastGuid":"guid1","itunesId":123,"title":"Dead Show","author":"Author","description":"Description","url":"https://example.com/dead.xml","artwork":"https://example.com/dead.jpg","dead":1,"categories":{"1":"Technology"}},
+						{"podcastGuid":"guid2","itunesId":456,"title":"Live Show","author":"Author","description":"Description","url":"https://example.com/live.xml","artwork":"https://example.com/live.jpg","dead":0,"categories":{"1":"Technology"}}
+					]}`), nil
+				}),
+			},
+			timeout:            time.Second,
+			userAgent:          discoveryUserAgent,
+			bodyLimit:          discoveryBodyLimit,
+			cache:              newDiscoveryCache(discoveryCacheMaxKeys),
+			podcastIndexConfig: podcastIndexConfig{apiKey: "test-key", apiSecret: "test-secret", userAgent: "test"},
+		}
+
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, discoveryPodcastIndexPodcastsBatchByGUIDRoute, strings.NewReader(`["guid1","guid2"]`))
+		service.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+		}
+
+		var resp []map[string]any
+		decodeResponseJSON(t, rr.Body, &resp)
+		if len(resp) != 1 {
+			t.Fatalf("response length = %d, want 1: %+v", len(resp), resp)
+		}
+		if resp[0]["podcastItunesId"] != "456" {
+			t.Fatalf("podcastItunesId = %v, want 456", resp[0]["podcastItunesId"])
+		}
+		if _, ok := resp[0]["dead"]; ok {
+			t.Fatalf("dead should be omitted, payload = %+v", resp[0])
 		}
 	})
 }

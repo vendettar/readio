@@ -35,7 +35,6 @@ describe('discovery query cache helpers', () => {
       episodeCount: 10,
       language: 'en',
       genres: ['Technology'],
-      dead: false,
     })
 
     const first = await ensurePodcastDetail(queryClient, '123', 'us')

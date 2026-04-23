@@ -65,7 +65,6 @@ describe('ExploreStore', () => {
       episodeCount: 50,
       language: 'en',
       genres: ['Technology'],
-      dead: false,
     }
 
     it('should subscribe to a podcast', async () => {
@@ -249,7 +248,6 @@ describe('ExploreStore', () => {
       episodeCount: 50,
       language: 'en',
       genres: ['Technology'],
-      dead: false,
     }
 
     const mockEpisode = {

@@ -104,7 +104,6 @@ const mockPodcast: Podcast = {
   episodeCount: 50,
   language: 'en',
   genres: ['Technology'],
-  dead: false,
 }
 
 describe('EpisodeRowErrorBoundary Integration', () => {

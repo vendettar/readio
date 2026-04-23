@@ -11,6 +11,7 @@ title: 播客发现 (Explore)
   - Search / Top Shows / Top Episodes 的首跳：Apple
   - Editor's Picks 的首跳：PodcastIndex `podcasts-batch-byguid`
   - 后续详情/富化：PodcastIndex
+- PodcastIndex 的可用性信号（例如 `dead`）只属于后端边界。Cloud 在输出 Readio DTO 前过滤 dead feed，前端 schema 不暴露 `dead`。
 
 ## 2. 首跳所有权
 

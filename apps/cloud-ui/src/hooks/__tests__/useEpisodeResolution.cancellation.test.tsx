@@ -40,7 +40,6 @@ function makePodcast(
     episodeCount: 50,
     language: 'en',
     genres: ['Technology'],
-    dead: false,
     ...overrides,
   }
 }

@@ -58,7 +58,6 @@ function makePodcast(overrides: Partial<Podcast> = {}): Podcast {
     episodeCount: 50,
     language: 'en',
     genres: ['Technology'],
-    dead: false,
     ...overrides,
   }
 }

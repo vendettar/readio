@@ -447,6 +447,10 @@ func mapPodcastIndexBatchFeedBridge(feed podcastIndexBatchFeed) (podcastIndexBat
 }
 
 func mapPodcastIndexPodcastToPIPodcast(feed podcastIndexPodcastFeed, podcastItunesID string) (piPodcastResponse, bool) {
+	if feed.Dead != 0 {
+		return piPodcastResponse{}, false
+	}
+
 	title := strings.TrimSpace(feed.Title)
 	author := strings.TrimSpace(feed.Author)
 	artwork := strings.TrimSpace(feed.Artwork)
@@ -495,7 +499,6 @@ func mapPodcastIndexPodcastToPIPodcast(feed podcastIndexPodcastFeed, podcastItun
 		EpisodeCount:    episodeCountValue,
 		Language:        language,
 		Genres:          genres,
-		Dead:            feed.Dead != 0,
 	}, true
 }
 

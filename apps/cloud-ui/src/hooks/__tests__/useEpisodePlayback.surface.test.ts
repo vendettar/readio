@@ -87,7 +87,6 @@ describe('useEpisodePlayback surface mode', () => {
       episodeCount: 0,
       language: 'en',
       genres: ['Technology'],
-      dead: false,
     }
 
     const { result } = renderHook(() => useEpisodePlayback())
@@ -120,7 +119,6 @@ describe('useEpisodePlayback surface mode', () => {
       episodeCount: 0,
       language: 'en',
       genres: ['Technology'],
-      dead: false,
     }
 
     const { result } = renderHook(() => useEpisodePlayback())

@@ -32,7 +32,6 @@ function makePodcast(overrides: Partial<Podcast> = {}): Podcast {
     episodeCount: 10,
     language: 'en',
     genres: ['Technology'],
-    dead: false,
     ...overrides,
   }
 }
@@ -60,7 +59,6 @@ describe('episodeMetadata mappers', () => {
       episodeCount: 50,
       language: 'en',
       genres: ['Technology'],
-      dead: false,
     })
 
     const payload = mapFeedEpisodeToPlaybackPayload(episode, podcast)

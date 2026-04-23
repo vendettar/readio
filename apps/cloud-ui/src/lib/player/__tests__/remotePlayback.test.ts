@@ -37,7 +37,6 @@ function makePodcast(overrides: Partial<Podcast> = {}): Podcast {
     episodeCount: 10,
     language: 'en',
     genres: ['Technology'],
-    dead: false,
     ...overrides,
   }
 }
@@ -170,7 +169,6 @@ describe('remotePlayback', () => {
         episodeCount: 10,
         language: 'en',
         genres: ['Technology'],
-        dead: false,
       }),
       { countryAtSave: TEST_COUNTRY }
     )

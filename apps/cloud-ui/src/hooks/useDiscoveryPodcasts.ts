@@ -64,9 +64,8 @@ export function useEditorPicks(country: string = 'us') {
       }
 
       const fresh = await discovery.getPodcastIndexPodcastsBatchByGuid([...picks], signal)
-      const alive = fresh.filter((podcast) => !podcast.dead)
-      queryClient.setQueryData(queryKey, alive)
-      return alive
+      queryClient.setQueryData(queryKey, fresh)
+      return fresh
     },
     enabled: isOnline,
     staleTime: 24 * 60 * 60 * 1000,

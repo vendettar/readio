@@ -34,7 +34,6 @@ describe('EditorPickShowCard routing', () => {
       episodeCount: 50,
       language: 'en',
       genres: ['News'],
-      dead: false,
     }
 
     render(<EditorPickShowCard podcast={podcast} index={0} />)
@@ -69,7 +68,6 @@ describe('EditorPickShowCard routing', () => {
       episodeCount: 50,
       language: 'en',
       genres: ['News'],
-      dead: false,
     }
 
     render(<EditorPickShowCard podcast={invalidPodcast} index={1} />)

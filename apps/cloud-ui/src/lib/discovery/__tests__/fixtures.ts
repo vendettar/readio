@@ -20,7 +20,6 @@ export function makeMinimalPodcast(
     description: 'A podcast',
     feedUrl: 'https://example.com/feed.xml',
     genres: [],
-    dead: false,
     ...overrides,
   }
 }

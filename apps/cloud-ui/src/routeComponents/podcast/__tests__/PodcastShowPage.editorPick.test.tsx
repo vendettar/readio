@@ -139,7 +139,6 @@ describe('PodcastShowPage editor pick path', () => {
         genres: ['Technology'],
         episodeCount: 2,
         language: 'en',
-        dead: false,
       },
     }
 
@@ -164,7 +163,6 @@ describe('PodcastShowPage editor pick path', () => {
         genres: ['Technology'],
         episodeCount: 2,
         language: 'en',
-        dead: false,
       },
     }
 

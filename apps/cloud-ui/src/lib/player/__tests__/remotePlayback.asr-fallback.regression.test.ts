@@ -57,7 +57,6 @@ describe('remotePlayback ASR-Fallback Regression', () => {
       episodeCount: 10,
       language: 'en',
       genres: ['Technology'],
-      dead: false,
     }
 
     const resolveSpy = vi.spyOn(playbackSource, 'resolvePlaybackSource')

@@ -88,7 +88,6 @@ describe('DownloadEpisodeButton country normalization', () => {
       episodeCount: 10,
       language: 'en',
       genres: ['Technology'],
-      dead: false,
     })
 
     render(

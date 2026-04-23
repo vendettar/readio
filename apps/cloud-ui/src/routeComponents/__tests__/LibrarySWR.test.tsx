@@ -426,7 +426,6 @@ describe('ExplorePage i18n Fix', () => {
         episodeCount: 10,
         language: 'en',
         genres: ['Technology'],
-        dead: false,
       },
     ]
     const topShows: TopPodcast[] = [

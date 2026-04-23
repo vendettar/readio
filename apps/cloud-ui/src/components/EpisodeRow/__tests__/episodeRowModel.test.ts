@@ -41,7 +41,6 @@ describe('episodeRowModel', () => {
       episodeCount: 50,
       language: 'en',
       genres: ['Technology'],
-      dead: false,
     }
     const episode: FeedEpisode = {
       episodeGuid: 'a8343698-1dca-4c63-bb5d-3e2a61522c2a',
@@ -80,7 +79,6 @@ describe('episodeRowModel', () => {
       episodeCount: 50,
       language: 'en',
       genres: ['Technology'],
-      dead: false,
     }
     const episode: FeedEpisode = {
       episodeGuid: '75f3241b-439d-4786-8968-07e05e548074',
@@ -109,7 +107,6 @@ describe('episodeRowModel', () => {
       feedUrl: 'https://feeds.simplecast.com/54nAGcIl',
       podcastGuid: '304b84f0-07b0-5265-b6b7-da5cf5aeb56e',
       podcastItunesId: '1200361736',
-      dead: false,
     }
     const podcast: Podcast = {
       podcastItunesId: '1200361736',
@@ -122,7 +119,6 @@ describe('episodeRowModel', () => {
       episodeCount: 100,
       language: 'en',
       genres: ['News'],
-      dead: false,
     }
     const episode: FeedEpisode = {
       episodeGuid: '75f3241b-439d-4786-8968-07e05e548074',
@@ -165,7 +161,6 @@ describe('episodeRowModel', () => {
       feedUrl: 'https://feeds.simplecast.com/54nAGcIl',
       podcastGuid: '304b84f0-07b0-5265-b6b7-da5cf5aeb56e',
       podcastItunesId: '1200361736',
-      dead: false,
     }
     const podcast: Podcast = {
       podcastItunesId: '1200361736',
@@ -178,7 +173,6 @@ describe('episodeRowModel', () => {
       episodeCount: 100,
       language: 'en',
       genres: ['News'],
-      dead: false,
     }
     const episode: FeedEpisode = {
       episodeGuid: '',

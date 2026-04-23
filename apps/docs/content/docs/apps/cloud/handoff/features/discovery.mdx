@@ -11,6 +11,7 @@ title: Discovery & Explore
   - Search / Top Shows / Top Episodes first-hop: Apple
   - Editor's Picks first-hop: PodcastIndex `podcasts-batch-byguid`
   - downstream detail/enrichment: PodcastIndex
+- PodcastIndex availability signals such as `dead` are backend-only. Cloud filters dead feeds before emitting Readio DTOs; frontend schemas must not expose `dead`.
 
 ## 2. First-Hop Ownership
 

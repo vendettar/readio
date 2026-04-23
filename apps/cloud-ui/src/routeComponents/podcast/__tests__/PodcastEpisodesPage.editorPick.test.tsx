@@ -177,7 +177,6 @@ describe('PodcastEpisodesPage editor pick path', () => {
         genres: ['Technology'],
         episodeCount: 2,
         language: 'en',
-        dead: false,
       },
     }
 

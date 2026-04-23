@@ -85,7 +85,6 @@ type piPodcastResponse struct {
 	EpisodeCount    *int64   `json:"episodeCount,omitempty"`
 	Language        string   `json:"language,omitempty"`
 	Genres          []string `json:"genres"`
-	Dead            bool     `json:"dead"`
 }
 
 // Discovery cache policy.

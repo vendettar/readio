@@ -15,7 +15,6 @@ const PIBasePodcastSchema = z.object({
   episodeCount: z.number().int().nonnegative().optional(),
   language: z.string().min(1).optional(),
   genres: z.array(z.string()),
-  dead: z.boolean(),
 })
 
 /**
