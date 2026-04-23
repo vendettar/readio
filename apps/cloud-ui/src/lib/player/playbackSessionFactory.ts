@@ -42,11 +42,10 @@ export function buildManagedPlaybackSessionCreateInput(input: {
     return null
   }
 
-  return {
+  const base = {
     id: input.id,
     progress: 0,
     durationSeconds: input.durationSeconds,
-    source: metadata ? 'explore' : 'local',
     audioUrl: input.normalizedAudioUrl,
     audioFilename: input.audioTitle,
     title: input.audioTitle,
@@ -61,7 +60,19 @@ export function buildManagedPlaybackSessionCreateInput(input: {
     publishedAt: metadata?.publishedAt,
     episodeGuid: metadata?.episodeGuid,
     podcastItunesId: metadata?.podcastItunesId,
-    countryAtSave,
+  }
+
+  if (metadata) {
+    return {
+      ...base,
+      source: 'explore',
+      countryAtSave: countryAtSave as string,
+    }
+  }
+
+  return {
+    ...base,
+    source: 'local',
   }
 }
 

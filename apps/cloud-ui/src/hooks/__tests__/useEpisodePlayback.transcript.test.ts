@@ -31,13 +31,15 @@ vi.mock('../../lib/logger', () => ({
 
 function makeEpisode(
   overrides: Partial<FeedEpisode> &
-    Pick<FeedEpisode, 'audioUrl' | 'title' | 'episodeGuid' | 'description' | 'pubDate'>
+    Pick<FeedEpisode, 'audioUrl' | 'title' | 'description' | 'pubDate'> & {
+      id?: string
+    }
 ): FeedEpisode {
   const { audioUrl, title, episodeGuid, description, pubDate, ...rest } = overrides
   return {
     audioUrl,
     title,
-    episodeGuid,
+    episodeGuid: episodeGuid ?? `guid-${audioUrl}`,
     description,
     pubDate,
     ...rest,
@@ -72,6 +74,7 @@ function makeFavorite(overrides: Partial<Favorite> = {}): Favorite {
     artworkUrl: 'https://example.com/art.jpg',
     addedAt: Date.now(),
     transcriptUrl: 'https://example.com/fav.srt',
+    countryAtSave: 'us',
     ...overrides,
   }
 }

@@ -1,8 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { HttpResponse, http } from 'msw'
 import type React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { server } from '../../../__tests__/setup'
 import { buildEpisodeCompactKey } from '../../../lib/discovery/editorPicks'
 import { useSearchStore } from '../../../store/searchStore'
 import { CommandPalette } from '../CommandPalette'

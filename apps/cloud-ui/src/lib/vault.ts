@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { DEFAULT_COUNTRY, SUPPORTED_CONTENT_REGIONS } from '../constants/app'
+import { SUPPORTED_CONTENT_REGIONS } from '../constants/app'
 import { TRACK_SOURCE } from './db/types'
 import type {
   Favorite,
@@ -33,40 +33,55 @@ function normalizeOptionalCountryAtSave(countryAtSave: unknown): string | undefi
   return SUPPORTED_COUNTRY_SET.has(normalized) ? normalized : undefined
 }
 
-const playbackSessionSchema: z.ZodType<PlaybackSession> = z
-  .object({
-    id: z.string(),
-    source: z.enum(['local', 'explore']),
-    title: z.string(),
-    createdAt: z.number(),
-    lastPlayedAt: z.number(),
-    sizeBytes: z.number(),
-    durationSeconds: z.number(),
-    audioId: z.string().nullable(),
-    subtitleId: z.string().nullable(),
-    hasAudioBlob: z.boolean(),
-    progress: z.number(),
-    audioFilename: z.string(),
-    subtitleFilename: z.string(),
-    audioUrl: z.string().optional(),
-    localTrackId: z.string().nullable().optional(),
-    artworkUrl: z.string().optional(),
-    description: z.string().optional(),
-    podcastTitle: z.string().optional(),
-    podcastFeedUrl: z.string().optional(),
-    publishedAt: z.number().optional(),
-    episodeGuid: z.string().optional(),
-    countryAtSave: z.preprocess(normalizeOptionalCountryAtSave, z.string()),
-    podcastItunesId: z.string().optional(),
-    transcriptUrl: z.string().optional(),
+const playbackSessionBaseSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  createdAt: z.number(),
+  lastPlayedAt: z.number(),
+  sizeBytes: z.number(),
+  durationSeconds: z.number(),
+  audioId: z.string().nullable(),
+  subtitleId: z.string().nullable(),
+  hasAudioBlob: z.boolean(),
+  progress: z.number(),
+  audioFilename: z.string(),
+  subtitleFilename: z.string(),
+  audioUrl: z.string().optional(),
+  localTrackId: z.string().nullable().optional(),
+  artworkUrl: z.string().optional(),
+  description: z.string().optional(),
+  podcastTitle: z.string().optional(),
+  podcastFeedUrl: z.string().optional(),
+  publishedAt: z.number().optional(),
+  episodeGuid: z.string().optional(),
+  podcastItunesId: z.string().optional(),
+  transcriptUrl: z.string().optional(),
+})
+
+const localPlaybackSessionSchema = playbackSessionBaseSchema
+  .extend({
+    source: z.literal('local'),
+    countryAtSave: z.undefined().optional(),
   })
   .strict()
+
+const explorePlaybackSessionSchema = playbackSessionBaseSchema
+  .extend({
+    source: z.literal('explore'),
+    countryAtSave: z.preprocess(normalizeOptionalCountryAtSave, z.string()),
+  })
+  .strict()
+
+const playbackSessionSchema: z.ZodType<PlaybackSession> = z.discriminatedUnion('source', [
+  localPlaybackSessionSchema,
+  explorePlaybackSessionSchema,
+])
 
 const subscriptionSchema: z.ZodType<Subscription> = z
   .object({
     id: z.string(),
-    feedUrl: z.string(),
     title: z.string(),
+    feedUrl: z.string(),
     author: z.string(),
     artworkUrl: z.string(),
     addedAt: z.number(),
@@ -92,7 +107,7 @@ const favoriteSchema: z.ZodType<Favorite> = z
     episodeGuid: z.string().optional(),
     podcastItunesId: z.string().optional(),
     transcriptUrl: z.string().optional(),
-    countryAtSave: z.preprocess(normalizeOptionalCountryAtSave, z.string().optional()),
+    countryAtSave: z.preprocess(normalizeOptionalCountryAtSave, z.string()),
   })
   .strict()
 
@@ -125,6 +140,9 @@ const localTrackSchema: z.ZodType<FileTrack> = z
     activeSubtitleId: z.string().optional(),
     artworkId: z.string().optional(),
     sourceType: z.literal(TRACK_SOURCE.USER_UPLOAD),
+    album: z.string().optional(),
+    artist: z.string().optional(),
+    isCorrupted: z.boolean().optional(),
   })
   .strict()
 
@@ -146,6 +164,8 @@ const podcastDownloadSchema: z.ZodType<PodcastDownload> = z
     downloadedAt: z.number(),
     countryAtSave: z.preprocess(normalizeOptionalCountryAtSave, z.string()),
     sourcePodcastItunesId: z.string().optional(),
+    sourceEpisodeGuid: z.string().optional(),
+    transcriptUrl: z.string().optional(),
     isCorrupted: z.boolean().optional(),
     sourceType: z.literal(TRACK_SOURCE.PODCAST_DOWNLOAD),
     activeSubtitleId: z.string().optional(),
@@ -160,6 +180,11 @@ const localSubtitleSchema: z.ZodType<FileSubtitle> = z
     name: z.string(),
     subtitleId: z.string(),
     createdAt: z.number(),
+    sourceKind: z.enum(['manual_upload', 'asr_online', 'asr_background', 'built_in']).optional(),
+    provider: z.string().optional(),
+    model: z.string().optional(),
+    language: z.string().optional(),
+    status: z.enum(['ready', 'failed']).optional(),
   })
   .strict()
 

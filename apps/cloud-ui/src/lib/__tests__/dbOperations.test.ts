@@ -470,7 +470,7 @@ describe('Dexie database operations', () => {
         podcastTitle: 'Podcast',
         artworkUrl: '',
         addedAt: Date.now(),
-      })
+      } as unknown as Parameters<typeof DB.addFavorite>[0])
     ).rejects.toThrow(/country/i)
   })
 
@@ -481,7 +481,7 @@ describe('Dexie database operations', () => {
         source: 'explore',
         title: 'Explore episode',
         episodeGuid: 'episode-guid-1',
-      })
+      } as unknown as Parameters<typeof DB.createPlaybackSession>[0])
     ).rejects.toThrow(/country/i)
   })
 })

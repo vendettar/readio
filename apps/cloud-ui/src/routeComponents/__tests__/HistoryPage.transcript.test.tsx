@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { PlaybackSession } from '../../lib/db/types'
+import type { ExplorePlaybackSession, PlaybackSession } from '../../lib/db/types'
 import HistoryPage from '../HistoryPage'
 
 const {
@@ -217,7 +217,7 @@ vi.mock('../../store/exploreStore', () => ({
     }),
 }))
 
-function makeSession(overrides: Partial<PlaybackSession> = {}): PlaybackSession {
+function makeSession(overrides: Partial<ExplorePlaybackSession> = {}): PlaybackSession {
   return {
     id: 'session-1',
     source: 'explore',
@@ -234,8 +234,11 @@ function makeSession(overrides: Partial<PlaybackSession> = {}): PlaybackSession 
     subtitleFilename: '',
     audioUrl: 'https://example.com/episode.mp3',
     podcastFeedUrl: 'https://example.com/feed.xml',
+    podcastItunesId: '123456789',
+    episodeGuid: 'episode-guid-1',
     podcastTitle: 'Podcast',
     transcriptUrl: 'https://example.com/episode.srt',
+    countryAtSave: 'us',
     ...overrides,
   }
 }

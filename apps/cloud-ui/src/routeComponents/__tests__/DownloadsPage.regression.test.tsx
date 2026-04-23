@@ -377,6 +377,7 @@ describe('DownloadsPage Regression', () => {
         trackId: 'track-1',
         subtitleId: 'subtitle-1',
         name: 'English',
+        createdAt: 1,
       },
       subtitle: subtitleText,
     }
@@ -386,6 +387,7 @@ describe('DownloadsPage Regression', () => {
         trackId: 'track-1',
         subtitleId: 'subtitle-1',
         name: 'English',
+        createdAt: 1,
       },
       subtitle: subtitleText,
     }

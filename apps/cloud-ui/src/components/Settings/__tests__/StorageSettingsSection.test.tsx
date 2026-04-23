@@ -25,6 +25,7 @@ const baseSession: PlaybackSession = {
   progress: 10,
   audioFilename: 'episode.mp3',
   subtitleFilename: '',
+  countryAtSave: 'us',
 }
 
 describe('StorageSettingsSection', () => {

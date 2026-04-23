@@ -113,7 +113,6 @@ export default function PodcastEpisodesPage() {
     gcTime: PODCAST_QUERY_CACHE_POLICY.feed.gcTime,
   })
 
-  const appleTotal = podcast?.episodeCount ?? 0
   const episodes = useMemo(() => feed?.episodes ?? [], [feed?.episodes])
   const groupedEpisodeData = useMemo(() => buildGroupedEpisodeData(episodes), [episodes])
 

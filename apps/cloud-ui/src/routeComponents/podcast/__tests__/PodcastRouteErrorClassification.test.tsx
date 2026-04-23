@@ -1,10 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  makeFeedEpisode,
-  makeParsedFeed,
-  makePodcast,
-} from '../../../lib/discovery/__tests__/fixtures'
+import { makeParsedFeed, makePodcast } from '../../../lib/discovery/__tests__/fixtures'
 import PodcastEpisodeDetailPage from '../PodcastEpisodeDetailPage'
 import PodcastEpisodesPage from '../PodcastEpisodesPage'
 import PodcastShowPage from '../PodcastShowPage'

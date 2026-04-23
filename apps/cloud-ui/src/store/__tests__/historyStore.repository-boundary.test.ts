@@ -78,6 +78,7 @@ describe('historyStore repository boundary', () => {
           subtitleId: null,
           audioUrl: 'https://example.com/audio.mp3',
           durationSeconds: 0,
+          countryAtSave: 'us',
         },
       ],
     })

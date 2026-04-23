@@ -16,6 +16,8 @@ import type {
   FileFolder,
   FileSubtitle,
   FileTrack,
+  ExplorePlaybackSession,
+  LocalPlaybackSession,
   PlaybackSession,
   PlaybackSessionCreateInput,
   PlaybackSessionUpdatePatch,
@@ -33,6 +35,7 @@ import type {
 // Import entity types from the canonical type definition file
 import {
   fromStoredFolderId,
+  isNavigableExplorePlaybackSession,
   isPodcastDownloadTrack,
   isUserUploadTrack,
   TRACK_SOURCE,
@@ -48,6 +51,8 @@ export type {
   FileSubtitle,
   Track,
   FileTrack,
+  ExplorePlaybackSession,
+  LocalPlaybackSession,
   PodcastDownload,
   PodcastDownloadCreateInput,
   PlaybackSession,
@@ -61,6 +66,7 @@ export type {
   SubtitleText,
   SubtitleVersionStatus,
 }
+export { isNavigableExplorePlaybackSession }
 
 // Dexie database table names SSOT
 export const DB_TABLE_NAMES = {
@@ -168,16 +174,6 @@ function normalizeRequiredCountryAtSave(
   return normalized
 }
 
-function normalizeSessionCountryAtSave(
-  session: Pick<PlaybackSession, 'source' | 'countryAtSave'>,
-  entityName: string
-): string | undefined {
-  if (session.source !== 'explore') {
-    return session.countryAtSave
-  }
-  return normalizeRequiredCountryAtSave(session.countryAtSave, entityName)
-}
-
 function buildPlaybackSessionRecord(data: PlaybackSessionCreateInput): PlaybackSession {
   const base = {
     id: data.id ?? generateId(),
@@ -215,6 +211,25 @@ function buildPlaybackSessionRecord(data: PlaybackSessionCreateInput): PlaybackS
   return {
     ...base,
     source: 'local',
+  }
+}
+
+function normalizePlaybackSessionRecord(
+  record: PlaybackSession,
+  entityName: string
+): PlaybackSession {
+  if (record.source === 'explore') {
+    return {
+      ...record,
+      source: 'explore',
+      countryAtSave: normalizeRequiredCountryAtSave(record.countryAtSave, entityName),
+    }
+  }
+
+  return {
+    ...record,
+    source: 'local',
+    countryAtSave: undefined,
   }
 }
 
@@ -351,7 +366,7 @@ export const DB = {
     const existing = await db.playback_sessions.get(id)
 
     if (existing) {
-      const updated: PlaybackSession = {
+      const merged = {
         ...existing,
         ...data,
         id, // Ensure ID is correct
@@ -361,7 +376,7 @@ export const DB = {
           data.durationSeconds !== undefined ? data.durationSeconds : existing.durationSeconds,
         lastPlayedAt: data.lastPlayedAt !== undefined ? data.lastPlayedAt : existing.lastPlayedAt,
       }
-      updated.countryAtSave = normalizeSessionCountryAtSave(updated, 'playback session')
+      const updated = normalizePlaybackSessionRecord(merged as PlaybackSession, 'playback session')
       await db.playback_sessions.put(updated)
       return id
     }
@@ -375,16 +390,14 @@ export const DB = {
     if (!existing) {
       throw new Error(`Playback session ${id} not found`)
     }
-    const updated: PlaybackSession = {
+    const merged = {
       ...existing,
       ...updates,
       // Only update timestamp if explicitly provided, otherwise keep existing
       lastPlayedAt: updates.lastPlayedAt ?? existing.lastPlayedAt,
     }
-    updated.countryAtSave = normalizeSessionCountryAtSave(updated, 'playback session')
-    await db.playback_sessions.put({
-      ...updated,
-    })
+    const updated = normalizePlaybackSessionRecord(merged as PlaybackSession, 'playback session')
+    await db.playback_sessions.put(updated)
   },
 
   async getPlaybackSession(id: string): Promise<PlaybackSession | undefined> {
@@ -1183,9 +1196,12 @@ export const DB = {
   },
 
   // File subtitles
-  async addFileSubtitle(data: Omit<FileSubtitle, 'id'>): Promise<string> {
+  async addFileSubtitle(
+    data: Omit<FileSubtitle, 'id' | 'createdAt'> & Partial<Pick<FileSubtitle, 'createdAt'>>
+  ): Promise<string> {
     const fileSub: FileSubtitle = {
       id: generateId(),
+      createdAt: Date.now(),
       ...data,
     }
     await db.local_subtitles.add(fileSub)

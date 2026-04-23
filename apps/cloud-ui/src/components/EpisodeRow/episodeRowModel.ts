@@ -1,6 +1,6 @@
 import type { TFunction } from 'i18next'
 import { formatDateStandard, formatDuration, formatRelativeTime } from '@/lib/dateUtils'
-import { isNavigableExplorePlaybackSession, type Favorite, type PlaybackSession } from '@/lib/db/types'
+import type { Favorite, PlaybackSession } from '@/lib/db/types'
 import type { EditorPickPodcast, FeedEpisode, Podcast, SearchEpisode } from '@/lib/discovery'
 import {
   buildEpisodeCompactKey,
@@ -261,12 +261,14 @@ export function fromPlaybackSession({
   language,
   t,
 }: PlaybackSessionModelArgs): EpisodeRowModel {
-  const podcastId = isNavigableExplorePlaybackSession(session)
-    ? session.podcastItunesId || subscriptionMap.get(session.podcastFeedUrl || '')
-    : undefined
-  const route = isNavigableExplorePlaybackSession(session)
-    ? buildEpisodeRoute(session.countryAtSave, podcastId, session.episodeGuid)
-    : null
+  const podcastId =
+    session.source === 'explore'
+      ? session.podcastItunesId || subscriptionMap.get(session.podcastFeedUrl || '')
+      : undefined
+  const route =
+    session.source === 'explore' && session.countryAtSave && podcastId && session.episodeGuid
+      ? buildEpisodeRoute(session.countryAtSave, podcastId, session.episodeGuid)
+      : null
 
   return {
     title: session.title,

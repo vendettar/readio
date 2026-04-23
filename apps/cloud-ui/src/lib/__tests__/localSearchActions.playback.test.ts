@@ -120,6 +120,7 @@ describe('localSearchActions remote playback delegation', () => {
         audioFilename: '',
         subtitleFilename: '',
         audioUrl: 'https://example.com/history.mp3',
+        countryAtSave: 'us',
       },
     } satisfies LocalSearchResult
 

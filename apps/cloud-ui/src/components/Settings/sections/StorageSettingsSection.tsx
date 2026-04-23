@@ -139,9 +139,7 @@ export const StorageSettingsSection = memo(function StorageSettingsSection({
                     <span className="capitalize">
                       {item.source === 'local'
                         ? t('sourceLocal')
-                        : item.source === 'explore'
-                          ? t('sourcePodcast')
-                          : item.source}
+                        : t('sourcePodcast')}
                     </span>
                     <span>•</span>
                     <span>{formatBytes(item.sizeBytes)}</span>

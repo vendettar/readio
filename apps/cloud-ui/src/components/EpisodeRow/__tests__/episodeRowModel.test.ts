@@ -109,6 +109,7 @@ describe('episodeRowModel', () => {
       feedUrl: 'https://feeds.simplecast.com/54nAGcIl',
       podcastGuid: '304b84f0-07b0-5265-b6b7-da5cf5aeb56e',
       podcastItunesId: '1200361736',
+      dead: false,
     }
     const podcast: Podcast = {
       podcastItunesId: '1200361736',
@@ -164,6 +165,7 @@ describe('episodeRowModel', () => {
       feedUrl: 'https://feeds.simplecast.com/54nAGcIl',
       podcastGuid: '304b84f0-07b0-5265-b6b7-da5cf5aeb56e',
       podcastItunesId: '1200361736',
+      dead: false,
     }
     const podcast: Podcast = {
       podcastItunesId: '1200361736',
@@ -179,6 +181,7 @@ describe('episodeRowModel', () => {
       dead: false,
     }
     const episode: FeedEpisode = {
+      episodeGuid: '',
       title: 'FeedEpisode 1',
       description: '<p>desc</p>',
       audioUrl: 'audio',

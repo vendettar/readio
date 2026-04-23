@@ -43,7 +43,6 @@ describe('surfacePolicy', () => {
         title: 'Search Episode',
         showTitle: 'Podcast',
         artwork: 'https://example.com/art.jpg',
-        feedUrl: 'https://example.com/feed.xml',
         episodeUrl: 'https://example.com/episode.mp3',
         episodeGuid: 'guid-surface-1',
         releaseDate: '2026-01-01T00:00:00Z',

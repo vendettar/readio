@@ -53,7 +53,7 @@ describe('useSession', () => {
   function makePlaybackSession(
     overrides: Partial<PlaybackSession> & Pick<PlaybackSession, 'id' | 'title' | 'source'>
   ): PlaybackSession {
-    return {
+    const base = {
       createdAt: 0,
       lastPlayedAt: 0,
       sizeBytes: 0,
@@ -65,6 +65,18 @@ describe('useSession', () => {
       audioFilename: '',
       subtitleFilename: '',
       ...overrides,
+    }
+    if (base.source === 'explore') {
+      return {
+        ...base,
+        source: 'explore',
+        countryAtSave: base.countryAtSave ?? 'us',
+      }
+    }
+    return {
+      ...base,
+      source: 'local',
+      countryAtSave: undefined,
     }
   }
 

@@ -231,9 +231,8 @@ vi.mock('../../store/exploreStore', () => ({
 }))
 
 function makeSession(overrides: Partial<PlaybackSession> = {}): PlaybackSession {
-  return {
+  const base = {
     id: 'session-1',
-    source: 'explore',
     title: 'Episode',
     createdAt: 1,
     lastPlayedAt: 1,
@@ -250,6 +249,18 @@ function makeSession(overrides: Partial<PlaybackSession> = {}): PlaybackSession 
     podcastTitle: 'Podcast',
     localTrackId: 'track-1', // Note: with source='explore', this will NOT trigger setPlaybackTrackId
     ...overrides,
+  }
+  if (overrides.source === 'local') {
+    return {
+      ...base,
+      source: 'local',
+      countryAtSave: undefined,
+    }
+  }
+  return {
+    ...base,
+    source: 'explore',
+    countryAtSave: 'us',
   }
 }
 

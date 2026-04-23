@@ -57,6 +57,7 @@ describe('discovery mappers', () => {
       audioUrl: 'https://example.com/download.mp3',
       podcastFeedUrl: 'https://example.com/feed.xml',
       podcastTitle: 'Podcast',
+      countryAtSave: 'us',
     })
 
     expect(episode.episodeGuid).toBeUndefined()

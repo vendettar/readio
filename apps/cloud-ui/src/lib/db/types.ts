@@ -68,14 +68,14 @@ export interface ExplorePlaybackSession extends PlaybackSessionBase {
 export type PlaybackSession = LocalPlaybackSession | ExplorePlaybackSession
 
 export type NavigableExplorePlaybackSession = ExplorePlaybackSession &
-  ({ podcastItunesId: string } | { episodeGuid: string })
+  { podcastItunesId: string; episodeGuid: string }
 
 export function isNavigableExplorePlaybackSession(
   session: PlaybackSession
 ): session is NavigableExplorePlaybackSession {
   if (session.source !== 'explore') return false
   if (!session.countryAtSave) return false
-  return !!session.podcastItunesId || !!session.episodeGuid
+  return !!session.podcastItunesId && !!session.episodeGuid
 }
 
 interface PlaybackSessionCreateInputBase {

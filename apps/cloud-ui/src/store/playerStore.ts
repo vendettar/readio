@@ -638,7 +638,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
       }
       // 2b. Restore remote audio (Podcasts / Explore page)
       // Prefer local download if available before falling back to remote URL
-      else if (lastSession.audioUrl) {
+      else if (lastSession.source === 'explore' && lastSession.audioUrl) {
         if (get().loadRequestId !== requestId || signal?.aborted) {
           if (get().loadRequestId === requestId) set({ initializationStatus: 'ready' })
           return

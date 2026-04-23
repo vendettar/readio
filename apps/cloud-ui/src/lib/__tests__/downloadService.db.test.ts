@@ -27,6 +27,7 @@ describe('downloadService DB integration', () => {
       trackId,
       subtitleId,
       name: 'English.srt',
+      createdAt: Date.now(),
     })
 
     // Verify setup
@@ -72,12 +73,14 @@ describe('downloadService DB integration', () => {
       trackId: trackId1,
       subtitleId,
       name: 'sub.srt',
+      createdAt: Date.now(),
     })
     await db.local_subtitles.add({
       id: 'link-2',
       trackId: trackId2,
       subtitleId,
       name: 'sub.srt',
+      createdAt: Date.now(),
     })
 
     // 4. Remove track 1

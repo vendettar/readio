@@ -169,7 +169,6 @@ describe('episodeMetadata mappers', () => {
       publishedAt: new Date('2024-06-01T00:00:00.000Z').getTime(),
       podcastItunesId: '999',
       transcriptUrl: 'https://example.com/local.srt',
-      countryAtSave: 'us',
     } as PlaybackSession
 
     const metadata = mapPlaybackSessionToEpisodeMetadata(

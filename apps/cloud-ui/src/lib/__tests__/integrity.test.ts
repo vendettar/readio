@@ -28,7 +28,15 @@ describe('Integrity Verification', () => {
             sourceType: TRACK_SOURCE.USER_UPLOAD,
           },
         ],
-        local_subtitles: [{ id: 'sub-1', trackId: 'track-1', name: 'Sub 1', subtitleId: 's-1' }],
+        local_subtitles: [
+          {
+            id: 'sub-1',
+            trackId: 'track-1',
+            name: 'Sub 1',
+            subtitleId: 's-1',
+            createdAt: Date.now(),
+          },
+        ],
         subscriptions: [
           {
             id: 'sub-id-1',
@@ -37,6 +45,7 @@ describe('Integrity Verification', () => {
             author: 'Author',
             artworkUrl: '',
             addedAt: Date.now(),
+            countryAtSave: 'us',
           },
         ],
         favorites: [
@@ -48,6 +57,7 @@ describe('Integrity Verification', () => {
             episodeTitle: 'E1',
             podcastTitle: 'P1',
             artworkUrl: '',
+            countryAtSave: 'us',
             addedAt: Date.now(),
           },
         ],

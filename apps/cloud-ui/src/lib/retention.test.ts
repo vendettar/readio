@@ -110,6 +110,7 @@ describe('runIntegrityCheck', () => {
       trackId: 'missing-track-id',
       name: 'Orphaned Sub',
       subtitleId: 'content-1',
+      createdAt: Date.now(),
     })
 
     const report = await runIntegrityCheck()

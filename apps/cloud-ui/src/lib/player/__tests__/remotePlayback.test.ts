@@ -435,7 +435,6 @@ describe('remotePlayback', () => {
     const pause = vi.fn()
 
     const ep: FeedEpisode = makeFeedEpisode({
-      id: 'ep-1',
       title: 'Failed Episode',
       audioUrl: 'https://example.com/fail.mp3',
     })
@@ -477,7 +476,6 @@ describe('remotePlayback', () => {
     const episode: FeedEpisode = makeFeedEpisode({
       audioUrl: 'https://example.com/no-transcript.mp3',
       title: 'Stream',
-      id: 'ep-1',
     })
 
     await playFeedEpisodeWithDeps({ setAudioUrl, play, pause }, episode, makePodcast(), {
@@ -506,7 +504,6 @@ describe('remotePlayback', () => {
     const episode: FeedEpisode = makeFeedEpisode({
       audioUrl: 'https://example.com/already-downloaded.mp3',
       title: 'Downloaded Episode',
-      id: 'ep-1',
     })
 
     await playFeedEpisodeWithDeps(
@@ -569,7 +566,6 @@ describe('remotePlayback', () => {
     const episode: FeedEpisode = makeFeedEpisode({
       audioUrl: 'https://example.com/untitled-fallback.mp3',
       title: '   ',
-      id: 'ep-1',
       transcriptUrl: 'https://example.com/untitled.srt',
     })
 
@@ -645,7 +641,6 @@ describe('remotePlayback', () => {
     const episode: FeedEpisode = makeFeedEpisode({
       audioUrl: 'https://example.com/next.mp3',
       title: 'Next Episode',
-      id: 'ep-1',
       transcriptUrl: 'https://example.com/next.srt',
     })
     const supersedingRequest = playFeedEpisodeWithDeps(
@@ -694,7 +689,6 @@ describe('remotePlayback', () => {
     const supersedingEpisode: FeedEpisode = makeFeedEpisode({
       audioUrl: 'https://example.com/next-after-history.mp3',
       title: 'Next Episode',
-      id: 'ep-1',
       transcriptUrl: 'https://example.com/next-after-history.srt',
     })
 

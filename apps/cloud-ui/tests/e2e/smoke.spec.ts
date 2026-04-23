@@ -29,6 +29,7 @@ async function seedSubscriptions(page: Page) {
       author: 'Playwright',
       artworkUrl: '',
       addedAt: Date.now(),
+      countryAtSave: 'us',
     })
   })
 }
