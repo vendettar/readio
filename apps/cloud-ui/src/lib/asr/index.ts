@@ -43,7 +43,7 @@ type ProgressiveSkipReason =
   | 'byte_floor_exceeds_budget'
   | 'split_result_exceeds_budget'
 
-type ChunkPlanMode = 'progressive' | 'legacy'
+type ChunkPlanMode = 'progressive' | 'baseline'
 
 interface ProgressivePlanReady {
   mode: 'progressive'
@@ -194,7 +194,7 @@ function scaleChunkTargetsForBudget(options: {
   }
 }
 
-function resolveLegacyMaxChunkSize(blob: Blob, expectedDurationSeconds?: number): number {
+function resolveBaselineMaxChunkSize(blob: Blob, expectedDurationSeconds?: number): number {
   let maxChunkSize = ASR_MAX_BLOB_BYTES
   if (
     isValidDurationSeconds(expectedDurationSeconds) &&
@@ -300,7 +300,7 @@ export async function transcribeAudioWithRetry(options: {
     ? await decideProgressivePlan(blob, expectedDurationSeconds)
     : ({ mode: 'fallback', reason: 'progressive_disabled', budget: null } as const)
   let chunks: Blob[] | null = null
-  let chunkPlanMode: ChunkPlanMode = 'legacy'
+  let chunkPlanMode: ChunkPlanMode = 'baseline'
   let fallbackReason: ProgressiveSkipReason | undefined
 
   if (progressiveDecision.mode === 'progressive') {
@@ -379,7 +379,7 @@ export async function transcribeAudioWithRetry(options: {
   }
 
   if (!chunks) {
-    const maxChunkSize = resolveLegacyMaxChunkSize(blob, expectedDurationSeconds)
+    const maxChunkSize = resolveBaselineMaxChunkSize(blob, expectedDurationSeconds)
     chunks = await splitMp3Blob(blob, maxChunkSize)
   }
 

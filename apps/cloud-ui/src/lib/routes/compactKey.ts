@@ -2,7 +2,7 @@
  * Episode identity ↔ compact route key helpers.
  *
  * Current route contract:
- * - UUID-shaped stable identities keep the legacy 22-character base64url form.
+ * - UUID-shaped stable identities keep the 22-character base64url form.
  * - Non-UUID stable identities use the generic prefixed UTF-8 base64url form.
  * - Both decode into the same canonical "stable episode identity" layer.
  */
@@ -80,7 +80,7 @@ export function normalizeUUID(input: string): string | null {
 }
 
 /**
- * Encode a UUID-shaped stable identity into the legacy 22-character base64url key.
+ * Encode a UUID-shaped stable identity into the 22-character base64url key.
  * Returns null if the input does not match the 8-4-4-4-12 UUID shape.
  */
 export function uuidToCompactKey(uuid: string): string | null {
@@ -119,8 +119,8 @@ export function isValidCompactKey(key: string): boolean {
 }
 
 /**
- * Decode a legacy 22-character compact key back to canonical UUID text.
- * Returns null for generic compact keys or invalid legacy UUID keys.
+ * Decode a 22-character UUID compact key back to canonical UUID text.
+ * Returns null for generic compact keys or invalid UUID compact keys.
  */
 export function compactKeyToUUID(key: string): string | null {
   if (!COMPACT_KEY_RE.test(key)) return null

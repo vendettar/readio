@@ -581,16 +581,6 @@ export const DownloadsRepository = {
   },
 
   /**
-   * Deprecated: Use getReadySubtitlesByTrackId for fallback support.
-   */
-  async getActiveSubtitleByTrackId(
-    trackId: string
-  ): Promise<{ fileSub: FileSubtitle; subtitle: SubtitleText } | undefined> {
-    const results = await this.getReadySubtitlesByTrackId(trackId)
-    return results[0]
-  },
-
-  /**
    * Export a single subtitle version as an SRT blob.
    */
   async exportSubtitleVersion(
@@ -634,7 +624,7 @@ export const DownloadsRepository = {
       return { ok: false }
     }
 
-    const active = await this.getActiveSubtitleByTrackId(trackId)
+    const active = (await this.getReadySubtitlesByTrackId(trackId))[0]
     if (!active) {
       return { ok: false }
     }

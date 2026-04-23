@@ -4,7 +4,7 @@ import { DB, db } from '../dexieDb'
 describe('Dexie database operations', () => {
   beforeEach(async () => {
     // Ensure a clean state between tests.
-    // This project does not require DB migration compatibility; we can safely reset data.
+    // This project does not preserve old DB snapshots between runs; we can safely reset data.
     await DB.clearAllData()
   })
 

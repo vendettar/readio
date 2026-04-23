@@ -1165,14 +1165,6 @@ export const DB = {
     )
   },
 
-  /**
-   * Backward-compatible alias; now performs the same safe cleanup pipeline
-   * used by repository deletion.
-   */
-  async deletePodcastDownload(id: string): Promise<void> {
-    await this.removePodcastDownloadWithCleanup(id)
-  },
-
   async searchPodcastDownloadsByName(query: string, limit = 200): Promise<PodcastDownload[]> {
     if (!query) return []
     const tracks = await db.tracks.where('name').startsWithIgnoreCase(query).limit(limit).toArray()

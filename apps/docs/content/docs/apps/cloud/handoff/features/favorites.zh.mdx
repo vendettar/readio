@@ -20,3 +20,4 @@ Favorites 仍然是 browser-local 记录，保存的节目元数据包括：
 ## 3. 路由契约
 
 只有在收藏记录里的路由元数据足够时，收藏条目才应深链到规范化 podcast/episode 路由；否则应退化为直接播放行为。
+- `countryAtSave` 不是纯展示快照。它属于 library 重新进入内容路由时保存下来的 route identity，不能被用户当前的全局 content region 替换。

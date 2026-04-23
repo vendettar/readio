@@ -85,7 +85,7 @@ export function BaseEpisodeRow({
         Hover Background Layer 
         - inset-y-0: Extends from top edge to bottom edge (divider).
         - Shifted left to cover the "gutter" area for episodes without artwork.
-        - Rounded-lg matches the legacy design.
+        - Rounded-lg matches the current row shape.
       */}
       <div
         className={cn(

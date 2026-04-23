@@ -11,5 +11,6 @@ title: 播放历史
 ## 2. 契约
 
 - 远程播放写入必须保留 `countryAtSave`
+- 对于可导航的 remote/library 来源历史记录，`countryAtSave` 属于 route identity 的一部分。History 深链必须复用保存下来的国家，不能替换成当前全局 content region。
 - History 仍是 browser-local
 - 删除历史只删 session，不删除底层已下载或本地媒体产物

@@ -60,7 +60,7 @@ const playbackSessionSchema: z.ZodType<PlaybackSession> = z
     podcastItunesId: z.string().optional(),
     transcriptUrl: z.string().optional(),
   })
-  .passthrough()
+  .strict()
 
 const subscriptionSchema: z.ZodType<Subscription> = z
   .object({
@@ -72,7 +72,7 @@ const subscriptionSchema: z.ZodType<Subscription> = z
     addedAt: z.number(),
     podcastItunesId: z.string().optional(),
   })
-  .passthrough()
+  .strict()
 
 const favoriteSchema: z.ZodType<Favorite> = z
   .object({
@@ -93,7 +93,7 @@ const favoriteSchema: z.ZodType<Favorite> = z
     transcriptUrl: z.string().optional(),
     countryAtSave: z.preprocess(normalizeOptionalCountryAtSave, z.string().optional()),
   })
-  .passthrough()
+  .strict()
 
 const settingSchema: z.ZodType<Setting> = z
   .object({
@@ -101,7 +101,7 @@ const settingSchema: z.ZodType<Setting> = z
     value: z.string(),
     updatedAt: z.number(),
   })
-  .passthrough()
+  .strict()
 
 const folderSchema: z.ZodType<FileFolder> = z
   .object({
@@ -110,7 +110,7 @@ const folderSchema: z.ZodType<FileFolder> = z
     createdAt: z.number(),
     pinnedAt: z.number().optional(),
   })
-  .passthrough()
+  .strict()
 
 const localTrackSchema: z.ZodType<FileTrack> = z
   .object({
@@ -125,7 +125,7 @@ const localTrackSchema: z.ZodType<FileTrack> = z
     artworkId: z.string().optional(),
     sourceType: z.literal(TRACK_SOURCE.USER_UPLOAD),
   })
-  .passthrough()
+  .strict()
 
 const podcastDownloadSchema: z.ZodType<PodcastDownload> = z
   .object({
@@ -151,7 +151,7 @@ const podcastDownloadSchema: z.ZodType<PodcastDownload> = z
     activeSubtitleId: z.string().optional(),
     manualPinnedAt: z.number().optional(),
   })
-  .passthrough()
+  .strict()
 
 const localSubtitleSchema: z.ZodType<FileSubtitle> = z
   .object({
@@ -160,7 +160,7 @@ const localSubtitleSchema: z.ZodType<FileSubtitle> = z
     name: z.string(),
     subtitleId: z.string(),
   })
-  .passthrough()
+  .strict()
 
 /**
  * Zod schema for the entire Personal Vault JSON structure.
@@ -169,16 +169,18 @@ const localSubtitleSchema: z.ZodType<FileSubtitle> = z
 export const vaultSchema = z.object({
   version: z.literal(VAULT_VERSION),
   exportedAt: z.number(),
-  data: z.object({
-    folders: z.array(folderSchema),
-    tracks: z.array(z.union([localTrackSchema, podcastDownloadSchema])),
-    local_subtitles: z.array(localSubtitleSchema),
-    subscriptions: z.array(subscriptionSchema),
-    favorites: z.array(favoriteSchema),
-    playback_sessions: z.array(playbackSessionSchema),
-    settings: z.array(settingSchema),
-  }),
-})
+  data: z
+    .object({
+      folders: z.array(folderSchema),
+      tracks: z.array(z.union([localTrackSchema, podcastDownloadSchema])),
+      local_subtitles: z.array(localSubtitleSchema),
+      subscriptions: z.array(subscriptionSchema),
+      favorites: z.array(favoriteSchema),
+      playback_sessions: z.array(playbackSessionSchema),
+      settings: z.array(settingSchema),
+    })
+    .strict(),
+}).strict()
 
 export type VaultData = z.infer<typeof vaultSchema>
 

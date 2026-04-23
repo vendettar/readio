@@ -20,3 +20,4 @@ Favorites are still browser-local records keyed by episode identity, with show m
 ## 3. Routing Contract
 
 Favorite items should deep-link to canonical podcast/episode routes only when the saved routing metadata is sufficient; otherwise they degrade to direct playback behavior.
+- `countryAtSave` is not a display-only snapshot. It is part of the saved route identity for library re-entry and must not be replaced by the user's current global content region.

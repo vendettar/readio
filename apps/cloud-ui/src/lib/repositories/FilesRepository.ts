@@ -147,16 +147,6 @@ export const FilesRepository = {
     return buildPrioritizedSubtitleCandidates(trackId, fileTrack.activeSubtitleId)
   },
 
-  /**
-   * Deprecated: Use getReadySubtitlesByTrackId for fallback support.
-   */
-  async getActiveSubtitleByTrackId(
-    trackId: string
-  ): Promise<{ fileSub: FileSubtitle; subtitle: SubtitleText } | undefined> {
-    const results = await this.getReadySubtitlesByTrackId(trackId)
-    return results[0]
-  },
-
   updateFolder(id: string, updates: Partial<Pick<FileFolder, 'name' | 'pinnedAt'>>): Promise<void> {
     return DB.updateFolder(id, updates)
   },

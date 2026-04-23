@@ -61,7 +61,7 @@ export function useTabSync(): void {
       }
     }
 
-    // 2. Setup LocalStorage fallback (Legacy/Compatible)
+    // 2. Setup LocalStorage fallback when BroadcastChannel is unavailable
     const onStorage = (event: StorageEvent) => {
       if (event.key !== SYNC_CHANNEL || !event.newValue) return
       try {

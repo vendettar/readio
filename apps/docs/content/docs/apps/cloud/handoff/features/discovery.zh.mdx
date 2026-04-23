@@ -6,6 +6,7 @@ title: 播客发现 (Explore)
 
 - 路由：`/explore`、`/podcast/$country/$id`、`/podcast/$country/$id/$episodeKey`
 - 标识契约：节目路由使用数值型 `podcastItunesId`；单集路由使用基于稳定单集身份生成的 compact key。UUID 形态的身份继续沿用旧的 22 字符 `base64url` 形式，非 UUID 身份则使用新的通用 compact 形式。
+- 路由国家契约：对于会从 browser-local 记录深链回内容路由的入口（Favorites、History、Downloads 以及其他 library 来源 surface），持久化的 `countryAtSave` 属于 route identity 的一部分。生成路由时必须复用保存下来的 `countryAtSave`，不能静默替换成当前全局 content region。
 - Hybrid 边界：
   - Search / Top Shows / Top Episodes 的首跳：Apple
   - Editor's Picks 的首跳：PodcastIndex `podcasts-batch-byguid`

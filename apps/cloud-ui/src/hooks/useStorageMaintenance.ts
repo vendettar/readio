@@ -59,7 +59,7 @@ export function useStorageMaintenance({ reload }: UseStorageMaintenanceOptions) 
       await clearDictCacheMemory()
       localStorage.removeItem(SETTINGS_STORAGE_KEY)
 
-      // 3. Best-effort cleanup for any legacy data
+      // 3. Best-effort cleanup for obsolete browser-only storage keys
       localStorage.removeItem('readio-user-credentials')
 
       toast.successKey('toastAllDataCleared')

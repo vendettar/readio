@@ -6,6 +6,7 @@ title: 单集解析契约
 
 - 节目路由 SSOT：数值型 `podcastItunesId`
 - 单集路由 SSOT：基于稳定单集身份生成的 compact key。UUID 身份继续沿用旧的 22 字符 key，非 UUID 身份则使用通用 compact 形式。
+- 来自 Library 的深链还必须保留路由国家。如果 Favorites / History / Downloads / 本地持久化记录里带有 `countryAtSave`，解析时必须使用这个已保存的路由国家，而不是当前全局 content region。
 
 ## 2. 解析顺序
 

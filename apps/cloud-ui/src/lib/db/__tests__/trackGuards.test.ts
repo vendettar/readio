@@ -49,7 +49,7 @@ describe('Track Type Guards and Delete Protection', () => {
       expect(track?.sourceType).toBe(TRACK_SOURCE.PODCAST_DOWNLOAD)
     })
 
-    it('deletePodcastDownload blocks user_upload deletion', async () => {
+    it('removePodcastDownloadWithCleanup blocks user_upload deletion', async () => {
       const uploadId = await DB.addFileTrack({
         name: 'Upload',
         audioId: 'a2',
@@ -57,8 +57,8 @@ describe('Track Type Guards and Delete Protection', () => {
         folderId: null,
       })
 
-      // Try to delete via deletePodcastDownload
-      await DB.deletePodcastDownload(uploadId)
+      // Try to delete via podcast-download cleanup path
+      await DB.removePodcastDownloadWithCleanup(uploadId)
 
       // Should still exist
       const track = await db.tracks.get(uploadId)
@@ -66,7 +66,7 @@ describe('Track Type Guards and Delete Protection', () => {
       expect(track?.sourceType).toBe(TRACK_SOURCE.USER_UPLOAD)
     })
 
-    it('deletePodcastDownload clears local session refs and removes unreferenced blob', async () => {
+    it('removePodcastDownloadWithCleanup clears local session refs and removes unreferenced blob', async () => {
       const audioId = await DB.addAudioBlob(new Blob(['audio']), 'download.mp3')
       const downloadId = await DB.addPodcastDownload({
         name: 'Download',
@@ -87,7 +87,7 @@ describe('Track Type Guards and Delete Protection', () => {
         localTrackId: downloadId,
       })
 
-      await DB.deletePodcastDownload(downloadId)
+      await DB.removePodcastDownloadWithCleanup(downloadId)
 
       const session = await db.playback_sessions.get('session-local-download')
       expect(session?.localTrackId).toBeNull()
@@ -97,7 +97,7 @@ describe('Track Type Guards and Delete Protection', () => {
       expect(await db.audioBlobs.get(audioId)).toBeUndefined()
     })
 
-    it('deletePodcastDownload preserves blob when still referenced by explore session', async () => {
+    it('removePodcastDownloadWithCleanup preserves blob when still referenced by explore session', async () => {
       const audioId = await DB.addAudioBlob(new Blob(['audio']), 'shared.mp3')
       const downloadId = await DB.addPodcastDownload({
         name: 'Download',
@@ -118,7 +118,7 @@ describe('Track Type Guards and Delete Protection', () => {
         localTrackId: null,
       })
 
-      await DB.deletePodcastDownload(downloadId)
+      await DB.removePodcastDownloadWithCleanup(downloadId)
 
       const session = await db.playback_sessions.get('session-explore-shared')
       expect(session?.audioId).toBe(audioId)

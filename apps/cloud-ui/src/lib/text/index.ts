@@ -20,7 +20,7 @@ export function normalizeInteractiveWord(token: string): string {
  * Splits text into tokens (words and separators) while preserving delimiters.
  *
  * Phase 1 behavior guard:
- * - If language is omitted, keep deterministic legacy fallback behavior.
+ * - If language is omitted, keep deterministic fallback tokenization.
  * - Locale-aware segmentation is opt-in via explicit language param.
  */
 export function tokenize(text: string, language?: string): string[] {

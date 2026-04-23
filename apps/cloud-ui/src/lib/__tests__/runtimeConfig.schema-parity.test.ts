@@ -69,10 +69,10 @@ describe('runtimeConfig schema parity', () => {
     expect(config.MAX_CONCURRENT_REQUESTS).toBe(DEFAULTS.MAX_CONCURRENT_REQUESTS)
   })
 
-  it('accepts the English-specific dictionary env key and ignores the legacy generic key', async () => {
+  it('accepts the English-specific dictionary env key and ignores the obsolete generic key', async () => {
     const env = {} as Window['__READIO_ENV__'] & Record<string, string>
     env.READIO_EN_DICTIONARY_API_URL = 'https://english.example/api/'
-    env.READIO_DICTIONARY_API_URL = 'https://legacy.example/api/'
+    env.READIO_DICTIONARY_API_URL = 'https://obsolete.example/api/'
     window.__READIO_ENV__ = env
 
     const { getAppConfig, DEFAULTS } = await import('../runtimeConfig')
@@ -80,14 +80,14 @@ describe('runtimeConfig schema parity', () => {
 
     expect(config.EN_DICTIONARY_API_URL).toBe('https://english.example/api/')
 
-    const legacyOnlyEnv = {} as Window['__READIO_ENV__'] & Record<string, string>
-    legacyOnlyEnv.READIO_DICTIONARY_API_URL = 'https://legacy-only.example/api/'
-    window.__READIO_ENV__ = legacyOnlyEnv
+    const obsoleteOnlyEnv = {} as Window['__READIO_ENV__'] & Record<string, string>
+    obsoleteOnlyEnv.READIO_DICTIONARY_API_URL = 'https://obsolete-only.example/api/'
+    window.__READIO_ENV__ = obsoleteOnlyEnv
     vi.resetModules()
 
-    const { getAppConfig: getAppConfigWithLegacyOnly } = await import('../runtimeConfig')
-    const legacyOnlyConfig = getAppConfigWithLegacyOnly()
-    expect(legacyOnlyConfig.EN_DICTIONARY_API_URL).toBe(DEFAULTS.EN_DICTIONARY_API_URL)
+    const { getAppConfig: getAppConfigWithObsoleteOnly } = await import('../runtimeConfig')
+    const obsoleteOnlyConfig = getAppConfigWithObsoleteOnly()
+    expect(obsoleteOnlyConfig.EN_DICTIONARY_API_URL).toBe(DEFAULTS.EN_DICTIONARY_API_URL)
   })
 
   it('surfaces invalid toggle tokens and fails closed (no all-open fallback)', async () => {

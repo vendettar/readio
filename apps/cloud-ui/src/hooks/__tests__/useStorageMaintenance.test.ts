@@ -59,11 +59,11 @@ describe('useStorageMaintenance', () => {
     localStorage.clear()
   })
 
-  it('wipeAll clears db and local settings/legacy key', async () => {
+  it('wipeAll clears db and local settings/obsolete browser-only key', async () => {
     localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify({ proxyUrl: 'https://proxy.local' }))
-    const LEGACY_STORAGE_KEY = 'readio-user-credentials'
+    const OBSOLETE_BROWSER_STORAGE_KEY = 'readio-user-credentials'
     localStorage.setItem(
-      LEGACY_STORAGE_KEY,
+      OBSOLETE_BROWSER_STORAGE_KEY,
       JSON.stringify({ translateKey: 'sk-test', groqKey: 'gsk_test' })
     )
 
@@ -87,7 +87,7 @@ describe('useStorageMaintenance', () => {
       expect(stored).toBeNull()
     }
 
-    expect(localStorage.getItem(LEGACY_STORAGE_KEY)).toBeNull()
+    expect(localStorage.getItem(OBSOLETE_BROWSER_STORAGE_KEY)).toBeNull()
     expect(reload).toHaveBeenCalledTimes(1)
     expect(toastSuccessKeyMock).toHaveBeenCalledWith('toastAllDataCleared')
   })

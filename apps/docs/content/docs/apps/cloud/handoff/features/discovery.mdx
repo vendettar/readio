@@ -6,6 +6,7 @@ title: Discovery & Explore
 
 - Routes: `/explore`, `/podcast/$country/$id`, `/podcast/$country/$id/$episodeKey`.
 - Identifier contract: show routes use numeric `podcastItunesId`; episode routes use a compact key derived from stable episode identity. Canonical UUID identities retain the legacy 22-character `base64url` form, while non-UUID identities use the newer generic compact form.
+- Route country contract: for browser-local records that deep-link back into content routes (Favorites, History, Downloads, other library-origin surfaces), saved `countryAtSave` is part of route identity. Route generation must reuse the persisted `countryAtSave` and must not silently substitute the current global content region.
 - Hybrid boundary:
   - Search / Top Shows / Top Episodes first-hop: Apple
   - Editor's Picks first-hop: PodcastIndex `podcasts-batch-byguid`

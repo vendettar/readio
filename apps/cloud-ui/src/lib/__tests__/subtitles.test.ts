@@ -1,9 +1,9 @@
 // src/__tests__/subtitles.test.ts
 import { describe, expect, it } from 'vitest'
-import { findSubtitleIndex, formatTimeLabel, parseSrt, parseSubtitles } from '../subtitles'
+import { findSubtitleIndex, formatTimeLabel, parseSubtitles } from '../subtitles'
 
 describe('Subtitle Module', () => {
-  describe('parseSrt', () => {
+  describe('parseSubtitles (SRT)', () => {
     it('should correctly parse valid SRT content', () => {
       const srtContent = `1
 00:00:01,000 --> 00:00:04,000
@@ -13,7 +13,7 @@ Hello World
 00:00:05,000 --> 00:00:08,000
 Second Line`
 
-      const result = parseSrt(srtContent)
+      const result = parseSubtitles(srtContent)
 
       expect(result).toHaveLength(2)
       expect(result[0]).toMatchObject({
@@ -29,14 +29,14 @@ Second Line`
 00:00:01,000 --> 00:00:04,000
 <i>Italic</i> and <b>Bold</b>`
 
-      const result = parseSrt(srtContent)
+      const result = parseSubtitles(srtContent)
       // Note: React version keeps HTML tags; rendering handles display
       expect(result[0].text).toContain('Italic')
       expect(result[0].text).toContain('Bold')
     })
 
     it('should return empty array for empty input', () => {
-      expect(parseSrt('')).toEqual([])
+      expect(parseSubtitles('')).toEqual([])
     })
 
     it('should handle multiline subtitles', () => {
@@ -45,7 +45,7 @@ Second Line`
 Line one
 Line two`
 
-      const result = parseSrt(srtContent)
+      const result = parseSubtitles(srtContent)
       expect(result[0].text).toBe('Line one\nLine two')
     })
 
@@ -58,7 +58,7 @@ This should be skipped
 00:00:05,000 --> 00:00:08,000
 Valid subtitle`
 
-      const result = parseSrt(srtContent)
+      const result = parseSubtitles(srtContent)
       expect(result).toHaveLength(1)
       expect(result[0].text).toBe('Valid subtitle')
     })
@@ -68,7 +68,7 @@ Valid subtitle`
 00:00:01.000 --> 00:00:04.000
 Dot notation`
 
-      const result = parseSrt(srtContent)
+      const result = parseSubtitles(srtContent)
       expect(result).toHaveLength(1)
       expect(result[0].start).toBe(1)
       expect(result[0].end).toBe(4)
@@ -78,7 +78,7 @@ Dot notation`
       const srtContent = `00:00:01,000 --> 00:00:04,000
 No index number`
 
-      const result = parseSrt(srtContent)
+      const result = parseSubtitles(srtContent)
       expect(result).toHaveLength(1)
       expect(result[0].text).toBe('No index number')
     })
@@ -97,7 +97,7 @@ Second
 
 `
 
-      const result = parseSrt(srtContent)
+      const result = parseSubtitles(srtContent)
       expect(result).toHaveLength(2)
       expect(result[0].text).toBe('First')
       expect(result[1].text).toBe('Second')
@@ -106,7 +106,7 @@ Second
     it('should handle Windows line endings (CRLF)', () => {
       const srtContent = `1\r\n00:00:01,000 --> 00:00:04,000\r\nWindows format`
 
-      const result = parseSrt(srtContent)
+      const result = parseSubtitles(srtContent)
       expect(result).toHaveLength(1)
       expect(result[0].text).toBe('Windows format')
     })
@@ -116,7 +116,7 @@ Second
 00:00:00,100 --> 00:00:00,200
 Quick flash`
 
-      const result = parseSrt(srtContent)
+      const result = parseSubtitles(srtContent)
       expect(result).toHaveLength(1)
       expect(result[0].start).toBe(0.1)
       expect(result[0].end).toBe(0.2)
@@ -127,7 +127,7 @@ Quick flash`
 02:30:15,500 --> 02:30:20,000
 Long movie`
 
-      const result = parseSrt(srtContent)
+      const result = parseSubtitles(srtContent)
       expect(result).toHaveLength(1)
       expect(result[0].start).toBe(2 * 3600 + 30 * 60 + 15.5)
       expect(result[0].end).toBe(2 * 3600 + 30 * 60 + 20)

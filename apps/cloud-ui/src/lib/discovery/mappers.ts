@@ -4,7 +4,7 @@ import type { FeedEpisode } from './schema'
 /**
  * Common episode fields shared by playback/favorite bridge code.
  * This is intentionally broader than the canonical RSS contract because
- * local/session records may still carry persistence-only provider identity.
+ * local/session records are partial persistence snapshots, not feed payloads.
  */
 export type EpisodeCommonFields = {
   title?: string

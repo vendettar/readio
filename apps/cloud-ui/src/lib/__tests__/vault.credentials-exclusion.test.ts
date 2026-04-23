@@ -22,7 +22,7 @@ describe('vault credential exclusion', () => {
     expect(serialized).not.toMatch(/provider_[a-z0-9_]+_key/)
   })
 
-  it('does not import or overwrite credentials table from vault input', async () => {
+  it('rejects vault input with unknown top-level data fields', async () => {
     await db.credentials.put({
       key: 'provider_groq_key',
       value: 'gsk_existing',
@@ -44,7 +44,7 @@ describe('vault credential exclusion', () => {
       },
     }
 
-    await importVault(withCredentialPayload)
+    await expect(importVault(withCredentialPayload)).rejects.toThrow('Invalid vault format')
     const credential = await db.credentials.get('provider_groq_key')
     expect(credential?.value).toBe('gsk_existing')
   })

@@ -404,32 +404,6 @@ describe('DownloadsRepository', () => {
     })
   })
 
-  describe('getActiveSubtitleByTrackId', () => {
-    it('returns the active subtitle content', async () => {
-      const { trackId } = await createDownloadWithSubtitles(2, {
-        activeId: 'file-sub-0',
-      })
-
-      const result = await DownloadsRepository.getActiveSubtitleByTrackId(trackId)
-      expect(result).toBeDefined()
-      expect(result?.fileSub.id).toBe('file-sub-0')
-      expect(result?.subtitle.cues[0].text).toContain('sub content 0')
-    })
-
-    it('returns newest ready subtitle when no active subtitle is set', async () => {
-      const { trackId } = await createDownloadWithSubtitles(1)
-
-      const result = await DownloadsRepository.getActiveSubtitleByTrackId(trackId)
-      expect(result).toBeDefined()
-      expect(result?.fileSub.id).toBe('file-sub-0')
-    })
-
-    it('returns undefined when no subtitle exists', async () => {
-      const result = await DownloadsRepository.getActiveSubtitleByTrackId('non-existent-track')
-      expect(result).toBeUndefined()
-    })
-  })
-
   describe('getReadySubtitlesByTrackId', () => {
     it('returns all ready subtitles with active first', async () => {
       const { trackId } = await createDownloadWithSubtitles(2)

@@ -199,11 +199,6 @@ function parseFlexibleTimestamp(value: unknown): number | null {
 }
 
 /**
- * Backward compatibility alias
- */
-export const parseSrt = parseSubtitles
-
-/**
  * Parse time string to seconds
  */
 function parseTime(timeStr: string): number {

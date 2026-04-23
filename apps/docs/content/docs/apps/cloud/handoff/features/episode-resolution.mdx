@@ -6,6 +6,7 @@ title: Episode Resolution Contract
 
 - Show route SSOT: numeric `podcastItunesId`
 - Episode route SSOT: compact key derived from stable episode identity. UUID identities keep the legacy 22-character key; non-UUID identities use the generic compact form.
+- Library-origin deep links must also preserve route country. If a Favorites / History / Downloads / local persisted record carries `countryAtSave`, resolution must use that saved route country rather than the current global content region.
 
 ## 2. Resolution Order
 

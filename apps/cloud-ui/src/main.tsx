@@ -17,8 +17,6 @@ if (typeof window !== 'undefined') {
   window.Buffer = window.Buffer || Buffer
 }
 
-// Note: legacy interactions.css and theme-tokens.css are being consolidated/removed
-
 // TanStack Query client configuration
 const queryClient = new QueryClient({
   defaultOptions: {
