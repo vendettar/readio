@@ -534,7 +534,6 @@ const locale = {
   episodeExplicit: '성인 콘텐츠',
   viewOriginal: '원본 보기',
   viewTranscript: '트랜스크립트',
-  viewChapters: '챕터',
   ariaPlayEpisode: '에피소드 재생',
   ariaOpenEpisodeDetail: '에피소드 상세 열기',
   episodeWebpage: '에피소드 웹페이지',

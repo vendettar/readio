@@ -546,7 +546,6 @@ const locale = {
   episodeExplicit: 'Ab 18',
   viewOriginal: 'Original ansehen',
   viewTranscript: 'Transkript',
-  viewChapters: 'Kapitel',
   ariaPlayEpisode: 'Folge abspielen',
   ariaOpenEpisodeDetail: 'Episodendetails öffnen',
   episodeWebpage: 'Episoden-Webseite',

@@ -4,7 +4,6 @@
 import { useCallback, useState } from 'react'
 import { clearAllCredentials } from '../lib/db/credentialsRepository'
 import { DB } from '../lib/dexieDb'
-import { clearDiscoveryMemoryCache, runDiscoveryCacheMaintenance } from '../lib/discovery'
 import { logError } from '../lib/logger'
 import { bumpSettingsWriteEpoch, SETTINGS_STORAGE_KEY } from '../lib/schemas/settings'
 import { clearDictCacheMemory } from '../lib/selection/dictCache'
@@ -57,8 +56,6 @@ export function useStorageMaintenance({ reload }: UseStorageMaintenanceOptions) 
 
       // 2. Clear all persistent storage
       await DB.clearAllData()
-      clearDiscoveryMemoryCache()
-      await runDiscoveryCacheMaintenance()
       await clearDictCacheMemory()
       localStorage.removeItem(SETTINGS_STORAGE_KEY)
 

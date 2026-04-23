@@ -1,0 +1,96 @@
+---
+title: Cloud 错误码
+description: Cloud API 接口（ASR Relay、Discovery、Proxy）错误码参考。
+---
+
+# Cloud 错误码
+
+本页面记录 Cloud API 返回的所有错误码。每个错误响应均为如下 JSON 格式：
+
+```json
+{
+  "code": "ERROR_CODE",
+  "message": "人类可读的描述",
+  "request_id": "十六进制时间戳",
+  "retryAfterMs": 5000
+}
+```
+
+所有错误响应均设置 `Content-Type: application/json; charset=utf-8`。
+
+## ASR Relay（`/api/v1/asr/transcriptions`、`/api/v1/asr/verify`）
+
+| 错误码 | HTTP 状态 | 触发场景 | 排查建议 |
+|--------|-----------|---------|---------|
+| `ASR_INVALID_METHOD` | 405 | 请求方法不是 POST | ASR 端点请使用 POST |
+| `ASR_MISSING_OR_DISALLOWED_ORIGIN` | 403 | 缺少 `Origin` 请求头 | 浏览器必须发送 Origin 头 |
+| `ASR_ORIGIN_NOT_ALLOWED` | 403 | Origin 不在允许列表中 | 检查 `READIO_ASR_ALLOWED_ORIGINS` 环境变量 |
+| `ASR_UNAUTHORIZED` | 401 | 中继令牌无效或缺少 ASR API 密钥 | 验证 `READIO_ASR_RELAY_PUBLIC_TOKEN` 和用户的 ASR 凭据 |
+| `ASR_RATE_LIMITED` | 429 | 超过速率限制 | 检查 `READIO_ASR_RATE_LIMIT_BURST` 和 `READIO_ASR_RATE_LIMIT_WINDOW_MS` |
+| `ASR_INVALID_PAYLOAD` | 400 | 缺少/无效的 multipart 请求体、缺少模型、不支持的模型或传输方式、空音频 | 确认请求包含有效的 `audio` 文件、`provider`、`model` 和 `apiKey` 字段 |
+| `ASR_PAYLOAD_TOO_LARGE` | 413 | 请求体超过 20MB 限制 | 减小音频文件大小 |
+| `ASR_UNSUPPORTED_PROVIDER` | 400 | ASR 提供商未配置 | 检查服务器配置中启用的提供商 |
+| `ASR_CLIENT_ERROR` | 400 | 请求被取消或火山引擎客户端错误 | 重试请求 |
+| `ASR_SERVICE_UNAVAILABLE` | 503 | 上游超时、提供商不可用或内部错误 | 检查上游提供商状态和 Worker 配置 |
+
+## Discovery（`/api/v1/discovery/*`）
+
+| 错误码 | HTTP 状态 | 触发场景 | 排查建议 |
+|--------|-----------|---------|---------|
+| `METHOD_NOT_ALLOWED` | 405 | 非 GET 请求 | Discovery 端点请使用 GET |
+| `NOT_FOUND` | 404 | 未知的 Discovery 端点 | 检查 URL 路径是否在可用路由列表中 |
+| `INVALID_COUNTRY` | 400 | 国家代码不是两位小写字母 | 使用 ISO 3166-1 alpha-2 代码（如 `us`、`gb`） |
+| `INVALID_TERM` | 400 | 搜索词为空 | 提供非空的搜索查询 |
+| `MISSING_URL` | 400 | Feed 查找缺少 URL 参数 | 包含 `url` 查询参数 |
+| `INVALID_URL` | 400 | 无效或不允许的 Feed URL | 确保 URL 是有效的 http/https 且不是私有/保留主机 |
+| `MISSING_ID` | 400 | 缺少必需的 `id` 参数 | 包含 `id` 查询参数 |
+| `INVALID_ID` | 400 | `id` 不是正整数 | ID 必须为正整数 |
+| `INVALID_IDS` | 400 | `ids` 列表包含非整数值 | IDs 必须是以逗号分隔的正整数列表 |
+| `INVALID_LIMIT` | 400 | `limit` 超出允许范围 | Limit 必须在端点允许的最大值范围内 |
+| `UPSTREAM_TIMEOUT` | 504 | iTunes/RSS 上游请求超时 | 延迟后重试；检查上游可用性 |
+| `UPSTREAM_TOO_LARGE` | 502 | 上游响应超过大小限制 | Feed 可能过大；联系上游 |
+| `INVALID_UPSTREAM_PAYLOAD` | 502 | 上游响应不是有效的 JSON | 上游 API 可能返回了 HTML 错误页面 |
+| `INVALID_UPSTREAM_XML` | 502 | 上游响应不是有效的 XML | RSS Feed 可能格式错误 |
+| `UPSTREAM_INVALID_RESPONSE` | 502 | 上游返回非成功状态 | 检查上游 API 健康状态 |
+| `UPSTREAM_REQUEST_FAILED` | 502 | 上游请求失败（网络错误） | 检查到上游的网络连接 |
+
+## Proxy（`/api/proxy`）
+
+| 错误码 | HTTP 状态 | 触发场景 | 排查建议 |
+|--------|-----------|---------|---------|
+| `PROXY_MISSING_URL` | 400 | 请求中未提供 URL | 包含 `url` 参数或 JSON body 字段 |
+| `PROXY_INVALID_URL` | 400 | URL 不是有效的 http/https URL | 确保 URL 格式正确 |
+| `PROXY_USERINFO_NOT_ALLOWED` | 400 | URL 包含 userinfo（`user:pass@host`） | 从 URL 中移除凭据 |
+| `PROXY_INVALID_RANGE` | 400 | Range 头不匹配预期格式 | 使用标准的 `bytes=start-end` 格式 |
+| `PROXY_INVALID_CONTENT_TYPE` | 400 | POST 的 Content-Type 不是 application/json | POST 请求请设置 `Content-Type: application/json` |
+| `PROXY_INVALID_PAYLOAD` | 400 | 请求体格式错误或过大 | 验证 JSON 结构和大小（< 2MB） |
+| `PROXY_MISSING_METHOD` | 400 | JSON body 中未指定 method | 包含 `method` 字段（GET 或 HEAD） |
+| `PROXY_UNSUPPORTED_METHOD` | 400 | 方法不是 GET 或 HEAD | 仅支持 GET 和 HEAD |
+| `PROXY_INVALID_HEADERS` | 400 | 头名称或值为空 | 确保所有转发的头都有非空的名称和值 |
+| `PROXY_UNSUPPORTED_HEADER` | 400 | 头不在允许列表中 | 仅安全头（Accept、Range 等）会被转发 |
+| `PROXY_HOST_NOT_ALLOWED` | 400 | 目标解析为回环/私有 IP | SSRF 防护阻止了内部地址 |
+| `PROXY_RATE_LIMIT_EXCEEDED` | 429 | 超过速率限制突发值 | 检查 `READIO_PROXY_RATE_LIMIT_BURST` |
+| `PROXY_UPSTREAM_TIMEOUT` | 504 | 上游请求超时（10 秒） | 上游响应慢；考虑重试 |
+| `PROXY_CREATE_REQUEST_FAILED` | 502 | 创建上游请求失败 | 内部错误；检查服务器日志 |
+| `PROXY_UPSTREAM_FAILED` | 502 | 上游请求失败 | 网络错误或上游不可用 |
+| `PROXY_METHOD_NOT_ALLOWED` | 405 | HTTP 方法不是 GET/HEAD/POST | 使用支持的方法 |
+| `PROXY_REDIRECT_TOO_LONG` | 502 | 重定向链超过 5 跳 | 目标 URL 重定向次数过多 |
+| `PROXY_RESOLVE_FAILED` | 400 | DNS 解析失败 | 目标主机名无法解析 |
+| `PROXY_DIAL_FAILED` | 502 | 到上游的 TCP 连接失败 | 上游主机不可达 |
+| `PROXY_UNKNOWN_ERROR` | 502 | 未分类的代理错误 | 检查服务器日志获取详细信息 |
+
+## 错误响应字段
+
+- `code`：机器可读的错误码（UPPER_SNAKE_CASE）。在版本间保持稳定。
+- `message`：人类可读的描述。可以安全地展示给用户。
+- `request_id`：本次请求的唯一标识符（十六进制时间戳）。报告问题时请提供。
+- `retryAfterMs`：（可选）建议重试前等待的毫秒数。仅在速率限制响应中出现。
+
+## `error_class` 与 `code` 的区别
+
+Cloud API 维护了两个独立的错误维度：
+
+- **`error_class`**：内部可观测性字段，用于 `slog` 中的指标聚合。低基数、稳定的分类，如 `timeout`、`rate_limit`、`upstream`。不会在 API 响应中返回。
+- **`code`**：公开 API 错误码，在 JSON 响应中返回。用于前端逻辑、运维排查和文档。格式为 UPPER_SNAKE_CASE。
+
+两者永远不会混用或互相替代。

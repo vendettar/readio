@@ -1,6 +1,6 @@
 import type { EpisodeMetadata } from '../../store/playerStore'
 import type { Favorite, PlaybackSession } from '../dexieDb'
-import type { Episode, Podcast, SearchEpisode } from '../discovery'
+import type { FeedEpisode, Podcast, SearchEpisode } from '../discovery'
 import { normalizeFeedUrl } from '../discovery/feedUrl'
 import { getDiscoveryArtworkUrl } from '../imageUtils'
 
@@ -32,13 +32,10 @@ export function resolvePlaybackArtwork(source: string | undefined, size: number 
 }
 
 export function mapFeedEpisodeToPlaybackPayload(
-  episode: Episode,
+  episode: FeedEpisode,
   podcast: Podcast
 ): PlaybackPayload {
-  const artwork = resolvePlaybackArtwork(
-    episode.artworkUrl || podcast.image || podcast.artwork,
-    600
-  )
+  const artwork = resolvePlaybackArtwork(episode.artworkUrl || podcast.artwork, 600)
 
   return {
     audioUrl: episode.audioUrl,
@@ -47,14 +44,16 @@ export function mapFeedEpisodeToPlaybackPayload(
     transcriptUrl: episode.transcriptUrl,
     metadata: {
       description: episode.description,
-      podcastTitle: podcast.title || '',
+      showTitle: podcast.title || '',
       podcastFeedUrl: normalizeFeedUrl(podcast.feedUrl ?? ''),
       artworkUrl: artwork,
       publishedAt: normalizeTimestamp(episode.pubDate),
       durationSeconds: episode.duration || 0,
       episodeGuid: normalizeProviderId(episode.episodeGuid),
       podcastItunesId: normalizeProviderId(podcast.podcastItunesId),
-      providerEpisodeId: normalizeProviderId(episode.providerEpisodeId),
+      // Canonical RSS episodes only preserve stable episode identity (`episodeGuid`).
+      // Provider-specific IDs remain available only on local/history/favorite bridge records.
+      providerEpisodeId: undefined,
       transcriptUrl: episode.transcriptUrl,
     },
   }
@@ -62,10 +61,9 @@ export function mapFeedEpisodeToPlaybackPayload(
 
 export function mapSearchEpisodeToPlaybackPayload(
   episode: SearchEpisode,
-  feedUrl?: string
+  podcastFeedUrl?: string
 ): PlaybackPayload {
-  const artwork = resolvePlaybackArtwork(episode.artwork || episode.image, 600)
-  const providerEpisodeId = normalizeProviderId(episode.providerEpisodeId)
+  const artwork = resolvePlaybackArtwork(episode.artwork, 600)
 
   return {
     audioUrl: episode.episodeUrl,
@@ -73,17 +71,18 @@ export function mapSearchEpisodeToPlaybackPayload(
     artwork,
     transcriptUrl: undefined,
     metadata: {
-      description: episode.description,
-      podcastTitle: episode.podcastTitle || '',
-      podcastFeedUrl: normalizeFeedUrl(feedUrl || episode.feedUrl || ''),
+      description: episode.shortDescription,
+      showTitle: episode.showTitle || '',
+      podcastFeedUrl: normalizeFeedUrl(podcastFeedUrl || ''),
       artworkUrl: artwork,
       publishedAt: normalizeTimestamp(episode.releaseDate),
       durationSeconds: episode.trackTimeMillis
         ? Math.round(episode.trackTimeMillis / 1000)
         : undefined,
-      episodeGuid: normalizeProviderId(episode.episodeGuid) ?? providerEpisodeId,
+      episodeGuid: normalizeProviderId(episode.episodeGuid),
       podcastItunesId: normalizeProviderId(episode.podcastItunesId),
-      providerEpisodeId,
+      // Search first-hop is Apple-only and does not carry canonical provider-side episode identity.
+      providerEpisodeId: undefined,
     },
   }
 }
@@ -98,7 +97,7 @@ export function mapFavoriteToPlaybackPayload(favorite: Favorite): PlaybackPayloa
     transcriptUrl: favorite.transcriptUrl,
     metadata: {
       description: favorite.description,
-      podcastTitle: favorite.podcastTitle,
+      showTitle: favorite.podcastTitle,
       podcastFeedUrl: normalizeFeedUrl(favorite.feedUrl),
       artworkUrl: artwork,
       publishedAt: normalizeTimestamp(favorite.pubDate),
@@ -119,7 +118,7 @@ export function mapPlaybackSessionToEpisodeMetadata(
 
   return {
     description: session.description,
-    podcastTitle: session.podcastTitle,
+    showTitle: session.podcastTitle,
     podcastFeedUrl: session.podcastFeedUrl,
     artworkUrl: artwork,
     publishedAt: normalizeTimestamp(session.publishedAt),

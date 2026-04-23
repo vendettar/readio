@@ -1,0 +1,14 @@
+---
+title: 订阅列表
+---
+
+## 1. 范围
+
+- 路由：`/subscriptions`
+- 主要权威：`apps/cloud-ui/src/store/exploreStore.ts`
+
+## 2. 契约
+
+- 主唯一键：`feedUrl`
+- 保存的节目元数据包含 `podcastItunesId`
+- 订阅状态必须在 Explore、详情页、Subscriptions 页之间保持同步

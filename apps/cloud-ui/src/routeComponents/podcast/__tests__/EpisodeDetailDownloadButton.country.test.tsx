@@ -57,7 +57,7 @@ describe('EpisodeDetailDownloadButton country normalization', () => {
     render(
       <EpisodeDetailDownloadButton
         episodeTitle="Episode"
-        podcastTitle="Podcast"
+        showTitle="Podcast"
         audioUrl="https://example.com/audio.mp3"
         countryAtSave={input}
       />

@@ -1,0 +1,19 @@
+---
+title: 单集解析契约
+---
+
+## 1. 持久身份
+
+- 节目路由 SSOT：数值型 `podcastItunesId`
+- 单集路由 SSOT：基于稳定单集身份生成的 compact key。UUID 身份继续沿用旧的 22 字符 key，非 UUID 身份则使用通用 compact 形式。
+
+## 2. 解析顺序
+
+1. 将 compact key 解码为稳定单集身份
+2. 若已有缓存 RSS，则先按稳定单集身份直接匹配
+3. 请求 PodcastIndex `podcasts/byitunesid`
+4. 按 canonical `feedUrl` 获取 RSS，并按稳定单集身份匹配
+
+## 3. 规则
+
+Cloud 必须保持单集详情解析由后端承载 PI / RSS lookup，不得重新把 Apple supplemental episode resolution 引回主路径。

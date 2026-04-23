@@ -2,7 +2,7 @@
 import { create } from 'zustand'
 import { normalizeCountryCode } from '../constants/app'
 import type { Favorite, Subscription } from '../lib/dexieDb'
-import discovery, { type Episode, type ParsedFeed, type Podcast } from '../lib/discovery'
+import type { FavoriteEpisodeInput, Podcast } from '../lib/discovery'
 import { normalizeFeedUrl } from '../lib/discovery/feedUrl'
 import { isAbortLikeError } from '../lib/fetchUtils'
 import { warn } from '../lib/logger'
@@ -13,9 +13,6 @@ import { getAppConfig } from '../lib/runtimeConfig'
 import { toast } from '../lib/toast'
 import type { TranslationKey } from '../lib/translations'
 
-// Abort controller management for explore requests
-let searchAbortController: AbortController | null = null
-let podcastAbortController: AbortController | null = null
 let hasHydratedCountry = false
 let hasManualCountrySelection = false
 
@@ -64,62 +61,8 @@ function resolveCountryAtSave(
   return requireCountryAtSave(resolvedCountry, operation)
 }
 
-function abortSearch(): void {
-  if (searchAbortController) {
-    searchAbortController.abort()
-    searchAbortController = null
-  }
-}
-
-function abortPodcast(): void {
-  if (podcastAbortController) {
-    podcastAbortController.abort()
-    podcastAbortController = null
-  }
-}
-
-function abortAll(): void {
-  abortSearch()
-  abortPodcast()
-}
-
-function bindExternalAbortSignal(
-  internalController: AbortController,
-  externalSignal?: AbortSignal
-): () => void {
-  if (!externalSignal) return () => {}
-  if (externalSignal.aborted) {
-    internalController.abort()
-    return () => {}
-  }
-
-  const onAbort = () => internalController.abort()
-  externalSignal.addEventListener('abort', onAbort, { once: true })
-  return () => externalSignal.removeEventListener('abort', onAbort)
-}
-
-export type ExploreView = 'search' | 'subscriptions' | 'favorites' | 'podcast' | 'episode'
-
 interface ExploreState {
-  // Modal state
-  isOpen: boolean
-  view: ExploreView
-
-  // Search state
-  searchQuery: string
-  searchResults: Podcast[]
-  searchLoading: boolean
-  searchErrorKey: TranslationKey | null
   country: string
-
-  // Podcast detail state
-  selectedPodcast: Podcast | null
-  podcastFeed: ParsedFeed | null
-  podcastLoading: boolean
-  podcastErrorKey: TranslationKey | null
-
-  // Episode state
-  selectedEpisode: Episode | null
 
   // Subscriptions
   subscriptions: Subscription[]
@@ -130,22 +73,7 @@ interface ExploreState {
   favoritesLoaded: boolean
 
   // Actions
-  open: () => void
-  close: () => void
-  setView: (view: ExploreView) => void
-  setSearchQuery: (query: string) => void
   setCountry: (country: string) => void
-
-  // Search
-  performSearch: (query: string, signal?: AbortSignal) => Promise<void>
-
-  // Podcast
-  selectPodcast: (podcast: Podcast, signal?: AbortSignal) => Promise<void>
-  clearPodcast: () => void
-
-  // Episode
-  selectEpisode: (episode: Episode) => void
-  clearEpisode: () => void
 
   // Subscriptions
   loadSubscriptions: () => Promise<void>
@@ -163,17 +91,18 @@ interface ExploreState {
   loadFavorites: () => Promise<void>
   refreshFavorites: () => Promise<void>
   addFavorite: (
-    podcast: Podcast,
-    episode: Episode,
+    podcast: {
+      feedUrl?: string
+      title?: string
+      artwork?: string
+      podcastItunesId?: string | number
+    },
+    episode: FavoriteEpisodeInput,
     signal?: AbortSignal,
     countryOverride?: string | null
   ) => Promise<void>
   removeFavorite: (key: string, signal?: AbortSignal) => Promise<void>
   isFavorited: (feedUrl: string, audioUrl: string, id?: string, providerId?: string) => boolean
-  // Request ID counters for race condition prevention
-  // Separate counters prevent unrelated operations from canceling each other
-  searchRequestId: number // For search operations
-  podcastRequestId: number // For podcast feed loading
 }
 
 const SETTING_KEY_COUNTRY = 'explore_country'
@@ -223,52 +152,11 @@ export function __testOnlyResetExploreStoreFlags(): void {
 
 export const useExploreStore = create<ExploreState>((set, get) => ({
   // Initial state
-  isOpen: false,
-  view: 'search',
-  searchQuery: '',
-  searchResults: [],
-  searchLoading: false,
-  searchErrorKey: null,
   country: getDefaultCountry(), // Hydrated from IDB on store initialization
-  selectedPodcast: null,
-  podcastFeed: null,
-  podcastLoading: false,
-  podcastErrorKey: null,
-  selectedEpisode: null,
   subscriptions: [],
   subscriptionsLoaded: false,
   favorites: [],
   favoritesLoaded: false,
-  searchRequestId: 0,
-  podcastRequestId: 0,
-
-  // Modal
-  open: () => {
-    set({ isOpen: true, view: 'search' })
-    // Load data from IDB
-    void get()
-      .loadSubscriptions()
-      .catch((err) => {
-        if (!isAbortLikeError(err))
-          warn('[ExploreStore] Failed to load subscriptions on open:', err)
-      })
-    void get()
-      .loadFavorites()
-      .catch((err) => {
-        if (!isAbortLikeError(err)) warn('[ExploreStore] Failed to load favorites on open:', err)
-      })
-  },
-  close: () => {
-    abortAll() // Abort all pending requests when closing modal
-    set({
-      isOpen: false,
-      selectedPodcast: null,
-      podcastFeed: null,
-      selectedEpisode: null,
-    })
-  },
-  setView: (view) => set({ view }),
-  setSearchQuery: (query) => set({ searchQuery: query }),
   setCountry: (country) => {
     const normalizedCountry = normalizeCountryCode(country)
     hasManualCountrySelection = true
@@ -279,111 +167,6 @@ export const useExploreStore = create<ExploreState>((set, get) => ({
       if (!isAbortLikeError(err)) warn('[ExploreStore] Failed to save setting:', err)
     })
   },
-
-  // Search
-  performSearch: async (query, signal) => {
-    // Abort previous search
-    abortSearch()
-
-    // Use incremental counter to avoid Date.now() collision
-    const requestId = get().searchRequestId + 1
-    set({ searchRequestId: requestId })
-
-    if (!query.trim()) {
-      set({ searchResults: [], searchErrorKey: null })
-      return
-    }
-
-    searchAbortController = new AbortController()
-    const internalSignal = searchAbortController.signal
-    const unbindExternalAbort = bindExternalAbortSignal(searchAbortController, signal)
-
-    set({ searchLoading: true, searchErrorKey: null })
-
-    try {
-      // Use state.country instead of hardcoded 'us'
-      // Compose internal and external signals
-      const results = await discovery.searchPodcasts(query, get().country, 30, internalSignal)
-      if (get().searchRequestId !== requestId || internalSignal.aborted) return // Ignore stale response
-      set({ searchResults: results, searchLoading: false })
-    } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        if (get().searchRequestId === requestId) {
-          set({ searchLoading: false })
-        }
-        return
-      }
-      if (get().searchRequestId !== requestId || internalSignal.aborted) return // Ignore stale response
-      if (!isAbortLikeError(error)) {
-        warn('[ExploreStore] Search failed:', error)
-      }
-      set({
-        searchErrorKey: 'errorSearchFailed',
-        searchLoading: false,
-      })
-    } finally {
-      unbindExternalAbort()
-    }
-  },
-
-  // Podcast
-  selectPodcast: async (podcast, signal) => {
-    // Abort previous podcast fetch
-    abortPodcast()
-
-    const requestId = get().podcastRequestId + 1
-    set({
-      selectedPodcast: podcast,
-      view: 'podcast',
-      podcastLoading: true,
-      podcastErrorKey: null,
-      podcastFeed: null,
-      podcastRequestId: requestId,
-    })
-
-    if (!podcast.feedUrl) {
-      set({ podcastErrorKey: 'errorPodcastUnavailable', podcastLoading: false })
-      return
-    }
-
-    podcastAbortController = new AbortController()
-    const internalSignal = podcastAbortController.signal
-    const unbindExternalAbort = bindExternalAbortSignal(podcastAbortController, signal)
-
-    try {
-      const feed = await discovery.fetchPodcastFeed(podcast.feedUrl, internalSignal)
-      if (get().podcastRequestId !== requestId || internalSignal.aborted) return // Ignore stale response
-      set({ podcastFeed: feed, podcastLoading: false })
-    } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        if (get().podcastRequestId === requestId) {
-          set({ podcastLoading: false })
-        }
-        return
-      }
-      if (get().podcastRequestId !== requestId || internalSignal.aborted) return // Ignore stale response
-      if (!isAbortLikeError(error)) {
-        warn('[ExploreStore] Failed to load podcast feed:', error)
-      }
-      set({
-        podcastErrorKey: 'errorLoadEpisodesFailed',
-        podcastLoading: false,
-      })
-    } finally {
-      unbindExternalAbort()
-    }
-  },
-  clearPodcast: () =>
-    set({
-      selectedPodcast: null,
-      podcastFeed: null,
-      podcastErrorKey: null,
-      view: 'search',
-    }),
-
-  // Episode
-  selectEpisode: (episode) => set({ selectedEpisode: episode, view: 'episode' }),
-  clearEpisode: () => set({ selectedEpisode: null, view: 'podcast' }),
 
   // Subscriptions (IndexedDB)
   loadSubscriptions: async () => {
@@ -426,7 +209,7 @@ export const useExploreStore = create<ExploreState>((set, get) => ({
       feedUrl: normalizedFeedUrl,
       title: podcast.title || '',
       author: podcast.author || '',
-      artworkUrl: podcast.image || podcast.artwork || '',
+      artworkUrl: podcast.artwork || '',
       addedAt: Date.now(),
       podcastItunesId:
         podcast.podcastItunesId && String(podcast.podcastItunesId) !== '0'
@@ -560,7 +343,17 @@ export const useExploreStore = create<ExploreState>((set, get) => ({
       }
     })
   },
-  addFavorite: async (podcast, episode, signal, countryOverride) => {
+  addFavorite: async (
+    podcast: {
+      feedUrl?: string
+      title?: string
+      artwork?: string
+      podcastItunesId?: string | number
+    },
+    episode: FavoriteEpisodeInput,
+    signal: AbortSignal | undefined,
+    countryOverride: string | null | undefined
+  ): Promise<void> => {
     if (signal?.aborted) return
     const countryAtSave = resolveCountryAtSave(
       get().country,
@@ -581,7 +374,7 @@ export const useExploreStore = create<ExploreState>((set, get) => ({
       pubDate: episode.pubDate, // Date | undefined is allowed in Favorite
       audioUrl: episode.audioUrl || '',
       durationSeconds: episode.duration || 0,
-      artworkUrl: podcast.image || podcast.artwork || '',
+      artworkUrl: podcast.artwork || '',
       addedAt: Date.now(),
       // Episode metadata for display
       episodeArtworkUrl: episode.artworkUrl,

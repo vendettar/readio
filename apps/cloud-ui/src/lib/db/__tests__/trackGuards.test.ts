@@ -9,15 +9,13 @@ describe('Track Type Guards and Delete Protection', () => {
 
   describe('Type Guards', () => {
     it('correctly identifies user_upload tracks', () => {
-      // biome-ignore lint/suspicious/noExplicitAny: test mock
-      const track: any = { sourceType: TRACK_SOURCE.USER_UPLOAD }
+      const track: unknown = { sourceType: TRACK_SOURCE.USER_UPLOAD }
       expect(isUserUploadTrack(track)).toBe(true)
       expect(isPodcastDownloadTrack(track)).toBe(false)
     })
 
     it('correctly identifies podcast_download tracks', () => {
-      // biome-ignore lint/suspicious/noExplicitAny: test mock
-      const track: any = { sourceType: TRACK_SOURCE.PODCAST_DOWNLOAD }
+      const track: unknown = { sourceType: TRACK_SOURCE.PODCAST_DOWNLOAD }
       expect(isUserUploadTrack(track)).toBe(false)
       expect(isPodcastDownloadTrack(track)).toBe(true)
     })

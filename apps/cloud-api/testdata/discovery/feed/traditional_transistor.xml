@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:podcast="https://podcastindex.org/namespace/1.0">
+  <channel>
+    <title>Build Your SaaS</title>
+    <language>en</language>
+    <itunes:author>Justin Jackson and Jon Buda</itunes:author>
+    <description>Build Your SaaS description</description>
+    <item>
+      <title>What is Transistor's secret weapon?</title>
+      <itunes:episode>164</itunes:episode>
+      <podcast:episode>164</podcast:episode>
+      <itunes:title>What is Transistor's secret weapon?</itunes:title>
+      <itunes:episodeType>full</itunes:episodeType>
+      <guid isPermaLink="false">b34e7e5b-750f-43e1-ab2e-3cc93f7fb5fd</guid>
+      <link>https://share.transistor.fm/s/9c22a01c</link>
+      <pubDate>Fri, 17 Apr 2026 17:26:43 -0700</pubDate>
+      <description><![CDATA[<p>Justin sits down with Helen Ryles and Michael Green, the two people behind almost every chat, email, and demo call that comes into Transistor, to talk about the company's secret weapon.</p>]]></description>
+      <enclosure url="https://2.gum.fm/op3.dev/e/dts.podtrac.com/redirect.mp3/media.transistor.fm/9c22a01c/fa09d122.mp3" length="39793259" type="audio/mpeg"/>
+      <itunes:duration>3500</itunes:duration>
+      <itunes:explicit>no</itunes:explicit>
+    </item>
+  </channel>
+</rss>

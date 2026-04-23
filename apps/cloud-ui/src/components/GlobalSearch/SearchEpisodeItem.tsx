@@ -1,8 +1,10 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { Play, Star } from 'lucide-react'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNetworkStatus } from '../../hooks/useNetworkStatus'
-import discovery, { type Episode, type Podcast, type SearchEpisode } from '../../lib/discovery'
+import { type FavoriteEpisodeInput, type SearchEpisode } from '../../lib/discovery'
+import { ensurePodcastDetail } from '../../lib/discovery/queryCache'
 import { canPlayRemoteStreamWithoutTranscript } from '../../lib/player/remotePlayback'
 import { normalizeCountryParam } from '../../lib/routes/podcastRoutes'
 import { cn } from '../../lib/utils'
@@ -19,25 +21,12 @@ interface SearchEpisodeItemProps {
   onPlayWithoutTranscript?: () => void
 }
 
-function buildPodcastFromSearchEpisode(episode: SearchEpisode): Podcast | null {
-  if (!episode.feedUrl || !episode.podcastTitle || !episode.podcastItunesId) {
-    return null
-  }
-
-  return {
-    title: episode.podcastTitle,
-    feedUrl: episode.feedUrl,
-    podcastItunesId: String(episode.podcastItunesId),
-    image: episode.image,
-    artwork: episode.artwork,
-  }
-}
-
 export function SearchEpisodeItem({
   episode,
   onPlay,
   onPlayWithoutTranscript,
 }: SearchEpisodeItemProps) {
+  const queryClient = useQueryClient()
   const { t, i18n } = useTranslation()
   const language = i18n.resolvedLanguage ?? i18n.language
   const { isOnline } = useNetworkStatus()
@@ -52,7 +41,6 @@ export function SearchEpisodeItem({
     !!onPlayWithoutTranscript &&
     canPlayRemoteStreamWithoutTranscript({ audioUrl: episode.episodeUrl }, isOnline)
 
-  // SearchEpisode might not have feedUrl, so we check favorites by audioUrl
   const favoritedItem = favorites.find((f) => f.audioUrl === episode.episodeUrl)
   const favorited = !!favoritedItem
 
@@ -66,23 +54,21 @@ export function SearchEpisodeItem({
       if (!podcastItunesId) {
         throw new Error('Missing podcastItunesId for metadata lookup')
       }
-      const podcast =
-        buildPodcastFromSearchEpisode(episode) ??
-        (await discovery.getPodcastIndexPodcastByItunesId(String(podcastItunesId)))
+      const podcast = await ensurePodcastDetail(
+        queryClient,
+        String(podcastItunesId),
+        globalCountry
+      )
       if (!podcast) throw new Error('Podcast not found')
 
-      const episodeObj: Episode = {
-        id: episode.episodeGuid ?? episode.providerEpisodeId?.toString() ?? episode.episodeUrl,
+      const episodeObj: FavoriteEpisodeInput = {
         title: episode.title || '',
-        description: episode.description || '',
+        description: episode.shortDescription || '',
         audioUrl: episode.episodeUrl,
-        pubDate: episode.releaseDate || '',
-        artworkUrl: episode.artwork || episode.image,
+        pubDate: '',
+        artworkUrl: episode.artwork,
         duration: (episode.trackTimeMillis || 0) / 1000,
-        feedUrl: episode.feedUrl || podcast.feedUrl,
-        providerEpisodeId: episode.providerEpisodeId?.toString(),
         episodeGuid: episode.episodeGuid,
-        podcastItunesId: String(podcastItunesId),
       }
       return { podcast, episode: episodeObj }
     },

@@ -3,6 +3,10 @@ import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { SearchEpisodeItem } from '../SearchEpisodeItem'
 
+vi.mock('@tanstack/react-query', () => ({
+  useQueryClient: () => ({}),
+}))
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) => key,
@@ -63,7 +67,9 @@ vi.mock('../../../lib/dateUtils', () => ({
 }))
 
 vi.mock('../../../lib/discovery', () => ({
-  default: { getPodcastIndexPodcastByItunesId: vi.fn() },
+  default: {
+    getPodcastIndexPodcastByItunesId: vi.fn(),
+  },
 }))
 
 vi.mock('../../../lib/htmlUtils', () => ({
@@ -79,21 +85,18 @@ vi.mock('../../../lib/toast', () => ({
 }))
 
 describe('SearchEpisodeItem URL hygiene', () => {
-  it('builds canonical episode links without query hints', () => {
+  it('does not build a direct episode route from first-hop search payload alone', () => {
     render(
       <SearchEpisodeItem
         episode={{
-          id: 'episode-id-42',
-          providerEpisodeId: '42',
           podcastItunesId: '7',
-          episodeGuid: '75f3241b-439d-4786-8968-07e05e548074',
           title: 'Episode Name',
-          podcastTitle: 'Show Name',
-          author: 'Host',
+          showTitle: 'Show Name',
           episodeUrl: 'https://example.com/audio.mp3',
+          episodeGuid: 'guid-1',
           releaseDate: '2025-01-01T00:00:00Z',
-          description: 'desc',
-          image: 'https://example.com/artwork-100.jpg',
+          trackTimeMillis: 61000,
+          shortDescription: 'desc',
           artwork: 'https://example.com/artwork-600.jpg',
         }}
         onPlay={() => {}}
@@ -102,17 +105,35 @@ describe('SearchEpisodeItem URL hygiene', () => {
 
     expect(screen.getByRole('button', { name: 'Episode Name' })).toBeTruthy()
 
-    expect(screen.getByTestId('route-to').textContent).toBe('/podcast/$country/$id/$episodeKey')
+    expect(screen.getByTestId('route-to').textContent).toBe('')
     const routeParamsText = screen.getByTestId('route-params').textContent ?? '{}'
-    const routeParams = JSON.parse(routeParamsText) as {
-      country?: string
-      id?: string
-      episodeKey?: string
-    }
-    expect(routeParams.country).toBe('us')
-    expect(routeParams.id).toBe('7')
-    expect(routeParams.episodeKey).toBe('dfMkG0OdR4aJaAfgXlSAdA')
+    expect(routeParamsText).toBe('{}')
     expect(screen.getByTestId('route-search').textContent).toBe('undefined')
+  })
+
+  it('returns null route for first-hop search payload alone', () => {
+    render(
+      <SearchEpisodeItem
+        episode={{
+          podcastItunesId: '7',
+          title: 'Episode Without GUID',
+          showTitle: 'Show Name',
+          episodeUrl: 'https://example.com/audio2.mp3',
+          episodeGuid: 'guid-2',
+          releaseDate: '2025-01-02T00:00:00Z',
+          trackTimeMillis: 62000,
+          shortDescription: 'desc',
+          artwork: 'https://example.com/artwork-600.jpg',
+        }}
+        onPlay={() => {}}
+      />
+    )
+
+    expect(screen.getByRole('button', { name: 'Episode Without GUID' })).toBeTruthy()
+
+    expect(screen.getByTestId('route-to').textContent).toBe('')
+    const routeParamsText = screen.getByTestId('route-params').textContent ?? '{}'
+    expect(routeParamsText).toBe('{}')
   })
 
   it('uses play semantics for non-artwork play affordance', () => {
@@ -121,18 +142,15 @@ describe('SearchEpisodeItem URL hygiene', () => {
     render(
       <SearchEpisodeItem
         episode={{
-          id: 'episode-id-43',
-          providerEpisodeId: '43',
           podcastItunesId: '7',
-          episodeGuid: 'episode-guid-43',
           title: 'Episode Without Artwork',
-          podcastTitle: 'Show Name',
-          author: 'Host',
+          showTitle: 'Show Name',
           episodeUrl: 'https://example.com/audio-2.mp3',
+          episodeGuid: 'guid-3',
           releaseDate: '2025-01-01T00:00:00Z',
-          description: 'desc',
-          image: '',
-          artwork: '',
+          trackTimeMillis: 63000,
+          shortDescription: 'desc',
+          artwork: 'https://example.com/artwork-600.jpg',
         }}
         onPlay={onPlay}
       />

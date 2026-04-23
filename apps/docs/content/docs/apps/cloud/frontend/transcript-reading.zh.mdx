@@ -1,0 +1,18 @@
+---
+title: 字幕交互系统
+---
+
+## 1. 范围
+
+Cloud 仍然通过 `TranscriptView` 和 AppShell 阅读区提供 transcript-first 阅读界面。
+
+## 2. 核心契约
+
+- transcript 交互仍是 browser-local、frontend-owned
+- 单词查词、选区菜单、transcript 高亮仍然是一级 UI 行为
+- transcript 交互不得破坏播放暂停/恢复语义
+- 语言感知分词仍然是 transcript 渲染契约的一部分
+
+## 3. 已下载字幕来源
+
+已下载单集可能拥有多个字幕版本；当前激活字幕的解析必须继续遵循本地 track/download 记录中的 active subtitle source。

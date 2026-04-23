@@ -1,11 +1,9 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { buildEpisodeCompactKey } from '../../../lib/discovery/editorPicks'
 import { PodcastEpisodesGrid } from '../PodcastEpisodesGrid'
 
 const navigateMock = vi.fn()
-const getPodcastIndexEpisodesMock = vi.fn()
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -18,12 +16,6 @@ vi.mock('@tanstack/react-router', () => ({
 vi.mock('../../../store/exploreStore', () => ({
   useExploreStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({ country: 'us' }),
-}))
-
-vi.mock('../../../lib/discovery', () => ({
-  default: {
-    getPodcastIndexEpisodes: (...args: unknown[]) => getPodcastIndexEpisodesMock(...args),
-  },
 }))
 
 vi.mock('../../../hooks/useCarouselLayout', () => ({
@@ -72,34 +64,20 @@ vi.mock('../CarouselNavigation', () => ({
   CarouselNavigation: () => null,
 }))
 
-describe('PodcastEpisodesGrid URL hygiene', () => {
+describe('PodcastEpisodesGrid navigation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })
 
-  it('navigates top episodes to canonical podcastItunesId plus compact key routes after PI enrichment', async () => {
-    getPodcastIndexEpisodesMock.mockResolvedValueOnce([
-      {
-        id: '75f3241b-439d-4786-8968-07e05e548074',
-        title: 'Different PI Title',
-        description: '',
-        audioUrl: 'https://cdn.apple.example.com/audio/top-episode.mp3?signature=pi',
-        pubDate: '2024-01-01T00:00:00.000Z',
-        episodeGuid: '75f3241b-439d-4786-8968-07e05e548074',
-      },
-    ])
-
+  it('navigates directly to the show route using podcastItunesId', async () => {
     render(
       <PodcastEpisodesGrid
         episodes={
           [
             {
-              id: 'episode-1',
-              name: 'Top Episode',
-              artistName: 'Host',
-              artworkUrl100: 'https://example.com/art.jpg',
-              url: 'https://podcasts.apple.com/us/podcast/example/id12345?i=episode-1',
-              audioUrl: 'https://cdn.apple.example.com/audio/top-episode.mp3?token=apple',
+              title: 'Top Episode',
+              author: 'Host',
+              artwork: 'https://example.com/art.jpg',
               podcastItunesId: '12345',
               genres: [],
             },
@@ -109,43 +87,6 @@ describe('PodcastEpisodesGrid URL hygiene', () => {
     )
 
     fireEvent.click(screen.getByRole('button', { name: 'Top Episode' }))
-
-    await waitFor(() => {
-      expect(getPodcastIndexEpisodesMock).toHaveBeenCalledWith('12345', 60, undefined)
-    })
-    expect(navigateMock).toHaveBeenCalledWith({
-      to: '/podcast/$country/$id/$episodeKey',
-      params: {
-        country: 'us',
-        id: '12345',
-        episodeKey: buildEpisodeCompactKey('75f3241b-439d-4786-8968-07e05e548074'),
-      },
-    })
-  })
-
-  it('falls back to the show route when PI enrichment fails', async () => {
-    getPodcastIndexEpisodesMock.mockRejectedValueOnce(new Error('network down'))
-
-    render(
-      <PodcastEpisodesGrid
-        episodes={
-          [
-            {
-              id: 'episode-1',
-              name: 'Top Episode',
-              artistName: 'Host',
-              artworkUrl100: 'https://example.com/art.jpg',
-              url: 'https://podcasts.apple.com/us/podcast/example/id12345?i=episode-1',
-              audioUrl: 'https://cdn.apple.example.com/audio/top-episode.mp3?token=apple',
-              podcastItunesId: '12345',
-              genres: [],
-            },
-          ] as never
-        }
-      />
-    )
-
-    fireEvent.click(screen.getByRole('button', { name: 'artwork' }))
 
     await waitFor(() => {
       expect(navigateMock).toHaveBeenCalledWith({

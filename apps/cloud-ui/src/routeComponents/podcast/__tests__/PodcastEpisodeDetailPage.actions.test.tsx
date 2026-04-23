@@ -1,31 +1,35 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { FeedEpisode } from '../../../lib/discovery'
+import {
+  makeFeedEpisode,
+  makePodcast,
+} from '../../../lib/discovery/__tests__/fixtures'
 import PodcastEpisodeDetailPage from '../PodcastEpisodeDetailPage'
+import type { ExpandableDescriptionProps } from '../../../components/ui/expandable-description'
 
 const addFavoriteMock = vi.fn()
 const removeFavoriteMock = vi.fn()
 const playEpisodeMock = vi.fn()
+const episodeDetailDownloadButtonPropsSpy = vi.fn()
+const expandableDescriptionPropsSpy = vi.fn()
 
 let favorited = false
-
-const podcast = {
-  podcastItunesId: 'pod-1',
-  title: 'Podcast Show',
-  author: 'Host',
-  feedUrl: 'https://example.com/feed.xml',
-  artwork: 'https://example.com/art-600.jpg',
-  image: 'https://example.com/art-100.jpg',
-}
-
-const episode = {
-  id: 'ep-1',
+let resolvedEpisode: FeedEpisode = makeFeedEpisode({
+  episodeGuid: 'ep-1',
   title: 'Episode One',
   audioUrl: 'https://example.com/ep-1.mp3',
   pubDate: '2024-01-01T00:00:00.000Z',
   duration: 1200,
   description: 'Episode description',
   descriptionHtml: '<p>Episode description</p>',
-}
+})
+
+const podcast = makePodcast({
+  podcastItunesId: 'pod-1',
+  title: 'Podcast Show',
+  feedUrl: 'https://example.com/feed.xml',
+})
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -45,7 +49,7 @@ vi.mock('@tanstack/react-router', () => ({
 vi.mock('../../../hooks/useEpisodeResolution', () => ({
   useEpisodeResolution: () => ({
     podcast,
-    episode,
+    episode: resolvedEpisode,
     isLoading: false,
     podcastError: null,
     resolutionError: null,
@@ -66,6 +70,20 @@ vi.mock('../../../hooks/useEpisodePlayback', () => ({
   }),
 }))
 
+vi.mock('../../../components/ui/expandable-description', () => ({
+  ExpandableDescription: (props: ExpandableDescriptionProps) => {
+    expandableDescriptionPropsSpy(props)
+    return <div>expandable-description</div>
+  },
+}))
+
+vi.mock('../EpisodeDetailDownloadButton', () => ({
+  EpisodeDetailDownloadButton: (props: Record<string, unknown>) => {
+    episodeDetailDownloadButtonPropsSpy(props)
+    return <div>download-button</div>
+  },
+}))
+
 vi.mock('../../../lib/openExternal', () => ({
   openExternal: vi.fn(),
 }))
@@ -83,10 +101,21 @@ vi.mock('../../../store/exploreStore', () => ({
 describe('PodcastEpisodeDetailPage action wiring', () => {
   beforeEach(() => {
     favorited = false
+    resolvedEpisode = makeFeedEpisode({
+      episodeGuid: 'ep-1',
+      title: 'Episode One',
+      audioUrl: 'https://example.com/ep-1.mp3',
+      pubDate: '2024-01-01T00:00:00.000Z',
+      duration: 1200,
+      description: 'Episode description',
+      descriptionHtml: '<p>Episode description</p>',
+    })
     addFavoriteMock.mockReset()
     removeFavoriteMock.mockReset()
     playEpisodeMock.mockReset()
     navigateMock.mockReset()
+    episodeDetailDownloadButtonPropsSpy.mockReset()
+    expandableDescriptionPropsSpy.mockReset()
   })
 
   it('adds favorite when not favorited', () => {
@@ -116,6 +145,46 @@ describe('PodcastEpisodeDetailPage action wiring', () => {
     fireEvent.click(screen.getByRole('button', { name: 'btnPlayOnly' }))
 
     expect(playEpisodeMock).toHaveBeenCalledTimes(1)
-    expect(playEpisodeMock).toHaveBeenCalledWith(episode, podcast, 'us')
+    expect(playEpisodeMock).toHaveBeenCalledWith(resolvedEpisode, podcast, 'us')
+  })
+
+  it('renders plain-text episode descriptions in plain mode', () => {
+    resolvedEpisode = makeFeedEpisode({
+      episodeGuid: 'ep-plain',
+      title: 'Plain Episode',
+      audioUrl: 'https://example.com/plain.mp3',
+      pubDate: '2024-01-02T00:00:00.000Z',
+      description: 'Line one\nLine two',
+      descriptionHtml: undefined,
+    })
+
+    render(<PodcastEpisodeDetailPage />)
+
+    expect(expandableDescriptionPropsSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: 'Line one\nLine two',
+        mode: 'plain',
+      })
+    )
+  })
+
+  it('renders HTML episode descriptions in html mode when descriptionHtml exists', () => {
+    resolvedEpisode = makeFeedEpisode({
+      episodeGuid: 'ep-html',
+      title: 'HTML Episode',
+      audioUrl: 'https://example.com/html.mp3',
+      pubDate: '2024-01-03T00:00:00.000Z',
+      description: 'Plain fallback',
+      descriptionHtml: '<p><strong>Rich</strong> description</p>',
+    })
+
+    render(<PodcastEpisodeDetailPage />)
+
+    expect(expandableDescriptionPropsSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: '<p><strong>Rich</strong> description</p>',
+        mode: 'html',
+      })
+    )
   })
 })

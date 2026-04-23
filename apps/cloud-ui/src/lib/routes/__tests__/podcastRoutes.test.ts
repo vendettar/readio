@@ -12,10 +12,10 @@ describe('podcastRoutes', () => {
       expect(normalizeCountryParam(' Jp ')).toBe('jp')
     })
 
-    it('returns null for unsupported countries', () => {
-      expect(normalizeCountryParam('xx')).toBeNull()
-      expect(normalizeCountryParam('')).toBeNull()
-      expect(normalizeCountryParam(undefined)).toBeNull()
+    it('returns undefined for unsupported countries', () => {
+      expect(normalizeCountryParam('xx')).toBeUndefined()
+      expect(normalizeCountryParam('')).toBeUndefined()
+      expect(normalizeCountryParam(undefined)).toBeUndefined()
     })
   })
 
@@ -51,7 +51,7 @@ describe('podcastRoutes', () => {
 
     expect(
       buildPodcastEpisodeRoute({
-        country: null,
+        country: undefined,
         podcastId: '1234',
         episodeKey: 'dm8RLqvNEjRWeAfgXlSAdA',
       })

@@ -1,7 +1,8 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createQueryClientWrapper } from '../../__tests__/queryClient'
 import { DB, type Favorite } from '../../lib/dexieDb'
-import type { Episode, Podcast } from '../../lib/discovery'
+import type { FeedEpisode, Podcast } from '../../lib/discovery'
 import {
   __resetRemoteTranscriptStateForTests,
   normalizeTranscriptUrl,
@@ -29,14 +30,14 @@ vi.mock('../../lib/logger', () => ({
 }))
 
 function makeEpisode(
-  overrides: Partial<Episode> &
-    Pick<Episode, 'audioUrl' | 'title' | 'id' | 'description' | 'pubDate'>
-): Episode {
-  const { audioUrl, title, id, description, pubDate, ...rest } = overrides
+  overrides: Partial<FeedEpisode> &
+    Pick<FeedEpisode, 'audioUrl' | 'title' | 'episodeGuid' | 'description' | 'pubDate'>
+): FeedEpisode {
+  const { audioUrl, title, episodeGuid, description, pubDate, ...rest } = overrides
   return {
     audioUrl,
     title,
-    id,
+    episodeGuid,
     description,
     pubDate,
     ...rest,
@@ -47,6 +48,15 @@ function makePodcast(overrides: Partial<Podcast> = {}): Podcast {
   return {
     podcastItunesId: '100',
     title: 'Podcast',
+    author: 'Host',
+    artwork: 'https://example.com/art.jpg',
+    description: 'A podcast',
+    feedUrl: 'https://example.com/feed.xml',
+    lastUpdateTime: 1613394044,
+    episodeCount: 50,
+    language: 'en',
+    genres: ['Technology'],
+    dead: false,
     ...overrides,
   }
 }
@@ -94,7 +104,9 @@ Hello transcript
     })
     const podcast = makePodcast({ feedUrl: 'https://example.com/feed.xml' })
 
-    const { result } = renderHook(() => useEpisodePlayback())
+    const { result } = renderHook(() => useEpisodePlayback(), {
+      wrapper: createQueryClientWrapper(),
+    })
     act(() => {
       result.current.playEpisode(episode, podcast)
     })
@@ -132,7 +144,9 @@ Delayed transcript
       transcriptUrl: 'https://example.com/ep-2.srt',
     })
 
-    const { result } = renderHook(() => useEpisodePlayback())
+    const { result } = renderHook(() => useEpisodePlayback(), {
+      wrapper: createQueryClientWrapper(),
+    })
     act(() => {
       result.current.playEpisode(episode, makePodcast())
     })
@@ -183,7 +197,9 @@ Delayed transcript
       transcriptUrl: 'https://example.com/ep-loading.srt',
     })
 
-    const { result } = renderHook(() => useEpisodePlayback())
+    const { result } = renderHook(() => useEpisodePlayback(), {
+      wrapper: createQueryClientWrapper(),
+    })
     act(() => {
       result.current.playEpisode(episode, makePodcast())
     })
@@ -221,7 +237,9 @@ Delayed transcript
       return Promise.reject(new Error('Unknown URL'))
     })
 
-    const { result } = renderHook(() => useEpisodePlayback())
+    const { result } = renderHook(() => useEpisodePlayback(), {
+      wrapper: createQueryClientWrapper(),
+    })
     act(() => {
       result.current.playEpisode(
         makeEpisode({
@@ -274,7 +292,9 @@ Delayed transcript
       transcriptUrl: 'https://example.com/ep-3.srt',
     })
 
-    const { result } = renderHook(() => useEpisodePlayback())
+    const { result } = renderHook(() => useEpisodePlayback(), {
+      wrapper: createQueryClientWrapper(),
+    })
     act(() => {
       result.current.playEpisode(episode, makePodcast())
     })
@@ -302,7 +322,9 @@ Delayed transcript
 Favorite transcript
 `)
 
-    const { result } = renderHook(() => useEpisodePlayback())
+    const { result } = renderHook(() => useEpisodePlayback(), {
+      wrapper: createQueryClientWrapper(),
+    })
     act(() => {
       result.current.playFavorite(makeFavorite())
     })
@@ -336,7 +358,9 @@ Learn all about this tick-borne disease in this classic episode.`)
       transcriptUrl: 'https://api.omny.fm/transcript?format=TextWithTimestamps',
     })
 
-    const { result } = renderHook(() => useEpisodePlayback())
+    const { result } = renderHook(() => useEpisodePlayback(), {
+      wrapper: createQueryClientWrapper(),
+    })
     act(() => {
       result.current.playEpisode(episode, makePodcast())
     })

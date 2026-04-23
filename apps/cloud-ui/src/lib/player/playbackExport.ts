@@ -444,7 +444,7 @@ async function resolveAudioExportAsset(
     audioUrl: sourceAudioUrl,
     episodeTitle: context.identity.audioTitle || resolvePlaybackExportBaseName(context.identity),
     episodeDescription: context.identity.episodeMetadata?.description,
-    podcastTitle: context.identity.episodeMetadata?.podcastTitle || '',
+    showTitle: context.identity.episodeMetadata?.showTitle || '',
     feedUrl: context.identity.episodeMetadata?.podcastFeedUrl,
     artworkUrl: context.identity.episodeMetadata?.artworkUrl,
     podcastItunesId: context.identity.episodeMetadata?.podcastItunesId,

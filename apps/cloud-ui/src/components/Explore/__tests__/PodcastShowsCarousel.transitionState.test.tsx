@@ -1,5 +1,6 @@
 import { render } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import type { TopPodcast } from '../../../lib/discovery'
 import { PodcastShowsCarousel } from '../PodcastShowsCarousel'
 
 const podcastShowCardSpy = vi.fn()
@@ -38,12 +39,13 @@ describe('PodcastShowsCarousel transition metadata transport', () => {
         podcasts={
           [
             {
-              id: '7',
-              name: 'Show',
-              artistName: 'Host',
-              artworkUrl100: 'https://example.com/art.jpg',
+              title: 'Show',
+              author: 'Host',
+              artwork: 'https://example.com/art.jpg',
+              podcastItunesId: '7',
+              genres: [],
             },
-          ] as never
+          ] satisfies TopPodcast[]
         }
         sectionId="top-shows"
       />

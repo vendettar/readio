@@ -62,7 +62,6 @@ var browserEnvAllowlist = []string{
 	"READIO_DISABLED_ASR_PROVIDERS",
 	"READIO_EN_DICTIONARY_API_URL",
 	"READIO_EN_DICTIONARY_API_TRANSPORT",
-	"READIO_RSS_FEED_BASE_URL",
 	"READIO_DEFAULT_PODCAST_CONTENT_COUNTRY",
 	"READIO_DEFAULT_LANGUAGE",
 	"READIO_FALLBACK_PODCAST_IMAGE",
@@ -350,8 +349,6 @@ func newBrowserRuntimeEnvHandler() http.Handler {
 // Key set must match browserEnvAllowlist. Do not add keys here
 // without also adding them to the allowlist slice.
 func buildBrowserRuntimeEnv(r *http.Request) map[string]any {
-	origin := requestOrigin(r)
-
 	return map[string]any{
 		"READIO_APP_NAME":    envOrDefault("READIO_APP_NAME", defaultRuntimeAppName),
 		"READIO_APP_VERSION": envOrDefault("READIO_APP_VERSION", defaultRuntimeAppVersion),
@@ -363,7 +360,6 @@ func buildBrowserRuntimeEnv(r *http.Request) map[string]any {
 		"READIO_DISABLED_ASR_PROVIDERS":      strings.TrimSpace(os.Getenv("READIO_DISABLED_ASR_PROVIDERS")),
 		"READIO_EN_DICTIONARY_API_URL":       envOrDefault("READIO_EN_DICTIONARY_API_URL", defaultDictionaryAPIURL),
 		"READIO_EN_DICTIONARY_API_TRANSPORT": envOrDefault("READIO_EN_DICTIONARY_API_TRANSPORT", defaultDictionaryTransport),
-		"READIO_RSS_FEED_BASE_URL":           origin + "/api/v1/discovery",
 		"READIO_DEFAULT_PODCAST_CONTENT_COUNTRY": envOrDefault(
 			"READIO_DEFAULT_PODCAST_CONTENT_COUNTRY",
 			defaultPodcastCountry,
@@ -381,35 +377,6 @@ func envOrDefault(name, fallback string) string {
 		return value
 	}
 	return fallback
-}
-
-func requestOrigin(r *http.Request) string {
-	proto := strings.TrimSpace(firstForwardedValue(r.Header.Get("X-Forwarded-Proto")))
-	if proto == "" {
-		if r.TLS != nil {
-			proto = "https"
-		} else {
-			proto = "http"
-		}
-	}
-
-	host := strings.TrimSpace(firstForwardedValue(r.Header.Get("X-Forwarded-Host")))
-	if host == "" {
-		host = strings.TrimSpace(r.Host)
-	}
-	if host == "" {
-		host = "localhost"
-	}
-
-	return proto + "://" + host
-}
-
-func firstForwardedValue(raw string) string {
-	if raw == "" {
-		return ""
-	}
-	parts := strings.Split(raw, ",")
-	return strings.TrimSpace(parts[0])
 }
 
 func fileExists(distDir, requestPath string) bool {

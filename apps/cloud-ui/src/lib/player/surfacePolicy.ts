@@ -1,5 +1,7 @@
 import type { Favorite, PlaybackSession } from '../dexieDb'
-import type { Episode, SearchEpisode } from '../discovery'
+import type { FeedEpisode, SearchEpisode } from '../discovery'
+
+export type PlayerSurfaceEpisode = Pick<FeedEpisode, 'transcriptUrl'>
 
 export type PlayerSurfaceMode = 'docked' | 'mini'
 
@@ -35,9 +37,7 @@ export function deriveSurfacePolicyFromFavorite(
   return derivePolicyFromTranscriptUrl(favorite.transcriptUrl)
 }
 
-export function deriveSurfacePolicyFromEpisode(
-  episode: Pick<Episode, 'transcriptUrl'>
-): PlayerSurfacePolicy {
+export function deriveSurfacePolicyFromEpisode(episode: PlayerSurfaceEpisode): PlayerSurfacePolicy {
   return derivePolicyFromTranscriptUrl(episode.transcriptUrl)
 }
 

@@ -1,0 +1,18 @@
+---
+title: Transcript & Interaction
+---
+
+## 1. Scope
+
+Cloud still ships the transcript-first reading surface through `TranscriptView` and the AppShell reading area.
+
+## 2. Core Contracts
+
+- transcript interaction remains browser-local and frontend-owned
+- word lookup, selection menus, and transcript highlighting remain first-class UI behavior
+- transcript interaction must not regress playback pause/resume semantics
+- locale-aware tokenization remains part of the transcript rendering contract
+
+## 3. Downloaded Transcript Source
+
+Downloaded episodes may have multiple subtitle versions; active transcript resolution must still honor the currently active subtitle source for the local track/download record.

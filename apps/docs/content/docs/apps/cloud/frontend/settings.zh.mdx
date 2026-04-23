@@ -1,0 +1,22 @@
+---
+title: 设置
+---
+
+## 1. 范围
+
+- 路由：`/settings`
+- 主界面：`apps/cloud-ui/src/routeComponents/SettingsPage.tsx`
+
+## 2. Cloud 当前职责
+
+Settings 仍然负责：
+
+- 语言切换
+- 内容地区
+- 浏览器本地维护动作
+- 仍然存在的库导入/导出流程
+- browser-local persistence 限制说明
+
+## 3. Cloud 边界
+
+Cloud Settings 文档必须体现当前 Cloud 所有权边界，不得把已明确删除的 legacy proxy 配置区块重新写回来。

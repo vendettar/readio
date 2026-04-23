@@ -44,7 +44,7 @@ vi.mock('../../../store/playerStore', () => ({
       episodeMetadata: {
         originalAudioUrl: 'https://example.com/source.mp3',
         countryAtSave: currentCountryAtSave,
-        podcastTitle: 'Podcast',
+        showTitle: 'Podcast',
       },
     }),
 }))

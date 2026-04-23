@@ -124,13 +124,9 @@ describe('useEpisodeRowFavoriteAction', () => {
     const buildAddPayload = vi.fn().mockResolvedValue({
       podcast: {
         podcastItunesId: '1',
-        collectionName: 'Show',
-        artistName: 'Host',
-        artworkUrl100: '',
-        artworkUrl600: '',
+        title: 'Show',
+        artwork: 'https://example.com/show.jpg',
         feedUrl: 'feed',
-        collectionViewUrl: '',
-        genres: [],
       },
       episode: {
         id: 'ep-1',
@@ -169,13 +165,9 @@ describe('useEpisodeRowFavoriteAction', () => {
     const buildAddPayload = vi.fn().mockResolvedValue({
       podcast: {
         podcastItunesId: '1',
-        collectionName: 'Show',
-        artistName: 'Host',
-        artworkUrl100: '',
-        artworkUrl600: '',
+        title: 'Show',
+        artwork: 'https://example.com/show.jpg',
         feedUrl: 'feed',
-        collectionViewUrl: '',
-        genres: [],
       },
       episode: {
         id: 'ep-1',
@@ -215,13 +207,9 @@ describe('useEpisodeRowFavoriteAction', () => {
     const buildAddPayload = vi.fn().mockResolvedValue({
       podcast: {
         podcastItunesId: '1',
-        collectionName: 'Show',
-        artistName: 'Host',
-        artworkUrl100: '',
-        artworkUrl600: '',
+        title: 'Show',
+        artwork: 'https://example.com/show.jpg',
         feedUrl: 'feed',
-        collectionViewUrl: '',
-        genres: [],
       },
       episode: {
         id: 'ep-1',
@@ -256,13 +244,9 @@ describe('useEpisodeRowFavoriteAction', () => {
     const buildAddPayload = vi.fn().mockResolvedValue({
       podcast: {
         podcastItunesId: '1',
-        collectionName: 'Show',
-        artistName: 'Host',
-        artworkUrl100: '',
-        artworkUrl600: '',
+        title: 'Show',
+        artwork: '',
         feedUrl: 'feed',
-        collectionViewUrl: '',
-        genres: [],
       },
       episode: {
         id: 'ep-1',

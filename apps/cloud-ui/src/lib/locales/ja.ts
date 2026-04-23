@@ -537,7 +537,6 @@ const locale = {
   episodeExplicit: '成人向け',
   viewOriginal: '元のページを見る',
   viewTranscript: '文字起こし',
-  viewChapters: 'チャプター',
   ariaPlayEpisode: 'エピソードを再生',
   ariaOpenEpisodeDetail: 'エピソード詳細を開く',
   episodeWebpage: '単集ウェブページ',

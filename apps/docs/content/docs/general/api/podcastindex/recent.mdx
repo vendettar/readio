@@ -1,0 +1,47 @@
+---
+title: Recent
+---
+
+# Recent Content Endpoints (/api/1.0/recent)
+
+Stay updated with global activity in the index. **Requires Authentication.**
+
+## `/feeds`
+Shows globally updated in the index.
+- **URL**: `/api/1.0/recent/feeds?max=20`
+- **Example Response**:
+```json
+{ "status": "true", "feeds": [{ "id": 75075, "title": "Recently Updated" }] }
+```
+
+## `/episodes`
+Globally published episodes.
+- **URL**: `/api/1.0/recent/episodes?max=20`
+- **Example Response**:
+```json
+{ "status": "true", "items": [{ "id": 16795090, "title": "New Ep" }] }
+```
+
+## `/newfeeds`
+Brand new feeds that have just been added to the Index.
+- **URL**: `/api/1.0/recent/newfeeds`
+- **Example Response**:
+```json
+{ "status": "true", "feeds": [{ "id": 99999, "title": "New Series" }] }
+```
+
+## `/chapters`
+Recently updated episodes with chapters data.
+- **URL**: `/api/1.0/recent/chapters`
+- **Example Response**:
+```json
+{ "status": "true", "items": [{ "id": 16795090, "chaptersUrl": "..." }] }
+```
+
+## `/soundbites`
+Recent clips/soundbites shared by creators.
+- **URL**: `/api/1.0/recent/soundbites`
+- **Example Response**:
+```json
+{ "status": "true", "items": [{ "id": 16795090, "title": "Soundbite clip" }] }
+```

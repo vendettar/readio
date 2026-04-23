@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
@@ -15,15 +16,14 @@ import (
 )
 
 const (
-	podcastIndexBaseURL      = "https://api.podcastindex.org/api/1.0"
-	podcastIndexAuthTimeout  = 5 * time.Second
-	podcastIndexFetchTimeout = 15 * time.Second
-
-	podcastIndexAPIKeyEnv    = "PODCAST_INDEX_API_KEY"
-	podcastIndexAPISecretEnv = "PODCAST_INDEX_API_SECRET"
-	podcastIndexUserAgentEnv = "PODCAST_INDEX_USER_AGENT"
-
-	podcastIndexCacheTTLEpisodes = 4 * time.Hour
+	podcastIndexBaseURL          = "https://api.podcastindex.org/api/1.0"
+	podcastIndexAuthTimeout      = 5 * time.Second
+	podcastIndexFetchTimeout     = 15 * time.Second
+	podcastIndexAPIKeyEnv        = "PODCAST_INDEX_API_KEY"
+	podcastIndexAPISecretEnv     = "PODCAST_INDEX_API_SECRET"
+	podcastIndexUserAgentEnv     = "PODCAST_INDEX_USER_AGENT"
+	podcastIndexMaxBatchGUIDs    = 100
+	podcastIndexMaxBatchBodySize = 10 * 1024
 )
 
 type podcastIndexConfig struct {
@@ -52,6 +52,40 @@ func getPodcastIndexConfig() podcastIndexConfig {
 	}
 }
 
+func (s *discoveryService) buildPodcastIndexRequest(ctx context.Context, method, urlPath string, body io.Reader) (*http.Request, error) {
+	cfg := s.podcastIndexConfig
+	if cfg.apiKey == "" || cfg.apiSecret == "" {
+		return nil, &discoveryProviderConfigError{
+			provider: "podcastindex",
+			message:  "podcastindex: missing API credentials",
+		}
+	}
+
+	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
+	authHash := fmt.Sprintf("%s%s%s", cfg.apiKey, cfg.apiSecret, timestamp)
+	authHash = fmt.Sprintf("%x", sha1.Sum([]byte(authHash)))
+
+	req, err := http.NewRequestWithContext(ctx, method, podcastIndexBaseURL+urlPath, body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("User-Agent", cfg.userAgent)
+	req.Header.Set("X-Auth-Key", cfg.apiKey)
+	req.Header.Set("X-Auth-Date", timestamp)
+	req.Header.Set("Authorization", authHash)
+
+	return req, nil
+}
+
+type podcastIndexInvalidResponseError struct {
+	message string
+}
+
+func (e *podcastIndexInvalidResponseError) Error() string {
+	return e.message
+}
+
 type podcastIndexEpisode struct {
 	ID              int64  `json:"id"`
 	Title           string `json:"title"`
@@ -65,7 +99,6 @@ type podcastIndexEpisode struct {
 	Duration        int64  `json:"duration,omitempty"`
 	Image           string `json:"image,omitempty"`
 	Explicit        int    `json:"explicit,omitempty"`
-	FeedID          int64  `json:"feedId,omitempty"`
 	PodcastGUID     string `json:"podcastGuid,omitempty"`
 	FeedItunesID    int64  `json:"feedItunesId,omitempty"`
 	FeedLanguage    string `json:"feedLanguage,omitempty"`
@@ -75,81 +108,67 @@ type podcastIndexEpisode struct {
 }
 
 type podcastIndexEpisodesResponse struct {
-	Status string                `json:"status"`
 	Items  []podcastIndexEpisode `json:"items"`
-	Count  int                   `json:"count"`
 }
 
-type podcastIndexEpisodeByGUIDItem struct {
-	ID            int64  `json:"id"`
-	Title         string `json:"title"`
-	Link          string `json:"link,omitempty"`
-	Description   string `json:"description,omitempty"`
-	GUID          string `json:"guid,omitempty"`
-	DatePublished int64  `json:"datePublished"`
-	EnclosureURL  string `json:"enclosureUrl,omitempty"`
-	Duration      int64  `json:"duration,omitempty"`
-	Image         string `json:"image,omitempty"`
-	Explicit      int    `json:"explicit,omitempty"`
-	Episode       int64  `json:"episode,omitempty"`
-	EpisodeType   string `json:"episodeType,omitempty"`
-	Season        int64  `json:"season,omitempty"`
-	FeedItunesID  int64  `json:"feedItunesId,omitempty"`
-	FeedImage     string `json:"feedImage,omitempty"`
-	FeedID        int64  `json:"feedId,omitempty"`
-	FeedTitle     string `json:"feedTitle,omitempty"`
-	FeedLanguage  string `json:"feedLanguage,omitempty"`
-	ChaptersURL   string `json:"chaptersUrl,omitempty"`
-	TranscriptURL string `json:"transcriptUrl,omitempty"`
+type podcastIndexCategoryNames []string
+
+func (c *podcastIndexCategoryNames) UnmarshalJSON(data []byte) error {
+	if string(data) == "null" {
+		*c = nil
+		return nil
+	}
+
+	var raw map[string]string
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	names := make([]string, 0, len(raw))
+	for _, name := range raw {
+		name = strings.TrimSpace(name)
+		if name != "" {
+			names = append(names, name)
+		}
+	}
+
+	*c = names
+	return nil
 }
 
-type podcastIndexEpisodeByGUIDResponse struct {
-	Status      string                        `json:"status"`
-	ID          int64                         `json:"id,omitempty"`
-	URL         string                        `json:"url,omitempty"`
-	PodcastGUID string                        `json:"podcastGuid,omitempty"`
-	GUID        string                        `json:"guid,omitempty"`
-	Episode     podcastIndexEpisodeByGUIDItem `json:"episode"`
-	Description string                        `json:"description,omitempty"`
-}
-
-type podcastIndexFeedItunes struct {
-	ID           int64             `json:"id"`
-	PodcastGUID  string            `json:"podcastGuid,omitempty"`
-	Title        string            `json:"title"`
-	URL          string            `json:"url"`
-	OriginalURL  string            `json:"originalUrl,omitempty"`
-	Link         string            `json:"link,omitempty"`
-	Description  string            `json:"description,omitempty"`
-	Author       string            `json:"author,omitempty"`
-	OwnerName    string            `json:"ownerName,omitempty"`
-	Image        string            `json:"image,omitempty"`
-	Artwork      string            `json:"artwork,omitempty"`
-	ItunesID     int64             `json:"itunesId,omitempty"`
-	Language     string            `json:"language,omitempty"`
-	EpisodeCount int64             `json:"episodeCount,omitempty"`
-	Categories   map[string]string `json:"categories,omitempty"`
+type podcastIndexPodcastFeed struct {
+	Title          string                   `json:"title"`
+	URL            string                   `json:"url"`
+	Description    string                   `json:"description"`
+	Author         string                   `json:"author"`
+	Artwork        string                   `json:"artwork"`
+	LastUpdateTime int64                    `json:"lastUpdateTime"`
+	ItunesID       int64                    `json:"itunesId"`
+	Language       string                   `json:"language"`
+	EpisodeCount   int64                    `json:"episodeCount"`
+	Dead           int                      `json:"dead"`
+	Categories     podcastIndexCategoryNames `json:"categories"`
 }
 
 type podcastIndexPodcastResponse struct {
-	Status      string                 `json:"status"`
-	Query       map[string]string      `json:"query,omitempty"`
-	Feed        podcastIndexFeedItunes `json:"feed"`
-	Description string                 `json:"description,omitempty"`
+	Feed podcastIndexPodcastFeed `json:"feed"`
 }
 
-type podcastIndexSearchResponse struct {
-	Status string                   `json:"status"`
-	Feeds  []podcastIndexFeedItunes `json:"feeds"`
-	Count  int                      `json:"count"`
+type podcastIndexBatchFeed struct {
+	PodcastGUID string `json:"podcastGuid,omitempty"`
+	podcastIndexPodcastFeed
 }
 
 type podcastIndexBatchPodcastResponse struct {
-	Status      string                   `json:"status"`
-	AllFound    bool                     `json:"allFound"`
-	Found       int                      `json:"found"`
-	Feeds       []podcastIndexFeedItunes `json:"feeds"`
-	Description string                   `json:"description,omitempty"`
+	Feeds []podcastIndexBatchFeed `json:"feeds"`
+}
+
+// Route-local bridge for batch-by-guid only.
+// orderingGUID stays backend-internal for response ordering;
+// response is the final cloud DTO emitted to the frontend.
+type podcastIndexBatchFeedBridge struct {
+	orderingGUID string
+	response     piPodcastResponse
 }
 
 const podcastIndexGUIDMaxLength = 1024
@@ -209,166 +228,13 @@ func normalizePodcastGUID(input string) (string, error) {
 	return trimmed, nil
 }
 
-func normalizePodcastIndexFeedID(input string) (string, error) {
-	trimmed := strings.TrimSpace(input)
-	if trimmed == "" {
-		return "", &discoveryParamError{
-			code:    "MISSING_FEED_ID",
-			message: "feedId query parameter is required",
-		}
-	}
-
-	if _, err := strconv.ParseInt(trimmed, 10, 64); err != nil {
-		return "", &discoveryParamError{
-			code:    "INVALID_FEED_ID",
-			message: "feedId must be a valid numeric Podcast Index feed id",
-		}
-	}
-
-	return trimmed, nil
-}
-
-func normalizeEpisodeGUID(input string) (string, error) {
-	trimmed := strings.TrimSpace(input)
-	if trimmed == "" {
-		return "", &discoveryParamError{
-			code:    "MISSING_EPISODE_GUID",
-			message: "guid query parameter is required",
-		}
-	}
-
-	if len(trimmed) > podcastIndexGUIDMaxLength {
-		return "", &discoveryParamError{
-			code:    "INVALID_EPISODE_GUID",
-			message: "guid query parameter is too long",
-		}
-	}
-
-	return trimmed, nil
-}
-
-func normalizePodcastIndexID(id string, idType string) (string, error) {
-	if idType == "itunesid" {
-		return normalizeItunesID(id)
-	}
-	return normalizePodcastIndexFeedID(id)
-}
-
-func (s *discoveryService) fetchPodcastIndexEpisodes(ctx context.Context, itunesID string, max int) ([]podcastIndexEpisode, error) {
-	cfg := s.podcastIndexConfig
-	if cfg.apiKey == "" || cfg.apiSecret == "" {
-		return nil, &discoveryProviderConfigError{
-			provider: "podcastindex",
-			message:  "podcastindex: missing API credentials",
-		}
-	}
-
+func (s *discoveryService) fetchPodcastIndexPodcastByItunesID(ctx context.Context, itunesID string) (*podcastIndexPodcastFeed, error) {
 	normalizedItunesID, err := normalizeItunesID(itunesID)
 	if err != nil {
 		return nil, fmt.Errorf("podcastindex: invalid itunes id: %w", err)
 	}
 
-	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
-	authHash := fmt.Sprintf("%s%s%s", cfg.apiKey, cfg.apiSecret, timestamp)
-	authHash = fmt.Sprintf("%x", sha1.Sum([]byte(authHash)))
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, podcastIndexBaseURL+"/episodes/byitunesid", nil)
-	if err != nil {
-		return nil, err
-	}
-
-	q := req.URL.Query()
-	q.Set("id", normalizedItunesID)
-	q.Set("max", strconv.Itoa(max))
-	req.URL.RawQuery = q.Encode()
-
-	req.Header.Set("User-Agent", cfg.userAgent)
-	req.Header.Set("X-Auth-Key", cfg.apiKey)
-	req.Header.Set("X-Auth-Date", timestamp)
-	req.Header.Set("Authorization", authHash)
-
-	var result podcastIndexEpisodesResponse
-	if err := s.executeJSONRequest(req, &result); err != nil {
-		return nil, err
-	}
-
-	return result.Items, nil
-}
-
-func (s *discoveryService) fetchPodcastIndexEpisodeByGUID(
-	ctx context.Context,
-	id string,
-	episodeGUID string,
-	idType string,
-) (*podcastIndexEpisodeByGUIDResponse, error) {
-	cfg := s.podcastIndexConfig
-	if cfg.apiKey == "" || cfg.apiSecret == "" {
-		return nil, &discoveryProviderConfigError{
-			provider: "podcastindex",
-			message:  "podcastindex: missing API credentials",
-		}
-	}
-
-	normalizedID, err := normalizePodcastIndexID(id, idType)
-	if err != nil {
-		return nil, fmt.Errorf("podcastindex: invalid %s: %w", idType, err)
-	}
-
-	normalizedEpisodeGUID, err := normalizeEpisodeGUID(episodeGUID)
-	if err != nil {
-		return nil, err
-	}
-
-	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
-	authHash := fmt.Sprintf("%s%s%s", cfg.apiKey, cfg.apiSecret, timestamp)
-	authHash = fmt.Sprintf("%x", sha1.Sum([]byte(authHash)))
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, podcastIndexBaseURL+"/episodes/byguid", nil)
-	if err != nil {
-		return nil, err
-	}
-
-	q := req.URL.Query()
-	q.Set("guid", normalizedEpisodeGUID)
-	if idType == "itunesid" {
-		q.Set("itunesid", normalizedID)
-	} else {
-		q.Set("feedid", normalizedID)
-	}
-	req.URL.RawQuery = q.Encode()
-
-	req.Header.Set("User-Agent", cfg.userAgent)
-	req.Header.Set("X-Auth-Key", cfg.apiKey)
-	req.Header.Set("X-Auth-Date", timestamp)
-	req.Header.Set("Authorization", authHash)
-
-	var result podcastIndexEpisodeByGUIDResponse
-	if err := s.executeJSONRequest(req, &result); err != nil {
-		return nil, err
-	}
-
-	return &result, nil
-}
-
-func (s *discoveryService) fetchPodcastIndexPodcastByItunesID(ctx context.Context, itunesID string) (*podcastIndexFeedItunes, error) {
-	cfg := s.podcastIndexConfig
-	if cfg.apiKey == "" || cfg.apiSecret == "" {
-		return nil, &discoveryProviderConfigError{
-			provider: "podcastindex",
-			message:  "podcastindex: missing API credentials",
-		}
-	}
-
-	normalizedItunesID, err := normalizeItunesID(itunesID)
-	if err != nil {
-		return nil, fmt.Errorf("podcastindex: invalid itunes id: %w", err)
-	}
-
-	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
-	authHash := fmt.Sprintf("%s%s%s", cfg.apiKey, cfg.apiSecret, timestamp)
-	authHash = fmt.Sprintf("%x", sha1.Sum([]byte(authHash)))
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, podcastIndexBaseURL+"/podcasts/byitunesid", nil)
+	req, err := s.buildPodcastIndexRequest(ctx, http.MethodGet, "/podcasts/byitunesid", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -376,11 +242,6 @@ func (s *discoveryService) fetchPodcastIndexPodcastByItunesID(ctx context.Contex
 	q := req.URL.Query()
 	q.Set("id", normalizedItunesID)
 	req.URL.RawQuery = q.Encode()
-
-	req.Header.Set("User-Agent", cfg.userAgent)
-	req.Header.Set("X-Auth-Key", cfg.apiKey)
-	req.Header.Set("X-Auth-Date", timestamp)
-	req.Header.Set("Authorization", authHash)
 
 	var result podcastIndexPodcastResponse
 	if err := s.executeJSONRequest(req, &result); err != nil {
@@ -390,33 +251,34 @@ func (s *discoveryService) fetchPodcastIndexPodcastByItunesID(ctx context.Contex
 	return &result.Feed, nil
 }
 
-func (s *discoveryService) fetchPodcastIndexPodcastsBatchByGUID(ctx context.Context, guids []string) ([]podcastIndexFeedItunes, error) {
-	cfg := s.podcastIndexConfig
-	if cfg.apiKey == "" || cfg.apiSecret == "" {
-		return nil, &discoveryProviderConfigError{
-			provider: "podcastindex",
-			message:  "podcastindex: missing API credentials",
+func (s *discoveryService) fetchPodcastIndexPodcastsBatchByGUID(ctx context.Context, guids []string) ([]podcastIndexBatchFeed, error) {
+	seen := make(map[string]bool, len(guids))
+	uniqueGUIDs := make([]string, 0, len(guids))
+	for _, g := range guids {
+		if !seen[g] {
+			seen[g] = true
+			uniqueGUIDs = append(uniqueGUIDs, g)
 		}
 	}
 
-	body, err := json.Marshal(guids)
+	if len(uniqueGUIDs) > podcastIndexMaxBatchGUIDs {
+		return nil, fmt.Errorf("podcastindex: too many GUIDs (max %d)", podcastIndexMaxBatchGUIDs)
+	}
+
+	body, err := json.Marshal(uniqueGUIDs)
 	if err != nil {
 		return nil, fmt.Errorf("podcastindex: encode guid batch: %w", err)
 	}
 
-	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
-	authHash := fmt.Sprintf("%s%s%s", cfg.apiKey, cfg.apiSecret, timestamp)
-	authHash = fmt.Sprintf("%x", sha1.Sum([]byte(authHash)))
+	if len(body) > podcastIndexMaxBatchBodySize {
+		return nil, fmt.Errorf("podcastindex: request body too large (max %d bytes)", podcastIndexMaxBatchBodySize)
+	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, podcastIndexBaseURL+"/podcasts/batch/byguid", strings.NewReader(string(body)))
+	req, err := s.buildPodcastIndexRequest(ctx, http.MethodPost, "/podcasts/batch/byguid", strings.NewReader(string(body)))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", cfg.userAgent)
-	req.Header.Set("X-Auth-Key", cfg.apiKey)
-	req.Header.Set("X-Auth-Date", timestamp)
-	req.Header.Set("Authorization", authHash)
 
 	var result podcastIndexBatchPodcastResponse
 	if err := s.executeJSONRequest(req, &result); err != nil {
@@ -426,221 +288,42 @@ func (s *discoveryService) fetchPodcastIndexPodcastsBatchByGUID(ctx context.Cont
 	return result.Feeds, nil
 }
 
-type podcastIndexEpisodesResponseJSON struct {
-	Episodes []episodeLookupResponse `json:"episodes"`
-}
-
-func (s *discoveryService) handlePodcastIndexEpisodes(w http.ResponseWriter, r *http.Request) {
-	start := time.Now()
-	route := discoveryPodcastIndexEpisodesRoute
-
-	guid := strings.TrimSpace(r.URL.Query().Get("guid"))
-	itunesIDFromQuery := strings.TrimSpace(r.URL.Query().Get("podcastItunesId"))
-
-	// Singular Episode Resolution (Podcast Index /episodes/byguid)
-	if guid != "" && itunesIDFromQuery != "" {
-		normalizedGUID, err := normalizeEpisodeGUID(guid)
-		if err != nil {
-			writeDiscoveryMappedError(w, err)
-			logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, CacheStatusMissError)
-			return
-		}
-
-		normalizedID, err := normalizePodcastIndexID(itunesIDFromQuery, "itunesid")
-		if err != nil {
-			writeDiscoveryMappedError(w, err)
-			logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, CacheStatusMissError)
-			return
-		}
-
-		cacheKey := fmt.Sprintf("podcastindex-episode:guid:%s:itunesid:%s", normalizedGUID, normalizedID)
-		ctx, cancel := context.WithTimeout(r.Context(), s.timeout)
-		defer cancel()
-
-		fetch := func(ctx context.Context) (any, error) {
-			result, err := s.fetchPodcastIndexEpisodeByGUID(ctx, normalizedID, normalizedGUID, "itunesid")
-			if err != nil {
-				return nil, errors.Join(errDiscoveryUpstreamError, err)
-			}
-			if result == nil {
-				return nil, nil
-			}
-
-			duration := float64(result.Episode.Duration)
-			itunesID := ""
-			if result.Episode.FeedItunesID > 0 {
-				itunesID = strconv.FormatInt(result.Episode.FeedItunesID, 10)
-			}
-			resolvedFeedID := result.Episode.FeedID
-			if resolvedFeedID <= 0 {
-				resolvedFeedID = result.ID
-			}
-			episode := episodeLookupResponse{
-				ID:          firstNonEmpty(strings.TrimSpace(result.Episode.GUID), strconv.FormatInt(result.Episode.ID, 10)),
-				Title:       strings.TrimSpace(result.Episode.Title),
-				Description: strings.TrimSpace(result.Episode.Description),
-				AudioURL:    strings.TrimSpace(result.Episode.EnclosureURL),
-				PubDate:     formatUnixTimestamp(result.Episode.DatePublished),
-				ArtworkURL:  firstNonEmpty(strings.TrimSpace(result.Episode.Image), strings.TrimSpace(result.Episode.FeedImage)),
-				Duration:    &duration,
-				FeedURL:     strings.TrimSpace(result.URL),
-				FeedID:      strconv.FormatInt(resolvedFeedID, 10),
-				PodcastGUID: strings.TrimSpace(result.PodcastGUID),
-				PodcastItunesID: itunesID,
-				EpisodeGUID: strings.TrimSpace(result.Episode.GUID),
-				Language:    strings.TrimSpace(result.Episode.FeedLanguage),
-			}
-			return episode, nil
-		}
-
-		data, cacheStatus, err := s.getWithGracefulDegradation(ctx, cacheKey, podcastIndexCacheTTLEpisodes, fetch)
-		if err != nil {
-			var configErr *discoveryProviderConfigError
-			if errors.As(err, &configErr) {
-				slog.Error("podcastindex episode-byguid lookup unavailable", "error", err, "provider", configErr.provider)
-				writeDiscoveryError(
-					w,
-					http.StatusServiceUnavailable,
-					"DISCOVERY_PROVIDER_NOT_CONFIGURED",
-					"podcastindex provider is not configured",
-				)
-				logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, cacheStatus)
-				return
-			}
-
-			slog.Warn("podcastindex episode-byguid lookup failed", "error", err)
-			writeDiscoveryMappedError(w, err)
-			logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, cacheStatus)
-			return
-		}
-
-		writeDiscoveryJSON(w, http.StatusOK, data)
-		logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), nil, cacheStatus)
-		return
-	}
-
-	itunesID := itunesIDFromQuery
-	if itunesID == "" {
-		writeDiscoveryError(w, http.StatusBadRequest, "MISSING_IDENTIFIER", "podcastItunesId query parameter is required")
-		logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), errors.New("missing identifier"), CacheStatusMissError)
-		return
-	}
-
-	normalizedItunesID, err := normalizeItunesID(itunesID)
-	if err != nil {
-		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, CacheStatusMissError)
-		return
-	}
-	itunesID = normalizedItunesID
-
-	limit, err := parseDiscoveryLimit(
-		r.URL.Query(),
-		"limit",
-		defaultDiscoveryLookupEpisodesLimit,
-		maxDiscoveryLookupEpisodesLimit,
-	)
-	if err != nil {
-		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, CacheStatusMissError)
-		return
-	}
-
-	cacheKey := fmt.Sprintf("podcastindex-episodes:itunes:%s:%d", itunesID, limit)
-	ctx, cancel := context.WithTimeout(r.Context(), s.timeout)
-	defer cancel()
-
-	fetch := func(ctx context.Context) (any, error) {
-		items, err := s.fetchPodcastIndexEpisodes(ctx, itunesID, limit)
-
-		if err != nil {
-			return nil, errors.Join(errDiscoveryUpstreamError, err)
-		}
-
-		episodes := make([]episodeLookupResponse, 0, len(items))
-		for _, item := range items {
-			duration := float64(item.Duration)
-			id := firstNonEmpty(strings.TrimSpace(item.GUID), strconv.FormatInt(item.ID, 10))
-			itunesIDForMeta := itunesID
-			if item.FeedItunesID > 0 {
-				itunesIDForMeta = strconv.FormatInt(item.FeedItunesID, 10)
-			}
-			episodes = append(episodes, episodeLookupResponse{
-				ID:          id,
-				Title:       item.Title,
-				Description: item.Description,
-				AudioURL:    item.EnclosureURL,
-				PubDate:     formatUnixTimestamp(item.DatePublished),
-				ArtworkURL:  item.Image,
-				Duration:    &duration,
-				FeedID:      strconv.FormatInt(item.FeedID, 10),
-				PodcastGUID: item.PodcastGUID,
-				PodcastItunesID: itunesIDForMeta,
-				EpisodeGUID: strings.TrimSpace(item.GUID),
-			})
-		}
-		return podcastIndexEpisodesResponseJSON{Episodes: episodes}, nil
-	}
-
-	data, cacheStatus, err := s.getWithGracefulDegradation(ctx, cacheKey, podcastIndexCacheTTLEpisodes, fetch)
-	if err != nil {
-		var configErr *discoveryProviderConfigError
-		if errors.As(err, &configErr) {
-			slog.Error("podcastindex supplementary lookup unavailable", "error", err, "provider", configErr.provider)
-			writeDiscoveryError(
-				w,
-				http.StatusServiceUnavailable,
-				"DISCOVERY_PROVIDER_NOT_CONFIGURED",
-				"podcastindex provider is not configured",
-			)
-			logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, cacheStatus)
-			return
-		}
-
-		slog.Warn("podcastindex supplementary lookup failed", "error", err)
-		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, cacheStatus)
-		return
-	}
-
-	resp, ok := data.(podcastIndexEpisodesResponseJSON)
-	if !ok {
-		writeDiscoveryError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "invalid response type")
-		logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), errors.New("invalid response type"), CacheStatusMissError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(resp.Episodes); err != nil {
-		slog.Warn("podcastindex: failed to encode response", "error", err)
-	}
-	logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), nil, cacheStatus)
-}
-
 func (s *discoveryService) handlePodcastIndexPodcastsBatchByGUID(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	route := discoveryPodcastIndexPodcastsBatchByGUIDRoute
 
 	if r.Method != http.MethodPost {
-		writeDiscoveryError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "method not allowed")
+		writeDiscoveryErrorSpec(w, http.StatusMethodNotAllowed, discoveryErrSimpleMethodNotAllowed)
 		logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), errors.New("method not allowed"), CacheStatusMissError)
 		return
 	}
 
+	if r.ContentLength > podcastIndexMaxBatchBodySize {
+		writeDiscoveryErrorSpec(w, http.StatusRequestEntityTooLarge, discoveryErrBodyTooLarge)
+		logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), errors.New("body too large"), CacheStatusMissError)
+		return
+	}
+
+	bodyReader := r.Body
+	if r.ContentLength == -1 {
+		bodyReader = http.MaxBytesReader(w, r.Body, podcastIndexMaxBatchBodySize)
+	}
+
 	var input []string
-	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
-		writeDiscoveryError(w, http.StatusBadRequest, "INVALID_GUID_BATCH", "request body must be a JSON array of podcast GUIDs")
+	if err := json.NewDecoder(bodyReader).Decode(&input); err != nil {
+		writeDiscoveryErrorSpec(w, http.StatusBadRequest, discoveryErrInvalidGuidBatch)
 		logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, CacheStatusMissError)
 		return
 	}
 
 	if len(input) == 0 {
-		writeDiscoveryJSON(w, http.StatusOK, []discoveryPodcastResponse{})
+		writeDiscoveryJSON(w, http.StatusOK, []piPodcastResponse{})
 		logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), nil, CacheStatusUncached)
 		return
 	}
 
 	normalizedGUIDs := make([]string, 0, len(input))
+	seen := make(map[string]struct{}, len(input))
 	for _, guid := range input {
 		normalizedGUID, err := normalizePodcastGUID(guid)
 		if err != nil {
@@ -648,6 +331,10 @@ func (s *discoveryService) handlePodcastIndexPodcastsBatchByGUID(w http.Response
 			logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, CacheStatusMissError)
 			return
 		}
+		if _, dup := seen[normalizedGUID]; dup {
+			continue
+		}
+		seen[normalizedGUID] = struct{}{}
 		normalizedGUIDs = append(normalizedGUIDs, normalizedGUID)
 	}
 
@@ -659,12 +346,7 @@ func (s *discoveryService) handlePodcastIndexPodcastsBatchByGUID(w http.Response
 		var configErr *discoveryProviderConfigError
 		if errors.As(err, &configErr) {
 			slog.Error("podcastindex guid batch unavailable", "error", err, "provider", configErr.provider)
-			writeDiscoveryError(
-				w,
-				http.StatusServiceUnavailable,
-				"DISCOVERY_PROVIDER_NOT_CONFIGURED",
-				"podcastindex provider is not configured",
-			)
+			writeDiscoveryErrorSpec(w, http.StatusServiceUnavailable, discoveryErrProviderNotConfigured)
 			logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, CacheStatusMissError)
 			return
 		}
@@ -675,19 +357,24 @@ func (s *discoveryService) handlePodcastIndexPodcastsBatchByGUID(w http.Response
 		return
 	}
 
-	byGUID := make(map[string]podcastIndexFeedSummaryResponse, len(feeds))
+	bridges := make([]podcastIndexBatchFeedBridge, 0, len(feeds))
 	for _, feed := range feeds {
-		mapped, ok := mapPodcastIndexFeedToSummaryResponse(feed, feed.PodcastGUID)
+		bridge, ok := mapPodcastIndexBatchFeedBridge(feed)
 		if !ok {
 			continue
 		}
-		byGUID[mapped.PodcastGUID] = mapped
+		bridges = append(bridges, bridge)
 	}
 
-	resp := make([]podcastIndexFeedSummaryResponse, 0, len(normalizedGUIDs))
+	guidToIndex := make(map[string]int, len(bridges))
+	for i, bridge := range bridges {
+		guidToIndex[bridge.orderingGUID] = i
+	}
+
+	resp := make([]piPodcastResponse, 0, len(normalizedGUIDs))
 	for _, guid := range normalizedGUIDs {
-		if mapped, ok := byGUID[guid]; ok {
-			resp = append(resp, mapped)
+		if idx, ok := guidToIndex[guid]; ok {
+			resp = append(resp, bridges[idx].response)
 		}
 	}
 
@@ -711,33 +398,27 @@ func (s *discoveryService) handlePodcastIndexPodcastByItunesID(w http.ResponseWr
 	ctx, cancel := context.WithTimeout(r.Context(), s.timeout)
 	defer cancel()
 
-	fetch := func(ctx context.Context) (any, error) {
+	fetch := func(ctx context.Context) (*piPodcastResponse, error) {
 		feed, err := s.fetchPodcastIndexPodcastByItunesID(ctx, podcastItunesID)
 		if err != nil {
 			return nil, errors.Join(errDiscoveryUpstreamError, err)
 		}
-		if feed == nil || feed.ID == 0 {
+		if feed == nil {
 			return nil, nil
 		}
-		parsedID, _ := strconv.ParseInt(podcastItunesID, 10, 64)
-		mapped, ok := mapPodcastIndexPodcastToDiscoveryPodcast(*feed, parsedID)
+		mapped, ok := mapPodcastIndexPodcastToPIPodcast(*feed, podcastItunesID)
 		if !ok {
 			return nil, nil
 		}
-		return mapped, nil
+		return &mapped, nil
 	}
 
-	data, cacheStatus, err := s.getWithGracefulDegradation(ctx, cacheKey, discoveryCacheTTLLookup, fetch)
+	data, cacheStatus, err := getWithGracefulDegradation(s, ctx, cacheKey, discoveryCacheTTLLookup, fetch)
 	if err != nil {
 		var configErr *discoveryProviderConfigError
 		if errors.As(err, &configErr) {
 			slog.Error("podcastindex itunesId lookup unavailable", "error", err, "provider", configErr.provider)
-			writeDiscoveryError(
-				w,
-				http.StatusServiceUnavailable,
-				"DISCOVERY_PROVIDER_NOT_CONFIGURED",
-				"podcastindex provider is not configured",
-			)
+			writeDiscoveryErrorSpec(w, http.StatusServiceUnavailable, discoveryErrProviderNotConfigured)
 			logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, cacheStatus)
 			return
 		}
@@ -754,93 +435,80 @@ func (s *discoveryService) handlePodcastIndexPodcastByItunesID(w http.ResponseWr
 		return
 	}
 
-	resp, ok := data.(discoveryPodcastResponse)
-	if !ok {
-		writeDiscoveryError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "invalid response type")
-		logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), errors.New("invalid response type"), CacheStatusMissError)
-		return
-	}
-
-	writeDiscoveryJSON(w, http.StatusOK, resp)
+	writeDiscoveryJSON(w, http.StatusOK, data)
 	logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), nil, cacheStatus)
 }
 
-func mapPodcastIndexPodcastToDiscoveryPodcast(feed podcastIndexFeedItunes, itunesID int64) (discoveryPodcastResponse, bool) {
-	id := itunesID
-	if id == 0 {
-		id = feed.ItunesID
-	}
-	if id == 0 && feed.ID == 0 {
-		return discoveryPodcastResponse{}, false
+func mapPodcastIndexBatchFeedBridge(feed podcastIndexBatchFeed) (podcastIndexBatchFeedBridge, bool) {
+	orderingGUID := strings.TrimSpace(feed.PodcastGUID)
+	if orderingGUID == "" {
+		return podcastIndexBatchFeedBridge{}, false
 	}
 
-	genres := make([]discoveryGenre, 0, len(feed.Categories))
-	for catID, name := range feed.Categories {
-		name = strings.TrimSpace(name)
-		if name != "" {
-			genres = append(genres, discoveryGenre{GenreID: catID, Name: name})
-		}
+	podcast, ok := mapPodcastIndexPodcastToPIPodcast(
+		feed.podcastIndexPodcastFeed,
+		strconv.FormatInt(feed.ItunesID, 10),
+	)
+	if !ok {
+		return podcastIndexBatchFeedBridge{}, false
 	}
 
-	var itunesIDStr string
-	if id > 0 {
-		itunesIDStr = strconv.FormatInt(id, 10)
-	}
-
-	return discoveryPodcastResponse{
-		ID:              strconv.FormatInt(feed.ID, 10),
-		Title:           feed.Title,
-		URL:             feed.Link,
-		FeedURL:         strings.TrimSpace(feed.URL),
-		Genres:          genres,
-		Description:     strings.TrimSpace(feed.Description),
-		PodcastItunesID: itunesIDStr,
-		FeedID:          strconv.FormatInt(feed.ID, 10),
-		PodcastGUID:     strings.TrimSpace(feed.PodcastGUID),
-		Language:        strings.TrimSpace(feed.Language),
-		EpisodeCount:    asOptionalInt64(feed.EpisodeCount),
+	return podcastIndexBatchFeedBridge{
+		orderingGUID: orderingGUID,
+		response:     podcast,
 	}, true
 }
 
-func mapPodcastIndexFeedToSummaryResponse(feed podcastIndexFeedItunes, fallbackGUID string) (podcastIndexFeedSummaryResponse, bool) {
-	podcastGUID := strings.TrimSpace(feed.PodcastGUID)
-	if podcastGUID == "" {
-		podcastGUID = strings.TrimSpace(fallbackGUID)
-	}
-	if feed.ID <= 0 || podcastGUID == "" || strings.TrimSpace(feed.Title) == "" {
-		return podcastIndexFeedSummaryResponse{}, false
-	}
+func mapPodcastIndexPodcastToPIPodcast(feed podcastIndexPodcastFeed, podcastItunesID string) (piPodcastResponse, bool) {
+	title := strings.TrimSpace(feed.Title)
+	author := strings.TrimSpace(feed.Author)
+	artwork := strings.TrimSpace(feed.Artwork)
+	description := strings.TrimSpace(feed.Description)
+	feedURL := strings.TrimSpace(feed.URL)
+	itunesIDStr := strings.TrimSpace(podcastItunesID)
+	lastUpdateTime := feed.LastUpdateTime
+	episodeCount := feed.EpisodeCount
+	language := strings.TrimSpace(feed.Language)
 
-	categories := make(map[string]string, len(feed.Categories))
-	for key, name := range feed.Categories {
+	genres := make([]string, 0, len(feed.Categories))
+	for _, name := range feed.Categories {
 		name = strings.TrimSpace(name)
-		if name == "" {
-			continue
+		if name != "" {
+			genres = append(genres, name)
 		}
-		categories[key] = name
 	}
 
-	var itunesID *int64
-	if feed.ItunesID > 0 {
-		itunesID = &feed.ItunesID
+	if title == "" ||
+		author == "" ||
+		artwork == "" ||
+		description == "" ||
+		feedURL == "" ||
+		itunesIDStr == "" {
+		return piPodcastResponse{}, false
 	}
 
-	return podcastIndexFeedSummaryResponse{
-		ID:              feed.ID,
-		Title:           strings.TrimSpace(feed.Title),
-		URL:             strings.TrimSpace(feed.URL),
-		OriginalURL:     strings.TrimSpace(feed.OriginalURL),
-		Link:            strings.TrimSpace(feed.Link),
-		Description:     strings.TrimSpace(feed.Description),
-		Author:          strings.TrimSpace(feed.Author),
-		OwnerName:       strings.TrimSpace(feed.OwnerName),
-		Image:           strings.TrimSpace(feed.Image),
-		Artwork:         strings.TrimSpace(feed.Artwork),
-		PodcastItunesID: itunesID,
-		Language:        strings.TrimSpace(feed.Language),
-		Categories:      categories,
-		PodcastGUID:     podcastGUID,
-		EpisodeCount:    asOptionalInt64(feed.EpisodeCount),
+	var lastUpdateTimeValue *int64
+	if lastUpdateTime > 0 {
+		lastUpdateTimeValue = &lastUpdateTime
+	}
+
+	var episodeCountValue *int64
+	if episodeCount > 0 {
+		episodeCountValue = &episodeCount
+	}
+
+	return piPodcastResponse{
+		Title:           title,
+		Author:          author,
+		Artwork:         artwork,
+		Description:     description,
+		FeedURL:         feedURL,
+		LastUpdateTime:  lastUpdateTimeValue,
+		PodcastItunesID: itunesIDStr,
+		EpisodeCount:    episodeCountValue,
+		Language:        language,
+		Genres:          genres,
+		Dead:            feed.Dead != 0,
 	}, true
 }
 

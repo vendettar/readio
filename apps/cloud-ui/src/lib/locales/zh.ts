@@ -513,7 +513,6 @@ const locale = {
   episodeExplicit: '成人内容',
   viewOriginal: '查看原文',
   viewTranscript: '查看转录',
-  viewChapters: '章节',
   ariaPlayEpisode: '播放单集',
   ariaOpenEpisodeDetail: '打开单集详情',
   episodeWebpage: '单集网页',

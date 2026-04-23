@@ -1,7 +1,6 @@
 // src/__tests__/exploreStore.test.ts
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DB } from '../../lib/dexieDb'
-import discovery from '../../lib/discovery'
 import { LibraryRepository } from '../../lib/repositories/LibraryRepository'
 import { __resetRequestManagerStateForTests } from '../../lib/requestManager'
 import { __testOnlyResetExploreStoreFlags, useExploreStore } from '../exploreStore'
@@ -17,9 +16,7 @@ describe('ExploreStore', () => {
     __resetRequestManagerStateForTests()
     // Reset store state manually to avoid test interference
     useExploreStore.setState({
-      searchQuery: '',
       country: 'us',
-      view: 'search',
       subscriptions: [],
       subscriptionsLoaded: false,
       favorites: [],
@@ -27,14 +24,7 @@ describe('ExploreStore', () => {
     })
   })
 
-  describe('Search', () => {
-    it('should update search query', () => {
-      const { setSearchQuery } = useExploreStore.getState()
-
-      setSearchQuery('technology')
-      expect(useExploreStore.getState().searchQuery).toBe('technology')
-    })
-
+  describe('Country', () => {
     it('should update country', () => {
       const { setCountry } = useExploreStore.getState()
 
@@ -61,53 +51,21 @@ describe('ExploreStore', () => {
       expect(useExploreStore.getState().country).toBe('us')
       expect(setSettingSpy).not.toHaveBeenCalled()
     })
-
-    it('aborts underlying search transport when external signal aborts', async () => {
-      let capturedSignal: AbortSignal | undefined
-      vi.spyOn(discovery, 'searchPodcasts').mockImplementation(
-        (_query, _country, _limit, signal?: AbortSignal) =>
-          new Promise((_, reject) => {
-            capturedSignal = signal
-            signal?.addEventListener(
-              'abort',
-              () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })),
-              { once: true }
-            )
-          })
-      )
-
-      const controller = new AbortController()
-      const performPromise = useExploreStore.getState().performSearch('tech', controller.signal)
-      controller.abort()
-      await performPromise
-
-      expect(capturedSignal?.aborted).toBe(true)
-      expect(useExploreStore.getState().searchLoading).toBe(false)
-    })
-  })
-
-  describe('View Navigation', () => {
-    it('should change view', () => {
-      const { setView } = useExploreStore.getState()
-
-      setView('favorites')
-      expect(useExploreStore.getState().view).toBe('favorites')
-
-      setView('subscriptions')
-      expect(useExploreStore.getState().view).toBe('subscriptions')
-    })
   })
 
   describe('Subscriptions', () => {
     const mockPodcast = {
       podcastItunesId: '123',
-      collectionName: 'Test Podcast',
-      artistName: 'Test Artist',
-      artworkUrl100: 'http://example.com/art.jpg',
-      artworkUrl600: 'http://example.com/art-large.jpg',
-      feedUrl: 'HTTP://Example.com:80/feed.xml#frag',
-      collectionViewUrl: '',
-      genres: [],
+      title: 'Test Podcast',
+      author: 'Test Artist',
+      artwork: 'http://example.com/art-large.jpg',
+      feedUrl: 'http://example.com/feed.xml',
+      description: 'A test podcast',
+      lastUpdateTime: 1613394044,
+      episodeCount: 50,
+      language: 'en',
+      genres: ['Technology'],
+      dead: false,
     }
 
     it('should subscribe to a podcast', async () => {
@@ -282,13 +240,16 @@ describe('ExploreStore', () => {
   describe('Favorites', () => {
     const mockPodcast = {
       podcastItunesId: '123',
-      collectionName: 'Test Podcast',
-      artistName: 'Test Artist',
-      artworkUrl100: 'http://example.com/art.jpg',
-      artworkUrl600: '',
-      feedUrl: 'HTTP://Example.com:80/feed.xml#frag',
-      collectionViewUrl: '',
-      genres: [],
+      title: 'Test Podcast',
+      author: 'Test Artist',
+      artwork: 'http://example.com/art-large.jpg',
+      feedUrl: 'http://example.com/feed.xml',
+      description: 'A test podcast',
+      lastUpdateTime: 1613394044,
+      episodeCount: 50,
+      language: 'en',
+      genres: ['Technology'],
+      dead: false,
     }
 
     const mockEpisode = {

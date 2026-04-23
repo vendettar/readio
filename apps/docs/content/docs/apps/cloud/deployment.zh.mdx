@@ -1,0 +1,463 @@
+---
+title: Cloud 部署指南
+description: Cloud CD 工作流与远程发布布局的运维说明。
+---
+
+# Cloud 部署指南
+
+本文档与 `.github/workflows/cd-cloud.yml` 保持一致，仅记录部署契约。
+它不负责 VPS、nginx、TLS、防火墙或 `systemd` 的搭建。
+
+## 0a. 生产环境运行时配置契约
+
+在生产环境 Cloud 中：
+
+- `apps/cloud-api` 动态提供 `/env.js`，**优先于** SPA/静态资源回退。
+- Cloud **不使用** `apps/cloud-ui/public/env.js` 或 `dist/env.js` 作为运行时配置基准。
+- 后端仅通过显式浏览器安全 allowlist 发出运行时配置。
+- 服务端所有的运行时值（监听端口、路径、滥用控制设置）保留在 VPS 环境或 systemd 环境文件（`/etc/readio/readio-cloud.env`）中。
+- PodcastIndex 的服务端凭证也保留在 VPS/systemd 运行时环境文件（`/etc/readio/readio-cloud.env`）中，不放到 GitHub Actions variables，也不发到 `/env.js`。
+
+当前契约下不存在单独的静态 Cloud `public/env.js` 模板。
+前端读取 `window.__READIO_ENV__`，而 Cloud 的运行时配置所有权来自后端动态生成的 `/env.js`。
+
+浏览器公开的运行时配置字段不是密钥。如果字段被发出到 `/env.js`，假设每个浏览器用户都能读取它。
+
+完整配置审计见 `handoff/runtime-config-ownership-audit.md`。
+
+## 1. 工作流构建内容
+
+- 使用 `pnpm -C apps/cloud-ui build` 在服务器外构建 Cloud UI。
+- 使用 `apps/cloud-api` 中的 `CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o readio-cloud .` 构建 Linux 二进制。
+- 只暂存发布产物：`readio-cloud` 二进制和 `apps/cloud-ui/dist`。
+- 这里明确要求交叉编译，因为 `apps/cloud-api/package.json` 的本地脚手架脚本是 `go build -o /tmp/readio-cloud .`，不能满足 Linux CD 契约。
+- Go 二进制读取的是 `PORT`；工作流中的 `CLOUD_PORT` 只是烟测端口，必须与服务的 `PORT` 值一致。
+
+## 2. 必需的 GitHub 配置
+
+使用受保护的 `cloud-production` GitHub Environment 存放部署 secrets，并可用于人工审批。
+
+Secrets：
+
+- `CLOUD_SSH_HOST`
+- `CLOUD_SSH_PORT`
+- `CLOUD_SSH_USER`
+- `CLOUD_SSH_PRIVATE_KEY`
+- `CLOUD_SSH_KNOWN_HOSTS`
+
+Variables：
+
+- `CLOUD_SERVICE_NAME`，默认 `readio-cloud`
+- `CLOUD_PORT`，默认 `8080`
+
+SSH 安全规则：
+
+- 通过 `CLOUD_SSH_KNOWN_HOSTS` 提供主机身份材料。
+- 保持 `StrictHostKeyChecking=yes`。
+- 不要把 `StrictHostKeyChecking=no` 作为可接受的文档化路径。
+
+## 2a. 远端前置条件
+
+在工作流能够成功执行之前，目标 VPS 必须已经具备：
+
+- 与 `CLOUD_SSH_USER` 一致的 Linux 用户
+- 该用户可通过上传的私钥进行 SSH 登录
+- VPS 上已安装 `rsync`
+- VPS 上已安装 `curl`，用于健康检查
+- 存在一个名称与 `CLOUD_SERVICE_NAME` 一致的 `systemd` 服务
+- SSH 用户具备重启并检查该服务状态的权限
+  - 要么服务直接由该 SSH 用户管理
+  - 要么该 SSH 用户可非交互式执行所需的 `systemctl` 命令
+
+本部署指南假设这些前置条件已经存在。如果其中任意一项缺失，工作流即使构建成功，也仍可能在发布或烟测阶段失败。
+
+## 3. 远程目录布局
+
+工作流在 VPS 上预期如下布局：
+
+- `/opt/readio/shared/data/`：持久化 SQLite 数据
+- `/opt/readio/releases/<git-sha>/`：发布产物
+- `/opt/readio/current`：运行时指针
+
+运行时契约：
+
+- 服务应从 `current` 指向的发布目录执行二进制，或在 `systemd` 中使用 `WorkingDirectory=/opt/readio/current`
+- Cloud 应用必须能从当前激活发布目录解析同目录下的 `dist/`
+- SQLite 数据库路径必须保持在 `/opt/readio/shared/data/` 下，或其他位于发布目录之外的共享持久路径中
+- 服务必须为监听端口导出 `PORT`；不要在这个契约里使用 `READIO_PORT`
+
+每个发布目录包含：
+
+- `readio-cloud`
+- `dist/`
+
+工作流会先创建远程目录再传输，且不会清空部署根目录，因此 SQLite 的 `data/` 会被保留。
+
+## 3a. 新主机 VPS 启动
+
+如果你在准备新的 VPS，先创建发布目录、安装 `systemd` 单元，并授予部署用户无需交互即可重启和检查 Cloud 服务的权限。
+
+请仅使用当前运行时契约：
+
+- `READIO_CLOUD_UI_DIST_DIR`
+- `READIO_CLOUD_DB_PATH`
+
+对于可变的运行时配置，优先使用 env file，而不是把所有值都硬编码进 `systemd` 单元：
+
+- 像 `PORT`、`READIO_CLOUD_UI_DIST_DIR`、`READIO_CLOUD_DB_PATH` 这种稳定路径留在 unit 里。
+- secrets 和可调运维参数放到 `/etc/readio/readio-cloud.env`。
+- 这样可以保持 `systemd` unit 稳定，同时允许你只修改运行时配置而不反复重写服务定义。
+
+PodcastIndex Phase 1 也使用同一套 env-file 契约：
+
+- `PODCAST_INDEX_API_KEY`
+- `PODCAST_INDEX_API_SECRET`
+- `PODCAST_INDEX_USER_AGENT`
+
+这些值属于 `apps/cloud-api` 的后端运行时配置，应写入 `/etc/readio/readio-cloud.env`。
+
+不要放到：
+
+- GitHub Actions variables
+- 浏览器运行时配置（`/env.js`）
+- 前端 `.env` 文件
+- `apps/cloud-ui`
+
+示例启动脚本：
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+DEPLOY_USER="$(id -un)"
+DEPLOY_GROUP="$(id -gn)"
+SYSTEMCTL_BIN="$(command -v systemctl)"
+SERVICE_NAME="readio-cloud"
+REMOTE_ROOT="/opt/readio"
+RELEASES_DIR="$REMOTE_ROOT/releases"
+SHARED_DATA_DIR="$REMOTE_ROOT/shared/data"
+CURRENT_DIR="$REMOTE_ROOT/current"
+DB_PATH="$SHARED_DATA_DIR/readio.db"
+
+sudo mkdir -p "$RELEASES_DIR"
+sudo mkdir -p "$SHARED_DATA_DIR"
+sudo mkdir -p /etc/readio
+sudo chown -R "$DEPLOY_USER:$DEPLOY_GROUP" "$REMOTE_ROOT"
+
+sudo tee /etc/readio/readio-cloud.env >/dev/null <<EOF
+READIO_ASR_ALLOWED_ORIGINS=https://www.readio.top
+READIO_ASR_RELAY_PUBLIC_TOKEN=replace-with-a-long-random-token
+READIO_ASR_RATE_LIMIT_BURST=60
+READIO_ASR_RATE_LIMIT_WINDOW_MS=60000
+READIO_PROXY_RATE_LIMIT_BURST=5
+READIO_PROXY_RATE_LIMIT_WINDOW_MS=60000
+# ASR Proxy Worker 配置 (可选)
+READIO_ASR_WORKER_BASE_URL=https://asr-proxy.example.workers.dev
+READIO_ASR_WORKER_SHARED_SECRET=your-high-entropy-secret-string
+# 内置 Cloudflare ASR 配置 (使用“系统提供”模式时必填)
+READIO_CF_ACCOUNT_ID=your-cloudflare-account-id
+READIO_CF_API_TOKEN=your-cloudflare-api-token
+# PodcastIndex 补充历史 episode 配置 (切换到 PodcastIndex supplementary hydration 时必填)
+PODCAST_INDEX_API_KEY=your-podcastindex-api-key
+PODCAST_INDEX_API_SECRET=your-podcastindex-api-secret
+PODCAST_INDEX_USER_AGENT=Readio/1.0 (+https://www.readio.top)
+EOF
+sudo chmod 600 /etc/readio/readio-cloud.env
+
+sudo tee "/etc/systemd/system/${SERVICE_NAME}.service" >/dev/null <<EOF
+[Unit]
+Description=Readio Cloud Backend
+After=network.target
+
+[Service]
+Type=simple
+User=$DEPLOY_USER
+WorkingDirectory=$CURRENT_DIR
+ExecStart=$CURRENT_DIR/readio-cloud
+Restart=always
+EnvironmentFile=/etc/readio/readio-cloud.env
+
+Environment=PORT=8080
+Environment=READIO_CLOUD_UI_DIST_DIR=$CURRENT_DIR/dist
+Environment=READIO_CLOUD_DB_PATH=$DB_PATH
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo tee "/etc/sudoers.d/readio-cloud-cd" >/dev/null <<EOF
+$DEPLOY_USER ALL=(root) NOPASSWD: $SYSTEMCTL_BIN restart $SERVICE_NAME, $SYSTEMCTL_BIN is-active $SERVICE_NAME
+EOF
+sudo chmod 440 /etc/sudoers.d/readio-cloud-cd
+
+sudo "$SYSTEMCTL_BIN" daemon-reload
+sudo "$SYSTEMCTL_BIN" enable "$SERVICE_NAME"
+```
+
+重要细节：
+
+- 服务使用 `WorkingDirectory=/opt/readio/current`。
+- 二进制路径是 `/opt/readio/current/readio-cloud`。
+- Cloud UI 静态资源从 `/opt/readio/current/dist` 提供。
+- SQLite 文件应保留在发布目录之外，例如 `/opt/readio/shared/data/readio.db`。
+- `/etc/readio/readio-cloud.env` 是推荐的 Cloud 可变运行时配置位置。
+- PodcastIndex supplementary hydration 的凭证和 user agent 也应写在 `/etc/readio/readio-cloud.env`。
+- 如果缺少 `PODCAST_INDEX_API_KEY` 或 `PODCAST_INDEX_API_SECRET`，`/api/v1/discovery/podcast-index/episodes` 会返回 `503 DISCOVERY_PROVIDER_NOT_CONFIGURED`。
+- Cloud ASR relay 的防滥用边界依赖 `READIO_ASR_ALLOWED_ORIGINS`、`READIO_ASR_RELAY_PUBLIC_TOKEN`、`READIO_ASR_RATE_LIMIT_BURST`、`READIO_ASR_RATE_LIMIT_WINDOW_MS`。
+- Cloud `/api/proxy` 的应用级速率限制由 `READIO_PROXY_RATE_LIMIT_BURST` 和 `READIO_PROXY_RATE_LIMIT_WINDOW_MS` 控制。
+- `READIO_ASR_RELAY_PUBLIC_TOKEN` 只需要在后端运行时环境中配置一次。生产 Cloud 会由 `apps/cloud-api` 动态生成 `/env.js`，把同一个浏览器可见值下发给前端，因此不再需要额外维护一份前端运行时 token。它只是轻量级防滥用值，不是强 secret 边界。
+- Cloud ASR relay 是 browser-facing 的 same-origin endpoint。请求必须带合法 `Origin`；缺失或不被允许的 `Origin` 会被直接拒绝。
+- `READIO_ASR_ALLOWED_ORIGINS` 是运维显式编写的 allowlist。请写完整 origin，例如 `https://www.readio.top` 或 `https://example.com:8443`；不要依赖 allowlist 内部对默认端口做隐式归一化。
+- 工作流已经使用 `sudo -n`，因此部署用户必须能够无密码执行 `systemctl restart` 和 `systemctl is-active`。
+- 工作流会在重启服务前把 `/opt/readio/current` 指向新发布目录，所以新主机第一次重启前必须已经存在对应发布目录。
+
+如果 VPS 的 sudoers 规则只允许 `systemctl restart readio-cloud`，却不允许 `systemctl is-active readio-cloud`，那么 GitHub Actions 里的非交互烟测步骤仍会失败。
+
+如果修改了 unit 或 env file，记得执行：
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart readio-cloud
+```
+
+建议在 VPS 上做的预启动验证：
+
+```bash
+sudo -n "$(command -v systemctl)" restart readio-cloud
+sudo -n "$(command -v systemctl)" is-active --quiet readio-cloud
+curl -fsS http://127.0.0.1:8080/healthz
+```
+
+## 4. 发布流程
+
+部署采用按版本号分段的发布方式，并且仅在指针层面保持原子性：
+
+1. 在 GitHub runner 上构建 Cloud UI 和 Cloud API。
+2. 将产物先暂存到本地 `release/`。
+3. 为当前提交 SHA 创建远程发布目录。
+4. 只把 `release/` 传到 `/opt/readio/releases/<git-sha>/`。
+5. 使用 `ln -sfn` 把 `/opt/readio/current` 切到新发布目录。
+6. 重启 `CLOUD_SERVICE_NAME` 指定的服务，默认值为 `readio-cloud`。
+7. 校验服务处于 active 状态。
+8. 校验当前发布目录中的二进制和静态资源目录存在。
+9. 使用 `CLOUD_PORT` 指定的端口做健康探测，默认值为 `8080`，路径为 `/healthz`。
+
+这不是原地覆盖式部署。工作流不会先删除持久化数据，也不会直接往 live 路径里复制构建产物。
+
+## 5. 重启与烟测
+
+工作流使用 `CLOUD_SERVICE_NAME` 指定的服务名，并检查：
+
+- `systemctl is-active --quiet <service>`
+- 当前发布目录中存在 `readio-cloud`
+- 当前发布目录中存在 `dist/`
+- `curl -fsS http://127.0.0.1:${CLOUD_PORT}/healthz`
+
+如果需要手动验证运行时状态，也应使用同样的检查。
+
+## 6. 回滚
+
+回滚是手动、按发布目录进行的：
+
+1. 保留上一个成功发布的目录。
+2. 用 `ln -sfn` 把 `/opt/readio/current` 指回上一个发布目录。
+3. 再次重启服务。
+4. 重新执行相同的 smoke 检查。
+
+如果上一个发布目录不存在，就需要从其他已知正常的发布目录恢复。工作流不会自动重新生成回滚产物。
+
+## 7. 可信代理与客户端 IP 契约
+
+Go 后端通过可信代理网关推导有效的客户端 IP。这确保速率限制和滥用控制针对的是真正的浏览器客户端，而非代理链。
+
+### 信任链：Cloudflare → nginx → Go
+
+请求经过三层：
+
+1. **Cloudflare** — 边缘过滤、机器人防护和 DDoS 缓解。
+2. **nginx** — VPS 上的反向代理；终止 TLS，将请求转发到本地 Go。
+3. **Go (`apps/cloud-api`)** — 对 `/api/proxy` 和 `/api/v1/asr/transcriptions` 执行面向路由的应用级速率限制。
+
+Go 只信任**紧邻的代理跳**（loopback/nginx），不信任 Cloudflare 公共 CIDR。可信代理集合通过 `READIO_TRUSTED_PROXY_CIDRS` 配置。
+
+### nginx real-ip 配置
+
+nginx 必须先从 **Cloudflare** 恢复原始客户端 IP，再把恢复后的客户端 IP 传给 Go。
+
+这一步不要在 nginx 的 `set_real_ip_from` 中使用 loopback 地址。在生产链路 `Cloudflare -> nginx -> Go` 中，nginx 的直接网络对端是 Cloudflare，因此 nginx 在采纳 `CF-Connecting-IP` 时必须信任 **Cloudflare 当前公布的 IP 段**。
+
+请在合适的 `http`、`server` 或包含的 nginx 配置作用域中添加 real-ip 指令，并保持 Cloudflare IP 段为最新：
+
+```nginx
+# 下面只是示例；请替换成 Cloudflare 当前公布的 IP 段。
+set_real_ip_from 173.245.48.0/20;
+set_real_ip_from 103.21.244.0/22;
+set_real_ip_from 2400:cb00::/32;
+
+real_ip_header CF-Connecting-IP;
+real_ip_recursive on;
+```
+
+然后，在代理到 Go 的 `location` 块中配置：
+
+```nginx
+# 完成上面的 real-ip 步骤后，$remote_addr 已经是恢复后的客户端 IP。
+proxy_set_header X-Real-IP          $remote_addr;
+proxy_set_header X-Forwarded-For    $proxy_add_x_forwarded_for;
+proxy_set_header X-Forwarded-Proto  $scheme;
+proxy_set_header Host               $host;
+proxy_pass http://127.0.0.1:8080;
+```
+
+`X-Forwarded-Proto` 是后端 same-origin 契约的一部分。它必须与外部请求协议保持一致（即使用 `$scheme`），不要硬编码也不要省略；`apps/cloud-api` 只会在紧邻对端可信时采信它，并用它区分 same-origin fallback 中的 `http` / `https`。
+
+### `READIO_TRUSTED_PROXY_CIDRS` 运行时配置
+
+- **类型**：逗号分隔的 CIDR 列表
+- **默认值**：空（无可信代理，所有转发头被忽略）
+- **示例**：`127.0.0.1/32,::1/128`
+- **范围**：仅后端 —— 不得出现在浏览器 `/env.js` 中
+
+当紧邻的对等方 IP 匹配可信代理 CIDR 时，Go 会采纳 `X-Real-IP`（优先）和 `X-Forwarded-For`（回退）。当对等方不受信任时，转发头被忽略，速率限制直接应用于对等方 IP。
+
+在 `/etc/readio/readio-cloud.env` 中设置：
+
+```bash
+READIO_TRUSTED_PROXY_CIDRS=127.0.0.1/32,::1/128
+```
+
+### 分层滥用控制
+
+| 层级 | 作用 |
+| --- | --- |
+| Cloudflare | 边缘过滤、机器人检测、DDoS 缓解 |
+| nginx | 反向代理把关、TLS 终止、请求缓冲 |
+| Go (`apps/cloud-api`) | 基于有效客户端 IP 的面向路由应用级速率限制 |
+
+各层独立运行。Go 的速率限制器即使请求通过代理链到达，也针对真正的浏览器客户端。
+
+## 8. 运维边界
+
+- 该工作流假设 VPS 已经存在。
+- 它不负责安装或管理 `systemd`。
+- 它不负责配置 nginx、TLS 或防火墙。
+- 它不要求为已批准的媒体 fallback 路径配置单独的 CORS proxy。
+- 它不会强制所有音频都走后端；在浏览器可用时仍优先使用浏览器直连媒体访问。
+- 对已批准的媒体相关失败类，Go 后端只作为透传 fallback 代理，不缓存也不持久化媒体字节。
+- 浏览器本地的下载、转录和设置仍然留在浏览器本地。
+- 该工作流不会重新启用 Workbox/PWA；Cloud 当前保持 PWA 关闭。
+- 它不部署 SQLite schema、同步、认证或多节点能力。
+
+## 9. ASR 代理 (Cloudflare Workers) 配置
+
+为了规避 Provider (如 Groq) 基于 IP 的速率限制并利用分布式出口 IP，Cloud 版本支持使用可选的 Cloudflare Workers 网关作为 ASR 转写代理。
+
+该 Worker 仅作为**后端出口跳**（`apps/cloud-api` → Worker → Groq），不是浏览器直连的代理，也不是通用出站隧道。当前仅启用 **Groq 转写提交**。
+
+### 9.1 部署 Worker
+1. 在 Cloudflare 面板创建新的 Worker。
+2. 将 `apps/cloud-api/resources/workers/asr-proxy.js` 中的源码粘贴至编辑器。
+3. 在 Worker 的 **Settings -> Variables** 中添加环境变量：
+   - `READIO_ASR_WORKER_SHARED_SECRET`: 设置一个长随机高熵字符串（Secret）。
+4. 部署 Worker 并记录其公网 URL（例如 `https://asr-proxy.example.workers.dev`）。
+
+### 9.2 后端接入配置
+在 VPS 的运行时环境文件 `/etc/readio/readio-cloud.env` 中添加以下字段，使 `apps/cloud-api` 能够正确对接 ASR 代理：
+
+```bash
+# ASR Proxy Worker 的基础 URL
+READIO_ASR_WORKER_BASE_URL=https://asr-proxy.example.workers.dev
+# 必须与 Worker 侧配置的 READIO_ASR_WORKER_SHARED_SECRET 严格一致
+READIO_ASR_WORKER_SHARED_SECRET=your-high-entropy-secret-string
+```
+
+两个值都必须配置 Worker transport 才会激活。任一缺失或为空时，后端默认走 direct-to-Groq。
+
+回滚方式：清空或删除这两个值并重启服务即可。无论传输模式如何，浏览器 contract 不受影响。
+
+### 9.3 安全性说明
+- **鉴权**：后端请求 Worker 时会自动携带 `X-Readio-Cloud-Secret` Header，Worker 校验失败将拒绝转发。
+- **收敛**：Worker 源码级限制了仅允许转发至 `api.groq.com`，其他 provider 显式拒绝 (404)，不是通用代理。
+- **密钥卫生**：Worker 共享密钥和 provider API key 均不出现在日志或响应体中。
+- **性能**：Worker 使用流式透传模式处理音频 Body，支持大体积音频文件。
+
+## 10. 管理后台可观测性
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `READIO_ADMIN_TOKEN` | (空 = 禁用) | `/admin/*` 端点的 Bearer token |
+| `READIO_ADMIN_LOG_BUFFER` | 2000 | 环形缓冲区容量 (最小 100，最大 10000) |
+
+### 10.1 访问入口
+
+- 浏览器 UI：`/ops`
+- 后端 JSON API：
+  - `/admin/logs`
+  - `/admin/health`
+  - `/admin/metrics/summary`
+- `/ops` 只是运维查看界面，不替代 `/admin/*` 的后端 token 校验
+
+### 10.2 启用条件与鉴权
+
+- 当 `READIO_ADMIN_TOKEN` 未设置或为空时：
+  - `/admin/*` 返回 `404`
+  - `/ops` 页面即使能打开，也无法拿到任何 admin 数据
+- 当 `READIO_ADMIN_TOKEN` 已设置时：
+  - `/admin/*` 需要 `Authorization: Bearer <token>`
+  - 缺失或错误的 bearer token 返回 `401`
+
+### 10.3 Token 使用规则
+
+- `READIO_ADMIN_TOKEN` 只存在于服务端
+- 不会通过 `/env.js` 输出
+- 浏览器 token 只在 `/ops` 页面手动输入
+- `/ops` 页面只把 token 存在 `sessionStorage`
+- 不要把 token 放进 query 参数、路由参数或硬编码前端配置
+
+### 10.4 推荐的外围收口
+
+- nginx 层建议：
+  - 保证 `/ops` 与 `/admin/*` 不可缓存
+  - 作为 defense in depth，可在反向代理层额外加 `Cache-Control: no-store`
+  - 强烈建议对 `/ops` 与 `/admin/*` 加 IP allowlist
+  - **必须**：在站点配置（`/etc/nginx/sites-enabled/default`）的 `location /api/v1/asr/` 下设置 `client_max_body_size 20m;` 以允许 ASR 音频上传（单次请求，需匹配或超过后端限制；Readio 前端限制分块 10MB，后端允许 20MB）。用 `sudo nginx -t` 测试，用 `sudo systemctl reload nginx` 重载
+- Cloudflare 层建议：
+  - 对 `/ops*` 与 `/admin/*` 做更严格的路径级控制
+  - 视情况增加 WAF / rate limit / 国家或 IP 限制
+- 这些外围限制不能替代 `READIO_ADMIN_TOKEN`，只是额外加固
+
+### 10.5 运维操作
+
+- 用高熵随机值生成 token，例如：
+
+```bash
+openssl rand -base64 48
+```
+
+- 将 `READIO_ADMIN_TOKEN` 放到服务端 env file，通常是：
+  - `/etc/readio/readio-cloud.env`
+- 新增或修改 token 后，重启服务：
+
+```bash
+sudo systemctl restart readio-cloud
+```
+
+- 如果 token 泄露：
+  1. 生成新 token
+  2. 更新 `/etc/readio/readio-cloud.env` 中的 `READIO_ADMIN_TOKEN`
+  3. 重启服务
+  4. 视为所有旧的 `/ops` 会话全部失效
+
+### 10.6 Env 示例
+
+```bash
+READIO_ADMIN_TOKEN=replace-with-a-long-random-token
+READIO_ADMIN_LOG_BUFFER=2000
+```
+
+## 11. 运维总结与边界
+
+- 该工作流假设 VPS 已经存在并完成基础系统初始化。
+- 运维人员负责管理 Cloudflare Workers 的生命周期及其 Secrets 同步。
+- 它不负责配置 nginx TLS 证书自动续期。
+- 浏览器本地数据（IndexedDB）的持久化安全性由浏览器同源策略保证，不属于后端部署边界。

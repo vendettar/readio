@@ -1,0 +1,33 @@
+---
+title: 开发标准
+---
+
+## 1. 共享前端标准
+
+Cloud 前端继续沿用主要的 Lite 演化工程规则：
+
+- tokenized layout，避免任意 UI 漂移
+- 原子化 Zustand selector
+- 显式异步取消
+- 长列表场景的 memoized 渲染
+- UI 不得绕过既定持久化边界直接写 DB
+
+## 2. 导航契约
+
+- 标题/封面仍然是 discovery / library 行项目的主要导航发射点
+- 单集行继续保持“直接播放”和“详情跳转”分离
+- 规范化播客/单集路由必须基于当前 Cloud discovery identity contract 生成
+
+## 3. 持久化边界
+
+- 浏览器本地写入必须继续经过 store action / repository helper
+- 组件应复用共享 DB/domain 类型，而不是临时拼接本地数据结构
+
+## 4. 无障碍基线
+
+Cloud 前端继续保持这些既定基线：
+
+- command palette 键盘交互
+- transcript 选区/菜单语义
+- player control ARIA
+- overlay 的确定性关闭/escape 行为

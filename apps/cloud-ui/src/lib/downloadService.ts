@@ -64,7 +64,7 @@ export interface DownloadJobOptions {
   audioUrl: string
   episodeTitle?: string
   episodeDescription?: string
-  podcastTitle?: string
+  showTitle?: string
   feedUrl?: string
   artworkUrl?: string
   silent?: boolean
@@ -248,7 +248,7 @@ export async function persistAudioBlobAsDownload(
           transcriptUrl: getValidTranscriptUrl(options.transcriptUrl) || undefined,
           sourceFeedUrl: options.feedUrl || undefined,
           lastAccessedAt: now,
-          sourcePodcastTitle: options.podcastTitle || undefined,
+          sourcePodcastTitle: options.showTitle || undefined,
           sourceEpisodeTitle: options.episodeTitle || undefined,
           sourceDescription: options.episodeDescription || undefined,
           sourceArtworkUrl: options.artworkUrl || undefined,

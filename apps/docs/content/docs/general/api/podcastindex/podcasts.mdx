@@ -1,0 +1,157 @@
+---
+title: Podcasts
+---
+
+# Podcast (Feed) Endpoints (/api/1.0/podcasts)
+
+Retrieving specific podcast feed data and show discovery. **Requires Authentication.**
+
+## `/byfeedid`
+Retrieve show-level metadata for a specific podcast by its Index ID.
+- **URL**: `/api/1.0/podcasts/byfeedid?id=75075`
+- **Example Response**:
+```json
+{
+  "status": "true",
+  "feed": {
+    "id": 75075,
+    "podcastGuid": "9b024349-ccf0-5f69-a609-6b82873eab3c",
+    "title": "Batman University",
+    "url": "https://feeds.theincomparable.com/batmanuniversity",
+    "originalUrl": "https://feeds.theincomparable.com/batmanuniversity",
+    "link": "https://www.theincomparable.com/batmanuniversity/",
+    "description": "Batman University is a seasonal podcast about you know who. It began with an analysis of episodes of “Batman: The Animated Series” but has now expanded to cover other series, movies, and media. Your professor is Tony Sindelar.",
+    "author": "Tony Sindelar",
+    "ownerName": "The Incomparable",
+    "image": "https://www.theincomparable.com/imgs/logos/logo-batmanuniversity-3x.jpg?cache-buster=2019-06-11",
+    "artwork": "https://www.theincomparable.com/imgs/logos/logo-batmanuniversity-3x.jpg?cache-buster=2019-06-11",
+    "lastUpdateTime": 1613394044,
+    "lastCrawlTime": 1613394034,
+    "lastParseTime": 1613394045,
+    "lastGoodHttpStatusTime": 1613394034,
+    "lastHttpStatus": 200,
+    "contentType": "application/rss+xml",
+    "itunesId": 1441923632,
+    "itunesType": "episodic",
+    "generator": "my podcast host",
+    "language": "en-us",
+    "explicit": false,
+    "type": 0,
+    "medium": "podcast",
+    "dead": 0,
+    "chash": "ad651c60eaaf3344595c0dd0bd787993",
+    "episodeCount": 19,
+    "crawlErrors": 0,
+    "parseErrors": 0,
+    "categories": {
+      "104": "Tv",
+      "105": "Film",
+      "107": "Reviews"
+    },
+    "locked": 0,
+    "imageUrlHash": 3969216649
+  }
+}
+```
+
+## `/byfeedurl`
+Lookup show metadata via its RSS URL.
+- **URL**: `/api/1.0/podcasts/byfeedurl?url={url}`
+- **Example Response**:
+```json
+{ "status": "true", "feed": { "id": 75075, "podcastGuid": "9b024349-...", "title": "Batman University", "url": "https://feeds.theincomparable.com/batmanuniversity" } }
+```
+
+## `/byitunesid`
+Lookup using the Apple store ID.
+- **URL**: `/api/1.0/podcasts/byitunesid?id=1441923632`
+- **Example Response**:
+```json
+{ "status": "true", "feed": { "id": 75075, "title": "Batman University", "itunesId": 1441923632 } }
+```
+
+## `/byguid`
+Lookup via its Podcasting 2.0 global ID.
+- **URL**: `/api/1.0/podcasts/byguid?guid=917393e3-1b1e-5cef-ace4-edaa54e1f810`
+- **Example Response**:
+```json
+{ "status": "true", "feed": { "id": 75075, "podcastGuid": "9b024349-ccf0-5f69-a609-6b82873eab3c", "title": "Batman University" } }
+```
+
+## `/bytag`
+Filter podcasts by tags (e.g., `podcast-value`).
+- **URL**: `/api/1.0/podcasts/bytag?q=podcast-value`
+- **Example Response**:
+```json
+{ "status": "true", "feeds": [{ "id": 75075, "title": "Batman University" }], "count": 1 }
+```
+
+## `/trending`
+Returns currently trending podcasts. Supports `lang`, `cat`, and `notcat` filters.
+- **URL**: `/api/1.0/podcasts/trending`
+- **Example Response**:
+```json
+{ "status": "true", "feeds": [{ "id": 75075, "title": "Trending Show", "trendScore": 12 }] }
+```
+
+## `/dead`
+Shows marked as dead or inactive.
+- **URL**: `/api/1.0/podcasts/dead`
+
+## `/newfeeds`
+Newly added shows to the index.
+- **URL**: `/api/1.0/podcasts/newfeeds`
+
+## `/batch/byguid` (POST)
+Batch retrieve multiple feeds by their GUIDs.
+- **URL**: `/api/1.0/podcasts/batch/byguid`
+- **Example Response**:
+```json
+{
+  "status": "true",
+  "allFound": true,
+  "found": 1,
+  "feeds": [
+    {
+      "id": 691283,
+      "title": "Bear Brook",
+      "url": "https:\/\/feeds.megaphone.fm\/TPG7540613670",
+      "originalUrl": "https:\/\/bearbrook.feed.nhpr.org\/",
+      "link": "https:\/\/www.nhpr.org",
+      "description": "Bear Brook, hosted by Jason Moon, is the critically-acclaimed true crime podcast from New Hampshire Public Radio. \nSeason 1 - Two barrels. Four Bodies. And a cold case that\u2019s changing how murders will be investigated forever.\nSeason 2: A True Crime Story - Jason Carroll is serving life in prison for a murder he says he didn\u2019t commit. The only evidence against him? His own taped confession. More than 30 years later, is it possible to get to the truth \u2013 and who gets to tell it?\nStephen King called both seasons \u201cthe best true crime podcasts I've ever heard. Brilliant, involving, hypnotic...",
+      "author": "NHPR",
+      "ownerName": "NHPR",
+      "image": "https:\/\/megaphone.imgix.net\/podcasts\/ccd024c4-cf9e-11f0-aa7b-d7182baa26f1\/image\/61c5bddecfb8c8dcff63d3590f1e3d0f.jpg?ixlib=rails-4.3.1&max-w=3000&max-h=3000&fit=crop&auto=format,compress",
+      "artwork": "https:\/\/megaphone.imgix.net\/podcasts\/ccd024c4-cf9e-11f0-aa7b-d7182baa26f1\/image\/61c5bddecfb8c8dcff63d3590f1e3d0f.jpg?ixlib=rails-4.3.1&max-w=3000&max-h=3000&fit=crop&auto=format,compress",
+      "lastUpdateTime": 1776797627,
+      "lastCrawlTime": 1776797624,
+      "lastParseTime": 1776797640,
+      "inPollingQueue": 0,
+      "priority": -1,
+      "lastGoodHttpStatusTime": 1776797624,
+      "lastHttpStatus": 200,
+      "contentType": "application\/rss+xml; charset=UTF-8",
+      "itunesId": 1423306695,
+      "generator": "",
+      "createdOn": 1598805316,
+      "language": "en",
+      "type": 0,
+      "dead": 0,
+      "crawlErrors": 0,
+      "parseErrors": 0,
+      "categories": {
+          "103": "True Crime"
+      },
+      "locked": 0,
+      "explicit": false,
+      "podcastGuid": "66c31c24-2dd0-595d-9bf6-b19fc91be6c9",
+      "medium": "podcast",
+      "episodeCount": 23,
+      "imageUrlHash": 3449597713,
+      "newestItemPubdate": 1770872460,
+      "valueBlock": null
+    }
+  ],
+  "description": "Found matching feeds."
+}
+```

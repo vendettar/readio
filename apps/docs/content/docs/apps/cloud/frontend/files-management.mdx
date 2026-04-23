@@ -1,0 +1,25 @@
+---
+title: Files Management
+---
+
+## 1. Scope
+
+Cloud still includes:
+
+- `/files`
+- `/files/folder/$folderId`
+- `/downloads`
+
+## 2. Storage Boundary
+
+- User-uploaded files and downloaded podcast episodes remain browser-local
+- They must stay logically separated in persistence and UI surfaces
+
+## 3. Cloud Relevance
+
+These docs still matter in Cloud because the frontend still owns:
+
+- local file ingestion
+- local subtitle attachment/import
+- downloaded podcast track management
+- local-vs-remote playback handoff for downloaded content

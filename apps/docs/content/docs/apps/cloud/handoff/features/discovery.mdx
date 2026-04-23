@@ -1,0 +1,34 @@
+---
+title: Discovery & Explore
+---
+
+## 1. Scope and Principles
+
+- Routes: `/explore`, `/podcast/$country/$id`, `/podcast/$country/$id/$episodeKey`.
+- Identifier contract: show routes use numeric `podcastItunesId`; episode routes use a compact key derived from stable episode identity. Canonical UUID identities retain the legacy 22-character `base64url` form, while non-UUID identities use the newer generic compact form.
+- Hybrid boundary:
+  - Search / Top Shows / Top Episodes first-hop: Apple
+  - Editor's Picks first-hop: PodcastIndex `podcasts-batch-byguid`
+  - downstream detail/enrichment: PodcastIndex
+
+## 2. First-Hop Ownership
+
+- Podcast search: Apple Search
+- Episode search: Apple Search
+- Top Shows: Apple chart feed
+- Top Episodes: Apple chart feed
+- Editor's Picks: PodcastIndex batch-byguid
+
+## 3. Second-Hop Ownership
+
+- Show metadata: PodcastIndex `podcasts/byitunesid`
+- Exact episode fallback order:
+  1. match cached RSS episodes by stable episode identity when feed data is already present
+  2. resolve canonical podcast metadata through PodcastIndex `podcasts/byitunesid`
+  3. fetch RSS by `feedUrl` through the same-origin Cloud feed route as the fallback source of truth
+
+## 4. Cache Model
+
+- Frontend: TanStack Query memory cache
+- Backend: in-memory relay cache with graceful degradation
+- No long-lived frontend discovery persistence in Cloud

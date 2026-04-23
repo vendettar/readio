@@ -107,7 +107,7 @@ export function createSettingsFormSchema() {
       translateKey: z.string().refine((val) => val === '' || val.startsWith('sk-'), {
         message: translate('validationApiKeyPrefix'),
       }),
-      proxyUrl: z.string().refine((val) => val === '' || z.string().url().safeParse(val).success, {
+      proxyUrl: z.string().refine((val) => val === '' || z.url().safeParse(val).success, {
         message: translate('validationUrlInvalid'),
       }),
       proxyAuthHeader: z

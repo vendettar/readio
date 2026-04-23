@@ -1,7 +1,10 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import discovery, { type SearchEpisode } from '../../../lib/discovery'
+import { createQueryClientWrapper } from '../../../__tests__/queryClient'
+import type { Podcast, SearchEpisode } from '../../../lib/discovery'
+import { makePodcast, makeSearchEpisode } from '../../../lib/discovery/__tests__/fixtures'
+import { ensurePodcastDetail } from '../../../lib/discovery/queryCache'
 import { useEpisodeRowFavoriteAction } from '../../EpisodeRow/useEpisodeRowFavoriteAction'
 import { SearchEpisodeItem } from '../SearchEpisodeItem'
 
@@ -19,8 +22,8 @@ vi.mock('react-i18next', async (importOriginal) => {
   }
 })
 
-vi.mock('../../../lib/discovery', () => ({
-  default: { getPodcastIndexPodcastByItunesId: vi.fn() },
+vi.mock('../../../lib/discovery/queryCache', () => ({
+  ensurePodcastDetail: vi.fn(),
 }))
 
 vi.mock('../../EpisodeRow/useEpisodeRowFavoriteAction', () => ({
@@ -68,103 +71,115 @@ describe('SearchEpisodeItem favorite enrichment', () => {
     vi.clearAllMocks()
   })
 
-  it('uses PI search payload directly when favorite metadata is already sufficient', async () => {
-    const episode = {
-      title: 'JP Episode',
-      podcastTitle: 'Search Show',
-      feedUrl: 'https://example.com/feed.xml',
-      episodeUrl: 'https://example.com/audio.mp3',
+  it('always resolves podcast metadata through PI lookup for favorites', async () => {
+    const lookupPodcast: Podcast = makePodcast({
       podcastItunesId: '999',
-      providerEpisodeId: '123',
-      episodeGuid: 'episode-guid-123',
-      image: 'https://example.com/episode-100.jpg',
+      title: 'Search Show',
       artwork: 'https://example.com/episode-600.jpg',
-    } as unknown as SearchEpisode
+      feedUrl: 'https://example.com/feed.xml',
+    })
+    vi.mocked(ensurePodcastDetail).mockResolvedValue(lookupPodcast)
 
-    render(<SearchEpisodeItem episode={episode} onPlay={() => {}} />)
+    const episode = makeSearchEpisode({
+      title: 'JP Episode',
+      showTitle: 'Search Show',
+      episodeUrl: 'https://example.com/audio.mp3',
+      episodeGuid: 'guid-jp-episode',
+      podcastItunesId: '999',
+      artwork: 'https://example.com/episode-600.jpg',
+    })
+
+    render(<SearchEpisodeItem episode={episode} onPlay={() => {}} />, {
+      wrapper: createQueryClientWrapper(),
+    })
 
     const buildAddPayload = vi.mocked(useEpisodeRowFavoriteAction).mock.calls[0][0].buildAddPayload
     const payload = await buildAddPayload()
 
-    expect(discovery.getPodcastIndexPodcastByItunesId).not.toHaveBeenCalled()
+    expect(ensurePodcastDetail).toHaveBeenCalledWith(expect.anything(), '999', 'us')
     expect(payload.podcast).toMatchObject({
       title: 'Search Show',
       feedUrl: 'https://example.com/feed.xml',
       podcastItunesId: '999',
-      image: 'https://example.com/episode-100.jpg',
       artwork: 'https://example.com/episode-600.jpg',
     })
     expect(payload.episode).toMatchObject({
-      id: 'episode-guid-123',
+      episodeGuid: 'guid-jp-episode',
       title: 'JP Episode',
       audioUrl: 'https://example.com/audio.mp3',
-      feedUrl: 'https://example.com/feed.xml',
-      providerEpisodeId: '123',
-      episodeGuid: 'episode-guid-123',
     })
   })
 
-  it('falls back to explicit PI lookup when feedUrl is missing from the search payload', async () => {
+  it('looks up PI metadata even when search payload is minimal', async () => {
     mockCountry = 'jp'
-    vi.mocked(discovery.getPodcastIndexPodcastByItunesId).mockResolvedValue({
+    const lookupPodcast: Podcast = makePodcast({
       podcastItunesId: '999',
       title: 'Show',
-      author: 'Host',
-      image: 'https://example.com/art-100.jpg',
       artwork: 'https://example.com/art-600.jpg',
       feedUrl: 'https://example.com/feed.xml',
-      collectionViewUrl: 'https://example.com/show',
-      genres: [],
+    })
+    vi.mocked(ensurePodcastDetail).mockResolvedValue(lookupPodcast)
+
+    const episode = makeSearchEpisode({
+      title: 'JP Episode',
+      showTitle: 'Search Show',
+      episodeUrl: 'https://example.com/audio.mp3',
+      episodeGuid: 'guid-minimal',
+      podcastItunesId: '999',
+      artwork: 'https://example.com/episode-600.jpg',
     })
 
-    const episode = {
-      title: 'JP Episode',
-      podcastTitle: 'Search Show',
-      episodeUrl: 'https://example.com/audio.mp3',
-      podcastItunesId: '999',
-      providerEpisodeId: '123',
-      episodeGuid: 'episode-guid-123',
-    } as unknown as SearchEpisode
-
-    render(<SearchEpisodeItem episode={episode} onPlay={() => {}} />)
+    render(<SearchEpisodeItem episode={episode} onPlay={() => {}} />, {
+      wrapper: createQueryClientWrapper(),
+    })
 
     const buildAddPayload = vi.mocked(useEpisodeRowFavoriteAction).mock.calls[0][0].buildAddPayload
     const payload = await buildAddPayload()
 
-    expect(discovery.getPodcastIndexPodcastByItunesId).toHaveBeenCalledWith('999')
+    expect(ensurePodcastDetail).toHaveBeenCalledWith(expect.anything(), '999', 'jp')
     expect(payload.podcast.feedUrl).toBe('https://example.com/feed.xml')
-    expect(payload.episode.providerEpisodeId).toBe('123')
-    expect(payload.episode.episodeGuid).toBe('episode-guid-123')
+    expect(payload.episode.episodeGuid).toBe('guid-minimal')
+    expect(payload.episode.audioUrl).toBe('https://example.com/audio.mp3')
   })
 
   it('throws error and does not call PI lookup if podcastItunesId is missing', async () => {
-    const episode = {
+    const episode = makeSearchEpisode({
       title: 'Minimal',
       episodeUrl: 'http://cdn/a.mp3',
-    } as unknown as SearchEpisode
+      episodeGuid: 'guid-missing-podcast',
+      showTitle: 'Minimal Show',
+      artwork: 'https://example.com/episode-600.jpg',
+      podcastItunesId: '' as SearchEpisode['podcastItunesId'],
+    })
 
-    render(<SearchEpisodeItem episode={episode} onPlay={() => {}} />)
+    render(<SearchEpisodeItem episode={episode} onPlay={() => {}} />, {
+      wrapper: createQueryClientWrapper(),
+    })
 
     const buildAddPayload = vi.mocked(useEpisodeRowFavoriteAction).mock.calls[0][0].buildAddPayload
 
     await expect(buildAddPayload()).rejects.toThrow('Missing podcastItunesId for metadata lookup')
-    expect(discovery.getPodcastIndexPodcastByItunesId).not.toHaveBeenCalled()
+    expect(ensurePodcastDetail).not.toHaveBeenCalled()
   })
 
   it('renders play-without-transcript action and triggers callback', () => {
     const onPlayWithoutTranscript = vi.fn()
-    const episode = {
+    const episode = makeSearchEpisode({
       title: 'Episode',
       episodeUrl: 'https://example.com/audio.mp3',
-      providerEpisodeId: '1',
-    } as unknown as SearchEpisode
+      episodeGuid: 'guid-play-without-transcript',
+      showTitle: 'Search Show',
+      artwork: 'https://example.com/episode-600.jpg',
+      podcastItunesId: '999',
+    })
 
     render(
       <SearchEpisodeItem
         episode={episode}
         onPlay={() => {}}
         onPlayWithoutTranscript={onPlayWithoutTranscript}
-      />
+      />,
+      { wrapper: createQueryClientWrapper() }
     )
 
     fireEvent.click(screen.getByRole('button', { name: 'playWithoutTranscript' }))

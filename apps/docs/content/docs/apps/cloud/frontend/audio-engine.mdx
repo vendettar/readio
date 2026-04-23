@@ -1,0 +1,19 @@
+---
+title: Audio Engine & Sync
+---
+
+## 1. Ownership
+
+- Core controller: `apps/cloud-ui/src/components/AppShell/GlobalAudioController.tsx`
+- State authority: `apps/cloud-ui/src/store/playerStore.ts`
+
+## 2. Contracts
+
+- Playback state must survive route changes.
+- High-frequency media events stay isolated from broad React rerenders.
+- Progress/session persistence remains browser-local.
+- MediaSession integration and autoplay-retry behavior remain part of the playback contract.
+
+## 3. Cloud-Specific Note
+
+Cloud uses the same frontend playback surface model, but remote media bootstrap/fallback behavior is constrained by Cloud backend contracts rather than pure frontend fetch ownership.

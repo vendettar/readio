@@ -1,5 +1,7 @@
+import { normalizeFeedUrl } from './feedUrl'
+
 export const PODCAST_QUERY_CACHE_POLICY = {
-  lookup: {
+  podcastDetail: {
     staleTime: 24 * 60 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
   },
@@ -13,20 +15,13 @@ export const PODCAST_QUERY_CACHE_POLICY = {
   },
 } as const
 
-export function buildPodcastIndexLookupQueryKey(
+export function buildPodcastDetailQueryKey(
   podcastId: string,
   country: string | null | undefined
 ) {
-  return ['podcast', 'podcast-index-lookup', podcastId.trim(), country ?? ''] as const
+  return ['podcast', 'podcast-detail', podcastId.trim(), country ?? ''] as const
 }
 
 export function buildPodcastFeedQueryKey(normalizedFeedUrl: string | null | undefined) {
-  return ['podcast', 'feed', (normalizedFeedUrl ?? '').trim()] as const
-}
-
-export function buildPodcastIndexEpisodesQueryKey(
-  podcastId: string,
-  country: string | null | undefined
-) {
-  return ['podcast', 'podcast-index-episodes', podcastId.trim(), country ?? ''] as const
+  return ['podcast', 'feed', normalizeFeedUrl(normalizedFeedUrl ?? '')] as const
 }

@@ -127,7 +127,7 @@ function EpisodeListItemImpl({
             <DownloadEpisodeButton
               episodeTitle={model.downloadArgs.episodeTitle}
               episodeDescription={model.description}
-              podcastTitle={model.downloadArgs.podcastTitle}
+              showTitle={model.downloadArgs.podcastTitle}
               feedUrl={model.downloadArgs.feedUrl}
               audioUrl={model.downloadArgs.audioUrl}
               transcriptUrl={model.downloadArgs.transcriptUrl}

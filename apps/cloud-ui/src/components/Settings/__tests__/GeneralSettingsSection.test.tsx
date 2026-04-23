@@ -13,6 +13,11 @@ vi.mock('react-i18next', () => ({
 vi.mock('../../../components/ui/select', async () => {
   const ReactModule = await import('react')
   const React = ReactModule.default
+  type MockSelectElementProps = {
+    id?: string
+    value?: string
+    children?: React.ReactNode
+  }
 
   const MockSelectTrigger = ({ children }: { id?: string; children?: React.ReactNode }) => (
     <>{children}</>
@@ -42,8 +47,7 @@ vi.mock('../../../components/ui/select', async () => {
     const walk = (nodes: React.ReactNode) => {
       React.Children.forEach(nodes, (node) => {
         if (!React.isValidElement(node)) return
-        // biome-ignore lint/suspicious/noExplicitAny: test helper traverses generic element props
-        const element = node as React.ReactElement<any>
+        const element = node as React.ReactElement<MockSelectElementProps>
         const componentName = (element.type as { displayName?: string }).displayName
 
         if (componentName === 'MockSelectTrigger') {

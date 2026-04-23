@@ -59,11 +59,11 @@ export function GlobalAudioController() {
     return {
       audioUrl,
       title: audioTitle || '',
-      artist: episodeMetadata?.podcastTitle,
+      artist: episodeMetadata?.showTitle,
       artworkUrl: artworkUrl ?? null,
       artworkType: coverArtUrl instanceof Blob ? coverArtUrl.type : undefined,
     }
-  }, [audioTitle, artworkUrl, audioUrl, episodeMetadata?.podcastTitle, coverArtUrl])
+  }, [audioTitle, artworkUrl, audioUrl, episodeMetadata?.showTitle, coverArtUrl])
 
   const handlePlay = useCallback(() => {
     usePlayerStore.getState().play()

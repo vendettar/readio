@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { Podcast, SearchEpisode } from '../lib/discovery'
+import type { SearchEpisode, SearchPodcast } from '../lib/discovery'
 import { useDiscoverySearch } from './useDiscoverySearch'
 import {
   type GlobalSearchLimits,
@@ -11,7 +11,7 @@ import {
 export type { LocalSearchBadge, LocalSearchResult, GlobalSearchLimits }
 
 export interface GlobalSearchResults {
-  podcasts: Podcast[]
+  podcasts: SearchPodcast[]
   episodes: SearchEpisode[]
   local: LocalSearchResult[]
   isLoading: boolean

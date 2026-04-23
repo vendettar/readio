@@ -4,15 +4,8 @@ import { useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { CAROUSEL_DEFAULTS } from '../../constants/layout'
 import { useCarouselLayout } from '../../hooks/useCarouselLayout'
-import discovery, { type DiscoveryPodcast } from '../../lib/discovery'
-import { buildEpisodeCompactKey, getStableEpisodeIdentifier } from '../../lib/discovery/editorPicks'
-import { matchTopEpisodeToPodcastIndexEpisode } from '../../lib/discovery/topEpisodes'
-import { warn } from '../../lib/logger'
-import {
-  buildPodcastEpisodeRoute,
-  buildPodcastShowRoute,
-  normalizeCountryParam,
-} from '../../lib/routes/podcastRoutes'
+import type { TopEpisode } from '../../lib/discovery'
+import { buildPodcastShowRoute, normalizeCountryParam } from '../../lib/routes/podcastRoutes'
 import { cn } from '../../lib/utils'
 import { useExploreStore } from '../../store/exploreStore'
 import { AnimatedList } from '../bits/AnimatedList'
@@ -21,7 +14,7 @@ import { InteractiveTitle } from '../interactive/InteractiveTitle'
 import { CarouselShell } from './CarouselShell'
 
 interface PodcastEpisodesGridProps {
-  episodes: DiscoveryPodcast[]
+  episodes: TopEpisode[]
   isLoading?: boolean
 }
 
@@ -50,7 +43,7 @@ export function PodcastEpisodesGrid({ episodes, isLoading }: PodcastEpisodesGrid
 
   const totalColumns = isLoading ? visibleCount || 3 : Math.ceil(episodes.length / ROWS)
 
-  async function handleOpenTopEpisode(episode: DiscoveryPodcast) {
+  async function handleOpenTopEpisode(episode: TopEpisode) {
     const podcastId = String(episode.podcastItunesId ?? '').trim()
     if (!podcastId || !normalizedCountry) return
 
@@ -58,37 +51,6 @@ export function PodcastEpisodesGrid({ episodes, isLoading }: PodcastEpisodesGrid
       country: normalizedCountry,
       podcastId,
     })
-
-    try {
-      const piEpisodes = await discovery.getPodcastIndexEpisodes(
-        podcastId,
-        60,
-        undefined
-      )
-      const matchedEpisode = matchTopEpisodeToPodcastIndexEpisode(episode, piEpisodes)
-      const episodeIdentifier = getStableEpisodeIdentifier(matchedEpisode)
-
-      if (matchedEpisode && episodeIdentifier) {
-        const episodeKey = buildEpisodeCompactKey(episodeIdentifier)
-        if (episodeKey) {
-          const episodeRoute = buildPodcastEpisodeRoute({
-            country: normalizedCountry,
-            podcastId,
-            episodeKey,
-          })
-          if (episodeRoute) {
-            await navigate(episodeRoute)
-            return
-          }
-        }
-      }
-    } catch (error) {
-      warn('[TopEpisodes] canonical episode resolution failed; falling back to show route', {
-        podcastId,
-        episodeId: episode.id,
-        error,
-      })
-    }
 
     if (showRoute) {
       await navigate(showRoute)
@@ -135,7 +97,7 @@ export function PodcastEpisodesGrid({ episodes, isLoading }: PodcastEpisodesGrid
               items={Array.from({ length: ROWS })
                 .map((_, rowIndex) => episodes[colIndex * ROWS + rowIndex])
                 .filter((ep): ep is NonNullable<typeof ep> => !!ep)}
-              getKey={(episode) => episode.id}
+              getKey={(episode) => `${episode.podcastItunesId}-${episode.title}`}
               delay={colIndex * 0.1}
               staggerDelay={0.08}
               renderItem={(episode, rowIndex) => {
@@ -143,7 +105,7 @@ export function PodcastEpisodesGrid({ episodes, isLoading }: PodcastEpisodesGrid
 
                 return (
                   <div
-                    key={episode.id}
+                    key={`${episode.podcastItunesId}-${episode.title}`}
                     className={cn(
                       'relative flex gap-0 py-2 px-0 h-22 w-full group/item transition-colors justify-start items-stretch text-start whitespace-normal overflow-hidden'
                     )}
@@ -151,14 +113,14 @@ export function PodcastEpisodesGrid({ episodes, isLoading }: PodcastEpisodesGrid
                     {/* Artwork with Navigation & Play */}
                     <div className="relative flex-shrink-0 flex items-center">
                       <InteractiveArtwork
-                        src={episode.image || episode.artwork}
+                        src={episode.artwork}
                         onClick={() => {
                           void handleOpenTopEpisode(episode)
                         }}
                         playIconSize={16}
                         hoverGroup="episode"
                         size="md"
-                        layoutId={`artwork-episode-${episode.id}`}
+                        layoutId={`artwork-episode-${episode.podcastItunesId}-${episode.title}`}
                         playLabel={t('ariaPlayEpisode')}
                       />
                     </div>
@@ -183,9 +145,9 @@ export function PodcastEpisodesGrid({ episodes, isLoading }: PodcastEpisodesGrid
                           {episode.author}
                         </span>
 
-                        {episode.genres?.[0]?.name && (
+                        {episode.genres?.[0] && (
                           <span className="text-xxs text-muted-foreground/60 uppercase tracking-wide mt-0 pointer-events-none">
-                            {episode.genres[0].name}
+                            {episode.genres[0]}
                           </span>
                         )}
                       </div>

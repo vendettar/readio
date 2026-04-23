@@ -1,0 +1,33 @@
+---
+title: Development Standards
+---
+
+## 1. Shared Frontend Standards
+
+Cloud frontend keeps the main Lite-derived engineering rules:
+
+- tokenized layouts, no arbitrary UI drift
+- atomic Zustand selectors
+- explicit async cancellation
+- memoized list rendering for long library surfaces
+- no direct UI-to-DB writes outside the approved persistence boundaries
+
+## 2. Navigation Contract
+
+- Title/artwork remain the primary navigation emitters for discovery/library rows.
+- Episode rows keep direct-play vs detail-navigation behavior separated.
+- Canonical podcast/episode routes must be generated from the current Cloud discovery identity contract.
+
+## 3. Persistence Boundary
+
+- Browser-local writes must continue to flow through store actions / repository helpers.
+- Components should consume types from shared DB/domain types, not invent local shapes.
+
+## 4. Accessibility Baseline
+
+Cloud frontend keeps the established baseline for:
+
+- command palette keyboard handling
+- transcript selection/menu semantics
+- player control ARIA
+- deterministic close/escape behavior for overlays

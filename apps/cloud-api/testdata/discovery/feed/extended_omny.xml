@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/" xmlns:podcast="https://podcastindex.org/namespace/1.0" version="2.0">
+  <channel>
+    <title>Stuff You Should Know</title>
+    <link>https://www.iheart.com/podcast/105-stuff-you-should-know-26940277/</link>
+    <description>Stuff You Should Know description</description>
+    <itunes:image href="https://example.com/omny/channel-image.jpg" />
+    <item>
+      <title>Selects: What is a Numbers Station?</title>
+      <description><![CDATA[<p>If you think secretly coded messages sent via short wave radio is Cold War relic, think again.</p>]]></description>
+      <content:encoded><![CDATA[<p>If you think secretly coded messages sent via short wave radio is Cold War relic, think again.</p>]]></content:encoded>
+      <itunes:episodeType>full</itunes:episodeType>
+      <itunes:image href="https://example.com/omny/channel-image.jpg" />
+      <media:content url="https://example.com/omny/audio-media.mp3" type="audio/mpeg">
+        <media:player url="https://example.com/omny/player" />
+      </media:content>
+      <guid isPermaLink="false">f1b0f403-a792-44d1-a33f-b425011e35bd</guid>
+      <pubDate>Sat, 11 Apr 2026 09:00:00 +0000</pubDate>
+      <itunes:duration>2299</itunes:duration>
+      <enclosure url="https://example.com/omny/audio-enclosure.mp3" length="36819377" type="audio/mpeg" />
+      <link>https://example.com/omny/episode-page</link>
+      <podcast:transcript url="https://example.com/omny/transcript.srt" type="application/srt" language="en" />
+      <podcast:transcript url="https://example.com/omny/transcript.vtt" type="text/vtt" language="en" />
+      <podcast:transcript url="https://example.com/omny/transcript.txt" type="text/plain" language="en" />
+    </item>
+  </channel>
+</rss>

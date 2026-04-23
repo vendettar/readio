@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" version="2.0">
+  <channel>
+    <title>Hunting Warhead</title>
+    <link>https://www.cbc.ca/radio/podcasts/hunting-warhead/index.html</link>
+    <description><![CDATA[<p>How do you take down a criminal network that's hidden in the shadows?</p>]]></description>
+    <itunes:image href="https://i.cbc.ca/ais/example/full/max/0/default.jpg"/>
+    <item>
+      <guid>huntingwarhead-6c8954bb-4328-4d63-af32-9148130bbe7d</guid>
+      <title>The next season of Hunting is coming</title>
+      <description><![CDATA[<p>In this sneak peek, host <strong>Daemon Fairless</strong> shares the investigation he's bringing you next.</p>]]></description>
+      <pubDate>Tue, 03 Feb 2026 00:10:00 EST</pubDate>
+      <itunes:duration>00:02:15</itunes:duration>
+      <itunes:explicit>No</itunes:explicit>
+      <enclosure url="https://example.com/cbc/audio.mp3?ttag=season:2" length="4538785" type="audio/mpeg"/>
+      <itunes:season>2</itunes:season>
+      <itunes:episodeType>trailer</itunes:episodeType>
+    </item>
+  </channel>
+</rss>

@@ -1,0 +1,4 @@
+{
+  "title": "Cloud Frontend",
+  "pages": ["index", "i18n", "audio-engine", "transcript-reading", "files-management", "settings"]
+}

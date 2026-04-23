@@ -66,7 +66,7 @@ export function useFilePlayback({ onComplete }: UseFilePlaybackProps = {}) {
 
         const sessionId = `local-track-${track.id}`
         await loadAudioBlob(audioBlob.blob, track.name, artwork, sessionId, undefined, {
-          podcastTitle: track.artist || undefined,
+          showTitle: track.artist || undefined,
           description: track.album || undefined,
           artworkUrl: typeof artwork === 'string' ? artwork : undefined,
           durationSeconds: track.durationSeconds,

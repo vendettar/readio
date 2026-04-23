@@ -3,37 +3,29 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getEditorPicksForRegion, isPodcastGuid } from '../constants/app'
-import discovery, { type DiscoveryPodcast } from '../lib/discovery'
+import discovery, { type EditorPickPodcast, type TopPodcast } from '../lib/discovery'
 import { NetworkError } from '../lib/fetchUtils'
 import { useNetworkStatus } from './useNetworkStatus'
 
 // Query keys
 const QUERY_KEYS = {
-  topPodcasts: (country: string, limit: number) => ['topPodcasts', country, limit] as const,
+  topPodcasts: (country: string) => ['topPodcasts', country] as const,
   editorPicks: (country: string) => ['editorPicks', country] as const,
-  topEpisodes: (country: string, limit: number) => ['topEpisodes', country, limit] as const,
+  topEpisodes: (country: string) => ['topEpisodes', country] as const,
 }
 
 /**
  * Hook for fetching Top Podcasts (Apple chart)
  */
-export function useTopPodcasts(country: string = 'us', limit: number = 25) {
+export function useTopPodcasts(country: string = 'us') {
   const { isOnline } = useNetworkStatus()
-  const queryClient = useQueryClient()
-  const queryKey = QUERY_KEYS.topPodcasts(country, limit)
+  const queryKey = QUERY_KEYS.topPodcasts(country)
 
   return useQuery({
     queryKey,
     queryFn: ({ signal }) => {
       return discovery
-        .fetchTopPodcasts(country, limit, signal, {
-          onBackgroundRefresh: (fresh) => {
-            queryClient.setQueryData(
-              queryKey,
-              fresh.filter((p) => p.podcastItunesId && p.podcastItunesId !== '0')
-            )
-          },
-        })
+        .fetchTopPodcasts(country, signal)
         .then((fresh) => fresh.filter((p) => p.podcastItunesId && p.podcastItunesId !== '0'))
     },
     enabled: isOnline,
@@ -71,13 +63,10 @@ export function useEditorPicks(country: string = 'us') {
         throw new Error(`Editor pick must be a podcast guid: ${invalidPick}`)
       }
 
-      const fresh = await discovery.getPodcastIndexPodcastsBatchByGuid([...picks], signal, {
-        onBackgroundRefresh: (data) => {
-          queryClient.setQueryData(queryKey, data)
-        },
-      })
-      queryClient.setQueryData(queryKey, fresh)
-      return fresh
+      const fresh = await discovery.getPodcastIndexPodcastsBatchByGuid([...picks], signal)
+      const alive = fresh.filter((podcast) => !podcast.dead)
+      queryClient.setQueryData(queryKey, alive)
+      return alive
     },
     enabled: isOnline,
     staleTime: 24 * 60 * 60 * 1000,
@@ -98,23 +87,15 @@ export function useEditorPicks(country: string = 'us') {
 /**
  * Hook for fetching Top Episodes (Apple chart)
  */
-export function useTopEpisodes(country: string = 'us', limit: number = 25) {
+export function useTopEpisodes(country: string = 'us') {
   const { isOnline } = useNetworkStatus()
-  const queryClient = useQueryClient()
-  const queryKey = QUERY_KEYS.topEpisodes(country, limit)
+  const queryKey = QUERY_KEYS.topEpisodes(country)
 
   return useQuery({
     queryKey,
     queryFn: ({ signal }) => {
       return discovery
-        .fetchTopEpisodes(country, limit, signal, {
-          onBackgroundRefresh: (fresh) => {
-            queryClient.setQueryData(
-              queryKey,
-              fresh.filter((p) => p.podcastItunesId && p.podcastItunesId !== '0')
-            )
-          },
-        })
+        .fetchTopEpisodes(country, signal)
         .then((fresh) => fresh.filter((p) => p.podcastItunesId && p.podcastItunesId !== '0'))
     },
     enabled: isOnline,
@@ -134,4 +115,4 @@ export function useTopEpisodes(country: string = 'us', limit: number = 25) {
 }
 
 // Re-export types
-export type { DiscoveryPodcast }
+export type { EditorPickPodcast, TopPodcast }

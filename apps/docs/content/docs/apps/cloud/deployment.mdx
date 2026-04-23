@@ -1,0 +1,464 @@
+---
+title: Cloud Deployment Guide
+description: Operational guide for the Cloud CD workflow and remote release layout.
+---
+
+# Cloud Deployment Guide
+
+This guide matches `.github/workflows/cd-cloud.yml` and documents the deployment contract only.
+It does not provision the VPS, nginx, TLS, firewall rules, or `systemd`.
+
+## 0a. Production Runtime Config Contract
+
+In production Cloud:
+
+- `apps/cloud-api` serves `/env.js` dynamically **before** the SPA/static fallback.
+- Cloud does **not** use `apps/cloud-ui/public/env.js` or `dist/env.js` as runtime configuration truth.
+- The backend emits runtime config from an explicit browser-safe allowlist only.
+- Server-owned runtime values (listen port, paths, abuse-control settings) stay in VPS env or systemd env files (`/etc/readio/readio-cloud.env`).
+- PodcastIndex server credentials also stay in the VPS/systemd runtime env file (`/etc/readio/readio-cloud.env`), not in GitHub Actions variables and not in `/env.js`.
+
+There is no separate static Cloud `public/env.js` template in the current contract.
+The frontend reads `window.__READIO_ENV__`, and Cloud runtime ownership comes from backend-generated `/env.js`.
+
+Browser-public runtime config fields are not secrets. If a field is emitted to `/env.js`, assume every browser user can read it.
+
+See `handoff/runtime-config-ownership-audit.md` for the full config audit.
+
+## 1. What the workflow builds
+
+- Build Cloud UI off-server with `pnpm -C apps/cloud-ui build`.
+- Build Cloud API as a Linux binary with `CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o readio-cloud .` from `apps/cloud-api`.
+- Stage only the release artifacts: the `readio-cloud` binary and `apps/cloud-ui/dist`.
+- Cross-compilation is deliberate and required because `apps/cloud-api/package.json` uses `go build -o /tmp/readio-cloud .` for the local scaffold, which is not sufficient for the Linux CD contract.
+- The Go binary reads `PORT`; the workflow's `CLOUD_PORT` variable is only the smoke-check port and must match the service's `PORT` value.
+
+## 2. Required GitHub configuration
+
+Use the protected `cloud-production` GitHub Environment for deploy secrets and optional approval.
+
+Secrets:
+
+- `CLOUD_SSH_HOST`
+- `CLOUD_SSH_PORT`
+- `CLOUD_SSH_USER`
+- `CLOUD_SSH_PRIVATE_KEY`
+- `CLOUD_SSH_KNOWN_HOSTS`
+
+Variables:
+
+- `CLOUD_SERVICE_NAME` with default `readio-cloud`
+- `CLOUD_PORT` with default `8080`
+
+SSH security rules:
+
+- Provide host identity material through `CLOUD_SSH_KNOWN_HOSTS`.
+- Keep `StrictHostKeyChecking=yes`.
+- Do not treat `StrictHostKeyChecking=no` as an acceptable documented path.
+
+## 2a. Required remote prerequisites
+
+Before the workflow can succeed, the target VPS must already provide:
+
+- a Linux user matching `CLOUD_SSH_USER`
+- SSH access for that user with the uploaded private key
+- `rsync` installed on the VPS
+- `curl` installed on the VPS for the health probe
+- `systemd` with an existing service whose name matches `CLOUD_SERVICE_NAME`
+- permission for the SSH user to restart and inspect that service
+  - either the SSH user directly owns the service
+  - or the SSH user has non-interactive permission to run the required `systemctl` commands
+
+The deployment guide assumes those prerequisites already exist. If any are missing, the workflow can build successfully and still fail during publish or smoke verification.
+
+## 3. Remote directory layout
+
+The workflow expects this layout on the VPS:
+
+- `/opt/readio/shared/data/` for persistent SQLite data
+- `/opt/readio/releases/<git-sha>/` for release artifacts
+- `/opt/readio/current` as the runtime pointer
+
+Runtime contract:
+
+- the service should execute the binary from the `current` release path or use `WorkingDirectory=/opt/readio/current`
+- the Cloud app must be able to resolve the colocated `dist/` directory from the active release
+- the SQLite database path must stay under `/opt/readio/shared/data/` (or another shared persistent path outside release directories)
+- the service must export `PORT` for the listen port; do not use `READIO_PORT` for this contract
+
+Each release directory contains:
+
+- `readio-cloud`
+- `dist/`
+
+The workflow creates the remote directories before transfer and never wipes the parent deployment tree, so the SQLite `data/` directory is preserved.
+
+## 3a. VPS bootstrap for a fresh host
+
+If you are preparing a new VPS, create the release directories, install the `systemd` unit, and grant the deploy user non-interactive permission to restart and inspect the Cloud service.
+
+Use the current runtime contract only:
+
+- `READIO_CLOUD_UI_DIST_DIR`
+- `READIO_CLOUD_DB_PATH`
+
+Prefer an env file for mutable runtime configuration instead of hard-coding everything into the unit itself:
+
+- Keep stable paths such as `PORT`, `READIO_CLOUD_UI_DIST_DIR`, and `READIO_CLOUD_DB_PATH` in the unit.
+- Put secrets and operational knobs into `/etc/readio/readio-cloud.env`.
+- This keeps the `systemd` unit stable while allowing runtime-only changes without rewriting the service definition.
+
+PodcastIndex Phase 1 uses the same env-file contract:
+
+- `PODCAST_INDEX_API_KEY`
+- `PODCAST_INDEX_API_SECRET`
+- `PODCAST_INDEX_USER_AGENT`
+
+These values belong in `/etc/readio/readio-cloud.env` because they are backend-only runtime configuration for `apps/cloud-api`.
+
+Do not place them in:
+
+- GitHub Actions variables
+- browser runtime config (`/env.js`)
+- frontend `.env` files
+- `apps/cloud-ui`
+
+Example bootstrap script:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+DEPLOY_USER="$(id -un)"
+DEPLOY_GROUP="$(id -gn)"
+SYSTEMCTL_BIN="$(command -v systemctl)"
+SERVICE_NAME="readio-cloud"
+REMOTE_ROOT="/opt/readio"
+RELEASES_DIR="$REMOTE_ROOT/releases"
+SHARED_DATA_DIR="$REMOTE_ROOT/shared/data"
+CURRENT_DIR="$REMOTE_ROOT/current"
+DB_PATH="$SHARED_DATA_DIR/readio.db"
+
+sudo mkdir -p "$RELEASES_DIR"
+sudo mkdir -p "$SHARED_DATA_DIR"
+sudo mkdir -p /etc/readio
+sudo chown -R "$DEPLOY_USER:$DEPLOY_GROUP" "$REMOTE_ROOT"
+
+sudo tee /etc/readio/readio-cloud.env >/dev/null <<EOF
+READIO_ASR_ALLOWED_ORIGINS=https://www.readio.top
+READIO_ASR_RELAY_PUBLIC_TOKEN=replace-with-a-long-random-token
+READIO_ASR_RATE_LIMIT_BURST=60
+READIO_ASR_RATE_LIMIT_WINDOW_MS=60000
+READIO_PROXY_RATE_LIMIT_BURST=5
+READIO_PROXY_RATE_LIMIT_WINDOW_MS=60000
+# ASR Proxy Worker config (optional)
+READIO_ASR_WORKER_BASE_URL=https://asr-proxy.example.workers.dev
+READIO_ASR_WORKER_SHARED_SECRET=your-high-entropy-secret-string
+# Built-in Cloudflare ASR config (required for "system-provided" Cloudflare ASR)
+READIO_CF_ACCOUNT_ID=your-cloudflare-account-id
+READIO_CF_API_TOKEN=your-cloudflare-api-token
+# PodcastIndex supplementary hydration config (required for PodcastIndex cutover)
+PODCAST_INDEX_API_KEY=your-podcastindex-api-key
+PODCAST_INDEX_API_SECRET=your-podcastindex-api-secret
+PODCAST_INDEX_USER_AGENT=Readio/1.0 (+https://www.readio.top)
+EOF
+sudo chmod 600 /etc/readio/readio-cloud.env
+
+sudo tee "/etc/systemd/system/${SERVICE_NAME}.service" >/dev/null <<EOF
+[Unit]
+Description=Readio Cloud Backend
+After=network.target
+
+[Service]
+Type=simple
+User=$DEPLOY_USER
+WorkingDirectory=$CURRENT_DIR
+ExecStart=$CURRENT_DIR/readio-cloud
+Restart=always
+EnvironmentFile=/etc/readio/readio-cloud.env
+
+Environment=PORT=8080
+Environment=READIO_CLOUD_UI_DIST_DIR=$CURRENT_DIR/dist
+Environment=READIO_CLOUD_DB_PATH=$DB_PATH
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo tee "/etc/sudoers.d/readio-cloud-cd" >/dev/null <<EOF
+$DEPLOY_USER ALL=(root) NOPASSWD: $SYSTEMCTL_BIN restart $SERVICE_NAME, $SYSTEMCTL_BIN is-active $SERVICE_NAME
+EOF
+sudo chmod 440 /etc/sudoers.d/readio-cloud-cd
+
+sudo "$SYSTEMCTL_BIN" daemon-reload
+sudo "$SYSTEMCTL_BIN" enable "$SERVICE_NAME"
+```
+
+Important details:
+
+- The service uses `WorkingDirectory=/opt/readio/current`.
+- The binary path is `/opt/readio/current/readio-cloud`.
+- The static Cloud UI assets are served from `/opt/readio/current/dist`.
+- The SQLite file stays outside release directories, for example `/opt/readio/shared/data/readio.db`.
+- `/etc/readio/readio-cloud.env` is the recommended home for mutable Cloud runtime configuration.
+- PodcastIndex supplementary hydration credentials and user agent also belong in `/etc/readio/readio-cloud.env`.
+- If `PODCAST_INDEX_API_KEY` or `PODCAST_INDEX_API_SECRET` is missing, `/api/v1/discovery/podcast-index/episodes` will return `503 DISCOVERY_PROVIDER_NOT_CONFIGURED`.
+- Cloud ASR relay protection is driven by `READIO_ASR_ALLOWED_ORIGINS`, `READIO_ASR_RELAY_PUBLIC_TOKEN`, `READIO_ASR_RATE_LIMIT_BURST`, and `READIO_ASR_RATE_LIMIT_WINDOW_MS`.
+- Cloud proxy rate limiting is driven by `READIO_PROXY_RATE_LIMIT_BURST` and `READIO_PROXY_RATE_LIMIT_WINDOW_MS`.
+- Configure `READIO_ASR_RELAY_PUBLIC_TOKEN` once in backend runtime env. In production Cloud, `apps/cloud-api` emits the same browser-public value through dynamic `/env.js`, so the browser can send `X-Readio-Relay-Public-Token` without a separately maintained frontend runtime token. This is a lightweight abuse-control value, not a secret boundary.
+- Cloud ASR relay is a browser-facing same-origin endpoint. Requests must include a valid `Origin`; requests with a missing or disallowed `Origin` are rejected.
+- `READIO_ASR_ALLOWED_ORIGINS` is an explicit operator-authored allowlist. Write exact origins such as `https://www.readio.top` or `https://example.com:8443`; do not rely on implicit default-port normalization inside the allowlist.
+- The workflow already uses `sudo -n`, so the deploy user must be able to run both `systemctl restart` and `systemctl is-active` without a password prompt.
+- The workflow points `/opt/readio/current` at the new release before it restarts the service, so the first restart on a fresh host needs that release directory to exist.
+
+If the VPS sudoers entry only allows `systemctl restart readio-cloud` and does not also allow `systemctl is-active readio-cloud`, the non-interactive smoke step will still fail in GitHub Actions.
+
+After editing either the unit or the env file:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart readio-cloud
+```
+
+## 4. Publish flow
+
+The deployment is release-scoped and atomic at the pointer level:
+
+1. Build Cloud UI and Cloud API on the GitHub runner.
+2. Stage artifacts locally under `release/`.
+3. Create the remote release directory for the current commit SHA.
+4. Transfer only `release/` into `/opt/readio/releases/<git-sha>/`.
+5. Switch `/opt/readio/current` to the new release with `ln -sfn`.
+6. Restart the service named by `CLOUD_SERVICE_NAME` with the default `readio-cloud`.
+7. Verify the service is active.
+8. Verify the deployed binary and static asset directory exist.
+9. Probe `http://127.0.0.1:${CLOUD_PORT}` with the default `8080` on the VPS at `/healthz`.
+
+This is not an in-place overwrite deploy. The workflow never deletes persistent data first and does not copy build artifacts directly into the live runtime path.
+
+## 5. Restart and smoke verification
+
+The workflow uses the service name from `CLOUD_SERVICE_NAME` and checks:
+
+- `systemctl is-active --quiet <service>`
+- the `readio-cloud` binary exists in the current release
+- the `dist/` directory exists in the current release
+- `curl -fsS http://127.0.0.1:${CLOUD_PORT}/healthz`
+
+Use the same checks manually after a deployment if you need to validate the runtime state.
+
+Recommended post-bootstrap validation on the VPS:
+
+```bash
+sudo -n "$(command -v systemctl)" restart readio-cloud
+sudo -n "$(command -v systemctl)" is-active --quiet readio-cloud
+curl -fsS http://127.0.0.1:8080/healthz
+```
+
+## 6. Rollback
+
+Rollback is manual and release-based:
+
+1. Keep the previous release directory on disk.
+2. Point `/opt/readio/current` back to the previous release with `ln -sfn`.
+3. Restart the service again.
+4. Re-run the same smoke probe.
+
+If the previous release is missing, you must restore it from another known-good release directory. The workflow does not rebuild rollback artifacts.
+
+## 7. Trusted proxy and client-IP contract
+
+The Go backend derives the effective client IP using a trusted-proxy gate. This ensures rate limiting and abuse control target the real browser client, not the proxy chain.
+
+### Trust chain: Cloudflare → nginx → Go
+
+Requests flow through three layers:
+
+1. **Cloudflare** — edge filtering, bot protection, and DDoS mitigation.
+2. **nginx** — reverse-proxy on the VPS; terminates TLS, forwards requests to Go on localhost.
+3. **Go (`apps/cloud-api`)** — route-aware application rate limiting on `/api/proxy` and `/api/v1/asr/transcriptions`.
+
+Go trusts only the **immediate proxy hop** (loopback/nginx), NOT Cloudflare public CIDRs. The trusted proxy set is configured via `READIO_TRUSTED_PROXY_CIDRS`.
+
+### nginx real-ip configuration
+
+nginx must first restore the original client IP from **Cloudflare**, then pass that restored client IP to Go.
+
+Do **not** use loopback addresses in nginx `set_real_ip_from` for this step. In the production chain `Cloudflare -> nginx -> Go`, nginx's immediate network peer is Cloudflare, so nginx must trust the **current Cloudflare published IP ranges** when honoring `CF-Connecting-IP`.
+
+Add the real-ip directives in the appropriate `http`, `server`, or included nginx config scope, and keep the Cloudflare IP ranges current:
+
+```nginx
+# Replace these examples with the current Cloudflare published IP ranges.
+set_real_ip_from 173.245.48.0/20;
+set_real_ip_from 103.21.244.0/22;
+set_real_ip_from 2400:cb00::/32;
+
+real_ip_header CF-Connecting-IP;
+real_ip_recursive on;
+```
+
+Then, in the `location` block that proxies to Go:
+
+```nginx
+# After the real-ip step above, $remote_addr is the restored client IP.
+proxy_set_header X-Real-IP          $remote_addr;
+proxy_set_header X-Forwarded-For    $proxy_add_x_forwarded_for;
+proxy_set_header X-Forwarded-Proto  $scheme;
+proxy_set_header Host               $host;
+proxy_pass http://127.0.0.1:8080;
+```
+
+`X-Forwarded-Proto` is part of the backend same-origin contract. Keep it aligned with the external request scheme (`$scheme`); do not hardcode or drop it, because `apps/cloud-api` only honors it when the immediate peer is trusted and uses it to distinguish `http` vs `https` during same-origin fallback checks.
+
+### `READIO_TRUSTED_PROXY_CIDRS` runtime config
+
+- **Type**: comma-separated CIDR list
+- **Default**: empty (no trusted proxies; all forwarded headers are ignored)
+- **Example**: `127.0.0.1/32,::1/128`
+- **Scope**: backend-only — must NOT appear in browser `/env.js`
+
+When the immediate peer IP matches a trusted proxy CIDR, Go honors `X-Real-IP` (preferred) and `X-Forwarded-For` (fallback). When the peer is untrusted, forwarded headers are ignored and rate limiting applies to the peer IP directly.
+
+Set this in `/etc/readio/readio-cloud.env`:
+
+```bash
+READIO_TRUSTED_PROXY_CIDRS=127.0.0.1/32,::1/128
+```
+
+### Layered abuse control
+
+| Layer | Role |
+| --- | --- |
+| Cloudflare | Edge filtering, bot detection, DDoS mitigation |
+| nginx | Reverse-proxy gatekeeping, TLS termination, request buffering |
+| Go (`apps/cloud-api`) | Route-aware application rate limiting using effective client IP |
+
+Each layer operates independently. Go's rate limiter targets the real browser client, even when requests arrive via the proxy chain.
+
+## 8. Operational boundaries
+
+- This workflow assumes the VPS already exists.
+- It does not install or manage `systemd`.
+- It does not configure nginx, TLS, or firewall rules.
+- It does not require a user-configured CORS proxy for supported media fallback paths.
+- It does not force all audio through the backend; browser-direct media access remains first-choice when available.
+- For supported media-adjacent failure classes, the Go backend acts as a pass-through fallback proxy only and does not cache or persist media bytes.
+- Browser-local downloads, transcripts, and settings remain browser-local.
+- It does not re-enable Workbox/PWA in this workflow; Cloud currently keeps PWA disabled.
+- It does not deploy SQLite schema, sync, auth, or multi-node features.
+
+## 9. ASR Proxy (Cloudflare Workers) Configuration
+
+To mitigate IP-based rate limiting from providers (e.g., Groq) and leverage distributed egress IPs, the Cloud version supports an optional Cloudflare Workers gateway as an ASR transcription proxy.
+
+This Worker is a **backend egress hop only** (`apps/cloud-api` → Worker → Groq). It is not a browser-facing proxy and not a generic outbound tunnel. The current rollout only enables **Groq transcription submit**.
+
+### 9.1 Deploying the Worker
+1. Create a new Worker in the Cloudflare dashboard.
+2. Paste the `asr-proxy.js` source code from `apps/cloud-api/resources/workers/asr-proxy.js`.
+3. Add the following environment variable in the Worker's **Settings -> Variables**:
+   - `READIO_ASR_WORKER_SHARED_SECRET`: A long, high-entropy random string (Secret).
+4. Deploy the Worker and note its public URL (e.g., `https://asr-proxy.example.workers.dev`).
+
+### 9.2 Backend Integration Config
+Add the following fields to your VPS runtime environment file at `/etc/readio/readio-cloud.env` to allow `apps/cloud-api` to connect to the ASR proxy:
+
+```bash
+# The base URL of your ASR Proxy Worker
+READIO_ASR_WORKER_BASE_URL=https://asr-proxy.example.workers.dev
+# MUST strictly match the READIO_ASR_WORKER_SHARED_SECRET configured in the Worker
+READIO_ASR_WORKER_SHARED_SECRET=your-high-entropy-secret-string
+```
+
+Both values must be configured for the Worker transport to activate. If either is missing or empty, the backend defaults to direct-to-Groq.
+
+To rollback: clear or remove these two values and restart the service. The browser contract is unchanged regardless of transport mode.
+
+### 9.3 Security Best Practices
+- **Authentication**: Backend requests to the Worker automatically include the `X-Readio-Cloud-Secret` header; the Worker rejects any request where this is missing or incorrect.
+- **Convergence**: The Worker source code restricts forwarding to `api.groq.com` only. Other providers are explicitly rejected (404). The Worker is not a generic proxy.
+- **Secret hygiene**: Neither the Worker shared secret nor the provider API key appear in logs or response bodies on either side.
+- **Performance**: The Worker uses a stream-through pattern for audio bodies, ensuring it stays well within the CPU limit and supports large audio files.
+
+## 10. Admin Observability
+
+| Var | Default | Description |
+|---|---|---|
+| `READIO_ADMIN_TOKEN` | (empty = disabled) | Bearer token for `/admin/*` endpoints |
+| `READIO_ADMIN_LOG_BUFFER` | 2000 | Ring buffer capacity (min 100, max 10000) |
+
+### 10.1 Access Surface
+
+- Browser UI: `/ops`
+- Backend JSON APIs:
+  - `/admin/logs`
+  - `/admin/health`
+  - `/admin/metrics/summary`
+- `/ops` is only the operator UI. It does not replace backend token checks on `/admin/*`.
+
+### 10.2 Enablement and Authentication
+
+- If `READIO_ADMIN_TOKEN` is unset or empty:
+  - `/admin/*` returns `404`
+  - the UI route may still render, but no admin data can be fetched
+- If `READIO_ADMIN_TOKEN` is set:
+  - `/admin/*` requires `Authorization: Bearer <token>`
+  - missing or invalid bearer token returns `401`
+
+### 10.3 Token Handling Rules
+
+- `READIO_ADMIN_TOKEN` is server-only
+- It must never be emitted via `/env.js`
+- The browser token is entered manually on `/ops`
+- The `/ops` page stores the token in `sessionStorage` only
+- Do not put the token in query params, route params, or hard-coded frontend config
+
+### 10.4 Recommended Outer Restrictions
+
+- For nginx:
+  - keep `/ops` and `/admin/*` non-cacheable
+  - add `Cache-Control: no-store` at the reverse-proxy layer as a defense-in-depth measure
+  - strongly consider an IP allowlist for `/ops` and `/admin/*`
+  - **required**: Set `client_max_body_size 20m;` in your site config (`/etc/nginx/sites-enabled/default`) under `location /api/v1/asr/` to allow ASR audio uploads (per-request, must match or exceed backend limit; Readio frontend limits chunks to 10MB, backend allows 20MB). Test with `sudo nginx -t` and reload with `sudo systemctl reload nginx`.
+
+- For Cloudflare:
+  - apply stricter path-based controls to `/ops*` and `/admin/*`
+  - add WAF / rate limiting / country or IP restrictions as appropriate
+- These outer controls do not replace `READIO_ADMIN_TOKEN`; they are additive hardening
+
+### 10.5 Operations
+
+- Generate the token with a high-entropy random value, for example:
+
+```bash
+openssl rand -base64 48
+```
+
+- Put `READIO_ADMIN_TOKEN` in the server env file, typically:
+  - `/etc/readio/readio-cloud.env`
+- After adding or changing the token, restart the service:
+
+```bash
+sudo systemctl restart readio-cloud
+```
+
+- If the token leaks:
+  1. generate a new token
+  2. replace `READIO_ADMIN_TOKEN` in `/etc/readio/readio-cloud.env`
+  3. restart the service
+  4. treat all previously entered `/ops` sessions as invalidated
+
+### 10.6 Example Env Snippet
+
+```bash
+READIO_ADMIN_TOKEN=replace-with-a-long-random-token
+READIO_ADMIN_LOG_BUFFER=2000
+```
+
+## 11. Operational Boundaries
+
+- This workflow assumes the VPS already exists and has undergone basic system initialization.
+- The operator is responsible for managing the Cloudflare Workers lifecycle and its secrets.
+- It does not configure nginx TLS certificate auto-renewal.
+- The security of browser-local data (IndexedDB) is guaranteed by the browser same-origin policy and is outside the backend deployment scope.

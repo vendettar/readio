@@ -284,10 +284,6 @@ func TestCloudMuxServesDynamicEnvBeforeStaticFallback(t *testing.T) {
 	if payload["READIO_ASR_RELAY_PUBLIC_TOKEN"] != "relay-public-token" {
 		t.Fatalf("READIO_ASR_RELAY_PUBLIC_TOKEN = %#v, want %#v", payload["READIO_ASR_RELAY_PUBLIC_TOKEN"], "relay-public-token")
 	}
-	if payload["READIO_RSS_FEED_BASE_URL"] != "https://cloud.example/api/v1/discovery" {
-		t.Fatalf("READIO_RSS_FEED_BASE_URL = %#v", payload["READIO_RSS_FEED_BASE_URL"])
-	}
-
 	for _, key := range browserEnvAllowlist {
 		if _, ok := payload[key]; !ok {
 			t.Fatalf("payload missing expected allowlist key %s", key)

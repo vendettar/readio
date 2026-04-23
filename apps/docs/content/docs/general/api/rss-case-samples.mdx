@@ -1,0 +1,1187 @@
+---
+title: RSS Case Samples
+---
+
+# RSS Case Samples
+
+This page stores representative RSS samples captured on 2026-04-13 (Asia/Shanghai) as reference cases for parser and data-model analysis.
+
+Each case keeps the `channel` header and exactly one representative `item`. Full feeds are intentionally omitted because item volume does not add structural value for this document.
+
+## Type Overview
+
+This case library currently covers 4 feed types:
+
+1. Traditional RSS 2.0 podcast feeds
+2. RSS 2.0 feeds with richer Podcasting 2.0 / vendor extensions
+3. RSS 2.0 feeds with stronger internationalization / multi-namespace variation
+4. True Atom feeds
+
+## Type 1: Traditional RSS 2.0 Podcast Feeds
+
+These are the most common podcast feeds in the current Readio pipeline.
+
+### What to watch
+
+- Root structure is standard RSS: `<rss><channel><item>`
+- Audio usually comes from `<enclosure>`
+- Common fields may still vary between `description`, `itunes:summary`, `content:encoded`, `itunes:image`, and `<image><url>`
+- This is the primary compatibility target for the current parser
+
+### Case 1: CBC Hunting Warhead
+
+- Source URL: https://www.cbc.ca/podcasting/includes/huntingwarhead.xml
+- Fetch command: curl https://www.cbc.ca/podcasting/includes/huntingwarhead.xml
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/css" href="/podcasting/includes/style/rss-style.css"?>
+<rss xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:googleplay="http://www.google.com/schemas/play-podcasts/1.0" version="2.0">
+  <channel>
+    <itunes:type>serial</itunes:type>
+    <language>en-ca</language>
+    <title>Hunting Warhead</title>
+    <link>https://www.cbc.ca/radio/podcasts/hunting-warhead/index.html</link>
+    <description><![CDATA[<p>How do you take down a criminal network that’s hidden in the shadows? How do you rescue child abuse victims who could be anywhere in the world? Hunting Warhead follows the journalists and police on a global mission to expose the darkest corners of the internet. What they discover shocks them. Host Daemon Fairless tracks down the investigators, survivors and criminals themselves. A co-production of CBC Podcasts and the Norwegian newspaper VG. For the best in true crime from CBC, ad-free, visit apple.co/cbctruecrime.</p>]]></description>
+    <cbcListenUrl>https://www.cbc.ca/listen</cbcListenUrl>
+    <itunes:summary><![CDATA[<p>How do you take down a criminal network that’s hidden in the shadows? How do you rescue child abuse victims who could be anywhere in the world? Hunting Warhead follows the journalists and police on a global mission to expose the darkest corners of the internet. What they discover shocks them. Host Daemon Fairless tracks down the investigators, survivors and criminals themselves. A co-production of CBC Podcasts and the Norwegian newspaper VG. For the best in true crime from CBC, ad-free, visit apple.co/cbctruecrime.</p>]]></itunes:summary>
+    <itunes:owner>
+      <itunes:name>CBC</itunes:name>
+      <itunes:email>podcasting@cbc.ca</itunes:email>
+    </itunes:owner>
+    <copyright>Copyright © CBC 2026</copyright>
+    <itunes:category text="True Crime">
+    </itunes:category>
+      <itunes:author>CBC</itunes:author>
+    <itunes:image href="https://i.cbc.ca/ais/2a08d638-9f4c-4342-9037-f774112d5ef9,1761154816523/full/max/0/default.jpg?imbypass=on"/>
+    <itunes:explicit>No</itunes:explicit>
+    <item>
+      <guid>huntingwarhead-6c8954bb-4328-4d63-af32-9148130bbe7d</guid>
+      <title>The next season of Hunting is coming</title>
+      <itunes:title>The next season of Hunting is coming</itunes:title>
+      <description><![CDATA[<p>In this sneak peek, host <strong>Daemon Fairless</strong> shares the investigation he’s bringing you next… A story still unfolding.&nbsp;</p><p><br></p><p>Following the critically-acclaimed <strong>Hunting Warhead</strong>, Season 2 takes us inside a deadly corner of the internet: the online world helping people end their lives.&nbsp;</p><p><br></p><p>The next season of Hunting – coming later this year.</p>]]></description>
+      <itunes:subtitle><![CDATA[<p>In this sneak peek, host <strong>Daemon Fairless</strong> shares the investigation he’s bringing you next… A story still unfolding.&nbsp;</p><p><br></p><p>Following the critically-acclaimed <strong>Hunting Warhead</strong>, Season 2 takes us inside a deadly corner of the internet: the online world helping people end their lives.&nbsp;</p><p><br></p><p>The next season of Hunting – coming later this year.</p>]]></itunes:subtitle>
+      <itunes:summary><![CDATA[<p>In this sneak peek, host <strong>Daemon Fairless</strong> shares the investigation he’s bringing you next… A story still unfolding.&nbsp;</p><p><br></p><p>Following the critically-acclaimed <strong>Hunting Warhead</strong>, Season 2 takes us inside a deadly corner of the internet: the online world helping people end their lives.&nbsp;</p><p><br></p><p>The next season of Hunting – coming later this year.</p>]]></itunes:summary>
+      <pubDate>Tue, 03 Feb 2026 00:10:00 EST</pubDate>
+      <itunes:duration>00:02:15</itunes:duration>
+      <itunes:explicit>No</itunes:explicit>
+      <enclosure url="https://mgln.ai/e/12/cbc.mc.tritondigital.com/CBC_HUNTINGWARHEAD_P/media/huntingwarhead/huntingwarhead-nNOXlpiX-20260203.mp3?ttag=season:2" length="4538785"
+        type="audio/mpeg" />
+      <contentLink>https://mgln.ai/e/12/cbc.mc.tritondigital.com/CBC_HUNTINGWARHEAD_P/media/huntingwarhead/huntingwarhead-nNOXlpiX-20260203.mp3?ttag=season:2</contentLink>
+      <itunes:season>2</itunes:season>
+      <itunes:episodeType>trailer</itunes:episodeType>
+    </item>
+  </channel>
+</rss>
+```
+
+### Case 2: Megaphone Bear Brook
+
+- Source URL: https://feeds.megaphone.fm/TPG7540613670
+- Fetch command: curl https://feeds.megaphone.fm/TPG7540613670
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:googleplay="http://www.google.com/schemas/play-podcasts/1.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/" xmlns:content="http://purl.org/rss/1.0/modules/content/">
+  <channel>
+    <atom:link href="https://feeds.megaphone.fm/TPG7540613670" rel="self" type="application/rss+xml"/>
+    <title>Bear Brook</title>
+    <link>https://www.nhpr.org</link>
+    <language>en</language>
+    <copyright>New Hampshire Public Radio</copyright>
+    <description>Bear Brook, hosted by Jason Moon, is the critically-acclaimed true crime podcast from New Hampshire Public Radio. 
+
+Season 1 - Two barrels. Four Bodies. And a cold case that’s changing how murders will be investigated forever.
+
+Season 2: A True Crime Story - Jason Carroll is serving life in prison for a murder he says he didn’t commit. The only evidence against him? His own taped confession. More than 30 years later, is it possible to get to the truth – and who gets to tell it?
+
+Stephen King called both seasons “the best true crime podcasts I've ever heard. Brilliant, involving, hypnotic.” The New Yorker said season one “stands out for its ambition, complexity, and thoughtful tone.”</description>
+    <image>
+      <url>https://megaphone.imgix.net/podcasts/ccd024c4-cf9e-11f0-aa7b-d7182baa26f1/image/61c5bddecfb8c8dcff63d3590f1e3d0f.jpg?ixlib=rails-4.3.1&amp;max-w=3000&amp;max-h=3000&amp;fit=crop&amp;auto=format,compress</url>
+      <title>Bear Brook</title>
+      <link>https://www.nhpr.org</link>
+    </image>
+    <itunes:explicit>no</itunes:explicit>
+    <itunes:type>serial</itunes:type>
+    <itunes:subtitle></itunes:subtitle>
+    <itunes:author>NHPR</itunes:author>
+    <itunes:summary>Bear Brook, hosted by Jason Moon, is the critically-acclaimed true crime podcast from New Hampshire Public Radio. 
+
+Season 1 - Two barrels. Four Bodies. And a cold case that’s changing how murders will be investigated forever.
+
+Season 2: A True Crime Story - Jason Carroll is serving life in prison for a murder he says he didn’t commit. The only evidence against him? His own taped confession. More than 30 years later, is it possible to get to the truth – and who gets to tell it?
+
+Stephen King called both seasons “the best true crime podcasts I've ever heard. Brilliant, involving, hypnotic.” The New Yorker said season one “stands out for its ambition, complexity, and thoughtful tone.”</itunes:summary>
+    <content:encoded>
+      <![CDATA[Bear Brook, hosted by Jason Moon, is the critically-acclaimed true crime podcast from New Hampshire Public Radio. 
+
+Season 1 - Two barrels. Four Bodies. And a cold case that’s changing how murders will be investigated forever.
+
+Season 2: A True Crime Story - Jason Carroll is serving life in prison for a murder he says he didn’t commit. The only evidence against him? His own taped confession. More than 30 years later, is it possible to get to the truth – and who gets to tell it?
+
+Stephen King called both seasons “the best true crime podcasts I've ever heard. Brilliant, involving, hypnotic.” The New Yorker said season one “stands out for its ambition, complexity, and thoughtful tone.”]]>
+    </content:encoded>
+    <itunes:owner>
+      <itunes:name>NHPR</itunes:name>
+      <itunes:email>bearbrookpodcast@nhpr.org</itunes:email>
+    </itunes:owner>
+    <itunes:image href="https://megaphone.imgix.net/podcasts/ccd024c4-cf9e-11f0-aa7b-d7182baa26f1/image/61c5bddecfb8c8dcff63d3590f1e3d0f.jpg?ixlib=rails-4.3.1&amp;max-w=3000&amp;max-h=3000&amp;fit=crop&amp;auto=format,compress"/>
+    <itunes:category text="True Crime">
+    </itunes:category>
+    <item>
+      <title>Introducing: Safe to Drink</title>
+      <description>Introducing “Safe to Drink:” A New Hampshire town finds out its water has been contaminated by a chemical. The most basic question — whether the water is safe to drink — doesn’t have a clear answer. Nobody seems to know much about this so-called forever chemical, which is weird because… this has all happened before.
+
+From the Document team at New Hampshire Public Radio, "Safe to Drink" is a four-part series about the water contamination story that keeps repeating in town after town — and about the people who fought for answers through a maze of chemistry, regulations, and illnesses.
+Learn more about your ad choices. Visit megaphone.fm/adchoices</description>
+      <pubDate>Thu, 12 Feb 2026 05:01:00 -0000</pubDate>
+      <itunes:episodeType>bonus</itunes:episodeType>
+      <itunes:author>NHPR</itunes:author>
+      <itunes:subtitle></itunes:subtitle>
+      <itunes:summary>Introducing “Safe to Drink:” A New Hampshire town finds out its water has been contaminated by a chemical. The most basic question — whether the water is safe to drink — doesn’t have a clear answer. Nobody seems to know much about this so-called forever chemical, which is weird because… this has all happened before.
+
+From the Document team at New Hampshire Public Radio, "Safe to Drink" is a four-part series about the water contamination story that keeps repeating in town after town — and about the people who fought for answers through a maze of chemistry, regulations, and illnesses.
+Learn more about your ad choices. Visit megaphone.fm/adchoices</itunes:summary>
+      <content:encoded>
+        <![CDATA[<p>Introducing “Safe to Drink:” A New Hampshire town finds out its water has been contaminated by a chemical. The most basic question — whether the water is safe to drink — doesn’t have a clear answer. Nobody seems to know much about this so-called forever chemical, which is weird because… this has all happened before.</p>
+<p>From the <em>Document</em> team at New Hampshire Public Radio, "Safe to Drink" is a four-part series about the water contamination story that keeps repeating in town after town — and about the people who fought for answers through a maze of chemistry, regulations, and illnesses.</p><p> </p><p>Learn more about your ad choices. Visit <a href="https://megaphone.fm/adchoices">megaphone.fm/adchoices</a></p>]]>
+      </content:encoded>
+      <itunes:duration>2021</itunes:duration>
+      <itunes:explicit>no</itunes:explicit>
+      <guid isPermaLink="false"><![CDATA[6c107e30-01f4-11f1-8710-271632f3a072]]></guid>
+      <enclosure url="https://www.podtrac.com/pts/redirect.mp3/tracking.swap.fm/track/tcQd6Q6C0RUUlOHq1Ytj/mgln.ai/e/51/pscrb.fm/rss/p/traffic.megaphone.fm/TPG8985652149.mp3?updated=1770229348" length="0" type="audio/mpeg"/>
+    </item>
+  </channel>
+</rss>
+```
+
+### Case 7: Transistor Build Your SaaS
+
+- Source URL: https://feeds.transistor.fm/build-your-saas
+- Key Features: `podcast:person`, `podcast:trailer`, `itunes:season`, `itunes:episode`, HTML in `description`.
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet href="/stylesheet.xsl" type="text/xsl"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:sy="http://purl.org/rss/1.0/modules/syndication/" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:podcast="https://podcastindex.org/namespace/1.0">
+  <channel>
+    <atom:link rel="self" type="application/rss+xml" href="https://feeds.transistor.fm/build-your-saas" title="MP3 Audio"/>
+    <atom:link rel="hub" href="https://pubsubhubbub.appspot.com/"/>
+    <podcast:podping usesPodping="true"/>
+    <title>Build Your SaaS</title>
+    <generator>Transistor (https://transistor.fm)</generator>
+    <itunes:new-feed-url>https://feeds.transistor.fm/build-your-saas</itunes:new-feed-url>
+    <description>Interested in building your own SaaS company? Follow the journey of Transistor.fm as they bootstrap a podcast hosting startup.</description>
+    <copyright>© 2025 Transistor, Inc.</copyright>
+    <podcast:guid>778116ac-6b1e-5ae2-b037-26a7ff2aee64</podcast:guid>
+    <podcast:podroll>
+      <podcast:remoteItem feedGuid="ae85e704-aea7-5502-b8d4-dd1a6d4b5a40" feedUrl="https://feeds.transistor.fm/hackers-inc"/>
+      <podcast:remoteItem feedGuid="4a10b63a-41b2-5c31-82e1-9ea2cd7cc19a" feedUrl="https://feeds.transistor.fm/the-panel"/>
+      <podcast:remoteItem feedGuid="3f7f94d2-8111-5ed2-b4d3-88ce0c4a7b24" feedUrl="https://feeds.transistor.fm/the-business-of-laravel"/>
+      <podcast:remoteItem feedGuid="d6671fb6-3ad2-5533-b157-e70f1a3b23cb" feedUrl="https://feeds.transistor.fm/mostly-technical"/>
+      <podcast:remoteItem feedGuid="0f17bc61-9135-5308-87da-390a957fcd83" feedUrl="https://feeds.transistor.fm/building-livewire"/>
+      <podcast:remoteItem feedGuid="ec3625d6-799c-5efb-93c7-a2a8c15f4fb8" feedUrl="https://feeds.castos.com/mqv6"/>
+      <podcast:remoteItem feedGuid="1f23616e-697c-5796-8aa2-fe7feaf83e5c" feedUrl="https://feeds.transistor.fm/bootstrapped-founder"/>
+      <podcast:remoteItem feedGuid="7ac16be6-8783-5b11-8290-f8eaf9df4f1d" feedUrl="https://feeds.transistor.fm/bootstrapped-web"/>
+    </podcast:podroll>
+    <podcast:locked>yes</podcast:locked>
+    <podcast:funding url="https://www.patreon.com/jonjustin">Support this podcast on Patreon</podcast:funding>
+    <podcast:person role="Editor" href="https://www.lemonproductions.ca/" img="https://img.transistorcdn.com/2SiuRhS348JffvBzdB3JGfWiktif4lkAlJ7qEYIddM0/rs:fill:0:0:1/w:800/h:800/q:60/mb:500000/aHR0cHM6Ly9pbWct/dXBsb2FkLXByb2R1/Y3Rpb24udHJhbnNp/c3Rvci5mbS9wZXJz/b24vOTViZmQ4MTYt/MjE2ZC00NGFjLTk1/MTgtOTdmZTgxZWNm/ZjQyLzE2NjQ0Nzkx/NTMtaW1hZ2UuanBn.jpg">Chris Enns</podcast:person>
+    <podcast:person role="Host" href="https://transistor.fm" img="https://img.transistorcdn.com/gDRCHUWtnyUcFLoKYzonKCNOePi94JeSg0YRNPbdsDA/rs:fill:0:0:1/w:800/h:800/q:60/mb:500000/aHR0cHM6Ly9pbWct/dXBsb2FkLXByb2R1/Y3Rpb24udHJhbnNp/c3Rvci5mbS9wZXJz/b24vODk0MzlmOGYt/NDE0Ni00NjM4LWIw/NzctNmMwZDBkOTYy/MTVlLzE2ODE5OTQz/MzEtaW1hZ2UuanBn.jpg">Jon Buda</podcast:person>
+    <podcast:person role="Host" href="https://justinjackson.ca" img="https://img.transistorcdn.com/smTvekjC85pUxar6FCHHuAlHwamJGkZQ86Q0uqyef8U/rs:fill:0:0:1/w:800/h:800/q:60/mb:500000/aHR0cHM6Ly9pbWct/dXBsb2FkLXByb2R1/Y3Rpb24udHJhbnNp/c3Rvci5mbS9wZXJz/b24vYjYwODFjYzkt/Y2ZmYi00YWIzLThj/NWMtZDVkZWYyMDRm/ZjgyLzE2NjQ0NjU4/NzItaW1hZ2UuanBn.jpg">Justin Jackson</podcast:person>
+    <podcast:trailer pubdate="Tue, 19 Jun 2018 12:00:00 -0700" url="https://2.gum.fm/op3.dev/e/dts.podtrac.com/redirect.mp3/media.transistor.fm/cd78d193/5d907ace.mp3" length="1117509" type="audio/mpeg">Teaser: I don't want to get crushed by the VC monster</podcast:trailer>
+    <podcast:trailer pubdate="Tue, 29 May 2018 01:05:00 -0700" url="https://2.gum.fm/op3.dev/e/dts.podtrac.com/redirect.mp3/media.transistor.fm/1b8db7a0/76c28761.mp3" length="11090436" type="audio/mpeg">What does Nathan Barry think of podcast hosting pricing?</podcast:trailer>
+    <podcast:trailer pubdate="Fri, 16 Feb 2018 17:00:00 -0800" url="https://2.gum.fm/op3.dev/e/dts.podtrac.com/redirect.mp3/media.transistor.fm/07d3a3b7/65742513.mp3" length="5537837" type="audio/mpeg">What does it take to build a SaaS these days?</podcast:trailer>
+    <language>en</language>
+    <pubDate>Wed, 22 Apr 2026 03:36:05 -0700</pubDate>
+    <lastBuildDate>Wed, 22 Apr 2026 03:37:05 -0700</lastBuildDate>
+    <link>https://saas.transistor.fm</link>
+    <image>
+      <url>https://img.transistorcdn.com/An4UnCBXf-0MXzTVM7zHAs8am60aE1-MC7V16hltka0/rs:fill:0:0:1/w:1400/h:1400/q:60/mb:500000/aHR0cHM6Ly9pbWct/dXBsb2FkLXByb2R1/Y3Rpb24udHJhbnNp/c3Rvci5mbS9zaG93/LzE1LzE1MjEyMzc4/NDYtYXJ0d29yay5q/cGc.jpg</url>
+      <title>Build Your SaaS</title>
+      <link>https://saas.transistor.fm</link>
+    </image>
+    <itunes:category text="Business">
+      <itunes:category text="Marketing"/>
+    </itunes:category>
+    <itunes:category text="Technology"/>
+    <itunes:type>episodic</itunes:type>
+    <itunes:author>Transistor.fm</itunes:author>
+    <itunes:image href="https://img.transistorcdn.com/An4UnCBXf-0MXzTVM7zHAs8am60aE1-MC7V16hltka0/rs:fill:0:0:1/w:1400/h:1400/q:60/mb:500000/aHR0cHM6Ly9pbWct/dXBsb2FkLXByb2R1/Y3Rpb24udHJhbnNp/c3Rvci5mbS9zaG93/LzE1LzE1MjEyMzc4/NDYtYXJ0d29yay5q/cGc.jpg"/>
+    <itunes:summary>Interested in building your own SaaS company? Follow the journey of Transistor.fm as they bootstrap a podcast hosting startup.</itunes:summary>
+    <itunes:subtitle>Interested in building your own SaaS company.</itunes:subtitle>
+    <itunes:keywords>technology, podcasting, business, saas, software, marketing, bootstrap, bootstrapping, rails, ruby on rails</itunes:keywords>
+    <itunes:owner>
+      <itunes:name>Transistor.fm</itunes:name>
+    </itunes:owner>
+    <itunes:complete>No</itunes:complete>
+    <itunes:explicit>Yes</itunes:explicit>
+    <item>
+      <title>What is Transistor's secret weapon?</title>
+      <itunes:episode>164</itunes:episode>
+      <podcast:episode>164</podcast:episode>
+      <itunes:title>What is Transistor's secret weapon?</itunes:title>
+      <itunes:episodeType>full</itunes:episodeType>
+      <guid isPermaLink="false">b34e7e5b-750f-43e1-ab2e-3cc93f7fb5fd</guid>
+      <link>https://share.transistor.fm/s/9c22a01c</link>
+      <description>
+        <![CDATA[<p>Justin sits down with Helen Ryles and Michael Green, the two people behind almost every chat, email, and demo call that comes into Transistor, to talk about the company's secret weapon: the thing that converts 75% of trials to paid and keeps people around for years.</p><p><strong>Chapters:</strong><br></p><ul><li>(02:13) - What did Helen do before she joined Transistor?</li>
+<li>(03:00) - What did Michael do before joining Transistor?</li>
+<li>(05:05) - How does Transistor do customer support different?</li>
+<li>(08:04) - What have we learned by doing demo calls with customers?</li>
+<li>(12:32) - What are some of the emotions of starting a podcast?</li>
+<li>(16:15) - What can startups learn from being a customer led company?</li>
+<li>(18:44) - How do we approach AI in customer support?</li>
+<li>(22:50) - How does customer support translate into sales?</li>
+<li>(25:49) - What else does a customer support role do at a Saas?</li>
+<li>(33:41) - How do future generations learn how to be on a team?</li>
+</ul><br><strong>Quotes:<p></p></strong>From Helen:"The bar with customer support is really quite low across the industry... If companies are setting the standard of getting back to people in three to five business days, we don't have to necessarily adopt that. We can set our own standards."<p>From Michael:</p>"There is an emotional side to podcasting, to using a product, to creation, and we help on that side as well. People are often excited or nervous or panicking or something feels urgent, and we can help alleviate all of that emotional side. It's not just about questions and answers."<p><strong>Have feedback on this episode?</strong></p><ul><li>👉 <a href="https://podline.fm/build-your-saas">​Leave a voicemail here​</a></li><li>🦋 <a href="https://bsky.app/profile/did:plc:gp74daaof2ydekw2pmbgwfgm/post/3mjq6k7g3kr2j" title="Reply on Bluesky">Reply on Bluesky</a><br>
+</li><li>📺 </li></ul>
+<strong>Thanks to our monthly supporters</strong>
+<ul>
+  <li>Rewardful.com</li>
+  <li>Mitchell Davis from sixsides.co</li>
+  <li>Marcel Fahle, wearebold.af</li>
+  <li>Bill Condo (@mavrck)</li>
+  <li>Ward from MemberSpace.com</li>
+  <li>Evandro Sasse</li>
+  <li>Austin Loveless</li>
+  <li>Michael Sitver</li>
+  <li>Dave Giunta</li>
+</ul>
+<br><p>🎙️ <em>Podcast hosting is provided by</em> <a href="https://transistor.fm/?via=rubyblend"><em>Transistor.fm</em></a><em>.<br>📺 Learn </em><a href="https://transistor.fm/how-to-start-a-podcast/"><em>how to start your own podcast</em></a><em>!</em></p>
+<strong>
+  <a href="https://www.patreon.com/jonjustin" rel="payment" title="★ Support this podcast on Patreon ★">★ Support this podcast on Patreon ★</a>
+</strong>]]>
+      </description>
+      <content:encoded>
+        <![CDATA[<p>Justin sits down with Helen Ryles and Michael Green, the two people behind almost every chat, email, and demo call that comes into Transistor, to talk about the company's secret weapon: the thing that converts 75% of trials to paid and keeps people around for years.</p><p><strong>Chapters:</strong><br></p><ul><li>(02:13) - What did Helen do before she joined Transistor?</li>
+<li>(03:00) - What did Michael do before joining Transistor?</li>
+<li>(05:05) - How does Transistor do customer support different?</li>
+<li>(08:04) - What have we learned by doing demo calls with customers?</li>
+<li>(12:32) - What are some of the emotions of starting a podcast?</li>
+<li>(16:15) - What can startups learn from being a customer led company?</li>
+<li>(18:44) - How do we approach AI in customer support?</li>
+<li>(22:50) - How does customer support translate into sales?</li>
+<li>(25:49) - What else does a customer support role do at a Saas?</li>
+<li>(33:41) - How do future generations learn how to be on a team?</li>
+</ul><br><strong>Quotes:<p></p></strong>From Helen:"The bar with customer support is really quite low across the industry... If companies are setting the standard of getting back to people in three to five business days, we don't have to necessarily adopt that. We can set our own standards."<p>From Michael:</p>"There is an emotional side to podcasting, to using a product, to creation, and we help on that side as well. People are often excited or nervous or panicking or something feels urgent, and we can help alleviate all of that emotional side. It's not just about questions and answers."<p><strong>Have feedback on this episode?</strong></p><ul><li>👉 <a href="https://podline.fm/build-your-saas">​Leave a voicemail here​</a></li><li>🦋 <a href="https://bsky.app/profile/did:plc:gp74daaof2ydekw2pmbgwfgm/post/3mjq6k7g3kr2j" title="Reply on Bluesky">Reply on Bluesky</a><br>
+</li><li>📺 </li></ul>
+<strong>Thanks to our monthly supporters</strong>
+<ul>
+  <li>Rewardful.com</li>
+  <li>Mitchell Davis from sixsides.co</li>
+  <li>Marcel Fahle, wearebold.af</li>
+  <li>Bill Condo (@mavrck)</li>
+  <li>Ward from MemberSpace.com</li>
+  <li>Evandro Sasse</li>
+  <li>Austin Loveless</li>
+  <li>Michael Sitver</li>
+  <li>Dave Giunta</li>
+</ul>
+<br><p>🎙️ <em>Podcast hosting is provided by</em> <a href="https://transistor.fm/?via=rubyblend"><em>Transistor.fm</em></a><em>.<br>📺 Learn </em><a href="https://transistor.fm/how-to-start-a-podcast/"><em>how to start your own podcast</em></a><em>!</em></p>
+<strong>
+  <a href="https://www.patreon.com/jonjustin" rel="payment" title="★ Support this podcast on Patreon ★">★ Support this podcast on Patreon ★</a>
+</strong>]]>
+      </content:encoded>
+      <pubDate>Fri, 17 Apr 2026 17:26:43 -0700</pubDate>
+      <author>Transistor.fm</author>
+      <enclosure url="https://2.gum.fm/op3.dev/e/dts.podtrac.com/redirect.mp3/media.transistor.fm/9c22a01c/fa09d122.mp3" length="39793259" type="audio/mpeg"/>
+      <itunes:author>Transistor.fm</itunes:author>
+      <itunes:duration>2486</itunes:duration>
+      <itunes:summary>
+        <![CDATA[<p>Justin sits down with Helen Ryles and Michael Green, the two people behind almost every chat, email, and demo call that comes into Transistor, to talk about the company's secret weapon: the thing that converts 75% of trials to paid and keeps people around for years.</p><p><strong>Chapters:</strong><br></p><ul><li>(02:13) - What did Helen do before she joined Transistor?</li>
+<li>(03:00) - What did Michael do before joining Transistor?</li>
+<li>(05:05) - How does Transistor do customer support different?</li>
+<li>(08:04) - What have we learned by doing demo calls with customers?</li>
+<li>(12:32) - What are some of the emotions of starting a podcast?</li>
+<li>(16:15) - What can startups learn from being a customer led company?</li>
+<li>(18:44) - How do we approach AI in customer support?</li>
+<li>(22:50) - How does customer support translate into sales?</li>
+<li>(25:49) - What else does a customer support role do at a Saas?</li>
+<li>(33:41) - How do future generations learn how to be on a team?</li>
+</ul><br><strong>Quotes:<p></p></strong>From Helen:"The bar with customer support is really quite low across the industry... If companies are setting the standard of getting back to people in three to five business days, we don't have to necessarily adopt that. We can set our own standards."<p>From Michael:</p>"There is an emotional side to podcasting, to using a product, to creation, and we help on that side as well. People are often excited or nervous or panicking or something feels urgent, and we can help alleviate all of that emotional side. It's not just about questions and answers."<p><strong>Have feedback on this episode?</strong></p><ul><li>👉 <a href="https://podline.fm/build-your-saas">​Leave a voicemail here​</a></li><li>🦋 <a href="https://bsky.app/profile/did:plc:gp74daaof2ydekw2pmbgwfgm/post/3mjq6k7g3kr2j" title="Reply on Bluesky">Reply on Bluesky</a><br>
+</li><li>📺 </li></ul>
+<strong>Thanks to our monthly supporters</strong>
+<ul>
+  <li>Rewardful.com</li>
+  <li>Mitchell Davis from sixsides.co</li>
+  <li>Marcel Fahle, wearebold.af</li>
+  <li>Bill Condo (@mavrck)</li>
+  <li>Ward from MemberSpace.com</li>
+  <li>Evandro Sasse</li>
+  <li>Austin Loveless</li>
+  <li>Michael Sitver</li>
+  <li>Dave Giunta</li>
+</ul>
+<br><p>🎙️ <em>Podcast hosting is provided by</em> <a href="https://transistor.fm/?via=rubyblend"><em>Transistor.fm</em></a><em>.<br>📺 Learn </em><a href="https://transistor.fm/how-to-start-a-podcast/"><em>how to start your own podcast</em></a><em>!</em></p>
+<strong>
+  <a href="https://www.patreon.com/jonjustin" rel="payment" title="★ Support this podcast on Patreon ★">★ Support this podcast on Patreon ★</a>
+</strong>]]>
+      </itunes:summary>
+      <itunes:keywords>technology, podcasting, business, saas, software, marketing, bootstrap, bootstrapping, rails, ruby on rails</itunes:keywords>
+      <itunes:explicit>No</itunes:explicit>
+      <podcast:person role="Editor" href="https://www.lemonproductions.ca/" img="https://img.transistorcdn.com/2SiuRhS348JffvBzdB3JGfWiktif4lkAlJ7qEYIddM0/rs:fill:0:0:1/w:800/h:800/q:60/mb:500000/aHR0cHM6Ly9pbWct/dXBsb2FkLXByb2R1/Y3Rpb24udHJhbnNp/c3Rvci5mbS9wZXJz/b24vOTViZmQ4MTYt/MjE2ZC00NGFjLTk1/MTgtOTdmZTgxZWNm/ZjQyLzE2NjQ0Nzkx/NTMtaW1hZ2UuanBn.jpg">Chris Enns</podcast:person>
+      <podcast:person role="Host" href="https://justinjackson.ca" img="https://img.transistorcdn.com/smTvekjC85pUxar6FCHHuAlHwamJGkZQ86Q0uqyef8U/rs:fill:0:0:1/w:800/h:800/q:60/mb:500000/aHR0cHM6Ly9pbWct/dXBsb2FkLXByb2R1/Y3Rpb24udHJhbnNp/c3Rvci5mbS9wZXJz/b24vYjYwODFjYzkt/Y2ZmYi00YWIzLThj/NWMtZDVkZWYyMDRm/ZjgyLzE2NjQ0NjU4/NzItaW1hZ2UuanBn.jpg">Justin Jackson</podcast:person>
+      <podcast:person role="Guest" href="https://transistor.fm/helen/" img="https://img.transistorcdn.com/1mwCcjPJ28W0q-MHPuUSfr0WXlnQOrBYX61oBX21rOU/rs:fill:0:0:1/w:800/h:800/q:60/mb:500000/aHR0cHM6Ly9pbWct/dXBsb2FkLXByb2R1/Y3Rpb24udHJhbnNp/c3Rvci5mbS9wZXJz/b24vMzcyYTczN2Mt/YjczYS00YmIwLWIy/OTQtZTYwYzU3Njdi/OTIzLzE2NjQ0Njkz/NDMtaW1hZ2UuanBn.jpg">Helen Ryles</podcast:person>
+      <podcast:person role="Guest" href="https://saas.transistor.fm/people/michael-green" img="https://img.transistorcdn.com/5lAhEoEXSLgMOD5jQ6T1TJsUOxKAlSyYMiAtdI0bTjU/rs:fill:0:0:1/w:800/h:800/q:60/mb:500000/aHR0cHM6Ly9pbWct/dXBsb2FkLXByb2R1/Y3Rpb24udHJhbnNp/c3Rvci5mbS80OWI1/YjRkNWUxYTgyNTk5/Njg2ZDI3MGM1NTVm/OTAyMC5wbmc.jpg">Michael Green</podcast:person>
+      <podcast:transcript url="https://share.transistor.fm/s/9c22a01c/transcription.vtt" type="text/vtt" rel="captions"/>
+      <podcast:transcript url="https://share.transistor.fm/s/9c22a01c/transcription.srt" type="application/x-subrip" rel="captions"/>
+      <podcast:transcript url="https://share.transistor.fm/s/9c22a01c/transcription.json" type="application/json" rel="captions"/>
+      <podcast:transcript url="https://share.transistor.fm/s/9c22a01c/transcription.txt" type="text/plain"/>
+      <podcast:transcript url="https://share.transistor.fm/s/9c22a01c/transcription" type="text/html"/>
+      <podcast:chapters url="https://share.transistor.fm/s/9c22a01c/chapters.json" type="application/json+chapters"/>
+      <podcast:socialInteract protocol="atproto" uri="at://did:plc:gp74daaof2ydekw2pmbgwfgm/app.bsky.feed.post/3mjq6k7g3kr2j"/>
+    </item>
+    <item>
+      <title>What does it take to build a SaaS these days?</title>
+      <itunes:episode>1</itunes:episode>
+      <podcast:episode>1</podcast:episode>
+      <itunes:title>What does it take to build a SaaS these days?</itunes:title>
+      <itunes:episodeType>trailer</itunes:episodeType>
+      <guid isPermaLink="false">5c53eb8c-70c2-483b-aad1-d596a478d0b2</guid>
+      <link>https://share.transistor.fm/s/07d3a3b7</link>
+      <description>
+        <![CDATA[<p>Jon Buda and Justin Jackson are building and launching a new product this year called Transistor.</p><p>You can follow along as we explore this question:</p><p>What does it take to build a SaaS business now? Is all of the low-hanging fruit gone?</p><p>You'll get to hear our real raw emotions:</p><p>"A lot of my time right now is spent trying to figure out how motivated the customer is to sign up."</p><p>If this sounds interesting, subscribe on Apple Podcasts, Spotify, or wherever you listen to shows. </p><p><b>Show notes</b></p><ul><li><a href="https://transistor.fm/how-to-start-a-podcast/">How to start a podcast</a></li><li><a href="https://transistor.fm">Transistor.fm</a></li><li><a href="https://www.instagram.com/transistor.fm/">Transistor.fm on Instagram</a></li><li><a href="https://twitter.com/transistorfm">Transistor.fm on Twitter</a></li><li>Jon Buda is back on Twitter: <a href="https://twitter.com/jonbuda">@jonbuda</a></li><li>Justin Jackson on Twitter here: <a href="https://twitter.com/mijustin">@mijustin</a></li></ul>
+<strong>Thanks to our monthly supporters</strong>
+<ul>
+  <li>Rewardful.com</li>
+  <li>Mitchell Davis from sixsides.co</li>
+  <li>Marcel Fahle, wearebold.af</li>
+  <li>Bill Condo (@mavrck)</li>
+  <li>Ward from MemberSpace.com</li>
+  <li>Evandro Sasse</li>
+  <li>Austin Loveless</li>
+  <li>Michael Sitver</li>
+  <li>Dave Giunta</li>
+</ul>
+<strong>
+  <a href="https://www.patreon.com/jonjustin" rel="payment" title="★ Support this podcast on Patreon ★">★ Support this podcast on Patreon ★</a>
+</strong>]]>
+      </description>
+      <content:encoded>
+        <![CDATA[<p>Jon Buda and Justin Jackson are building and launching a new product this year called Transistor.</p><p>You can follow along as we explore this question:</p><p>What does it take to build a SaaS business now? Is all of the low-hanging fruit gone?</p><p>You'll get to hear our real raw emotions:</p><p>"A lot of my time right now is spent trying to figure out how motivated the customer is to sign up."</p><p>If this sounds interesting, subscribe on Apple Podcasts, Spotify, or wherever you listen to shows. </p><p><b>Show notes</b></p><ul><li><a href="https://transistor.fm/how-to-start-a-podcast/">How to start a podcast</a></li><li><a href="https://transistor.fm">Transistor.fm</a></li><li><a href="https://www.instagram.com/transistor.fm/">Transistor.fm on Instagram</a></li><li><a href="https://twitter.com/transistorfm">Transistor.fm on Twitter</a></li><li>Jon Buda is back on Twitter: <a href="https://twitter.com/jonbuda">@jonbuda</a></li><li>Justin Jackson on Twitter here: <a href="https://twitter.com/mijustin">@mijustin</a></li></ul>
+<strong>Thanks to our monthly supporters</strong>
+<ul>
+  <li>Rewardful.com</li>
+  <li>Mitchell Davis from sixsides.co</li>
+  <li>Marcel Fahle, wearebold.af</li>
+  <li>Bill Condo (@mavrck)</li>
+  <li>Ward from MemberSpace.com</li>
+  <li>Evandro Sasse</li>
+  <li>Austin Loveless</li>
+  <li>Michael Sitver</li>
+  <li>Dave Giunta</li>
+</ul>
+<strong>
+  <a href="https://www.patreon.com/jonjustin" rel="payment" title="★ Support this podcast on Patreon ★">★ Support this podcast on Patreon ★</a>
+</strong>]]>
+      </content:encoded>
+      <pubDate>Fri, 16 Feb 2018 17:00:00 -0800</pubDate>
+      <author>Transistor.fm</author>
+      <enclosure url="https://2.gum.fm/op3.dev/e/dts.podtrac.com/redirect.mp3/media.transistor.fm/07d3a3b7/65742513.mp3" length="5537837" type="audio/mpeg"/>
+      <itunes:author>Transistor.fm</itunes:author>
+      <itunes:duration>345</itunes:duration>
+      <itunes:summary>37signals started an indie SaaS revolution when they launched Basecamp and Ruby on Rails. But can you still succeed with something new?</itunes:summary>
+      <itunes:subtitle>37signals started an indie SaaS revolution when they launched Basecamp and Ruby on Rails. But can you still succeed with something new?</itunes:subtitle>
+      <itunes:keywords>technology, podcasting, business, saas, software, marketing, bootstrap, bootstrapping, rails, ruby on rails</itunes:keywords>
+      <itunes:explicit>No</itunes:explicit>
+      <podcast:person role="Host" href="https://transistor.fm" img="https://img.transistorcdn.com/gDRCHUWtnyUcFLoKYzonKCNOePi94JeSg0YRNPbdsDA/rs:fill:0:0:1/w:800/h:800/q:60/mb:500000/aHR0cHM6Ly9pbWct/dXBsb2FkLXByb2R1/Y3Rpb24udHJhbnNp/c3Rvci5mbS9wZXJz/b24vODk0MzlmOGYt/NDE0Ni00NjM4LWIw/NzctNmMwZDBkOTYy/MTVlLzE2ODE5OTQz/MzEtaW1hZ2UuanBn.jpg">Jon Buda</podcast:person>
+      <podcast:person role="Host" href="https://justinjackson.ca" img="https://img.transistorcdn.com/smTvekjC85pUxar6FCHHuAlHwamJGkZQ86Q0uqyef8U/rs:fill:0:0:1/w:800/h:800/q:60/mb:500000/aHR0cHM6Ly9pbWct/dXBsb2FkLXByb2R1/Y3Rpb24udHJhbnNp/c3Rvci5mbS9wZXJz/b24vYjYwODFjYzkt/Y2ZmYi00YWIzLThj/NWMtZDVkZWYyMDRm/ZjgyLzE2NjQ0NjU4/NzItaW1hZ2UuanBn.jpg">Justin Jackson</podcast:person>
+      <podcast:person role="Editor" href="https://www.lemonproductions.ca/" img="https://img.transistorcdn.com/2SiuRhS348JffvBzdB3JGfWiktif4lkAlJ7qEYIddM0/rs:fill:0:0:1/w:800/h:800/q:60/mb:500000/aHR0cHM6Ly9pbWct/dXBsb2FkLXByb2R1/Y3Rpb24udHJhbnNp/c3Rvci5mbS9wZXJz/b24vOTViZmQ4MTYt/MjE2ZC00NGFjLTk1/MTgtOTdmZTgxZWNm/ZjQyLzE2NjQ0Nzkx/NTMtaW1hZ2UuanBn.jpg">Chris Enns</podcast:person>
+      <podcast:transcript url="https://share.transistor.fm/s/07d3a3b7/transcription.vtt" type="text/vtt" rel="captions"/>
+      <podcast:transcript url="https://share.transistor.fm/s/07d3a3b7/transcription.srt" type="application/x-subrip" rel="captions"/>
+      <podcast:transcript url="https://share.transistor.fm/s/07d3a3b7/transcription.json" type="application/json" rel="captions"/>
+      <podcast:transcript url="https://share.transistor.fm/s/07d3a3b7/transcription.txt" type="text/plain"/>
+      <podcast:transcript url="https://share.transistor.fm/s/07d3a3b7/transcription" type="text/html"/>
+    </item>
+  </channel>
+</rss>
+```
+
+## Type 2: RSS 2.0 With Rich Podcasting 2.0 / Vendor Extensions
+
+These feeds are still RSS, but they carry much richer extension data than traditional podcast feeds.
+
+### What to watch
+
+- Still RSS structurally; do not confuse them with Atom
+- May include multiple `podcast:transcript` nodes, `podcast:chapters`, `podcast:value`, `alternateEnclosure`, vendor-specific tags, or extra media nodes
+- Current parser only maps a subset of these extensions, so these cases are useful both for supported behavior and explicit non-support boundaries
+- These feeds are often where "it is valid XML, but our DTO intentionally ignores most of it" becomes important
+
+### Case 3: Omny Stuff You Should Know
+
+- Source URL: https://omnycontent.com/d/playlist/e73c998e-6e60-432f-8610-ae210140c5b1/A91018A4-EA4F-4130-BF55-AE270180C327/44710ECC-10BB-48D1-93C7-AE270180C33E/podcast.rss
+- Fetch command: curl https://omnycontent.com/d/playlist/e73c998e-6e60-432f-8610-ae210140c5b1/A91018A4-EA4F-4130-BF55-AE270180C327/44710ECC-10BB-48D1-93C7-AE270180C33E/podcast.rss
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<rss xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/" xmlns:psc="http://podlove.org/simple-chapters" xmlns:omny="https://omny.fm/rss-extensions" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:acast="https://schema.acast.com/1.0/" xmlns:podcast="https://podcastindex.org/namespace/1.0" version="2.0">
+  <channel>
+    <omny:organizationId>e73c998e-6e60-432f-8610-ae210140c5b1</omny:organizationId>
+    <omny:networkId>f4bdfbd3-5be1-45d2-b690-ae3e0141cc95</omny:networkId>
+    <omny:programId>a91018a4-ea4f-4130-bf55-ae270180c327</omny:programId>
+    <omny:playlistId>44710ecc-10bb-48d1-93c7-ae270180c33e</omny:playlistId>
+    <language>en-US</language>
+    <atom:link rel="self" type="application/rss+xml" href="https://www.omnycontent.com/d/playlist/e73c998e-6e60-432f-8610-ae210140c5b1/a91018a4-ea4f-4130-bf55-ae270180c327/44710ecc-10bb-48d1-93c7-ae270180c33e/podcast.rss" />
+    <atom:link rel="first" type="application/rss+xml" href="https://www.omnycontent.com/d/playlist/e73c998e-6e60-432f-8610-ae210140c5b1/a91018a4-ea4f-4130-bf55-ae270180c327/44710ecc-10bb-48d1-93c7-ae270180c33e/podcast.rss?page=1" />
+    <atom:link rel="last" type="application/rss+xml" href="https://www.omnycontent.com/d/playlist/e73c998e-6e60-432f-8610-ae210140c5b1/a91018a4-ea4f-4130-bf55-ae270180c327/44710ecc-10bb-48d1-93c7-ae270180c33e/podcast.rss?page=1" />
+    <itunes:new-feed-url>https://www.omnycontent.com/d/playlist/e73c998e-6e60-432f-8610-ae210140c5b1/a91018a4-ea4f-4130-bf55-ae270180c327/44710ecc-10bb-48d1-93c7-ae270180c33e/podcast.rss</itunes:new-feed-url>
+    <title>Stuff You Should Know</title>
+    <itunes:subtitle>Stuff You Should Know</itunes:subtitle>
+    <link>https://www.iheart.com/podcast/105-stuff-you-should-know-26940277/</link>
+    <description><![CDATA[If you've ever wanted to know about champagne, satanism, the Stonewall Uprising, chaos theory, LSD, El Nino, true crime and Rosa Parks, then look no further. Josh and Chuck have you covered.]]></description>
+    <itunes:type>episodic</itunes:type>
+    <itunes:summary>If you've ever wanted to know about champagne, satanism, the Stonewall Uprising, chaos theory, LSD, El Nino, true crime and Rosa Parks, then look no further. Josh and Chuck have you covered.</itunes:summary>
+    <itunes:owner>
+      <itunes:name>iHeartPodcasts</itunes:name>
+      <itunes:email>iHeartPodcasts@iHeartmedia.com</itunes:email>
+    </itunes:owner>
+    <itunes:author>iHeartPodcasts</itunes:author>
+    <copyright>2026 iHeartMedia, Inc. © Any use of this intellectual property for text and data mining or computational analysis including as training material for artificial intelligence systems is strictly prohibited without express written consent from iHeartMedia</copyright>
+    <itunes:explicit>no</itunes:explicit>
+    <itunes:category text="Society &amp; Culture"></itunes:category>
+    <itunes:image href="https://www.omnycontent.com/d/programs/e73c998e-6e60-432f-8610-ae210140c5b1/a91018a4-ea4f-4130-bf55-ae270180c327/image.jpg?t=1749759419&amp;size=Large" />
+    <image>
+      <url>https://www.omnycontent.com/d/programs/e73c998e-6e60-432f-8610-ae210140c5b1/a91018a4-ea4f-4130-bf55-ae270180c327/image.jpg?t=1749759419&amp;size=Large</url>
+      <title>Stuff You Should Know</title>
+      <link>https://www.iheart.com/podcast/105-stuff-you-should-know-26940277/</link>
+    </image>
+    <item>
+      <title>Selects: What is a Numbers Station?</title>
+      <itunes:title>Selects: What is a Numbers Station?</itunes:title>
+      <description><![CDATA[<p>If you think secretly coded messages sent via short wave radio is Cold War relic, think again. In this classic episode, Chuck and Josh are here to dispel that myth, along with many others relating to numbers stations, including why they might still be operational.</p><p>See <a href="https://omnystudio.com/listener">omnystudio.com/listener</a> for privacy information.</p>]]></description>
+      <content:encoded><![CDATA[<p>If you think secretly coded messages sent via short wave radio is Cold War relic, think again. In this classic episode, Chuck and Josh are here to dispel that myth, along with many others relating to numbers stations, including why they might still be operational.</p><p>See <a href="https://omnystudio.com/listener">omnystudio.com/listener</a> for privacy information.</p>]]></content:encoded>
+      <itunes:episodeType>full</itunes:episodeType>
+      <itunes:author>iHeartPodcasts</itunes:author>
+      <itunes:image href="https://www.omnycontent.com/d/programs/e73c998e-6e60-432f-8610-ae210140c5b1/a91018a4-ea4f-4130-bf55-ae270180c327/image.jpg?t=1749759419&amp;size=Large" />
+      <media:content url="https://podtrac.com/pts/redirect.mp3/pscrb.fm/rss/p/traffic.omny.fm/d/clips/e73c998e-6e60-432f-8610-ae210140c5b1/a91018a4-ea4f-4130-bf55-ae270180c327/f1b0f403-a792-44d1-a33f-b425011e35bd/audio.mp3?utm_source=Podcast&amp;in_playlist=44710ecc-10bb-48d1-93c7-ae270180c33e" type="audio/mpeg">
+        <media:player url="https://omny.fm/shows/stuff-you-should-know-1/selects-what-is-a-numbers-station/embed?media=Audio" />
+      </media:content>
+      <media:content url="https://www.omnycontent.com/d/programs/e73c998e-6e60-432f-8610-ae210140c5b1/a91018a4-ea4f-4130-bf55-ae270180c327/image.jpg?t=1749759419&amp;size=Large" type="image/jpeg" />
+      <guid isPermaLink="false">f1b0f403-a792-44d1-a33f-b425011e35bd</guid>
+      <omny:clipId>f1b0f403-a792-44d1-a33f-b425011e35bd</omny:clipId>
+      <pubDate>Sat, 11 Apr 2026 09:00:00 +0000</pubDate>
+      <itunes:duration>2299</itunes:duration>
+      <enclosure url="https://podtrac.com/pts/redirect.mp3/pscrb.fm/rss/p/traffic.omny.fm/d/clips/e73c998e-6e60-432f-8610-ae210140c5b1/a91018a4-ea4f-4130-bf55-ae270180c327/f1b0f403-a792-44d1-a33f-b425011e35bd/audio.mp3?utm_source=Podcast&amp;in_playlist=44710ecc-10bb-48d1-93c7-ae270180c33e" length="36819377" type="audio/mpeg" />
+      <link>https://omny.fm/shows/stuff-you-should-know-1/selects-what-is-a-numbers-station</link>
+      <podcast:transcript url="https://api.omny.fm/orgs/e73c998e-6e60-432f-8610-ae210140c5b1/clips/f1b0f403-a792-44d1-a33f-b425011e35bd/transcript?format=SubRip&amp;t=1775582793" type="application/srt" language="en" />
+      <podcast:transcript url="https://api.omny.fm/orgs/e73c998e-6e60-432f-8610-ae210140c5b1/clips/f1b0f403-a792-44d1-a33f-b425011e35bd/transcript?format=WebVTT&amp;t=1775582793" type="text/vtt" language="en" />
+      <podcast:transcript url="https://api.omny.fm/orgs/e73c998e-6e60-432f-8610-ae210140c5b1/clips/f1b0f403-a792-44d1-a33f-b425011e35bd/transcript?format=TextWithTimestamps&amp;t=1775582793" type="text/plain" language="en" />
+    </item>
+  </channel>
+</rss>
+```
+
+### Case 4: No Agenda (Podcasting 2.0 & Value for Value)
+
+- Source URL: https://feed.nashownotes.com/rss.xml
+- Key Features: `podcast:value` (Lightning payments), `podcast:chapters`, `podcast:liveItem`.
+
+```xml
+<rss xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:podcast="https://github.com/Podcastindex-org/podcast-namespace/blob/main/docs/1.0.md" version="2.0">
+  <channel>
+    <title>No Agenda Show</title>
+    <description>Deconstructing Media with No Agenda, by Adam Curry and John C. Dvorak</description>
+    <link>http://noagendashow.net</link>
+    <docs>http://blogs.law.harvard.edu/tech/rss</docs>
+    <language>en</language>
+    <generator>Sovereign Feeds</generator>
+    <pubDate>Sun, 19 Apr 2026 21:21:39 +0000</pubDate>
+    <lastBuildDate>Sun, 19 Apr 2026 21:21:39 +0000</lastBuildDate>
+    <podcast:locked owner="adam@curry.com">yes</podcast:locked>
+    <podcast:funding url="https://noagendadonations.com">Support the Show!</podcast:funding>
+    <managingEditor>adam@curry.com (Adam Curry)</managingEditor>
+    <webMaster>adam@curry.com (Adam Curry)</webMaster>
+    <itunes:owner>
+      <itunes:email>adam@curry.com</itunes:email>
+      <itunes:name>Adam Curry</itunes:name>
+    </itunes:owner>
+    <image>
+      <url>https://noagendaassets.com/enc/1776632964.164_na-1861-art-feed.jpg</url>
+      <link>http://noagendashow.net</link>
+      <title>No Agenda Show</title>
+      <description>Deconstructing Media with No Agenda, by Adam Curry and John C. Dvorak</description>
+      <width>144</width>
+      <height>144</height>
+    </image>
+    <itunes:summary>A show about politics with No Agenda, by Adam Curry and John C. Dvorak</itunes:summary>
+    <itunes:author><![CDATA[Adam Curry & John C. Dvorak]]></itunes:author>
+    <itunes:image href="https://noagendaassets.com/enc/1776632964.164_na-1861-art-feed.jpg"/>
+    <itunes:explicit>Yes</itunes:explicit>
+    <itunes:keywords>government,agenda,elections,legislation,curry,dvorak,politics,news</itunes:keywords>
+    <itunes:category text="News &amp; Politics"/>
+    <itunes:category text="Comedy"/>
+    <podcast:value type="lightning" method="keysend" suggested="0.00000005000">
+      <podcast:valueRecipient name="Value4Value" type="node" address="03ae9f91a0cb8ff43840e3c322c4c61f019d8c1c3cea15a25cfc425ac605e61a4a" split="53"/>
+      <podcast:valueRecipient name="Dreb Scott (Chapter Architect)" type="node" address="02453e4e93322d60219808c00c2e6d1f1c673420e95b5511a33c40cfb4df5e9148" split="5"/>
+      <podcast:valueRecipient name="Clip Custodian" type="node" address="030a58b8653d32b99200a2334cfe913e51dc7d155aa0116c176657a4f1722677a3" customKey="696969" customValue="g96UfnRSUQlwKfzLEoB3" split="20"/>
+      <podcast:valueRecipient name="Sovereign Feeds" address="035ad2c954e264004986da2d9499e1732e5175e1dcef2453c921c6cdcc3536e9d8" type="node" split="5"/>
+      <podcast:valueRecipient name="BoostBot" type="node" address="03d55f4d4c870577e98ac56605a54c5ed20c8897e41197a068fd61bdb580efaa67" customKey="696969" customValue="gq0Z8b1wEftMkFL4vj7E" split="1"/>
+      <podcast:valueRecipient name="Geoff Smith - Various Original Songs" type="node" address="030a58b8653d32b99200a2334cfe913e51dc7d155aa0116c176657a4f1722677a3" customKey="696969" customValue="mXbAWPOMXmz866ZUJv29" split="5"/>
+      <podcast:valueRecipient name="boostbot@fountain.fm" type="node" address="03b6f613e88bd874177c28c6ad83b3baba43c4c656f56be1f8df84669556054b79" customKey="906608" customValue="01IMQkt4BFzAiSynxcQQqd" split="1"/>
+      <podcast:valueRecipient name="Bakfiets" type="node" address="021f548a8ab5eb8e7cf91e4c9777c388463e213485ece9a1808e3c6850084ee630" split="5"/>
+      <podcast:valueRecipient name="Sir Bemrose" type="node" address="035df303dcc65edcf4965960be85c2f65b7910d253a7d6a52dd3768018a83f016a" split="5"/>
+    </podcast:value>
+    <podcast:guid>856cd618-7f34-57ea-9b84-3600f1f65e7f</podcast:guid>
+    <podcast:medium>podcast</podcast:medium>
+    <podcast:complete>no</podcast:complete>
+    <podcast:block>no</podcast:block>
+    <podcast:block id="spotify">yes</podcast:block>
+    <podcast:block id="facebook">yes</podcast:block>
+    <category><![CDATA[News & Politics]]></category>
+    <category>Comedy</category>
+    <podcast:podroll>
+      <podcast:remoteItem feedGuid="991c5078-9383-5e2f-9845-05cbce8ac4dd" feedUrl="https://mp3s.nashownotes.com/catkrss.xml"/>
+      <podcast:remoteItem feedGuid="8ee4cdcf-5baa-5d0c-b7c4-690d9958240b" feedUrl="http://feeds.dhunplugged.com/DHUnplugged"/>
+      <podcast:remoteItem feedGuid="917393e3-1b1e-5cef-ace4-edaa54e1f810" feedUrl="http://mp3s.nashownotes.com/pc20rss.xml"/>
+      <podcast:remoteItem feedGuid="6dfbd8e4-f9f3-5ea1-98a1-574134999b3b" feedUrl="https://mp3s.nashownotes.com/bballrss.xml"/>
+    </podcast:podroll>
+    <podcast:liveItem status="ended" start="2026-04-19T17:32:00.000Z" chat="irc.zeronode.net" end="2026-04-19T21:32:00.000Z">
+      <title>No Agenda Episode 1861 - Live</title>
+      <author><![CDATA[Adam Curry & John C Dvorak]]></author>
+      <description><![CDATA[<p><strong>No Agenda Epsiode 1861 Live Sunday April 19th 2026 </strong><strong>Living Large and LIT!</strong></p>
+<p><strong>Boost us!</strong></p>
+<p><strong>Get a modern app at podcastapps.com</strong></p>
+<p>&nbsp;</p>]]></description>
+      <enclosure length="33" type="audio/mpeg" url="https://op3.dev/e/listen.noagendastream.com/noagenda"/>
+      <guid isPermaLink="false">NA-1861 Live</guid>
+      <itunes:image href="https://noagendaassets.com/enc/1776619772.005_na-1861-lit.jpg"/>
+      <itunes:keywords>noagenda news deconstruction</itunes:keywords>
+      <itunes:subtitle>No Agenda Episode 1861 - Live</itunes:subtitle>
+      <itunes:summary><![CDATA[<p><strong>No Agenda Epsiode 1861 Live Sunday April 19th 2026 </strong><strong>Living Large and LIT!</strong></p>
+<p><strong>Boost us!</strong></p>
+<p><strong>Get a modern app at podcastapps.com</strong></p>
+<p>&nbsp;</p>]]></itunes:summary>
+      <podcast:contentLink href="http://adam.curry.com/html/NoAgendaStreamandCha-1414965812.html">Listen Live in the Troll Room</podcast:contentLink>
+      <itunes:author><![CDATA[Adam Curry & John C Dvorak]]></itunes:author>
+      <link>http://trollroom.io</link>
+      <podcast:chat server="irc.zeronode.net" protocol="irc" accountId="adamc1999" space="#NoAgenda" embedUrl="https://kiwiirc.com/nextclient/irc.zeronode.net/?nick=webtroll?#NoAgenda"/>
+      <podcast:liveValue uri="https://curiohoster.com/event?event_id=c22e6f45-fad8-4f9e-84ab-5c7b4e688a8a" protocol="socket.io"/>
+      <podcast:socialInteract uri="https://psyopshop.com/@adam/113223050457334787" protocol="activitypub" accountId="adam" accountUrl="https://psyopshop.com"/>
+      <podcast:value type="lightning" method="keysend" suggested="0.00000005000">
+        <podcast:valueRecipient name="No Agenda Show" type="lnaddress" address="no_agenda_show@strike.me" split="90"/>
+        <podcast:valueRecipient name="Bakfiets" type="lnaddress" address="adam@getalby.com" split="10"/>
+      </podcast:value>
+    </podcast:liveItem>
+    <item>
+      <title><![CDATA[1861 - "Cone of Uncertainty"]]></title>
+      <description><![CDATA[<h2>No Agenda Episode 1861 - "Cone of Uncertainty"</h2>
+<p>Cone of Uncertainty</p>
+<p>Executive Producers:</p>
+<p>Shawn Brannan</p>
+<p>Sir Jan the innkeeper</p>
+<p>Al Liebl</p>
+<p>Ara Derderian</p>
+<p>Associate Executive Producers:</p>
+<p>Zadoc Brown III</p>
+<p>Eli The Coffee Guy</p>
+<p>Linda Lu Duchess of Jobs writer of winning resumes</p>
+<p>Paul Sommers</p>
+<p>William Calderone</p>
+<p>Adam Provencher</p>
+<p>Order of the Heart:</p>
+<p>Shawn Brannan</p>
+<p>Knights &amp; Dames</p>
+<p>Shawn Brannan</p>
+<p>Chiel &gt; Sir Chiel from the banks of the river Amstel</p>
+<p>End of Show Mixes:</p>
+<p>MVP</p>
+<p>Sir Satyruday Night Bill Walsh</p>
+<p><a href="https://noagendaartgenerator.com/artist/darren-oneill" target="_blank" rel="noopener">Art By: Darren O'Neill</a></p>
+<p><a href="https://noagendadonations.com/" target="_blank" rel="noopener">Become a member of the 1861 Club, support the show here</a></p>
+<p><a href="https://podverse.fm/" target="_blank" rel="noopener">Boost us with with Podcasting 2.0 Certified apps: Podverse - Podfriend - Breez - Sphinx - Podstation - Curiocaster - Fountain</a></p>
+<p>Mark van Dijk - Systems Master</p>
+<p>Ryan Bemrose - Program Director</p>
+<p>Back Office Jae Dvorak</p>
+<p>Chapters: Dreb Scott</p>
+<p>Clip Custodian: Neal Jones</p>
+<p>Clip Collectors: Steve Jones &amp; Dave Ackerman</p>
+<p><a href="http://dvorak.org/peerage.htm" target="_blank" rel="noopener">No Agenda Peerage</a></p>
+<p><a href="http://1861.noagendanotes.com/" target="_blank" rel="noopener">ShowNotes Archive 1861.noagendanotes.com</a></p>
+<p><a href="http://archive.noagendanotes.com/" target="_blank" rel="noopener">Directory Archive archive.noagendanotes.com</a></p>
+<p><a href="http://feed.nashownotes.com/rss.xml" target="_blank" rel="noopener">RSS Podcast Feed</a></p>
+<p><a href="https://noagendalite.glump.net/" target="_blank" rel="noopener">No Agenda Lite in opus format</a></p>]]></description>
+      <link>http://1861.noagendanotes.com</link>
+      <guid isPermaLink="true">http://1861.noagendanotes.com</guid>
+      <pubDate>Sun, 19 Apr 2026 21:17:57 +0000</pubDate>
+      <podcast:chapters url="https://reflex.livewire.io/chapters/podcast/856cd618-7f34-57ea-9b84-3600f1f65e7f/item/http://1861.noagendanotes.com/chapters/https://chapters.hypercatcher.com/http:feed.nashownotes.comrss.xml/http:1861.noagendanotes.com" type="application/json"/>
+      <itunes:subtitle><![CDATA[1861 - "Cone of Uncertainty"]]></itunes:subtitle>
+      <itunes:summary><![CDATA[<h2>No Agenda Episode 1861 - "Cone of Uncertainty"</h2>
+<p>Cone of Uncertainty</p>
+<p>Executive Producers:</p>
+<p>Shawn Brannan</p>
+<p>Sir Jan the innkeeper</p>
+<p>Al Liebl</p>
+<p>Ara Derderian</p>
+<p>Associate Executive Producers:</p>
+<p>Zadoc Brown III</p>
+<p>Eli The Coffee Guy</p>
+<p>Linda Lu Duchess of Jobs writer of winning resumes</p>
+<p>Paul Sommers</p>
+<p>William Calderone</p>
+<p>Adam Provencher</p>
+<p>Order of the Heart:</p>
+<p>Shawn Brannan</p>
+<p>Knights &amp; Dames</p>
+<p>Shawn Brannan</p>
+<p>Chiel &gt; Sir Chiel from the banks of the river Amstel</p>
+<p>End of Show Mixes:</p>
+<p>MVP</p>
+<p>Sir Satyruday Night Bill Walsh</p>
+<p><a href="https://noagendaartgenerator.com/artist/darren-oneill" target="_blank" rel="noopener">Art By: Darren O'Neill</a></p>
+<p><a href="https://noagendadonations.com/" target="_blank" rel="noopener">Become a member of the 1861 Club, support the show here</a></p>
+<p><a href="https://podverse.fm/" target="_blank" rel="noopener">Boost us with with Podcasting 2.0 Certified apps: Podverse - Podfriend - Breez - Sphinx - Podstation - Curiocaster - Fountain</a></p>
+<p>Mark van Dijk - Systems Master</p>
+<p>Ryan Bemrose - Program Director</p>
+<p>Back Office Jae Dvorak</p>
+<p>Chapters: Dreb Scott</p>
+<p>Clip Custodian: Neal Jones</p>
+<p>Clip Collectors: Steve Jones &amp; Dave Ackerman</p>
+<p><a href="http://dvorak.org/peerage.htm" target="_blank" rel="noopener">No Agenda Peerage</a></p>
+<p><a href="http://1861.noagendanotes.com/" target="_blank" rel="noopener">ShowNotes Archive 1861.noagendanotes.com</a></p>
+<p><a href="http://archive.noagendanotes.com/" target="_blank" rel="noopener">Directory Archive archive.noagendanotes.com</a></p>
+<p><a href="http://feed.nashownotes.com/rss.xml" target="_blank" rel="noopener">RSS Podcast Feed</a></p>
+<p><a href="https://noagendalite.glump.net/" target="_blank" rel="noopener">No Agenda Lite in opus format</a></p>]]></itunes:summary>
+      <itunes:author><![CDATA[Adam Curry & John C. Dvorak]]></itunes:author>
+      <author><![CDATA[Adam Curry & John C. Dvorak]]></author>
+      <itunes:image href="https://noagendaassets.com/enc/1776632964.164_na-1861-art-feed.jpg"/>
+      <itunes:explicit>No</itunes:explicit>
+      <itunes:keywords>curry,dvorak,noagenda,no,agenda,politics,douchebag</itunes:keywords>
+      <enclosure url="https://op3.dev/e/mp3s.nashownotes.com/NA-1861-2026-04-19-Final.mp3" type="audio/mpeg" length="118190444"/>
+      <podcast:person href="http://curry.com/" img="https://pbs.twimg.com/profile_images/1401922551161442307/XjN2DdFD_400x400.jpg" group="cast" role="host">Adam Curry</podcast:person>
+      <podcast:person href="http://dvorak.org/blog" img="https://speaking.com/wp-content/uploads/2018/09/John-Dvorak.jpg" group="cast" role="host">John C Dvorak</podcast:person>
+      <podcast:transcript url="https://mp3s.nashownotes.com/NA-1861-Captions.srt" type="application/srt" rel="captions"/>
+      <itunes:duration>9845</itunes:duration>
+      <podcast:value type="lightning" method="keysend" suggested="0.00000005000">
+        <podcast:valueRecipient name="No Agenda Show" type="lnaddress" address="no_agenda_show@strike.me" split="59"/>
+        <podcast:valueRecipient name="Dreb Scott (Chapter Architect)" type="node" address="02453e4e93322d60219808c00c2e6d1f1c673420e95b5511a33c40cfb4df5e9148" split="5"/>
+        <podcast:valueRecipient name="Sovereign Feeds" type="node" address="035ad2c954e264004986da2d9499e1732e5175e1dcef2453c921c6cdcc3536e9d8" split="5"/>
+        <podcast:valueRecipient name="AC" type="lnaddress" address="adamcurry@strike.me" split="5"/>
+        <podcast:valueRecipient name="Clip Collector Steve" type="lnaddress" address="babygreen973@walletofsatoshi.com" split="5"/>
+        <podcast:valueRecipient name="hiddenflower35@getalby.com" type="lnaddress" address="hiddenflower35@getalby.com" split="5"/>
+        <podcast:valueRecipient name="Reflex" type="lnaddress" address="reflex@livewire.io" split="5"/>
+        <podcast:valueRecipient name="darrenoneill@getalby.com" type="lnaddress" address="darrenoneill@getalby.com" split="5"/>
+        <podcast:valueRecipient name="aceackerman@fountain.fm" type="lnaddress" address="03b6f613e88bd874177c28c6ad83b3baba43c4c656f56be1f8df84669556054b79" split="5"/>
+        <podcast:valueRecipient name="Clip Custodian" type="lnaddress" address="clip_custodian@strike.me" split="1"/>
+      </podcast:value>
+      <podcast:socialInteract uri="https://psyopshop.com/@adam/116433464699306351" protocol="activitypub" accountId="adam" accountUrl="https://psyopshop.com/"/>
+    </item>
+    <item>
+      <title><![CDATA[1667 - "Heavy Tail"]]></title>
+      <description><![CDATA[<h2>No Agenda Episode 1667 - "Heavy Tail"</h2>
+<div>
+<div id="tabcredits">
+<p><strong>"Heavy Tail"</strong></p>
+<p>Show Number and Rubbelizer Donations</p>
+<p>Duke of Central Florida</p>
+<p>Sir Donald of the Firebottles</p>
+<p>Executive Producers:</p>
+<p>Duke of Central Florida</p>
+<p>Sir Donald of the Firebottles</p>
+<p>Baron Paul, The Trusted Advisor</p>
+<p>Julian Erickson</p>
+<p>Associate Executive Producers:</p>
+<p>Agent99</p>
+<p>Kristopher ORorke</p>
+<p>Sir Scott The Welder - Blacksmith of the East</p>
+<p>Eli The Coffee Guy</p>
+<p>Peter Mawson</p>
+<p>Linda Lu, Duchess of Jobs &amp; Writer of Resumes</p>
+<p>Become a member of the 1668 Club, support the show&nbsp;<a href="http://dvorak.org/na">here</a></p>
+<p>Boost us with with Podcasting 2.0 Certified apps:&nbsp;<a href="https://podverse.fm/">Podverse</a>&nbsp;-&nbsp;<a href="https://www.podfriend.com/">Podfriend&nbsp;</a>-&nbsp;<a href="https://breez.technology/">Breez&nbsp;</a>-&nbsp;<a href="https://sphinx.chat/">Sphinx&nbsp;</a>-&nbsp;<a href="https://podstation.github.io/">Podstation</a>&nbsp;-&nbsp;<a href="http://curiocaster.com/">Curiocaster</a>&nbsp;-&nbsp;<a href="http://fountain.fm/">Fountain</a></p>
+<p>Title Changes</p>
+<p>Sir Alex &gt; Baronet Alex, The NICU Dad</p>
+<p>Viscount Hugger of kitties &gt; Count Hugger of kitties</p>
+<p>Baronet Paul &gt; Baron Paul, The Trusted Advisor</p>
+<p>Knights &amp; Dames</p>
+<p>Scott the Welder &gt; Sir Scott The Welder - Blacksmith of the East</p>
+<p><a href="https://noagendaartgenerator.com/artist/nessworks" target="_blank" rel="noopener">Art By: nessworks - nessworks@getalby.com</a></p>
+<p>End of Show Mixes: Prof J Jones</p>
+<p>Engineering, Stream Management &amp; Wizardry</p>
+<p>Mark van Dijk - Systems Master</p>
+<p>Ryan Bemrose - Program Director</p>
+<p>Back Office Jae Dvorak</p>
+<p>Chapters: Dreb Scott</p>
+<p>Clip Custodian: Neal Jones</p>
+<p>Clip Collectors: Steve Jones &amp; Dave Ackerman</p>
+<p><strong>NEW:</strong>&nbsp;and soon on Netflix:&nbsp;<a href="https://www.youtube.com/channel/UCihyXCKCTKZ0H6OQRpKN5qQ">Animated No Agenda</a></p>
+<p><strong>Sign Up</strong>&nbsp;for the&nbsp;<a href="http://www.dvorak.org/blog/no-agenda-mailing-list-signup-here/">newsletter</a></p>
+<p><a href="http://dvorak.org/peerage.htm" target="_blank" rel="noopener">No Agenda Peerage</a></p>
+<p>ShowNotes Archive of links and Assets (clips etc)&nbsp;<a href="http://1667.noagendanotes.com/">1667.noagendanotes.com</a></p>
+<p>Directory Archive of Shownotes (includes all audio and video assets used)&nbsp;<a href="http://archive.noagendanotes.com/">archive.noagendanotes.com</a></p>
+<p>RSS Podcast<a href="http://feed.nashownotes.com/rss.xml">&nbsp;Feed</a></p>
+<p><a href="https://www.blugs.com/na/NASummaries.pdf" target="_blank" rel="noopener"><strong>Full Summaries in PDF</strong></a></p>
+<p><a href="https://noagendalite.glump.net/">No Agenda Lite</a>&nbsp;in opus format</p>
+<p><span>Last Modified 06/09/2024 16:52:42</span><br /><a href="http://freedomcontroller.com/"><span>This page created with the FreedomController</span></a></p>
+</div>
+</div>
+<div><small>Last Modified 06/09/2024 16:52:42 by&nbsp;<a href="http://freedomcontroller.com/">Freedom Controller</a></small>&nbsp;<a title="Link to the opml for this document." href="http://adam.curry.com/opml/NoAgendaEpisode1667H-Mz4f1pTrTgHCklRBBFRJk45Pg7zB46.opml">&nbsp;</a></div>]]></description>
+      <link>http://1667.noagendanotes.com</link>
+      <guid isPermaLink="true">http://1667.noagendanotes.com</guid>
+      <pubDate>Sun, 09 Jun 2024 21:54:12 +0000</pubDate>
+      <podcast:chapters url="https://reflex.livewire.io/chapters/podcast/856cd618-7f34-57ea-9b84-3600f1f65e7f/item/http://1667.noagendanotes.com/chapters/https://chapters.hypercatcher.com/http:feed.nashownotes.comrss.xml/http:1667.noagendanotes.com" type="application/json"/>
+      <itunes:subtitle><![CDATA[1667 - "Heavy Tail"]]></itunes:subtitle>
+      <itunes:summary><![CDATA[<h2>No Agenda Episode 1667 - "Heavy Tail"</h2>
+<div>
+<div id="tabcredits">
+<p><strong>"Heavy Tail"</strong></p>
+<p>Show Number and Rubbelizer Donations</p>
+<p>Duke of Central Florida</p>
+<p>Sir Donald of the Firebottles</p>
+<p>Executive Producers:</p>
+<p>Duke of Central Florida</p>
+<p>Sir Donald of the Firebottles</p>
+<p>Baron Paul, The Trusted Advisor</p>
+<p>Julian Erickson</p>
+<p>Associate Executive Producers:</p>
+<p>Agent99</p>
+<p>Kristopher ORorke</p>
+<p>Sir Scott The Welder - Blacksmith of the East</p>
+<p>Eli The Coffee Guy</p>
+<p>Peter Mawson</p>
+<p>Linda Lu, Duchess of Jobs &amp; Writer of Resumes</p>
+<p>Become a member of the 1668 Club, support the show&nbsp;<a href="http://dvorak.org/na">here</a></p>
+<p>Boost us with with Podcasting 2.0 Certified apps:&nbsp;<a href="https://podverse.fm/">Podverse</a>&nbsp;-&nbsp;<a href="https://www.podfriend.com/">Podfriend&nbsp;</a>-&nbsp;<a href="https://breez.technology/">Breez&nbsp;</a>-&nbsp;<a href="https://sphinx.chat/">Sphinx&nbsp;</a>-&nbsp;<a href="https://podstation.github.io/">Podstation</a>&nbsp;-&nbsp;<a href="http://curiocaster.com/">Curiocaster</a>&nbsp;-&nbsp;<a href="http://fountain.fm/">Fountain</a></p>
+<p>Title Changes</p>
+<p>Sir Alex &gt; Baronet Alex, The NICU Dad</p>
+<p>Viscount Hugger of kitties &gt; Count Hugger of kitties</p>
+<p>Baronet Paul &gt; Baron Paul, The Trusted Advisor</p>
+<p>Knights &amp; Dames</p>
+<p>Scott the Welder &gt; Sir Scott The Welder - Blacksmith of the East</p>
+<p><a href="https://noagendaartgenerator.com/artist/nessworks" target="_blank" rel="noopener">Art By: nessworks - nessworks@getalby.com</a></p>
+<p>End of Show Mixes: Prof J Jones</p>
+<p>Engineering, Stream Management &amp; Wizardry</p>
+<p>Mark van Dijk - Systems Master</p>
+<p>Ryan Bemrose - Program Director</p>
+<p>Back Office Jae Dvorak</p>
+<p>Chapters: Dreb Scott</p>
+<p>Clip Custodian: Neal Jones</p>
+<p>Clip Collectors: Steve Jones &amp; Dave Ackerman</p>
+<p><strong>NEW:</strong>&nbsp;and soon on Netflix:&nbsp;<a href="https://www.youtube.com/channel/UCihyXCKCTKZ0H6OQRpKN5qQ">Animated No Agenda</a></p>
+<p><strong>Sign Up</strong>&nbsp;for the&nbsp;<a href="http://www.dvorak.org/blog/no-agenda-mailing-list-signup-here/">newsletter</a></p>
+<p><a href="http://dvorak.org/peerage.htm" target="_blank" rel="noopener">No Agenda Peerage</a></p>
+<p>ShowNotes Archive of links and Assets (clips etc)&nbsp;<a href="http://1667.noagendanotes.com/">1667.noagendanotes.com</a></p>
+<p>Directory Archive of Shownotes (includes all audio and video assets used)&nbsp;<a href="http://archive.noagendanotes.com/">archive.noagendanotes.com</a></p>
+<p>RSS Podcast<a href="http://feed.nashownotes.com/rss.xml">&nbsp;Feed</a></p>
+<p><a href="https://www.blugs.com/na/NASummaries.pdf" target="_blank" rel="noopener"><strong>Full Summaries in PDF</strong></a></p>
+<p><a href="https://noagendalite.glump.net/">No Agenda Lite</a>&nbsp;in opus format</p>
+<p><span>Last Modified 06/09/2024 16:52:42</span><br /><a href="http://freedomcontroller.com/"><span>This page created with the FreedomController</span></a></p>
+</div>
+</div>
+<div><small>Last Modified 06/09/2024 16:52:42 by&nbsp;<a href="http://freedomcontroller.com/">Freedom Controller</a></small>&nbsp;<a title="Link to the opml for this document." href="http://adam.curry.com/opml/NoAgendaEpisode1667H-Mz4f1pTrTgHCklRBBFRJk45Pg7zB46.opml">&nbsp;</a></div>]]></itunes:summary>
+      <itunes:author><![CDATA[Adam Curry & John C. Dvorak]]></itunes:author>
+      <author><![CDATA[Adam Curry & John C. Dvorak]]></author>
+      <itunes:image href="https://noagendaassets.com/enc/1717969594.977_na-1667-art-feed.jpg"/>
+      <itunes:explicit>Yes</itunes:explicit>
+      <itunes:keywords>curry,dvorak,noagenda,no,agenda,politics,douchebag</itunes:keywords>
+      <enclosure url="https://op3.dev/e/mp3s.nashownotes.com/NA-1667-2024-06-09-Final.mp3" type="audio/mpeg" length="141552893"/>
+      <podcast:person href="http://curry.com/" img="https://upload.wikimedia.org/wikipedia/commons/thumb/d/d5/Adam_Curry_2016.jpg/440px-Adam_Curry_2016.jpg" group="cast" role="host">Adam Curry</podcast:person>
+      <podcast:person href="http://dvorak.org/blog" img="https://speaking.com/wp-content/uploads/2018/09/John-Dvorak.jpg" group="cast" role="host">John C Dvorak</podcast:person>
+      <podcast:images srcset="https://noagendaassets.com/enc/1718284403.074_na-1668-lit.jpg 512w"/>
+      <podcast:transcript url="https://mp3s.nashownotes.com/NA-1667-Captions.srt" type="application/srt" rel="captions"/>
+      <itunes:duration>11791</itunes:duration>
+      <podcast:value type="lightning" method="keysend" suggested="0.00000005000">
+        <podcast:valueRecipient name="Value4Value" type="node" address="03ae9f91a0cb8ff43840e3c322c4c61f019d8c1c3cea15a25cfc425ac605e61a4a" split="40"/>
+        <podcast:valueRecipient name="Dreb Scott (Chapter Architect)" type="node" address="02453e4e93322d60219808c00c2e6d1f1c673420e95b5511a33c40cfb4df5e9148" split="5"/>
+        <podcast:valueRecipient name="n3@getalby.com" type="node" address="030a58b8653d32b99200a2334cfe913e51dc7d155aa0116c176657a4f1722677a3" customKey="696969" customValue="g96UfnRSUQlwKfzLEoB3" split="15"/>
+        <podcast:valueRecipient name="Sovereign Feeds" type="node" address="035ad2c954e264004986da2d9499e1732e5175e1dcef2453c921c6cdcc3536e9d8" split="5"/>
+        <podcast:valueRecipient name="Stats" type="node" address="030a58b8653d32b99200a2334cfe913e51dc7d155aa0116c176657a4f1722677a3" customKey="696969" customValue="gq0Z8b1wEftMkFL4vj7E" split="1"/>
+        <podcast:valueRecipient name="Bakfiets" type="node" address="021f548a8ab5eb8e7cf91e4c9777c388463e213485ece9a1808e3c6850084ee630" split="5"/>
+        <podcast:valueRecipient name="Clip Collector Steve" type="node" address="030a58b8653d32b99200a2334cfe913e51dc7d155aa0116c176657a4f1722677a3" customKey="696969" customValue="InN2u5UPX11FboEccyOM" split="5"/>
+        <podcast:valueRecipient name="Sir Bemrose" type="node" address="035df303dcc65edcf4965960be85c2f65b7910d253a7d6a52dd3768018a83f016a" split="4"/>
+        <podcast:valueRecipient name="Bingit.io" type="node" address="030a58b8653d32b99200a2334cfe913e51dc7d155aa0116c176657a4f1722677a3" customKey="696969" customValue="vVERjCpDD6Z8gTQSuNVP" split="5"/>
+        <podcast:valueRecipient name="reflex@getalby.com" type="node" address="03a2cb3058309f7a0355b9583fc4347d82b251ee94997aec4d4e5573b181a49657" split="5"/>
+        <podcast:valueRecipient name="aceackerman@fountain.fm" type="node" address="03b6f613e88bd874177c28c6ad83b3baba43c4c656f56be1f8df84669556054b79" customKey="906608" customValue="01zegNyRXeUvycJJOZ5c9k" split="5"/>
+        <podcast:valueRecipient name="Nessworks - Album Art" type="node" address="030a58b8653d32b99200a2334cfe913e51dc7d155aa0116c176657a4f1722677a3" customKey="696969" customValue="C0RUJaObTdzDRW2mWggk" split="5"/>
+      </podcast:value>
+      <podcast:socialInteract uri="https://psyopshop.com/@adam/112588912698056291" protocol="activitypub" accountId="adam" accountUrl="https://psyopshop.com/"/>
+    </item>
+  </channel>
+</rss>
+```
+
+### Case 5: Podnews (Transcripts & Alternate Enclosures)
+
+- Source URL: https://podnews.net/rss
+- Key Features: `podcast:transcript` (VTT/SRT), `podcast:alternateEnclosure` (OPUS/AAC/Video).
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?><?xml-stylesheet type="text/css" href="https://podnews.net/_static/xml-style.css"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"
+    xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:atom="http://www.w3.org/2005/Atom"
+    xmlns:content="http://purl.org/rss/1.0/modules/content/"
+    xmlns:media="http://search.yahoo.com/mrss/"
+    xmlns:podcast="https://podcastindex.org/namespace/1.0">
+    <channel>
+        <link>https://podnews.net</link>
+        <atom:link rel="self" href="https://podnews.net/rss" />
+        <atom:link rel="hub" href="https://amazinglybrilliant.superfeedr.com/" />
+        <atom:link rel="payment" href="https://podnews.net/article/advertising" />
+        <title>Podnews Daily - podcast industry news</title>
+        <description>Daily news for people in podcasting - from Apple Podcasts to Spotify and
+            YouTube; Amy Poehler to Crime Junkie and Joe Rogan, indie podcasting to the biggest
+            hits. Whether it's the newest show from Goalhanger, the latest signing from The Ringer,
+            advertising information from Magellan AI or Podtrac, research including the most popular
+            podcasts to listen to, or updates from The Daily from The New York Times, we cover it
+            all, every weekday.
+
+            Podnews also covers the latest podcast jobs and events - and we help you with new
+            podcasts to listen to. Our podcast is updated weekdays at 7a Eastern; but you can also
+            visit https://podnews.net to get our free newsletter, for all the stories whenever you
+            need them.
+
+            Email: editor@podnews.net</description>
+        <language>en-gb</language>
+        <generator>Podnews LLC</generator>
+        <copyright>2026 Podnews LLC</copyright>
+        <itunes:explicit>false</itunes:explicit>
+        <itunes:new-feed-url>https://podnews.net/rss</itunes:new-feed-url>
+        <lastBuildDate>Wed, 22 Apr 2026 11:13:10 +0000</lastBuildDate>
+        <podcast:location geo="geo:-27.4679,153.028" osm="R11677792" country="au" rel="creator">Brisbane,
+            Australia</podcast:location>
+        <podcast:follow url="https://podnews.net/podcast/i8xe9/follow.json" />
+        <pubDate>Wed, 22 Apr 2026 11:09:07 +0000</pubDate>
+        <skipDays>
+            <day>Saturday</day>
+            <day>Sunday</day>
+        </skipDays>
+        <skipHours>
+            <hour>0</hour>
+            <hour>1</hour>
+            <hour>2</hour>
+            <hour>3</hour>
+            <hour>4</hour>
+            <hour>5</hour>
+            <hour>6</hour>
+            <hour>15</hour>
+            <hour>16</hour>
+            <hour>17</hour>
+            <hour>18</hour>
+            <hour>19</hour>
+            <hour>20</hour>
+            <hour>21</hour>
+            <hour>22</hour>
+            <hour>23</hour>
+        </skipHours>
+        <podcast:guid>9b024349-ccf0-5f69-a609-6b82873eab3c</podcast:guid>
+        <podcast:funding url="https://buy.stripe.com/4gw8zIcpc58CcGQ6ot">Support us</podcast:funding>
+        <podcast:value type="lightning" method="keysend">
+            <podcast:valueRecipient name="Podnews" type="lnaddress" address="james@podnews.net"
+                split="99" />
+            <podcast:valueRecipient name="Podcast Index" type="lnaddress"
+                address="podcastindex@podcastindex.org" split="1" />
+        </podcast:value>
+        <podcast:podping usesPodping="true" />
+        <podcast:person role="host" group="cast"
+            img="https://james.cridland.net/james-cridland-thumbnail.jpg"
+            href="https://james.cridland.net/">James Cridland</podcast:person>
+        <itunes:author>Podnews LLC</itunes:author>
+        <itunes:owner>
+            <itunes:name>Podnews LLC</itunes:name>
+            <itunes:email>editor+dailyrss@podnews.net</itunes:email>
+        </itunes:owner>
+        <itunes:subtitle>Daily news for the podcast and on-demand audio industry - from Apple
+            Podcasts to Spotify, YouTube Music to Joe Rogan. Podnews also covers the latest jobs and
+            events and trending shows in a short update every weekday. editor@podnews.net</itunes:subtitle>
+        <itunes:keywords>podcasting,radio,pod news</itunes:keywords>
+        <itunes:category text="News">
+            <itunes:category text="Daily News" />
+        </itunes:category>
+        <itunes:category text="Technology"></itunes:category>
+        <itunes:type>episodic</itunes:type>
+        <itunes:image href="https://podnews.net/static/podnews-2000x2000.png" />
+        <image>
+            <url>https://podnews.net/static/_favicons/apple-icon.png</url>
+            <title>Podnews Daily - podcast industry news</title>
+            <link>https://podnews.net</link>
+        </image>
+        <podcast:updateFrequency rrule="FREQ=DAILY;INTERVAL=1;BYDAY=MO,TU,WE,TH,FR">Every weekday</podcast:updateFrequency>
+        <podcast:podroll>
+            <podcast:remoteItem feedGuid="396d9ae0-da7e-5557-b894-b606231fa3ea"
+                feedUrl="https://feeds.buzzsprout.com/1538779.rss" />
+            <podcast:remoteItem feedGuid="d04f3195-25e8-52d9-b87f-969251009f1e"
+                feedUrl="https://feeds.buzzsprout.com/2105583.rss" />
+            <podcast:remoteItem feedGuid="dc87f50b-8c0d-5980-8f2d-067dde67c7e4"
+                feedUrl="https://podnews.net/sitemap/trailers.xml" />
+        </podcast:podroll>
+        <podcast:publisher>
+            <podcast:remoteItem feedGuid="d76ccec7-e6df-5616-9d7d-8dc1fb9d9820" medium="publisher"
+                feedUrl="https://podnews.net/static/feeds/publisher.xml" />
+        </podcast:publisher>
+        <category>podcasting</category>
+        <category>radio</category>
+        <ttl>30</ttl>
+        <item>
+            <title>Sirius XM to sell YouTube audio ads</title>
+            <link>https://podnews.net/update/youtube-sirius-audio-sell-ads</link>
+            <pubDate>Wed, 22 Apr 2026 11:06:04 +0000</pubDate>
+            <podcast:transcript url="https://podnews.net/audio/podnews260422.mp3.vtt"
+                type="text/vtt" rel="captions" />
+            <description><![CDATA[They'll be exclusive ad representative in the US.
+
+Sponsored by Podscribe. Join us at the Innovation Stage at POSSIBLE! Learn how to buy audio more effectively and drive measurable results with Podscribe’s Matt Drengler. April 29, 12:10 PM ET. Save your spot. <a href="https://podnews.net/cc/3429">https://podnews.net/cc/3429</a>
+
+Visit <a href="https://podnews.net/update/youtube-sirius-audio-sell-ads">https://podnews.net/update/youtube-sirius-audio-sell-ads</a> for the story links in full, and to get our daily newsletter.]]></description>
+            <content:encoded><![CDATA[<p><i>Sponsored by <strong>Podscribe</strong>. Join us at the Innovation Stage at POSSIBLE! Learn how to buy audio more effectively and drive measurable results with Podscribe’s Matt Drengler. April 29, 12:10 PM ET. <a class="l" style="font-weight:bold;color:#BC1515" href="https://podnews.net/class-click/3429/2026-04-22">Save your spot.</a></i></p><ul>
+<li><strong>First look:</strong> <a href="https://podnews.net/press-release/siriusxm-youtube">SiriusXM has been announced as the exclusive advertising representative of YouTube audio advertising in the US.</a> This is a significant addition to SiriusXM Media's portfolio, which will now be able to reach 255mn monthly listeners - almost 90% of all US adults 13+.</p>
+<ul>
+<li>SiriusXM also released data from Edison Research, showing that around 74% of US adults 13+ consume YouTube audio, or engage in listening-first behaviours on YouTube. The data also says that 45% consume YouTube content with static visuals; 48% listen while video is minimised or in the background.</li>
+</ul>
+</li>
+<li><a href="https://soundsprofitable.com/research/audio-primes-2026/?utm_source=podnews.net&amp;utm_medium=rss&amp;utm_campaign=podnews.net%3A2026-04-22" rel="sponsored">Sounds Profitable released new research on &quot;Audio Primes&quot;</a> - the people who listen to at least 75% of their content as audio. That's 22% of podcast consumers; and they're younger and more educated. While they choose audio for podcasts, Audio Primes also - surprisingly - consume more video as well. The full report, sponsored by RSS<wbr>.com, is <a href="https://soundsprofitable.com/research/audio-primes-2026/?utm_source=podnews.net&amp;utm_medium=rss&amp;utm_campaign=podnews.net%3A2026-04-22" rel="sponsored">available as a free download</a>.</li>
+<li><a href="https://podnews.net/press-release/bumper-score">Bumper has launched The Bumper Score</a>, a new tool &quot;built to close the trust gap between podcast listenership and advertiser confidence&quot;. The company suggests that the next $1 billion in podcasting starts with better data; the tool uses verified metrics to give a simple score for strong verified reach. It will be free to all podcasters; you can join the waitlist now.</li>
+</ul><p><a href="https://podnews.net/update/youtube-sirius-audio-sell-ads"><B>&gt; &gt; &gt; Read more of today’s podcast industry news stories on the Podnews website</b></a>: and get our free daily newsletter.</p><P><B>Classifieds</B> - <a href="https://podnews.net/classifieds/">your job or ad here</a></P><ul><li><a href="https://podnews.net/class-click/2736/2026-04-22" rel="sponsored">Podcast Growth & Monetization tips every Thursday!</a> &mdash; Subscribe to the FREE Podcasting Business School newsletter and get fresh tips every Thursday for podcast growth, monetization, and online business strategies. Join over 4,000+ Pod Pals on this list.</li><li><a href="https://podnews.net/class-click/3447/2026-04-22" rel="sponsored">Podcast Guesting UNsummit - FREE EVENT - Apr 28/29</a> &mdash; Build a podcast guesting strategy that gets you booked and turns interviews into clients. 2 days of LIVE Interactive Mini Workshops & Gifts. Walk away with assets — ready to pitch, guest, and convert.</li><li><a href="https://podnews.net/class-click/3469/2026-04-22" rel="sponsored">Questions to Ask Before You Sign</a> &mdash; What happens when compliance rejects an episode the day before publish? How do they handle guest tech failures? This guide gives you the questions that reveal the real answers. Free.</li></ul></P><P><B>Gold supporters:</B> <a href="https://www.buzzsprout.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Buzzsprout</a>, <a href="https://mowpod.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Mowpod</a>, <a href="https://100mba.net/escape/?utm_source=partners&utm_medium=leadgen&utm_content=Podnews&utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">The $100 MBA</a>, <a href="https://cloud10.fm/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Cloud10</a>, <a href="https://podglomerate.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">The Podglomerate</a>, <a href="https://www.cohostpodcasting.com?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Cohost</a>, <a href="https://magid.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Magid</a>, <a href="https://audioboom.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">audioBoom</a>, <a href="https://podscribe.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Podscribe</a>, <a href="https://redcircle.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">RedCircle</a>, <a href="https://www.pavestudios.com?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">PAVE Studios</a>, <a href="https://www.contentcreatorsaccountant.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">The Content Creator's Accountant</a>, <a href="https://libsyn.com?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Libsyn</a>, <a href="https://simplecast.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Simplecast</a>, <a href="https://soundsprofitable.com?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Sounds Profitable</a>, <a href="https://www.audiohook.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Audiohook</a>, <a href="https://www.jaraudio.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Jar Podcast Solutions</a>, <a href="https://awesound.com/podcasting?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Awesound</a>, <a href="https://www.acast.com/en?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Acast</a>, <a href="https://www.weeditpodcasts.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">We Edit Podcasts</a>, <a href="https://www.podpage.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Podpage websites</a></P><P><B>Silver supporters:</B> <a href="https://audaciaaudio.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Audacia Audio</a>, <a href="https://www.gamutpodcasts.com?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Gamut Podcast Network</a>, <a href="https://wearebumper.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Bumper</a>, <a href="https://www.goalhanger.com?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Goalhanger</a>, <a href="https://soundsdebatable.com?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Sounds Debatable</a>, <a href="https://nomono.co/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Nomono</a>, <a href="https://www.magellan.ai/?SQF_SOURCE=podnews&utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Magellan AI</a>, <a href="https://podcastmovement.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Podcast Movement</a>, <a href="https://castbox.fm?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Castbox</a>, <a href="https://www.redseatventures.com?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Red Seat Ventures</a>, <a href="https://compliancepodcastnetwork.net?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Compliance Podcast Network</a>, <a href="https://www.areyapartnerships.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Araeya Media</a>, <a href="https://hubermanlab.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Huberman Lab</a>, <a href="https://thepodcasthaven.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">The Podcast Haven</a>, <a href="https://voxtopica.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Voxtopica</a>, <a href="https://tinkmedia.co/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Tink Media</a>, <a href="https://www.ausha.co/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Ausha</a>, <a href="https://frequencyads.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Frequency</a>, <a href="https://companionarts.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Companion Arts</a>, <a href="https://www.powpr.co.uk/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">POW PR</a>, <a href="https://jonekiri.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Jonekiri</a>, <a href="https://podanalyst.com?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">PodAnalyst</a>, <a href="https://lockedonpodcasts.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Locked On Podcast Network</a>, <a href="https://truefans.fm/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Truefans</a>, <a href="https://www.blubrry.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Blubrry</a>, <a href="https://www.roostnetwork.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">The Roost</a>, <a href="https://arn.com.au/iheartpodcast-network-2/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">ARN's iHeartPodcast Network Aust</a>, <a href="https://soundstack.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">SoundStack</a>, <a href="https://www.podiumpodcastco.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Podium </a>, <a href="https://healthpodcastnetwork.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Health Podcast Network</a>, <a href="https://www.lemonadamedia.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Lemonada Media</a>, <a href="https://thecreatorx.io/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">CreatorX</a>, <a href="https://sonicim.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Sonic Influencer Marketing</a>, <a href="https://transistor.fm/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Transistor</a>, <a href="https://www.jamstreetmedia.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Jam Street Media</a>, <a href="https://geni.us/DiversionPodsonPodNews?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Diversion Podcasts</a>, <a href="https://www.headliner.app/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Headliner</a>, <a href="https://www.doubleelvis.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Double Elvis Productions</a>, <a href="https://www.rhapsodyvoices.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Rhapsody Voices</a>, <a href="https://rephonic.com?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Rephonic</a>, <a href="https://www.content10x.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Content10x</a>, <a href="https://podcastpartnership.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Podcast Partnership</a>, <a href="https://cleanfeed.net/podcasting?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Cleanfeed</a>, <a href="https://adopter.media/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Adopter Media</a>, <a href="https://podigy.co/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Podigy</a>, <a href="https://revolverpodcasts.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Revolver Podcasts</a>, <a href="https://schoolofpodcasting.newzenler.com/courses/school-of-podcasting?coupon=podnews&utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">School of Podcasting</a>, <a href="https://lowerstreet.co/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Lower Street</a>, <a href="https://signalhillinsights.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Signal Hill Insights</a></P><P>Our supporters pay for Podnews, so everyone can read it. <a rel="payment" href="https://podnews.net/support">Join them today.</a></P><P><small>Image: <a href="https://unsplash.com/photos/smartphone-with-youtube-logo-on-keyboard-JEq4f62lWjI">Zulfugar Karimov</a></small></P>]]></content:encoded>
+            <guid isPermaLink="true">https://podnews.net/update/youtube-sirius-audio-sell-ads</guid>
+            <itunes:episodeType>full</itunes:episodeType>
+            <itunes:title>Sirius XM to sell YouTube audio ads</itunes:title>
+            <itunes:episode>2323</itunes:episode>
+            <itunes:explicit>false</itunes:explicit>
+            <itunes:image href="https://podnews.net/audio/podnews260422.jpeg" />
+            <enclosure
+                url="https://op3.dev/e,pg=9b024349-ccf0-5f69-a609-6b82873eab3c/podnews.net/audio/podnews260422.mp3"
+                type="audio/mpeg" length="5939047" />
+            <itunes:duration>370</itunes:duration>
+            <podcast:alternateEnclosure type="audio/aac" length="1582020" bitrate="32000"
+                title="Low bitrate AAC">
+                <podcast:source
+                    uri="https://op3.dev/e,pg=9b024349-ccf0-5f69-a609-6b82873eab3c/podnews.net/audio/podnews260422.m4a" />
+            </podcast:alternateEnclosure>
+            <podcast:alternateEnclosure type="audio/mpeg" length="5939047" bitrate="128000"
+                default="true" title="MP3">
+                <podcast:source
+                    uri="https://op3.dev/e,pg=9b024349-ccf0-5f69-a609-6b82873eab3c/podnews.net/audio/podnews260422.mp3" />
+            </podcast:alternateEnclosure>
+            <podcast:alternateEnclosure type="audio/opus" length="578861" bitrate="12000"
+                title="Low bitrate Opus">
+                <podcast:source
+                    uri="https://op3.dev/e,pg=9b024349-ccf0-5f69-a609-6b82873eab3c/podnews.net/audio/podnews260422.opus" />
+            </podcast:alternateEnclosure>
+            <podcast:alternateEnclosure type="video/mp4" length="36718691" bitrate="512000"
+                title="Video">
+                <podcast:source
+                    uri="https://op3.dev/e,pg=9b024349-ccf0-5f69-a609-6b82873eab3c/podnews.net/audio/podnews260422.mp4" />
+            </podcast:alternateEnclosure>
+        </item>
+        <item>
+            <title>New Heights makes it to Amazon Prime Video</title>
+            <link>https://podnews.net/update/new-heights-prime-video</link>
+            <pubDate>Thu, 25 Sep 2025 09:44:26 +0000</pubDate>
+            <podcast:transcript url="https://podnews.net/audio/podnews250925.mp3.vtt"
+                type="text/vtt" rel="captions" />
+            <description><![CDATA[As long as you're in the US, that is.
+
+Sponsored by SoundStack. Heading to Programmatic I/O and/or Advertising Week NY? Let’s talk fast, simple monetization to keep your podcast and streaming businesses growing. <a href="https://podnews.net/cc/3048">https://podnews.net/cc/3048</a>
+
+Visit <a href="https://podnews.net/update/new-heights-prime-video">https://podnews.net/update/new-heights-prime-video</a> for the story links in full, and to get our daily newsletter.]]></description>
+            <content:encoded><![CDATA[<p><i>Sponsored by <strong>SoundStack</strong>. Heading to Programmatic I/O and/or Advertising Week NY? Let’s talk <a class="l" style="font-weight:bold;color:#BC1515" href="https://podnews.net/class-click/3048/2025-09-25">fast, simple monetization</a> to keep your podcast and streaming businesses growing.</i></p><ul>
+<li><a href="https://www.aboutamazon.com/news/entertainment/new-heights-jason-travis-kelce-prime-video-podcast-wondery?utm_source=podnews.net&amp;utm_medium=rss&amp;utm_campaign=podnews.net%3A2025-09-25">Amazon Prime Video is now showing New Heights with Jason &amp; Travis Kelce in the US.</a> The show is owned by Wondery, an Amazon subsidiary. <a href="https://www.amazon.com/dp/B0FR2MJWYS?ref=podnews&amp;utm_source=podnews.net&amp;utm_medium=rss&amp;utm_campaign=podnews.net%3A2025-09-25">Here’s the show page</a>, which appears to be sorted by oldest-first. It doesn’t appear to be available on Amazon Prime Video in other countries but is available on YouTube internationally - we’ve asked why.</li>
+<li><a href="https://podnews.net/press-release/qcode-daylight">QCODE has expanded to become a brand of Daylight Media, a new venture designed for creators to scale reach and monetization.</a> QCODE founder and CEO Rob Herting will lead Daylight Media as CEO. The company has also announced a sales and distribution partnership with <a href="https://podnews.net/podcast/i9c5e"><cite>The Weekly Show with Jon Stewart</cite></a>.</li>
+<li><a href="https://podnews.net/press-release/girls-next-level-libsyn">Libsyn has signed Girls Next Level</a>, the pop culture podcast hosted by Holly Madison and Bridget Marquardt. The show signed with AdLarge <a href="https://podnews.net/press-release/adlarge-girls-next-level">in 2022</a>, and Audioboom’s Creator Network <a href="https://audioboom.medium.com/audiobooms-creator-network-welcomes-new-hit-podcasts-e47353f4a5a4?utm_source=podnews.net&amp;utm_medium=rss&amp;utm_campaign=podnews.net%3A2025-09-25">in 2023</a>.</li>
+</ul><p><a href="https://podnews.net/update/new-heights-prime-video"><B>&gt; &gt; &gt; Read more of today’s podcast industry news stories on the Podnews website</b></a>: and get our free daily newsletter.</p><P><B>Classifieds</B> - <a href="https://podnews.net/classifieds/">your job or ad here</a></P><ul><li><a href="https://podnews.net/class-click/2940/2025-09-25" rel="sponsored">Guest Match Pro - Beta Open</a> &mdash; Unlock your next great interview on GuestMatch.pro. Tap into two decades of Blubrry expertise and find the perfect guest in minutes. Get started now!</li><li><a href="https://podnews.net/class-click/2382/2025-09-25" rel="sponsored">🎧 Grow Your Podcast On Player FM</a> &mdash; Player.FM’s new self-serve ad portal can help you grow your show, boost engagement, and drive downloads with flexible pricing. Book your next campaign now!</li><li><a href="https://podnews.net/class-click/3040/2025-09-25" rel="sponsored">Ads don’t sell themselves. (But we do.) </a> &mdash; BackBeat Media has been matching podcasters with great sponsors for over 20 years. Got 10k+ downloads an episode? Let’s talk.
+</li></ul></P><P><B>Gold supporters:</B> <a href="https://www.buzzsprout.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Buzzsprout</a>, <a href="https://mowpod.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Mowpod</a>, <a href="https://100mba.net/escape/?utm_source=partners&utm_medium=leadgen&utm_content=Podnews&utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">The $100 MBA</a>, <a href="https://podglomerate.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">The Podglomerate</a>, <a href="https://cloud10.fm/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Cloud10</a>, <a href="https://libsyn.com?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Libsyn</a>, <a href="https://www.pavestudios.com?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">PAVE Studios</a>, <a href="https://soundsprofitable.com?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Sounds Profitable</a>, <a href="https://magid.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Magid</a>, <a href="https://audioboom.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">audioBoom</a>, <a href="https://simplecast.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Simplecast</a>, <a href="https://www.cohostpodcasting.com?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Cohost</a>, <a href="https://www.contentcreatorsaccountant.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">The Content Creator's Accountant</a>, <a href="https://www.audiohook.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Audiohook</a>, <a href="https://podscribe.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Podscribe</a>, <a href="https://redcircle.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">RedCircle</a>, <a href="https://www.jaraudio.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Jar Podcast Solutions</a>, <a href="https://awesound.com/podcasting?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Awesound</a>, <a href="https://www.podpage.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Podpage websites</a>, <a href="https://www.weeditpodcasts.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">We Edit Podcasts</a>, <a href="https://www.acast.com/en?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Acast</a></P><P><B>Silver supporters:</B> <a href="https://audaciaaudio.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Audacia Audio</a>, <a href="https://www.gamutpodcasts.com?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Gamut Podcast Network</a>, <a href="https://wearebumper.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Bumper</a>, <a href="https://www.goalhanger.com?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Goalhanger</a>, <a href="https://soundsdebatable.com?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Sounds Debatable</a>, <a href="https://www.magellan.ai/?SQF_SOURCE=podnews&utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Magellan AI</a>, <a href="https://nomono.co/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Nomono</a>, <a href="https://www.ausha.co/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Ausha</a>, <a href="https://companionarts.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Companion Arts</a>, <a href="https://tinkmedia.co/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Tink Media</a>, <a href="https://soundstack.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">SoundStack</a>, <a href="https://jonekiri.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Jonekiri</a>, <a href="https://www.powpr.co.uk/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">POW PR</a>, <a href="https://hubermanlab.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Huberman Lab</a>, <a href="https://thepodcasthaven.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">The Podcast Haven</a>, <a href="https://truefans.fm/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Truefans</a>, <a href="https://www.roostnetwork.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">The Roost</a>, <a href="https://podcastmovement.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Podcast Movement</a>, <a href="https://www.areyapartnerships.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Araeya Media</a>, <a href="https://lockedonpodcasts.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Locked On Podcast Network</a>, <a href="https://compliancepodcastnetwork.net?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Compliance Podcast Network</a>, <a href="https://www.podiumpodcastco.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Podium </a>, <a href="https://arn.com.au/iheartpodcast-network-2/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">ARN's iHeartPodcast Network Aust</a>, <a href="https://www.redseatventures.com?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Red Seat Ventures</a>, <a href="https://voxtopica.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Voxtopica</a>, <a href="https://podanalyst.com?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">PodAnalyst</a>, <a href="https://castbox.fm?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Castbox</a>, <a href="https://frequencyads.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Frequency</a>, <a href="https://www.blubrry.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Blubrry</a>, <a href="https://healthpodcastnetwork.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Health Podcast Network</a>, <a href="https://transistor.fm/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Transistor</a>, <a href="https://geni.us/DiversionPodsonPodNews?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Diversion Podcasts</a>, <a href="https://www.lemonadamedia.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Lemonada Media</a>, <a href="https://sonicim.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Sonic Influencer Marketing</a>, <a href="https://www.rhapsodyvoices.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Rhapsody Voices</a>, <a href="https://thecreatorx.io/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">CreatorX</a>, <a href="https://www.doubleelvis.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Double Elvis Productions</a>, <a href="https://www.headliner.app/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Headliner</a>, <a href="https://www.jamstreetmedia.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Jam Street Media</a>, <a href="https://rephonic.com?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Rephonic</a>, <a href="https://podcastpartnership.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Podcast Partnership</a>, <a href="https://www.content10x.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Content10x</a>, <a href="https://cleanfeed.net/podcasting?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Cleanfeed</a>, <a href="https://schoolofpodcasting.newzenler.com/courses/school-of-podcasting?coupon=podnews&utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">School of Podcasting</a>, <a href="https://adopter.media/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Adopter Media</a>, <a href="https://lowerstreet.co/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Lower Street</a>, <a href="https://podigy.co/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Podigy</a>, <a href="https://revolverpodcasts.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Revolver Podcasts</a>, <a href="https://signalhillinsights.com/?utm_source=podnews.net&utm_medium=rss&utm_campaign=supporter">Signal Hill Insights</a></P><P>Our supporters pay for Podnews, so everyone can read it. <a rel="payment" href="https://podnews.net/support">Join them today.</a></P><P><small>Image: Amazon</small></P>]]></content:encoded>
+            <guid isPermaLink="true">https://podnews.net/update/new-heights-prime-video</guid>
+            <itunes:episodeType>full</itunes:episodeType>
+            <itunes:title>New Heights makes it to Amazon Prime Video</itunes:title>
+            <itunes:episode>2174</itunes:episode>
+            <itunes:explicit>false</itunes:explicit>
+            <itunes:image href="https://podnews.net/audio/podnews250925.jpeg" />
+            <podcast:socialInteract protocol="atproto"
+                uri="at://did:plc:pzznkrzajsaqev3ffamg3jnr/app.bsky.feed.post/3lznow3i6vi2t" />
+            <podcast:socialInteract protocol="activitypub" accountId="@podnews"
+                uri="https://social.podnews.net/users/podnews/statuses/115264342085647536" />
+            <enclosure
+                url="https://op3.dev/e,pg=9b024349-ccf0-5f69-a609-6b82873eab3c/podnews.net/audio/podnews250925.mp3"
+                type="audio/mpeg" length="3183510" />
+            <itunes:duration>196</itunes:duration>
+            <podcast:alternateEnclosure type="audio/aac" length="872666" bitrate="32000"
+                title="Low bitrate AAC">
+                <podcast:source
+                    uri="https://op3.dev/e,pg=9b024349-ccf0-5f69-a609-6b82873eab3c/podnews.net/audio/podnews250925.m4a" />
+            </podcast:alternateEnclosure>
+            <podcast:alternateEnclosure type="audio/mpeg" length="3183510" bitrate="128000"
+                default="true" title="MP3">
+                <podcast:source
+                    uri="https://op3.dev/e,pg=9b024349-ccf0-5f69-a609-6b82873eab3c/podnews.net/audio/podnews250925.mp3" />
+            </podcast:alternateEnclosure>
+            <podcast:alternateEnclosure type="audio/opus" length="305719" bitrate="12000"
+                title="Low bitrate Opus">
+                <podcast:source
+                    uri="https://op3.dev/e,pg=9b024349-ccf0-5f69-a609-6b82873eab3c/podnews.net/audio/podnews250925.opus" />
+            </podcast:alternateEnclosure>
+            <podcast:alternateEnclosure type="video/mp4" length="35928003" bitrate="512000"
+                title="Video">
+                <podcast:source
+                    uri="https://op3.dev/e,pg=9b024349-ccf0-5f69-a609-6b82873eab3c/podnews.net/audio/podnews250925.mp4" />
+            </podcast:alternateEnclosure>
+        </item>
+    </channel>
+</rss>                                                                                        
+```
+
+## Type 3: RSS 2.0 With Internationalization / Multi-Namespace Variation
+
+These feeds are still RSS, but the main compatibility pressure comes from language, encoding, CDATA, and namespace diversity rather than from richer podcast feature semantics.
+
+### What to watch
+
+- Non-English text and localized punctuation
+- Heavy CDATA usage
+- More exotic or less product-relevant namespaces
+- Useful for checking that sanitization, text extraction, and HTML handling do not assume English-only content
+
+### Case 6: 故事FM (Chinese & Multi-namespace)
+
+- Source URL: https://feeds.storyfm.cn/storyfm.xml
+- Key Features: Chinese CDATA, complex legal notices, multiple namespaces (`dc`, `sy`, `wavpub`, `psc`).
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+                    <?xml-stylesheet type="text/xsl" href="/podcast.xsl"?>
+<rss xmlns:dc="http://purl.org/dc/elements/1.1/"
+    xmlns:sy="http://purl.org/rss/1.0/modules/syndication/"
+    xmlns:admin="http://webns.net/mvcb/"
+    xmlns:atom="http://www.w3.org/2005/Atom/"
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    xmlns:content="http://purl.org/rss/1.0/modules/content/"
+    xmlns:googleplay="http://www.google.com/schemas/play-podcasts/1.0"
+    xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"
+    xmlns:podcast="https://github.com/Podcastindex-org/podcast-namespace/blob/main/docs/1.0.md"
+    xmlns:fireside="http://fireside.fm/modules/rss/fireside"
+    xmlns:wavpub="https://www.wavpub.com/dtds/podcast-1.0.dtd"
+    xmlns:media="http://search.yahoo.com/mrss/"
+    xmlns:dcterms="http://purl.org/dc/terms/"
+    xmlns:spotify="http://www.spotify.com/ns/rss"
+    xmlns:psc="http://podlove.org/simple-chapters/"
+    version="2.0" encoding="UTF-8">
+    <channel>
+        <generator>WavPub.com</generator>
+        <wavpub:version>2.0</wavpub:version>
+        <wavpub:legal_notice>此RSS源的所有内容均受著作权法保护，严禁任何未经授权的使用。第三方仅被许可以流式传输实时播放本RSS中的音视频文件URL。未经内容创作者明确允许且未向声湃正式通知的情况下，任何网站、客户端或软件工具均不得抓取、存储或再处理音频文件，更不得向最终用户提供缓存的音视频文件。除非事先获得创作者和声湃的书面许可，否则禁止将本RSS的任何内容用于AI产品的训练，也不得将本RSS的内容作为训练素材或语料库。一旦您通过人工方式或使用机器爬虫技术访问本RSS源，即视为您已全面理解并无条件接受本法律声明的所有条款。我们警告，对任何违反这些规定的行为，我们将采取法律措施，追究其法律责任，并要求支付可能引起的所有损害赔偿。您的合规操作是避免法律纠纷的唯一途径。
+            All content from this RSS feed is protected by copyright law and any unauthorized use is
+            strictly prohibited. Third parties are only permitted to stream the audio and video file
+            URLs contained within this RSS feed in real time. Under no circumstances should any
+            website, app, or software tool capture, store, or reprocess audio files, nor provide
+            cached audio and video files to end users, without explicit permission from the content
+            creator and formal notification to WavPub.Unless prior written consent has been obtained
+            from both the content creator and WavPub, it is forbidden to use any content from this
+            RSS feed for training AI products or as training materials or corpus. As soon as you
+            access this RSS feed either manually or using machine crawling technology, it is deemed
+            that you have fully understood and unconditionally accepted all terms of this legal
+            statement.We warn that we will take legal action against any breaches of these
+            provisions, pursue legal responsibility, and require payment for any damages incurred as
+            a result. Compliance is your only path to avoid legal disputes.</wavpub:legal_notice>
+        <link>https://storyfm.cn/</link>
+        <itunes:owner>
+            <itunes:name>寇爱哲</itunes:name>
+            <itunes:email>kouaizhe@gmail.com</itunes:email>
+        </itunes:owner>
+        <title><![CDATA[故事FM]]></title>
+        <description><![CDATA[欢迎收听故事FM 。在这里，我们用你的声音，讲述你的故事。合作邮箱：bd@storyfm.cn]]></description>
+        <itunes:image href="https://media.wavpub.com/b8/41/c0/20230624005325-xSbBQbgPqjQYRYtp.png" />
+        <language>zh-CN</language>
+        <itunes:category text="Society &amp; Culture" />
+        <itunes:explicit>false</itunes:explicit>
+        <itunes:author>寇爱哲</itunes:author>
+        <itunes:type>Episodic</itunes:type>
+        <copyright><![CDATA[故事FM]]></copyright>
+        <item>
+            <wavpub:guid>wavpub_bMABAYNYCeSXTBNcNsKCdXEdjgHSmvqpkgpvKHFqGBJDRZDKUCBVbtrAP</wavpub:guid>
+            <link>
+                https://hosting.wavpub.cn/storyfm/2026/04/21/e891-%e6%88%91%e5%bd%93%e9%a5%ad%e5%9c%88%e7%b2%89%e5%a4%b4%e7%9a%84%e9%82%a3%e4%ba%9b%e5%b9%b4%ef%bc%9a%e6%88%91%e4%bb%ac%e6%8a%b1%e5%9b%a2%e5%8f%96%e6%9a%96%ef%bc%8c%e4%b9%9f%e4%bd%9c%e6%81%b6/</link>
+            <title><![CDATA[E891.我当饭圈粉头的那些年：我们抱团取暖，也作恶多端]]></title>
+            <description><![CDATA[<p>故事FM ❜ 第 891 期</p><p>爱哲按：</p><p>你一票，我一票，哥哥明天就出道。2021 年选秀节目《青春有你 3》的粉丝为了给自己喜欢的偶像投票，购买并倾倒了 27 万瓶未过期牛奶，直接导致节目被紧急叫停、取消决赛，成为饭圈畸形应援的标志性事件。</p><p>当屏幕上的偶像光芒万丈，粉丝群里的欢呼此起彼伏时，饭圈也被人们抨击为是一群狂热分子的闹剧。从倒奶事件，到热搜刷屏、天价应援，饭圈早已不止是简单的追星。</p><p>今天的讲述者小李，曾经是一位身处饭圈核心的粉头，今天的节目里，她将以亲身经历，带我们看见狂热背后，最真实的人心与代价。</p><p>时间轴：</p><p>2:57 走上追星之路：我想成为TA</p><p>6:50 成立大吧，为爱发电</p><p>10:30 饭圈众生相：一群失意者的抱团与情感寄托</p><p>12:13 情感操控：精神状态越不好的人越容易被操控</p><p>15:38 狂欢的真相：天价应援全是粉丝自嗨</p><p>19:17 偶像也不过是商品、傀儡</p><p>20:50 权力巅峰：一句话就能煽动网暴&nbsp;</p><p>26:48 失控漩涡：越失败，越沉迷，越疯狂</p><p>28:18 被开盒、网暴：在粉头派系斗争中落幕</p><p><strong>/Staff/</strong></p><p><strong>讲述者 |&nbsp;</strong>小李</p><p><strong>主播 |&nbsp;</strong>@故事FM爱哲</p><p><strong>采访 |&nbsp;</strong>@故事FM爱哲</p><p><strong>制作人 |&nbsp;</strong>陈思宇</p><p><strong>声音设计 |&nbsp;</strong>陈思宇</p><p><strong>文案整理 |&nbsp;</strong>陈思宇</p><p><strong>运营 |</strong>&nbsp;鸣鸣</p><p>用你的声音，讲述你的故事。故事FM 是一档亲历者自述的声音节目。在以下渠道均可收听我们的节目：</p><p>苹果播客 | 网易云音乐 | 喜马拉雅</p><p>小宇宙 |蜻蜓FM | 荔枝FM｜QQ音乐</p><p>Spotify | YouTube Music</p><p>商务合作：bd@storyfm.cn</p><p>微信公众号：故事FM (ID: story_fm)</p><p>新浪微博：@故事FM_StoryFM</p><p>个人微信号：gushi_fm02</p>]]></description>
+            <enclosure
+                url="https://tk.wavpub.com/WPDL_CGCFfjkPREFSvhheuDWhTSutzadJkabVNGBWnEJCwcgakWgUBSumYmkkhj-9f.mp3"
+                length="52836820" type="audio/mpeg" />
+            <media:content type="audio/mpeg"
+                url="https://tk.wavpub.com/WPDL_CGCFfjkPREFSvhheuDWhTSutzadJkabVNGBWnEJCwcgakWgUBSumYmkkhj-9f.mp3" />
+            <guid><![CDATA[https://hosting.wavpub.cn/storyfm/?p=4587]]></guid>
+            <pubDate>Tue, 21 Apr 2026 19:15:27 +0800</pubDate>
+            <itunes:duration>2201</itunes:duration>
+            <itunes:image
+                href="https://media.wavpub.com/de/ae/3a/20260421191659-WqrQZBJngSaAUazA.jpg" />
+            <itunes:explicit>false</itunes:explicit>
+            <itunes:episodeType>full</itunes:episodeType>
+        </item>
+        <item>
+            <wavpub:guid>wavpub_DjcgPEUFqjvKPcHPyaHBxdXqhjTrqvENaEKMcSjjbZTzGxQAMCZXjNvqh</wavpub:guid>
+            <link>
+                https://hosting.wavpub.cn/storyfm/2017/07/06/e001-%e6%88%91%e8%a2%ab%e4%bc%a0%e9%94%80%e7%bb%84%e7%bb%87%e5%9b%9a%e7%a6%81%e7%9a%84-28-%e5%a4%a9/</link>
+            <title><![CDATA[E001.我被传销组织囚禁的 28 天]]></title>
+            <description><![CDATA[<p>Sara 是一个九〇后，今年 23 岁。2016 年 6 月 9 日之前，她从来没有想过传销这个词儿会和自己扯上关系。更没有想到，传销的方式阴暗、恐怖，而且可能就在你的身边。</p>]]></description>
+            <enclosure
+                url="https://tk.wavpub.com/WPDL_vCgpTdCcVGyhrvFNsgqFdDznhFuYGwUkNBXTVGEtjyBnJaTRqgTYFFcCXf-97.mp3"
+                length="30089926" type="audio/mpeg" />
+            <media:content type="audio/mpeg"
+                url="https://tk.wavpub.com/WPDL_vCgpTdCcVGyhrvFNsgqFdDznhFuYGwUkNBXTVGEtjyBnJaTRqgTYFFcCXf-97.mp3" />
+            <guid><![CDATA[http://storyfm.cn/?post_type=episode&p=273]]></guid>
+            <pubDate>Thu, 06 Jul 2017 16:35:03 +0800</pubDate>
+            <itunes:duration>1500</itunes:duration>
+            <itunes:image
+                href="https://media.wavpub.com/25/96/23/20230624010210-VnfwkjbXwDLSfKdP.jpg" />
+            <itunes:explicit>false</itunes:explicit>
+            <itunes:episodeType>full</itunes:episodeType>
+        </item>
+    </channel>
+</rss>
+```
+
+## Type 4: True Atom Feed Boundary References
+
+These are not RSS feeds. They are structurally different enough that they should be treated as a separate compatibility boundary.
+
+### What to watch
+
+- Root is `<feed>`, not `<rss>`
+- Entries are `<entry>`, not `<item>`
+- Time fields are typically `published` / `updated`, not `pubDate`
+- Current Readio parser is RSS-oriented, so this type is mainly useful for making the unsupported boundary explicit
+- This section is a format-boundary reference, not a confirmed Readio-relevant podcast input category
+
+### Case 8: True Atom Feed (Format Boundary Reference, Not Confirmed Podcast Case)
+
+- Source URL: https://shkspr.mobi/blog/feed/atom/
+- Key Features: true Atom root (`<feed>`), `entry` instead of `item`, `published`/`updated` instead of `pubDate`.
+- Why it matters: this is a real public Atom feed, not an RSS feed with `atom:*` extension tags. It is useful for confirming that our current parser is RSS-only rather than Atom-compatible.
+- Important note: this is not currently a confirmed public podcast-audio Atom case, so it should not be treated as evidence that Readio will encounter Atom in its real podcast discovery path.
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet href="https://shkspr.mobi/blog/wp-content/themes/edent-wordpress-theme/atom-style.xsl" type="text/xsl"?>
+<feed
+  xmlns="http://www.w3.org/2005/Atom"
+  xmlns:thr="http://purl.org/syndication/thread/1.0"
+  xml:lang="en-GB"
+>
+  <title type="text">Terence Eden’s Blog</title>
+  <subtitle type="text">Regular nonsense about tech and its effects 🙃</subtitle>
+  <updated>2026-04-20T11:14:41Z</updated>
+  <link rel="alternate" type="text/html" href="https://shkspr.mobi/blog" />
+  <id>https://shkspr.mobi/blog/feed/atom/</id>
+  <link rel="self" type="application/atom+xml" href="https://shkspr.mobi/blog/feed/atom/" />
+  <generator uri="https://wordpress.org/" version="6.9.4">WordPress</generator>
+  <icon>https://shkspr.mobi/blog/wp-content/uploads/2023/07/cropped-avatar-32x32.jpeg</icon>
+  <entry>
+    <author>
+      <name>@edent</name>
+      <uri>https://edent.tel/</uri>
+    </author>
+    <title type="html"><![CDATA[[RSS Club] How do you preserve an RSS feed?]]></title>
+    <link rel="alternate" type="text/html" href="https://shkspr.mobi/blog/2026/04/rss-club-how-do-you-preserve-an-rss-feed/" />
+    <id>https://shkspr.mobi/blog/?p=70521</id>
+    <updated>2026-04-20T11:14:41Z</updated>
+    <published>2026-04-22T11:34:46Z</published>
+    <category scheme="https://shkspr.mobi/blog" term="[RSS Club]" />
+    <category scheme="https://shkspr.mobi/blog" term="RSS Club" />
+    <summary type="html"><![CDATA[Psssst! This top secret post is only available to RSS subscribers!]]></summary>
+    <content type="html" xml:base="https://shkspr.mobi/blog/2026/04/rss-club-how-do-you-preserve-an-rss-feed/"><![CDATA[<p><mark><em>Psssst!</em> This <strong>top secret</strong> post is only available to RSS subscribers!</mark></p>]]></content>
+    <link rel="replies" type="text/html" href="https://shkspr.mobi/blog/2026/04/rss-club-how-do-you-preserve-an-rss-feed/#comments" thr:count="0" />
+    <link rel="replies" type="application/atom+xml" href="https://shkspr.mobi/blog/2026/04/rss-club-how-do-you-preserve-an-rss-feed/feed/atom/" thr:count="0" />
+    <thr:total>0</thr:total>
+  </entry>
+</feed>
+```
+
+```

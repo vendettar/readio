@@ -1,132 +1,179 @@
 import { z } from 'zod'
 
 /**
- * DiscoveryPodcast type for cloud-ui (PodcastIndex format - used for Top Charts)
+ * Shared podcast fields across PI detail and editor-pick snapshot contracts.
+ * Identity: podcastItunesId
  */
-export const DiscoveryPodcastSchema = z.object({
-  id: z.string().min(1),
+const PIBasePodcastSchema = z.object({
   title: z.string().min(1),
-  author: z.string().optional(),
-  image: z.string().url().optional(),
-  artwork: z.string().url().optional(),
-  url: z.string().min(1),
-  audioUrl: z.string().url().optional(),
-  genres: z
-    .array(
-      z.object({
-        genreId: z.string().min(1),
-        name: z.string().min(1),
-        url: z.string().optional(),
-      })
-    )
-    .optional(),
-  description: z.string().optional(),
-  releaseDate: z.string().optional(),
-  duration: z.number().nonnegative().optional(),
-  feedUrl: z.string().optional(),
-  podcastItunesId: z.string().optional(),
-  providerEpisodeId: z.string().optional(),
-  feedId: z.string().min(1).optional(),
-  podcastGuid: z.string().min(1).optional(),
-  episodeGuid: z.string().min(1).optional(),
+  author: z.string().min(1),
+  artwork: z.url(),
+  description: z.string().min(1),
+  feedUrl: z.string().min(1),
+  lastUpdateTime: z.number().int().nonnegative().optional(),
+  podcastItunesId: z.string().min(1),
   episodeCount: z.number().int().nonnegative().optional(),
   language: z.string().min(1).optional(),
-  link: z.string().optional(),
+  genres: z.array(z.string()),
+  dead: z.boolean(),
 })
 
 /**
- * Podcast type for cloud-ui (PodcastIndex format)
+ * Editor's Pick Podcast type (narrow DTO for Explore Editor's Picks surface)
+ * Identity: podcastItunesId
+ * Source: PI batch-byguid endpoint
  */
-export const PodcastSchema = z.object({
-  id: z.string().optional(),
-  title: z.string().optional(),
-  author: z.string().optional(),
-  image: z.string().url().optional(),
-  artwork: z.string().url().optional(),
-  feedUrl: z.string().optional(),
-  description: z.string().optional(),
-  podcastItunesId: z.string().optional(),
-  feedId: z.string().min(1).optional(),
-  podcastGuid: z.string().min(1).optional(),
-  language: z.string().min(1).optional(),
-  episodeCount: z.number().int().nonnegative().optional(),
-  genres: z
-    .array(
-      z.object({
-        genreId: z.string().min(1),
-        name: z.string().min(1),
-        url: z.string().optional(),
-      })
-    )
-    .optional(),
-  collectionViewUrl: z.string().url().optional(),
+export const EditorPickPodcastSchema = PIBasePodcastSchema
+
+/**
+ * Top Podcast type (narrow DTO for Explore Top Shows surface)
+ * Identity: podcastItunesId
+ * Source: Apple RSS feed
+ */
+export const TopPodcastSchema = z.object({
+  podcastItunesId: z.string().min(1),
+  title: z.string().min(1),
+  author: z.string().min(1),
+  artwork: z.url().min(1),
+  genres: z.array(z.string()),
 })
 
 /**
- * Episode result from PodcastIndex Search API
+ * Top Episode type (narrow DTO for Explore Top Episodes surface)
+ * Identity: title + podcastItunesId
+ * Source: Apple RSS feed
+ */
+export const TopEpisodeSchema = z.object({
+  podcastItunesId: z.string().min(1),
+  title: z.string().min(1),
+  author: z.string().min(1),
+  artwork: z.url().min(1),
+  genres: z.array(z.string()),
+})
+
+/**
+ * Podcast type for PI podcast-byitunesid detail (canonical cover: artwork)
+ * Identity: podcastItunesId
+ */
+export const PIPodcastSchema = PIBasePodcastSchema
+
+/**
+ * Search-specific podcast DTO (Apple search contract)
+ * Identity: podcastItunesId (iTunes ID from Apple)
+ * Source: Apple Search API
+ */
+export const SearchPodcastSchema = z.object({
+  podcastItunesId: z.string().min(1),
+  title: z.string().min(1),
+  author: z.string().min(1),
+  artwork: z.url().min(1),
+  releaseDate: z.string().optional(),
+  episodeCount: z.number().int().nonnegative(),
+  genres: z.array(z.string()),
+})
+
+/**
+ * Search-specific episode DTO (Apple search contract)
+ * Identity: episodeUrl
  */
 export const SearchEpisodeSchema = z.object({
-  id: z.string().min(1),
-  podcastItunesId: z.coerce.string().optional(),
+  podcastItunesId: z.string().min(1),
   title: z.string().min(1),
-  author: z.string().optional(),
-  podcastTitle: z.string().optional(),
-  image: z.string().url().optional(),
-  artwork: z.string().url().optional(),
-  feedUrl: z.string().url().optional(),
-  episodeUrl: z.string().url(),
-  releaseDate: z.string().datetime().optional(),
+  showTitle: z.string().min(1),
+  artwork: z.url(),
+  episodeUrl: z.url(),
+  episodeGuid: z.string().min(1),
+  releaseDate: z.string().min(1).optional(),
   trackTimeMillis: z.number().int().optional(),
-  description: z.string().optional(),
-  shortDescription: z.string().optional(),
-  episodeGuid: z.string().optional(),
-  providerEpisodeId: z.coerce.string().optional(),
+  shortDescription: z.string().min(1).optional(),
 })
 
 /**
- * Episode type for cloud-ui (parsed from RSS feed)
+ * Canonical episode contract from RSS feed.
  */
-export const EpisodeSchema = z.object({
-  id: z.string().min(1),
+export const FeedEpisodeSchema = z.object({
+  episodeGuid: z.string().min(1),
   title: z.string().min(1),
   description: z.string(),
   descriptionHtml: z.string().optional(),
-  audioUrl: z.string().url(),
+  audioUrl: z.url(),
   pubDate: z.string().min(1),
-  artworkUrl: z.string().url().optional(),
+  artworkUrl: z.url().optional(),
   duration: z.number().nonnegative().optional(),
   seasonNumber: z.number().int().nonnegative().optional(),
   episodeNumber: z.number().int().nonnegative().optional(),
   episodeType: z.enum(['full', 'trailer', 'bonus']).optional(),
   explicit: z.boolean().optional(),
-  link: z.string().url().optional(),
+  link: z.url().optional(),
   fileSize: z.number().int().nonnegative().optional(),
-  transcriptUrl: z.string().url().optional(),
-  chaptersUrl: z.string().url().optional(),
-  providerEpisodeId: z.string().optional(),
-  feedUrl: z.string().optional(),
-  feedId: z.string().min(1).optional(),
-  podcastGuid: z.string().min(1).optional(),
-  podcastItunesId: z.string().optional(),
-  episodeGuid: z.string().min(1).optional(),
-  language: z.string().min(1).optional(),
-  author: z.string().optional(),
-  image: z.string().url().optional(),
-  artwork: z.string().url().optional(),
+  transcriptUrl: z.url().optional(),
 })
 
 /**
- * Parsed RSS Feed result
+ * Canonical parsed feed payload returned by cloud discovery.
  */
 export const ParsedFeedSchema = z.object({
   title: z.string().min(1),
   description: z.string(),
-  artworkUrl: z.string().url().optional(),
-  episodes: z.array(EpisodeSchema),
+  artworkUrl: z.url().optional(),
+  episodes: z.array(FeedEpisodeSchema),
 })
 
-export type DiscoveryPodcast = z.infer<typeof DiscoveryPodcastSchema>
-export type Podcast = z.infer<typeof PodcastSchema>
+export type TopPodcast = z.infer<typeof TopPodcastSchema>
+export type EditorPickPodcast = z.infer<typeof EditorPickPodcastSchema>
+export type TopEpisode = z.infer<typeof TopEpisodeSchema>
+export type Podcast = z.infer<typeof PIPodcastSchema>
+export type SearchPodcast = z.infer<typeof SearchPodcastSchema>
 export type SearchEpisode = z.infer<typeof SearchEpisodeSchema>
-export type Episode = z.infer<typeof EpisodeSchema>
+export type FeedEpisode = z.infer<typeof FeedEpisodeSchema>
 export type ParsedFeed = z.infer<typeof ParsedFeedSchema>
+
+/**
+ * Compatibility alias for older consumers.
+ */
+export type NormalizedParsedFeed = ParsedFeed
+
+/**
+ * Narrow adapter type for favorites/add operations.
+ * Accepts any episode-like object with the minimum required fields.
+ * This is a loose type for internal bridge code, not a strict schema.
+ */
+export interface FavoriteEpisodeInput {
+  title?: string
+  audioUrl?: string
+  description?: string
+  artworkUrl?: string
+  duration?: number
+  pubDate?: string
+  episodeGuid?: string
+  providerEpisodeId?: string
+  transcriptUrl?: string
+}
+
+/**
+ * Narrow internal adapter type for non-canonical contexts
+ * where we only have partial podcast metadata from downloads/history.
+ */
+export interface PlaybackPodcastStub {
+  podcastItunesId: string
+  title: string
+  author: string
+  artwork: string
+  feedUrl: string
+}
+
+/**
+ * Narrow internal adapter type for non-canonical episode contexts
+ * from local track/session data.
+ */
+export interface PlaybackEpisodeStub {
+  episodeGuid: string
+  title: string
+  audioUrl: string
+  description?: string
+  artworkUrl?: string
+  duration: number
+  pubDate: string
+  providerEpisodeId?: string
+  transcriptUrl?: string
+}

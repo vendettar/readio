@@ -1,0 +1,33 @@
+---
+title: Categories
+---
+
+# Categories Endpoints (/api/1.0/categories)
+
+Understanding and using categories for filtering. **Requires Authentication.**
+
+## `/categories/list`
+Fetch the full, canonical list of supported podcast categories.
+- **URL**: `/api/1.0/categories/list`
+- **Example Response snippet**:
+```json
+{
+  "status": "true",
+  "feeds": [
+    { "id": 1, "name": "Arts" },
+    { "id": 2, "name": "Books" }
+  ],
+  "count": 1
+}
+```
+
+---
+
+## Working with Categories
+
+When using the `cat` or `notcat` parameters (e.g., in `/podcasts/trending` or `/podcasts/bytag`):
+
+- **Flexibility**: You can use either the **Category ID** (integer) or the **Category Name** (string).
+- **Case Sensitivity**: Names are **not** case-sensitive.
+- **Multi-select**: Separate multiple values with commas (e.g., `?cat=Arts,Video Games,101`).
+- **Full List**: Always use the `/api/1.0/categories/list` endpoint or the [official categories.json](https://github.com/Podcastindex-org/podcast-namespace/blob/main/categories.json) to confirm names/IDs.

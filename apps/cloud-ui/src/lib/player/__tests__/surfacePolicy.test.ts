@@ -39,12 +39,16 @@ describe('surfacePolicy', () => {
     })
     expect(
       deriveSurfacePolicyFromSearchEpisode({
-        id: 'episode-id-1',
-        providerEpisodeId: '1',
         podcastItunesId: '2',
         title: 'Search Episode',
-        podcastTitle: 'Podcast',
+        showTitle: 'Podcast',
+        artwork: 'https://example.com/art.jpg',
+        feedUrl: 'https://example.com/feed.xml',
         episodeUrl: 'https://example.com/episode.mp3',
+        episodeGuid: 'guid-surface-1',
+        releaseDate: '2026-01-01T00:00:00Z',
+        trackTimeMillis: 61000,
+        shortDescription: 'desc',
       })
     ).toEqual({
       playableContext: true,

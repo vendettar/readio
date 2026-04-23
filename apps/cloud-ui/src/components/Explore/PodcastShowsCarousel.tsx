@@ -2,13 +2,13 @@
 // Horizontal carousel of podcasts (standard image format)
 
 import { useCarouselLayout } from '../../hooks/useCarouselLayout'
-import type { DiscoveryPodcast } from '../../lib/discovery'
+import type { TopPodcast } from '../../lib/discovery'
 import { PodcastCardSkeleton } from '../PodcastCard/PodcastCardSkeleton'
 import { CarouselShell } from './CarouselShell'
 import { PodcastShowCard } from './PodcastShowCard'
 
 interface TopShowsCarouselProps {
-  podcasts: DiscoveryPodcast[]
+  podcasts: TopPodcast[]
   isLoading?: boolean
   sectionId?: string
 }
@@ -51,7 +51,7 @@ export function PodcastShowsCarousel({ podcasts, isLoading, sectionId }: TopShow
             ))
         : podcasts.map((podcast, index) => (
             <PodcastShowCard
-              key={`${sectionId || 'default'}-${podcast.id}`}
+              key={`${sectionId || 'default'}-${podcast.podcastItunesId}`}
               podcast={podcast}
               index={index}
               transitionState={sectionId ? { fromLayoutPrefix: sectionId } : undefined}

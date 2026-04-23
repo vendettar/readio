@@ -1143,7 +1143,7 @@ async function startOnlineASRForTrack(options: {
           void persistAudioBlobAsDownload(audioBlob, {
             audioUrl: expectedAudioUrl,
             episodeTitle: freshState.audioTitle,
-            podcastTitle: meta?.podcastTitle,
+            showTitle: meta?.showTitle,
             feedUrl: meta?.podcastFeedUrl,
             artworkUrl: meta?.artworkUrl,
             durationSeconds: meta?.durationSeconds,

@@ -1,0 +1,1055 @@
+---
+title: Decision Log
+description: Architecture decisions and rationale.
+---
+
+# Architecture Decision Log
+
+## D001 — UUID Primary Keys (All Tables)
+- **Decision**: All tables use UUID primary keys; natural keys (e.g., `feedUrl`, `key`) are unique indexes only.
+- **Rationale**: Global uniqueness, sync readiness, stable identity.
+- **Implication**: Schema changes require DB reset (first‑release policy).
+
+## D002 — I18n Direct Usage
+- **Decision**: Components use `useTranslation()` from `react-i18next` directly; no `useI18n` adapter.
+- **Rationale**: Standard API, fewer layers, clearer onboarding.
+
+## D003 — Offline Strategy A
+- **Decision**: When offline, hide remote Discovery and remote search results; keep local content available and show an Offline badge.
+- **Rationale**: Predictable UX, no failing network calls.
+
+## D004 — ObjectURL Ownership
+- **Decision**: Audio Object URLs are store‑owned; image Object URLs are component‑owned with cleanup on unmount.
+- **Rationale**: Prevent audio memory leaks while keeping UI flexibility for artwork.
+
+## D005 — Deployment Target [Implemented]
+- **Decision**: Primary deployment is Vercel; Docker is supported for self‑hosting.
+- **Rationale**: Fast web deployment with a portable fallback.
+
+## D006 — Legal Pages Required [Implemented]
+- **Decision**: Privacy Policy and Terms of Service are mandatory for production.
+- **Rationale**: Store compliance and user trust.
+
+## D007 — Smoke E2E Tests [Implemented]
+- **Decision**: Maintain Playwright smoke tests for core user journeys before release.
+- **Rationale**: Prevent end‑to‑end regressions that unit tests miss.
+
+## D008 — Strict CSP [Implemented]
+- **Decision**: Enforce a strict Content Security Policy for all web deployments, via **HTTP response headers** (server/edge).
+- **Rationale**: Reduce XSS and untrusted resource loading risk.
+
+## D009 — Data Retention Policy [Implemented]
+- **Decision**: Prune playback history to a bounded window (time + count).
+- **Rationale**: Prevent long‑term IndexedDB bloat and performance degradation.
+
+## D010 — PWA Update Lifecycle [Implemented]
+- **Decision**: Notify users when a new PWA version is available and allow refresh.
+- **Rationale**: Avoid stale clients and ensure users receive fixes.
+
+## D011 — CI Pipeline [Implemented]
+- **Decision**: Enforce lint/typecheck/tests on every PR via CI.
+- **Rationale**: Prevent regressions from bypassing local checks.
+
+## D012 — Import Integrity Checks [Implemented]
+- **Decision**: Validate imports for ID collisions and broken references before writing to DB (Instruction 049).
+- **Rationale**: Prevent silent corruption during Vault/OPML import.
+
+## D013 — Bundle Size Budget [Implemented]
+- **Decision**: Enforce bundle size budgets in CI (Instruction 050).
+- **Rationale**: Prevent performance regressions from dependency bloat.
+
+## D014 — Iframe Sandbox Policy
+- **Decision**: Use strict iframe sandboxing for untrusted rich HTML when required.
+- **Rationale**: Isolate untrusted content beyond DOMPurify.
+
+## D015 — Feedback Loop
+- **Decision**: Provide in-app links for bug reporting and support contact.
+- **Rationale**: Close product feedback loop.
+
+## D016 — Offline Content Visibility
+- **Decision**: Show offline availability badges and provide cache cleanup tools.
+- **Rationale**: Make offline behavior transparent and manageable.
+
+## D017 — Episode Sorting & Filtering
+- **Decision**: Provide sort/filter controls for episode lists.
+- **Rationale**: Improve discoverability at scale.
+
+## D018 — Content Attribution
+- **Decision**: Show attribution and copyright complaint entry points.
+- **Rationale**: Reduce legal exposure and clarify content ownership.
+
+## D019 — Multilingual Typography [Implemented]
+- **Decision**: Use language-specific font stacks via `:root[lang]` selectors.
+- **Rationale**: Ensure consistent rendering across scripts (Latin, CJK).
+- **Implementation**: Language-specific font stacks in `index.css` with optimizeLegibility rendering.
+
+## D020 — DB Access Guard [Implemented]
+- **Decision**: Prevent direct DB access from UI components via lint guard.
+- **Rationale**: Enforce architecture boundaries and maintain store-first persistence.
+- **Implementation**: `pnpm lint:db-guard` script checks for DB imports in components.
+
+## D021 — MSW for Network Tests [Implemented]
+- **Decision**: Use MSW to mock external APIs in tests.
+- **Rationale**: Stable and deterministic test runs.
+- **Implementation**: `src/__tests__/setup.ts` and `handlers.ts` intercept requests.
+
+## D022 — Contributing & Manifesto
+- **Decision**: Document instruction-driven workflow and architecture manifesto.
+- **Rationale**: Reduce onboarding friction and keep rules consistent.
+
+## D023 — PWA Audio Range Cache [Implemented]
+- **Decision**: Support Range Requests (206) in SW media cache for offline seeking.
+- **Rationale**: Enable offline seek in large audio files.
+
+## D024 — Memory Stress Test [Implemented]
+- **Decision**: Maintain a long-session memory stress test for leak detection.
+- **Rationale**: Prevent mobile crashes after hours of playback.
+- **Implementation**: `apps/lite/tests/stress/memory.test.ts` (Playwright).
+
+## D025 — Proxy Failover
+- **Decision**: Support proxy list with automatic failover on 429/5xx.
+- **Rationale**: Keep discovery resilient when a proxy fails.
+
+## D026 — I18n Coverage Audit [Implemented]
+- **Decision**: Enforce translation key parity across all languages at build time.
+- **Rationale**: Prevent missing-key regressions in non-English locales.
+- **Implementation**: `apps/lite/scripts/audit-i18n.ts` compares all languages against `en` and is integrated into CI (Instruction 063).
+
+## D027 — IndexedDB Migrations
+- **Decision**: Move from reset-only policy to versioned migrations.
+- **Rationale**: Preserve user data in production.
+
+## D028 — Browser Support Matrix
+- **Decision**: Define browserslist and legacy polyfill strategy.
+- **Rationale**: Avoid white screens on older devices/WebViews.
+
+## D029 — Turborepo Cache Hardening [Implemented]
+- **Decision**: Explicit inputs/outputs for Turbo pipelines.
+- **Rationale**: Ensure cache correctness and fast CI.
+- **Implementation**: `turbo.json` defines explicit `inputs` (source files, configs) and `outputs` (`dist/**`, `stats.html`). Global dependencies (`.npmrc`, `pnpm-workspace.yaml`) are tracked. Test files are excluded from build inputs (Instruction 066).
+
+## D030 — Atomic Write & Self-Healing [Implemented]
+- **Decision**: Complex writes (imports, deletes) must be transactional; boot process checks integrity.
+- **Rationale**: Prevent "half-written" state if browser crashes during large file ingestion.
+- **Implementation**: Wrapped `ingestFiles` and `deleteFolder` in `db.transaction`. Added `runIntegrityCheck` to `useAppInitialization` to flag orphan (blob-less) tracks (Instruction 067).
+
+## D031 — Async Race Condition Guard [Implemented]
+- **Decision**: Use requestId/AbortController to ensure last-action-wins.
+- **Rationale**: Avoid playback/UI desync under rapid interactions.
+- **Implementation**: Added `loadRequestId` to `playerStore` and `exploreStore`; implemented auto-abort in `fetchUtils.ts` for same-resource requests.
+- **Rule Documentation**: `apps/docs/content/docs/apps/lite/coding-standards/logic-flow.mdx` (Section: Async Interaction Safety).
+
+## D032 — Robust Metadata Parser (Phase 1)
+- **Decision**: Use `music-metadata` for ID3/M4A parsing.
+- **Rationale**: Replaces filename-based heuristics with binary stream parsing to extract high-quality metadata (Artwork, Title, Album, Artist, Duration).
+- **Artwork Strategy**: Extract embedded covers, store as Blobs in Dexie, and serve via ephemeral `ObjectURL` in UI.
+- **Implementation**: Runs in dedicated Web Worker (`src/workers/metadata.worker.ts`) to prevent blocking the main thread during large file imports. Buffer polyfill applied in `main.tsx`.
+
+## D033 — Skeleton UI System [Implemented]
+- **Decision**: Standardize shimmer-based skeletons for key surfaces (PodcastCard, EpisodeRow, ExploreHero).
+- **Rationale**: Reduce layout shift and improve perceived performance during content loading.
+- **Implementation**: Base `Skeleton` component in `ui/skeleton.tsx` using `animate-shimmer`. Specific skeletons mirror layout dimensions of content components.
+
+## D034 — Overlay Layering Standardization
+- **Decision**: Standardize Portal usage and z-index tokens without a global modal store.
+- **Rationale**: Prevent stacking bugs while keeping local state intact.
+
+## D035 — Media Cache Eviction
+- **Decision**: Enforce LRU-based audio blob trimming with configurable limits.
+- **Rationale**: Prevent uncontrolled storage growth.
+
+## D036 — Network Backoff & Circuit Breaker [Implemented]
+- **Decision**: Add exponential backoff and per-proxy circuit breaker.
+- **Rationale**: Avoid retry storms and improve proxy resilience.
+- **Implementation**: 
+    - `withRetry` helper in `fetchUtils.ts` with exponential backoff (1s, 2s, 4s, 8s) and jitter.
+    - `CircuitBreaker` state management to block failing proxies for 30s after 5 consecutive failures.
+    - Automatic retry on 5xx or network-level errors; skip for 4xx.
+
+## D037 — Storage Quota Monitoring
+- **Decision**: Surface quota usage and warnings in Settings.
+- **Rationale**: Give users visibility before storage exhaustion.
+
+## D038 — Intl API Upgrade
+- **Decision**: Use Intl APIs for dates, numbers, and relative time.
+- **Rationale**: Improve localization correctness and reduce manual formatting bugs.
+
+## D039 — Granular Error Boundaries [Implemented]
+- **Decision**: Add component-level error boundaries for critical UI nodes.
+- **Rationale**: Prevent single-component crashes from taking down pages.
+- **Implementation**:
+    - `ComponentErrorBoundary` class component handles `getDerivedStateFromError` and `componentDidCatch`.
+    - Integrated with `logError` for diagnosis.
+    - Wrapped `TranscriptView`, `EpisodeRow`, and `Sidebar` for localized fault isolation.
+    - Added i18n-supported localized fallback UI with a retry mechanism. (Instruction 076)
+
+## D040 — Lighthouse CI Budget
+- **Decision**: Enforce Lighthouse score budgets in CI.
+- **Rationale**: Prevent regressions in performance and accessibility.
+
+## D041 — Dependency Audit & License Policy
+- **Decision**: Enforce vulnerability and license checks in CI.
+- **Rationale**: Reduce supply-chain and compliance risk.
+
+## D042 — Floating Promise Audit
+- **Decision**: Require explicit error handling for async store actions.
+- **Rationale**: Prevent silent failures and inconsistent state.
+
+## D043 — Event Listener Leak Audit
+- **Decision**: Standardize global listener management via a shared hook.
+- **Rationale**: Avoid memory leaks under long sessions.
+
+## D044 — Zustand Selector Optimization
+- **Decision**: Enforce atomic selectors and `useShallow` for multi-select.
+- **Rationale**: Reduce unnecessary re-renders.
+
+## D045 — RSS Content CSS Isolation
+- **Decision**: Isolate show-notes CSS via scoped reset (Shadow DOM fallback).
+- **Rationale**: Prevent untrusted HTML from polluting UI.
+
+## D046 — File Validation Strategy
+- **Decision**: Layered approach for performance and security.
+  - **Web (Lite)**: MIME type and extension validation only (UX focused).
+  - **Backend**: Deep content validation (Magic numbers, full parsing).
+  - **Native**: Decoder-based validation or lightweight head sniffing.
+- **Rationale**: Keep client-side logic fast and lightweight while deferring intensive checks to secure environments.
+
+## D047 — UI Pattern Change Gate
+- **Decision**: Every modification to `ui-patterns/*.mdx` that introduces a new standardized interaction (e.g., standard forms, file drop zones) MUST be logged in the Decision Log.
+- **Rationale**: Ensure architecture consistency and maintain a source of truth for UI standardization across the project (Instructions 012-015).
+
+## D048 — Standardized File Drop Zone
+- **Decision**: All file upload surfaces MUST use the `FileDropZone` component based on `react-dropzone` with Zod-based validation.
+- **Rationale**: Provides consistent visual feedback (Glassmorphism), centralized error handling, and type-safe validation across the application (Instruction 015).
+
+## D049 — Premium Glass Visuals
+- **Decision**: Core structural surfaces (Sidebar, Player Footer, Overlays) MUST use Premium Glass materials (`backdrop-blur-xl`, `backdrop-saturate-150`, and `bg-background/80` or `bg-popover/95`).
+- **Rationale**: Achieves a high-quality, native-like aesthetic that adapts to content and theme while maintaining legibility (Instruction 016).
+
+## D050 — List Row Interactions
+- **Decision**: All list items and cards MUST use `bg-accent/50` for hover states and `border-border/50` for separation, with "Smart Divider" logic (Instruction 016).
+- **Rationale**: Maintains visual consistency across different list types and creates a focused, floating effect for interactive rows.
+
+## D051 — Modern Toast Notifications (Sonner)
+- **Decision**: Replace Radix Toast with `sonner` for all notification feedback.
+- **Rationale**: Sonner provides superior developer experience (imperative API), better visual stacking, built-in promise support, and native-feeling animations (Instruction 017).
+
+## D052 — Command Palette Search (cmdk)
+- **Decision**: Replace custom floating Search Overlay with an inline sidebar `CommandPalette` based on `cmdk`.
+- **Rationale**: Provides consistent keyboard navigation, improved accessibility, and a modern "inline sidebar search experience" that works globally (Instruction 018).
+- **Implementation Detail Update**: Keep inline sidebar input UX unchanged, but standardize result panel shell to portal-backed `Popover` (`PopoverAnchor` + `PopoverContent`) and align close-path control to store-driven `onOpenChange(false)` / `closeOverlay()`.
+
+## D053 — Standardized Badge System
+- **Decision**: All status indicators (Subscriptions, Favorites, History, Files, Listen Later) in lists and Command Palette MUST use a unified visual language: right-aligned, vertically centered, and `text-primary` color.
+- **Rationale**: Ensures visual consistency and reduces cognitive load by establishing a predictable location and color for "Status" metadata across the application.
+
+## D055 — Standardized Bits Animations
+- **Decision**: Introduce a set of standardized, high-quality animation components (Bits) in `src/components/bits/`, starting with `AnimatedList` and `CountUp`.
+- **Rationale**: Elevates the "vibe" and perceived quality of the application with fluid, premium motion patterns (Framer Motion) while ensuring reusability and architectural consistency (Instruction 021).
+- **Implementation**:
+    - `AnimatedList`: Staggered entrance animations for lists and grids.
+    - `CountUp`: Smooth spring-based numeric transitions for statistics and usage values.
+
+## D056 — Conditional "Last Played" Timestamp Update
+- **Decision**: The `lastPlayedAt` timestamp in `PlaybackSession` is ONLY updated when `isPlaying` is true.
+- **Rationale**: Prevents session restoration (e.g., reopening a tab) or manual seeking while paused from incorrectly bumping an item to the top of "Recent" lists. "Last Played" should semantically represent active consumption of content.
+- **Implementation**:
+    - Removed forced `Date.now()` in `DB.updatePlaybackSession`.
+    - `playerStore` actions (`updateProgress`, `saveProgressNow`) conditionally include `lastPlayedAt` based on the current `isPlaying` state.
+
+## D057 — Shared Element Transitions
+- **Decision**: Use `layoutId` (Framer Motion) to synchronize persistent UI elements (especially artwork) between global UI states (MiniPlayer ↔ FullPlayer).
+- **Rationale**: Maintains spatial continuity, reduces visual pop-in, and achieves a high-end "native" feel.
+- **Constraint**: The `layoutId` MUST be unique within the same visible tree. Conditional rendering (e.g., `isDesktop`) must be used if multiple nodes for different layouts (Mobile/Desktop) share the same semantic ID tracking the same object.
+
+## D058 — App Boot Sequence
+- **Decision**: Show a full-screen `BootLoader` (Breathing Logo) until all core IndexedDB stores are hydrated and the playback session is restored.
+- **Rationale**: Prevents "Hydration Flash" (empty states briefly flickering) and provides a premium, native-app feel during cold starts.
+- **Constraints**: 
+    - Loader must use `fixed inset-0 z-50 bg-background` to perfectly cover content.
+    - Transitions must use `AnimatePresence` for a smooth fade-out.
+
+## D059 — Shared Element Transition Scoping
+- **Decision**: If the same logical object appears multiple times on a single page, the `layoutId` MUST be scoped with a unique prefix (e.g., `sectionId`) to avoid collision.
+- **Status Update (Superseded in transport by D080)**: `fromLayoutPrefix` is still the transition metadata key, but it now travels via typed `location.state` only, not URL `search`.
+- **Rationale**: Prevents Framer Motion collisions when duplicate content exists in different UI sections, while keeping transition metadata out of canonical/shareable URLs.
+
+## D060 — Logical Properties Migration (RTL Support)
+- **Decision**: Migrate all physical CSS properties (`left`, `right`, `ml`, `mr`, `pl`, `pr`, `text-left`, `text-right`, `border-l`, `border-r`) to their logical equivalents (`start`, `end`, `ms`, `me`, `ps`, `pe`, `text-start`, `text-end`, `border-s`, `border-e`).
+- **Rationale**: Enables seamless support for Right-to-Left (RTL) languages (e.g., Arabic, Hebrew) without duplicating CSS rules or using complex overrides. Aligns with modern web standards and improves future accessibility.
+- **Constraint**: Directional icons must be explicitly flipped using `className="rtl:rotate-180"` where appropriate.
+
+## D061 — Store Persistence Repository Boundary (Phase 1) [Implemented]
+- **Decision**: Introduce `LibraryRepository`, `PlaybackRepository`, and `FilesRepository` as the persistence boundary for `exploreStore`, `historyStore`, `playerStore`, and `filesStore`.
+- **Rationale**: Decouple store action/state logic from direct Dexie access while preserving existing store APIs and runtime behavior.
+- **Implementation**:
+  - Migrated target stores to repository calls.
+  - Added repository parity tests and repository-boundary store tests.
+  - Kept Dexie schema/version and `DB` exports unchanged.
+
+## D062 — Fetch/Runtime Config Internal Module Extraction (Phase 1) [Implemented]
+- **Decision**: Keep `fetchUtils.ts` and `runtimeConfig.ts` as stable public facades, and extract internals into dedicated modules.
+- **Rationale**: Reduce critical-file complexity and isolate policy-heavy logic without changing external contracts.
+- **Implementation**:
+  - Added `lib/networking/proxyUrl.ts`, `lib/networking/circuitBreaker.ts`, `lib/networking/timeouts.ts`.
+  - Added `runtimeConfig.defaults.ts` and `runtimeConfig.schema.ts`.
+  - Preserved proxy fallback order, breaker policy, timeout behavior, env-key contract, and fallback parsing semantics.
+
+## D061 — Sleep Timer Architecture
+- **Decision**: Centralize the sleep timer countdown ticker inside `useSleepTimerStore` (module-level interval), while `GlobalAudioController` remains responsible for reacting to end-of-episode events.
+- **Rationale**: Guarantees a single ticker regardless of component mounting patterns, avoids duplicate timers, and keeps countdown state co-located with the store that owns it. The player should revert to a `paused` state when the timer expires.
+
+## D062 — Tooltip Wrapping for Overlays
+- **Decision**: Standardize wrapping `DropdownMenuTrigger` or `PopoverTrigger` with `Tooltip` for icon-only buttons that also provide transient state feedback (e.g., remaining sleep timer time). 
+- **Rationale**: Adheres to the "Icon-only buttons MUST have a Tooltip" rule while allowing rich interaction on click.
+
+## D063 — Image Fallback Strategy [Implemented]
+- **Decision**: All artwork/images MUST use a standard fallback mechanism: themed skeleton (`bg-muted/50`) during loading, and a fallback icon (`Podcast` or `Disc`) on error. Transition between states MUST use a smooth fade. (Instruction 046)
+- **Rationale**: Prevents "broken image" icons from degrading the premium aesthetic and ensures layout stability during content ingestion.
+
+## D064 — Onboarding & Empty States [Implemented]
+- **Decision**: All empty library/list views MUST use a standardized `EmptyState` pattern: centered orientation, high-quality icon, clear descriptive text, and a primary CTA button. (Instruction 045)
+- **Rationale**: Reduces user abandonment by providing clear guidance on how to populate the application and ensuring the first-run experience is intentional.
+
+## D065 — UseEventListener Ref Handling
+- **Decision**: `useEventListener` MUST receive the `RefObject` itself, not `ref.current`. The hook is responsible for accessing `.current` inside its effect.
+- **Rationale**: Ensures listeners are correctly attached even if the ref is initially null (P1 fix).
+
+## D066 — Prose Isolation Strategy
+- **Decision**: Use a wrapper `div` with `.prose-isolate` around content that needs style isolation, instead of applying it directly to the content container.
+- **Rationale**: Prevents `all: revert` from stripping utility classes needed on the content container itself (e.g., `whitespace-pre-line`).
+
+## D067 — Floating Promise Guard
+- **Decision**: All "fire-and-forget" async calls in stores MUST use `.catch(logError)` or `void` operator.
+- **Rationale**: Prevents unhandled promise rejections and ensures errors are logged (Instruction 079).
+
+## D068 — Store Selector Enforcement
+- **Decision**: All Zustand store usage MUST use atomic selectors.
+- **Rationale**: Prevents massive unnecessary re-renders. Enforced via `lint:selectors` CI check.
+
+## D069 — Tab Synchronization
+- **Decision**: Use `BroadcastChannel` (with `localStorage` fallback) to coordinate playback across tabs. Only one tab plays at a time.
+- **Rationale**: Prevents audio overlapping (Instruction 029).
+
+## D070 — CORS Proxy Architecture & Troubleshooting [2.0 Refactor]
+- **Decision**:
+  - Standardize all CORS proxies to raw/passthrough mode (original `Content-Type` + body), and decommission AllOrigins-specific JSON wrapper assumptions.
+  - Keep proxy configuration provider-agnostic via URL template (`{url}`), so Cloudflare Workers/Nginx reverse proxies can be swapped without client contract changes.
+  - Disable circuit-breaker and global `abortPrevious` dedupe in client fetch fallback chains for discovery requests.
+- **Rationale**:
+  - Remove hard dependency on one public proxy service.
+  - In single-user browser runtime, preemptive breaker/dedupe can drop valid later requests; exhaustive ordered retries across configured endpoints are more reliable for perceived availability.
+
+## D071 — Library Detail Country Context (`countryAtSave`)
+- **Decision**: Persist normalized `countryAtSave` on library/remote writes (`Subscription`, `Favorite`, podcast-origin `PlaybackSession`) and use it to build canonical `/$country/...` links from library surfaces.
+- **Status Update (Superseded in resolution authority by D082 + D080)**: podcast content-route country resolution is route-param authority only (`$country`), with no runtime fallback to global/default country in content pages.
+- **Write Guardrail**: if `countryAtSave` cannot be resolved for remote/library writes, reject persistence (local track sessions are exempt).
+- **Rationale**: Region switching must affect discovery only; saved items keep deterministic country context through canonical path links under first-release, no-backfill policy.
+
+## D072 — Discovery SWR Cache Semantics
+- **Decision**: Discovery provider cache now uses SWR + stale-if-error semantics with explicit per-API TTL profiles (24h charts/detail/feed, 12h episode lookup list, 30m search), keeps stale localStorage payloads after TTL expiry, and only overwrites cache on successful network responses.
+- **Rationale**: Preserve continuity on unstable networks and prevent empty-state regressions when stale data exists. Revalidation success must propagate to active UI via exact `queryClient.setQueryData`, while storage cleanup remains stale-safe (hard-retention protected) and explicit maintenance is centralized through `runDiscoveryCacheMaintenance()`.
+
+## D073 — Podcast Transcript Auto-Ingestion Cache
+- **Decision**: Podcast transcript ingestion is asynchronous and non-blocking to playback start. The system reads transcript data in order: runtime cache behavior (`fresh | stale | miss`) -> IndexedDB `remote_transcripts` -> network fetch, and writes cache only on successful fetch+parse.
+- **Rationale**: Preserve read-along continuity without delaying audio controls, keep stale transcript usable during network failures, and avoid data loss from failed revalidation.
+- **Guardrails**: Manual local subtitles stay authoritative; remote transcript apply must pass playback context guards (`loadRequestId` + `audioUrl`) to prevent stale async overrides.
+
+## D074 — Transcript Atomic Lookup Authority & Span-Safe Highlight
+- **Decision**:
+  - Keep atomic transcript rendering (`SubtitleLine` tokenization + `Word` interactive tokens) with a single lookup authority per `TranscriptView` (`useSelection(containerRef)`).
+  - Enforce event dedupe by marking word-token clicks with `data-lookup-word="true"` and skipping generic mouseup fallback lookup for marked targets.
+  - Upgrade subtitle highlight matching to traverse all text nodes under `.subtitle-text` instead of assuming `element.firstChild` is a text node.
+- **Rationale**: Eliminate duplicate lookup requests from one click, preserve deterministic selection/lookup state transitions, and keep dictionary-word highlight behavior correct after transcript spanization/nested DOM structures.
+
+## D075 — Global Docked Transcript Surface Mode [Implemented]
+- **Decision**:
+  - Introduce a global player-surface state machine (`mini | docked | full`) in `src/store/playerSurfaceStore.ts`.
+  - Playback with transcript-capable context defaults to `docked`; non-transcript context defaults to `mini`.
+  - Surface transitions are route-independent and non-modal: collapse/restore/open-full must not trigger navigation.
+  - Full-open is guarded by playable context; exiting full returns to `docked` when context exists, otherwise `mini`.
+- **Rationale**: Keep transcript read-along available as a persistent player extension across routes while preserving shell interactivity (Sidebar/page content) and avoiding modal/route-coupled regressions.
+- **Implementation**:
+  - `AppShell` mounts `DockedPlayer` as the standard reading surface extension (no additional right-side panel).
+  - `MiniPlayer` provides docked restore and full-open entry with guard semantics.
+  - Playback entry paths (`useEpisodePlayback`, `useFilePlayback`, `HistoryPage`) set playable context and default surface deterministically.
+
+## D076 — Component-Driven Transcript Word Interactions
+- **Decision**:
+  - `Word` component is the sole trigger source for single-word lookup and single-word context menu.
+  - Add dedicated `openWordMenu(word, x, y)` action in `useSelectionActions` for word-menu state transitions.
+  - Remove geometric word hit-testing/click-delay fallback lookup from `useSelectionEvents`; keep only selected-range menu routing and container-level close behavior.
+  - Enforce context priority: when native selection is non-collapsed, selected-range context menu wins and word-menu dispatch is skipped for the same event.
+- **Rationale**: Eliminate duplicate interaction paths under virtualization, reduce hot-path mouse event overhead, and keep selection/lookup state deterministic from a single `TranscriptView` authority.
+
+## D077 — Transcript Right-Click Dual-Path Menu Contract
+- **Decision**:
+  - Transcript right-click keeps a deterministic dual-path contract:
+    - selected text present -> open context menu in `menuMode: 'word'`
+    - no selection on `.subtitle-line` -> fallback to line context menu in `menuMode: 'line'`
+  - `Word` component remains the explicit source for single-word right-click menu (`openWordMenu`), and geometric pointer-based word lookup remains removed.
+- **Rationale**: Preserve prior line-level UX while keeping component-driven word interactions and avoiding reintroduction of fragile geometric hit-testing paths.
+
+## D078 — Unified Full/Docked Player Surface Motion [Implemented]
+- **Decision**:
+  - Replace separate `DockedPlayer`/`FullPlayer` overlays with one shared `PlayerSurfaceFrame` and one shared layout identity (`PLAYER_SURFACE_LAYOUT_ID`).
+  - Keep docked/full as two layout states of the same logical reading surface and keep mode transitions route-independent.
+  - Move transcript auto-follow state to shared frame scope so transcript interaction and follow-button visibility remain consistent across docked/full morph.
+- **Rationale**: Remove the perceived two-step exit/enter sequence and enforce continuous single-surface motion while preserving transcript behavior and control parity.
+- **Implementation**:
+  - `AppShell` renders one surface frame topology for `docked | full`.
+  - Shared reading core is extracted to `ReadingContent`.
+  - Legacy `DockedPlayer.tsx` and `FullPlayer.tsx` are removed in favor of unified frame architecture (Instruction 089c).
+
+## D079 — Full Surface Dismiss Interaction (Custom Motion) [Updated]
+- **Decision**:
+  - Replaced `Drawer` (`vaul`) with custom motion-based implementation for `PlayerSurfaceFrame`.
+  - Full mode covers the entire screen (including sidebar) with a single unified surface shell.
+  - Dismissal is explicit (Minimize button or `Esc` shortcut); backdrop click-dismiss is intentionally disabled.
+- **Rationale**: `Drawer` caused layering issues with SideBar and unstable focus management. Custom motion provides a robust, fully controlled, and cleaner animation state that aligns with the "Mini -> Docked -> Full" morphing architecture.
+- **Implementation**:
+  - Removed `src/components/ui/drawer.tsx` and `vaul` dependency.
+  - Removed backdrop click close path in `PlayerSurfaceFrame.tsx`; close path is now button/keyboard only and remains deterministic (`toDocked()` when restorable, else `toMini()`).
+
+## D080 — Content URL Contract Finalization + Transition Metadata Relocation [Implemented]
+- **Decision**:
+  - All in-app content entry points (Explore/Search/Global Search/Library) must emit canonical path-only podcast routes with no correctness query hints.
+  - `/$country/podcast/*` route search contracts no longer define legacy library hints (`source/feedUrl/audioUrl/providerEpisodeId/sessionId`) and no longer define `fromLayoutPrefix`.
+  - Legacy query hints are tolerated and stripped during search validation (non-strict handling), rather than hard-rejected.
+  - `fromLayoutPrefix` is retained only as optional shared-transition metadata in typed `location.state`, not URL `search`.
+  - `useEpisodeResolution` no longer accepts context-based query hints; resolution correctness is route-param + slug-token driven.
+- **Rationale**: Eliminate URL contract drift, prevent hidden route correctness coupling to search params, and keep shared-element transition metadata out of canonical links.
+
+## D081 — Search Palette Opaque Selection Contrast [Implemented]
+- **Decision**:
+  - Command Palette / Search overlay active rows (hover + keyboard-selected) use solid `bg-primary` highlight instead of translucent accent layers.
+  - Active row applies divider-merge contract (`-mt-px` + `z-10`) to visually merge adjacent separators into one contiguous selection block.
+- **Rationale**: Ensures high-contrast focus affordance under premium-glass overlays and keeps pointer/keyboard focus state visually unambiguous.
+
+## D082 — Route-Country SSOT + Feed Key + shortId8 + Legacy Route Decommission [Implemented]
+- **Decision**: Podcast content routes are country-scoped (`/$country/podcast/*`) and route country is the single authority for content resolution.
+- **Decision**: Feed cache keys are normalized URL only (`feed` namespace), without country segment.
+- **Decision**: Episode slug suffix policy is fixed to exact `shortId8` (`toShortId8Token` + exact-8 parser).
+- **Decision**: Legacy `/podcast/*` routes are decommissioned and blocked by CI guard scripts.
+- **Rationale**: Prevent hidden country fallback, avoid cache fragmentation, keep deterministic slug matching, and stop regression via static guardrails.
+- **Implementation**:
+  - `apps/lite/src/routes/$country/**` and parent validator `apps/lite/src/routes/$country.tsx`
+  - Route builders in `apps/lite/src/lib/routes/podcastRoutes.ts`
+  - Feed key normalization in `apps/lite/src/lib/discovery/providers/apple.ts`
+  - shortId8 utilities in `apps/lite/src/lib/slugUtils.ts`
+  - Guard scripts: `apps/lite/scripts/check-route-country-guards.js`, `apps/lite/scripts/check-legacy-podcast-route-ban.js`
+
+## D083 — Region-Unavailable Classification + Unified Podcast Query Contract [Implemented]
+- **Decision**:
+  - `regionUnavailable` is strictly a business-state and must not mask fetch/runtime failures.
+  - Podcast content routes and resolver hooks must share one query contract:
+    - lookup: `['podcast', 'lookup', podcastId, country]`
+    - feed: `['podcast', 'feed', normalizedFeedUrl]`
+    - provider episodes: `['podcast', 'provider-episodes', podcastId, country]`
+  - Page-level query functions in podcast content routes must forward React Query `signal` to discovery calls.
+- **Rationale**: Prevent user-facing misclassification, remove cache-key drift across entry points, and guarantee stale-request cancellation semantics on route-country switches.
+- **Implementation**:
+  - Contract module: `apps/lite/src/lib/discovery/podcastQueryContract.ts`
+  - Applied in: `apps/lite/src/hooks/useEpisodeResolution.ts`, `apps/lite/src/routeComponents/podcast/PodcastShowPage.tsx`, `apps/lite/src/routeComponents/podcast/PodcastEpisodesPage.tsx`, `apps/lite/src/routeComponents/podcast/PodcastEpisodeDetailPage.tsx`
+  - Regression tests:
+    - `apps/lite/src/hooks/__tests__/useEpisodeResolution.cancellation.test.tsx`
+    - `apps/lite/src/routeComponents/podcast/__tests__/PodcastRouteErrorClassification.test.tsx`
+
+## D084 — Route State Boundary & Feed Normalization Placement [Implemented]
+- **Decision**:
+  - `location.state` is UI-transition metadata only and must not carry business-correctness identity.
+  - Feed URL normalization is executed at ingestion/write boundaries; render/query hot paths consume normalized feed URLs directly.
+- **Rationale**:
+  - `location.state` is not durable across refresh/direct-open/share links.
+  - Moving normalization out of hot paths prevents repeated URL parsing overhead and keeps feed cache keys stable.
+- **Implementation**:
+  - Added route guard rules to block business fields under `location.state` and to block hot-path `normalizeFeedUrl` / `new URL()` regressions.
+  - Added feed normalization boundary utility (`src/lib/discovery/feedUrl.ts`) and applied it to provider mapping plus persistence write paths.
+  - Added ReadingContent transition perf budget guard (`120ms`) for `docked <-> full` mode switches.
+
+## D085 — Route Guard AST Upgrade + Session Country Allowlist + Search Open-Detail Semantics [Implemented]
+- **Decision**:
+  - Route-country guard script adds AST-aware detection for `location.state` business-field access, including destructuring, aliasing, and optional-chain variants.
+  - `useSession` validates `countryAtSave` with the same allowlist contract as route country (`normalizeCountryParam`), rejecting unsupported values for explore-session persistence.
+  - Search episode item interaction semantics are standardized to “open detail” (prop naming + aria label), while keeping canonical navigation behavior unchanged.
+- **Rationale**:
+  - Regex-only script checks can miss semantic bypasses.
+  - Persisted country values must align with route-country contract to avoid bad links and future action-blocking flows.
+  - Accessibility and event semantics should reflect actual behavior (open detail, not playback).
+
+## D086 — Player Command Authority Unification [Implemented]
+- **Decision**:
+  - `src/hooks/usePlayerController.ts` is the single command authority for playback-control semantics.
+  - `GlobalAudioController` media-session `prev/next`, `MiniPlayer` skip buttons, and `PlayerSurfaceFrame` (full surface) skip/rate actions all delegate to this shared controller.
+  - Skip-step constant is centralized as `SKIP_SECONDS = 10`.
+- **Rationale**:
+  - Remove duplicated control logic and prevent semantic drift between hardware keys and UI controls.
+  - Keep subtitle-neighbor smart navigation and fallback skip behavior consistent across surfaces.
+- **Implementation**:
+  - Added `usePlayerController` with `togglePlayPause`, `skipBackward`, `skipForward`, `prevSmart`, `nextSmart`, `jumpToSubtitle`, and `cyclePlaybackRate`.
+  - Updated command wiring in:
+    - `apps/lite/src/components/AppShell/GlobalAudioController.tsx`
+    - `apps/lite/src/components/AppShell/MiniPlayer.tsx`
+    - `apps/lite/src/components/AppShell/PlayerSurfaceFrame.tsx`
+    - `apps/lite/src/components/AppShell/ReadingContent.tsx`
+
+## D087 — Remote Playback Metadata + Orchestration Unification [Implemented]
+- **Decision**:
+  - Introduce `apps/lite/src/lib/player/episodeMetadata.ts` as the single mapper layer for feed/search/favorite/history remote playback payloads.
+  - Introduce `apps/lite/src/lib/player/remotePlayback.ts` as the single action-wiring layer for remote playback (`setAudioUrl`, `play`, transcript ingest, optional history resume bindings).
+  - Keep `useSession` as the persistence owner for remote playback sessions; no new direct remote session DB write path is introduced.
+  - Remove redundant metadata writes where `setAudioUrl(..., metadata)` already carries full episode metadata.
+- **Rationale**:
+  - Eliminate duplicated metadata literals across hooks/components and reduce drift risk between playback entry points.
+  - Preserve behavior while making remote playback easier to validate and maintain.
+- **Implementation**:
+  - Delegated call sites:
+    - `apps/lite/src/hooks/useEpisodePlayback.ts`
+    - `apps/lite/src/lib/localSearchActions.ts`
+    - `apps/lite/src/routeComponents/podcast/PodcastEpisodeDetailPage.tsx`
+    - `apps/lite/src/routeComponents/HistoryPage.tsx`
+
+## D088 — Modular i18n Locale Loading + Safe Language Switch [Implemented]
+- **Decision**:
+  - Translation resources are split into per-language TypeScript modules under `apps/lite/src/lib/locales/`.
+  - `apps/lite/src/lib/translations.ts` is retained as the typed contract hub (`Language`, `TranslationSchema`, `localeLoaders`, `baseEnglishTranslations`), no monolithic in-file dictionary.
+  - `apps/lite/src/lib/i18n.ts` initializes with English only and lazy-loads non-`en` locales via `ensureLocaleLoaded`.
+  - Language changes must go through `changeLanguageSafely` (latest-wins gate + load-before-apply).
+  - i18n audit script loads locales via the shared loader registry and fails on both missing and extra keys.
+- **Rationale**:
+  - Reduce initial bundle payload while preserving strict key typing.
+  - Prevent async race conditions during rapid language toggles.
+  - Keep one authoritative locale-loading contract across runtime and audit tooling.
+- **Implementation**:
+  - `apps/lite/src/lib/locales/{en,zh,ja,ko,de,es}.ts`
+  - `apps/lite/src/lib/translations.ts`
+  - `apps/lite/src/lib/i18n.ts`
+  - `apps/lite/src/routeComponents/SettingsPage.tsx`
+  - `apps/lite/scripts/audit-i18n.ts`
+  - Tests:
+    - `apps/lite/src/lib/__tests__/i18nLocaleLoader.test.ts`
+    - `apps/lite/src/lib/__tests__/i18nChangeLanguageSafely.test.ts`
+
+## D089 — Integrity Maintenance Promotion in Settings [Implemented]
+- **Decision**:
+  - Keep boot-time maintenance in `useAppInitialization` unchanged.
+  - Promote integrity maintenance to an explicit Settings capability through `MaintenanceSettingsSection` + `useIntegrityMaintenance`.
+  - `runIntegrityCheck` contract is upgraded to a typed report that always resolves:
+    - `IntegrityCheckReport = { checkedAt, missingAudioBlob, danglingFolderRef, danglingTrackRef, totalRepairs }`.
+  - Manual scan action enforces single-flight semantics and maps outcomes to deterministic toasts (`repaired` vs `no issues`), with an optional unexpected-exception fallback toast.
+- **Rationale**:
+  - Make self-healing behavior observable and user-triggerable without adding new storage schema or schedulers.
+  - Eliminate rejection-based control flow for expected integrity-scan failures.
+  - Keep destructive storage actions isolated from maintenance scan behavior.
+- **Implementation**:
+  - `apps/lite/src/lib/retention.ts`
+  - `apps/lite/src/hooks/useIntegrityMaintenance.ts`
+  - `apps/lite/src/components/Settings/sections/MaintenanceSettingsSection.tsx`
+  - `apps/lite/src/routeComponents/SettingsPage.tsx`
+  - `apps/lite/src/lib/locales/{en,zh,ja,ko,de,es}.ts`
+  - Tests:
+    - `apps/lite/src/lib/retention.test.ts`
+    - `apps/lite/src/hooks/__tests__/useIntegrityMaintenance.test.ts`
+    - `apps/lite/src/components/Settings/__tests__/MaintenanceSettingsSection.test.tsx`
+    - `apps/lite/src/routeComponents/__tests__/SettingsPage.test.tsx`
+
+## D090 — Unified Episode Row Model + Shared Row Container [Implemented]
+- **Decision**:
+  - Introduce one shared episode-row mapping layer at `apps/lite/src/components/EpisodeRow/episodeRowModel.ts`.
+  - Introduce one shared favorite interaction hook at `apps/lite/src/components/EpisodeRow/useEpisodeRowFavoriteAction.ts`.
+  - Introduce one shared row container at `apps/lite/src/components/EpisodeRow/EpisodeListItem.tsx`, while keeping `BaseEpisodeRow` as the presentational primitive.
+  - Preserve playback ownership at call sites; `onPlay` remains caller-owned for Podcast/Search/Favorites/History.
+  - Keep Favorites/History `bottomMeta` formatting owned by route components.
+- **Rationale**:
+  - Remove duplicated row mapping and interaction wiring across Podcast, Search, Favorites, and History.
+  - Keep visual parity and fallback behavior stable while reducing drift risk between surfaces.
+- **Implementation**:
+  - Added:
+    - `apps/lite/src/components/EpisodeRow/episodeRowModel.ts`
+    - `apps/lite/src/components/EpisodeRow/useEpisodeRowFavoriteAction.ts`
+    - `apps/lite/src/components/EpisodeRow/EpisodeListItem.tsx`
+  - Refactored call sites:
+    - `apps/lite/src/components/EpisodeRow/EpisodeRow.tsx`
+    - `apps/lite/src/components/GlobalSearch/SearchEpisodeItem.tsx`
+    - `apps/lite/src/routeComponents/FavoritesPage.tsx`
+    - `apps/lite/src/routeComponents/HistoryPage.tsx`
+  - Regression coverage:
+    - `apps/lite/src/components/EpisodeRow/__tests__/episodeRowModel.test.ts`
+    - `apps/lite/src/components/EpisodeRow/__tests__/useEpisodeRowFavoriteAction.test.tsx`
+    - `apps/lite/src/components/EpisodeRow/__tests__/EpisodeListItem.test.tsx`
+    - `apps/lite/src/routeComponents/__tests__/HistoryPage.row-render.test.tsx`
+    - `apps/lite/src/routeComponents/__tests__/FavoritesPage.row-render.test.tsx`
+
+## D091 — Multilingual Transcript Tokenization Core (Phase 1) [Implemented]
+- **Decision**:
+  - Introduce `apps/lite/src/lib/text/tokenizeWithLocale.ts` as the locale-aware tokenizer core.
+  - Use `Intl.Segmenter` (`granularity: 'word'`) when available, with per-locale in-memory segmenter cache.
+  - Keep deterministic regex fallback (`tokenizeFallback`) and preserve delimiter tokens in both paths.
+  - Keep transcript UI wiring unchanged in phase 1; only tokenizer internals are upgraded.
+- **Rationale**:
+  - Support CJK and mixed-language token boundaries with better linguistic accuracy.
+  - Preserve rendering and interaction compatibility by maintaining the existing token contract.
+  - Avoid phase coupling by separating tokenizer-core rollout from UI integration/perf tuning.
+- **Implementation**:
+  - Added:
+    - `apps/lite/src/lib/text/tokenizeWithLocale.ts`
+    - `apps/lite/src/lib/text/__tests__/tokenizeWithLocale.test.ts`
+  - Refactored public entry:
+    - `apps/lite/src/lib/text/index.ts` (stable API bridge)
+  - Regression coverage:
+    - English punctuation/spacing
+    - Chinese/Japanese/Korean segmentation
+    - mixed-language sentence handling
+    - `Intl.Segmenter` unavailable fallback
+
+## D092 — GlobalAudioController Internal Hookization (Phase 1) [Implemented]
+- **Decision**:
+  - Extract audio element synchronization logic into `apps/lite/src/hooks/useAudioElementSync.ts`.
+  - Extract audio event binding logic into `apps/lite/src/hooks/useAudioElementEvents.ts`.
+  - Keep `GlobalAudioController` as orchestration shell for media-session wiring and autoplay retry flow.
+- **Rationale**:
+  - Reduce controller complexity without changing public behavior.
+  - Make event/sync logic independently testable and easier to maintain.
+  - Preserve lifecycle and store-transition semantics while preparing phase-2 media-session/autoplay refactors.
+- **Implementation**:
+  - Added:
+    - `apps/lite/src/hooks/useAudioElementSync.ts`
+    - `apps/lite/src/hooks/useAudioElementEvents.ts`
+    - `apps/lite/src/hooks/__tests__/useAudioElementSync.test.tsx`
+    - `apps/lite/src/hooks/__tests__/useAudioElementEvents.test.tsx`
+  - Refactored:
+    - `apps/lite/src/components/AppShell/GlobalAudioController.tsx`
+  - Regression alignment:
+    - `apps/lite/src/components/AppShell/__tests__/GlobalAudioController.test.tsx`
+
+## D093 — Accessibility Baseline Hardening [Implemented]
+- **Decision**: Establish a strict baseline keyboard/a11y contract for command palette, selection menu, and player sliders.
+- **Rationale**: Remove high-frequency keyboard traps and missing ARIA semantics without altering feature behavior.
+- **Implementation**:
+  - Command palette input now exposes `aria-expanded`/`aria-controls`, and `Esc` closes from both input and panel contexts.
+  - Selection menu now supports keyboard navigation (`ArrowUp`/`ArrowDown`/`Home`/`End`) and `Esc` close with explicit menu roles.
+  - Lookup popover now uses dialog semantics (`role="dialog"`, `aria-modal`) and supports `Esc` close.
+  - Mini/Full seek bars and mini volume slider now expose explicit ARIA labels.
+
+## D094 — Service Worker Audio Cache Hardening [Implemented]
+- **Decision**: Split runtime cache namespaces and formalize range-aware audio cache policy.
+- **Rationale**: Improve offline seek reliability while keeping cache growth bounded and auditable.
+- **Implementation**:
+  - Added dedicated runtime cache policy module: `src/lib/pwa/runtimeCaching.ts`.
+  - `readio-audio-v2`: `StaleWhileRevalidate`, `rangeRequests: true`, statuses `[200, 206]`, bounded retention.
+  - `readio-api-v1`: `NetworkFirst` API/feed cache partition with explicit retention bounds.
+  - Added automated policy tests and offline verification checklist in handoff environment docs.
+## D095 — Sequential ASR Chunking [Implemented]
+- **Decision**: Automatically split large audio files (>20MB) into frames-aligned chunks before transcription.
+- **Rationale**: Groq/Whisper API has a 25MB payload limit. Chunking allows transcribing full-length podcast episodes without client-side OOM or API rejections.
+- **Implementation**: `src/lib/asr/mp3Chunker.ts` detects MP3 frame boundaries to ensure chunks are valid bitstreams. Results are merged sequentially with adjusted timestamps. (Instruction 125)
+
+## D096 — Priority ASR Queue [Implemented]
+- **Decision**: Implement a global FIFO queue for ASR with a `manual` task priority shortcut.
+- **Rationale**: Prevent 429 Rate Limit errors from concurrent API calls while ensuring user-initiated "current track" transcription jumps to the front of the waitlist.
+- **Implementation**: `src/lib/asr/queue.ts` (ASRQueue) manages a single-concurrency worker. `enqueuePriority` uses `unshift()` to prioritize immediate user needs. (Instruction 125)
+
+## D097 — ASR Fingerprinting & Deduplication [Implemented]
+- **Decision**: Use SHA-256 fingerprinting to deduplicate transcription tasks.
+- **Rationale**: Avoid redundant API costs and wait times by reusing existing transcripts for identical audio files, even if they have different source URLs.
+- **Implementation**: Fingerprint key: `localTrackId | audioId | size | model`. Stored in IndexedDB (`asrFingerprint` index) for O(1) cache hits. (Instruction 125)
+
+## D098 — Manual Storage Management [Implemented]
+- **Decision**: Replace automatic LRU eviction with a hard storage limit and manual cleanup prompts.
+- **Rationale**: Prevent "silent deletion" of user downloads. In a language-learning context, specific tracks are high-value and should only be removed by explicit user intent.
+- **Implementation**: Default `10GB` limit. Downloads are blocked early via `HEAD` sizing check if they would exceed cap. `ConfirmAlertDialog` added to deletion flows to prevent accidental loss. (Instruction 124)
+
+## D099 — ASR Configuration Safety & UX Guardrails [Implemented]
+- **Decision**: ASR-blocking download logic in `remotePlayback.ts` MUST verify that ASR is fully configured (provider + model) before initiating.
+- **Rationale**: Prevents users without ASR credentials from experiencing massive blocking downloads of full audio files (O(50MB-200MB)) before playback start.
+- **Decision**: Automatic ASR triggers (`auto`) FAIL SILENTLY to `IDLE` status when unconfigured, while manual triggers show `FAILED` with an explicit configuration error.
+- **Rationale**: Avoids "Transcription Failed" error noise for new users while providing clear feedback and a path to settings for power users who explicitly request ASR. (2026-02-27 refactor)
+
+
+## 2026-02-27: Unification of local_tracks and podcast_downloads
+- **Context**: `local_tracks` (user uploads) and `podcast_downloads` (remote episodes) had identical persistence requirements but dual-table implementations leading to polymorphic foreign keys (e.g. `PlaybackSession.localTrackId`).
+- **Decision**: Merged into a single `tracks` table with a `sourceType` discriminator (Single Table Inheritance).
+- **Rationale**: Eliminates polymorphic relationships, simplifies DB queries, and centralizes cascade cleanup logic (especially for subtitles and audio blobs). 
+- **Risk Profile**: High migration risk usually, but explicitly zero-cost in this pre-release phase under the "no legacy data migration burden" policy.
+- **Note**: A full DB rebuild is expected for early testers.
+- **Implementation**: Instruction 128 (Align Downloads Density).
+
+## D101 — Indexed Root-Folder Queries
+- **Decision**: Prioritize compound indexes (e.g., `[sourceType+folderId+createdAt]`) even for root folder queries where `folderId` is `null`.
+- **Rationale**: Significant performance improvement for large file libraries by avoiding in-memory filtering.
+- **Guard**: Implement a `try-catch` fallback to full scan + filter if the IndexedDB engine hits null-compound-key quirks (`DataError`).
+- **Status**: Planned (Instruction 130).
+
+## D102 — Stream-Only Playback Is an Explicit Overflow Action [Implemented]
+- **Decision**: Keep default play behavior unchanged and expose `Play without transcript` only as an explicit overflow action.
+- **Rationale**:
+  - avoids introducing a global toggle that could silently alter existing listening behavior
+  - keeps transcript/ASR bypass intent request-scoped and user-driven
+- **Architecture**:
+  - centralized playback mode contract in `src/lib/player/remotePlayback.ts` (`default` vs `stream_without_transcript`)
+  - one shared decision point controls ASR-download gating and transcript auto-ingestion branching
+  - one shared remote URL resolver (`resolveRemoteStreamTargetUrl`) defines deterministic precedence across entry points
+- **Risk Handling**:
+  - stream-only branch forces transcript reset before final source assignment to prevent stale cue leakage
+  - mode remains request-scoped and relies on existing epoch guard (latest-request-wins) to avoid race-driven dead-end states
+
+## D103 — Provider-Scoped ASR Model Contract (Static Allowlist) [Implemented]
+- **Decision**:
+  - enforce provider-scoped ASR model selection (`provider -> models`) as a strict runtime/form contract.
+  - keep model catalog in local registry (`lib/asr/registry.ts`) as SSOT; do not use provider `/models` API as dynamic source of truth.
+  - centralize provider resolution and validation helpers so UI/schema/runtime consume the same contract.
+- **Rationale**:
+  - static allowlist prevents runtime drift from provider-side model listing changes and keeps UX deterministic.
+  - one shared provider contract avoids cross-layer divergence and invalid persisted pairs.
+  - `/models` endpoint remains useful for key-validity checks without coupling user configuration semantics to remote catalog volatility.
+- **Credential Binding Note**:
+  - provider-to-credential lookup is centralized in ASR domain flow; UI/runtime must not hardcode provider-specific credential branches.
+
+
+## D104 — Overflow Menu Item Icon Alignment (3-dot Menus) [Implemented]
+- **Decision**:
+  - all 3-dot overflow menu items must include an icon.
+  - icon placement is standardized to trailing position (text-left, icon-right).
+- **Rationale**:
+  - creates a consistent visual scan pattern across Downloads, History, Favorites, Search, and Files surfaces.
+  - improves readability for multilingual labels with varying text lengths by keeping icon anchors stable.
+- **Implementation**:
+  - standardized menu item composition to `justify-between` with explicit trailing icons.
+  - updated design and handoff standards:
+    - `apps/docs/content/docs/apps/lite/ui-patterns/shell.mdx`
+    - `apps/docs/content/docs/apps/lite/handoff/standards.mdx`
+  - applied across overflow menu entry points in `apps/lite/src/components/**` and `apps/lite/src/routeComponents/**`.
+
+## D105 — Destructive Delete Confirmation Coverage (Including Subtitle Rows) [Implemented]
+- **Decision**:
+  - every delete/remove action must require explicit two-step confirmation.
+  - this includes subtitle-row delete buttons in Files/Downloads cards, not only top-level menu deletes.
+- **Rationale**:
+  - subtitle data is user-generated/high-value and accidental deletion risk is high on dense row UIs.
+  - one unified destructive-action contract prevents regressions when new delete entry points are added.
+- **Implementation**:
+  - added confirmation flow to subtitle-row delete actions:
+    - `apps/lite/src/components/Files/TrackCardSubtitles.tsx`
+    - `apps/lite/src/components/Downloads/DownloadTrackCard.tsx`
+  - standardized rule text in:
+    - `apps/docs/content/docs/apps/lite/ui-patterns/shell.mdx`
+    - `apps/docs/content/docs/apps/lite/handoff/standards.mdx`
+
+## D106 — Progressive ASR Chunk Ramp With Bounded Call Budget [Implemented]
+- **Decision**:
+  - adopt front-loaded duration-driven chunk planning for online ASR when duration metadata is valid and source is frame-safe MP3.
+  - use ramp sequence `5s -> 10s -> 20s -> 60s`, then converge to steady `600s` chunks.
+  - enforce bounded growth with both:
+    - dynamic budget: `baselineCalls + maxExtraCalls`
+    - absolute cap: `ABSOLUTE_MAX_CALLS = 24`
+  - if duration signal is unavailable/unreliable (or source is not frame-safe), fallback to legacy byte-only splitting.
+- **Rationale**:
+  - front-loaded small chunks reduce the first-subtitle wait window without waiting for a large first slice.
+  - budget and absolute cap prevent unbounded API call amplification on long episodes.
+  - fallback preserves production safety and existing behavior when duration-based planning cannot be trusted.
+- **Implementation**:
+  - plan builder and budget guards in `apps/lite/src/lib/asr/index.ts` (`buildChunkDurationPlan`, progressive decision path).
+  - progressive frame-safe split path in `apps/lite/src/lib/asr/mp3Chunker.ts` (`splitMp3BlobWithTargetSizes`).
+  - regression/unit coverage in:
+    - `apps/lite/src/lib/asr/__tests__/index.progressiveChunkRamp.test.ts`
+    - `apps/lite/src/lib/asr/__tests__/mp3Chunker.test.ts`
+    - `apps/lite/src/lib/__tests__/asr/asrChunkPolicy.test.ts`
+
+## D107 — Deepgram Native ASR Transport (Binary Upload + Fail-Closed Parse) [Implemented]
+- **Decision**:
+  - Deepgram is integrated as a first-class provider via dedicated native transport (`deepgramCompatible.ts`), not OpenAI-compatible multipart transport.
+  - Transcription requests use raw binary `Blob` upload with `Authorization: Token <key>`.
+  - Registry/model governance remains allowlist-based and provider-scoped (`deepgram -> nova-3|nova-2|nova|base|whisper`).
+- **Rationale**:
+  - Deepgram protocol (endpoint, auth header, payload/response shape) differs materially from OpenAI-compatible providers; forcing a shared adapter would increase contract drift risk and error handling ambiguity.
+  - Raw binary upload avoids avoidable memory overhead and keeps transport semantics explicit.
+  - Fail-closed parsing prevents false-success empty transcripts while still allowing transcript-only fallback when word timestamps are absent.
+- **Risk Notes**:
+  - Binary uploads rely on accurate content-type fallback (`audio/mpeg` when blob type is empty).
+  - Nested payload parsing must remain strict (`results.channels[0].alternatives[0]`) to avoid silently accepting malformed responses.
+  - Non-2xx mapping reuses existing `ASRClientError` taxonomy and retry-after parsing to preserve queue/retry behavior consistency across providers.
+
+## D108 — ASR Provider Runtime Toggles Require Shared Resolver + Runtime Fail-Closed Guard [Implemented]
+- **Decision**:
+  - Provider enable/disable semantics are runtime-env driven via:
+    - `READIO_ENABLED_ASR_PROVIDERS`
+    - `READIO_DISABLED_ASR_PROVIDERS`
+  - Toggle resolution is centralized in `apps/lite/src/lib/asr/providerToggles.ts` and reused by settings + runtime entry points.
+  - Blacklist precedence over whitelist is fixed (deterministic subtraction after whitelist resolution).
+  - Runtime ASR entry points (`transcribeAudioWithRetry`, `verifyAsrKey`) must block disabled providers with fail-closed `ASRClientError(code='client_error')`.
+- **Rationale**:
+  - UI-only hiding is insufficient; runtime guard is required to prevent stale settings or direct calls from bypassing operator policy.
+  - One shared resolver eliminates parser drift between schema/settings/runtime layers.
+- **Risk Notes**:
+  - Misconfigured toggles can disable all providers; this is intentional fail-closed behavior and must surface as unconfigured/blocked state.
+  - Validation and parsing must normalize case/whitespace consistently to avoid environment-specific surprises.
+- **Implementation**:
+  - Resolver and runtime guards in `apps/lite/src/lib/asr/providerToggles.ts` and `apps/lite/src/lib/asr/index.ts`.
+  - Settings delegation in `apps/lite/src/lib/schemas/settings.ts`.
+  - Coverage in:
+    - `apps/lite/src/lib/asr/__tests__/providerToggles.test.ts`
+    - `apps/lite/src/lib/asr/__tests__/index.providerToggleGuard.test.ts`
+    - `apps/lite/src/lib/schemas/__tests__/settings.test.ts`
+    - `apps/lite/src/lib/__tests__/runtimeConfig.schema-parity.test.ts`
+
+## D109 — ASR Toggle Misconfiguration Changed From Fail-Open to Explicit Validation [Implemented]
+- **Decision**:
+  - `READIO_ENABLED_ASR_PROVIDERS` / `READIO_DISABLED_ASR_PROVIDERS` no longer use field-level `.catch(...)` fallback for invalid values.
+  - Unknown provider tokens must raise explicit validation signals at config parse boundary.
+  - Runtime fallback on toggle misconfiguration is fail-closed (effectively no enabled providers), never silent all-open.
+- **Rationale**:
+  - Fail-open behavior can silently broaden ASR provider availability under operator misconfiguration.
+  - Explicit validation + fail-closed fallback keeps behavior deterministic and policy-safe.
+- **Risk Notes**:
+  - Misconfigured toggles can intentionally result in no available providers; this is preferred over accidental provider expansion.
+  - Parser remains defensive (unknown tokens ignored) but cannot be relied on as validation authority; config schema is authoritative.
+- **Implementation**:
+  - Removed toggle field `.catch(...)` fallback in `apps/lite/src/lib/runtimeConfig.schema.ts`.
+  - Added fail-closed parse fallback branch in `apps/lite/src/lib/runtimeConfig.ts` for toggle-validation errors.
+  - Added/updated regression coverage in:
+    - `apps/lite/src/lib/__tests__/runtimeConfig.schema-parity.test.ts`
+    - `apps/lite/src/lib/asr/__tests__/providerToggles.test.ts`
+
+## D110 — Selection UI Targeted Surface Closure & Absorption [Implemented]
+- **Decision**:
+  - `closeMenu` and `closeLookup` must require a `surface` identifier.
+  - Surface mismatch results in a no-op to prevent race-condition flicker during transitions.
+  - Introduce a transparent backdrop for `LookupCallout` to absorb dismissal clicks.
+- **Rationale**:
+  - Prevent stale "outside click" or "auto-dismiss" calls from one closing surface from killing a newly opened different surface.
+  - Achieve "First click dismisses, second click interacts" (Absorption) while preserving "Immediate Right-Click Switch" behavior.
+- **Implementation**:
+  - `useSelectionActions` uses `currentSurfaceTypeRef` to validate targeted closures.
+  - `LookupCallout` uses a fixed-position backdrop that swallows `pointerdown` for left-clicks and executes an immediate `switch` for right-clicks.
+  - `useSelectionEvents` restricts global `pointerup` finalization to left-clicks only.
+
+## D111 — Page Shell and Header Contract [Implemented]
+- **Decision**: Standardize all library routes (Explore, Search, Favorites, History, Files, Downloads, Settings) using a unified `<PageShell>` layout and `<PageHeader>` component contract.
+- **Rationale**: Ensures structural consistency, predictable vertical rhythm (avoiding MiniPlayer collisions), and unified header behavior (mobile stacking, text overflow policies).
+- **Implementation**:
+  - `<PageShell>`: Enforces `max-w-content`, `px-page`, and `pb-32` bottom spacing. Relies on `AppShell` for global vertical scrolling to avoid nested scrollbar issues and simplify sticky positioning for child components.
+  - `<PageHeader>`: Provides standardized slots (`title`, `subtitle`, `actions`, `meta`, `beforeTitle`) with built-in `line-clamp-2` and `min-w-0` overflow protection.
+  - Decommissioned route-specific local headers (e.g., `FilesPageHeader`).
+
+## D112 — Documentation SSOT Reconciliation for Audio Identity and Repo Topology [Implemented]
+- **Decision**:
+  - `localTrackId` documentation is unified across EN/ZH as a generic playback track binding that can represent both user uploads and downloaded podcast tracks.
+  - `stream_without_transcript` remains the explicit path that clears binding with `setPlaybackTrackId(null)`.
+  - Repository topology docs must only reference paths that exist today (`packages/core`, `packages/ui`, `packages/config`; `apps/cloud`/`apps/native` as scaffold directories).
+- **Rationale**:
+  - Prevent conflicting contracts across bilingual handoff docs for ASR identity anchoring and persistence behavior.
+  - Prevent onboarding/automation errors caused by stale README and monorepo path claims.
+- **Implementation**:
+  - Updated bilingual audio-engine contracts:
+    - `apps/docs/content/docs/apps/lite/handoff/features/audio-engine.mdx`
+    - `apps/docs/content/docs/apps/lite/handoff/features/audio-engine.zh.mdx`
+  - Updated repository-structure docs:
+    - `README.md`
+    - `apps/docs/README.md`
+    - `apps/docs/content/docs/general/monorepo-strategy.mdx`
+    - `apps/docs/content/docs/general/monorepo-strategy.zh.mdx`
+
+## D113 — Locale-Aware Docs Metadata Must Stay Structural; Search Stemming Stays Explicitly Constrained [Implemented]
+- **Decision**:
+  - Docs markdown export, OG image URLs, and source links must preserve the active locale structurally instead of reconstructing locale-less paths.
+  - The docs search route keeps an explicit `localeMap` and maps both `en` and `zh` to Orama `english` stemming in the current stack version.
+  - This search behavior is documented as a temporary tokenizer limitation, not a claim of native Chinese segmentation support.
+- **Rationale**:
+  - Locale loss in generated metadata/links creates hard 404s and invalid sharing targets.
+  - The current Fumadocs/Orama stack version does not provide a native Chinese tokenizer in-repo, so pretending bilingual full-text semantics are solved would be false.
+  - Explicit locale mapping is safer than implicit defaults because it prevents silent search behavior drift during future dependency changes.
+- **Risk Notes**:
+  - Chinese search quality remains bounded by English stemming behavior until the search stack gains a tokenizer that is actually supported by this repo.
+  - Production build verification for the docs app remains a separate open blocker and is not implied solved by this decision.
+- **Implementation**:
+  - Locale-aware docs metadata and links:
+    - `apps/docs/app/[lang]/docs/[[...slug]]/page.tsx`
+    - `apps/docs/lib/source.ts`
+    - `apps/docs/next.config.mjs`
+    - `apps/docs/app/[lang]/layout.tsx`
+    - `apps/docs/app/[lang]/og/docs/[...slug]/route.tsx`
+  - Explicit search locale mapping:
+    - `apps/docs/app/api/search/route.ts`
+
+## D114 — Default Repo Verification Must Enforce Shared Package Build and Lite Guard Scripts [Implemented]
+- **Decision**:
+  - Root `pnpm lint` now includes the highest-value Lite guard scripts in addition to workspace lint.
+  - Root `pnpm typecheck` now includes an explicit `@readio/core` build obligation rather than assuming transitive coverage.
+  - `@readio/core` declares its own `typecheck` and `build` scripts as first-class verification entry points.
+- **Rationale**:
+  - A green root verification path must cover the anti-corruption checks the repo relies on, otherwise architecture guardrails can silently drift out of normal contributor workflows.
+  - Shared package correctness should not depend on indirect compilation side effects from consumer apps.
+- **Risk Notes**:
+  - Root verification is stricter and may surface previously latent failures in contributor environments; that is intentional.
+  - The docs production build remains outside the “all green” state until the separate build hang is resolved.
+- **Implementation**:
+  - Root verification scripts:
+    - `package.json`
+  - Shared package obligations:
+    - `packages/core/package.json`
+
+## D115 — English-Only Dictionary Runtime Contract & Language-Normalized Availability [Implemented]
+- **Decision**:
+  - The runtime dictionary configuration is currently English-only and must use the explicit contract `EN_DICTIONARY_API_URL` / `READIO_EN_DICTIONARY_API_URL`, not a generic all-language dictionary key.
+  - Lookup availability must be resolved from the normalized base language rather than raw locale strings; region forms such as `en-US` normalize to `en`.
+  - If the normalized language is not configured, lookup must open a dedicated `lookupDictionaryNotConfigured` state.
+  - This unsupported-language state must remain distinct from `lookupNotFound` and `errorNetwork`.
+  - Future per-language / per-region dictionary expansion remains an architecture direction only; current docs and product behavior must not imply that it is already implemented.
+- **Rationale**:
+  - The active dictionary backend only serves English today, so generic naming and generic UX claims are factually incorrect.
+  - Normalizing language before availability checks prevents accidental rejection of supported English region variants.
+  - Unsupported-language lookup is a capability/configuration boundary, not a failed English lookup request, so it requires its own user-visible state and must not inherit success semantics.
+- **Risk Notes**:
+  - Unsupported-language lookup must not route through the English fetch/cache path.
+  - Closing an unsupported-language lookup surface must not apply delayed same-word highlight as if a successful definition had been returned.
+  - Future language expansion should extend the availability mapping explicitly instead of weakening the current English-only contract wording.
+- **Implementation**:
+  - Runtime config rename:
+    - `apps/lite/src/lib/runtimeConfig.defaults.ts`
+    - `apps/lite/src/lib/runtimeConfig.schema.ts`
+    - `apps/lite/src/lib/runtimeConfig.ts`
+    - `apps/lite/public/env.js`
+  - Dictionary consumer alignment:
+    - `apps/lite/src/lib/selection/api.ts`
+    - `apps/lite/src/lib/__tests__/runtimeConfig.schema-parity.test.ts`
+  - Language-aware lookup semantics:
+    - `apps/lite/src/components/Transcript/TranscriptView.tsx`
+    - `apps/lite/src/hooks/useSelection.ts`
+    - `apps/lite/src/hooks/selection/useSelectionActions.ts`
+    - `apps/lite/src/hooks/__tests__/useSelection.test.ts`
+    - `apps/lite/src/hooks/selection/__tests__/useSelectionActions.test.ts`
+  - Lookup-state copy parity:
+    - `apps/lite/src/lib/locales/en.ts`
+    - `apps/lite/src/lib/locales/zh.ts`
+    - `apps/lite/src/lib/locales/de.ts`
+    - `apps/lite/src/lib/locales/es.ts`
+    - `apps/lite/src/lib/locales/ja.ts`
+    - `apps/lite/src/lib/locales/ko.ts`
+
+## D116 — Cloud Scaffold Uses Go `net/http`, SQLite Bootstrap, and Lite Dist Reuse [Implemented]
+- **Decision**:
+  - The current Cloud scaffold phase uses a pure Go `net/http` backend in `apps/cloud`.
+  - `apps/cloud` serves the built `apps/lite/dist` output directly for the frontend surface in this phase.
+  - SQLite is the current database bootstrap target for Cloud self-hosting and local portability.
+  - The earlier Spring Boot / Hono direction is not the current scaffold contract and must not be described as the implemented Cloud backend for this phase.
+- **Rationale**:
+  - The scaffold is intentionally minimal and must stay portable, reviewable, and easy to self-host.
+  - Reusing `apps/lite/dist` avoids duplicate frontend work while the Cloud backend only provides the current contracts.
+  - A pure Go server plus SQLite keeps the bootstrap path free of CGO and reduces deployment friction.
+- **Risk Notes**:
+  - Documentation must not imply that a separate Cloud web frontend exists yet.
+  - Documentation must not claim sync, auth, or schema layers that are not part of the scaffold phase.
+  - Future Cloud evolution can change the long-term stack, but the current phase contract must remain explicit and narrow.
+
+## D117 — Cloud ASR Provider Submission Uses a Dedicated Same-Origin Relay [Implemented]
+- **Decision**:
+  - Cloud ASR provider transcription submission must use a dedicated same-origin backend relay (`POST /api/v1/asr/transcriptions`) rather than browser-direct provider calls.
+  - `/api/proxy` remains a bounded media/RSS proxy surface and must not become a generic provider POST tunnel.
+  - In this phase, provider credentials remain user-owned and browser-supplied; the backend relay may use them only as transient request data and must not persist, cache, or log them.
+- **Rationale**:
+  - Browser-direct provider submission still fails under provider CORS even after the media fallback work is complete.
+  - A dedicated relay fixes transport ownership without prematurely changing the product's user-provided-key model.
+  - Keeping `/api/proxy` narrow avoids broadening SSRF/body-tunneling risk under a convenience abstraction.
+- **Risk Notes**:
+  - Provider verification/readiness remains browser-direct and is intentionally out of scope for this phase.
+  - Browser-local blobs/downloaded blobs remain browser-local inputs; the relay does not move audio storage server-side.
+  - Request bodies must stay bounded, and error mapping must preserve the existing ASR retry/cooldown semantics.
+
+## D118 — Cloud Production Runtime Config Ownership Moved to Backend-Generated /env.js [Implemented]
+- **Decision**:
+  - Cloud production runtime config ownership moved to backend-generated `/env.js` by `apps/cloud-api`.
+  - `apps/cloud-ui/public/env.js` is dev/default-template oriented, not production Cloud truth.
+  - Server-owned runtime config (listen address, paths, abuse-control settings) belongs in VPS/systemd env files.
+  - Browser-public runtime config is emitted by backend via an explicit allowlist, not dumped from process env.
+- **Alternatives Considered**:
+  - Keeping static frontend files (`dist/env.js`) as production truth: rejected because Cloud is a backend-owned product surface and production config should not require editing static frontend assets.
+  - Shared config package: rejected as prematurely generalized; Cloud's ownership model differs from Lite's browser-direct model.
+- **Rationale**:
+  - Cloud now owns networking on the backend and must own the runtime configuration contract.
+  - Production config should not require manually editing static frontend assets on the VPS.
+  - Browser-public fields are not secrets; emitting them via backend allowlist makes the contract explicit and auditable.
+- **Risk Notes**:
+  - Browser-public fields (e.g., `READIO_ASR_RELAY_PUBLIC_TOKEN`) are lightweight abuse-control tokens, not strong secret boundaries.
+  - If a field is emitted to `/env.js`, every browser user can read it; design accordingly.
+  - The allowlist is implicit in the map literal construction in the Go handler (`apps/cloud-api/main.go`), and only browser-safe fields are emitted.
+
+## D119 — Cloud Discovery Durable Identifier Contract [Superseded by D120]
+- **Decision**:
+  - For Cloud discovery/content routes, the show route SSOT is the numeric `itunesId`.
+  - [Superseded] Canonical episode routes used `slugified-title--encodeURIComponent(episodeGuid)`.
+  - [Superseded] Route topology was `/:country/podcast/*`.
+  - Episode detail resolution removes the Apple supplemental episode path and resolves through cached RSS by stable episode identity when available, then PodcastIndex `podcasts/byitunesid`, then RSS-by-canonical-`feedUrl` as the remaining fallback.
+- **Rationale**:
+  - `itunesId` is the cross-source join key shared by Apple charts and PodcastIndex detail APIs.
+  - RSS GUIDs are the most durable episode identifiers and allow cold-open recovery without transient route hints.
+
+- **Supersession**:
+  - This supersedes the `shortId8` episode-suffix portion of D082 and any discovery-surface assumption that `feedId` is a canonical show-route identifier.
+  - D082's route-country SSOT and feed-cache-key normalization remain in force.
+- **Implementation**:
+  - Backend relay and tests:
+    - `apps/cloud-api/discovery.go`
+    - `apps/cloud-api/discovery_podcastindex.go`
+    - `apps/cloud-api/discovery_test.go`
+  - Cloud UI routing, resolution, and emitters:
+    - `apps/cloud-ui/src/lib/discovery/cloudApi.ts`
+    - `apps/cloud-ui/src/lib/discovery/index.ts`
+    - `apps/cloud-ui/src/lib/discovery/editorPicks.ts`
+    - `apps/cloud-ui/src/hooks/useEpisodeResolution.ts`
+    - `apps/cloud-ui/src/routeComponents/podcast/PodcastShowPage.tsx`
+    - `apps/cloud-ui/src/routeComponents/podcast/PodcastEpisodeDetailPage.tsx`
+    - `apps/cloud-ui/src/routeComponents/podcast/PodcastEpisodesPage.tsx`
+    - `apps/cloud-ui/src/components/Explore/PodcastEpisodesGrid.tsx`
+    - `apps/cloud-ui/src/components/GlobalSearch/CommandPalette.tsx`
+    - `apps/cloud-ui/src/lib/localSearchActions.ts`
+    - `apps/cloud-ui/src/routeComponents/DownloadsPage.tsx`
+
+## D120 — Compact Cloud Podcast Route Contract [Implemented]
+- **Decision**:
+  - Canonical Cloud show routes are moved to `/podcast/:country/:itunesId`.
+  - Canonical Cloud episode routes are moved to `/podcast/:country/:itunesId/:episodeKey`.
+  - `episodeKey` is a compact encoding of stable episode identity.
+  - Canonical UUID identities retain the legacy 22-character `base64url` encoding and decode back to canonical lowercase hyphenated UUID text without ambiguity.
+  - Non-UUID stable identities use the newer generic compact form.
+  - The `/episode/` path segment and title-based episode slug are removed; no backward-compatibility redirect is retained.
+  - Route validation enforces valid compact key format for `episodeKey` and numeric format for `itunesId`.
+- **Clarification**:
+  - The 22-character form applies only to UUID-shaped stable identities.
+  - Non-UUID stable identities still use compact keys, but not the fixed 22-character UUID form.
+- **Rationale**:
+  - Episode resolution already depends on `itunesId + stable episode identity`; title text is not part of the lookup contract.
+  - UUID-backed routes still benefit from the compact fixed-length key, while non-UUID identities can now participate in the same route model without restoring PI episode fallback APIs.
+  - Moving the route root to `/podcast/:country/...` removes the country-first nesting and makes the podcast surface easier to scan and share.
+- **Implementation**:
+  - Compact key helpers: `apps/cloud-ui/src/lib/routes/compactKey.ts`
+  - Route topology: `apps/cloud-ui/src/routes/podcast/`
+  - All route emitters and test suites updated in `apps/cloud-ui/src`.
+  - Instruction 028.
+
+## D121 — Hybrid Cloud Discovery Strategy (Apple First-Hop / PodcastIndex Second-Hop) [Implemented]
+- **Decision**:
+  - All discovery entry points (Search Overlay, Search Results, Top Charts) use **Apple Search/RSS** as the first-hop source of truth.
+  - **PodcastIndex (PI)** is used exclusively as a second-hop enrichment/detail source, keyed by the Apple `itunesId` (`collectionId`).
+  - Apple first-hop responses must provide all fields required for list rendering (titles, artwork, metadata); PI is NOT involved in generating search results or chart lists.
+- **Rationale**:
+  - **Storefront Consistency**: Apple search is storefront/country-aware; PI search is term/language-oriented and lacks reliable country filtering.
+  - **Identifier Bridge**: Using `itunesId` as the universal bridge key allows stable lookup into PI's richer metadata (transcripts, chapters, HTML descriptions) while maintaining Apple's authoritative listing signals.
+  - **Avoid Identifier Fragmentation**: Avoids using Apple's episode-level `trackId` or PI's internal `feedId` as route identifiers, unifying the system on the more stable show-level `itunesId`.
+- **Implementation**:
+  - Backend: `apps/cloud-api/discovery.go`, `apps/cloud-api/discovery_apple.go`, `apps/cloud-api/discovery_podcastindex.go`.
+  - Frontend: `apps/cloud-ui/src/lib/discovery/index.ts`, `apps/cloud-ui/src/lib/discovery/cloudApi.ts`.
+  - UI: `apps/cloud-ui/src/routeComponents/ExplorePage.tsx`, `apps/cloud-ui/src/components/GlobalSearch/CommandPalette.tsx`.
+  - Instruction 027, 031.
+
+## D122 — Cloud Discovery Memory-Only Cache [Implemented]
+- **Decision**: 
+  - `cloud-ui` discovery results (Search, Explore, Feed) are moved to a memory-only cache (TanStack Query).
+  - Persistent discovery caching in IndexedDB (`runtime_cache`) is removed for the Cloud architecture.
+  - The `cloud-api` backend implements its own in-memory cache with graceful degradation for upstream Apple/PI results.
+- **Rationale**: 
+  - Simplifies frontend logic by removing complex XML parsing and persistent mapping.
+  - Reduces IndexedDB bloat.
+  - Backend-level caching provides better reliability across multiple clients and ensures UI availability even during upstream outages.
+- **Implementation**: 
+  - Frontend: `apps/cloud-ui/src/lib/discovery/discoveryCache.ts` refactored to maintenance-only.
+  - Backend: `apps/cloud-api/discovery_apple.go` uses `getWithGracefulDegradation`.

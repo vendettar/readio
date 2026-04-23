@@ -46,7 +46,7 @@ export function PlayerDownloadAction({ className }: { className?: string }) {
       audioUrl: sourceIdentityUrl,
       episodeTitle: audioTitle,
       episodeDescription: episodeMetadata?.description,
-      podcastTitle: episodeMetadata?.podcastTitle || '',
+      showTitle: episodeMetadata?.showTitle || '',
       feedUrl: episodeMetadata?.podcastFeedUrl,
       artworkUrl: episodeMetadata?.artworkUrl,
       transcriptUrl: episodeMetadata?.transcriptUrl,

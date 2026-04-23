@@ -1,0 +1,46 @@
+---
+title: 核心架构
+---
+
+## 1. 范围
+
+Cloud 现在是拆分式应用：
+
+- `apps/cloud-ui`：React 19 + TypeScript 前端
+- `apps/cloud-api`：Go 后端，负责提供前端构建产物与同源 API
+
+## 2. 前端结构
+
+前端仍保留原 Lite 演化而来的分层：
+
+- `src/routes`：TanStack Router 路由
+- `src/routeComponents`：页面编排层
+- `src/components`：可复用 UI 模块
+- `src/hooks`：共享业务逻辑
+- `src/lib`：平台服务、discovery client、持久化辅助层
+- `src/store`：Zustand 状态层
+
+## 3. 所有权边界
+
+- discovery / search / feed API 由后端同源承载
+- 浏览器本地 playback、downloads、transcripts、favorites、subscriptions、settings 仍由前端拥有
+- 前端持久化依旧是 browser-local；Cloud 不等于服务端同步
+
+## 4. 运行时模式
+
+- 路由页负责数据获取与渲染编排
+- 高频音频事件继续隔离在 `GlobalAudioController`
+- TanStack Query 负责 server-state cache；Zustand 负责 UI / playback / library state
+- 所有异步链路都要求支持请求取消与 stale-request 防护
+
+## 5. Cloud 里仍然存在的前端面
+
+Cloud 当前仍保留这些由 Lite 演化而来的主要前端面：
+
+- Explore / Search
+- 播客详情页与单集详情页
+- Favorites / History / Subscriptions
+- Downloads
+- Files
+- Settings
+- Transcript-first 阅读与播放界面

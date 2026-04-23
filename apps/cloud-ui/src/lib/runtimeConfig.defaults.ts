@@ -1,10 +1,3 @@
-const DEFAULT_RUNTIME_ORIGIN =
-  typeof globalThis !== 'undefined' && globalThis.location?.origin
-    ? globalThis.location.origin
-    : 'http://localhost:3000'
-
-const SAME_ORIGIN_DISCOVERY_BASE = `${DEFAULT_RUNTIME_ORIGIN}/api/v1/discovery`
-
 export const DEFAULTS = {
   APP_NAME: 'Readio',
   APP_VERSION: '1.0.0',
@@ -23,7 +16,6 @@ export const DEFAULTS = {
   DB_NAME: 'readio-lite',
   EN_DICTIONARY_API_URL: 'https://api.dictionaryapi.dev/api/v2/entries/en/',
   EN_DICTIONARY_API_TRANSPORT: 'direct',
-  RSS_FEED_BASE_URL: SAME_ORIGIN_DISCOVERY_BASE,
   MAX_AUDIO_CACHE_GB: 10,
   DICT_CACHE_MAX_ENTRIES: 500,
   DICT_CACHE_KEY: 'readio-lite-dict-cache',

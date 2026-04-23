@@ -1,0 +1,92 @@
+---
+title: Monorepo Strategy
+---
+
+# Monorepo Strategy & Future Apps
+
+Readio is evolving from a single frontend codebase into a Cloud-hosted web app plus future platform surfaces.
+This document outlines the current role of `apps/cloud-ui`, `apps/cloud-api`, and the longer-term direction for `apps/native`.
+
+## 1. Apps Overview
+
+| App | Path | Type | Status | Goal |
+|---|---|---|---|---|
+| **Cloud UI** | `apps/cloud-ui` | SPA/Web App | 🟢 Live | Main frontend surface for playback, discovery, library, files, and settings. |
+| **Cloud API** | `apps/cloud-api` | Go backend | 🟢 Live | Serve `apps/cloud-ui/dist`, own same-origin relays, proxy/fallback routes, and bootstrap SQLite. |
+| **Native** | `apps/native` | Mobile | ⚪ Scaffold only | iOS/Android wrapper via Capacitor. |
+
+---
+
+## 2. Cloud Strategy (The Backend)
+
+**Role**: Optional enhancement. The app must work perfectly without it.
+
+### Frontend/Backend Split
+- **Current State**: `apps/cloud-api` is the Go `net/http` backend. It directly serves the built `apps/cloud-ui/dist` output and owns same-origin backend relays.
+- **Current Frontend**: `apps/cloud-ui` is the active web frontend. It is no longer described as a temporary Lite artifact.
+- **Future Direction**: If Cloud later grows into a broader multi-user web product, shared presentation logic may move into dedicated shared packages. Current docs must describe the code that exists today.
+
+### Planned Features (P2/P3)
+- **Data Sync**: Sync subscriptions and progress across devices.
+- **AI Services**: Server-side Whisper (Transcription) and LLM (Summary).
+- **Social**: Comments and "Podcast Clubs".
+
+### Tech Stack
+- **Framework**: Go `net/http` for the current scaffold.
+- **Database**: SQLite for the current scaffold; PostgreSQL remains a future SaaS direction only.
+- **Auth**: JWT-based auth remains a future direction only.
+
+---
+
+## 3. Native Strategy (The Wrapper)
+
+**Role**: Access system APIs that PWA cannot reach.
+
+### Planned Features (P2)
+- **Background Audio**: Native iOS/Android audio session handling.
+- **Notifications**: Push notifications for new episodes.
+- **Widgets**: Home screen widgets.
+- **CarPlay / Auto**: Simplified UI for driving.
+
+### Tech Stack
+- **Framework**: Capacitor-based shell remains a future direction.
+- **Shared Code**: Shared package topology is intentionally minimal today; docs must not claim shared packages that no longer exist.
+
+---
+
+## 4. Shared Packages (`packages/`)
+
+Current docs should only describe shared packages that actually exist and are in use.
+
+- Do not assume a `packages/core` contract when the package is absent.
+- Introduce new shared packages only when code has actually been extracted and the package exists in the workspace.
+ 
+---
+ 
+## 5. Engine Policy (Consistency)
+
+To prevent architectural drift and "Works on my machine" bugs, the entire monorepo strictly enforces tooling versions:
+
+- **Runtime**: Node.js `>=20.0.0` (LTS baseline).
+- **Manager**: pnpm `>=10.28.0` (Lockfile version stability).
+- **Enforcement**: Mandatory `engine-strict=true` in root `.npmrc`.
+
+---
+
+## 6. Cache Policy (Turborepo) [Implemented]
+
+To maximize build performance and prevent stale outputs:
+
+- **Global Dependencies**: `.npmrc` and `pnpm-workspace.yaml` invalidate all caches when changed.
+- **Build Inputs**: Source files (`src/**`), configs (`vite.config.ts`, `tsconfig.json`), excludes tests.
+- **Build Outputs**: `dist/**`, `.next/**`, `stats.html`.
+- **Dependency Propagation**: `^build` ensures upstream packages rebuild first.
+- **No-Cache Tasks**: `dev` and `format` are never cached.
+
+**Verification**: Run `pnpm build` twice. Second run should show `>>> FULL TURBO`.
+
+---
+
+## Planned (Pending Execution)
+
+- **Architecture Map**: Mermaid diagram linking `apps/docs`, `apps/cloud-ui`, `apps/cloud-api`, and `agent/instructions`.

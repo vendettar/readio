@@ -1,0 +1,15 @@
+---
+title: 播放历史
+---
+
+## 1. 范围
+
+- 路由：`/history`
+- 主要权威：`apps/cloud-ui/src/store/historyStore.ts`
+- 持久化表：browser-local playback sessions
+
+## 2. 契约
+
+- 远程播放写入必须保留 `countryAtSave`
+- History 仍是 browser-local
+- 删除历史只删 session，不删除底层已下载或本地媒体产物

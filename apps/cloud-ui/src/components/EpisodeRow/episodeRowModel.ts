@@ -1,14 +1,12 @@
 import type { TFunction } from 'i18next'
 import { formatDateStandard, formatDuration, formatRelativeTime } from '@/lib/dateUtils'
 import type { Favorite, PlaybackSession } from '@/lib/db/types'
-import type { Episode, Podcast, SearchEpisode } from '@/lib/discovery'
+import type { EditorPickPodcast, FeedEpisode, Podcast, SearchEpisode } from '@/lib/discovery'
 import {
   buildEpisodeCompactKey,
   type EditorPickRouteState,
   getCanonicalEditorPickPodcastID,
-  getEditorPickGuidFromPodcast,
-  getEditorPickSnapshotFromPodcast,
-  getStableEpisodeIdentifier,
+  getEpisodeGuid,
 } from '@/lib/discovery/editorPicks'
 import { stripHtml } from '@/lib/htmlUtils'
 import { buildPodcastEpisodeRoute } from '@/lib/routes/podcastRoutes'
@@ -57,8 +55,9 @@ export interface EpisodeRowModel {
 }
 
 interface EpisodeModelArgs extends ModelContext {
-  episode: Episode
+  episode: FeedEpisode
   podcast: Podcast
+  editorPickSnapshot?: EditorPickPodcast
   routeCountry: string | null | undefined
   podcastId?: string
 }
@@ -106,7 +105,7 @@ function buildEpisodeRoute(
   if (!episodeKey) return null
 
   const route = buildPodcastEpisodeRoute({
-    country,
+    country: country ?? undefined,
     podcastId,
     episodeKey,
   })
@@ -121,42 +120,42 @@ function buildEpisodeRoute(
 export function fromEpisode({
   episode,
   podcast,
+  editorPickSnapshot,
   routeCountry,
   language,
   t,
   podcastId,
 }: EpisodeModelArgs): EpisodeRowModel {
-  const editorPickSnapshot = getEditorPickSnapshotFromPodcast(podcast)
-  const stableEpisodeIdentifier = getStableEpisodeIdentifier(episode)
-  const editorPickPodcastGuid = getEditorPickGuidFromPodcast(podcast)
-  const canonicalEditorPickPodcastId =
-    getCanonicalEditorPickPodcastID(podcast) ||
-    editorPickPodcastGuid ||
-    podcast.podcastItunesId ||
-    String(podcast.podcastItunesId || '')
+  const episodeGuid = getEpisodeGuid(episode)
+  // Rule: content routes require podcast iTunes ID - fail closed if unavailable, never fallback to GUID
+  const canonicalEditorPickPodcastId = getCanonicalEditorPickPodcastID(podcast)
 
-  const route = editorPickSnapshot
-    ? stableEpisodeIdentifier && (podcastId || canonicalEditorPickPodcastId)
+  // Determine podcast ID for route: prefer explicit podcastId, fall back to canonical
+  const routePodcastId =
+    podcastId || (canonicalEditorPickPodcastId ? canonicalEditorPickPodcastId : undefined)
+
+  // Fail closed: only build route if we have both episode ID and podcast ID
+  // When editorPickSnapshot exists, pass it in route state
+  const route =
+    episodeGuid && routePodcastId
       ? buildEpisodeRoute(
           routeCountry,
-          podcastId || canonicalEditorPickPodcastId,
-          stableEpisodeIdentifier,
-          { editorPickSnapshot } satisfies EditorPickRouteState
+          routePodcastId,
+          episodeGuid,
+          editorPickSnapshot ? { editorPickSnapshot } : undefined
         )
       : null
-    : buildEpisodeRoute(
-        routeCountry,
-        podcastId || String(podcast.podcastItunesId || ''),
-        stableEpisodeIdentifier
-      )
+
+  const artworkUrl = episode.artworkUrl
+  const transcriptUrl = episode.transcriptUrl
 
   return {
     title: episode.title,
     subtitle: formatRelativeTime(episode.pubDate, language),
     description: stripHtml(episode.description || ''),
     meta: formatDuration(episode.duration, t),
-    artworkSrc: episode.artworkUrl,
-    artworkFallbackSrc: podcast.image || podcast.artwork,
+    artworkSrc: artworkUrl,
+    artworkFallbackSrc: podcast.artwork,
     artworkSize: 'xl',
     playIconSize: 16,
     route,
@@ -166,12 +165,11 @@ export function fromEpisode({
       podcastTitle: podcast.title || '',
       feedUrl: podcast.feedUrl,
       audioUrl: episode.audioUrl,
-      transcriptUrl: episode.transcriptUrl,
-      artworkUrl: episode.artworkUrl || podcast.image || podcast.artwork,
+      transcriptUrl,
+      artworkUrl: artworkUrl || podcast.artwork,
       countryAtSave: routeCountry || undefined,
       podcastItunesId: podcast.podcastItunesId?.toString(),
-      providerEpisodeId: episode.providerEpisodeId?.toString(),
-      episodeGuid: getStableEpisodeIdentifier(episode),
+      episodeGuid: getEpisodeGuid(episode),
       durationSeconds: episode.duration,
     },
   }
@@ -183,18 +181,17 @@ export function fromSearchEpisode({
   language,
   t,
 }: SearchEpisodeModelArgs): EpisodeRowModel {
-  const episodeGuid = episode.episodeGuid
   const podcastId = episode.podcastItunesId?.toString()
-  const route = buildEpisodeRoute(routeCountry, podcastId, episodeGuid)
-  const artwork = episode.artwork || episode.image
+  const route = null
+  const artwork = episode.artwork
 
   return {
     title: episode.title || '',
     subtitle: joinSubtitle(
       formatRelativeTime(episode.releaseDate || '', language),
-      episode.author || ''
+      episode.showTitle || ''
     ),
-    description: stripHtml(episode.description || ''),
+    description: stripHtml(episode.shortDescription || ''),
     meta: formatDuration((episode.trackTimeMillis || 0) / 1000, t),
     artworkSrc: artwork,
     artworkFallbackSrc: artwork,
@@ -205,14 +202,12 @@ export function fromSearchEpisode({
     downloadArgs: episode.episodeUrl
       ? {
           episodeTitle: episode.title || '',
-          podcastTitle: episode.author || '',
-          feedUrl: episode.feedUrl,
+          podcastTitle: episode.showTitle || '',
           audioUrl: episode.episodeUrl,
           artworkUrl: artwork,
           countryAtSave: routeCountry || undefined,
           podcastItunesId: podcastId,
-          providerEpisodeId: episode.providerEpisodeId?.toString() || episode.episodeUrl,
-          episodeGuid: episode.episodeGuid || undefined,
+          episodeGuid: episode.episodeGuid,
           durationSeconds: (episode.trackTimeMillis || 0) / 1000,
         }
       : undefined,

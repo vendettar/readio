@@ -5,11 +5,10 @@ import { useTranslation } from 'react-i18next'
 import { GroupedVirtuoso } from 'react-virtuoso'
 import { EpisodeRow } from '../../components/EpisodeRow/EpisodeRow'
 import { Button } from '../../components/ui/button'
-import { useEpisodePlayback } from '../../hooks/useEpisodePlayback'
-import discovery, { type Episode } from '../../lib/discovery'
+import discovery, { type FeedEpisode } from '../../lib/discovery'
 import {
   buildPodcastFeedQueryKey,
-  buildPodcastIndexLookupQueryKey,
+  buildPodcastDetailQueryKey,
   PODCAST_QUERY_CACHE_POLICY,
 } from '../../lib/discovery/podcastQueryContract'
 import { logError } from '../../lib/logger'
@@ -19,7 +18,7 @@ import { useExploreStore } from '../../store/exploreStore'
 const UNKNOWN_YEAR = -1
 
 interface GroupedEpisodeData {
-  flattenedEpisodes: Episode[]
+  flattenedEpisodes: FeedEpisode[]
   groupCounts: number[]
   groupYears: number[]
   /** Cumulative item offset at the start of each group (for converting flat index → within-group index). */
@@ -31,7 +30,7 @@ function resolveEpisodeYear(pubDate: string): number {
   return Number.isFinite(year) ? year : UNKNOWN_YEAR
 }
 
-function buildGroupedEpisodeData(episodes: Episode[]): GroupedEpisodeData {
+function buildGroupedEpisodeData(episodes: FeedEpisode[]): GroupedEpisodeData {
   const groupCounts: number[] = []
   const groupYears: number[] = []
 
@@ -74,11 +73,9 @@ function buildGroupedEpisodeData(episodes: Episode[]): GroupedEpisodeData {
   }
 }
 
-function getEpisodeRowKey(episode: Episode | undefined, index: number): string {
+function getEpisodeRowKey(episode: FeedEpisode | undefined, index: number): string {
   if (!episode) return `temp-key-${index}`
-  return (
-    episode.id || episode.providerEpisodeId || `${episode.audioUrl}-${episode.pubDate}-${index}`
-  )
+  return episode.episodeGuid || `${episode.audioUrl}-${episode.pubDate}-${index}`
 }
 
 export default function PodcastEpisodesPage() {
@@ -95,11 +92,11 @@ export default function PodcastEpisodesPage() {
     isLoading: isLoadingPodcast,
     error: podcastError,
   } = useQuery({
-    queryKey: buildPodcastIndexLookupQueryKey(id, normalizedRouteCountry),
+    queryKey: buildPodcastDetailQueryKey(id, normalizedRouteCountry),
     queryFn: ({ signal }) => discovery.getPodcastIndexPodcastByItunesId(id, signal),
     enabled: Boolean(normalizedRouteCountry),
-    staleTime: PODCAST_QUERY_CACHE_POLICY.lookup.staleTime,
-    gcTime: PODCAST_QUERY_CACHE_POLICY.lookup.gcTime,
+    staleTime: PODCAST_QUERY_CACHE_POLICY.podcastDetail.staleTime,
+    gcTime: PODCAST_QUERY_CACHE_POLICY.podcastDetail.gcTime,
   })
 
   // Fetch episodes via the active discovery path.
@@ -116,15 +113,9 @@ export default function PodcastEpisodesPage() {
     gcTime: PODCAST_QUERY_CACHE_POLICY.feed.gcTime,
   })
 
-  const episodes = useMemo(() => feed?.episodes || [], [feed?.episodes])
+  const appleTotal = podcast?.episodeCount ?? 0
+  const episodes = useMemo(() => feed?.episodes ?? [], [feed?.episodes])
   const groupedEpisodeData = useMemo(() => buildGroupedEpisodeData(episodes), [episodes])
-  const showLimitedFeedNotice = useMemo(() => {
-    const appleTotal = podcast?.episodeCount || 0
-    if (episodes.length === 0 || !appleTotal) return false
-    return episodes.length < appleTotal * 0.8 && appleTotal - episodes.length > 20
-  }, [episodes.length, podcast?.episodeCount])
-
-  const { playEpisode } = useEpisodePlayback()
 
   if (isLoadingPodcast || isLoadingFeed) {
     return (
@@ -232,22 +223,7 @@ export default function PodcastEpisodesPage() {
               customScrollParent={scrollContainer}
               computeItemKey={(index, episode) => getEpisodeRowKey(episode, index)}
               components={{
-                Footer: () =>
-                  showLimitedFeedNotice ? (
-                    <div className="flex flex-col">
-                      <div className="border-t border-border/50" />
-                      <div className="flex items-center justify-center h-40 text-center">
-                        <div className="max-w-md px-4 py-3 bg-muted/30 rounded-lg border border-border/50">
-                          <p className="text-sm text-muted-foreground font-medium">
-                            {t('feedLimitedAccess')}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="h-32" />
-                    </div>
-                  ) : (
-                    <div className="pb-32" />
-                  ),
+                Footer: () => <div className="pb-32" />,
               }}
               groupContent={(groupIndex) => (
                 <div className="py-4">
@@ -267,9 +243,6 @@ export default function PodcastEpisodesPage() {
                   <EpisodeRow
                     episode={episode}
                     podcast={podcast}
-                    onPlay={() =>
-                      playEpisode(episode, podcast, normalizedRouteCountry ?? undefined)
-                    }
                     isLast={indexInGroup === groupSize - 1}
                   />
                 )

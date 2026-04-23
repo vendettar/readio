@@ -1,7 +1,7 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { forwardRef, type ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createQueryClientHarness } from '../../../__tests__/queryClient'
 
 // Stub deep sub-dependencies, NOT Sidebar itself
 const mockLocation = { pathname: '/', search: '' }
@@ -129,12 +129,12 @@ import { AppShell } from '../AppShell'
 // Import real Sidebar and AppShell
 import { Sidebar } from '../Sidebar'
 
-const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: false } },
-})
-
 function renderWithProviders(ui: ReactNode) {
-  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>)
+  const harness = createQueryClientHarness()
+  return {
+    ...render(ui, { wrapper: harness.wrapper }),
+    queryClient: harness.queryClient,
+  }
 }
 
 function getBackdrop(): Element | null {
@@ -147,7 +147,6 @@ function getHamburger(): HTMLElement | null {
 
 describe('MobileSidebar — real Sidebar behavior', () => {
   beforeEach(() => {
-    queryClient.clear()
     vi.clearAllMocks()
     document.body.style.overflow = ''
     mockLocation.pathname = '/'
@@ -168,7 +167,7 @@ describe('MobileSidebar — real Sidebar behavior', () => {
       const aside = container.querySelector('aside')
       expect(aside).toBeTruthy()
       expect(aside?.className).toContain('start-0')
-      expect(aside?.className).toContain('z-overlay')
+      expect(aside?.className).toContain('z-modal')
       expect(aside?.className).toContain('w-64')
     })
 
@@ -271,11 +270,7 @@ describe('MobileSidebar — real Sidebar behavior', () => {
       act(() => {
         mockLocation.pathname = '/explore'
       })
-      rerender(
-        <QueryClientProvider client={queryClient}>
-          <AppShell>Content</AppShell>
-        </QueryClientProvider>
-      )
+      rerender(<AppShell>Content</AppShell>)
 
       expect(screen.queryByRole('button', { name: /close sidebar/i })).toBeNull()
     })
@@ -292,11 +287,7 @@ describe('MobileSidebar — real Sidebar behavior', () => {
         mockLocation.pathname = '/'
         mockLocation.search = '?q=episode'
       })
-      rerender(
-        <QueryClientProvider client={queryClient}>
-          <AppShell>Content</AppShell>
-        </QueryClientProvider>
-      )
+      rerender(<AppShell>Content</AppShell>)
 
       expect(screen.queryByRole('button', { name: /close sidebar/i })).toBeNull()
     })

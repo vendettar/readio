@@ -211,7 +211,7 @@ describe('playerStore - Session Restore Prefer Local Download', () => {
     expect(result.current.audioTitle).toBe('Episode 42')
 
     const meta = result.current.episodeMetadata
-    expect(meta?.podcastTitle).toBe('Test Show')
+    expect(meta?.showTitle).toBe('Test Show')
     expect(meta?.podcastFeedUrl).toBe('https://feeds.example.com/test-show')
     expect(meta?.description).toBe('A great episode')
     expect(meta?.artworkUrl).toBe('https://example.com/art.jpg')

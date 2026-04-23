@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:thr="http://purl.org/syndication/thread/1.0" xml:lang="en-GB">
+  <title type="text">Terence Eden's Blog</title>
+  <subtitle type="text">Regular nonsense about tech and its effects</subtitle>
+  <updated>2026-04-20T11:14:41Z</updated>
+  <link rel="alternate" type="text/html" href="https://shkspr.mobi/blog" />
+  <id>https://shkspr.mobi/blog/feed/atom/</id>
+  <link rel="self" type="application/atom+xml" href="https://shkspr.mobi/blog/feed/atom/" />
+  <generator uri="https://wordpress.org/" version="6.9.4">WordPress</generator>
+  <icon>https://shkspr.mobi/blog/wp-content/uploads/2023/07/cropped-avatar-32x32.jpeg</icon>
+  <entry>
+    <author>
+      <name>@edent</name>
+      <uri>https://edent.tel/</uri>
+    </author>
+    <title type="html">[RSS Club] How do you preserve an RSS feed?</title>
+    <link rel="alternate" type="text/html" href="https://shkspr.mobi/blog/2026/04/rss-club-how-do-you-preserve-an-rss-feed/" />
+    <id>https://shkspr.mobi/blog/?p=70521</id>
+    <updated>2026-04-20T11:14:41Z</updated>
+    <published>2026-04-22T11:34:46Z</published>
+    <summary type="html">Psssst! This top secret post is only available to RSS subscribers!</summary>
+    <content type="html" xml:base="https://shkspr.mobi/blog/2026/04/rss-club-how-do-you-preserve-an-rss-feed/">&lt;p&gt;&lt;mark&gt;&lt;em&gt;Psssst!&lt;/em&gt; This &lt;strong&gt;top secret&lt;/strong&gt; post is only available to RSS subscribers!&lt;/mark&gt;&lt;/p&gt;</content>
+    <link rel="replies" type="text/html" href="https://shkspr.mobi/blog/2026/04/rss-club-how-do-you-preserve-an-rss-feed/#comments" thr:count="0" />
+    <link rel="replies" type="application/atom+xml" href="https://shkspr.mobi/blog/2026/04/rss-club-how-do-you-preserve-an-rss-feed/feed/atom/" thr:count="0" />
+    <thr:total>0</thr:total>
+  </entry>
+</feed>

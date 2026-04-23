@@ -1,0 +1,13 @@
+{
+  "title": "Cloud 前端功能模块",
+  "pages": [
+    "api-response-contract",
+    "episode-resolution",
+    "discovery-api-flow",
+    "history",
+    "favorites",
+    "subscriptions",
+    "search",
+    "discovery"
+  ]
+}

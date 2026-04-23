@@ -1,0 +1,12 @@
+---
+title: Authentication
+---
+
+# Authentication & Security
+
+All `/api/1.0/` endpoints require these headers unless otherwise noted.
+
+- **User-Agent**: e.g., `Readio/1.0` (Identifies your app)
+- **X-Auth-Key**: Your API Key.
+- **X-Auth-Date**: Current Unix timestamp.
+- **Authorization**: `sha1(api_key + api_secret + timestamp)`

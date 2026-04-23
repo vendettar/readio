@@ -128,7 +128,7 @@ describe('executeLocalSearchAction', () => {
         subtitleFilename: '',
         countryAtSave: 'jp',
         podcastItunesId: '456',
-        providerEpisodeId: '75f3241b-439d-4786-8968-07e05e548074',
+        episodeGuid: '75f3241b-439d-4786-8968-07e05e548074',
         audioUrl: 'https://example.com/history.mp3',
       },
     } satisfies LocalSearchResult

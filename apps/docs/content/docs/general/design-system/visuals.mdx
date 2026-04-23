@@ -1,0 +1,128 @@
+---
+title: Visuals & Motion
+---
+
+## Motion & Animation
+
+UI should feel alive but not distracting.
+
+### 1. Standard Transitions (CSS)
+- **Hover**: `transition-colors duration-200` (Standard for buttons/links).
+- **Transform**: `transition-transform duration-200 ease-out` (For scales/slides).
+- **Enter/Exit**: Use `tailwindcss-animate` utilities (`animate-in fade-in zoom-in-95`).
+
+### 2. Complex Motion (Framer Motion)
+For layout shifts (lists reordering), shared element transitions, or complex sequences, use **Framer Motion**.
+- **Installation**: `framer-motion` is approved for these use cases.
+- **Rule**: Persistent elements (like Artwork) MUST use `layoutId` during view transitions (e.g., Mini Player to Full Player).
+- **Component**: Create reusable "Bits" in `src/components/bits/` (e.g., `AnimatedList.tsx`, `CountUp.tsx`) to encapsulate Framer Motion logic.
+
+### 3. Spatial Metaphors
+- **Rule**: When a persistent element moves from one view to another, use a shared layout transition to help the user maintain spatial orientation.
+- **Entrance Animations**: Lists should not appear instantly. Use a staggered fade-in + slide-up effect for items.
+
+---
+
+## Typography & Readability
+
+Readio is a reading tool. The quality of the reading experience is our primary advantage.
+
+- **Line Height**: Default must be **1.6** for the transcript area. Prevents "line skipping" while reading.
+- **Paragraph Spacing**: Use **1.2em** to **1.5em**. Provides a clear visual break between dialogue turns.
+- **Dynamic Zoom**: Scaling must be **Fluid** (adjusting `font-size`) rather than `transform: scale()`.
+- **Constraint**: Do NOT use `scale()` for reading area as it creates blurry text. Apply `--reading-font-size` variable to the root container.
+- **Visibility**: Every word in a transcript MUST remain visible. No `text-overflow: ellipsis` or `white-space: nowrap` allowed for subtitle text.
+
+---
+
+## Global CSS Whitelist (`src/index.css`)
+
+**Rule**: Avoid putting “normal UI styling” (buttons, cards, spacing tweaks, page layouts) into global CSS.
+
+If a UI can be implemented with Tailwind utilities + shadcn components + component-level variants (`cva`), it MUST NOT be added to `src/index.css`.
+
+Global CSS is allowed only for a small set of system-wide tokens and interaction-only behaviors. The current whitelist is:
+
+### A) Theme and Token Definitions (Allowed)
+- `@layer base :root` and `.dark` CSS variables (shadcn theme tokens)
+- Base shadcn globals:
+  - `@layer base * { border-color: hsl(var(--border)) }`
+  - `@layer base body { background-color: hsl(var(--background)); color: hsl(var(--foreground)) }`
+- Accent token overrides:
+  - `:root[data-accent="…"]` and `.dark[data-accent="…"]`
+- Reading background palette overrides (intentional product feature):
+  - `[data-reading-bg]` and `[data-reading-bg="…"]`
+
+### B) Interaction-Only / System Utilities (Allowed)
+- Reading container utility:
+  - `.reading-area` (applies reading background variables to the transcript area)
+- Drag-and-drop cursor lock (prevents cursor flicker during DnD interactions):
+  - `.is-dragging` and `.is-dragging *` (used via `document.body.classList` while dragging)
+- Smart List Divider (Premium podcast style: hides divider when next item is hovered):
+  - `.smart-divider-group:has(+ .smart-divider-group:hover) .smart-divider`
+- Hide scrollbar utility:
+  - `.scrollbar-none`
+- Selection “pin” markers (interaction-bound, uses SVG mask):
+  - `.readio-highlight::before/::after`
+  - `.readio-overlay-rect.start::before`
+  - `.readio-overlay-rect.end::after`
+- Text selection behavior for subtitles:
+  - `.subtitle-text::selection`
+- Modern Highlights API styling (lookup highlights):
+  - `::highlight(lookup-highlight)`
+- Scrollbar theming (scoped):
+  - `.custom-scrollbar::-webkit-scrollbar` (and related pseudo-elements)
+  - Rationale: System scrollbars are inconsistent between dark/light modes and OSs. Scoped styling allows for a premium, intentional look without polluting external or third-party containers.
+
+### Prohibited in Global CSS
+Do NOT add global utility classes for normal UI styling (cards, buttons, progress bars, icon styling). Implement these via Tailwind utilities, shadcn primitives, and component variants (`cva`).
+
+### Adding new global CSS
+If you believe a new rule must go into `src/index.css`:
+- It MUST be either “Token/Theme” (A) or “Interaction-only/System utility” (B).
+- Add a short comment explaining why it cannot live in Tailwind/shadcn/component scope.
+- Update this whitelist section with the new selector and rationale.
+
+Conflict handling:
+- If a user request conflicts with the design system, point it out explicitly.
+- Do NOT silently break or bypass the system to satisfy a request.
+
+Primary goal:
+Maintain speed WITH strict visual and structural consistency.
+Predictability > cleverness.
+
+---
+
+## Inline Style Rules
+
+**Default**: Use Tailwind CSS only. Inline styles (`style={{ ... }}`) are **prohibited**.
+
+**Exceptions** (whitelist only):
+1. **Virtual lists**: `top`, `height`, `transform`, `overflow` for virtualization positioning (e.g. react-virtuoso / react-window). Includes the `TranscriptView` container and its Virtuoso component.
+2. **Dynamic popups**: `left`, `top` for cursor-based positioning (e.g., SelectionUI, context menus)
+3. **CSS variable injection**: `--variable-name` for dynamic values (see pattern below)
+
+All other inline styles are **forbidden**. Use Tailwind utilities or component-scoped CSS.
+
+---
+
+## CSS Variable Pattern for Dynamic Values
+
+For values that need runtime calculation (progress bars, dynamic widths/heights):
+
+**✅ Correct**:
+```tsx
+// Component
+<div
+    className="h-1 bg-primary w-[var(--progress)]"
+    style={{ '--progress': '37%' } as React.CSSProperties}
+/>
+```
+
+**❌ Wrong**:
+```tsx
+// Direct inline style
+<div style={{ width: '37%' }} />
+```
+
+**Why**: CSS variables keep visual tokens in CSS while allowing dynamic JavaScript values.

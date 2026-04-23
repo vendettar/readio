@@ -20,14 +20,14 @@ import { useTranscriptStore } from './transcriptStore'
 // Episode metadata for session persistence
 export interface EpisodeMetadata {
   description?: string
-  podcastTitle?: string
+  showTitle?: string
   podcastFeedUrl?: string
   countryAtSave?: string
   transcriptUrl?: string
   artworkUrl?: string
   publishedAt?: number
   durationSeconds?: number // In seconds
-  episodeGuid?: string // Canonical UUID for compact route generation (v7)
+  episodeGuid?: string // Stable episode identity for compact route generation (v7)
   podcastItunesId?: string // Podcast ID for navigation (v6)
   providerEpisodeId?: string // Episode ID for deterministic history/favorites matching
   originalAudioUrl?: string // Network URL identity for offline playback

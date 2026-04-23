@@ -49,3 +49,7 @@ issue*/
 
 # Local tools
 .claude/
+
+# Application data
+data/
+*.db

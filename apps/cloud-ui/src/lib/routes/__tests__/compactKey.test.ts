@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { compactKeyToUUID, isValidCompactKey, normalizeUUID, uuidToCompactKey } from '../compactKey'
+import {
+  compactKeyToEpisodeIdentity,
+  compactKeyToUUID,
+  episodeIdentityToCompactKey,
+  isValidCompactKey,
+  normalizeUUID,
+  uuidToCompactKey,
+} from '../compactKey'
 
 describe('compactKey UUID shape normalization', () => {
   it('accepts hyphenated UUID-shaped values without enforcing RFC version or variant bits', () => {
@@ -7,8 +14,9 @@ describe('compactKey UUID shape normalization', () => {
     const key = uuidToCompactKey(input)
 
     expect(key).toBe('zQaP0Y1sQe2qzJq_iC4c8w')
-    // biome-ignore lint/style/noNonNullAssertion: test assertion
-    expect(compactKeyToUUID(key!)).toBe(input)
+    if (!key) throw new Error('expected compact key')
+    expect(compactKeyToUUID(key)).toBe(input)
+    expect(compactKeyToEpisodeIdentity(key)).toBe(input)
   })
 
   it('normalizes uppercase UUID-shaped values to lowercase', () => {
@@ -47,10 +55,38 @@ describe('compactKey UUID shape normalization', () => {
     })
   })
 
+  describe('generic non-UUID identity support', () => {
+    it('round-trips a stable non-UUID episode identity', () => {
+      const input = 'abc123-def456'
+      const key = episodeIdentityToCompactKey(input)
+
+      expect(key).toBe('e_YWJjMTIzLWRlZjQ1Ng')
+      if (!key) throw new Error('expected compact key')
+      expect(compactKeyToEpisodeIdentity(key)).toBe(input)
+      expect(compactKeyToUUID(key)).toBeNull()
+    })
+
+    it('round-trips a URL-shaped episode identity', () => {
+      const input = 'https://podnews.net/update/new-heights-prime-video'
+      const key = episodeIdentityToCompactKey(input)
+
+      expect(key).toBeTruthy()
+      if (!key) throw new Error('expected compact key')
+      expect(compactKeyToEpisodeIdentity(key)).toBe(input)
+      expect(compactKeyToUUID(key)).toBeNull()
+    })
+
+    it('rejects empty identities', () => {
+      expect(episodeIdentityToCompactKey('')).toBeNull()
+      expect(episodeIdentityToCompactKey('   ')).toBeNull()
+    })
+  })
+
   describe('isValidCompactKey', () => {
     it('accepts valid 22-character base64url keys', () => {
       expect(isValidCompactKey('dm8RLqvNEjRWeAfgXlSAdA')).toBe(true)
       expect(isValidCompactKey('766f112eabcd1234567807')).toBe(true) // random chars but valid b64url
+      expect(isValidCompactKey('e_YWJjMTIzLWRlZjQ1Ng')).toBe(true)
     })
 
     it('rejects keys with wrong length', () => {

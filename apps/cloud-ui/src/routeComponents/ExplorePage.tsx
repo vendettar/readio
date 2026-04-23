@@ -1,6 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { Compass } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { EditorPickShowsCarousel } from '../components/Explore/EditorPickShowsCarousel'
 import { ExploreHeroSkeleton } from '../components/Explore/ExploreHeroSkeleton'
 import { PodcastEpisodesGrid } from '../components/Explore/PodcastEpisodesGrid'
 import { PodcastShowsCarousel } from '../components/Explore/PodcastShowsCarousel'
@@ -21,8 +22,8 @@ export default function ExplorePage() {
 
   // Data fetching
   const { data: editorPicks, isLoading: isLoadingPicks } = useEditorPicks(country)
-  const { data: topShows, isLoading: isLoadingShows } = useTopPodcasts(country, 30)
-  const { data: topEpisodes, isLoading: isLoadingEpisodes } = useTopEpisodes(country, 30)
+  const { data: topShows, isLoading: isLoadingShows } = useTopPodcasts(country)
+  const { data: topEpisodes, isLoading: isLoadingEpisodes } = useTopEpisodes(country)
 
   // Data availability flags
   const hasPicks = (editorPicks?.length ?? 0) > 0
@@ -83,7 +84,7 @@ export default function ExplorePage() {
           <ExploreHeroSkeleton />
           <section>
             <Skeleton className="h-6 w-48 mb-4 rounded-md" />
-            <PodcastShowsCarousel podcasts={[]} isLoading sectionId="editorPicks-loading" />
+            <EditorPickShowsCarousel podcasts={[]} isLoading sectionId="editorPicks-loading" />
           </section>
           <section>
             <Skeleton className="h-6 w-48 mb-4 rounded-md" />
@@ -111,7 +112,7 @@ export default function ExplorePage() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold">{t('editorPicksTitle')}</h2>
             </div>
-            <PodcastShowsCarousel
+            <EditorPickShowsCarousel
               podcasts={editorPicks || []}
               isLoading={isLoadingPicks}
               sectionId="editorsPicks"

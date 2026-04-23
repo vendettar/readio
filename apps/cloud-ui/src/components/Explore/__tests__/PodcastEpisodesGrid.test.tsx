@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
+import type { TopEpisode } from '../../../lib/discovery'
 import { PodcastEpisodesGrid } from '../PodcastEpisodesGrid'
 
 const animatedListSpy = vi.fn()
@@ -20,9 +21,7 @@ vi.mock('../../../store/exploreStore', () => ({
 }))
 
 vi.mock('../../../lib/discovery', () => ({
-  default: {
-    getPodcastIndexEpisodes: vi.fn(),
-  },
+  default: {},
 }))
 
 vi.mock('../../../hooks/useCarouselLayout', () => ({
@@ -71,11 +70,35 @@ describe('PodcastEpisodesGrid', () => {
       <PodcastEpisodesGrid
         episodes={
           [
-            { id: 'e1', name: 'Episode 1', artistName: 'A', genres: [], url: 'https://x/id1' },
-            { id: 'e2', name: 'Episode 2', artistName: 'A', genres: [], url: 'https://x/id1' },
-            { id: 'e3', name: 'Episode 3', artistName: 'A', genres: [], url: 'https://x/id1' },
-            { id: 'e4', name: 'Episode 4', artistName: 'A', genres: [], url: 'https://x/id1' },
-          ] as never
+            {
+              title: 'Episode 1',
+              author: 'A',
+              artwork: 'https://example.com/e1.jpg',
+              genres: [],
+              podcastItunesId: '1',
+            },
+            {
+              title: 'Episode 2',
+              author: 'A',
+              artwork: 'https://example.com/e2.jpg',
+              genres: [],
+              podcastItunesId: '1',
+            },
+            {
+              title: 'Episode 3',
+              author: 'A',
+              artwork: 'https://example.com/e3.jpg',
+              genres: [],
+              podcastItunesId: '1',
+            },
+            {
+              title: 'Episode 4',
+              author: 'A',
+              artwork: 'https://example.com/e4.jpg',
+              genres: [],
+              podcastItunesId: '1',
+            },
+          ] satisfies TopEpisode[]
         }
       />
     )

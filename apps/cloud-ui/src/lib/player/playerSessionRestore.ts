@@ -47,7 +47,7 @@ export function buildRestoredRemoteSessionState(input: {
 }): RestoredPlaybackState {
   const episodeMetadata: EpisodeMetadata = {
     description: input.session.description,
-    podcastTitle: input.session.podcastTitle,
+    showTitle: input.session.podcastTitle,
     podcastFeedUrl: input.session.podcastFeedUrl,
     transcriptUrl: input.session.transcriptUrl,
     artworkUrl: input.session.artworkUrl,

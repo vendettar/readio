@@ -26,7 +26,7 @@ type parsedFeedResponse struct {
 }
 
 type parsedFeedEpisodeResult struct {
-	ID              string   `json:"id"`
+	EpisodeGUID     string   `json:"episodeGuid"`
 	Title           string   `json:"title"`
 	Description     string   `json:"description"`
 	DescriptionHTML string   `json:"descriptionHtml,omitempty"`
@@ -41,54 +41,62 @@ type parsedFeedEpisodeResult struct {
 	Link            string   `json:"link,omitempty"`
 	FileSize        *int64   `json:"fileSize,omitempty"`
 	TranscriptURL   string   `json:"transcriptUrl,omitempty"`
-	ChaptersURL     string   `json:"chaptersUrl,omitempty"`
 }
 
-// RSS XML types.
+// Supported podcast feed XML types.
 
-type rssDocument struct {
-	Channel rssChannel `xml:"channel"`
+type feedXMLDocument struct {
+	Channel feedChannel `xml:"channel"`
 }
 
-type rssChannel struct {
-	Title        string              `xml:"title"`
-	Description  string              `xml:"description"`
-	Image        rssHrefElement      `xml:"http://www.itunes.com/dtds/podcast-1.0.dtd image"`
-	ChannelImage rssChannelImageInfo `xml:"image"`
-	Items        []rssItem           `xml:"item"`
+type feedChannel struct {
+	Title        string                 `xml:"title"`
+	Description  string                 `xml:"description"`
+	SubTitle     string                 `xml:"subtitle"`
+	Image        feedXMLElementWithURL  `xml:"http://www.itunes.com/dtds/podcast-1.0.dtd image"`
+	ChannelImage feedChannelImageInfo   `xml:"image"`
+	Items        []feedItem             `xml:"item"`
+	Link         string                 `xml:"link"`
 }
 
-type rssItem struct {
-	Title       string         `xml:"title"`
-	Description string         `xml:"description"`
-	Summary     string         `xml:"summary"`
-	Encoded     string         `xml:"encoded"`
-	GUID        string         `xml:"guid"`
-	PubDate     string         `xml:"pubDate"`
-	Link        string         `xml:"link"`
-	Enclosure   rssEnclosure   `xml:"enclosure"`
-	Image       rssHrefElement `xml:"http://www.itunes.com/dtds/podcast-1.0.dtd image"`
-	Duration    string         `xml:"duration"`
-	Season      string         `xml:"season"`
-	Episode     string         `xml:"episode"`
-	EpisodeType string         `xml:"episodeType"`
-	Explicit    string         `xml:"explicit"`
-	Transcript  rssHrefElement `xml:"transcript"`
-	Chapters    rssHrefElement `xml:"chapters"`
+type feedItem struct {
+	Title       string                 `xml:"title"`
+	Description string                 `xml:"description"`
+	Summary     string                 `xml:"summary"`
+	Encoded     string                 `xml:"encoded"`
+	GUID        string                 `xml:"guid"`
+	PubDate     string                 `xml:"pubDate"`
+	Link        string                 `xml:"link"`
+	Enclosure   feedEnclosure          `xml:"enclosure"`
+	Image       feedXMLElementWithURL  `xml:"http://www.itunes.com/dtds/podcast-1.0.dtd image"`
+	Duration    string                 `xml:"duration"`
+	Season      string                 `xml:"season"`
+	Episode     string                 `xml:"episode"`
+	EpisodeType string                 `xml:"episodeType"`
+	Explicit    string                 `xml:"explicit"`
+	Transcripts []feedTranscriptLink   `xml:"transcript"`
 }
 
-type rssEnclosure struct {
+type feedEnclosure struct {
 	URL    string `xml:"url,attr"`
 	Length string `xml:"length,attr"`
 }
 
-type rssHrefElement struct {
+type feedXMLElementWithURL struct {
 	Href string `xml:"href,attr"`
 	URL  string `xml:"url,attr"`
 	Text string `xml:",chardata"`
 }
 
-type rssChannelImageInfo struct {
+type feedTranscriptLink struct {
+	Href     string `xml:"href,attr"`
+	URL      string `xml:"url,attr"`
+	Type     string `xml:"type,attr"`
+	Rel      string `xml:"rel,attr"`
+	Language string `xml:"language,attr"`
+}
+
+type feedChannelImageInfo struct {
 	URL string `xml:"url"`
 }
 
@@ -155,10 +163,15 @@ func (s *discoveryService) fetchFeed(ctx context.Context, requestURL string) (pa
 	}
 	validatedAddrs, err := proxy.resolveProxyTargetAddresses(ctx, parsedURL)
 	if err != nil {
-		return parsedFeedResponse{}, &discoveryParamError{
-			code:    "INVALID_URL",
-			message: err.Error(),
+		errStr := err.Error()
+		if strings.Contains(errStr, "target host is required") ||
+			strings.Contains(errStr, "target host is not allowed") {
+			return parsedFeedResponse{}, &discoveryParamError{
+				code:    "INVALID_URL",
+				message: "url must be a valid absolute http or https URL",
+			}
 		}
+		return parsedFeedResponse{}, errDiscoveryHostUnresolvable
 	}
 
 	client := s.newValidatedFeedClient(validatedAddrs)
@@ -186,7 +199,7 @@ func (s *discoveryService) fetchFeed(ctx context.Context, requestURL string) (pa
 		return parsedFeedResponse{}, &discoveryUpstreamStatusError{status: resp.StatusCode}
 	}
 
-	return decodeDiscoveryFeed(resp.Body, s.bodyLimit)
+	return decodeDiscoveryFeedXML(resp.Body, s.bodyLimit)
 }
 
 func (s *discoveryService) newValidatedFeedClient(validatedAddrs []netip.Addr) *http.Client {
@@ -277,7 +290,7 @@ func isXMLEntity(data []byte, pos int) bool {
 
 // Feed decode & mapping.
 
-func decodeDiscoveryFeed(body io.Reader, limit int64) (parsedFeedResponse, error) {
+func decodeDiscoveryFeedXML(body io.Reader, limit int64) (parsedFeedResponse, error) {
 	data, err := io.ReadAll(io.LimitReader(body, limit+1))
 	if err != nil {
 		return parsedFeedResponse{}, fmt.Errorf("read discovery upstream body: %w", err)
@@ -289,7 +302,7 @@ func decodeDiscoveryFeed(body io.Reader, limit int64) (parsedFeedResponse, error
 	decoder := xml.NewDecoder(bytes.NewReader(sanitizeXML(data)))
 	decoder.Strict = false
 
-	var document rssDocument
+	var document feedXMLDocument
 	if err := decoder.Decode(&document); err != nil {
 		slog.Warn("discovery UpstreamKindFeed XML decode failed", "snippet_prefix", string(data[:min(len(data), 100)]))
 		return parsedFeedResponse{}, errDiscoveryXMLDecode
@@ -302,7 +315,7 @@ func decodeDiscoveryFeed(body io.Reader, limit int64) (parsedFeedResponse, error
 	return payload, nil
 }
 
-func mapParsedFeed(document rssDocument) (parsedFeedResponse, error) {
+func mapParsedFeed(document feedXMLDocument) (parsedFeedResponse, error) {
 	title := strings.TrimSpace(document.Channel.Title)
 	if title == "" {
 		return parsedFeedResponse{}, errDiscoveryXMLDecode
@@ -311,6 +324,12 @@ func mapParsedFeed(document rssDocument) (parsedFeedResponse, error) {
 	artworkURL := sanitizeOptionalAbsoluteURL(firstNonEmpty(document.Channel.Image.Href, document.Channel.ChannelImage.URL))
 	channelArtworkNormalized := normalizeDiscoveryArtworkURL(artworkURL)
 
+	description := deriveChannelDescription(
+		document.Channel.Description,
+		document.Channel.SubTitle,
+		document.Channel.Link,
+	)
+
 	episodes := make([]parsedFeedEpisodeResult, 0, len(document.Channel.Items))
 	for _, item := range document.Channel.Items {
 		mapped, ok := mapParsedFeedEpisode(item, channelArtworkNormalized)
@@ -318,42 +337,61 @@ func mapParsedFeed(document rssDocument) (parsedFeedResponse, error) {
 			episodes = append(episodes, mapped)
 		}
 	}
+	if len(document.Channel.Items) > 0 && len(episodes) == 0 {
+		return parsedFeedResponse{}, errDiscoveryXMLDecode
+	}
 
 	return parsedFeedResponse{
 		Title:       title,
-		Description: strings.TrimSpace(document.Channel.Description),
+		Description: description,
 		ArtworkURL:  artworkURL,
 		Episodes:    episodes,
 	}, nil
 }
 
-func mapParsedFeedEpisode(item rssItem, channelArtworkNormalized string) (parsedFeedEpisodeResult, bool) {
-	audioURL := sanitizeOptionalAbsoluteURL(item.Enclosure.URL)
-	title := strings.TrimSpace(item.Title)
-	pubDate := strings.TrimSpace(item.PubDate)
-	if audioURL == "" || title == "" || pubDate == "" {
-		return parsedFeedEpisodeResult{}, false
-	}
+func deriveChannelDescription(description, subtitle, link string) string {
+	description = strings.TrimSpace(description)
+	subtitle = strings.TrimSpace(subtitle)
+	link = strings.TrimSpace(link)
 
-	id := firstNonEmpty(strings.TrimSpace(item.GUID), audioURL)
-	if id == "" {
+	if description != "" {
+		return description
+	}
+	if subtitle != "" {
+		return subtitle
+	}
+	if link != "" {
+		parsed, err := url.Parse(link)
+		if err == nil && parsed != nil && parsed.Host != "" {
+			return fmt.Sprintf("Visit %s for more information", parsed.Host)
+		}
+	}
+	return description
+}
+
+type parsedFeedEpisodeCore struct {
+	EpisodeGUID string
+	Title       string
+	AudioURL    string
+	PubDate     string
+}
+
+func mapParsedFeedEpisode(item feedItem, channelArtworkNormalized string) (parsedFeedEpisodeResult, bool) {
+	core, ok := requireParsedFeedEpisodeCore(item)
+	if !ok {
 		return parsedFeedEpisodeResult{}, false
 	}
 
 	description, descriptionHTML := deriveParsedFeedDescription(item)
-	artworkURL := sanitizeOptionalAbsoluteURL(firstNonEmpty(item.Image.Href, item.Image.URL))
-	if artworkURL != "" && normalizeDiscoveryArtworkURL(artworkURL) == channelArtworkNormalized {
-		artworkURL = ""
-	}
 
 	return parsedFeedEpisodeResult{
-		ID:              id,
-		Title:           title,
+		EpisodeGUID:     core.EpisodeGUID,
+		Title:           core.Title,
 		Description:     description,
 		DescriptionHTML: descriptionHTML,
-		AudioURL:        audioURL,
-		PubDate:         pubDate,
-		ArtworkURL:      artworkURL,
+		AudioURL:        core.AudioURL,
+		PubDate:         core.PubDate,
+		ArtworkURL:      deriveParsedFeedEpisodeArtworkURL(item, channelArtworkNormalized),
 		Duration:        parseParsedFeedDuration(item.Duration),
 		SeasonNumber:    parseParsedFeedInt(item.Season),
 		EpisodeNumber:   parseParsedFeedInt(item.Episode),
@@ -361,26 +399,92 @@ func mapParsedFeedEpisode(item rssItem, channelArtworkNormalized string) (parsed
 		Explicit:        parseParsedFeedExplicit(item.Explicit),
 		Link:            sanitizeOptionalAbsoluteURL(item.Link),
 		FileSize:        parseParsedFeedInt64(item.Enclosure.Length),
-		TranscriptURL:   sanitizeOptionalAbsoluteURL(firstNonEmpty(item.Transcript.Href, item.Transcript.URL)),
-		ChaptersURL:     sanitizeOptionalAbsoluteURL(firstNonEmpty(item.Chapters.Href, item.Chapters.URL)),
+		TranscriptURL:   selectParsedFeedTranscriptURL(item.Transcripts),
 	}, true
 }
 
-func deriveParsedFeedDescription(item rssItem) (string, string) {
-	encoded := strings.TrimSpace(item.Encoded)
-	description := strings.TrimSpace(item.Description)
-	summary := strings.TrimSpace(item.Summary)
+func requireParsedFeedEpisodeCore(item feedItem) (parsedFeedEpisodeCore, bool) {
+	audioURL := sanitizeOptionalAbsoluteURL(item.Enclosure.URL)
+	title := strings.TrimSpace(item.Title)
+	pubDate := strings.TrimSpace(item.PubDate)
+	episodeGUID := strings.TrimSpace(item.GUID)
 
-	if encoded != "" {
-		return encoded, encoded
+	if audioURL == "" || title == "" || pubDate == "" || episodeGUID == "" {
+		return parsedFeedEpisodeCore{}, false
 	}
-	if strings.Contains(description, "<p") || strings.Contains(description, "<br") || strings.Contains(description, "<a ") {
-		return description, description
+
+	return parsedFeedEpisodeCore{
+		EpisodeGUID: episodeGUID,
+		Title:       title,
+		AudioURL:    audioURL,
+		PubDate:     pubDate,
+	}, true
+}
+
+func deriveParsedFeedEpisodeArtworkURL(item feedItem, channelArtworkNormalized string) string {
+	artworkURL := sanitizeOptionalAbsoluteURL(firstNonEmpty(item.Image.Href, item.Image.URL))
+	if artworkURL != "" && normalizeDiscoveryArtworkURL(artworkURL) == channelArtworkNormalized {
+		return ""
 	}
-	if len(description) >= len(summary) {
-		return description, ""
+	return artworkURL
+}
+
+func deriveParsedFeedDescription(item feedItem) (string, string) {
+	encodedHTML := strings.TrimSpace(item.Encoded)
+	plainDescription := strings.TrimSpace(item.Description)
+	plainSummary := strings.TrimSpace(item.Summary)
+
+	if encodedHTML != "" {
+		return encodedHTML, encodedHTML
 	}
-	return summary, ""
+	if looksLikeHTMLDescription(plainDescription) {
+		return plainDescription, plainDescription
+	}
+	if len(plainDescription) >= len(plainSummary) {
+		return plainDescription, ""
+	}
+	return plainSummary, ""
+}
+
+func looksLikeHTMLDescription(value string) bool {
+	return strings.Contains(value, "<p") ||
+		strings.Contains(value, "<br") ||
+		strings.Contains(value, "<a ")
+}
+
+func selectParsedFeedTranscriptURL(transcripts []feedTranscriptLink) string {
+	if len(transcripts) == 0 {
+		return ""
+	}
+
+	bestURL := ""
+	bestRank := 101
+	for _, transcript := range transcripts {
+		candidateURL := sanitizeOptionalAbsoluteURL(firstNonEmpty(transcript.Href, transcript.URL))
+		if candidateURL == "" {
+			continue
+		}
+		rank := rankParsedFeedTranscriptType(transcript.Type)
+		if rank < bestRank {
+			bestRank = rank
+			bestURL = candidateURL
+		}
+	}
+
+	return bestURL
+}
+
+func rankParsedFeedTranscriptType(rawType string) int {
+	switch strings.ToLower(strings.TrimSpace(rawType)) {
+	case "text/vtt":
+		return 0
+	case "application/srt":
+		return 1
+	case "text/plain":
+		return 2
+	default:
+		return 100
+	}
 }
 
 // Feed parsing helpers.

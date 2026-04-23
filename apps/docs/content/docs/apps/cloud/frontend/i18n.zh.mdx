@@ -1,0 +1,30 @@
+---
+title: 国际化（i18n）
+---
+
+## 1. Cloud 中的当前角色
+
+Cloud 前端仍沿用原前端的类型化按需加载 i18n 模型：
+
+- 英语仍是基础 schema
+- 非默认语言按需加载
+- 语言切换必须保持竞态安全
+
+## 2. 安全切换契约
+
+- `changeLanguageSafely` 仍是唯一合法切换入口
+- 同一语言的并发请求应做去重
+- 只有最后一次请求的语言允许真正生效
+
+## 3. 运行时同步
+
+- `<html lang>` 必须与当前 locale 保持同步
+- formatter 与 transcript 的 locale-aware tokenization 都依赖运行时解析后的语言
+
+## 4. 为什么对 Cloud 仍有价值
+
+这份文档对 Cloud 仍然有价值，因为 `apps/cloud-ui` 依然负责：
+
+- 路由/页面文案渲染
+- settings 驱动的语言切换
+- transcript 的语言感知分词行为

@@ -1,6 +1,8 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { CircleArrowDown, Download } from 'lucide-react'
 import { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import { ensurePodcastDetail } from '@/lib/discovery/queryCache'
 import { normalizeCountryParam } from '@/lib/routes/podcastRoutes'
 import { getAppConfig } from '@/lib/runtimeConfig'
 import { cn } from '@/lib/utils'
@@ -12,7 +14,7 @@ import { CircularProgress } from '../ui/circular-progress'
 interface DownloadEpisodeButtonProps {
   episodeTitle: string
   episodeDescription?: string
-  podcastTitle: string
+  showTitle: string
   feedUrl?: string
   audioUrl: string
   transcriptUrl?: string
@@ -30,7 +32,7 @@ interface DownloadEpisodeButtonProps {
 export function DownloadEpisodeButton({
   episodeTitle,
   episodeDescription,
-  podcastTitle,
+  showTitle,
   feedUrl,
   audioUrl,
   transcriptUrl,
@@ -43,6 +45,7 @@ export function DownloadEpisodeButton({
   className,
   episodeStatus,
 }: DownloadEpisodeButtonProps) {
+  const queryClient = useQueryClient()
   const { t } = useTranslation()
   const defaultCountry = getAppConfig().DEFAULT_COUNTRY
   const ownStatus = useEpisodeStatus(episodeStatus ? undefined : audioUrl)
@@ -53,32 +56,46 @@ export function DownloadEpisodeButton({
 
     const normalizedCountryAtSave = normalizeCountryParam(countryAtSave) ?? defaultCountry
 
-    void downloadEpisode({
-      audioUrl,
-      episodeTitle,
-      episodeDescription,
-      podcastTitle,
-      feedUrl,
-      artworkUrl,
-      transcriptUrl,
-      countryAtSave: normalizedCountryAtSave,
-      podcastItunesId,
-      providerEpisodeId,
-      episodeGuid,
-      durationSeconds,
-    }).then(() => {
+    void (async () => {
+      let resolvedFeedUrl = feedUrl
+      const normalizedPodcastItunesId = String(podcastItunesId ?? '').trim()
+
+      if (!resolvedFeedUrl && normalizedPodcastItunesId) {
+        try {
+          const podcast = await ensurePodcastDetail(queryClient, normalizedPodcastItunesId, normalizedCountryAtSave)
+          resolvedFeedUrl = podcast?.feedUrl
+        } catch {
+          resolvedFeedUrl = undefined
+        }
+      }
+
+      await downloadEpisode({
+        audioUrl,
+        episodeTitle,
+        episodeDescription,
+        showTitle,
+        feedUrl: resolvedFeedUrl,
+        artworkUrl,
+        transcriptUrl,
+        countryAtSave: normalizedCountryAtSave,
+        podcastItunesId,
+        providerEpisodeId,
+        episodeGuid,
+        durationSeconds,
+      })
       status.refresh()
-    })
+    })()
   }, [
     audioUrl,
     episodeTitle,
     episodeDescription,
-    podcastTitle,
+    showTitle,
     feedUrl,
     artworkUrl,
     transcriptUrl,
     countryAtSave,
     defaultCountry,
+    queryClient,
     podcastItunesId,
     providerEpisodeId,
     episodeGuid,

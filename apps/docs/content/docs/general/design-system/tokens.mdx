@@ -1,0 +1,87 @@
+---
+title: Tokens & Layout
+---
+
+## Semantic Color System (No Raw Hex/Palette)
+
+To ensure theming (Light/Dark/Accents) works perfectly, you MUST use Semantic Tokens.
+
+**❌ Forbidden**:
+- `bg-white`, `bg-gray-100`, `text-black`
+- `text-red-500` (Unless implementing a specific brand color, but prefer `destructive`)
+- `border-gray-200`
+- `data-accent="..."` (Do not manually set accent attributes; use the Theme Store).
+
+**✅ Required**:
+- **Backgrounds**: `bg-background`, `bg-card`, `bg-popover`, `bg-muted`, `bg-accent`.
+- **Text**: `text-foreground`, `text-muted-foreground`, `text-accent-foreground`.
+- **Borders**: `border-border`, `border-input`.
+- **Status**: `text-destructive`, `bg-destructive`.
+- **Primary**: `bg-primary`, `text-primary`.
+
+---
+
+## Layout Constants (Single Source of Truth)
+
+Do NOT hardcode pixels for structural elements. Use the extended Tailwind theme config.
+
+**Spacing Tokens** (via `theme.extend.spacing` in `tailwind.config.js`):
+- `sidebar`: Maps to `var(--sidebar-width)` (260px). Use in `w-sidebar`, `pl-sidebar`, etc.
+- `mini-player`: Maps to `var(--mini-player-height)` (73px). Use in `h-mini-player`, `pb-mini-player`, etc.
+- `page-gutter`: Maps to `var(--page-gutter-x)` (24px desktop, 12px mobile). Use in `gap-page-gutter`, etc.
+- `page-margin`: Maps to `var(--page-margin-x)` (48px desktop, 24px mobile). Use as needed.
+
+**Explicit Shorthand Utilities**:
+- **Width**: `w-sidebar` (sidebar width).
+- **Height**: `h-mini-player` (mini-player height).
+- **Padding**: `p-page` / `px-page` / `p-gutter` / `px-gutter`.
+- **Margin**: `m-page` / `mx-page` / `m-gutter` / `mx-gutter`.
+
+**Why?** If we decide to widen the sidebar later, we change it in ONE place (CSS variable), and the whole app adapts.
+
+
+---
+
+## Icons Policy (Lucide-First)
+
+**Default rule**: Readio UI icons MUST use `lucide-react`.
+
+### 1. Sizing Standard
+- **Default**: `size-4` (16px) - For standard buttons and dense lists.
+- **Medium**: `size-5` (20px) - For navigation items or card headers.
+- **Large**: `size-6` (24px) - For primary actions (e.g., Big Play Button).
+- **Rule**: Use Tailwind `size-*` utility (not `w-4 h-4`) or the component prop `size={16}` consistently.
+
+### 2. Styling
+- **Color**: Use semantic colors (`text-muted-foreground`), never raw colors (`text-gray-500`).
+- **Stroke**: Default stroke width is `2`. For large icons (`size-8+`), use `1.5` to maintain visual weight balance.
+- **SVG Fill Rule**: All project-specific SVGs (Logos, interaction-bound assets) MUST use `fill="currentColor"` or `stroke="currentColor"` to allow automatic theming via CSS `text-*` classes.
+
+### Allowed SVG exceptions (very limited)
+SVG files are allowed only for:
+1. **Logo/App mark** assets (e.g. `readio.svg`, `readio.png`).
+2. **Interaction-bound assets** where existing implementation relies on SVG+CSS techniques (e.g. mask icons, selection pin, legacy interaction-heavy styling). Do not replace these unless explicitly requested.
+
+---
+
+## Layering & Z-Index (SSOT)
+
+All overlay and shell layering must use semantic z-index tokens. Using raw magic numbers is forbidden.
+
+| Token | Value | Applied To |
+| :--- | :--- | :--- |
+| `--z-docked-player` | 30 | Docked player surface (below sidebar) |
+| `--z-sidebar` | 40 | Navigation sidebar |
+| `--z-mini-player` | 50 | Bottom mini-player bar |
+| `--z-overlay` | 60 | Global search, command palette, standard tooltips |
+| `--z-modal` | 100 | Full-screen player, standard dialogs |
+| `--z-full-player` | 100 | Alias for `--z-modal` (explicit for player) |
+| `--z-menu` | 150 | Desktop context menus, lookup callouts |
+
+**Note**: Runtime implementation in `index.css` must inherit these values from this document. If a surface requires a z-index not listed here, it must be added to this matrix first.
+
+---
+
+## Planned (Pending Execution)
+
+- **Multilingual Typography**: Language-specific font stacks (Instruction 056).

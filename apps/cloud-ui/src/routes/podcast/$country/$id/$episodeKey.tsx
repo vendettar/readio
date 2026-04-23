@@ -7,7 +7,7 @@ const episodeDetailSearchSchema = z.object({})
 const episodeDetailParamSchema = z.object({
   id: z.string().regex(/^\d+$/),
   episodeKey: z.string().refine((val) => isValidCompactKey(val), {
-    message: 'Episode param must be a valid 22-character base64url compact key',
+    message: 'Episode param must be a valid compact episode key',
   }),
 })
 

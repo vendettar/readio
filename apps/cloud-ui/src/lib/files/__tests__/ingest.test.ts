@@ -44,8 +44,11 @@ beforeAll(() => {
 // Mock Worker
 const mockPostMessage = vi.fn()
 // We need a way to access the current worker instance from the test to trigger onmessage
-// biome-ignore lint/suspicious/noExplicitAny: Mock worker reference
-let currentWorker: any = null
+type MockWorkerInstance = {
+  onmessage: ((e: MessageEvent) => void) | null
+  onerror: ((e: ErrorEvent) => void) | null
+}
+let currentWorker: MockWorkerInstance | null = null
 
 vi.mock('../../../workers/metadata.worker?worker', () => {
   return {

@@ -1,0 +1,171 @@
+---
+title: Discovery API Flow
+---
+
+## 1. First Hop APIs
+
+These are the first external discovery APIs used directly by user-facing entry surfaces.
+
+### 1.1 Apple Search Podcasts
+
+- Surface:
+  - Search podcast results
+- Upstream:
+  - Apple Search API
+- Typical input:
+  - `term`
+  - `country`
+  - `limit`
+- Core output used by readio:
+  - `podcastItunesId`
+  - `title`
+  - `author`
+  - `artwork`
+  - other search-specific summary fields still kept in the active schema
+- Next step:
+  - When canonical podcast metadata or show-detail enrichment is needed, continue to Podcast Index `podcasts/byitunesid`
+
+### 1.2 Apple Search Episodes
+
+- Surface:
+  - Search episode results
+- Upstream:
+  - Apple Search API
+- Typical input:
+  - `term`
+  - `country`
+  - `limit`
+- Core output used by readio:
+  - `podcastItunesId`
+  - `title`
+  - `showTitle`
+  - `artwork`
+  - `episodeUrl`
+  - `episodeGuid`
+  - `releaseDate`
+  - `trackTimeMillis`
+  - `shortDescription`
+- Next step:
+  - When canonical podcast metadata is needed, continue to Podcast Index `podcasts/byitunesid`
+  - When feed-native episode data is needed, continue to RSS feed parsing by the canonical `feedUrl` returned from Podcast Index `podcasts/byitunesid`
+
+### 1.3 Apple Top Podcasts
+
+- Surface:
+  - Explore Top Shows
+- Upstream:
+  - Apple top podcasts chart feed
+- Typical input:
+  - `country`
+  - `limit`
+- Core output used by readio:
+  - `podcastItunesId`
+  - `title`
+  - `author`
+  - `artwork`
+  - `genres`
+- Next step:
+  - When the user enters the show or canonical podcast metadata is needed, continue to Podcast Index `podcasts/byitunesid`
+
+### 1.4 Apple Top Episodes
+
+- Surface:
+  - Explore Top Episodes
+- Upstream:
+  - Apple top episodes chart feed
+- Typical input:
+  - `country`
+  - `limit`
+- Core output used by readio:
+  - `podcastItunesId`
+  - `title`
+  - `author`
+  - `artwork`
+  - `genres`
+- Next step:
+  - This first hop only provides the Explore Top Episodes surface payload
+  - After click-through, downstream resolution continues from show-level context, starting with Podcast Index `podcasts/byitunesid`
+
+### 1.5 Podcast Index Podcasts Batch By GUID
+
+- Surface:
+  - Explore Editor's Picks
+- Upstream:
+  - Podcast Index `podcasts/batch/byguid`
+- Typical input:
+  - array of podcast GUIDs owned by the editor-pick surface
+- Core output used by readio:
+  - editor-pick podcast rows in the narrowed Readio contract
+- Next step:
+  - When the user opens a picked show, continue to show-page lookup using Podcast Index `podcasts/byitunesid`
+  - When the opened show later needs episode data, continue to RSS feed parsing by the canonical `feedUrl` returned from Podcast Index `podcasts/byitunesid`
+
+## 2. Second Hop And Later Resolution
+
+These APIs are used after a first-hop result, route, or previously cached data already exists.
+
+### 2.1 Podcast Index Podcast By iTunes ID
+
+- Upstream:
+  - Podcast Index `podcasts/byitunesid`
+- Used for:
+  - canonical podcast metadata
+  - show page lookup
+  - enriching first-hop Apple results
+  - obtaining canonical `feedUrl`
+- Previous hop:
+  - Apple Search Podcasts
+  - Apple Search Episodes
+  - Apple Top Podcasts
+  - Apple Top Episodes
+  - route entry by `podcastItunesId`
+- Depends on previous hop providing:
+  - `podcastItunesId`
+- Produces:
+  - canonical podcast contract used by show/detail flows
+  - `feedUrl` for later RSS resolution
+
+### 2.2 RSS Feed Parsing By Feed URL
+
+- Upstream:
+  - RSS feed fetch and parse by `feedUrl`
+- Used for:
+  - show page feed episode list
+  - final episode resolution fallback
+  - feed-native fields such as transcript, chapters, season/episode numbers, and HTML description
+- Previous hop:
+  - Podcast Index `podcasts/byitunesid`
+  - cached canonical podcast data
+  - cached previously fetched feed data
+- Depends on previous hop providing:
+  - `feedUrl`
+- Produces:
+  - normalized RSS episode rows keyed by stable episode identity
+
+### 2.3 Episode Resolution Order
+
+- Step 1:
+  - resolve route or compact key into a target stable episode identity
+- Step 2:
+  - match cached RSS feed episodes by stable episode identity if feed data already exists
+- Step 3:
+  - fetch canonical podcast metadata through Podcast Index `podcasts/byitunesid`
+- Step 4:
+  - fetch RSS by canonical `feedUrl` and match by stable episode identity
+
+## 3. Surface Overview
+
+| Surface | First Hop | Second Hop | Later Resolution |
+|---|---|---|---|
+| Search podcasts | Apple Search Podcasts | Podcast Index `podcasts/byitunesid` when needed | RSS by `feedUrl` only if later detail flow needs it |
+| Search episodes | Apple Search Episodes | Podcast Index `podcasts/byitunesid` when needed | RSS by canonical `feedUrl` for episode resolution |
+| Explore Top Shows | Apple Top Podcasts | Podcast Index `podcasts/byitunesid` after user enters a show | RSS by `feedUrl` inside show/detail flow |
+| Explore Top Episodes | Apple Top Episodes | After click-through, continue from Podcast Index `podcasts/byitunesid` show context | RSS by `feedUrl` inside later detail/resolution flow |
+| Explore Editor's Picks | Podcast Index `podcasts/batch/byguid` | Podcast Index `podcasts/byitunesid` after show entry | RSS by `feedUrl` inside show/detail flow |
+| Show page | none | Podcast Index `podcasts/byitunesid` | RSS by `feedUrl` |
+| Episode detail page | none | Podcast Index `podcasts/byitunesid` | RSS by canonical `feedUrl` |
+
+## 4. Explicit Non-Usage
+
+- Readio does not currently use Podcast Index `episodes/byguid` in the active discovery flow.
+- Readio still uses Podcast Index `podcasts/batch/byguid` for Editor's Picks.

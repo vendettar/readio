@@ -1,0 +1,129 @@
+---
+title: API 响应约定
+---
+
+## 1. 范围
+
+本文档定义 `cloud-api` 与 `cloud-ui` 之间的内部 HTTP JSON 响应契约。
+
+它不记录 Apple、Podcast Index、RSS 等第三方上游 API 文档。
+
+## 2. 默认规则
+
+- 成功响应默认直接返回业务 payload
+- 错误响应统一返回标准化错误对象
+- HTTP status 仍然是成功/失败的第一信号
+- 不要把所有成功响应都包成 `{ code, message, object }` 这一类全局 envelope
+
+## 3. 成功响应
+
+普通成功场景直接返回业务 payload。
+
+数组示例：
+
+```json
+[
+  {
+    "podcastItunesId": "1200361736",
+    "title": "The Daily"
+  }
+]
+```
+
+对象示例：
+
+```json
+{
+  "title": "The Daily",
+  "episodes": []
+}
+```
+
+规则：
+
+- 响应体应直接对应当前路由 DTO
+- 路由级 success schema 应直接校验完整 payload
+- 不要在成功业务 payload 里再塞 `code` 或 `message`
+
+## 4. 错误响应
+
+所有标准化 JSON 错误响应都应使用这个结构：
+
+```json
+{
+  "code": "RATE_LIMITED",
+  "message": "rate limit exceeded",
+  "request_id": "req_123"
+}
+```
+
+规则：
+
+- `code` 是稳定的、面向机器处理的错误标识
+- `message` 是给人看的，可用于内部 UI 展示
+- `request_id` 用于 tracing 和日志关联
+- HTTP status 仍负责表达错误的大类
+
+常见 status 映射：
+
+- `400` 请求非法或参数错误
+- `401` 未授权
+- `403` 禁止访问
+- `404` 资源不存在
+- `409` 状态冲突
+- `413` 请求体过大
+- `429` 触发限流
+- `500` 服务内部错误
+- `502` 上游返回异常或 relay 失败
+- `503` 服务不可用
+- `504` 上游超时
+
+## 5. 允许使用 Envelope 的例外
+
+只有当该路由本身真的存在额外元数据时，才允许包一层 envelope。
+
+允许的典型场景：
+
+- 分页
+- cursor 列表
+- warnings / partial results
+- 长任务状态查询
+
+示例：
+
+```json
+{
+  "items": [],
+  "next_cursor": "cursor_123"
+}
+```
+
+规则：
+
+- 只有元数据本身属于路由契约时，才加 envelope
+- 不要为了“形式统一”给所有成功响应平白加一层
+
+## 6. 前端消费规则
+
+`cloud-ui` 消费内部 API 时应遵循这个顺序：
+
+1. 先解析 JSON
+2. 再检查 `response.ok`
+3. 如果是非 2xx，按标准错误对象解析并抛出 typed fetch error
+4. 如果是 2xx，再按该路由的 success schema 校验 payload
+
+规则：
+
+- 不要先拿非 2xx 响应去做 success schema 校验
+- 不要把后端标准错误包误降级成通用 payload validation error
+- 当前端拿得到 `code` 和 `request_id` 时，要保留下来
+
+## 7. Readio 当前方向
+
+这是 Readio 当前应坚持的方向：
+
+- Discovery 成功响应继续直接返回 DTO payload
+- Discovery 错误继续返回标准化 JSON 错误对象
+- 只有路由真的需要元数据时，才增加分页式 envelope
+
+这意味着 Readio 应保持当前成功路径风格，并继续把错误路径做统一收口，而不是回到全局 `{ code, message, object }` 包装。

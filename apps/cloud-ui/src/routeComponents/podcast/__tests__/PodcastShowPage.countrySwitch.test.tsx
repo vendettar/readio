@@ -1,12 +1,15 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import type React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createQueryClientWrapper } from '../../../__tests__/queryClient'
+import {
+  makeFeedEpisode,
+  makeMinimalPodcast,
+} from '../../../lib/discovery/__tests__/fixtures'
 import PodcastShowPage from '../PodcastShowPage'
 
 const getPodcastMock = vi.fn()
 const fetchPodcastFeedMock = vi.fn()
-const getPodcastEpisodesMock = vi.fn()
 
 let routeCountry = 'us'
 
@@ -43,41 +46,21 @@ vi.mock('../../../hooks/useEpisodePlayback', () => ({
   }),
 }))
 
-vi.mock('../../../lib/discovery', () => ({
-  default: {
-    getPodcastIndexPodcastByItunesId: (...args: unknown[]) => getPodcastMock(...args),
-    fetchPodcastFeed: (...args: unknown[]) => fetchPodcastFeedMock(...args),
-    getPodcastIndexEpisodes: (...args: unknown[]) => getPodcastEpisodesMock(...args),
-  },
-}))
+vi.mock('../../../lib/discovery', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../lib/discovery')>()
+  return {
+    ...actual,
+    default: {
+      getPodcastIndexPodcastByItunesId: (...args: unknown[]) => getPodcastMock(...args),
+      fetchPodcastFeed: (...args: unknown[]) => fetchPodcastFeedMock(...args),
+    },
+  }
+})
 
 type DeferredPodcast = {
   signal?: AbortSignal
-  resolve: (value: {
-    podcastItunesId: string
-    collectionName: string
-    artistName: string
-    feedUrl: string
-    artworkUrl600: string
-    artworkUrl100: string
-    genres: string[]
-    collectionViewUrl: string
-  }) => void
+  resolve: (value: ReturnType<typeof makeMinimalPodcast>) => void
   reject: (error: unknown) => void
-}
-
-function createWrapper() {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: false,
-      },
-    },
-  })
-
-  return ({ children }: { children: React.ReactNode }) => (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-  )
 }
 
 describe('PodcastShowPage country switch cancellation', () => {
@@ -85,7 +68,6 @@ describe('PodcastShowPage country switch cancellation', () => {
     routeCountry = 'us'
     getPodcastMock.mockReset()
     fetchPodcastFeedMock.mockReset()
-    getPodcastEpisodesMock.mockReset()
   })
 
   it('aborts old-country lookup and keeps latest country content', async () => {
@@ -113,22 +95,18 @@ describe('PodcastShowPage country switch cancellation', () => {
         title: `Feed ${country}`,
         description: '',
         artworkUrl: '',
-        episodes: [
-          {
-            id: `${country}-ep-1`,
-            providerEpisodeId: `${country}-provider-1`,
-            title: `${country.toUpperCase()} Episode`,
-            description: '',
-            audioUrl: `https://example.com/${country}/audio.mp3`,
-            pubDate: '2025-01-01T00:00:00.000Z',
-          },
-        ],
+        episodes: [makeFeedEpisode({
+          episodeGuid: `${country}-ep-1`,
+          title: `${country.toUpperCase()} Episode`,
+          description: '',
+          audioUrl: `https://example.com/${country}/audio.mp3`,
+          pubDate: '2025-01-01T00:00:00.000Z',
+          artworkUrl: undefined,
+          duration: undefined,
+        })],
       })
     })
-
-    getPodcastEpisodesMock.mockResolvedValue([])
-
-    const wrapper = createWrapper()
+    const wrapper = createQueryClientWrapper()
     const { rerender } = render(<PodcastShowPage />, { wrapper })
 
     await waitFor(() => expect(deferredByCountry.has('us')).toBe(true))
@@ -139,14 +117,14 @@ describe('PodcastShowPage country switch cancellation', () => {
     await waitFor(() => expect(deferredByCountry.has('jp')).toBe(true))
 
     deferredByCountry.get('jp')?.resolve({
-      podcastItunesId: '123',
-      collectionName: 'JP Podcast',
-      artistName: 'JP Author',
-      feedUrl: 'https://example.com/jp/feed.xml',
-      artworkUrl600: 'https://example.com/jp/art-600.jpg',
-      artworkUrl100: 'https://example.com/jp/art-100.jpg',
-      genres: ['Tech'],
-      collectionViewUrl: '',
+      ...makeMinimalPodcast({
+        podcastItunesId: '123',
+        title: 'JP Podcast',
+        author: 'JP Author',
+        feedUrl: 'https://example.com/jp/feed.xml',
+        artwork: 'https://example.com/jp/art-600.jpg',
+        genres: ['Tech'],
+      }),
     })
 
     await waitFor(() => expect(screen.queryByText('JP Podcast')).not.toBeNull())
@@ -155,14 +133,14 @@ describe('PodcastShowPage country switch cancellation', () => {
     expect(oldSignal?.aborted).toBe(true)
 
     deferredByCountry.get('us')?.resolve({
-      podcastItunesId: '123',
-      collectionName: 'US Podcast',
-      artistName: 'US Author',
-      feedUrl: 'https://example.com/us/feed.xml',
-      artworkUrl600: 'https://example.com/us/art-600.jpg',
-      artworkUrl100: 'https://example.com/us/art-100.jpg',
-      genres: ['Tech'],
-      collectionViewUrl: '',
+      ...makeMinimalPodcast({
+        podcastItunesId: '123',
+        title: 'US Podcast',
+        author: 'US Author',
+        feedUrl: 'https://example.com/us/feed.xml',
+        artwork: 'https://example.com/us/art-600.jpg',
+        genres: ['Tech'],
+      }),
     })
 
     await waitFor(() => expect(screen.queryByText('JP Podcast')).not.toBeNull())

@@ -1,6 +1,8 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useMemo } from 'react'
 import type { Favorite } from '../lib/dexieDb'
-import type { Episode, Podcast, SearchEpisode } from '../lib/discovery'
+import { type FeedEpisode, type Podcast, type SearchEpisode } from '../lib/discovery'
+import { ensurePodcastDetail } from '../lib/discovery/queryCache'
 import { PLAYBACK_REQUEST_MODE, type PlaybackRequestMode } from '../lib/player/playbackMode'
 import {
   playFavoriteWithDeps,
@@ -19,6 +21,7 @@ import { usePlayerStore } from '../store/playerStore'
 import { usePlayerSurfaceStore } from '../store/playerSurfaceStore'
 
 export function useEpisodePlayback() {
+  const queryClient = useQueryClient()
   const setAudioUrl = usePlayerStore((state) => state.setAudioUrl)
   const play = usePlayerStore((state) => state.play)
 
@@ -29,11 +32,11 @@ export function useEpisodePlayback() {
   const setPlaybackTrackId = usePlayerStore((state) => state.setPlaybackTrackId)
 
   /**
-   * Standard playback for Episode + Podcast objects (from Feed)
+   * Standard playback for FeedEpisode + Podcast objects
    */
   const playEpisode = useCallback(
     (
-      episode: Episode,
+      episode: FeedEpisode,
       podcast: Podcast,
       countryAtSave?: string,
       options?: { mode?: PlaybackRequestMode }
@@ -61,20 +64,37 @@ export function useEpisodePlayback() {
   const playSearchEpisode = useCallback(
     (
       episode: SearchEpisode,
-      feedUrl?: string,
       countryAtSave?: string,
       options?: { mode?: PlaybackRequestMode }
     ) => {
       const globalCountry = normalizeCountryParam(useExploreStore.getState().country)
       const searchPolicy = deriveSurfacePolicyFromSearchEpisode(episode)
       applySurfacePolicy({ setPlayableContext, toDocked, toMini }, searchPolicy)
-      void playSearchEpisodeWithDeps({ setAudioUrl, play, pause, setPlaybackTrackId }, episode, {
-        feedUrl,
-        countryAtSave: countryAtSave ?? globalCountry ?? undefined,
-        mode: options?.mode ?? PLAYBACK_REQUEST_MODE.DEFAULT,
-      })
+      void (async () => {
+        let podcastFeedUrl: string | undefined
+        const podcastItunesId = String(episode.podcastItunesId || '').trim()
+
+        if (podcastItunesId) {
+          try {
+            const podcast = await ensurePodcastDetail(queryClient, podcastItunesId, globalCountry)
+            podcastFeedUrl = podcast?.feedUrl
+          } catch {
+            podcastFeedUrl = undefined
+          }
+        }
+
+        await playSearchEpisodeWithDeps(
+          { setAudioUrl, play, pause, setPlaybackTrackId },
+          episode,
+          {
+            podcastFeedUrl,
+            countryAtSave: countryAtSave ?? globalCountry ?? undefined,
+            mode: options?.mode ?? PLAYBACK_REQUEST_MODE.DEFAULT,
+          }
+        )
+      })()
     },
-    [setAudioUrl, play, pause, setPlaybackTrackId, setPlayableContext, toDocked, toMini]
+    [queryClient, setAudioUrl, play, pause, setPlaybackTrackId, setPlayableContext, toDocked, toMini]
   )
 
   /**

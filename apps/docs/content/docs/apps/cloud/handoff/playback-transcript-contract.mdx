@@ -1,0 +1,259 @@
+---
+title: Playback Transcript Contract
+---
+
+# Playback Transcript Contract
+
+This handoff records the current Cloud playback/transcript contract after the transcript-first playback work and the artwork CTA state-machine work.
+
+It is the reference document for:
+
+- remote playback behavior when an episode already exposes a transcript source
+- Reading Area artwork/CTA behavior when transcript content is not currently visible
+- the boundary between transcript-first playback, pure listening mode, and manual ASR generation
+
+## 1. Core Product Rule
+
+Cloud playback is now **transcript-first**.
+
+If the current playback payload already carries a usable transcript source:
+
+- the app must prefer transcript loading over automatic ASR
+- the app must not automatically download full audio only to feed ASR
+- the app must not reinterpret transcript-source failure as an ASR-setup problem
+
+Only transcript-missing playback may enter the automatic ASR readiness / download / generation path.
+
+## 2. Transcript Sources
+
+For the current Cloud contract, `transcript available` includes:
+
+1. built-in remote transcript
+   - e.g. `episodeMetadata.transcriptUrl`
+2. cached / previously ingested transcript
+   - e.g. remote transcript cache keyed to the current episode/audio identity
+3. local/downloaded transcript
+   - bound to the current `localTrackId`
+
+The contract explicitly distinguishes:
+
+- `transcript source exists`
+- `transcript currently loaded into the Reading Area`
+
+The second is not required for the first.
+
+## 3. Transcript-First Playback
+
+When playback starts for a transcript-bearing remote episode:
+
+- the transcript-bearing path becomes authoritative immediately
+- the first full-player state must be transcript-loading, not `No transcript yet`
+- automatic ASR must be skipped
+- full-audio download for ASR must be skipped
+- the player may continue independently if transcript loading later fails
+
+Transcript-bearing failure is still a transcript failure, not an ASR readiness failure.
+
+## 4. Reading Area CTA Contract
+
+The Reading Area can render either:
+
+- transcript content
+- loading/progress state
+- error state
+- artwork + CTA state
+
+The artwork + CTA state is governed by a transcript-first decision boundary.
+
+### If transcript source exists
+
+The Reading Area must prefer:
+
+- `Transcript available`
+- `Show Transcript`
+
+It must not incorrectly surface:
+
+- `Generate Transcript`
+- `Set up transcript generation`
+
+### If transcript source does not exist
+
+Then the CTA may branch by ASR readiness:
+
+- ASR ready -> `Generate Transcript`
+- ASR not ready -> `Set up transcript generation`
+
+## 5. Pure Listening Mode
+
+`stream_without_transcript` is a presentation choice, not a transcript-availability signal.
+
+It means:
+
+- the user is listening without automatically showing transcript content
+
+It does **not** mean:
+
+- transcript source is absent
+- transcript is unavailable
+- the UI should downgrade to `Generate Transcript`
+
+If transcript source exists while in pure listening mode, the Reading Area should still show:
+
+- `Transcript available`
+- `Show Transcript`
+
+## 6. Built-In vs Local Transcript Actions
+
+The `Show Transcript` CTA is source-aware.
+
+### Built-in / remote transcript
+
+Allowed behavior:
+
+- trigger the existing remote transcript ingest/load path
+
+### Local/downloaded transcript
+
+Allowed behavior:
+
+- load/select/display the stored local transcript
+
+Forbidden behavior:
+
+- falling back to automatic ASR because `transcriptUrl` is missing
+- treating a local transcript CTA as if it were a remote-only transcript fetch
+
+## 7. Local Download / Session Restore Contract
+
+If session restore resolves to a local/downloaded track and that track has transcript data in storage:
+
+- it counts as `transcript available`
+- it must not wait for cues to already be visible before the CTA can say `Show Transcript`
+- it must not flash `Generate Transcript` or `Set up transcript generation` first
+
+This keeps local restore aligned with the transcript-first contract.
+
+Additional Downloads-page rule:
+
+- `play without transcript` must preserve transcript-source identity
+- if a downloaded podcast track already carries a built-in `transcriptUrl`, the Downloads entry path must still surface `Transcript available` / `Show Transcript`
+- `play without transcript` suppresses automatic transcript display; it does not erase transcript availability
+
+## 8. Download-Time Built-In Transcript Persistence
+
+If a podcast episode exposes a built-in transcript source at download time:
+
+- the download flow should persist the audio track as normal
+- the same flow should also fetch and parse the built-in transcript into cues
+- the built-in transcript should be stored as a local subtitle version for the downloaded track
+- the Downloads card should therefore be able to show a subtitle row immediately after download, without requiring playback or manual import first
+
+Failure boundary:
+
+- built-in transcript persistence is an attached follow-up step, not the primary download success condition
+- audio download success must remain authoritative even if built-in transcript fetch or parse fails
+
+## 9. Failure Semantics
+
+If transcript source exists but the current fetch/load attempt fails:
+
+- playback must remain independent
+- the UI may move to a retry/show-transcript state
+- the UI must not automatically pivot into ASR generation
+
+In other words:
+
+- `source exists but load failed`
+  is not the same as
+- `no transcript source exists`
+
+## 10. Transcript Export Compatibility Note
+
+Cloud transcript export is plain text subtitle content, not executable content.
+
+Observed platform behavior on macOS:
+
+- browser-driven `Blob` download and "open transcript in browser, then Command+S" are not equivalent save paths
+- Chrome `Blob` downloads may carry `com.apple.quarantine` metadata and trigger Gatekeeper-style verification prompts even for transcript files
+- this behavior is platform/download-path specific; it is not evidence that the SRT content itself is malformed
+
+Practical export compatibility rule:
+
+- SRT exports should use an explicit subtitle MIME instead of generic `text/plain`
+- the current playback transcript export path uses `application/x-subrip;charset=utf-8` for SRT blobs
+- VTT exports should use `text/vtt;charset=utf-8`
+- transcript export is now format-driven rather than source-filename-driven on the current player surfaces
+
+Operational note:
+
+- if a user can open the transcript URL directly in the browser and save it successfully via Command+S, but the automatic exported file triggers macOS verification, the likely differentiator is download metadata/quarantine handling rather than transcript parsing
+- this should be treated as a download-path compatibility issue, not a transcript-quality issue
+
+## 11. Export Menu Contract
+
+Cloud export entry points are now intentionally split by surface:
+
+- MiniPlayer uses `Export transcript...`
+- Downloads subtitle-row hover action uses `Export`
+- Downloads card overflow remains a separate audio/export surface
+
+Menu contents:
+
+- MiniPlayer second-level menu exposes transcript formats:
+  - `srt`
+  - `vtt`
+- Downloads subtitle-row export menu exposes the same transcript formats:
+  - `srt`
+  - `vtt`
+- these surfaces should consume the same transcript export-format contract so new formats cannot drift between them
+- Downloads card overflow audio export remains separate from transcript-format selection
+
+Interaction rule:
+
+- when a nested overflow step is open, outside pointer interaction should close the whole overflow menu
+- that outside interaction must not activate the underlying page control the pointer landed on
+
+## 12. Downloads Subtitle Source Badges
+
+Downloads subtitle rows should expose source identity consistently:
+
+- ASR-generated versions keep provider/model badges when metadata exists
+- built-in podcast transcript versions should show a `Built-in` badge
+- user-imported transcript versions should show an `Imported` badge
+
+Display rule:
+
+- `Built-in` and `Imported` are source badges
+- provider/model remain ASR metadata badges, not source badges
+- the Downloads subtitle row and the subtitle-version sheet should use the same source terminology
+
+## 13. Review Checklist
+
+Reviewer should verify:
+
+1. transcript-bearing playback never auto-escalates into ASR
+2. `stream_without_transcript` does not erase transcript availability
+3. local/downloaded transcript source is recognized before cues are already rendered
+4. `Show Transcript` dispatches by source type correctly
+5. built-in transcript failure does not surface ASR-setup CTA while transcript-first is still authoritative
+6. download-time built-in transcript persistence does not block or fail the primary audio download path
+7. MiniPlayer and Downloads transcript export menus expose the same format set
+
+## 13. Boundaries
+
+This handoff does describe:
+
+- transcript-first playback semantics
+- artwork/CTA state semantics
+- pure listening mode semantics
+- local/downloaded transcript availability semantics
+- download-time built-in transcript persistence semantics
+- transcript export surface/format semantics
+
+This handoff does not describe:
+
+- backend `/api/proxy` transport contract
+- ASR provider transport details
+- transcript storage schema internals
+- full player visual redesign

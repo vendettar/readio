@@ -1,5 +1,11 @@
 import { render } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import { createQueryClientWrapper } from '../../../__tests__/queryClient'
+import {
+  makeEditorPickSnapshot,
+  makeFeedEpisode,
+  makeMinimalPodcast,
+} from '../../../lib/discovery/__tests__/fixtures'
 import PodcastEpisodeDetailPage from '../PodcastEpisodeDetailPage'
 
 const useEpisodeResolutionMock = vi.fn()
@@ -47,6 +53,17 @@ vi.mock('@/store/playerStore', () => ({
     selector({
       setAudioUrl: vi.fn(),
       play: vi.fn(),
+      pause: vi.fn(),
+      setPlaybackTrackId: vi.fn(),
+    }),
+}))
+
+vi.mock('@/store/playerSurfaceStore', () => ({
+  usePlayerSurfaceStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({
+      setPlayableContext: vi.fn(),
+      toDocked: vi.fn(),
+      toMini: vi.fn(),
     }),
 }))
 
@@ -68,7 +85,7 @@ describe('PodcastEpisodeDetailPage canonical refresh', () => {
     routeEpisodeKey = 'h_M4G0OdR4aJaAfgXlSAdA'
     routeState = null
 
-    render(<PodcastEpisodeDetailPage />)
+    render(<PodcastEpisodeDetailPage />, { wrapper: createQueryClientWrapper() })
 
     expect(useEpisodeResolutionMock).toHaveBeenCalledWith(
       '123',
@@ -81,37 +98,30 @@ describe('PodcastEpisodeDetailPage canonical refresh', () => {
   it('redirects editor-pick detail pages onto podcastItunesId plus stable episode identity canonical routes', () => {
     useEpisodeResolutionMock.mockReturnValue({
       podcast: {
-        collectionName: 'Modern Love',
-        artistName: 'The New York Times',
-        artworkUrl100: 'https://example.com/show-100.jpg',
-        artworkUrl600: 'https://example.com/show-600.jpg',
-        feedUrl: 'https://feeds.simplecast.com/eHEJ08b1',
-        collectionViewUrl: '',
-        genres: [],
-        id: '304b84f0-07b0-5265-b6b7-da5cf5aeb56e',
-        feedId: '436568',
-        podcastGuid: '304b84f0-07b0-5265-b6b7-da5cf5aeb56e',
-        editorPickSnapshot: {
-          id: '304b84f0-07b0-5265-b6b7-da5cf5aeb56e',
-          name: 'Modern Love',
-          artistName: 'The New York Times',
-          artworkUrl100: 'https://example.com/show-100.jpg',
-          url: 'https://example.com/show',
-          genres: [],
-          feedUrl: 'https://feeds.simplecast.com/eHEJ08b1',
-          feedId: '436568',
-          podcastGuid: '304b84f0-07b0-5265-b6b7-da5cf5aeb56e',
+        ...makeMinimalPodcast({
           podcastItunesId: '1065559535',
-        },
+          title: 'Modern Love',
+          author: 'The New York Times',
+          artwork: 'https://example.com/show-600.jpg',
+          feedUrl: 'https://feeds.simplecast.com/eHEJ08b1',
+        }),
+        editorPickSnapshot: makeEditorPickSnapshot({
+          title: 'Modern Love',
+          author: 'The New York Times',
+          artwork: 'https://example.com/show-600.jpg',
+          feedUrl: 'https://feeds.simplecast.com/eHEJ08b1',
+          podcastItunesId: '1065559535',
+          genres: [],
+        }),
       },
-      episode: {
-        id: 'a8343698-1dca-4c63-bb5d-3e2a61522c2a',
+      episode: makeFeedEpisode({
+        episodeGuid: 'a8343698-1dca-4c63-bb5d-3e2a61522c2a',
         title: 'Lindy West Thought She Couldn’t Handle Polyamory. She Was Wrong.',
         audioUrl: 'https://example.com/audio.mp3',
         pubDate: '2025-01-01T00:00:00.000Z',
         duration: 1200,
         description: 'desc',
-      },
+      }),
       isLoading: false,
       podcastError: null,
       resolutionError: null,
@@ -121,7 +131,7 @@ describe('PodcastEpisodeDetailPage canonical refresh', () => {
     routeEpisodeKey = 'wrong_key'
     routeState = null
 
-    render(<PodcastEpisodeDetailPage />)
+    render(<PodcastEpisodeDetailPage />, { wrapper: createQueryClientWrapper() })
 
     expect(navigateMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -129,7 +139,7 @@ describe('PodcastEpisodeDetailPage canonical refresh', () => {
         params: {
           country: 'us',
           id: '1065559535',
-          episodeKey: 'qDQ2mB3KTEO7XT4qYVIsKg', // Compact key for a8343698-1dca-4c63-bb5d-3e2a61522c2a
+          episodeKey: 'qDQ2mB3KTGO7XT4qYVIsKg', // Compact key for a8343698-1dca-4c63-bb5d-3e2a61522c2a
         },
         replace: true,
       })

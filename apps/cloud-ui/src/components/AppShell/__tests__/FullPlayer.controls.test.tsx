@@ -83,7 +83,7 @@ vi.mock('framer-motion', () => ({
   AnimatePresence: ({ children }: { children?: ReactNode }) => <>{children}</>,
 }))
 
-vi.mock('../Transcript', () => ({
+vi.mock('../../Transcript', () => ({
   TranscriptView: () => <div data-testid="transcript" />,
 }))
 

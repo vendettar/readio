@@ -1,0 +1,22 @@
+---
+title: Settings
+---
+
+## 1. Scope
+
+- Route: `/settings`
+- Main interface: `apps/cloud-ui/src/routeComponents/SettingsPage.tsx`
+
+## 2. Current Cloud Role
+
+Settings still owns:
+
+- language switching
+- content region
+- browser-local maintenance actions
+- library export/import flows where still present
+- storage disclosure for browser-local persistence limits
+
+## 3. Cloud Boundary
+
+Cloud Settings should document current Cloud-specific ownership and must not reintroduce legacy proxy configuration blocks that were intentionally removed from the Cloud contract.

@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import discovery from '../lib/discovery'
 import { NetworkError } from '../lib/fetchUtils'
@@ -21,7 +21,6 @@ function useDebouncedValue<T>(value: T, delayMs: number) {
 
 export function useDiscoverySearch(query: string, enabled = true) {
   const { isOnline } = useNetworkStatus()
-  const queryClient = useQueryClient()
   const country = useExploreStore((s) => s.country) || getAppConfig().DEFAULT_COUNTRY
   const normalizedQuery = query.toLowerCase().trim()
   const debouncedQuery = useDebouncedValue(normalizedQuery, DISCOVERY_SEARCH_DEBOUNCE_MS)
@@ -32,12 +31,7 @@ export function useDiscoverySearch(query: string, enabled = true) {
   // Discovery Provider: Podcast Search (Debounced)
   const { data: podcasts = [], isLoading: isLoadingPodcasts } = useQuery({
     queryKey: podcastsQueryKey,
-    queryFn: ({ signal }) =>
-      discovery.searchPodcasts(debouncedQuery, country, 20, signal, {
-        onBackgroundRefresh: (fresh) => {
-          queryClient.setQueryData(podcastsQueryKey, fresh)
-        },
-      }),
+    queryFn: ({ signal }) => discovery.searchPodcasts(debouncedQuery, country, signal),
     enabled: shouldSearch,
     staleTime: 30 * 60 * 1000,
     placeholderData: (prev) => prev,
@@ -50,12 +44,7 @@ export function useDiscoverySearch(query: string, enabled = true) {
   // Discovery Provider: Episode Search (Debounced)
   const { data: episodes = [], isLoading: isLoadingEpisodes } = useQuery({
     queryKey: episodesQueryKey,
-    queryFn: ({ signal }) =>
-      discovery.searchEpisodes(debouncedQuery, country, 50, signal, {
-        onBackgroundRefresh: (fresh) => {
-          queryClient.setQueryData(episodesQueryKey, fresh)
-        },
-      }),
+    queryFn: ({ signal }) => discovery.searchEpisodes(debouncedQuery, country, signal),
     enabled: shouldSearch,
     staleTime: 30 * 60 * 1000,
     placeholderData: (prev) => prev,

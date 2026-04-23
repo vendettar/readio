@@ -1,0 +1,19 @@
+---
+title: Episode Resolution Contract
+---
+
+## 1. Durable Identity
+
+- Show route SSOT: numeric `podcastItunesId`
+- Episode route SSOT: compact key derived from stable episode identity. UUID identities keep the legacy 22-character key; non-UUID identities use the generic compact form.
+
+## 2. Resolution Order
+
+1. Decode compact key to stable episode identity
+2. Match cached RSS feed episodes by stable episode identity if already available
+3. Query PodcastIndex `podcasts/byitunesid`
+4. Use RSS-by-canonical-`feedUrl` and match by stable episode identity
+
+## 3. Rule
+
+Cloud must keep episode detail resolution backend-owned for PI/RSS lookups and must not reintroduce Apple supplemental episode resolution as a normal path.

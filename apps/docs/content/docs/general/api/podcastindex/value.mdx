@@ -1,0 +1,42 @@
+---
+title: Value & V4V
+---
+
+# Value & V4V Endpoints (/api/1.0/value)
+
+Accessing payment and monetization data for podcasts. **Requires Authentication** for Individual Lookups, but **Not for Batch Lookups**.
+
+## `/byfeedid`
+Retrieve the payment nodes and configuration for a podcast.
+- **URL**: `/api/1.0/value/byfeedid?id=169991`
+- **Example Response**:
+```json
+{
+  "status": "true",
+  "value": {
+    "model": { "type": "lightning", "method": "keysend", "suggested": "0.00000005000" },
+    "destinations": [
+      { "name": "Podcast Index", "address": "03ae4f6e...", "type": "node", "split": 1 }
+    ]
+  }
+}
+```
+
+## `/byfeedurl`
+Lookup value block via the RSS URL.
+- **URL**: `/api/1.0/value/byfeedurl?url={url}`
+
+## `/batch/byepisodeguid` (POST)
+Batch retrieve value data for multiple episodes across different podcasts. **No API Key needed.**
+- **URL**: `/api/1.0/value/batch/byepisodeguid`
+- **Request Body Example**:
+```json
+{
+  "917393e3-1b1e-5cef-ace4-edaa54e1f810": ["PC20141", "PC20142"],
+  "c73b1a23-1c28-5edb-94c3-10d1745d0877": ["bdea6759-a7b6-4c0d-9d1e-acca3133f4a9"]
+}
+```
+- **Example Response snippet**:
+```json
+{ "917393e3-1b1e-5cef-ace4-edaa54e1f810": ["PC20141"] }
+```

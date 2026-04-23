@@ -4,7 +4,7 @@ import { warn } from './logger'
 
 export const opmlItemSchema = z.object({
   title: z.string().default('Unknown Podcast'),
-  xmlUrl: z.string().url(),
+  xmlUrl: z.url(),
 })
 
 export type MinimalSubscription = z.infer<typeof opmlItemSchema>

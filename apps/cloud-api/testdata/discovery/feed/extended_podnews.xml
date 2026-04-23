@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:podcast="https://podcastindex.org/namespace/1.0" version="2.0">
+  <channel>
+    <title>Podnews Daily</title>
+    <description>Podnews description</description>
+    <podcast:guid>9b024349-ccf0-5f69-a609-6b82873eab3c</podcast:guid>
+    <item>
+      <title>Sirius XM to sell YouTube audio ads</title>
+      <link>https://podnews.net/update/youtube-sirius-audio-sell-ads</link>
+      <guid isPermaLink="true">https://podnews.net/update/youtube-sirius-audio-sell-ads</guid>
+      <pubDate>Tue, 22 Apr 2026 00:00:00 +0000</pubDate>
+      <description>Podnews episode description</description>
+      <podcast:transcript url="https://podnews.net/audio/podnews260422.mp3.vtt" type="text/vtt" rel="captions"/>
+      <podcast:alternateEnclosure type="audio/opus" length="495843" bitrate="12000" title="Low bitrate Opus">
+        <podcast:source uri="https://op3.dev/e,pg=9b024349-ccf0-5f69-a609-6b82873eab3c/podnews.net/audio/podnews260422.opus" />
+      </podcast:alternateEnclosure>
+      <podcast:alternateEnclosure type="video/mp4" length="30743112" bitrate="512000" title="Video">
+        <podcast:source uri="https://op3.dev/e,pg=9b024349-ccf0-5f69-a609-6b82873eab3c/podnews.net/audio/podnews260422.mp4" />
+      </podcast:alternateEnclosure>
+      <enclosure url="https://op3.dev/e,pg=9b024349-ccf0-5f69-a609-6b82873eab3c/podnews.net/audio/podnews260422.mp3" type="audio/mpeg" length="5939047" />
+    </item>
+  </channel>
+</rss>

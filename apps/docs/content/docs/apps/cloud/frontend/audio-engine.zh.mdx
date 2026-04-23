@@ -1,0 +1,19 @@
+---
+title: 音频引擎与同步
+---
+
+## 1. 所有权
+
+- 核心控制器：`apps/cloud-ui/src/components/AppShell/GlobalAudioController.tsx`
+- 状态权威：`apps/cloud-ui/src/store/playerStore.ts`
+
+## 2. 契约
+
+- 播放状态必须能跨路由保持
+- 高频媒体事件继续隔离，避免引发大面积 React 重渲染
+- 进度与 session 持久化仍是 browser-local
+- MediaSession 集成与 autoplay-retry 行为仍属于播放契约的一部分
+
+## 3. Cloud 特有说明
+
+Cloud 继续使用相同的前端播放表面模型，但远程媒体 bootstrap / fallback 行为现在受 Cloud 后端契约约束，而不是纯前端直连所有权。

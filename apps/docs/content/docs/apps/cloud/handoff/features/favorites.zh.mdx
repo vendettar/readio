@@ -1,0 +1,22 @@
+---
+title: 收藏夹
+---
+
+## 1. 范围
+
+- 路由：`/favorites`
+- 主要权威：`apps/cloud-ui/src/store/exploreStore.ts`
+
+## 2. 关键模型
+
+Favorites 仍然是 browser-local 记录，保存的节目元数据包括：
+
+- `feedUrl`
+- `podcastTitle`
+- `artworkUrl`
+- `podcastItunesId`
+- `countryAtSave`
+
+## 3. 路由契约
+
+只有在收藏记录里的路由元数据足够时，收藏条目才应深链到规范化 podcast/episode 路由；否则应退化为直接播放行为。

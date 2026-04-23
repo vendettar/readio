@@ -539,7 +539,6 @@ const locale = {
   episodeExplicit: 'Explícito',
   viewOriginal: 'Ver original',
   viewTranscript: 'Transcripción',
-  viewChapters: 'Capítulos',
   ariaPlayEpisode: 'Reproducir episodio',
   ariaOpenEpisodeDetail: 'Abrir detalles del episodio',
   episodeWebpage: 'Página web del episodio',

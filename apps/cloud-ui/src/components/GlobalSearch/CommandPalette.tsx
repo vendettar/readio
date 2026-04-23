@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { type LocalSearchResult, useGlobalSearch } from '../../hooks/useGlobalSearch'
 import { useNetworkStatus } from '../../hooks/useNetworkStatus'
-import type { Podcast as PodcastType, SearchEpisode } from '../../lib/discovery'
+import type { SearchPodcast as PodcastType, SearchEpisode } from '../../lib/discovery'
 import { buildEpisodeCompactKey } from '../../lib/discovery/editorPicks'
 import { executeLocalSearchAction } from '../../lib/localSearchActions'
 import {
@@ -204,23 +204,42 @@ export function CommandPalette() {
   const handleSelectPodcast = (podcast: PodcastType) => {
     closeOverlay()
     toMini()
+    const podcastId = podcast.podcastItunesId
+    if (!podcastId) return
     const showRoute = buildPodcastShowRoute({
       country: globalCountry,
-      podcastId: String(podcast.id || ''),
+      podcastId: String(podcastId),
     })
     if (showRoute) {
       void navigate(showRoute)
     }
   }
 
-  const handleSelectEpisode = (episode: SearchEpisode) => {
+  const handleSelectEpisode = async (episode: SearchEpisode) => {
     closeOverlay()
     toMini()
     const podcastId = episode.podcastItunesId?.toString()
-    const rawEpisodeId = episode.id?.toString() || ''
-    if (!podcastId || !rawEpisodeId) return
-    const episodeKey = buildEpisodeCompactKey(rawEpisodeId)
-    if (!episodeKey) return
+
+    if (!podcastId) return
+
+    const episodeIdentity = episode.episodeGuid?.trim()
+    if (!episodeIdentity) {
+      const showRoute = buildPodcastShowRoute({ country: globalCountry, podcastId })
+      if (showRoute) {
+        void navigate(showRoute)
+      }
+      return
+    }
+
+    const episodeKey = buildEpisodeCompactKey(episodeIdentity)
+    if (!episodeKey) {
+      const showRoute = buildPodcastShowRoute({ country: globalCountry, podcastId })
+      if (showRoute) {
+        void navigate(showRoute)
+      }
+      return
+    }
+
     const episodeRoute = buildPodcastEpisodeRoute({
       country: globalCountry,
       podcastId,
@@ -404,8 +423,8 @@ export function CommandPalette() {
                 <CommandGroup>
                   {suggestions.map((podcast: PodcastType) => (
                     <CommandItem
-                      key={`suggest-${podcast.id}`}
-                      value={`suggest-${podcast.id}`}
+                      key={`suggest-${podcast.podcastItunesId}`}
+                      value={`suggest-${podcast.podcastItunesId}`}
                       onSelect={() => handleSelectPodcast(podcast)}
                       className="flex items-center py-1 px-3 rounded-md hover:bg-primary hover:text-primary-foreground aria-selected:bg-primary aria-selected:text-primary-foreground data-[selected=true]:bg-primary data-[selected=true]:text-primary-foreground cursor-pointer"
                     >
@@ -459,13 +478,13 @@ export function CommandPalette() {
                   <CommandGroup heading={t('searchPodcasts')}>
                     {podcasts.slice(0, config.SEARCH_PODCASTS_LIMIT).map((podcast, index, arr) => (
                       <CommandItem
-                        key={`podcast-${podcast.id}`}
-                        value={`podcast-${podcast.id}`}
+                        key={`podcast-${podcast.podcastItunesId}`}
+                        value={`podcast-${podcast.podcastItunesId}`}
                         onSelect={() => handleSelectPodcast(podcast)}
                         className="relative py-1.5 px-3 rounded-md flex items-center gap-3 hover:bg-primary hover:text-primary-foreground hover:[&_.text-muted-foreground]:text-primary-foreground/80 aria-selected:bg-primary aria-selected:text-primary-foreground aria-selected:[&_.text-muted-foreground]:text-primary-foreground/80 data-[selected=true]:bg-primary data-[selected=true]:text-primary-foreground data-[selected=true]:[&_.text-muted-foreground]:text-primary-foreground/80 cursor-pointer group/search-item -mt-px hover:z-10 aria-selected:z-10 data-[selected=true]:z-10"
                       >
                         <InteractiveArtwork
-                          src={podcast.image || podcast.artwork}
+                          src={podcast.artwork}
                           imageSize={80}
                           size="sm"
                           className="h-10 w-10 shadow-sm"
@@ -490,30 +509,33 @@ export function CommandPalette() {
                 <>
                   <CommandSeparator className="my-1" />
                   <CommandGroup heading={t('searchEpisodes')}>
-                    {episodes.slice(0, config.SEARCH_EPISODES_LIMIT).map((episode, index, arr) => (
-                      <CommandItem
-                        key={`episode-${episode.id}`}
-                        value={`episode-${episode.id}`}
-                        onSelect={() => handleSelectEpisode(episode)}
-                        className="relative py-1.5 px-3 rounded-md flex items-center gap-3 hover:bg-primary hover:text-primary-foreground hover:[&_.text-muted-foreground]:text-primary-foreground/80 aria-selected:bg-primary aria-selected:text-primary-foreground aria-selected:[&_.text-muted-foreground]:text-primary-foreground/80 data-[selected=true]:bg-primary data-[selected=true]:text-primary-foreground data-[selected=true]:[&_.text-muted-foreground]:text-primary-foreground/80 cursor-pointer group/search-item -mt-px hover:z-10 aria-selected:z-10 data-[selected=true]:z-10"
-                      >
-                        <InteractiveArtwork
-                          src={episode.image || episode.artwork}
-                          imageSize={80}
-                          size="sm"
-                          className="h-10 w-10 shadow-sm"
-                        />
-                        <div className="flex flex-col flex-1 min-w-0">
-                          <span className="text-xs font-light truncate">{episode.title}</span>
-                          <span className="text-xxs text-muted-foreground truncate">
-                            {episode.author}
-                          </span>
-                        </div>
-                        {index < arr.length - 1 && (
-                          <div className="absolute bottom-0 start-3 end-3 h-px bg-border smart-divider smart-divider-bottom" />
-                        )}
-                      </CommandItem>
-                    ))}
+                    {episodes.slice(0, config.SEARCH_EPISODES_LIMIT).map((episode, index, arr) => {
+                      const episodeKey = episode.episodeUrl
+                      return (
+                        <CommandItem
+                          key={`episode-${episodeKey}`}
+                          value={`episode-${episodeKey}`}
+                          onSelect={() => handleSelectEpisode(episode)}
+                          className="relative py-1.5 px-3 rounded-md flex items-center gap-3 hover:bg-primary hover:text-primary-foreground hover:[&_.text-muted-foreground]:text-primary-foreground/80 aria-selected:bg-primary aria-selected:text-primary-foreground aria-selected:[&_.text-muted-foreground]:text-primary-foreground/80 data-[selected=true]:bg-primary data-[selected=true]:text-primary-foreground data-[selected=true]:[&_.text-muted-foreground]:text-primary-foreground/80 cursor-pointer group/search-item -mt-px hover:z-10 aria-selected:z-10 data-[selected=true]:z-10"
+                        >
+                          <InteractiveArtwork
+                            src={episode.artwork}
+                            imageSize={80}
+                            size="sm"
+                            className="h-10 w-10 shadow-sm"
+                          />
+                          <div className="flex flex-col flex-1 min-w-0">
+                            <span className="text-xs font-light truncate">{episode.title}</span>
+                            <span className="text-xxs text-muted-foreground truncate">
+                              {episode.showTitle}
+                            </span>
+                          </div>
+                          {index < arr.length - 1 && (
+                            <div className="absolute bottom-0 start-3 end-3 h-px bg-border smart-divider smart-divider-bottom" />
+                          )}
+                        </CommandItem>
+                      )
+                    })}
                   </CommandGroup>
                 </>
               )}

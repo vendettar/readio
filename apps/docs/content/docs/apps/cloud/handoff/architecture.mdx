@@ -1,0 +1,46 @@
+---
+title: Core Architecture
+---
+
+## 1. Scope
+
+Cloud is a split application:
+
+- `apps/cloud-ui`: React 19 + TypeScript frontend.
+- `apps/cloud-api`: Go backend serving the built frontend and same-origin APIs.
+
+## 2. Frontend Structure
+
+The frontend still follows the former Lite layering:
+
+- `src/routes`: TanStack Router routes
+- `src/routeComponents`: page orchestrators
+- `src/components`: reusable UI modules
+- `src/hooks`: shared business logic
+- `src/lib`: platform services, discovery clients, persistence helpers
+- `src/store`: Zustand stores
+
+## 3. Ownership Boundaries
+
+- Discovery/search/feed API ownership is backend-first and same-origin.
+- Browser-local playback, downloads, transcripts, favorites, subscriptions, and settings remain frontend-owned.
+- Frontend persistence stays browser-local; Cloud does not imply server-side sync.
+
+## 4. Runtime Patterns
+
+- Route pages orchestrate data fetching and rendering.
+- High-frequency audio events stay isolated in `GlobalAudioController`.
+- TanStack Query owns server-state caching; Zustand owns UI/playback/library state.
+- Request cancellation and stale-request guards are required across async flows.
+
+## 5. Frontend Surfaces Still Present in Cloud
+
+Cloud currently includes the major Lite-derived frontend surfaces:
+
+- Explore / Search
+- Podcast show and episode detail pages
+- Favorites / History / Subscriptions
+- Downloads
+- Files
+- Settings
+- Transcript-first reading and playback surfaces

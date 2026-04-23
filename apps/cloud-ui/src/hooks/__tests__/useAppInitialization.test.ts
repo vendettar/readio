@@ -16,17 +16,21 @@ const { mockExploreState, mockPlayerState } = vi.hoisted(() => ({
 }))
 
 vi.mock('../../store/exploreStore', () => ({
-  // biome-ignore lint/suspicious/noExplicitAny: test mock
-  useExploreStore: Object.assign((selector: any) => selector(mockExploreState), {
-    getState: () => mockExploreState,
-  }),
+  useExploreStore: Object.assign(
+    (selector: (state: typeof mockExploreState) => unknown) => selector(mockExploreState),
+    {
+      getState: () => mockExploreState,
+    }
+  ),
 }))
 
 vi.mock('../../store/playerStore', () => ({
-  // biome-ignore lint/suspicious/noExplicitAny: test mock
-  usePlayerStore: Object.assign((selector: any) => selector(mockPlayerState), {
-    getState: () => mockPlayerState,
-  }),
+  usePlayerStore: Object.assign(
+    (selector: (state: typeof mockPlayerState) => unknown) => selector(mockPlayerState),
+    {
+      getState: () => mockPlayerState,
+    }
+  ),
 }))
 
 const checkStorageQuota = vi.fn()

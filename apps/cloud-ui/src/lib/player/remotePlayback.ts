@@ -2,7 +2,7 @@ import type { EpisodeMetadata } from '../../store/playerStore'
 import { TRANSCRIPT_INGESTION_STATUS, useTranscriptStore } from '../../store/transcriptStore'
 import { getAsrCredentialKey, getCredential } from '../db/credentialsRepository'
 import type { Favorite, PlaybackSession } from '../dexieDb'
-import type { Episode, Podcast, SearchEpisode } from '../discovery'
+import type { FeedEpisode, Podcast, SearchEpisode } from '../discovery'
 import { downloadEpisode, removeDownloadedTrack } from '../downloadService'
 import { log, logError } from '../logger'
 import {
@@ -121,8 +121,8 @@ function mergeMetadata(metadata: EpisodeMetadata, patch?: MetadataPatch): Episod
 function resolvePlayableTitle(title: string | undefined, metadata: EpisodeMetadata): string {
   const normalizedTitle = title?.trim()
   if (normalizedTitle) return normalizedTitle
-  const fallbackPodcastTitle = metadata.podcastTitle?.trim()
-  if (fallbackPodcastTitle) return fallbackPodcastTitle
+  const fallbackShowTitle = metadata.showTitle?.trim()
+  if (fallbackShowTitle) return fallbackShowTitle
   return UNTITLED_PLAYBACK_TITLE
 }
 
@@ -227,7 +227,7 @@ export async function downloadAndResolve(
     audioUrl: payload.audioUrl,
     episodeTitle: payload.title,
     episodeDescription: payload.metadata.description,
-    podcastTitle: payload.metadata.podcastTitle || '',
+    showTitle: payload.metadata.showTitle || '',
     feedUrl: payload.metadata.podcastFeedUrl,
     artworkUrl: payload.artwork,
     podcastItunesId: payload.metadata.podcastItunesId,
@@ -294,7 +294,7 @@ async function playRemotePayload(
 
 export async function playFeedEpisodeWithDeps(
   deps: RemotePlaybackDeps,
-  episode: Episode,
+  episode: FeedEpisode,
   podcast: Podcast,
   options?: MetadataPatch & PlaybackModeOptions
 ): Promise<void> {
@@ -305,9 +305,9 @@ export async function playFeedEpisodeWithDeps(
 export async function playSearchEpisodeWithDeps(
   deps: RemotePlaybackDeps,
   episode: SearchEpisode,
-  options?: { feedUrl?: string; countryAtSave?: string; mode?: PlaybackRequestMode }
+  options?: { podcastFeedUrl?: string; countryAtSave?: string; mode?: PlaybackRequestMode }
 ): Promise<void> {
-  const payload = mapSearchEpisodeToPlaybackPayload(episode, options?.feedUrl)
+  const payload = mapSearchEpisodeToPlaybackPayload(episode, options?.podcastFeedUrl)
   await playRemotePayload(deps, payload, options, options)
 }
 

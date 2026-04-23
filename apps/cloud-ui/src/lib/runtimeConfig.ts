@@ -25,9 +25,6 @@ declare global {
       READIO_DB_NAME?: string
       READIO_EN_DICTIONARY_API_URL?: string
       READIO_EN_DICTIONARY_API_TRANSPORT?: string
-      READIO_DISCOVERY_LOOKUP_URL?: string
-      READIO_DISCOVERY_SEARCH_URL?: string
-      READIO_RSS_FEED_BASE_URL?: string
       READIO_MAX_AUDIO_CACHE_GB?: number | string
       READIO_DICT_CACHE_MAX_ENTRIES?: number | string
       READIO_DICT_CACHE_KEY?: string

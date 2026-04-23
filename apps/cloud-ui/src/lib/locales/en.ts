@@ -528,7 +528,6 @@ const locale = {
   episodeExplicit: 'Explicit',
   viewOriginal: 'View Original',
   viewTranscript: 'Transcript',
-  viewChapters: 'Chapters',
   ariaPlayEpisode: 'Play episode',
   ariaOpenEpisodeDetail: 'Open episode details',
   episodeWebpage: 'Episode Webpage',

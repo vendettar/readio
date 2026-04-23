@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { PlaybackSession, Track } from '../db/types'
 import { DB } from '../dexieDb'
 
 const {
@@ -106,9 +107,8 @@ vi.mock('../repositories/DownloadsRepository', () => ({
 
 vi.mock('../repositories/FilesRepository', () => ({
   FilesRepository: {
-    // biome-ignore lint/suspicious/noExplicitAny: test mock
-    iterateAllTracks: async (cb: any) => {
-      const tracks = await toArrayDownloadsMock()
+    iterateAllTracks: async (cb: (track: Track) => void | Promise<void>) => {
+      const tracks = (await toArrayDownloadsMock()) as Track[]
       for (const track of tracks) {
         await cb(track)
       }
@@ -118,9 +118,8 @@ vi.mock('../repositories/FilesRepository', () => ({
 
 vi.mock('../repositories/PlaybackRepository', () => ({
   PlaybackRepository: {
-    // biome-ignore lint/suspicious/noExplicitAny: test mock
-    iterateAllPlaybackSessions: async (cb: any) => {
-      const sessions = await toArraySessionsMock()
+    iterateAllPlaybackSessions: async (cb: (session: PlaybackSession) => void | Promise<void>) => {
+      const sessions = (await toArraySessionsMock()) as PlaybackSession[]
       for (const session of sessions) {
         await cb(session)
       }
@@ -201,7 +200,7 @@ describe('downloadService regressions', () => {
     const result = await persistAudioBlobAsDownload(new Blob(['audio']), {
       audioUrl: 'https://example.com/audio.mp3',
       episodeTitle: 'Episode',
-      podcastTitle: 'Podcast',
+      showTitle: 'Podcast',
       countryAtSave: 'us',
       transcriptUrl: 'https://example.com/transcript.vtt',
     })
@@ -226,6 +225,24 @@ describe('downloadService regressions', () => {
       transcriptUrl: 'https://example.com/transcript.vtt',
       setActive: true,
     })
+  })
+
+  it('persists providerEpisodeId separately from episodeGuid', async () => {
+    await persistAudioBlobAsDownload(new Blob(['audio']), {
+      audioUrl: 'https://example.com/audio.mp3',
+      episodeTitle: 'Episode',
+      showTitle: 'Podcast',
+      countryAtSave: 'us',
+      providerEpisodeId: 'provider-999',
+      episodeGuid: '766f112e-abcd-1234-5678-07e05e548074',
+    })
+
+    expect(DB.addPodcastDownload).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceProviderEpisodeId: 'provider-999',
+        sourceEpisodeGuid: '766f112e-abcd-1234-5678-07e05e548074',
+      })
+    )
   })
 
   it('rejects blob persistence when countryAtSave is missing', async () => {

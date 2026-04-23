@@ -1,9 +1,10 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import { HttpResponse, http } from 'msw'
 import type React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createQueryClientWrapper } from '../../../__tests__/queryClient'
 import { server } from '../../../__tests__/setup'
+import { makeFeedEpisode, makeParsedFeed, makePodcast } from '../../../lib/discovery/__tests__/fixtures'
 import PodcastEpisodesPage from '../PodcastEpisodesPage'
 
 let appleLookupHits = 0
@@ -96,20 +97,6 @@ vi.mock('react-virtuoso', () => ({
   },
 }))
 
-function createWrapper() {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: false,
-      },
-    },
-  })
-
-  return ({ children }: { children: React.ReactNode }) => (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-  )
-}
-
 describe('PodcastEpisodesPage editor pick path', () => {
   beforeEach(() => {
     appleLookupHits = 0
@@ -129,19 +116,17 @@ describe('PodcastEpisodesPage editor pick path', () => {
           const url = new URL(request.url)
           expect(url.searchParams.get('podcastItunesId')).toBe('12345')
 
-          return HttpResponse.json({
-            podcastItunesId: '12345',
-            collectionName: 'Editor Pick Podcast',
-            artistName: 'Host',
-            artworkUrl100: 'https://example.com/show-100.jpg',
-            artworkUrl600: 'https://example.com/show-600.jpg',
-            feedUrl: 'https://example.com/show-feed.xml',
-            collectionViewUrl: 'https://podcasts.apple.com/editor-pick',
-            genres: [{ genreId: '1', name: 'Technology' }],
-            trackCount: 2,
-            feedId: '4063627',
-            podcastGuid: '304b84f0-07b0-5265-b6b7-da5cf5aeb56e',
-          })
+          return HttpResponse.json(
+            makePodcast({
+              podcastItunesId: '12345',
+              title: 'Editor Pick Podcast',
+              artwork: 'https://example.com/show-600.jpg',
+              description: 'Editor pick description',
+              feedUrl: 'https://example.com/show-feed.xml',
+              lastUpdateTime: 1711497600,
+              episodeCount: 2,
+            })
+          )
         }
       ),
       http.get('http://localhost:3000/api/v1/discovery/feed', ({ request }) => {
@@ -149,29 +134,30 @@ describe('PodcastEpisodesPage editor pick path', () => {
         const url = new URL(request.url)
         expect(url.searchParams.get('url')).toBe('https://example.com/show-feed.xml')
 
-        return HttpResponse.json({
-          title: 'Editor Pick Podcast',
-          description: 'Feed description',
-          artworkUrl: 'https://example.com/show-600.jpg',
-          episodes: [
-            {
-              id: 'feed-ep-1',
-              episodeGuid: 'feed-ep-1',
-              title: 'Feed Episode 1',
-              description: 'Feed description',
-              audioUrl: 'https://example.com/audio-1.mp3',
-              pubDate: '2026-03-27T00:00:00.000Z',
-              artworkUrl: 'https://example.com/ep-1.jpg',
-              duration: 123,
-            },
-          ],
-        })
+        return HttpResponse.json(
+          makeParsedFeed({
+            title: 'Editor Pick Podcast',
+            description: 'Feed description',
+            artworkUrl: 'https://example.com/show-600.jpg',
+            episodes: [
+              makeFeedEpisode({
+                episodeGuid: 'feed-ep-1',
+                title: 'Feed Episode 1',
+                description: 'Feed description',
+                audioUrl: 'https://example.com/audio-1.mp3',
+                pubDate: '2026-03-27T00:00:00.000Z',
+                artworkUrl: 'https://example.com/ep-1.jpg',
+                duration: 123,
+              }),
+            ],
+          })
+        )
       })
     )
   })
 
   it('loads editor pick episode lists through podcast-byitunesid then RSS', async () => {
-    render(<PodcastEpisodesPage />, { wrapper: createWrapper() })
+    render(<PodcastEpisodesPage />, { wrapper: createQueryClientWrapper() })
 
     expect(await screen.findByText('Feed Episode 1')).not.toBeNull()
     expect(appleLookupHits).toBe(0)
@@ -182,15 +168,17 @@ describe('PodcastEpisodesPage editor pick path', () => {
   it('fails closed when the RSS fetch fails instead of pivoting to Apple/provider episodes', async () => {
     routeState = {
       editorPickSnapshot: {
-        id: '304b84f0-07b0-5265-b6b7-da5cf5aeb56e',
-        name: 'Editor Pick Podcast',
-        artistName: 'Host',
-        artworkUrl100: 'https://example.com/show-100.jpg',
-        url: 'https://podcasts.apple.com/editor-pick',
-        genres: [{ genreId: '1', name: 'Technology', url: '' }],
+        title: 'Editor Pick Podcast',
+        author: 'Host',
+        artwork: 'https://example.com/show-600.jpg',
+        description: 'Editor pick description',
         feedUrl: 'https://example.com/show-feed.xml',
+        lastUpdateTime: 1711497600,
         podcastItunesId: '12345',
-        podcastGuid: '304b84f0-07b0-5265-b6b7-da5cf5aeb56e',
+        genres: ['Technology'],
+        episodeCount: 2,
+        language: 'en',
+        dead: false,
       },
     }
 
@@ -201,7 +189,7 @@ describe('PodcastEpisodesPage editor pick path', () => {
       })
     )
 
-    render(<PodcastEpisodesPage />, { wrapper: createWrapper() })
+    render(<PodcastEpisodesPage />, { wrapper: createQueryClientWrapper() })
 
     expect(await screen.findByText('errorPodcastUnavailable')).not.toBeNull()
     expect(appleLookupHits).toBe(0)

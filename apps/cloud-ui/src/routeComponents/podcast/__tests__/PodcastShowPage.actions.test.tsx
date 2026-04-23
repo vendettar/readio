@@ -1,33 +1,35 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  makeFeedEpisode,
+  makeParsedFeed,
+  makePodcast,
+} from '../../../lib/discovery/__tests__/fixtures'
 import PodcastShowPage from '../PodcastShowPage'
 
 const subscribeMock = vi.fn()
 const unsubscribeMock = vi.fn()
 const playEpisodeMock = vi.fn()
 
-const podcast = {
+const podcast = makePodcast({
   podcastItunesId: 'pod-1',
   feedUrl: 'https://example.com/feed.xml',
-  collectionName: 'Podcast Show',
-  artistName: 'Host',
-  artworkUrl600: 'https://example.com/art-600.jpg',
-  artworkUrl100: 'https://example.com/art-100.jpg',
-  primaryGenreName: 'News',
-}
+  title: 'Podcast Show',
+  genres: ['News'],
+})
 
-const feed = {
+const feed = makeParsedFeed({
   description: 'desc',
   episodes: [
-    {
-      id: 'ep-1',
+    makeFeedEpisode({
+      episodeGuid: 'ep-1',
       title: 'Episode 1',
       audioUrl: 'https://example.com/ep-1.mp3',
       pubDate: '2024-01-01T00:00:00.000Z',
       description: 'Episode 1 description',
-    },
+    }),
   ],
-}
+})
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -52,6 +54,10 @@ vi.mock('@tanstack/react-query', () => ({
     }
     return { data: feed, isLoading: false, error: null }
   },
+  useQueryClient: () => ({
+    invalidateQueries: vi.fn(),
+    getQueryData: vi.fn(),
+  }),
 }))
 
 vi.mock('../../../hooks/useEpisodePlayback', () => ({
@@ -71,13 +77,16 @@ vi.mock('../../../store/exploreStore', () => ({
     }),
 }))
 
-vi.mock('../../../lib/discovery', () => ({
-  default: {
-    getPodcastIndexPodcastByItunesId: vi.fn(),
-    fetchPodcastFeed: vi.fn(),
-    getPodcastIndexEpisodes: vi.fn(),
-  },
-}))
+vi.mock('../../../lib/discovery', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../lib/discovery')>()
+  return {
+    ...actual,
+    default: {
+      getPodcastIndexPodcastByItunesId: vi.fn(),
+      fetchPodcastFeed: vi.fn(),
+    },
+  }
+})
 
 describe('PodcastShowPage action wiring', () => {
   beforeEach(() => {

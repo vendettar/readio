@@ -1,0 +1,34 @@
+---
+title: Apple Replacement
+---
+
+# Apple Replacement APIs
+
+Designed as drop-in replacements for the iTunes Search and Lookup APIs. **No authentication required.**
+
+## `/search` (Replacement)
+Returns results in a format similar to the iTunes Search API.
+- **URL**: `https://api.podcastindex.org/search?term={term}`
+- **Example Response**:
+```json
+{
+  "resultCount": 1,
+  "results": [{
+    "wrapperType": "track",
+    "kind": "podcast",
+    "collectionName": "Batman University",
+    "feedUrl": "https://feeds.theincomparable.com/batmanuniversity"
+  }]
+}
+```
+
+## `/lookup` (Replacement)
+Returns a result set similar to the iTunes Lookup API.
+- **URL**: `https://api.podcastindex.org/lookup?id={itunesId}`
+- **Example Response**:
+```json
+{
+  "resultCount": 1,
+  "results": [{ "collectionId": 1441923632, "collectionName": "Batman University" }]
+}
+```

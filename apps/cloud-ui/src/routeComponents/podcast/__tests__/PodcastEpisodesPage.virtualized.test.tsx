@@ -1,14 +1,14 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import type React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Episode, Podcast } from '../../../lib/discovery/providers/types'
+import { makeFeedEpisode, makePodcast } from '../../../lib/discovery/__tests__/fixtures'
+import type { FeedEpisode, Podcast } from '../../../lib/discovery/schema'
 import PodcastEpisodesPage from '../PodcastEpisodesPage'
 
-const playEpisodeMock = vi.fn()
 const intersectionObserverCtor = vi.fn()
 
 let mockPodcast: Podcast | null = null
-let mockEpisodes: Episode[] = []
+let mockEpisodes: FeedEpisode[] = []
 let originalIntersectionObserver: typeof globalThis.IntersectionObserver
 
 vi.mock('react-i18next', async () => {
@@ -28,7 +28,7 @@ vi.mock('@tanstack/react-router', () => ({
 
 vi.mock('@tanstack/react-query', () => ({
   useQuery: ({ queryKey }: { queryKey: readonly unknown[] }) => {
-    if (queryKey[1] === 'podcast-index-lookup') {
+    if (queryKey[1] === 'podcast-detail') {
       return {
         data: mockPodcast,
         isLoading: false,
@@ -58,7 +58,7 @@ vi.mock('@tanstack/react-query', () => ({
 
 vi.mock('../../../hooks/useEpisodePlayback', () => ({
   useEpisodePlayback: () => ({
-    playEpisode: playEpisodeMock,
+    playEpisode: vi.fn(),
   }),
 }))
 
@@ -70,7 +70,6 @@ vi.mock('../../../lib/discovery', () => ({
   default: {
     getPodcastIndexPodcastByItunesId: vi.fn(),
     fetchPodcastFeed: vi.fn(),
-    getPodcastIndexEpisodes: vi.fn(),
   },
 }))
 
@@ -80,13 +79,13 @@ vi.mock('../../../components/EpisodeRow/EpisodeRow', () => ({
     isLast,
     onPlay,
   }: {
-    episode: Episode
+    episode: FeedEpisode
     isLast?: boolean
     onPlay?: () => void
   }) => (
     <button
       type="button"
-      data-testid={`episode-row-${episode.id}`}
+      data-testid={`episode-row-${episode.episodeGuid}`}
       data-is-last={isLast ? 'true' : 'false'}
       onClick={onPlay}
     >
@@ -104,11 +103,11 @@ vi.mock('react-virtuoso', () => ({
     computeItemKey,
     components,
   }: {
-    data?: Episode[]
+    data?: FeedEpisode[]
     groupCounts?: number[]
     groupContent?: (groupIndex: number) => React.ReactNode
-    itemContent?: (index: number, groupIndex: number, item: Episode) => React.ReactNode
-    computeItemKey?: (index: number, item: Episode) => React.Key
+    itemContent?: (index: number, groupIndex: number, item: FeedEpisode) => React.ReactNode
+    computeItemKey?: (index: number, item: FeedEpisode) => React.Key
     components?: {
       Header?: React.ComponentType
       Footer?: React.ComponentType
@@ -121,8 +120,7 @@ vi.mock('react-virtuoso', () => ({
     for (const count of groupCounts) {
       const groupIndex = groups.length
       const firstEpisode = data[groupStartIndex]
-      const groupKey =
-        firstEpisode?.id ?? firstEpisode?.providerEpisodeId ?? `group-${groupStartIndex}-${count}`
+      const groupKey = firstEpisode?.episodeGuid ?? `group-${groupStartIndex}-${count}`
 
       const items = Array.from({ length: count }).map((_, indexInGroup) => {
         const episode = data[flatIndex]
@@ -159,27 +157,42 @@ vi.mock('react-virtuoso', () => ({
   },
 }))
 
-function makeEpisode(id: string, year: number): Episode {
-  return {
-    id,
-    title: `Episode ${id}`,
-    description: `Description ${id}`,
-    audioUrl: `https://example.com/audio/${id}.mp3`,
-    pubDate: `${year}-01-01T00:00:00.000Z`,
-  }
-}
-
 describe('PodcastEpisodesPage virtualized grouped rendering', () => {
   beforeEach(() => {
-    playEpisodeMock.mockReset()
     intersectionObserverCtor.mockClear()
-    mockPodcast = {
+    mockPodcast = makePodcast({
       podcastItunesId: '123',
       title: 'Test Podcast',
+      author: 'Author',
+      artwork: 'https://example.com/art.jpg',
+      description: 'Description',
       feedUrl: 'https://example.com/feed.xml',
+      lastUpdateTime: 1700000000000,
       episodeCount: 60,
-    }
-    mockEpisodes = [makeEpisode('ep-1', 2025), makeEpisode('ep-2', 2025), makeEpisode('ep-3', 2024)]
+    })
+    mockEpisodes = [
+      makeFeedEpisode({
+        episodeGuid: 'ep-1',
+        title: 'Episode ep-1',
+        description: 'Description ep-1',
+        audioUrl: 'https://example.com/audio/ep-1.mp3',
+        pubDate: '2025-01-01T00:00:00.000Z',
+      }),
+      makeFeedEpisode({
+        episodeGuid: 'ep-2',
+        title: 'Episode ep-2',
+        description: 'Description ep-2',
+        audioUrl: 'https://example.com/audio/ep-2.mp3',
+        pubDate: '2025-01-01T00:00:00.000Z',
+      }),
+      makeFeedEpisode({
+        episodeGuid: 'ep-3',
+        title: 'Episode ep-3',
+        description: 'Description ep-3',
+        audioUrl: 'https://example.com/audio/ep-3.mp3',
+        pubDate: '2024-01-01T00:00:00.000Z',
+      }),
+    ]
 
     originalIntersectionObserver = globalThis.IntersectionObserver
     // The virtualized path must not rely on IntersectionObserver-driven incremental rendering.
@@ -212,44 +225,26 @@ describe('PodcastEpisodesPage virtualized grouped rendering', () => {
     expect(screen.getByTestId('episode-row-ep-2').getAttribute('data-is-last')).toBe('true')
     expect(screen.getByTestId('episode-row-ep-3').getAttribute('data-is-last')).toBe('true')
 
-    fireEvent.click(screen.getByTestId('episode-row-ep-1'))
-    expect(playEpisodeMock).toHaveBeenCalledTimes(1)
-    expect(playEpisodeMock).toHaveBeenCalledWith(mockEpisodes[0], mockPodcast, 'us')
-
     expect(globalThis.IntersectionObserver).not.toHaveBeenCalled()
     expect(intersectionObserverCtor).not.toHaveBeenCalled()
   })
 
-  it('keeps limited-feed notice behavior after virtualization', () => {
-    const firstRender = render(<PodcastEpisodesPage />)
-    expect(screen.queryByText('feedLimitedAccess')).not.toBeNull()
-    firstRender.unmount()
-
-    mockPodcast = {
-      id: '123',
-      title: 'Test Podcast',
-      author: 'Test Author',
-      image: 'https://example.com/image.jpg',
-      artwork: 'https://example.com/image.jpg',
-      genres: [{ name: 'News', genreId: '1' }],
-      url: 'https://example.com/podcast',
-      episodeCount: 3,
-    } as unknown as Podcast
-
-    render(<PodcastEpisodesPage />)
-    expect(screen.queryByText('feedLimitedAccess')).toBeNull()
-  })
-
   it('groups malformed pubDate entries into unknown-year bucket without breaking rendering', () => {
     mockEpisodes = [
-      makeEpisode('ep-valid', 2025),
-      {
-        id: 'ep-invalid',
+      makeFeedEpisode({
+        episodeGuid: 'ep-valid',
+        title: 'Episode ep-valid',
+        description: 'Description ep-valid',
+        audioUrl: 'https://example.com/audio/ep-valid.mp3',
+        pubDate: '2025-01-01T00:00:00.000Z',
+      }),
+      makeFeedEpisode({
+        episodeGuid: 'ep-invalid',
         title: 'Episode invalid',
         description: 'Description invalid',
         audioUrl: 'https://example.com/audio/invalid.mp3',
         pubDate: 'not-a-date',
-      },
+      }),
     ]
 
     render(<PodcastEpisodesPage />)

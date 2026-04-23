@@ -50,6 +50,24 @@ vi.mock('../../lib/session', async (importOriginal) => {
 })
 
 describe('useSession', () => {
+  function makePlaybackSession(
+    overrides: Partial<PlaybackSession> & Pick<PlaybackSession, 'id' | 'title' | 'source'>
+  ): PlaybackSession {
+    return {
+      createdAt: 0,
+      lastPlayedAt: 0,
+      sizeBytes: 0,
+      durationSeconds: 0,
+      audioId: null,
+      subtitleId: null,
+      hasAudioBlob: false,
+      progress: 0,
+      audioFilename: '',
+      subtitleFilename: '',
+      ...overrides,
+    }
+  }
+
   beforeEach(() => {
     vi.useFakeTimers()
     vi.clearAllMocks()
@@ -73,23 +91,18 @@ describe('useSession', () => {
   })
 
   it('should trigger restoreSession on mount', async () => {
-    const mockLastSession = {
+    const mockLastSession = makePlaybackSession({
       id: 'last-session-id',
+      source: 'local',
+      title: 'Test',
       progress: 120,
       durationSeconds: 300,
       audioId: 'audio-1',
-      subtitleId: null,
       audioFilename: 'test.mp3',
-      subtitleFilename: '',
-      createdAt: 0,
-      lastPlayedAt: 0,
       hasAudioBlob: true,
-      source: 'local' as const,
-      title: 'Test',
       sizeBytes: 1000,
-    }
-    // biome-ignore lint/suspicious/noExplicitAny: Mocking DB return
-    vi.mocked(DB.getLastPlaybackSession).mockResolvedValue(mockLastSession as any)
+    })
+    vi.mocked(DB.getLastPlaybackSession).mockResolvedValue(mockLastSession)
     vi.mocked(DB.getAudioBlob).mockResolvedValue({
       id: 'audio-1',
       blob: new Blob(['audio']),
@@ -424,11 +437,12 @@ describe('useSession', () => {
 
     const mockExistingSession = {
       id: 'existing-session-123',
+      source: 'local' as const,
+      title: 'Existing Session',
       progress: 45.5,
       durationSeconds: 100,
     }
-    // biome-ignore lint/suspicious/noExplicitAny: mock
-    vi.mocked(DB.findLastSessionByUrl).mockResolvedValue(mockExistingSession as any)
+    vi.mocked(DB.findLastSessionByUrl).mockResolvedValue(makePlaybackSession(mockExistingSession))
 
     const seekToSpy = vi.spyOn(usePlayerStore.getState(), 'seekTo')
 

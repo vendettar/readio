@@ -13,29 +13,6 @@ import (
 	"time"
 )
 
-type appleDiscoveryPodcastResponse struct {
-	ID                string           `json:"id"`
-	Title             string           `json:"title"`
-	Author            string           `json:"author,omitempty"`
-	Image             string           `json:"image,omitempty"`
-	Artwork           string           `json:"artwork,omitempty"`
-	URL               string           `json:"url"`
-	AudioURL          string           `json:"audioUrl,omitempty"`
-	Genres            []discoveryGenre `json:"genres,omitempty"`
-	Description       string           `json:"description,omitempty"`
-	ReleaseDate       string           `json:"releaseDate,omitempty"`
-	Duration          *int64           `json:"duration,omitempty"`
-	FeedURL           string           `json:"feedUrl,omitempty"`
-	PodcastItunesID   string           `json:"podcastItunesId,omitempty"`
-	ProviderEpisodeID string           `json:"providerEpisodeId,omitempty"`
-	FeedID            string           `json:"feedId,omitempty"`
-	PodcastGUID       string           `json:"podcastGuid,omitempty"`
-	EpisodeGUID       string           `json:"episodeGuid,omitempty"`
-	EpisodeCount      *int64           `json:"episodeCount,omitempty"`
-	Language          string           `json:"language,omitempty"`
-	Link              string           `json:"link,omitempty"`
-}
-
 var extractPodcastIDFromURLRe = regexp.MustCompile(`(?i)/id(\d+)`)
 
 func buildAppleSearchURL(base, term, country string, limit int, entity string) string {
@@ -51,6 +28,14 @@ func buildAppleSearchURL(base, term, country string, limit int, entity string) s
 	return strings.TrimRight(base, "/") + "?" + params.Encode()
 }
 
+func buildApplePodcastSearchURL(base, term, country string, limit int) string {
+	return buildAppleSearchURL(base, term, country, limit, "")
+}
+
+func buildApplePodcastEpisodeSearchURL(base, term, country string, limit int) string {
+	return buildAppleSearchURL(base, term, country, limit, "podcastEpisode")
+}
+
 func buildAppleFeedURL(base, country string, limit int, resource string) string {
 	return fmt.Sprintf(
 		"%s/%s/podcasts/top/%d/%s.json",
@@ -61,53 +46,244 @@ func buildAppleFeedURL(base, country string, limit int, resource string) string 
 	)
 }
 
-type rawAppleFeedResponse struct {
+type rawAppleTopPodcastFeedResponse struct {
 	Feed struct {
-		Results []rawAppleItem `json:"results"`
+		Results []rawAppleTopPodcastItem `json:"results"`
 	} `json:"feed"`
 }
 
-type rawAppleLookupResponse struct {
-	Results []rawAppleItem `json:"results"`
+type rawAppleTopEpisodeFeedResponse struct {
+	Feed struct {
+		Results []rawAppleTopEpisodeItem `json:"results"`
+	} `json:"feed"`
 }
 
-type rawAppleGenre struct {
-	GenreID any    `json:"genreId"`
-	Name    string `json:"name"`
-	URL     string `json:"url"`
+type rawAppleTopPodcastItem struct {
+	ID            any               `json:"id"`
+	Name          string            `json:"name"`
+	ArtistName    string            `json:"artistName"`
+	ArtworkURL100 string            `json:"artworkUrl100"`
+	Genres        []json.RawMessage `json:"genres"`
 }
 
-type rawAppleItem struct {
-	ID                any               `json:"id"`
-	Name              string            `json:"name"`
-	ArtistName        string            `json:"artistName"`
-	ArtworkURL100     string            `json:"artworkUrl100"`
-	ArtworkURL600     string            `json:"artworkUrl600"`
-	ArtworkURL160     string            `json:"artworkUrl160"`
-	ArtworkURL60      string            `json:"artworkUrl60"`
-	URL               string            `json:"url"`
-	Genres            []json.RawMessage `json:"genres"`
-	Description       string            `json:"description"`
-	ShortDescription  string            `json:"shortDescription"`
-	ReleaseDate       string            `json:"releaseDate"`
-	Duration          any               `json:"duration"`
-	CollectionID      any               `json:"collectionId"`
-	CollectionName    string            `json:"collectionName"`
-	TrackName         string            `json:"trackName"`
-	FeedURL           string            `json:"feedUrl"`
-	CollectionViewURL string            `json:"collectionViewUrl"`
-	TrackCount        any               `json:"trackCount"`
-	EpisodeURL        string            `json:"episodeUrl"`
-	EpisodeGUID       string            `json:"episodeGuid"`
-	TrackID           any               `json:"trackId"`
-	TrackTimeMillis   any               `json:"trackTimeMillis"`
-	WrapperType       string            `json:"wrapperType"`
-	Kind              string            `json:"kind"`
+type rawAppleTopEpisodeItem struct {
+	Name          string            `json:"name"`
+	ArtistName    string            `json:"artistName"`
+	ArtworkURL100 string            `json:"artworkUrl100"`
+	URL           string            `json:"url"`
+	Genres        []json.RawMessage `json:"genres"`
+}
+
+// Route-specific raw types for Apple podcast search
+type rawApplePodcastSearchResponse struct {
+	Results []rawApplePodcastSearchItem `json:"results"`
+}
+
+type rawApplePodcastSearchItem struct {
+	CollectionID   any               `json:"collectionId"`
+	CollectionName string            `json:"collectionName"`
+	ArtistName     string            `json:"artistName"`
+	ArtworkURL600  string            `json:"artworkUrl600"`
+	ReleaseDate    string            `json:"releaseDate"`
+	TrackCount     any               `json:"trackCount"`
+	Genres         []json.RawMessage `json:"genres"`
+}
+
+// Route-specific response DTO for Apple podcast search
+type discoverySearchPodcastResponseItem struct {
+	Title           string   `json:"title"`
+	Author          string   `json:"author"`
+	Artwork         string   `json:"artwork"`
+	ReleaseDate     string   `json:"releaseDate,omitempty"`
+	EpisodeCount    int64    `json:"episodeCount"`
+	PodcastItunesID string   `json:"podcastItunesId"`
+	Genres          []string `json:"genres"`
+}
+
+// Route-specific response DTO for Apple episode search
+type discoverySearchEpisodeResponseItem struct {
+	PodcastItunesID  string `json:"podcastItunesId"`
+	Title            string `json:"title"`
+	ShowTitle        string `json:"showTitle"`
+	Artwork          string `json:"artwork"`
+	EpisodeURL       string `json:"episodeUrl"`
+	EpisodeGUID      string `json:"episodeGuid"`
+	ReleaseDate      string `json:"releaseDate,omitempty"`
+	TrackTimeMillis  *int64 `json:"trackTimeMillis,omitempty"`
+	ShortDescription string `json:"shortDescription,omitempty"`
+}
+
+// Route-specific raw types for Apple episode search
+type rawAppleEpisodeSearchResponse struct {
+	Results []rawAppleEpisodeSearchItem `json:"results"`
+}
+
+type rawAppleEpisodeSearchItem struct {
+	CollectionID     any    `json:"collectionId"`
+	CollectionName   string `json:"collectionName"`
+	TrackName        string `json:"trackName"`
+	ArtworkURL600    string `json:"artworkUrl600"`
+	EpisodeURL       string `json:"episodeUrl"`
+	EpisodeGUID      string `json:"episodeGuid"`
+	ReleaseDate      string `json:"releaseDate"`
+	TrackTimeMillis  any    `json:"trackTimeMillis"`
+	ShortDescription string `json:"shortDescription"`
+}
+
+func isRelevantAppleEpisodeSearchItem(item rawAppleEpisodeSearchItem, queryTokens []string) bool {
+	if len(queryTokens) == 0 {
+		return true
+	}
+
+	searchText := strings.ToLower(
+		strings.Join(
+			[]string{
+				strings.TrimSpace(item.TrackName),
+				strings.TrimSpace(item.CollectionName),
+			},
+			" ",
+		),
+	)
+
+	for _, token := range queryTokens {
+		if strings.Contains(searchText, token) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func mapAppleEpisodeSearchItem(item rawAppleEpisodeSearchItem) (discoverySearchEpisodeResponseItem, bool) {
+	audioURL := strings.TrimSpace(item.EpisodeURL)
+	releaseDate := strings.TrimSpace(item.ReleaseDate)
+	title := strings.TrimSpace(item.TrackName)
+	showTitle := strings.TrimSpace(item.CollectionName)
+	episodeGUID := strings.TrimSpace(item.EpisodeGUID)
+	itunesIDStr := asStringID(item.CollectionID)
+	artwork := strings.TrimSpace(item.ArtworkURL600)
+	shortDescription := strings.TrimSpace(item.ShortDescription)
+	durationMs := asOptionalInt64(item.TrackTimeMillis)
+
+	if audioURL == "" ||
+		title == "" ||
+		showTitle == "" ||
+		episodeGUID == "" ||
+		itunesIDStr == "" ||
+		artwork == "" {
+		return discoverySearchEpisodeResponseItem{}, false
+	}
+
+	return discoverySearchEpisodeResponseItem{
+		PodcastItunesID:  itunesIDStr,
+		Title:            title,
+		ShowTitle:        showTitle,
+		Artwork:          artwork,
+		EpisodeURL:       audioURL,
+		EpisodeGUID:      episodeGUID,
+		ReleaseDate:      releaseDate,
+		TrackTimeMillis:  durationMs,
+		ShortDescription: shortDescription,
+	}, true
+}
+
+func isRelevantApplePodcastSearchItem(item rawApplePodcastSearchItem, queryTokens []string) bool {
+	if len(queryTokens) == 0 {
+		return true
+	}
+
+	searchText := strings.ToLower(
+		strings.Join(
+			[]string{
+				strings.TrimSpace(item.CollectionName),
+				strings.TrimSpace(item.ArtistName),
+			},
+			" ",
+		),
+	)
+
+	for _, token := range queryTokens {
+		if strings.Contains(searchText, token) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func mapApplePodcastSearchItem(
+	item rawApplePodcastSearchItem,
+) (discoverySearchPodcastResponseItem, bool) {
+	itunesIDStr := asStringID(item.CollectionID)
+	title := strings.TrimSpace(item.CollectionName)
+	artwork := strings.TrimSpace(item.ArtworkURL600)
+	releaseDate := strings.TrimSpace(item.ReleaseDate)
+	author := strings.TrimSpace(item.ArtistName)
+	genres := mapDiscoveryGenreNames(item.Genres)
+	episodeCount := asOptionalInt64(item.TrackCount)
+
+	if itunesIDStr == "" ||
+		title == "" ||
+		artwork == "" ||
+		author == "" ||
+		episodeCount == nil {
+		return discoverySearchPodcastResponseItem{}, false
+	}
+
+	return discoverySearchPodcastResponseItem{
+		Title:           title,
+		Author:          author,
+		Artwork:         artwork,
+		ReleaseDate:     releaseDate,
+		EpisodeCount:    *episodeCount,
+		PodcastItunesID: itunesIDStr,
+		Genres:          genres,
+	}, true
+}
+
+// Narrow DTOs for top-podcasts route (Explore surface contract)
+type topPodcastResponse struct {
+	Title           string   `json:"title"`
+	Author          string   `json:"author"`
+	Artwork         string   `json:"artwork"`
+	Genres          []string `json:"genres"`
+	PodcastItunesID string   `json:"podcastItunesId"`
+}
+
+// Narrow DTOs for top-episodes route (Explore surface contract)
+type topEpisodeResponse struct {
+	Title           string   `json:"title"`
+	Author          string   `json:"author"`
+	Artwork         string   `json:"artwork"`
+	PodcastItunesID string   `json:"podcastItunesId"`
+	Genres          []string `json:"genres"`
+}
+
+var errDiscoveryChartInvalidPayload = errors.New("discovery chart payload invalid")
+
+func validateAppleTopPodcastChartPayload(results []rawAppleTopPodcastItem) error {
+	if len(results) == 0 {
+		return errors.Join(errDiscoveryChartInvalidPayload, errors.New("feed results empty"))
+	}
+	return nil
+}
+
+func validateAppleTopEpisodeChartPayload(results []rawAppleTopEpisodeItem) error {
+	if len(results) == 0 {
+		return errors.Join(errDiscoveryChartInvalidPayload, errors.New("feed results empty"))
+	}
+	return nil
 }
 
 func (s *discoveryService) handleTopPodcasts(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	route := discoveryTopPodcastsRoute
+
+	if !s.allowTopRequest(effectiveClientIP(r, s.trustedProxies)) {
+		writeDiscoveryErrorSpec(w, http.StatusTooManyRequests, discoveryErrRateLimited)
+		logDiscoveryRequest(route, UpstreamKindAppleFeed, s.rssBaseURL, time.Since(start), errDiscoveryRateLimited, CacheStatusUncached)
+		return
+	}
 
 	country, err := parseDiscoveryCountry(r.URL.Query())
 	if err != nil {
@@ -126,24 +302,33 @@ func (s *discoveryService) handleTopPodcasts(w http.ResponseWriter, r *http.Requ
 	ctx, cancel := context.WithTimeout(r.Context(), s.timeout)
 	defer cancel()
 
-	fetch := func(ctx context.Context) (any, error) {
+	fetch := func(ctx context.Context) ([]topPodcastResponse, error) {
 		upstreamURL := buildAppleFeedURL(s.rssBaseURL, country, limit, "podcasts")
-		var payload rawAppleFeedResponse
+		var payload rawAppleTopPodcastFeedResponse
 		if err := s.fetchJSON(ctx, upstreamURL, &payload); err != nil {
 			return nil, errors.Join(errDiscoveryUpstreamError, err)
 		}
 
-		items := make([]discoveryPodcastResponse, 0, len(payload.Feed.Results))
+		if err := validateAppleTopPodcastChartPayload(payload.Feed.Results); err != nil {
+			return nil, err
+		}
+
+		items := make([]topPodcastResponse, 0, len(payload.Feed.Results))
 		for _, item := range payload.Feed.Results {
 			mapped, ok := mapTopPodcast(item)
 			if ok {
-				items = append(items, mapAppleDiscoveryPodcastToDiscoveryPodcast(mapped))
+				items = append(items, mapped)
 			}
 		}
+
+		if len(items) == 0 {
+			return nil, errors.Join(errDiscoveryChartInvalidPayload, errors.New("all rows dropped during mapping"))
+		}
+
 		return items, nil
 	}
 
-	data, cacheStatus, err := s.getWithGracefulDegradation(ctx, cacheKey, discoveryCacheTTLTopPodcasts, fetch)
+	data, cacheStatus, err := getWithGracefulDegradation(s, ctx, cacheKey, discoveryCacheTTLTopPodcasts, fetch)
 	if err != nil {
 		writeDiscoveryMappedError(w, err)
 		logDiscoveryRequest(route, UpstreamKindAppleFeed, s.rssBaseURL, time.Since(start), err, cacheStatus)
@@ -157,6 +342,12 @@ func (s *discoveryService) handleTopPodcasts(w http.ResponseWriter, r *http.Requ
 func (s *discoveryService) handleTopEpisodes(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
 	route := discoveryTopEpisodesRoute
+
+	if !s.allowTopRequest(effectiveClientIP(r, s.trustedProxies)) {
+		writeDiscoveryErrorSpec(w, http.StatusTooManyRequests, discoveryErrRateLimited)
+		logDiscoveryRequest(route, UpstreamKindAppleFeed, s.rssBaseURL, time.Since(start), errDiscoveryRateLimited, CacheStatusUncached)
+		return
+	}
 
 	country, err := parseDiscoveryCountry(r.URL.Query())
 	if err != nil {
@@ -175,24 +366,33 @@ func (s *discoveryService) handleTopEpisodes(w http.ResponseWriter, r *http.Requ
 	ctx, cancel := context.WithTimeout(r.Context(), s.timeout)
 	defer cancel()
 
-	fetch := func(ctx context.Context) (any, error) {
+	fetch := func(ctx context.Context) ([]topEpisodeResponse, error) {
 		upstreamURL := buildAppleFeedURL(s.rssBaseURL, country, limit, "podcast-episodes")
-		var payload rawAppleFeedResponse
+		var payload rawAppleTopEpisodeFeedResponse
 		if err := s.fetchJSON(ctx, upstreamURL, &payload); err != nil {
 			return nil, errors.Join(errDiscoveryUpstreamError, err)
 		}
 
-		items := make([]discoveryPodcastResponse, 0, len(payload.Feed.Results))
+		if err := validateAppleTopEpisodeChartPayload(payload.Feed.Results); err != nil {
+			return nil, err
+		}
+
+		items := make([]topEpisodeResponse, 0, len(payload.Feed.Results))
 		for _, item := range payload.Feed.Results {
 			mapped, ok := mapTopEpisode(item)
 			if ok {
-				items = append(items, mapAppleDiscoveryPodcastToDiscoveryPodcast(mapped))
+				items = append(items, mapped)
 			}
 		}
+
+		if len(items) == 0 {
+			return nil, errors.Join(errDiscoveryChartInvalidPayload, errors.New("all rows dropped during mapping"))
+		}
+
 		return items, nil
 	}
 
-	data, cacheStatus, err := s.getWithGracefulDegradation(ctx, cacheKey, discoveryCacheTTLTopEpisodes, fetch)
+	data, cacheStatus, err := getWithGracefulDegradation(s, ctx, cacheKey, discoveryCacheTTLTopEpisodes, fetch)
 	if err != nil {
 		writeDiscoveryMappedError(w, err)
 		logDiscoveryRequest(route, UpstreamKindAppleFeed, s.rssBaseURL, time.Since(start), err, cacheStatus)
@@ -208,7 +408,7 @@ func (s *discoveryService) handleSearchPodcasts(w http.ResponseWriter, r *http.R
 	route := discoverySearchPodcastsRoute
 
 	if !s.allowSearchRequest(effectiveClientIP(r, s.trustedProxies)) {
-		writeDiscoveryError(w, http.StatusTooManyRequests, "RATE_LIMITED", "rate limit exceeded")
+		writeDiscoveryErrorSpec(w, http.StatusTooManyRequests, discoveryErrRateLimited)
 		logDiscoveryRequest(route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), errDiscoveryRateLimited, CacheStatusUncached)
 		return
 	}
@@ -240,56 +440,27 @@ func (s *discoveryService) handleSearchPodcasts(w http.ResponseWriter, r *http.R
 	ctx, cancel := context.WithTimeout(r.Context(), s.timeout)
 	defer cancel()
 
-	upstreamURL := buildAppleSearchURL(s.searchBaseURL, term, country, limit, "")
+	upstreamURL := buildApplePodcastSearchURL(s.searchBaseURL, term, country, limit)
 
-	var payload rawAppleLookupResponse
+	var payload rawApplePodcastSearchResponse
 	if err := s.fetchJSON(ctx, upstreamURL, &payload); err != nil {
 		writeDiscoveryMappedError(w, err)
 		logDiscoveryRequest(route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), err, CacheStatusMissError)
 		return
 	}
 
-	type searchPodcastItem struct {
-		ID                string   `json:"id"`
-		Title             string   `json:"title"`
-		Author            string   `json:"author,omitempty"`
-		Image             string   `json:"image,omitempty"`
-		Artwork           string   `json:"artwork,omitempty"`
-		FeedURL           string   `json:"feedUrl,omitempty"`
-		Description       string   `json:"description,omitempty"`
-		PodcastItunesID   string   `json:"podcastItunesId,omitempty"`
-		FeedID            string   `json:"feedId,omitempty"`
-		PodcastGUID       string   `json:"podcastGuid,omitempty"`
-		Language          string   `json:"language,omitempty"`
-		EpisodeCount      *int64   `json:"episodeCount,omitempty"`
-		Genres            []string `json:"genres,omitempty"`
-		CollectionViewURL string   `json:"collectionViewUrl,omitempty"`
-	}
-
-	items := make([]searchPodcastItem, 0, len(payload.Results))
+	queryTokens := tokenizeDiscoveryQuery(term)
+	items := make([]discoverySearchPodcastResponseItem, 0, len(payload.Results))
 	for _, item := range payload.Results {
-		if item.Kind != "podcast" && item.WrapperType != "collection" {
-			continue
-		}
-		if !isRelevantDiscoverySearchResult(item, term) {
+		if !isRelevantApplePodcastSearchItem(item, queryTokens) {
 			continue
 		}
 
-		itunesIDStr := asStringID(item.CollectionID)
-		image := firstNonEmpty(strings.TrimSpace(item.ArtworkURL100), strings.TrimSpace(item.ArtworkURL600))
-		artwork := firstNonEmpty(strings.TrimSpace(item.ArtworkURL600), image)
-
-		items = append(items, searchPodcastItem{
-			ID:                itunesIDStr,
-			Title:             strings.TrimSpace(item.CollectionName),
-			Author:            strings.TrimSpace(item.ArtistName),
-			Image:             image,
-			Artwork:           artwork,
-			FeedURL:           strings.TrimSpace(item.FeedURL),
-			Description:       strings.TrimSpace(item.Description),
-			PodcastItunesID:   itunesIDStr,
-			CollectionViewURL: strings.TrimSpace(item.CollectionViewURL),
-		})
+		mapped, ok := mapApplePodcastSearchItem(item)
+		if !ok {
+			continue
+		}
+		items = append(items, mapped)
 	}
 
 	writeDiscoveryJSON(w, http.StatusOK, items)
@@ -301,7 +472,7 @@ func (s *discoveryService) handleSearchEpisodes(w http.ResponseWriter, r *http.R
 	route := discoverySearchEpisodesRoute
 
 	if !s.allowSearchRequest(effectiveClientIP(r, s.trustedProxies)) {
-		writeDiscoveryError(w, http.StatusTooManyRequests, "RATE_LIMITED", "rate limit exceeded")
+		writeDiscoveryErrorSpec(w, http.StatusTooManyRequests, discoveryErrRateLimited)
 		logDiscoveryRequest(route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), errDiscoveryRateLimited, CacheStatusUncached)
 		return
 	}
@@ -333,157 +504,113 @@ func (s *discoveryService) handleSearchEpisodes(w http.ResponseWriter, r *http.R
 	ctx, cancel := context.WithTimeout(r.Context(), s.timeout)
 	defer cancel()
 
-	upstreamURL := buildAppleSearchURL(s.searchBaseURL, term, country, limit, "podcastEpisode")
+	upstreamURL := buildApplePodcastEpisodeSearchURL(s.searchBaseURL, term, country, limit)
 
-	var payload rawAppleLookupResponse
+	var payload rawAppleEpisodeSearchResponse
 	if err := s.fetchJSON(ctx, upstreamURL, &payload); err != nil {
 		writeDiscoveryMappedError(w, err)
 		logDiscoveryRequest(route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), err, CacheStatusMissError)
 		return
 	}
 
-	type searchEpisodeItem struct {
-		ID                string `json:"id"`
-		PodcastItunesID   string `json:"podcastItunesId,omitempty"`
-		Title             string `json:"title"`
-		Author            string `json:"author,omitempty"`
-		PodcastTitle      string `json:"podcastTitle,omitempty"`
-		Image             string `json:"image,omitempty"`
-		Artwork           string `json:"artwork,omitempty"`
-		FeedURL           string `json:"feedUrl,omitempty"`
-		EpisodeURL        string `json:"episodeUrl"`
-		ReleaseDate       string `json:"releaseDate,omitempty"`
-		TrackTimeMillis   *int64 `json:"trackTimeMillis,omitempty"`
-		Description       string `json:"description,omitempty"`
-		ShortDescription  string `json:"shortDescription,omitempty"`
-		EpisodeGUID       string `json:"episodeGuid,omitempty"`
-		ProviderEpisodeID *int64 `json:"providerEpisodeId,omitempty"`
-	}
-
-	items := make([]searchEpisodeItem, 0, len(payload.Results))
+	queryTokens := tokenizeDiscoveryQuery(term)
+	items := make([]discoverySearchEpisodeResponseItem, 0, len(payload.Results))
 	for _, item := range payload.Results {
-		if item.Kind != "podcast-episode" && item.WrapperType != "track" {
-			continue
-		}
-		if !isRelevantDiscoverySearchResult(item, term) {
+		if !isRelevantAppleEpisodeSearchItem(item, queryTokens) {
 			continue
 		}
 
-		audioURL := strings.TrimSpace(item.EpisodeURL)
-		releaseDate := strings.TrimSpace(item.ReleaseDate)
-		title := firstNonEmpty(item.TrackName, item.CollectionName)
-		if audioURL == "" || releaseDate == "" || title == "" {
+		mapped, ok := mapAppleEpisodeSearchItem(item)
+		if !ok {
 			continue
 		}
-
-		itunesIDStr := asStringID(item.CollectionID)
-		image := firstNonEmpty(strings.TrimSpace(item.ArtworkURL160), strings.TrimSpace(item.ArtworkURL60))
-		artwork := firstNonEmpty(strings.TrimSpace(item.ArtworkURL600), image)
-		providerEpisodeID := asOptionalInt64(item.TrackID)
-		description := firstNonEmpty(item.Description, item.ShortDescription)
-		durationMs := asOptionalInt64(item.TrackTimeMillis)
-
-		items = append(items, searchEpisodeItem{
-			ID:                asStringID(item.TrackID),
-			PodcastItunesID:   itunesIDStr,
-			Title:             title,
-			Author:            strings.TrimSpace(item.ArtistName),
-			PodcastTitle:      strings.TrimSpace(item.CollectionName),
-			Image:             image,
-			Artwork:           artwork,
-			FeedURL:           strings.TrimSpace(item.FeedURL),
-			EpisodeURL:        audioURL,
-			ReleaseDate:       releaseDate,
-			TrackTimeMillis:   durationMs,
-			Description:       description,
-			ShortDescription:  strings.TrimSpace(item.ShortDescription),
-			EpisodeGUID:       strings.TrimSpace(item.EpisodeGUID),
-			ProviderEpisodeID: providerEpisodeID,
-		})
+		items = append(items, mapped)
 	}
 
 	writeDiscoveryJSON(w, http.StatusOK, items)
 	logDiscoveryRequest(route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), nil, CacheStatusUncached)
 }
 
-func isRelevantDiscoverySearchResult(item rawAppleItem, query string) bool {
-	tokens := tokenizeDiscoveryQuery(query)
-	if len(tokens) == 0 {
-		return true
+func mapTopPodcast(item rawAppleTopPodcastItem) (topPodcastResponse, bool) {
+	id := asStringID(item.ID)
+	title := strings.TrimSpace(item.Name)
+	author := strings.TrimSpace(item.ArtistName)
+	artwork := strings.TrimSpace(item.ArtworkURL100)
+	genres := mapDiscoveryGenreNames(item.Genres)
+
+	if id == "" || title == "" || author == "" || artwork == "" {
+		return topPodcastResponse{}, false
 	}
 
-	searchText := strings.ToLower(
-		strings.Join(
-			[]string{
-				strings.TrimSpace(item.CollectionName),
-				strings.TrimSpace(item.TrackName),
-				strings.TrimSpace(item.ArtistName),
-			},
-			" ",
-		),
-	)
+	return topPodcastResponse{
+		Title:           title,
+		Author:          author,
+		Artwork:         artwork,
+		Genres:          genres,
+		PodcastItunesID: id,
+	}, true
+}
 
-	for _, token := range tokens {
-		if strings.Contains(searchText, token) {
-			return true
+func mapTopEpisode(item rawAppleTopEpisodeItem) (topEpisodeResponse, bool) {
+	title := strings.TrimSpace(item.Name)
+	if title == "" {
+		return topEpisodeResponse{}, false
+	}
+
+	author := strings.TrimSpace(item.ArtistName)
+	if author == "" {
+		return topEpisodeResponse{}, false
+	}
+
+	podcastItunesID := extractPodcastIDFromURL(strings.TrimSpace(item.URL))
+	if podcastItunesID == "" {
+		return topEpisodeResponse{}, false
+	}
+
+	artwork := strings.TrimSpace(item.ArtworkURL100)
+	if artwork == "" {
+		return topEpisodeResponse{}, false
+	}
+
+	genres := mapDiscoveryGenreNames(item.Genres)
+
+	return topEpisodeResponse{
+		Title:           title,
+		Author:          author,
+		Artwork:         artwork,
+		Genres:          genres,
+		PodcastItunesID: podcastItunesID,
+	}, true
+}
+
+func mapDiscoveryGenreNames(rawGenres []json.RawMessage) []string {
+	if len(rawGenres) == 0 {
+		return []string{}
+	}
+	names := make([]string, 0, len(rawGenres))
+	for _, rawGenre := range rawGenres {
+		var textValue string
+		if err := json.Unmarshal(rawGenre, &textValue); err == nil {
+			name := strings.TrimSpace(textValue)
+			if name != "" {
+				names = append(names, name)
+			}
+			continue
+		}
+
+		var objectValue struct {
+			Name string `json:"name"`
+		}
+		if err := json.Unmarshal(rawGenre, &objectValue); err != nil {
+			continue
+		}
+
+		name := strings.TrimSpace(objectValue.Name)
+		if name != "" {
+			names = append(names, name)
 		}
 	}
-
-	return false
-}
-
-func mapTopPodcast(item rawAppleItem) (appleDiscoveryPodcastResponse, bool) {
-	id := asStringID(item.ID)
-	title := firstNonEmpty(item.Name)
-	itemURL := strings.TrimSpace(item.URL)
-	if id == "" || title == "" || itemURL == "" {
-		return appleDiscoveryPodcastResponse{}, false
-	}
-
-	image := firstNonEmpty(strings.TrimSpace(item.ArtworkURL100), strings.TrimSpace(item.ArtworkURL600))
-	artwork := firstNonEmpty(strings.TrimSpace(item.ArtworkURL600), image)
-
-	return appleDiscoveryPodcastResponse{
-		ID:      id,
-		Title:   title,
-		Author:  strings.TrimSpace(item.ArtistName),
-		Image:   image,
-		Artwork: artwork,
-		URL:     itemURL,
-		Genres:  mapDiscoveryGenres(item.Genres),
-	}, true
-}
-
-func mapTopEpisode(item rawAppleItem) (appleDiscoveryPodcastResponse, bool) {
-	id := asStringID(item.ID)
-	title := firstNonEmpty(item.Name)
-	itemURL := strings.TrimSpace(item.URL)
-	if id == "" || title == "" || itemURL == "" {
-		return appleDiscoveryPodcastResponse{}, false
-	}
-
-	image := firstNonEmpty(strings.TrimSpace(item.ArtworkURL100), strings.TrimSpace(item.ArtworkURL600))
-	artwork := firstNonEmpty(strings.TrimSpace(item.ArtworkURL600), image)
-	PodcastItunesID := asStringID(item.CollectionID)
-	if PodcastItunesID == "" {
-		PodcastItunesID = extractPodcastIDFromURL(itemURL)
-	}
-
-	return appleDiscoveryPodcastResponse{
-		ID:                id,
-		Title:             title,
-		Author:            strings.TrimSpace(item.ArtistName),
-		Image:             image,
-		Artwork:           artwork,
-		URL:               itemURL,
-		AudioURL:          strings.TrimSpace(item.EpisodeURL),
-		Genres:            []discoveryGenre{},
-		Description:       strings.TrimSpace(item.Description),
-		ReleaseDate:       strings.TrimSpace(item.ReleaseDate),
-		Duration:          asOptionalInt64(item.Duration),
-		PodcastItunesID:   PodcastItunesID,
-		ProviderEpisodeID: asStringID(item.TrackID),
-	}, true
+	return names
 }
 
 func extractPodcastIDFromURL(itemURL string) string {
@@ -495,71 +622,4 @@ func extractPodcastIDFromURL(itemURL string) string {
 		return match[1]
 	}
 	return ""
-}
-
-func mapDiscoveryGenres(rawGenres []json.RawMessage) []discoveryGenre {
-	if len(rawGenres) == 0 {
-		return []discoveryGenre{}
-	}
-
-	genres := make([]discoveryGenre, 0, len(rawGenres))
-	for index, rawGenre := range rawGenres {
-		var textValue string
-		if err := json.Unmarshal(rawGenre, &textValue); err == nil {
-			name := strings.TrimSpace(textValue)
-			if name == "" {
-				continue
-			}
-			genres = append(genres, discoveryGenre{
-				GenreID: strconv.Itoa(index),
-				Name:    name,
-			})
-			continue
-		}
-
-		var objectValue rawAppleGenre
-		if err := json.Unmarshal(rawGenre, &objectValue); err != nil {
-			continue
-		}
-
-		genreID := asStringID(objectValue.GenreID)
-		if genreID == "" {
-			genreID = strconv.Itoa(index)
-		}
-		name := strings.TrimSpace(objectValue.Name)
-		if name == "" {
-			name = genreID
-		}
-		genres = append(genres, discoveryGenre{
-			GenreID: genreID,
-			Name:    name,
-			URL:     strings.TrimSpace(objectValue.URL),
-		})
-	}
-
-	return genres
-}
-
-func mapAppleDiscoveryPodcastToDiscoveryPodcast(a appleDiscoveryPodcastResponse) discoveryPodcastResponse {
-	return discoveryPodcastResponse{
-		ID:                a.ID,
-		Title:             a.Title,
-		Author:            a.Author,
-		URL:               a.URL,
-		Image:             a.Image,
-		Artwork:           a.Artwork,
-		Genres:            a.Genres,
-		Description:       a.Description,
-		ReleaseDate:       a.ReleaseDate,
-		Duration:          a.Duration,
-		FeedURL:           a.FeedURL,
-		PodcastItunesID:   a.PodcastItunesID,
-		ProviderEpisodeID: a.ProviderEpisodeID,
-		FeedID:            a.FeedID,
-		PodcastGUID:       a.PodcastGUID,
-		EpisodeGUID:       a.EpisodeGUID,
-		EpisodeCount:      a.EpisodeCount,
-		Language:          a.Language,
-		AudioURL:          a.AudioURL,
-	}
 }

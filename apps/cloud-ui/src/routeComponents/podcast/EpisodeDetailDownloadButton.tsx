@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils'
 interface EpisodeDetailDownloadButtonProps {
   episodeTitle: string
   episodeDescription?: string
-  podcastTitle: string
+  showTitle: string
   feedUrl?: string
   audioUrl: string
   transcriptUrl?: string
@@ -30,7 +30,7 @@ interface EpisodeDetailDownloadButtonProps {
 export function EpisodeDetailDownloadButton({
   episodeTitle,
   episodeDescription,
-  podcastTitle,
+  showTitle,
   feedUrl,
   audioUrl,
   transcriptUrl,
@@ -58,7 +58,7 @@ export function EpisodeDetailDownloadButton({
       audioUrl,
       episodeTitle,
       episodeDescription,
-      podcastTitle,
+      showTitle,
       feedUrl,
       artworkUrl,
       transcriptUrl,
@@ -74,7 +74,7 @@ export function EpisodeDetailDownloadButton({
     audioUrl,
     episodeTitle,
     episodeDescription,
-    podcastTitle,
+    showTitle,
     feedUrl,
     artworkUrl,
     transcriptUrl,

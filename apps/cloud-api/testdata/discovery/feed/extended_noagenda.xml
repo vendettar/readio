@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:podcast="https://podcastindex.org/namespace/1.0" version="2.0">
+  <channel>
+    <title>No Agenda</title>
+    <description>No Agenda description</description>
+    <podcast:guid>856cd618-7f34-57ea-9b84-3600f1f65e7f</podcast:guid>
+    <podcast:value type="lightning" method="keysend" suggested="0.00000005000">
+      <podcast:valueRecipient name="No Agenda Show" type="lnaddress" address="no_agenda_show@strike.me" split="90"/>
+    </podcast:value>
+    <item>
+      <title>1861 - "Cone of Uncertainty"</title>
+      <link>http://1861.noagendanotes.com</link>
+      <guid isPermaLink="true">http://1861.noagendanotes.com</guid>
+      <pubDate>Sun, 19 Apr 2026 21:17:57 +0000</pubDate>
+      <description>Episode description</description>
+      <podcast:chapters url="https://example.com/noagenda/chapters.json" type="application/json"/>
+      <podcast:transcript url="https://mp3s.nashownotes.com/NA-1861-Captions.srt" type="application/srt" rel="captions"/>
+      <podcast:value type="lightning" method="keysend" suggested="0.00000005000">
+        <podcast:valueRecipient name="No Agenda Show" type="lnaddress" address="no_agenda_show@strike.me" split="95"/>
+      </podcast:value>
+      <podcast:liveItem status="live" start="2026-04-19T21:00:00+00:00" />
+      <enclosure url="https://op3.dev/e/mp3s.nashownotes.com/NA-1861-2026-04-19-Final.mp3" type="audio/mpeg" length="118190444"/>
+    </item>
+  </channel>
+</rss>

@@ -162,7 +162,7 @@ export function useSession() {
               effectiveMetadata?.artworkUrl ||
               (typeof coverArtUrl === 'string' ? coverArtUrl : undefined),
             description: effectiveMetadata?.description,
-            podcastTitle: effectiveMetadata?.podcastTitle,
+            podcastTitle: effectiveMetadata?.showTitle,
             podcastFeedUrl,
             transcriptUrl: effectiveMetadata?.transcriptUrl,
             publishedAt: effectiveMetadata?.publishedAt,

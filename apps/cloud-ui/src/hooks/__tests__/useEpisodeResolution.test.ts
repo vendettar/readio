@@ -5,27 +5,23 @@ describe('resolveEpisodeResolutionError', () => {
   it('prioritizes podcast lookup failures', () => {
     const podcastError = new Error('podcast')
     const feedError = new Error('feed')
-    const supplementalEpisodesError = new Error('episodes')
 
     expect(
       resolveEpisodeResolutionError({
         podcastError,
         feedError,
-        supplementalEpisodesError,
       })
     ).toBe(podcastError)
   })
 
-  it('prefers supplemental episode failures over rss fallback failures', () => {
+  it('falls back to rss feed failures when podcast lookup succeeded', () => {
     const feedError = new Error('feed')
-    const supplementalEpisodesError = new Error('episodes')
 
     expect(
       resolveEpisodeResolutionError({
         podcastError: null,
         feedError,
-        supplementalEpisodesError,
       })
-    ).toBe(supplementalEpisodesError)
+    ).toBe(feedError)
   })
 })

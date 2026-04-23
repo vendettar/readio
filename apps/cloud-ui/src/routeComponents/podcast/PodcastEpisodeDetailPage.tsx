@@ -3,7 +3,7 @@
 
 import { useLocation, useNavigate, useParams } from '@tanstack/react-router'
 import { motion } from 'framer-motion'
-import { AlertTriangle, FileText, List, Play, SquareArrowUpRight, Star } from 'lucide-react'
+import { AlertTriangle, FileText, Play, SquareArrowUpRight, Star } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { InteractiveArtwork } from '@/components/interactive/InteractiveArtwork'
@@ -17,9 +17,8 @@ import { formatDuration, formatRelativeTime } from '@/lib/dateUtils'
 import {
   buildEpisodeCompactKey,
   getCanonicalEditorPickPodcastID,
-  getEditorPickPodcastGUIDFromPodcast,
   getEditorPickRouteState,
-  getStableEpisodeIdentifier,
+  getEpisodeGuid,
 } from '@/lib/discovery/editorPicks'
 import { logError } from '@/lib/logger'
 import { openExternal } from '@/lib/openExternal'
@@ -53,22 +52,22 @@ export default function PodcastEpisodeDetailPage() {
     location.state
   )
   const editorPickState = getEditorPickRouteState(location.state)
+  // Rule: content route requires iTunes ID - never fallback to GUID
   const canonicalPodcastId = (
     getCanonicalEditorPickPodcastID(podcast) ||
     podcast?.podcastItunesId ||
     (podcast?.podcastItunesId ? String(podcast.podcastItunesId) : '') ||
-    editorPickState?.editorPickSnapshot.podcastItunesId ||
+    editorPickState?.editorPickSnapshot?.podcastItunesId ||
     id
   ).trim()
-  const showPodcastId = canonicalPodcastId || getEditorPickPodcastGUIDFromPodcast(podcast) || id
 
   // Canonical key enforcement: redirect to canonical URL if key or podcast ID doesn't match
   useEffect(() => {
     if (!episode || isLoading) return
-    const stableEpisodeIdentifier = getStableEpisodeIdentifier(episode)
-    if (!stableEpisodeIdentifier) return
+    const episodeGuid = getEpisodeGuid(episode)
+    if (!episodeGuid) return
 
-    const canonicalKey = buildEpisodeCompactKey(stableEpisodeIdentifier)
+    const canonicalKey = buildEpisodeCompactKey(episodeGuid)
     if (!canonicalKey) return
 
     if (episodeKey !== canonicalKey || id !== canonicalPodcastId) {
@@ -97,7 +96,7 @@ export default function PodcastEpisodeDetailPage() {
 
   const handlePlayEpisode = () => {
     if (!podcast || !episode) return
-    playEpisode(episode, podcast, normalizedRouteCountry ?? undefined)
+    playEpisode(episode, podcast, normalizedRouteCountry || undefined)
   }
 
   const handleToggleFavorite = () => {
@@ -105,7 +104,7 @@ export default function PodcastEpisodeDetailPage() {
     if (favorited) {
       removeFavorite(`${podcast.feedUrl}::${episode.audioUrl}`)
     } else {
-      addFavorite(podcast, episode, undefined, normalizedRouteCountry)
+      addFavorite(podcast, episode, undefined, normalizedRouteCountry || undefined)
     }
   }
 
@@ -213,17 +212,17 @@ export default function PodcastEpisodeDetailPage() {
   }
 
   // Artwork selection (handled by InteractiveArtwork, but we prep URLs here)
-  const primaryArtwork = episode.artworkUrl || podcast?.image || podcast?.artwork
-  const fallbackArtwork = podcast?.image || podcast?.artwork
+  const primaryArtwork = episode.artworkUrl || podcast?.artwork
+  const fallbackArtwork = podcast?.artwork
 
-  // Description handling - rich HTML rendered via shared expandable component
+  // Description handling - preserve plain-text formatting when HTML is unavailable
   const contentSource = episode.descriptionHtml || episode.description || ''
+  const contentMode = episode.descriptionHtml ? 'html' : 'plain'
 
   // Format metadata
   const relativeTime = formatRelativeTime(episode.pubDate, language)
   const duration = formatDuration(episode.duration, t)
 
-  // Build season/episode label
   let episodeLabel = ''
   if (episode.seasonNumber && episode.episodeNumber) {
     episodeLabel = `S${episode.seasonNumber} · E${episode.episodeNumber}`
@@ -234,7 +233,7 @@ export default function PodcastEpisodeDetailPage() {
   }
   const showRoute = buildPodcastShowRoute({
     country: routeCountry,
-    podcastId: showPodcastId,
+    podcastId: canonicalPodcastId,
   })
 
   return (
@@ -255,7 +254,7 @@ export default function PodcastEpisodeDetailPage() {
               fallbackSrc={fallbackArtwork}
               size="original"
               className="w-full aspect-square rounded-2xl shadow-lg"
-              layoutId={`artwork-episode-${episode.id}`}
+              layoutId={`artwork-episode-${episode.episodeGuid}`}
             />
           </div>
 
@@ -284,7 +283,7 @@ export default function PodcastEpisodeDetailPage() {
                   </>
                 )}
 
-                {episode.episodeType && episode.episodeType !== 'full' && (
+                {episode.episodeType && episode.episodeType !== 'full' ? (
                   <>
                     {(relativeTime || episodeLabel || duration) && <span>·</span>}
                     <span
@@ -292,26 +291,24 @@ export default function PodcastEpisodeDetailPage() {
                         'px-1.5 py-0.5 rounded tracking-wider',
                         episode.episodeType === 'trailer'
                           ? 'bg-amber-500/10 text-amber-600'
-                          : episode.episodeType === 'bonus'
-                            ? 'bg-purple-500/10 text-purple-600'
-                            : 'bg-muted text-muted-foreground'
+                          : 'bg-purple-500/10 text-purple-600'
                       )}
                     >
                       {episode.episodeType === 'trailer'
                         ? t('episodeTypeTrailer')
-                        : episode.episodeType === 'bonus'
-                          ? t('episodeTypeBonus')
-                          : (episode.episodeType as string).toUpperCase()}
+                        : t('episodeTypeBonus')}
                     </span>
                   </>
-                )}
+                ) : null}
 
                 {episode.explicit && (
                   <>
                     {(relativeTime ||
                       episodeLabel ||
                       duration ||
-                      (episode.episodeType && episode.episodeType !== 'full')) && <span>·</span>}
+                      (episode.episodeType && episode.episodeType !== 'full')) && (
+                      <span>·</span>
+                    )}
                     <span className="text-red-500 flex items-center gap-0.5">
                       <AlertTriangle size={10} strokeWidth={3} />
                       {t('episodeExplicit')}
@@ -351,7 +348,7 @@ export default function PodcastEpisodeDetailPage() {
                 <EpisodeDetailDownloadButton
                   episodeTitle={episode.title}
                   episodeDescription={episode.description}
-                  podcastTitle={podcast?.title || ''}
+                  showTitle={podcast?.title || ''}
                   feedUrl={podcast?.feedUrl}
                   audioUrl={episode.audioUrl}
                   transcriptUrl={episode.transcriptUrl}
@@ -360,8 +357,7 @@ export default function PodcastEpisodeDetailPage() {
                   podcastItunesId={
                     podcast?.podcastItunesId ? String(podcast.podcastItunesId) : undefined
                   }
-                  providerEpisodeId={episode.providerEpisodeId || String(episode.id)}
-                  episodeGuid={episode.episodeGuid || String(episode.id)}
+                  episodeGuid={episode.episodeGuid}
                   durationSeconds={episode.duration}
                   className="rounded-full flex-shrink-0"
                 />
@@ -381,8 +377,8 @@ export default function PodcastEpisodeDetailPage() {
           </div>
         </div>
 
-        {/* Podcasting 2.0 Features: Transcript & Chapters */}
-        {(episode.transcriptUrl || episode.chaptersUrl) && (
+        {/* Podcasting 2.0 Features */}
+        {episode.transcriptUrl && (
           <div className="flex flex-wrap gap-3 mb-8">
             {episode.transcriptUrl && (
               <Button
@@ -397,19 +393,6 @@ export default function PodcastEpisodeDetailPage() {
                 {t('viewTranscript')}
               </Button>
             )}
-            {episode.chaptersUrl && (
-              <Button
-                variant="secondary"
-                size="sm"
-                className="rounded-md h-9 px-4 text-sm"
-                onClick={() => {
-                  if (episode.chaptersUrl) openExternal(episode.chaptersUrl)
-                }}
-              >
-                <List size={14} className="me-1.5" />
-                {t('viewChapters')}
-              </Button>
-            )}
           </div>
         )}
 
@@ -420,7 +403,7 @@ export default function PodcastEpisodeDetailPage() {
             <div className="max-w-xl">
               <ExpandableDescription
                 content={contentSource}
-                mode="html"
+                mode={contentMode}
                 isExpandable={false}
                 collapsedLines={4}
                 expanded={isDescriptionExpanded}
@@ -440,7 +423,10 @@ export default function PodcastEpisodeDetailPage() {
               <Button
                 variant="link"
                 className="text-primary p-0 h-auto font-bold flex items-center gap-2 hover:no-underline"
-                onClick={() => episode.link && openExternal(episode.link)}
+                onClick={() => {
+                  const episodeLink = episode.link
+                  if (episodeLink) openExternal(episodeLink)
+                }}
               >
                 <span className="text-sm group-hover/link:underline">{t('episodeWebpage')}</span>
                 <SquareArrowUpRight size={18} className="text-primary" />

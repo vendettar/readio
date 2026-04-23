@@ -1,0 +1,14 @@
+---
+title: Subscriptions
+---
+
+## 1. Scope
+
+- Route: `/subscriptions`
+- Main authority: `apps/cloud-ui/src/store/exploreStore.ts`
+
+## 2. Contract
+
+- Primary uniqueness key: `feedUrl`
+- Saved metadata includes `podcastItunesId`
+- Subscription state must stay in sync across Explore, show pages, and the dedicated subscriptions surface

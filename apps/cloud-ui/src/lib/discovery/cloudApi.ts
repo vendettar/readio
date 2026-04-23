@@ -1,38 +1,149 @@
 import { z } from 'zod'
+
 import { FetchError, NetworkError } from '../fetchUtils'
 import { normalizeFeedUrl } from './feedUrl'
-import type { DiscoveryPodcast, Episode, Podcast, SearchEpisode } from './providers/types'
-import type { ParsedFeed } from './schema'
+import type {
+  EditorPickPodcast,
+  ParsedFeed,
+  Podcast,
+  SearchEpisode,
+  SearchPodcast,
+  TopEpisode,
+  TopPodcast,
+} from './schema'
 import {
-  DiscoveryPodcastSchema,
-  EpisodeSchema,
+  EditorPickPodcastSchema,
   ParsedFeedSchema,
-  PodcastSchema,
+  PIPodcastSchema,
   SearchEpisodeSchema,
+  SearchPodcastSchema,
+  TopEpisodeSchema,
+  TopPodcastSchema,
 } from './schema'
 
-const PodcastIndexFeedSummarySchema = z.object({
-  id: z.number().int().positive(),
-  title: z.string().min(1),
-  url: z.string().url(),
-  originalUrl: z.string().url().optional(),
-  link: z.string().url().optional(),
-  description: z.string().optional(),
-  author: z.string().optional(),
-  image: z.string().url().optional(),
-  artwork: z.string().url().optional(),
-  podcastItunesId: z.coerce.string().optional(),
-  language: z.string().min(1).optional(),
-  categories: z.record(z.string(), z.string()).optional(),
-  podcastGuid: z.string().min(1),
-  episodeCount: z.number().int().nonnegative().optional(),
+export class DiscoveryParseError extends Error {
+  constructor(
+    message: string,
+    public readonly cause?: unknown
+  ) {
+    super(message)
+    this.name = 'DiscoveryParseError'
+  }
+}
+
+export class DiscoveryInvalidPayloadError extends Error {
+  constructor(
+    message: string,
+    public readonly cause?: unknown
+  ) {
+    super(message)
+    this.name = 'DiscoveryInvalidPayloadError'
+  }
+}
+
+const DiscoveryErrorSchema = z.object({
+  code: z.string(),
+  message: z.string(),
+  request_id: z.string(),
 })
 
-export type PodcastIndexFeedSummary = z.infer<typeof PodcastIndexFeedSummarySchema>
+const DISCOVERY_ROUTE = {
+  topPodcasts: '/api/v1/discovery/top-podcasts',
+  searchPodcasts: '/api/v1/discovery/search/podcasts',
+  searchEpisodes: '/api/v1/discovery/search/episodes',
+  topEpisodes: '/api/v1/discovery/top-episodes',
+  piPodcastByItunesId: '/api/v1/discovery/podcast-index/podcast-byitunesid',
+  piPodcastsBatchByGuid: '/api/v1/discovery/podcast-index/podcasts-batch-byguid',
+  feed: '/api/v1/discovery/feed',
+} as const
 
 function buildDiscoveryURL(pathname: string, search: URLSearchParams): string {
   const query = search.toString()
   return query ? `${pathname}?${query}` : pathname
+}
+
+function parseDiscoveryJSON(method: 'GET' | 'POST', pathname: string, text: string): unknown {
+  try {
+    return text ? JSON.parse(text) : null
+  } catch (error) {
+    throw new DiscoveryParseError(`${method} ${pathname}: invalid JSON response`, error)
+  }
+}
+
+function validateDiscoveryPayload<T>(
+  method: 'GET' | 'POST',
+  pathname: string,
+  value: unknown,
+  parse: (value: unknown) => T
+): T {
+  try {
+    return parse(value)
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      throw new DiscoveryInvalidPayloadError(
+        `${method} ${pathname}: discovery payload validation failed`,
+        error
+      )
+    }
+    if (error instanceof DiscoveryParseError || error instanceof DiscoveryInvalidPayloadError) {
+      throw error
+    }
+    if (error instanceof Error) {
+      throw new DiscoveryInvalidPayloadError(`${method} ${pathname}: ${error.message}`, error)
+    }
+    throw error
+  }
+}
+
+async function executeDiscoveryRequest<T>(
+  method: 'GET' | 'POST',
+  pathname: string,
+  body: unknown,
+  parse: (value: unknown) => T,
+  signal?: AbortSignal
+): Promise<T> {
+  const fetchOptions: RequestInit = {
+    method,
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    signal,
+  }
+
+  if (method === 'POST' && body) {
+    fetchOptions.body = JSON.stringify(body)
+  }
+
+  try {
+    const response = await fetch(pathname, fetchOptions)
+    const text = await response.text()
+    const value = parseDiscoveryJSON(method, pathname, text)
+
+    if (!response.ok) {
+      const errorPayload = DiscoveryErrorSchema.safeParse(value)
+      if (errorPayload.success) {
+        throw new FetchError(errorPayload.data.message, pathname, response.status, 'direct', {
+          code: errorPayload.data.code,
+          requestId: errorPayload.data.request_id,
+        })
+      }
+
+      throw new FetchError(
+        `Cloud discovery request failed: ${response.status}`,
+        pathname,
+        response.status,
+        'direct'
+      )
+    }
+
+    return validateDiscoveryPayload(method, pathname, value, parse)
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new NetworkError(error.message)
+    }
+    throw error
+  }
 }
 
 async function fetchDiscoveryJSON<T>(
@@ -40,36 +151,7 @@ async function fetchDiscoveryJSON<T>(
   parse: (value: unknown) => T,
   signal?: AbortSignal
 ): Promise<T> {
-  try {
-    const response = await fetch(pathname, {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-      },
-      signal,
-    })
-
-    const text = await response.text()
-    const parsed = text ? JSON.parse(text) : null
-
-    if (!response.ok) {
-      const message =
-        parsed &&
-        typeof parsed === 'object' &&
-        'message' in parsed &&
-        typeof parsed.message === 'string'
-          ? parsed.message
-          : `Cloud discovery request failed: ${response.status}`
-      throw new FetchError(message, pathname, response.status, 'direct')
-    }
-
-    return parse(parsed)
-  } catch (error) {
-    if (error instanceof TypeError) {
-      throw new NetworkError(error.message)
-    }
-    throw error
-  }
+  return executeDiscoveryRequest('GET', pathname, null, parse, signal)
 }
 
 async function postDiscoveryJSON<T>(
@@ -78,56 +160,13 @@ async function postDiscoveryJSON<T>(
   parse: (value: unknown) => T,
   signal?: AbortSignal
 ): Promise<T> {
-  try {
-    const response = await fetch(pathname, {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-      signal,
-    })
-
-    const text = await response.text()
-    const parsed = text ? JSON.parse(text) : null
-
-    if (!response.ok) {
-      const message =
-        parsed &&
-        typeof parsed === 'object' &&
-        'message' in parsed &&
-        typeof parsed.message === 'string'
-          ? parsed.message
-          : `Cloud discovery request failed: ${response.status}`
-      throw new FetchError(message, pathname, response.status, 'direct')
-    }
-
-    return parse(parsed)
-  } catch (error) {
-    if (error instanceof TypeError) {
-      throw new NetworkError(error.message)
-    }
-    throw error
-  }
+  return executeDiscoveryRequest('POST', pathname, body, parse, signal)
 }
 
-export function fetchTopPodcasts(
-  country = 'us',
-  limit = 30,
-  signal?: AbortSignal
-): Promise<DiscoveryPodcast[]> {
+export function fetchTopPodcasts(country = 'us', signal?: AbortSignal): Promise<TopPodcast[]> {
   return fetchDiscoveryJSON(
-    buildDiscoveryURL(
-      '/api/v1/discovery/top-podcasts',
-      new URLSearchParams({ country, limit: String(limit) })
-    ),
-    (value) => {
-      if (!Array.isArray(value)) {
-        throw new Error('Invalid top podcasts payload')
-      }
-      return value.map((item) => DiscoveryPodcastSchema.parse(item))
-    },
+    buildDiscoveryURL(DISCOVERY_ROUTE.topPodcasts, new URLSearchParams({ country })),
+    (value) => z.array(TopPodcastSchema).parse(value),
     signal
   )
 }
@@ -135,20 +174,14 @@ export function fetchTopPodcasts(
 export function searchPodcasts(
   term: string,
   country = 'us',
-  limit = 20,
   signal?: AbortSignal
-): Promise<Podcast[]> {
+): Promise<SearchPodcast[]> {
   return fetchDiscoveryJSON(
     buildDiscoveryURL(
-      '/api/v1/discovery/search/podcasts',
-      new URLSearchParams({ term: term.toLowerCase().trim(), country, limit: String(limit) })
+      DISCOVERY_ROUTE.searchPodcasts,
+      new URLSearchParams({ term: term.toLowerCase().trim(), country })
     ),
-    (value) => {
-      if (!Array.isArray(value)) {
-        throw new Error('Invalid podcast search payload')
-      }
-      return value.map((item) => PodcastSchema.parse(item))
-    },
+    (value) => z.array(SearchPodcastSchema).parse(value),
     signal
   )
 }
@@ -156,40 +189,22 @@ export function searchPodcasts(
 export function searchEpisodes(
   term: string,
   country = 'us',
-  limit = 50,
   signal?: AbortSignal
 ): Promise<SearchEpisode[]> {
   return fetchDiscoveryJSON(
     buildDiscoveryURL(
-      '/api/v1/discovery/search/episodes',
-      new URLSearchParams({ term: term.toLowerCase().trim(), country, limit: String(limit) })
+      DISCOVERY_ROUTE.searchEpisodes,
+      new URLSearchParams({ term: term.toLowerCase().trim(), country })
     ),
-    (value) => {
-      if (!Array.isArray(value)) {
-        throw new Error('Invalid episode search payload')
-      }
-      return value.map((item) => SearchEpisodeSchema.parse(item))
-    },
+    (value) => z.array(SearchEpisodeSchema).parse(value),
     signal
   )
 }
 
-export function fetchTopEpisodes(
-  country = 'us',
-  limit = 30,
-  signal?: AbortSignal
-): Promise<DiscoveryPodcast[]> {
+export function fetchTopEpisodes(country = 'us', signal?: AbortSignal): Promise<TopEpisode[]> {
   return fetchDiscoveryJSON(
-    buildDiscoveryURL(
-      '/api/v1/discovery/top-episodes',
-      new URLSearchParams({ country, limit: String(limit) })
-    ),
-    (value) => {
-      if (!Array.isArray(value)) {
-        throw new Error('Invalid top episodes payload')
-      }
-      return value.map((item) => DiscoveryPodcastSchema.parse(item))
-    },
+    buildDiscoveryURL(DISCOVERY_ROUTE.topEpisodes, new URLSearchParams({ country })),
+    (value) => z.array(TopEpisodeSchema).parse(value),
     signal
   )
 }
@@ -200,10 +215,10 @@ export function getPodcastIndexPodcastByItunesId(
 ): Promise<Podcast | null> {
   return fetchDiscoveryJSON(
     buildDiscoveryURL(
-      '/api/v1/discovery/podcast-index/podcast-byitunesid',
+      DISCOVERY_ROUTE.piPodcastByItunesId,
       new URLSearchParams({ podcastItunesId })
     ),
-    (value) => (value === null ? null : PodcastSchema.parse(value)),
+    (value) => (value === null ? null : PIPodcastSchema.parse(value)),
     signal
   )
 }
@@ -211,61 +226,24 @@ export function getPodcastIndexPodcastByItunesId(
 export function getPodcastIndexPodcastsBatchByGuid(
   guids: string[],
   signal?: AbortSignal
-): Promise<PodcastIndexFeedSummary[]> {
+): Promise<EditorPickPodcast[]> {
   if (guids.length === 0) return Promise.resolve([])
 
   return postDiscoveryJSON(
-    '/api/v1/discovery/podcast-index/podcasts-batch-byguid',
+    DISCOVERY_ROUTE.piPodcastsBatchByGuid,
     guids,
-    (value) => {
-      if (!Array.isArray(value)) {
-        throw new Error('Invalid podcast index guid batch payload')
-      }
-      return value.map((item) => PodcastIndexFeedSummarySchema.parse(item))
-    },
+    (value) => z.array(EditorPickPodcastSchema).parse(value),
     signal
   )
 }
 
-export function getPodcastIndexEpisodes(
-  podcastItunesId: string,
-  limit = 300,
+export function fetchPodcastFeed(
+  feedUrl: string,
   signal?: AbortSignal
-): Promise<Episode[]> {
-  const params = new URLSearchParams({ limit: String(limit) })
-  params.set('podcastItunesId', podcastItunesId)
-
-  return fetchDiscoveryJSON(
-    buildDiscoveryURL('/api/v1/discovery/podcast-index/episodes', params),
-    (value) => {
-      if (!Array.isArray(value)) {
-        throw new Error('Invalid podcast index episodes payload')
-      }
-      return value.map((item) => EpisodeSchema.parse(item))
-    },
-    signal
-  )
-}
-
-export function getPodcastIndexEpisodeByGuid(
-  episodeGuid: string,
-  podcastItunesId: string,
-  signal?: AbortSignal
-): Promise<Episode | null> {
-  const params = new URLSearchParams({ guid: episodeGuid })
-  params.set('podcastItunesId', podcastItunesId)
-
-  return fetchDiscoveryJSON(
-    buildDiscoveryURL('/api/v1/discovery/podcast-index/episodes', params),
-    (value) => (value === null ? null : EpisodeSchema.parse(value)),
-    signal
-  )
-}
-
-export function fetchPodcastFeed(feedUrl: string, signal?: AbortSignal): Promise<ParsedFeed> {
+): Promise<ParsedFeed> {
   return fetchDiscoveryJSON(
     buildDiscoveryURL(
-      '/api/v1/discovery/feed',
+      DISCOVERY_ROUTE.feed,
       new URLSearchParams({ url: normalizeFeedUrl(feedUrl) })
     ),
     (value) => ParsedFeedSchema.parse(value),

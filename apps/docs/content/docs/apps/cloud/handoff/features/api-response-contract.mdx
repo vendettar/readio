@@ -1,0 +1,129 @@
+---
+title: API Response Contract
+---
+
+## 1. Scope
+
+This page defines the internal HTTP JSON response contract between `cloud-api` and `cloud-ui`.
+
+It does not document third-party upstream APIs such as Apple, Podcast Index, or raw RSS feeds.
+
+## 2. Default Rule
+
+- Success responses should return the business payload directly.
+- Error responses should return a normalized error object.
+- HTTP status must remain the primary success/failure signal.
+- Do not wrap every success response in a global envelope such as `{ code, message, object }`.
+
+## 3. Success Responses
+
+Use direct payloads for normal success cases.
+
+Array example:
+
+```json
+[
+  {
+    "podcastItunesId": "1200361736",
+    "title": "The Daily"
+  }
+]
+```
+
+Object example:
+
+```json
+{
+  "title": "The Daily",
+  "episodes": []
+}
+```
+
+Rules:
+
+- The response body should match the route DTO directly.
+- Route-level success schemas should validate the full payload directly.
+- Do not add `code` or `message` to successful business payloads.
+
+## 4. Error Responses
+
+All normalized JSON error responses should use this shape:
+
+```json
+{
+  "code": "RATE_LIMITED",
+  "message": "rate limit exceeded",
+  "request_id": "req_123"
+}
+```
+
+Rules:
+
+- `code` is stable and machine-oriented.
+- `message` is human-readable and safe to show in internal UI.
+- `request_id` is used for tracing and log correlation.
+- HTTP status still carries the top-level error class.
+
+Typical status mapping:
+
+- `400` invalid request or invalid parameters
+- `401` unauthorized
+- `403` forbidden
+- `404` not found
+- `409` conflict
+- `413` payload too large
+- `429` rate limited
+- `500` internal server error
+- `502` bad upstream response or relay failure
+- `503` service unavailable
+- `504` upstream timeout
+
+## 5. Envelope Exceptions
+
+An envelope is allowed only when the route truly has additional response metadata.
+
+Allowed examples:
+
+- pagination
+- cursor-based listing
+- warnings or partial results
+- long-running task status
+
+Example:
+
+```json
+{
+  "items": [],
+  "next_cursor": "cursor_123"
+}
+```
+
+Rule:
+
+- Use an envelope only when the metadata itself is part of the route contract.
+- Do not introduce envelopes merely for stylistic uniformity.
+
+## 6. Frontend Consumption Rules
+
+`cloud-ui` should consume internal API responses in this order:
+
+1. Parse JSON
+2. Check `response.ok`
+3. If non-2xx, parse the normalized error object and throw a typed fetch error
+4. If 2xx, validate the success payload against the route schema
+
+Rules:
+
+- Do not validate a non-2xx response against the success schema first.
+- Do not downgrade normalized backend errors into generic payload validation errors.
+- Preserve `code` and `request_id` on frontend fetch errors when available.
+
+## 7. Current Readio Direction
+
+This is the active design direction for Readio:
+
+- Discovery success responses return direct DTO payloads
+- Discovery errors return normalized JSON error objects
+- Pagination-style envelopes should be added only when a route actually needs metadata
+
+This means Readio should keep the current success-path style and continue tightening error-path consistency, not move to a global `{ code, message, object }` response wrapper.

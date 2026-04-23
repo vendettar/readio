@@ -38,11 +38,12 @@ export function useRemotePlaybackFallback({
   }, [])
 
   // Reset state when audioUrl changes (new track)
+  // biome-ignore lint/correctness/useExhaustiveDependencies: audioUrl is needed to trigger reset
   useEffect(() => {
     proxiedRef.current = false
     playbackSourceMode = null
     clearBootstrapTimeout()
-  }, [clearBootstrapTimeout])
+  }, [audioUrl, clearBootstrapTimeout])
 
   // Cleanup on unmount
   useEffect(() => {

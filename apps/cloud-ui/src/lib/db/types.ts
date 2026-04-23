@@ -50,7 +50,7 @@ export interface PlaybackSession {
   podcastTitle?: string // Podcast name
   podcastFeedUrl?: string // Feed URL for favorite operations
   publishedAt?: number // Episode publishing date (timestamp)
-  episodeGuid?: string // Canonical UUID for compact route generation (v7)
+  episodeGuid?: string // Stable episode identity for compact route generation (v7)
   podcastItunesId?: string // Platform-specific podcast ID for navigation (v6)
   providerEpisodeId?: string // Platform-specific episode ID for deterministic history matching
   transcriptUrl?: string // Podcast transcript source URL (Podcasting 2.0)
@@ -103,7 +103,7 @@ export interface Favorite {
   pubDate?: string // ISO date string
   durationSeconds?: number // Duration in seconds
   episodeArtworkUrl?: string // Episode-specific artwork
-  episodeGuid?: string // Canonical UUID for compact route generation (v7)
+  episodeGuid?: string // Stable episode identity for compact route generation (v7)
   podcastItunesId?: string // Platform-specific podcast ID for navigation (v6)
   providerEpisodeId?: string // Platform-specific ID (e.g. Apple Track ID) for robust matching
   transcriptUrl?: string // Podcast transcript source URL (Podcasting 2.0)
@@ -202,7 +202,7 @@ export interface PodcastDownloadTrack extends TrackBase {
   countryAtSave: string // Country at time of download for routing (required invariant)
   sourcePodcastItunesId?: string // Provider podcast ID
   sourceProviderEpisodeId?: string // Provider episode ID
-  sourceEpisodeGuid?: string // Canonical UUID for compact route generation (v7)
+  sourceEpisodeGuid?: string // Stable episode identity for compact route generation (v7)
   manualPinnedAt?: number // Timestamp when user manually selected active subtitle (Instruction 125b)
 }
 
@@ -211,17 +211,25 @@ export type Track = UserUploadTrack | PodcastDownloadTrack
 /**
  * Type guard for UserUploadTrack
  */
-export function isUserUploadTrack(track: Track | null | undefined): track is UserUploadTrack {
-  return track?.sourceType === TRACK_SOURCE.USER_UPLOAD
+export function isUserUploadTrack(track: unknown): track is UserUploadTrack {
+  return (
+    typeof track === 'object' &&
+    track !== null &&
+    'sourceType' in track &&
+    track.sourceType === TRACK_SOURCE.USER_UPLOAD
+  )
 }
 
 /**
  * Type guard for PodcastDownloadTrack
  */
-export function isPodcastDownloadTrack(
-  track: Track | null | undefined
-): track is PodcastDownloadTrack {
-  return track?.sourceType === TRACK_SOURCE.PODCAST_DOWNLOAD
+export function isPodcastDownloadTrack(track: unknown): track is PodcastDownloadTrack {
+  return (
+    typeof track === 'object' &&
+    track !== null &&
+    'sourceType' in track &&
+    track.sourceType === TRACK_SOURCE.PODCAST_DOWNLOAD
+  )
 }
 
 // Keep aliases for backward compatibility in the rest of the app, to be refactored in 127d2

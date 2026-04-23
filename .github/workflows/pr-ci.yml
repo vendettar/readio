@@ -8,58 +8,6 @@ permissions:
   contents: read
 
 jobs:
-  # ─── Lite ───────────────────────────────────────────────────────────
-  lite:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v5
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: License Check
-        run: pnpm --filter @readio/lite exec license-checker-rseidelsohn --summary --failOn 'GPL;AGPL;LGPL'
-
-      - name: Install Ripgrep for DB Guard
-        run: sudo apt-get update && sudo apt-get install -y ripgrep
-
-      - name: Lint (Lite)
-        run: pnpm --filter @readio/lite lint
-
-      - name: DB Access Guard
-        run: pnpm --filter @readio/lite lint:db-guard
-
-      - name: I18n Coverage Audit
-        run: pnpm --filter @readio/lite i18n:check
-
-      - name: Selector Optimization Audit
-        run: pnpm --filter @readio/lite lint:selectors
-
-      - name: Route Country Guard
-        run: pnpm --filter @readio/lite lint:route-guards
-
-      - name: Legacy Podcast Route Ban
-        run: pnpm --filter @readio/lite lint:legacy-route-ban
-
-      - name: Typecheck (Lite)
-        run: pnpm --filter @readio/lite typecheck
-
-      - name: Build (Lite)
-        run: pnpm --filter @readio/lite build
-
-      - name: Bundle Size Budget
-        run: pnpm --filter @readio/lite check-size
-
   # ─── Cloud UI ───────────────────────────────────────────────────────
   cloud-ui:
     runs-on: ubuntu-latest
@@ -79,14 +27,38 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: License Check
+        run: pnpm --filter @readio/cloud-ui exec license-checker-rseidelsohn --summary --failOn 'GPL;AGPL;LGPL'
+
+      - name: Install Ripgrep for DB Guard
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+
       - name: Lint (Cloud UI)
         run: pnpm -C apps/cloud-ui lint
+
+      - name: DB Access Guard
+        run: pnpm -C apps/cloud-ui lint:db-guard
+
+      - name: I18n Coverage Audit
+        run: pnpm -C apps/cloud-ui i18n:check
+
+      - name: Selector Optimization Audit
+        run: pnpm -C apps/cloud-ui lint:selectors
+
+      - name: Route Country Guard
+        run: pnpm -C apps/cloud-ui lint:route-guards
+
+      - name: Legacy Podcast Route Ban
+        run: pnpm -C apps/cloud-ui lint:legacy-route-ban
 
       - name: Typecheck (Cloud UI)
         run: pnpm -C apps/cloud-ui typecheck
 
       - name: Build (Cloud UI)
         run: pnpm -C apps/cloud-ui build
+
+      - name: Bundle Size Budget
+        run: pnpm -C apps/cloud-ui check-size
 
   # ─── Cloud API ──────────────────────────────────────────────────────
   cloud-api:
@@ -110,31 +82,6 @@ jobs:
       - name: Go Test
         working-directory: apps/cloud-api
         run: go test ./...
-
-  # ─── packages/core ──────────────────────────────────────────────────
-  core:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v5
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Typecheck (core)
-        run: pnpm -C packages/core typecheck
-
-      - name: Build (core)
-        run: pnpm -C packages/core build
 
   # ─── apps/docs (optional, non-blocking) ─────────────────────────────
   docs:

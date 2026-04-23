@@ -1,0 +1,15 @@
+---
+title: Playback History
+---
+
+## 1. Scope
+
+- Route: `/history`
+- Main authority: `apps/cloud-ui/src/store/historyStore.ts`
+- Persistence table: browser-local playback sessions
+
+## 2. Contract
+
+- Remote playback writes must keep `countryAtSave`
+- History remains browser-local
+- Deleting history removes sessions, not the underlying downloaded/local media artifacts

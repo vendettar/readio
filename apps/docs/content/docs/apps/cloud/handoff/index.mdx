@@ -1,0 +1,110 @@
+---
+title: Cloud Handoff
+---
+
+# Cloud Handoff
+
+This document is the current entry point for the Cloud bootstrap phase.
+It records the implemented `apps/cloud-ui` + `apps/cloud-api` contracts and should stay aligned with the actual code.
+
+## 0. Documentation Map
+
+Use the Cloud handoff tree as the current SSOT for app-level frontend/backend contracts:
+
+- `handoff/architecture.mdx`
+- `handoff/database.mdx`
+- `handoff/environment.mdx`
+- `handoff/standards.mdx`
+- `handoff/features/*`
+- `frontend/*`
+
+`handoff/` should stay focused on ownership, contracts, and bootstrap context. Long-lived frontend implementation notes now live under `cloud/frontend/`.
+
+## 1. Current Purpose
+
+- Build `apps/cloud-ui` as a full Lite-equivalent frontend clone.
+- Serve the built `apps/cloud-ui/dist` frontend output from `apps/cloud-api`.
+- Keep migrated discovery, search, and feed flows backend-owned and same-origin through `apps/cloud-api`.
+- Prefer direct browser media access when available, and use `apps/cloud-api` as the built-in fallback proxy only for supported media failure classes.
+- Keep browser-local downloads, transcripts, and other local media artifacts browser-local; clearing site data still removes them.
+- Keep Cloud Settings free of the `CORS Proxy` block for the current Cloud contract.
+- Route Cloud ASR provider transcription through a dedicated same-origin relay in `apps/cloud-api`, while keeping provider credentials user-owned and browser-supplied per request in this phase.
+- Keep Cloud ASR provider verification/readiness browser-direct until a later instruction explicitly changes that ownership.
+- Keep Workbox/PWA disabled in the current Cloud phase unless a later instruction explicitly restores it.
+- Provide the `/api/proxy` RSS proxy contract for the current scaffold phase.
+- Bootstrap SQLite for the Cloud backend scaffold and keep the lifecycle explicit.
+
+## 2. Static Serving Strategy
+
+- `apps/cloud-api` serves the built Cloud UI output directly.
+- Non-API routes fall back to `index.html` only when a direct file does not exist.
+- Existing files, including extensionless assets, are served directly when present.
+- `/api/*` routes remain owned by API handlers and must not fall back to the SPA shell.
+- The backend resolves `dist/` from an explicit `READIO_CLOUD_UI_DIST_DIR` override first, then falls back to colocated `dist/` or repository-local `apps/cloud-ui/dist`.
+
+## 3. RSS Proxy Contract
+
+- `GET /api/proxy?url=...` is the current proxy surface.
+- The proxy validates the requested target before dialing and rejects private, loopback, link-local, or metadata-style destinations.
+- The request path is fail-closed: it uses a pinned validated target set and does not follow redirects into disallowed destinations.
+- The proxy uses a custom user agent, applies a bounded fetch timeout, and keeps a basic in-memory rate limit.
+
+## 4. SQLite Bootstrap Status
+
+- SQLite is the current Cloud persistence bootstrap target.
+- The bootstrap path creates the parent directory, opens the database, applies initialization PRAGMAs, and closes cleanly on shutdown.
+- This phase does not define schema, migrations, sync, or auth layers.
+
+## 5. Boundaries
+
+- Do describe Cloud as a Lite-equivalent frontend clone served by the Go backend for this phase.
+- Do describe migrated discovery, search, and feed requests as backend-owned same-origin flows.
+- Do describe Cloud Settings as no longer including the `CORS Proxy` block.
+- Do describe Cloud media as browser-direct first, with backend fallback only for approved failure classes.
+- Do describe Cloud ASR provider transcription as same-origin relay-owned through a dedicated backend route.
+- Do describe provider credentials in Cloud ASR as user-owned and browser-supplied per request in this phase.
+- Do describe Cloud ASR provider verification/readiness as still browser-direct.
+- Do describe backend media fallback as pass-through and non-caching.
+- Do describe browser-local media artifacts as remaining browser-local.
+- Do note that Cloud currently keeps Workbox/PWA disabled in this phase.
+- Do not claim schema, sync, auth, or multi-user SaaS behavior in this scaffold stage.
+- Do not claim all audio always goes through backend.
+- Do not claim `/api/proxy` handles provider transcription.
+- Do not claim Cloud stores user ASR provider credentials server-side in this phase.
+- Do not claim server-side media caching or persistence.
+- Keep future Cloud evolution in docs that are explicitly labeled as future direction.
+
+## 6. Media Fallback Audit
+
+- The 006a media audit is recorded in `media-fallback-audit.md`.
+- It classifies native audio, JS fetch prefetch, `HEAD`, `GET`, `Range GET`, transcript fetch, local `blob:` playback, and tracking URL unwrap behavior.
+- The current runtime contract keeps direct browser transport first and backend fallback narrow, pass-through, and non-caching for approved failure classes.
+- Keep this entry high-level; implementation details belong in the audit sub-doc.
+
+## 7. ASR Relay Audit
+
+- The 008a ASR transport audit is recorded in `asr-relay-audit.md`.
+- It separates media fetch fallback from provider transcription submission and provider verification/readiness checks.
+- The current Cloud contract now routes provider transcription through a dedicated same-origin relay, while provider verification/readiness stays browser-direct.
+- Browser-local blobs and downloaded blobs remain browser-local inputs; the relay does not move them into backend persistence.
+- Keep this entry high-level; implementation details belong in the audit sub-doc.
+
+## 8. Runtime Config Ownership Audit
+
+- The runtime config ownership audit is recorded in `runtime-config-ownership-audit.md`.
+- It classifies config into three ownership buckets: server-owned runtime env, browser-public runtime config emitted by backend `/env.js`, and browser-local/user-local config.
+- Production Cloud `/env.js` is backend-generated by `apps/cloud-api` using an explicit allowlist, not dumped from process env.
+- `apps/cloud-ui/public/env.js` is dev/default-template oriented only.
+- Server-owned config stays in VPS env or systemd env files (e.g., `/etc/readio/readio-cloud.env`).
+- Browser-public fields (e.g., `READIO_ASR_RELAY_PUBLIC_TOKEN`) are not secrets; they are lightweight abuse-control tokens.
+- Keep this entry high-level; implementation details belong in the audit sub-doc.
+
+## 9. Playback Transcript Contract
+
+- The current transcript-first playback and Reading Area CTA contract is recorded in `playback-transcript-contract.mdx`.
+- It defines:
+  - when transcript-bearing playback must skip automatic ASR
+  - how artwork CTA behaves when transcript content is not currently visible
+  - how `stream_without_transcript` affects presentation without erasing transcript availability
+  - how local/downloaded transcript sources must be treated during restore and pure-listening flows
+- Keep this entry high-level; implementation details belong in the handoff sub-doc.

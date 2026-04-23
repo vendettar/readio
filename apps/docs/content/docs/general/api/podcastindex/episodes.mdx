@@ -1,0 +1,103 @@
+---
+title: Episodes
+---
+
+# Episode Endpoints (/api/1.0/episodes)
+
+Accessing episode-level data and discovery. **Requires Authentication.**
+
+## `/byfeedid`
+Retrieve the complete episode list for a show. This is the primary way to pull show content.
+- **URL**: `/api/1.0/episodes/byfeedid?id=75075&max=20`
+- **Example Response**:
+```json
+{
+  "status": "true",
+  "items": [
+    {
+      "id": 16795088,
+      "title": "Gotham",
+      "link": "https://www.theincomparable.com/batmanuniversity/",
+      "description": "Batman University is back in session! James Thomson and Nathan Alderman join Tony for a discussion of Fox’s “Gotham.” Tune in to hear our thoughts on how a half-baked comic book show was reborn into an unmissable train wreck.",
+      "guid": "incomparable/batman/19",
+      "datePublished": 1546399813,
+      "datePublishedPretty": "January 01, 2019 10:10pm",
+      "dateCrawled": 1598369047,
+      "enclosureUrl": "https://www.theincomparable.com/podcast/batmanuniversity302.mp3",
+      "enclosureType": "audio/mp3",
+      "enclosureLength": 26385472,
+      "duration": 54,
+      "explicit": 0,
+      "episode": 19,
+      "episodeType": "full",
+      "season": 3,
+      "image": "https://www.theincomparable.com/imgs/logos/logo-batmanuniversity-3x.jpg?cache-buster=2019-06-11",
+      "imageUrlHash": 3969216649,
+      "feedItunesId": 1441923632,
+      "feedImage": "https://www.theincomparable.com/imgs/logos/logo-batmanuniversity-3x.jpg?cache-buster=2019-06-11",
+      "feedId": 75075,
+      "feedTitle": "Batman University",
+      "feedLanguage": "en-us"
+    }
+  ],
+  "count": 1
+}
+```
+
+## `/byfeedurl`
+Retrieve episode list via the show's RSS URL.
+- **URL**: `/api/1.0/episodes/byfeedurl?url={url}`
+
+## `/byitunesid`
+Retrieve episode list by iTunes podcast ID.
+- **URL**: `/api/1.0/episodes/byitunesid?id=1441923632`
+
+## `/byguid`
+Lookup a specific episode by its persistent RSS `<guid>`.
+- **URL**: `/api/1.0/episodes/byguid?guid=incomparable:batmanuniversity:41`
+- **Example Response**:
+```json
+{
+  "status": "true",
+  "episode": {
+    "id": 16795088,
+    "title": "Gotham",
+    "description": "...",
+    "enclosureUrl": "https://www.theincomparable.com/podcast/batmanuniversity302.mp3",
+    "feedId": 75075
+  }
+}
+```
+
+## `/byid`
+Lookup a specific episode by its internal Index ID.
+- **URL**: `/api/1.0/episodes/byid?id=16795090`
+
+## `/bysoundbiteid`
+Lookup episode by soundbite ID.
+- **URL**: `/api/1.0/episodes/bysoundbiteid?id={id}`
+
+## `/random`
+Returns random episodes. Use the `max` and `lang` parameters for better results.
+- **URL**: `/api/1.0/episodes/random?max=5`
+- **Example Response**:
+```json
+{
+  "status": "true",
+  "episodes": [
+    {
+      "id": 16795088,
+      "title": "Gotham",
+      "feedTitle": "Batman University"
+    }
+  ]
+}
+```
+
+## `/live`
+Retrieve active `<podcast:liveItem>` streams for shows currently broadcasting.
+- **URL**: `/api/1.0/episodes/live`
+- **Example Response**:
+```json
+{ "status": "true", "items": [{ "id": 10001, "title": "Batman Live", "status": "live", "feedId": 75075 }] }
+```

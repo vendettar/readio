@@ -260,13 +260,26 @@ export class FetchError extends Error {
   status?: number
   url: string
   source: FetchSource
+  code?: string
+  requestId?: string
 
-  constructor(message: string, url: string, status: number | undefined, source: FetchSource) {
+  constructor(
+    message: string,
+    url: string,
+    status: number | undefined,
+    source: FetchSource,
+    options?: {
+      code?: string
+      requestId?: string
+    }
+  ) {
     super(message)
     this.name = 'FetchError'
     this.url = url
     this.status = status
     this.source = source
+    this.code = options?.code
+    this.requestId = options?.requestId
   }
 }
 

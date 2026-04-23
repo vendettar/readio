@@ -1,5 +1,10 @@
 import { render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  makeFeedEpisode,
+  makeParsedFeed,
+  makePodcast,
+} from '../../../lib/discovery/__tests__/fixtures'
 import PodcastEpisodeDetailPage from '../PodcastEpisodeDetailPage'
 import PodcastEpisodesPage from '../PodcastEpisodesPage'
 import PodcastShowPage from '../PodcastShowPage'
@@ -11,23 +16,20 @@ const queryClientMock = {
   setQueryData: vi.fn(),
 }
 
-const mockPodcast = {
+const mockPodcast = makePodcast({
   podcastItunesId: '123',
-  collectionName: 'Test Podcast',
-  artistName: 'Author',
-  feedUrl: 'https://example.com/feed.xml',
-  artworkUrl600: 'https://example.com/art-600.jpg',
-  artworkUrl100: 'https://example.com/art-100.jpg',
-}
+  title: 'Test Podcast',
+  author: 'Author',
+})
 
 function setQueryState(input: {
   podcast?: typeof mockPodcast | null
   podcastError?: Error | null
-  feed?: { episodes: Array<Record<string, unknown>> } | undefined
+  feed?: ReturnType<typeof makeParsedFeed> | undefined
   feedError?: Error | null
 }) {
   useQueryMock.mockImplementation(({ queryKey }: { queryKey: readonly unknown[] }) => {
-    if (queryKey[1] === 'lookup' || queryKey[1] === 'podcast-index-lookup') {
+    if (queryKey[1] === 'podcast-detail') {
       return {
         data: input.podcast ?? null,
         isLoading: false,
@@ -68,7 +70,7 @@ vi.mock('@tanstack/react-router', () => ({
   Link: ({ children }: { children: React.ReactNode }) => <a href="/">{children}</a>,
   useLocation: () => ({ state: null }),
   useNavigate: () => vi.fn(),
-  useParams: () => ({ country: 'us', id: '123', episodeId: 'episode-abc12345' }),
+  useParams: () => ({ country: 'us', id: '123', episodeKey: 'qDQ2mB3KTGO7XT4qYVIsKg' }),
 }))
 
 vi.mock('../../../hooks/useEpisodePlayback', () => ({
@@ -90,7 +92,6 @@ vi.mock('../../../lib/discovery', () => ({
   default: {
     getPodcastIndexPodcastByItunesId: vi.fn(),
     fetchPodcastFeed: vi.fn(),
-    getPodcastIndexEpisodes: vi.fn(),
   },
 }))
 
@@ -144,7 +145,7 @@ describe('Podcast route error classification', () => {
   it('show page renders region-unavailable only for successful upstream unresolved content', () => {
     setQueryState({
       podcast: mockPodcast,
-      feed: { episodes: [] },
+      feed: makeParsedFeed({ episodes: [] }),
       feedError: null,
     })
 
@@ -170,7 +171,7 @@ describe('Podcast route error classification', () => {
   it('episodes page renders region-unavailable only for successful upstream unresolved content', () => {
     setQueryState({
       podcast: mockPodcast,
-      feed: { episodes: [] },
+      feed: makeParsedFeed({ episodes: [] }),
       feedError: null,
     })
 

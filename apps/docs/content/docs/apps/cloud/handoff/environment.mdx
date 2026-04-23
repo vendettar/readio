@@ -1,0 +1,34 @@
+---
+title: Environment & Deployment
+---
+
+## 1. Runtime Split
+
+- `apps/cloud-ui` is built as a static frontend bundle.
+- `apps/cloud-api` serves the bundle and owns same-origin API routes.
+
+## 2. Frontend Runtime Config
+
+Cloud frontend runtime config is emitted by the backend through `/env.js`.
+
+- Browser-public values must stay on the explicit allowlist.
+- Real upstream secrets must not be exposed through browser runtime config.
+- `apps/cloud-ui/public/env.js` is only a dev/default template.
+
+## 3. Discovery/Media Contract
+
+- Discovery/search/feed requests are same-origin through Cloud backend routes.
+- Browser media remains direct-first where the current Cloud contract allows it.
+- Backend fallback/proxy behavior is documented separately in handoff audit docs.
+
+## 4. PWA Status
+
+Cloud currently keeps Workbox/PWA disabled unless a later instruction explicitly restores it.
+
+## 5. Deployment Docs
+
+Keep high-level deployment/runtime behavior here; operational audits stay in:
+
+- `handoff/runtime-config-ownership-audit.md`
+- `handoff/media-fallback-audit.md`
+- `handoff/asr-relay-audit.md`

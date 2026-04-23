@@ -1,0 +1,32 @@
+---
+title: 播客发现 (Explore)
+---
+
+## 1. 范围与原则
+
+- 路由：`/explore`、`/podcast/$country/$id`、`/podcast/$country/$id/$episodeKey`
+- 标识契约：节目路由使用数值型 `podcastItunesId`；单集路由使用基于稳定单集身份生成的 compact key。UUID 形态的身份继续沿用旧的 22 字符 `base64url` 形式，非 UUID 身份则使用新的通用 compact 形式。
+- Hybrid 边界：
+  - Search / Top Shows / Top Episodes 的首跳：Apple
+  - Editor's Picks 的首跳：PodcastIndex `podcasts-batch-byguid`
+  - 后续详情/富化：PodcastIndex
+
+## 2. 首跳所有权
+
+- 播客搜索：Apple Search
+- 单集搜索：Apple Search
+- Top Shows：Apple chart feed
+- Top Episodes：Apple chart feed
+- Editor's Picks：PodcastIndex batch-byguid
+
+## 3. 二跳所有权
+
+- 节目元数据：PodcastIndex `podcasts/byitunesid`
+- 单集匹配：优先按稳定单集身份命中已缓存 RSS
+- RSS 兜底：通过同源 Cloud feed route 按 `feedUrl` 获取，并作为后续单集解析的事实来源
+
+## 4. 缓存模型
+
+- 前端：TanStack Query 内存缓存
+- 后端：带优雅降级的 relay 内存缓存
+- Cloud 不再使用长期持久化的前端 discovery 缓存

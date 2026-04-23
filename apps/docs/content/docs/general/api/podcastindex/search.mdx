@@ -1,0 +1,43 @@
+---
+title: Search
+---
+
+# Search Endpoints (/api/1.0/search)
+
+Exhaustive list of all search endpoints provided by Podcast Index. **Requires Authentication.**
+
+## `/byterm`
+Full-text search across all podcast fields.
+- **URL**: `/api/1.0/search/byterm?q={term}`
+- **Example Response**:
+```json
+{
+  "status": "true",
+  "feeds": [{ "id": 75075, "title": "Batman University", "url": "https://..." }],
+  "count": 1
+}
+```
+
+## `/bytitle`
+Strict search in titles only.
+- **URL**: `/api/1.0/search/bytitle?q={title}`
+- **Example Response**:
+```json
+{ "status": "true", "feeds": [{ "id": 75075, "title": "Batman University" }], "count": 1 }
+```
+
+## `/byperson`
+Search for shows or episodes involving a specific host, actor, or person.
+- **URL**: `/api/1.0/search/byperson?q={name}`
+- **Example Response snippet**:
+```json
+{ "status": "true", "items": [{ "id": 16795090, "title": "Episode with Adam Curry" }], "count": 1 }
+```
+
+## `/bylanguage`
+Filter indices using ISO language codes (e.g., `zh`, `en`).
+- **URL**: `/api/1.0/search/bylanguage?q={lang}`
+
+## `/music/byterm` & `/music/bytitle`
+Search specifically for podcasts with a `music` medium.
+- **URL**: `/api/1.0/search/music/byterm?q={term}`

@@ -1,0 +1,24 @@
+---
+title: Stats
+---
+
+# Index Statistics Endpoints (/api/1.0/stats)
+
+Overview of the current scale and activity of the Index. **Requires Authentication.**
+
+## `/stats/current`
+Provides a bird's eye view of the size and state of the Index.
+- **URL**: `/api/1.0/stats/current`
+- **Example Response**:
+```json
+{
+  "status": "true",
+  "stats": {
+    "feedCountTotal": 4257865,
+    "episodeCountTotal": 143953477,
+    "feedsWithValueBlocks": 21916,
+    "feedsWithChapters": 35582,
+    "feedsWithTranscripts": 61385
+  }
+}
+```

@@ -1,0 +1,30 @@
+---
+title: Internationalization (i18n)
+---
+
+## 1. Current Role in Cloud
+
+Cloud frontend still uses the same typed lazy-loading i18n model carried from the original frontend:
+
+- English is the base schema
+- non-default locales load on demand
+- language switching must stay race-safe
+
+## 2. Safe Switching Contract
+
+- `changeLanguageSafely` remains the only valid switching path
+- concurrent requests for the same locale should dedupe
+- only the latest requested language may apply
+
+## 3. Runtime Synchronization
+
+- `<html lang>` must stay in sync with active locale
+- formatters and locale-aware transcript tokenization depend on the resolved runtime language
+
+## 4. Scope
+
+This doc remains valuable for Cloud because `apps/cloud-ui` still owns:
+
+- route/page text rendering
+- settings-driven language switching
+- transcript locale-aware tokenization behavior

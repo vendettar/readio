@@ -1,0 +1,171 @@
+---
+title: Discovery API 实际使用链路
+---
+
+## 1. 第一跳 API
+
+这一章只记录用户入口页面直接触发的外部 discovery API。
+
+### 1.1 Apple Search Podcasts
+
+- 页面/入口：
+  - 搜索页的节目结果
+- 上游：
+  - Apple Search API
+- 常见输入：
+  - `term`
+  - `country`
+  - `limit`
+- Readio 实际使用的核心输出：
+  - `podcastItunesId`
+  - `title`
+  - `author`
+  - `artwork`
+  - 当前 schema 里仍保留的搜索摘要字段
+- 下一步：
+  - 当需要 canonical podcast metadata 或节目详情富化时，继续走 Podcast Index `podcasts/byitunesid`
+
+### 1.2 Apple Search Episodes
+
+- 页面/入口：
+  - 搜索页的单集结果
+- 上游：
+  - Apple Search API
+- 常见输入：
+  - `term`
+  - `country`
+  - `limit`
+- Readio 实际使用的核心输出：
+  - `podcastItunesId`
+  - `title`
+  - `showTitle`
+  - `artwork`
+  - `episodeUrl`
+  - `episodeGuid`
+  - `releaseDate`
+  - `trackTimeMillis`
+  - `shortDescription`
+- 下一步：
+  - 当需要 canonical podcast metadata 时，继续走 Podcast Index `podcasts/byitunesid`
+  - 当需要 feed 原生单集数据时，继续走按 Podcast Index `podcasts/byitunesid` 返回的 canonical `feedUrl` 的 RSS 解析
+
+### 1.3 Apple Top Podcasts
+
+- 页面/入口：
+  - Explore Top Shows
+- 上游：
+  - Apple top podcasts chart feed
+- 常见输入：
+  - `country`
+  - `limit`
+- Readio 实际使用的核心输出：
+  - `podcastItunesId`
+  - `title`
+  - `author`
+  - `artwork`
+  - `genres`
+- 下一步：
+  - 当用户进入节目页或需要 canonical podcast metadata 时，继续走 Podcast Index `podcasts/byitunesid`
+
+### 1.4 Apple Top Episodes
+
+- 页面/入口：
+  - Explore Top Episodes
+- 上游：
+  - Apple top episodes chart feed
+- 常见输入：
+  - `country`
+  - `limit`
+- Readio 实际使用的核心输出：
+  - `podcastItunesId`
+  - `title`
+  - `author`
+  - `artwork`
+  - `genres`
+- 下一步：
+  - 这个第一跳只负责提供 Explore Top Episodes 板块展示所需的数据
+  - 用户点击后，后续解析从 show-level context 继续，起点是 Podcast Index `podcasts/byitunesid`
+
+### 1.5 Podcast Index Podcasts Batch By GUID
+
+- 页面/入口：
+  - Explore Editor's Picks
+- 上游：
+  - Podcast Index `podcasts/batch/byguid`
+- 常见输入：
+  - 由 editor-pick surface 持有的一组 podcast GUID
+- Readio 实际使用的核心输出：
+  - editor-pick surface 使用的收窄节目 DTO
+- 下一步：
+  - 当用户打开某个 picked show 时，继续走节目页 lookup，也就是 Podcast Index `podcasts/byitunesid`
+  - 当该节目页后续需要单集数据时，继续走按 Podcast Index `podcasts/byitunesid` 返回的 canonical `feedUrl` 的 RSS 解析
+
+## 2. 第二跳与后续解析
+
+这一章记录第一跳之后、或者已有 route / cache / canonical podcast context 时才会触发的 API。
+
+### 2.1 Podcast Index Podcast By iTunes ID
+
+- 上游：
+  - Podcast Index `podcasts/byitunesid`
+- 用途：
+  - 获取 canonical podcast metadata
+  - 节目页 lookup
+  - 富化 Apple 第一跳结果
+  - 获取 canonical `feedUrl`
+- 上一跳：
+  - Apple Search Podcasts
+  - Apple Search Episodes
+  - Apple Top Podcasts
+  - Apple Top Episodes
+  - 或者基于 `podcastItunesId` 直接进入节目页
+- 依赖上一跳提供：
+  - `podcastItunesId`
+- 向下游产出：
+  - canonical podcast contract
+  - 后续 RSS 解析所需的 `feedUrl`
+
+### 2.2 RSS Feed Parsing By Feed URL
+
+- 上游：
+  - 按 `feedUrl` 拉取并解析 RSS
+- 用途：
+  - 节目页 feed episode list
+  - 最后的 episode resolution fallback
+  - feed 原生字段，例如 transcript、chapters、season/episode number、HTML description
+- 上一跳：
+  - Podcast Index `podcasts/byitunesid`
+  - 已缓存的 canonical podcast 数据
+  - 已缓存的 feed 数据
+- 依赖上一跳提供：
+  - `feedUrl`
+- 向下游产出：
+  - 以稳定单集身份为键的 normalized RSS episode rows
+
+### 2.3 单集解析顺序
+
+- 第一步：
+  - 从 route 或 compact key 解析出目标稳定单集身份
+- 第二步：
+  - 如果 feed 数据已存在，先在 cached RSS episodes 里按稳定单集身份匹配
+- 第三步：
+  - 通过 Podcast Index `podcasts/byitunesid` 获取 canonical podcast metadata
+- 第四步：
+  - 按 canonical `feedUrl` 拉 RSS，再按稳定单集身份匹配
+
+## 3. 页面总览
+
+| 页面/入口 | 第一跳 | 第二跳 | 后续解析 |
+|---|---|---|---|
+| 搜索节目 | Apple Search Podcasts | 需要时走 Podcast Index `podcasts/byitunesid` | 只有在后续详情流需要时才会走 RSS |
+| 搜索单集 | Apple Search Episodes | 需要时走 Podcast Index `podcasts/byitunesid` | 用 canonical `feedUrl` 做单集解析 |
+| Explore Top Shows | Apple Top Podcasts | 用户进入节目页后走 Podcast Index `podcasts/byitunesid` | 在节目/单集详情流中按 `feedUrl` 走 RSS |
+| Explore Top Episodes | Apple Top Episodes | 用户点击后，从 Podcast Index `podcasts/byitunesid` 的 show context 继续 | 在后续详情/解析链路里按 `feedUrl` 走 RSS |
+| Explore Editor's Picks | Podcast Index `podcasts/batch/byguid` | 用户进入节目页后走 Podcast Index `podcasts/byitunesid` | 在节目/单集详情流中按 `feedUrl` 走 RSS |
+| 节目页 | 无 | Podcast Index `podcasts/byitunesid` | RSS `feedUrl` |
+| 单集详情页 | 无 | Podcast Index `podcasts/byitunesid` | 用 canonical `feedUrl` 走 RSS |
+
+## 4. 明确不使用
+
+- Readio 当前 active discovery flow 不使用 Podcast Index `episodes/byguid`
+- Readio 当前仍然使用 Podcast Index `podcasts/batch/byguid` 作为 Editor's Picks 的第一跳

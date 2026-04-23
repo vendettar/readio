@@ -1,0 +1,21 @@
+---
+title: Search System
+---
+
+## 1. Scope
+
+Cloud search still has two user-facing surfaces:
+
+- command palette / overlay
+- `/search` results page
+
+## 2. Source Contract
+
+- First-hop search source: Apple Search
+- Detail/enrichment after click: PodcastIndex via `podcastItunesId`
+
+## 3. Interaction Contract
+
+- Search episode rows keep direct-play and detail-navigation separated
+- Offline/local library indicators remain frontend-owned
+- Missing metadata may trigger enrichment lookup before persistence actions such as favorites

@@ -1,0 +1,34 @@
+---
+title: 环境与部署
+---
+
+## 1. 运行时拆分
+
+- `apps/cloud-ui` 构建为静态前端产物
+- `apps/cloud-api` 负责提供该产物并承载同源 API
+
+## 2. 前端 Runtime Config
+
+Cloud 前端的运行时配置通过后端 `/env.js` 发出。
+
+- 浏览器可见字段必须保持在显式 allowlist 内
+- 真实上游 secret 不得通过浏览器运行时配置暴露
+- `apps/cloud-ui/public/env.js` 只应视为开发/默认模板
+
+## 3. Discovery / Media 契约
+
+- discovery / search / feed 请求统一通过 Cloud 后端同源路由承载
+- 当前 Cloud 契约允许的情况下，媒体仍是浏览器直连优先
+- backend fallback / proxy 的细节记录在 handoff 审计文档里
+
+## 4. PWA 状态
+
+Cloud 当前默认保持 Workbox / PWA 关闭，除非后续指令明确恢复。
+
+## 5. 部署文档边界
+
+这里保留高层部署/运行时行为；具体审计文档位于：
+
+- `handoff/runtime-config-ownership-audit.md`
+- `handoff/media-fallback-audit.md`
+- `handoff/asr-relay-audit.md`

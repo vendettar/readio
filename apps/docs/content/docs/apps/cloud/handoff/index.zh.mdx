@@ -1,0 +1,110 @@
+---
+title: Cloud 交接
+---
+
+# Cloud 交接
+
+本文档是 Cloud bootstrap 阶段的当前入口。
+它记录 `apps/cloud-ui` 与 `apps/cloud-api` 的已实现契约，并且必须与实际代码保持一致。
+
+## 0. 文档地图
+
+Cloud handoff 树现在是应用级前后端契约的当前 SSOT：
+
+- `handoff/architecture.zh.mdx`
+- `handoff/database.zh.mdx`
+- `handoff/environment.zh.mdx`
+- `handoff/standards.zh.mdx`
+- `handoff/features/*`
+- `frontend/*`
+
+`handoff/` 只保留 ownership、contract 和 bootstrap 语境。长期存在的前端实现说明现在迁到 `cloud/frontend/`。
+
+## 1. 当前目的
+
+- 将 `apps/cloud-ui` 构建为与 Lite 等价的完整前端克隆。
+- 由 `apps/cloud-api` 直接提供 `apps/cloud-ui/dist` 的构建产物。
+- 让已迁移的 discovery、search、feed 流量通过 `apps/cloud-api` 以同源后端方式承载。
+- 在浏览器直连可用时优先使用浏览器直连；仅对已批准的媒体失败类由 `apps/cloud-api` 提供内建 fallback 代理。
+- 让浏览器本地的下载、转录和其他本地媒体产物继续留在浏览器本地；清除站点数据后仍会被移除。
+- 让 Cloud Settings 在当前契约中不再包含 `CORS Proxy` 区块。
+- 让 Cloud ASR provider 转写通过 `apps/cloud-api` 里的独立同源 relay 提交，同时在这一阶段保持 provider credential 由用户拥有并由浏览器按请求提供。
+- 让 Cloud ASR provider 的验证 / readiness 在后续指令明确修改之前继续保持 browser-direct。
+- 在当前阶段保持 Workbox/PWA 关闭，除非后续指令明确恢复。
+- 暴露当前脚手架阶段的 `/api/proxy` RSS 代理契约。
+- 启动 SQLite 作为 Cloud 后端脚手架的持久化基础，并保持生命周期清晰。
+
+## 2. 静态服务策略
+
+- `apps/cloud-api` 直接提供 Cloud UI 的构建输出。
+- 非 API 路由仅在不存在同名文件时回退到 `index.html`。
+- 已存在的文件，包括无扩展名资源，都会被直接提供。
+- `/api/*` 路由由 API 处理器独占，不能回退到 SPA shell。
+- 后端会优先读取显式的 `READIO_CLOUD_UI_DIST_DIR`，否则回退到同目录 `dist/` 或仓库内的 `apps/cloud-ui/dist`。
+
+## 3. RSS 代理契约
+
+- `GET /api/proxy?url=...` 是当前代理入口。
+- 代理在拨号前会校验目标地址，并拒绝私网、回环、链路本地或 metadata 风格目标。
+- 请求路径是 fail-closed 的：它使用已验证的固定目标集，并且不会通过重定向跳入不允许的目标。
+- 代理使用自定义 user agent，限制上游请求超时，并保留基础的内存限流。
+
+## 4. SQLite 启动状态
+
+- SQLite 是 Cloud 当前的持久化启动目标。
+- 启动路径会创建父目录、打开数据库、执行初始化 PRAGMA，并在关闭时清理干净。
+- 这一阶段不定义 schema、迁移、同步或认证层。
+
+## 5. 边界
+
+- 在这一阶段，应把 Cloud 描述为由 Go 后端提供的 Lite 等价前端克隆。
+- 应把已迁移的 discovery、search、feed 请求描述为由后端拥有的同源流量。
+- 应把 Cloud Settings 描述为不再包含 `CORS Proxy` 区块。
+- 应把 Cloud 媒体描述为浏览器直连优先，仅对已批准的失败类使用后端 fallback。
+- 应把 Cloud ASR provider 转写描述为通过独立后端路由拥有的同源 relay。
+- 应把 Cloud ASR 的 provider credential 描述为在这一阶段仍由用户拥有，并由浏览器按请求提供。
+- 应把 Cloud ASR provider 的验证 / readiness 描述为仍然是 browser-direct。
+- 应把后端媒体 fallback 描述为透传且不缓存。
+- 应把浏览器本地媒体产物描述为继续留在浏览器本地。
+- 应注明 Cloud 在当前阶段保持 Workbox/PWA 关闭。
+- 不要在这一阶段声称已经具备 schema、同步、认证或多用户 SaaS 行为。
+- 不要声称所有音频都会一直走后端。
+- 不要声称 `/api/proxy` 负责 provider 转写。
+- 不要声称 Cloud 在这一阶段会服务端持久化用户的 ASR provider credential。
+- 不要声称存在服务端媒体缓存或持久化。
+- 未来 Cloud 演进应放在明确标记为 future direction 的文档里。
+
+## 6. 媒体 fallback 审计
+
+- 006a 的媒体审计记录在 `media-fallback-audit.md`。
+- 它分类了原生 audio、JS fetch 预取、`HEAD`、`GET`、`Range GET`、transcript 抓取、本地 `blob:` 播放，以及 tracking URL 解包行为。
+- 当前运行时契约保持浏览器直连优先，并仅对已批准的失败类使用窄而明确的后端 fallback，且为透传、不缓存。
+- 这一页只保留高层映射；实现细节放在审计子文档里。
+
+## 7. ASR Relay 审计
+
+- 008a 的 ASR transport 审计记录在 `asr-relay-audit.md`。
+- 它把媒体抓取 fallback 与 provider 转写提交、provider 验证 / readiness 检查分开。
+- 当前 Cloud 契约已经把 provider 转写切到独立的同源 relay，而 provider 验证 / readiness 仍然保持 browser-direct。
+- 浏览器本地 blob 与已下载 blob 仍然是 browser-local 输入；relay 不会把它们变成后端持久化对象。
+- 这一页只保留高层映射；实现细节放在审计子文档里。
+
+## 8. 运行时配置所有权审计
+
+- 运行时配置所有权审计记录在 `runtime-config-ownership-audit.md`。
+- 它将配置分为三个所有权桶：服务端所有运行时环境、由后端 `/env.js` 发出的浏览器公开运行时配置，以及浏览器本地/用户本地配置。
+- 生产环境 Cloud `/env.js` 由 `apps/cloud-api` 通过显式 allowlist 生成，不是从进程环境变量转储。
+- `apps/cloud-ui/public/env.js` 仅面向开发/默认模板。
+- 服务端所有配置保留在 VPS 环境或 systemd 环境文件（例如 `/etc/readio/readio-cloud.env`）。
+- 浏览器公开字段（例如 `READIO_ASR_RELAY_PUBLIC_TOKEN`）不是密钥；它们是轻量级滥用控制 token。
+- 这一页只保留高层映射；实现细节放在审计子文档里。
+
+## 9. 播放与 Transcript 契约
+
+- 当前 transcript-first 播放与 Reading Area CTA 契约记录在 `playback-transcript-contract.zh.mdx`。
+- 它定义了：
+  - 带 transcript 的播放何时必须跳过 automatic ASR
+  - 当前没有显示 transcript 时，artwork CTA 应如何表现
+  - `stream_without_transcript` 如何只影响展示，而不抹掉 transcript availability
+  - local/downloaded transcript source 在 restore 与 pure listening 流程中应如何被视为 transcript available
+- 本页只保留高层映射；实现细节放在 handoff 子文档里。

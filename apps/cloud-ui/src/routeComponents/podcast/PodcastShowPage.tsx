@@ -14,49 +14,26 @@ import { Button } from '../../components/ui/button'
 import { ExpandableDescription } from '../../components/ui/expandable-description'
 import { Skeleton } from '../../components/ui/skeleton'
 import { useEpisodePlayback } from '../../hooks/useEpisodePlayback'
-import discovery, { type Episode } from '../../lib/discovery'
+import discovery, { type FeedEpisode } from '../../lib/discovery'
 import {
   getCachedEditorPickByItunesID,
   getCanonicalEditorPickPodcastID,
   getEditorPickRouteState,
   mapEditorPickToPodcast,
-  type PodcastWithEditorPickSnapshot,
 } from '../../lib/discovery/editorPicks'
 import {
   buildPodcastFeedQueryKey,
-  buildPodcastIndexLookupQueryKey,
+  buildPodcastDetailQueryKey,
   PODCAST_QUERY_CACHE_POLICY,
 } from '../../lib/discovery/podcastQueryContract'
 import { formatCompactNumber } from '../../lib/formatters'
 import { getDiscoveryArtworkUrl } from '../../lib/imageUtils'
+
+function getEpisodeRowKey(episode: FeedEpisode, index: number): string {
+  return episode.episodeGuid || `${episode.audioUrl}-${episode.pubDate}-${index}`
+}
+
 import { logError } from '../../lib/logger'
-import { normalizePodcastAudioUrl } from '../../lib/networking/urlUtils'
-
-function getEpisodeIdentities(ep: Episode): string[] {
-  const identities: string[] = []
-  const normalizedAudio = normalizePodcastAudioUrl(ep.audioUrl)
-  if (normalizedAudio) identities.push(`audio:${normalizedAudio}`)
-  if (ep.id) identities.push(`guid:${ep.id}`)
-  if (ep.pubDate && ep.title) identities.push(`title:${ep.title.toLowerCase()}:${ep.pubDate}`)
-  return identities
-}
-
-function isNewEpisode(addedIdentities: Set<string>, ep: Episode): boolean {
-  const identities = getEpisodeIdentities(ep)
-  if (identities.length === 0) return false
-  if (identities.some((identity) => addedIdentities.has(identity))) return false
-  for (const identity of identities) {
-    addedIdentities.add(identity)
-  }
-  return true
-}
-
-function getFeedDataHash(feed: { episodes?: Episode[] } | undefined): string {
-  if (!feed?.episodes?.length) return 'empty'
-  const ids = feed.episodes.map((ep) => ep.id).join(',')
-  return `${feed.episodes.length}-${ids.slice(0, 64)}`
-}
-
 import {
   buildPodcastEpisodesRoute,
   buildPodcastShowRoute,
@@ -88,39 +65,30 @@ export default function PodcastShowPage() {
   const queryClient = useQueryClient()
 
   // Optimization: If navigating from Editor's Picks, use the snapshot from state or cache
-  // to avoid redundant iTunes ID lookup.
+  // to bootstrap initial data while still performing authoritative PI byitunesid enrichment.
   const snapshot =
     getEditorPickRouteState(location.state)?.editorPickSnapshot ||
     getCachedEditorPickByItunesID(queryClient, normalizedRouteCountry, id)
   const initialPodcast = snapshot ? mapEditorPickToPodcast(snapshot) : undefined
 
   // Fetch podcast metadata via the active discovery path.
+  // NOTE: PI byitunesid lookup ALWAYS runs when canonical iTunes ID exists - snapshot is only a bootstrap hint,
+  // not a replacement for authoritative enrichment.
   const {
     data: queryData,
     isLoading: isLoadingPodcast,
     error: podcastError,
   } = useQuery({
-    queryKey: buildPodcastIndexLookupQueryKey(id, normalizedRouteCountry),
+    queryKey: buildPodcastDetailQueryKey(id, normalizedRouteCountry),
     queryFn: ({ signal }) => discovery.getPodcastIndexPodcastByItunesId(id, signal),
     initialData: initialPodcast,
-    // Optimization: Skip the network request if we already have the snapshot
-    enabled: Boolean(normalizedRouteCountry && !initialPodcast),
-    staleTime: PODCAST_QUERY_CACHE_POLICY.lookup.staleTime,
-    gcTime: PODCAST_QUERY_CACHE_POLICY.lookup.gcTime,
+    // Always fetch when we have a route ID - snapshot bootstraps but doesn't replace authoritative lookup
+    enabled: Boolean(normalizedRouteCountry && id),
+    staleTime: PODCAST_QUERY_CACHE_POLICY.podcastDetail.staleTime,
+    gcTime: PODCAST_QUERY_CACHE_POLICY.podcastDetail.gcTime,
   })
 
-  // Ensure that the editorPickSnapshot is preserved even after the lookup query refreshes,
-  // as it is required for stable route generation in child components.
-  const podcast = useMemo(() => {
-    const data = (queryData || initialPodcast) as PodcastWithEditorPickSnapshot | undefined
-    if (!data) return undefined
-    return {
-      ...data,
-      editorPickSnapshot:
-        (initialPodcast as PodcastWithEditorPickSnapshot | undefined)?.editorPickSnapshot ||
-        data.editorPickSnapshot,
-    }
-  }, [queryData, initialPodcast])
+  const podcast = useMemo(() => queryData || initialPodcast, [initialPodcast, queryData])
 
   const feedUrl = podcast?.feedUrl
 
@@ -136,100 +104,7 @@ export default function PodcastShowPage() {
     gcTime: PODCAST_QUERY_CACHE_POLICY.feed.gcTime,
   })
 
-  const feedDataHash = getFeedDataHash(feed)
-  const appleTotal = podcast?.episodeCount ?? 0
-  const rssCount = feed?.episodes?.length ?? 0
-  const podcastItunesId = (
-    podcast?.podcastItunesId ||
-    (podcast?.podcastItunesId ? String(podcast.podcastItunesId) : '') ||
-    id
-  ).trim()
-  const shouldHydrate =
-    rssCount < 10 &&
-    appleTotal >= 20 &&
-    appleTotal > rssCount &&
-    appleTotal > 0 &&
-    rssCount / appleTotal < 0.8 &&
-    podcastItunesId.length > 0
-
-  const { data: hydratedEpisodes } = useQuery({
-    queryKey: [
-      'podcast-hydration',
-      id,
-      normalizedRouteCountry,
-      podcastItunesId || null,
-      feedDataHash,
-      appleTotal,
-    ],
-    queryFn: async ({ signal }) => {
-      if (!shouldHydrate || !podcastItunesId) {
-        return null
-      }
-
-      try {
-        const piEpisodes = await discovery.getPodcastIndexEpisodes(
-          podcastItunesId,
-          Math.min(appleTotal, 300),
-          signal
-        )
-
-        if (!piEpisodes || piEpisodes.length === 0) {
-          return null
-        }
-
-        const addedIdentities = new Set<string>()
-        const merged: Episode[] = []
-
-        for (const ep of feed?.episodes ?? []) {
-          if (isNewEpisode(addedIdentities, ep)) {
-            merged.push(ep)
-          }
-        }
-
-        for (const ep of piEpisodes) {
-          if (isNewEpisode(addedIdentities, ep)) {
-            merged.push(ep)
-          }
-        }
-
-        if (merged.length <= rssCount) {
-          return null
-        }
-
-        merged.sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime())
-
-        if (import.meta.env.DEV) {
-          logError('[PodcastShowPage] episodes_hydration_applied', {
-            reason: 'applied',
-            source: 'podcastindex',
-            podcastId: id,
-            country: normalizedRouteCountry,
-            rssCount,
-            appleTotal,
-            mergedCount: merged.length,
-          })
-        }
-
-        return merged
-      } catch (err) {
-        if (import.meta.env.DEV) {
-          logError('[PodcastShowPage] episodes_hydration_failed', {
-            reason: 'fetch_failed',
-            source: 'podcastindex',
-            podcastId: id,
-            country: normalizedRouteCountry,
-            error: err,
-          })
-        }
-        return null
-      }
-    },
-    enabled: shouldHydrate && rssCount > 0,
-  })
-
-  const episodes = shouldHydrate
-    ? (hydratedEpisodes ?? feed?.episodes ?? [])
-    : (feed?.episodes ?? [])
+  const episodes = feed?.episodes ?? []
 
   // Subscription state
   const subscriptions = useExploreStore((state) => state.subscriptions)
@@ -329,7 +204,7 @@ export default function PodcastShowPage() {
   }
 
   // Get artwork URL
-  const artworkUrl = getDiscoveryArtworkUrl(podcast.image || podcast.artwork, 600)
+  const artworkUrl = getDiscoveryArtworkUrl(podcast.artwork, 600)
   const canonicalPodcastId = getCanonicalEditorPickPodcastID(podcast) || id
 
   const rawDescription = feed?.description || ''
@@ -408,7 +283,7 @@ export default function PodcastShowPage() {
                 <p className="text-xl font-bold text-primary">{podcast.author}</p>
                 {/* Meta badges/text */}
                 <div className="flex items-center gap-2 mt-2 text-xs font-medium text-muted-foreground tracking-tight">
-                  <span>{String(podcast.genres?.[0]?.name || podcast.genres?.[0] || t('podcastLabel'))}</span>
+                  <span>{String(podcast.genres?.[0] || t('podcastLabel'))}</span>
                 </div>
               </div>
 
@@ -433,9 +308,10 @@ export default function PodcastShowPage() {
             <div className="flex items-end gap-3 pt-6 pe-4">
               {episodes[0] && (
                 <Button
-                  onClick={() =>
-                    playEpisode(episodes[0], podcast, normalizedRouteCountry ?? undefined)
-                  }
+                  onClick={() => {
+                    const ep = episodes[0]
+                    playEpisode(ep, podcast, normalizedRouteCountry ?? undefined)
+                  }}
                   className="rounded-md bg-primary hover:opacity-90 text-primary-foreground px-5 h-8 font-bold text-xs flex items-center gap-1.5 shadow-none transition-all active:scale-95"
                 >
                   <Play className="w-3.5 h-3.5 fill-current" />
@@ -495,12 +371,12 @@ export default function PodcastShowPage() {
             <div className="flex flex-col">
               {episodes.slice(0, 8).map((episode, index) => (
                 <EpisodeRow
-                  key={episode.id}
+                  key={getEpisodeRowKey(episode, index)}
                   episode={episode}
                   podcast={podcast}
+                  editorPickSnapshot={snapshot}
                   podcastId={id}
                   country={normalizedRouteCountry ?? undefined}
-                  onPlay={() => playEpisode(episode, podcast, normalizedRouteCountry ?? undefined)}
                   isLast={index === 7} // Slice is 8, so index 7 is last visual item
                 />
               ))}

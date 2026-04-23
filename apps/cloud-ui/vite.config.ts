@@ -34,7 +34,6 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
-      '@readio/core': path.resolve(__dirname, '../../packages/core/src/index.ts'),
     },
   },
   optimizeDeps: {

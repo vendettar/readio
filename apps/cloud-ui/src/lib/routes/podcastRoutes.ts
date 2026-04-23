@@ -5,13 +5,15 @@ export type SupportedCountry = EditorPicksRegion
 
 const SUPPORTED_COUNTRY_SET = new Set(SUPPORTED_CONTENT_REGIONS)
 
-export function normalizeCountryParam(country: string | null | undefined): SupportedCountry | null {
-  if (typeof country !== 'string') return null
+export function normalizeCountryParam(
+  country: string | null | undefined
+): SupportedCountry | undefined {
+  if (typeof country !== 'string') return undefined
   const normalized = country.trim().toLowerCase()
-  if (!normalized) return null
+  if (!normalized) return undefined
   return SUPPORTED_COUNTRY_SET.has(normalized as SupportedCountry)
     ? (normalized as SupportedCountry)
-    : null
+    : undefined
 }
 
 // ---------------------------------------------------------------------------
@@ -19,20 +21,20 @@ export function normalizeCountryParam(country: string | null | undefined): Suppo
 // ---------------------------------------------------------------------------
 
 interface BuildPodcastShowRouteArgs {
-  country: string | null | undefined
+  country: string | undefined
   podcastId: string
   search?: { [x: string]: never }
 }
 
 interface BuildPodcastEpisodeRouteArgs {
-  country: string | null | undefined
+  country: string | undefined
   podcastId: string
   episodeKey: string
   search?: { [x: string]: never }
 }
 
 interface BuildPodcastEpisodesRouteArgs {
-  country: string | null | undefined
+  country: string | undefined
   podcastId: string
   search?: { [x: string]: never }
 }

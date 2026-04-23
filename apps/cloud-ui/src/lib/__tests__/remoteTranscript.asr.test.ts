@@ -512,7 +512,7 @@ Direct transcript line
     autoIngestEpisodeTranscript(transcriptUrl, audioUrl)
 
     await waitFor(() => {
-      expect(useTranscriptStore.getState().transcriptIngestionStatus).toBe('idle')
+      expect(useTranscriptStore.getState().transcriptIngestionStatus).toBe('failed')
     })
 
     const transcriptFetchCalls = fetchMock.mock.calls.filter((call) => call[0] === transcriptUrl)
@@ -528,9 +528,9 @@ Direct transcript line
     expect(transcribeCalls).toHaveLength(0)
     expect(useTranscriptStore.getState().subtitlesLoaded).toBe(false)
     expect(logMock).toHaveBeenCalledWith(
-      '[remoteTranscript] Transcript fetch failed; skipping automatic ASR because transcript exists',
+      '[remoteTranscript] Transcript fetch failed; transcript source remains available',
       expect.objectContaining({
-        expectedAudioUrl: audioUrl,
+        expectedAudioUrl: 'https://example.com/audio.mp3',
         transcriptSourceHost: 'example.com',
       })
     )

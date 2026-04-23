@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Episode, Podcast } from '../../discovery'
+import type { FeedEpisode } from '../../discovery'
 import { downloadEpisode, removeDownloadedTrack } from '../../downloadService'
 import * as playbackSource from '../playbackSource'
 import { bumpPlaybackEpoch, playFeedEpisodeWithDeps } from '../remotePlayback'
@@ -15,6 +15,7 @@ vi.mock('../../downloadService', () => ({
 vi.mock('../../remoteTranscript', () => ({
   autoIngestEpisodeTranscript: vi.fn(),
   getAsrSettingsSnapshot: () => ({ asrProvider: 'groq', asrModel: 'whisper-1' }),
+  getValidTranscriptUrl: (url: string | null | undefined) => url || null,
 }))
 
 vi.mock('../../db/credentialsRepository', () => ({
@@ -36,14 +37,28 @@ describe('remotePlayback ASR-Fallback Regression', () => {
 
     const audioUrl = 'https://example.com/audio.mp3'
     // Ensure transcriptUrl is missing to trigger ASR blocking
-    const episode = {
+    const episode: FeedEpisode = {
+      episodeGuid: 'ep1',
       audioUrl,
       title: 'Test',
       description: 'Desc',
-      id: 'ep1',
+      descriptionHtml: undefined,
+      pubDate: '2025-01-01T00:00:00.000Z',
       transcriptUrl: undefined,
     }
-    const podcast = { collectionName: 'Pod', feedUrl: 'https://feed.com' }
+    const podcast = {
+      podcastItunesId: '123',
+      title: 'Pod',
+      feedUrl: 'https://feed.com',
+      author: 'Author',
+      artwork: 'https://example.com/art.jpg',
+      description: 'Description',
+      lastUpdateTime: 1700000000000,
+      episodeCount: 10,
+      language: 'en',
+      genres: ['Technology'],
+      dead: false,
+    }
 
     const resolveSpy = vi.spyOn(playbackSource, 'resolvePlaybackSource')
 
@@ -68,8 +83,8 @@ describe('remotePlayback ASR-Fallback Regression', () => {
         pause: pauseSpy,
         setPlaybackTrackId: setPlaybackTrackIdSpy,
       },
-      episode as Partial<Episode> as Episode,
-      podcast as Partial<Podcast> as Podcast
+      episode,
+      podcast
     )
 
     // Verify it called removeDownloadedTrack for the dirty track

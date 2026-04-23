@@ -4,8 +4,9 @@ import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { useEpisodePlayback } from '../../hooks/useEpisodePlayback'
 import { useNetworkStatus } from '../../hooks/useNetworkStatus'
-import type { Episode, Podcast } from '../../lib/discovery'
-import { PLAYBACK_REQUEST_MODE } from '../../lib/player/playbackMode'
+import type { EditorPickPodcast, FeedEpisode, Podcast } from '../../lib/discovery'
+import { getEpisodeGuid } from '../../lib/discovery/editorPicks'
+import { PLAYBACK_REQUEST_MODE, type PlaybackRequestMode } from '../../lib/player/playbackMode'
 import { canPlayRemoteStreamWithoutTranscript } from '../../lib/player/remotePlayback'
 import { normalizeCountryParam } from '../../lib/routes/podcastRoutes'
 import { cn } from '../../lib/utils'
@@ -18,11 +19,12 @@ import { fromEpisode } from './episodeRowModel'
 import { useEpisodeRowFavoriteAction } from './useEpisodeRowFavoriteAction'
 
 export interface EpisodeRowProps {
-  episode: Episode
+  episode: FeedEpisode
   podcast: Podcast
+  editorPickSnapshot?: EditorPickPodcast
   podcastId?: string
   country?: string
-  onPlay?: () => void
+  onPlay?: (options?: { mode?: PlaybackRequestMode }) => void
   showDescription?: boolean
   descriptionLines?: number
   showDivider?: boolean
@@ -34,6 +36,7 @@ export interface EpisodeRowProps {
 function EpisodeRowInner({
   episode,
   podcast,
+  editorPickSnapshot,
   podcastId,
   country: manualCountry,
   onPlay: customOnPlay,
@@ -49,13 +52,9 @@ function EpisodeRowInner({
   const removeFavorite = useExploreStore((s) => s.removeFavorite)
   const globalCountry = useExploreStore((s) => s.country)
   const routeParams = useParams({ strict: false })
+  const favoriteIdentity = getEpisodeGuid(episode)
   const favorited = useExploreStore((s) =>
-    s.isFavorited(
-      podcast.feedUrl ?? '',
-      episode.audioUrl ?? '',
-      episode.id,
-      episode.providerEpisodeId
-    )
+    s.isFavorited(podcast.feedUrl ?? '', episode.audioUrl ?? '', favoriteIdentity)
   )
   const { playEpisode } = useEpisodePlayback()
   const { isOnline } = useNetworkStatus()
@@ -66,8 +65,12 @@ function EpisodeRowInner({
     normalizeCountryParam(manualCountry) ??
     normalizeCountryParam((routeParams as { country?: string }).country) ??
     normalizeCountryParam(globalCountry)
+
   const handlePlay =
-    customOnPlay || (() => playEpisode(episode, podcast, routeCountry ?? undefined))
+    customOnPlay ||
+    ((options?: { mode?: PlaybackRequestMode }) => {
+      playEpisode(episode, podcast, routeCountry ?? undefined, options)
+    })
   const canPlayWithoutTranscript = canPlayRemoteStreamWithoutTranscript(
     { audioUrl: episode.audioUrl },
     isOnline
@@ -87,6 +90,7 @@ function EpisodeRowInner({
   const model = fromEpisode({
     episode,
     podcast,
+    editorPickSnapshot,
     podcastId,
     routeCountry,
     language,
@@ -107,11 +111,7 @@ function EpisodeRowInner({
       >
         {canPlayWithoutTranscript && (
           <DropdownMenuItem
-            onSelect={() =>
-              playEpisode(episode, podcast, routeCountry ?? undefined, {
-                mode: PLAYBACK_REQUEST_MODE.STREAM_WITHOUT_TRANSCRIPT,
-              })
-            }
+            onSelect={() => handlePlay?.({ mode: PLAYBACK_REQUEST_MODE.STREAM_WITHOUT_TRANSCRIPT })}
             className="text-sm font-medium focus:bg-primary focus:text-primary-foreground whitespace-nowrap cursor-pointer justify-between"
           >
             <span>{t('playWithoutTranscript')}</span>

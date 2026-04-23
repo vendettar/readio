@@ -1,11 +1,11 @@
 import { useCallback, useState } from 'react'
-import type { Episode, Podcast } from '@/lib/discovery'
+import type { FavoriteEpisodeInput } from '@/lib/discovery'
 import { logError } from '@/lib/logger'
 import { toast } from '@/lib/toast'
 
 interface AddFavoritePayload {
-  podcast: Podcast
-  episode: Episode
+  podcast: { feedUrl?: string; title?: string; artwork?: string; podcastItunesId?: string | number }
+  episode: FavoriteEpisodeInput
   country?: string | null | undefined
 }
 
@@ -13,8 +13,13 @@ interface UseEpisodeRowFavoriteActionArgs {
   favorited: boolean
   favoriteKey: string | null
   addFavorite: (
-    podcast: Podcast,
-    episode: Episode,
+    podcast: {
+      feedUrl?: string
+      title?: string
+      artwork?: string
+      podcastItunesId?: string | number
+    },
+    episode: FavoriteEpisodeInput,
     signal?: AbortSignal,
     country?: string | null | undefined
   ) => Promise<unknown> | unknown

@@ -1,0 +1,79 @@
+---
+title: Cloud 运行时配置归属审计
+---
+
+# Cloud 运行时配置归属审计
+
+## 范围
+
+本审计记录由 `009a-cloud-runtime-config-code-and-tests.md` 实现的 Cloud 运行时配置归属拆分。
+
+当前 Cloud 运行时配置面分为三类：
+
+- `apps/cloud-api` 持有的服务端运行时环境变量
+- 由后端 `/env.js` 向浏览器发出的 browser-public 运行时配置
+- 浏览器本地或用户本地状态
+
+## 1. 服务端持有的运行时环境变量
+
+这些值必须留在后端运行时环境中，不能出现在浏览器 `/env.js`。
+
+| Key | 当前持有者 | 代表性读取点 | 为什么保持服务端持有 |
+| --- | --- | --- | --- |
+| `PORT` | backend runtime env | `apps/cloud-api/main.go` | 服务监听地址只属于后端 |
+| `READIO_CLOUD_UI_DIST_DIR` | backend runtime env | `apps/cloud-api/main.go` | 静态资源路径只属于后端 |
+| `READIO_CLOUD_DB_PATH` | backend runtime env | `apps/cloud-api/main.go` | 基础设施 / 持久化路径只属于后端 |
+| `READIO_ASR_ALLOWED_ORIGINS` | backend runtime env | `apps/cloud-api/asr_relay.go` | abuse-control 与 origin allowlist 属于后端 |
+| `READIO_ASR_RATE_LIMIT_BURST` | backend runtime env | `apps/cloud-api/asr_relay.go` | relay abuse-control 参数 |
+| `READIO_ASR_RATE_LIMIT_WINDOW_MS` | backend runtime env | `apps/cloud-api/asr_relay.go` | relay abuse-control 参数 |
+| `READIO_TRUSTED_PROXY_CIDRS` | backend runtime env | `apps/cloud-api/clientip.go` | 用于客户端 IP 推导的可信代理 CIDR 列表；仅后端，不得出现在浏览器 `/env.js` 中 |
+
+## 2. Browser-public 运行时配置
+
+这些字段可以暴露给浏览器，但在生产 Cloud 中必须由后端生成的 `/env.js` 提供，而不是由静态 `dist/env.js` 充当真实来源。
+
+| Key | 009a 之后的生产来源 | 代表性浏览器读取点 | 说明 |
+| --- | --- | --- | --- |
+| `READIO_APP_NAME` | backend `/env.js` allowlist | `apps/cloud-ui/src/lib/runtimeConfig.ts` | 部署可见的应用名称 |
+| `READIO_APP_VERSION` | backend `/env.js` allowlist | `apps/cloud-ui/src/lib/runtimeConfig.ts` | 部署可见的版本信息 |
+| `READIO_ASR_RELAY_PUBLIC_TOKEN` | backend `/env.js` allowlist（读取环境变量 `READIO_ASR_RELAY_PUBLIC_TOKEN`，Go 常量 `asrRelayPublicTokenEnv` 于 `asr_relay.go:26`） | `apps/cloud-ui/src/lib/asr/backendRelay.ts` 通过 `getAppConfig()` | 浏览器公开的轻量 abuse-control token，不是强 secret |
+| `READIO_ASR_PROVIDER` | backend `/env.js` allowlist | `apps/cloud-ui/src/lib/runtimeConfig.ts` | 仅是浏览器可见默认值 |
+| `READIO_ASR_MODEL` | backend `/env.js` allowlist | `apps/cloud-ui/src/lib/runtimeConfig.ts` | 仅是浏览器可见默认值 |
+| `READIO_ENABLED_ASR_PROVIDERS` | backend `/env.js` allowlist | `apps/cloud-ui/src/lib/runtimeConfig.ts` | 浏览器可见 feature toggle |
+| `READIO_DISABLED_ASR_PROVIDERS` | backend `/env.js` allowlist | `apps/cloud-ui/src/lib/runtimeConfig.ts` | 浏览器可见 feature toggle |
+| `READIO_EN_DICTIONARY_API_URL` | backend `/env.js` allowlist | `apps/cloud-ui/src/lib/selection/api.ts` 通过 `getAppConfig()` | 浏览器可见词典 API 选择 |
+| `READIO_EN_DICTIONARY_API_TRANSPORT` | backend `/env.js` allowlist | `apps/cloud-ui/src/lib/selection/api.ts` 通过 `getAppConfig()` | 显式浏览器 transport 契约 |
+| `READIO_DISCOVERY_LOOKUP_URL` | backend `/env.js` allowlist | `apps/cloud-ui/src/lib/discovery/cloudApi.ts` 通过 `getAppConfig()` | 生产 Cloud 现在拥有同源 discovery 根路径 |
+| `READIO_DISCOVERY_SEARCH_URL` | backend `/env.js` allowlist | `apps/cloud-ui/src/lib/discovery/cloudApi.ts` 通过 `getAppConfig()` | 生产 Cloud 现在拥有同源 discovery 根路径 |
+| `READIO_RSS_FEED_BASE_URL` | backend `/env.js` allowlist | `apps/cloud-ui/src/lib/discovery/cloudApi.ts` 通过 `getAppConfig()` | 生产 Cloud 现在拥有同源 feed 根路径 |
+| `READIO_DEFAULT_PODCAST_CONTENT_COUNTRY` | backend `/env.js` allowlist | `apps/cloud-ui/src/lib/runtimeConfig.ts` | 部署可见 UI 默认值 |
+| `READIO_DEFAULT_LANGUAGE` | backend `/env.js` allowlist | `apps/cloud-ui/src/lib/runtimeConfig.ts` | 部署可见 UI 默认值 |
+| `READIO_FALLBACK_PODCAST_IMAGE` | backend `/env.js` allowlist | `apps/cloud-ui/src/lib/runtimeConfig.ts` | 浏览器可见资源默认值 |
+
+## 3. 浏览器本地 / 用户本地配置与状态
+
+这些值在当前阶段继续由浏览器持有，不会迁移到后端运行时环境。
+
+| Key / 状态 | 当前持有者 | 代表性读取点 | 为什么保持浏览器本地 |
+| --- | --- | --- | --- |
+| `READIO_ASR_API_KEY` | 浏览器本地 runtime / 用户设置 | `apps/cloud-ui/src/lib/runtimeConfig.ts`、ASR 流程 | 用户自有 provider credential |
+| `READIO_OPENAI_API_KEY` | 浏览器本地 runtime / 用户设置 | `apps/cloud-ui/src/lib/runtimeConfig.ts` | 用户自有 provider credential |
+| `READIO_CORS_PROXY_URL` 及认证字段 | 浏览器本地 runtime / 用户设置 | `apps/cloud-ui/src/lib/fetchUtils.ts`、`src/lib/networking/proxyUrl.ts` | Cloud 不再把它们当成生产运行时真相 |
+| `READIO_DB_NAME` | 浏览器本地 runtime | `apps/cloud-ui/src/lib/dexieDb.ts` | 本地 IndexedDB 名称空间 |
+| 音频 / 下载 / transcript 缓存设置 | 浏览器本地 runtime | `storageQuota.ts`、`downloadCapacity.ts`、`dictCache.ts` | 本地存储配额行为继续由浏览器持有 |
+| 播放 / 会话状态 | 浏览器存储与内存 store | player store 与 hooks | 用户 / 会话本地状态 |
+
+## 4. 生产与开发契约
+
+### Cloud 运行时契约
+
+- `apps/cloud-api` 会在 SPA/static fallback 之前提供 `/env.js`。
+- Cloud 不再把 `dist/env.js` 视为运行时真相。
+- 后端只发出显式 browser-safe allowlist。
+- `apps/cloud-ui/src/lib/runtimeConfig.ts` 继续读取 `window.__READIO_ENV__`，但当前 Cloud 契约不再保留单独的静态 `public/env.js` 模板。
+
+## 5. 当前风险说明
+
+- 只要字段出现在 `/env.js` 中，所有浏览器用户都能读取，因此 browser-public 值不是 secret。
+- `READIO_ASR_RELAY_PUBLIC_TOKEN` 仍然只是 abuse-control，不能被描述为强 secret 边界。
+- 用户 API key 这类 browser-local 字段在当前阶段刻意不进入后端运行时归属。

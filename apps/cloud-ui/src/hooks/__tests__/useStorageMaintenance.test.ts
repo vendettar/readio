@@ -8,8 +8,6 @@ const {
   clearAllDataMock,
   clearAllAudioBlobsMock,
   clearPlaybackSessionAudioCacheMock,
-  clearDiscoveryMemoryCacheMock,
-  runDiscoveryCacheMaintenanceMock,
   clearDictCacheMemoryMock,
   toastSuccessKeyMock,
   toastErrorKeyMock,
@@ -18,8 +16,6 @@ const {
   clearAllDataMock: vi.fn(async () => {}),
   clearAllAudioBlobsMock: vi.fn(async () => {}),
   clearPlaybackSessionAudioCacheMock: vi.fn(async () => false),
-  clearDiscoveryMemoryCacheMock: vi.fn(),
-  runDiscoveryCacheMaintenanceMock: vi.fn(async () => {}),
   clearDictCacheMemoryMock: vi.fn(async () => {}),
   toastSuccessKeyMock: vi.fn(),
   toastErrorKeyMock: vi.fn(),
@@ -40,11 +36,6 @@ vi.mock('../../lib/dexieDb', () => ({
     clearPlaybackSessionAudioCache: clearPlaybackSessionAudioCacheMock,
     deletePlaybackSession: vi.fn(async () => {}),
   },
-}))
-
-vi.mock('../../lib/discovery', () => ({
-  clearDiscoveryMemoryCache: clearDiscoveryMemoryCacheMock,
-  runDiscoveryCacheMaintenance: runDiscoveryCacheMaintenanceMock,
 }))
 
 vi.mock('../../lib/selection/dictCache', () => ({
@@ -68,7 +59,7 @@ describe('useStorageMaintenance', () => {
     localStorage.clear()
   })
 
-  it('wipeAll clears db, all runtime memory caches, and local settings/legacy key', async () => {
+  it('wipeAll clears db and local settings/legacy key', async () => {
     localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify({ proxyUrl: 'https://proxy.local' }))
     const LEGACY_STORAGE_KEY = 'readio-user-credentials'
     localStorage.setItem(
@@ -85,8 +76,6 @@ describe('useStorageMaintenance', () => {
 
     expect(clearAllCredentialsMock).toHaveBeenCalledTimes(1)
     expect(clearAllDataMock).toHaveBeenCalledTimes(1)
-    expect(clearDiscoveryMemoryCacheMock).toHaveBeenCalledTimes(1)
-    expect(runDiscoveryCacheMaintenanceMock).toHaveBeenCalledTimes(1)
     expect(clearDictCacheMemoryMock).toHaveBeenCalledTimes(1)
 
     // In some environments, wipeAll might trigger a re-parse that auto-selects groq.

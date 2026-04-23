@@ -1,6 +1,8 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { HttpResponse, http } from 'msw'
 import type React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { server } from '../../../__tests__/setup'
 import { buildEpisodeCompactKey } from '../../../lib/discovery/editorPicks'
 import { useSearchStore } from '../../../store/searchStore'
 import { CommandPalette } from '../CommandPalette'
@@ -475,15 +477,16 @@ describe('CommandPalette', () => {
     }
   })
 
-  it('navigates to episode detail when selecting an episode result', () => {
+  it('navigates to episode detail when selecting an episode result', async () => {
     mockGlobalSearchState.episodes = [
       {
-        providerEpisodeId: '42',
         podcastItunesId: '7',
+        title: 'Episode Name',
+        showTitle: 'Show Name',
+        episodeUrl: 'https://example.com/audio.mp3',
         episodeGuid: '75f3241b-439d-4786-8968-07e05e548074',
-        trackName: 'Episode Name',
-        collectionName: 'Show Name',
-        artworkUrl100: '',
+        shortDescription: 'desc',
+        artwork: '',
       },
     ]
     act(() => {
@@ -495,19 +498,54 @@ describe('CommandPalette', () => {
 
     render(<CommandPalette />)
 
-    const episodeItem = document.querySelector('[data-command-item-value="episode-42"]')
-    expect(episodeItem).toBeTruthy()
-    fireEvent.click(episodeItem as HTMLButtonElement)
+    fireEvent.click(screen.getByText('Episode Name'))
 
-    expect(navigateMock).toHaveBeenCalledWith({
-      to: '/podcast/$country/$id/$episodeKey',
-      params: {
-        country: 'us',
-        id: '7',
-        episodeKey: buildEpisodeCompactKey('75f3241b-439d-4786-8968-07e05e548074'),
-      },
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith({
+        to: '/podcast/$country/$id/$episodeKey',
+        params: {
+          country: 'us',
+          id: '7',
+          episodeKey: buildEpisodeCompactKey('75f3241b-439d-4786-8968-07e05e548074'),
+        },
+      })
     })
     expect(useSearchStore.getState().isOverlayOpen).toBe(false)
+  })
+
+  it('navigates to episode detail when selecting a non-UUID episode result', async () => {
+    mockGlobalSearchState.episodes = [
+      {
+        podcastItunesId: '7',
+        title: 'Episode Name',
+        showTitle: 'Show Name',
+        episodeUrl: 'https://example.com/audio.mp3',
+        episodeGuid: 'abc123-def456',
+        shortDescription: 'desc',
+        artwork: '',
+      },
+    ]
+    act(() => {
+      useSearchStore.setState({
+        query: 'episode',
+        isOverlayOpen: true,
+      })
+    })
+
+    render(<CommandPalette />)
+
+    fireEvent.click(screen.getByText('Episode Name'))
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith({
+        to: '/podcast/$country/$id/$episodeKey',
+        params: {
+          country: 'us',
+          id: '7',
+          episodeKey: buildEpisodeCompactKey('abc123-def456'),
+        },
+      })
+    })
   })
 
   it('passes transcript setter deps when selecting a local result', () => {

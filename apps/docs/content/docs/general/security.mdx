@@ -1,0 +1,90 @@
+---
+title: Security & Privacy
+---
+
+# Security & Privacy Standards
+
+Readio is committed to user data sovereignty and absolute security.
+
+---
+
+## 1. HTML Sanitization (Anti-XSS)
+
+**Rule**: NEVER use `dangerouslySetInnerHTML` directly with raw data from RSS feeds or files.
+- **Strictly Required**: All HTML content must be sanitized before rendering.
+- **Tool**: Use `DOMPurify` (via the wrapper `src/lib/htmlUtils.ts`).
+- **Policy**: Only safe tags (formatting, links) are allowed. Scripts, frames, and tracking pixels are stripped.
+- **Isolations**: `style` tags and inline `style` attributes are strictly forbidden (`FORBID_TAGS: ['style'], FORBID_ATTR: ['style']`) to prevent CSS pollution.
+- **Visual Isolation**: Third-party content containers MUST use the `.prose-isolate` utility which applies `all: revert` to neutralize inherited global styles.
+
+## 1.1 Content Security Policy (CSP) [Implemented]
+- **Status**: Implemented via Instruction 041.
+- **Goal**: Enforce strict CSP via **HTTP response headers** (server/edge), to limit script, media, and image sources.
+- **Policy**: `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https:; font-src 'self' data: https:; frame-ancestors 'none'; base-uri 'self';`
+- **Flexibility**: `https:` is explicitly allowed for `connect-src` and `img-src` to support user-configured custom CORS proxies and various podcast artwork CDNs.
+- **Implementation**:
+  - **Vercel**: `vercel.json` sets `Content-Security-Policy` via response headers.
+  - **Docker (Nginx)**: `nginx.conf` sets `Content-Security-Policy` via `add_header ... always;`.
+  - **Forbidden**: Do **not** enforce CSP via an `index.html` `<meta http-equiv="Content-Security-Policy">` tag. It is not an equivalent control surface (notably for `frame-ancestors`).
+
+## 1.2 Planned: Iframe Sandbox
+- **Status**: Planned via Instruction 051.
+- **Goal**: Isolate untrusted rich HTML in a sandboxed iframe when required.
+
+## 2. Privacy & Data Sovereignty
+
+### A. Proxy Privacy (Critical)
+**Problem**: Third-party CORS proxies see every URL you request.
+**Rules**: 
+- **User Choice**: Provide a toggle in Settings to disable public proxies.
+- **Disclosure**: Warn users in the UI when a request is routed through a public proxy.
+- **Sensitive Data**: Never pass authentication headers, API keys, or cookies through public proxies.
+
+### A.1. Public Proxy Security Hardening [Implemented]
+**Status**: Implemented via Instruction 084.
+**Security Model**: 
+- **Frontend config is public**: Any value shipped to browser runtime config (`READIO_CORS_PROXY_AUTH_VALUE`) is **not** a secret store. For true secret protection, move secrets to server-side proxy.
+- **Hardening Strategy**: Treat proxy credentials as non-secret and harden the proxy path through strict request constraints, abuse controls, and audit logging.
+
+**Proxy Request Constraints** (Cloudflare Worker side):
+- **Allowlist upstream hosts**: Only approved domains (iTunes, RSS hosts).
+- **Allowlist caller origins**: Explicit `ALLOWED_ORIGINS` (comma-separated). Development phase may temporarily include `http://localhost:5173`; **production must not include any localhost origin**.
+- **Method allowlist**: Only `OPTIONS` (preflight) and `POST` (client contract).
+- **Auth header contract**: Client auth carried only by request header (e.g., `x-proxy-token`), never by query param.
+- **POST-only client**: All client proxy calls use POST JSON body `{ "url": "..." }`. No GET fallback.
+- **Response policy**: Return `403` for policy violations (disallowed origin/upstream).
+
+**Lite-Side Guardrails**:
+- Force custom proxy mode to POST JSON contract; no runtime GET mode.
+- Fix auth header name to `x-proxy-token` to match Worker CORS allow-headers and avoid preflight mismatches.
+- Validate that proxy auth value is present when auth header is configured.
+- Keep `credentials: 'omit'` for proxy fetches.
+
+### B. Error Reporting Privacy [Implemented]
+**Rule**: Do NOT collect or export Personally Identifiable Information (PII).
+- **Redaction**: All diagnostic logs are passed through a `redact()` filter before being stored in the buffer or exported. 
+- **Forbidden**: Logged strings must strip file names, local file paths (e.g., `/Users/username/`), and user emails. 
+- **Allowed**: Generic error messages, browser version, and anonymized stack traces (all paths stripped of local usernames).
+
+## 3. External Links
+**Rule**: Use `src/lib/openExternal.ts` for all external navigation.
+- **Requirements**: Must include `rel="noopener noreferrer"`.
+
+## 4. Local File Security
+**Rule**: The app must never attempt to upload the content of local media files to any server.
+- **Processing**: All metadata extraction (ID3 tags) must happen client-side (via Web Workers).
+
+## 5. Dependency Security & Supply Chain [Implemented]
+
+**Goal**: Secure the supply chain by ensuring all dependencies are safe and follow the project's open-source licensing policy.
+
+- **Status**: Implemented via Instruction 078.
+- **Vulnerability Audit**: The CI pipeline runs `pnpm audit --audit-level high` on every PR in **report-only mode** (non-blocking). High or critical findings are reported in logs.
+- **License Compliance**: The CI pipeline includes a **License Check** step (via `license-checker-rseidelsohn`) in **report-only mode** (non-blocking) to audit third-party licenses. 
+- **Policy**: Only permissive licenses (MIT, Apache-2.0, BSD, ISC) are allowed for production dependencies. Copyleft licenses (GPL, LGPL, AGPL) are prohibited.
+
+---
+
+## Planned (Pending Execution)
+
+- **Content Attribution**: Add attribution and complaint entry point for RSS content (Instruction 055).

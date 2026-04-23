@@ -1,0 +1,27 @@
+---
+title: Hub & Add
+---
+
+# Hub & Management Endpoints (/api/1.0/hub & /api/1.0/add)
+
+Managing shows and update notifications in the index. **Requires Authentication.**
+
+## `/add/byurl`
+Submit a new RSS feed to the index.
+- **URL**: `/api/1.0/add/byurl?url={url}`
+- **Example Response**:
+```json
+{ "status": "true", "existed": "true", "feedId": 75075, "description": "Feed already exists" }
+```
+
+## `/add/byitunesid`
+Submit a show to the index using its Apple ID.
+- **URL**: `/api/1.0/add/byitunesid?id={itunesId}`
+
+## `/hub/pubnotify`
+Manually notify the index of an update to a specific feed (WebSub proxy).
+- **URL**: `/api/1.0/hub/pubnotify?url={url}`
+- **Example Response**:
+```json
+{ "status": "true", "description": "Pubnotify received" }
+```

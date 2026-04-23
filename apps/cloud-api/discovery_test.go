@@ -57,6 +57,23 @@ func newDiscoveryFeedFixtureService(
 	return service, &dialedAddress
 }
 
+func assertDiscoveryErrorPayload(t *testing.T, body interface{ String() string }, wantCode string) {
+	t.Helper()
+
+	var payload map[string]string
+	decodeResponseJSON(t, body, &payload)
+
+	if payload["code"] != wantCode {
+		t.Fatalf("code = %q, want %q", payload["code"], wantCode)
+	}
+	if strings.TrimSpace(payload["message"]) == "" {
+		t.Fatal("message is empty")
+	}
+	if strings.TrimSpace(payload["request_id"]) == "" {
+		t.Fatal("request_id is empty")
+	}
+}
+
 func TestDiscoveryServiceTopPodcastsNormalizesPayload(t *testing.T) {
 	service := &discoveryService{
 		client: &http.Client{
@@ -75,9 +92,8 @@ func TestDiscoveryServiceTopPodcastsNormalizesPayload(t *testing.T) {
 								"name": "Top Show",
 								"artistName": "Host",
 								"artworkUrl100": "https://example.com/art-100.jpg",
-								"url": "https://podcasts.apple.com/top-show",
 								"genres": [
-									{"genreId": "1301", "name": "Arts", "url": "https://example.com/arts"}
+									{"name": "Arts"}
 								]
 							}
 						]
@@ -101,17 +117,247 @@ func TestDiscoveryServiceTopPodcastsNormalizesPayload(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
 	}
 
-	var payload []discoveryPodcastResponse
+	var payload []topPodcastResponse
 	decodeResponseJSON(t, rr.Body, &payload)
 
 	if len(payload) != 1 {
 		t.Fatalf("payload length = %d, want 1", len(payload))
 	}
-	if payload[0].ID != "100" || payload[0].Title != "Top Show" {
+	if payload[0].PodcastItunesID != "100" || payload[0].Title != "Top Show" {
 		t.Fatalf("unexpected payload: %+v", payload[0])
 	}
-	if len(payload[0].Genres) != 1 || payload[0].Genres[0].GenreID != "1301" {
+	if len(payload[0].Genres) != 1 || payload[0].Genres[0] != "Arts" {
 		t.Fatalf("genres = %+v", payload[0].Genres)
+	}
+	if payload[0].Artwork != "https://example.com/art-100.jpg" {
+		t.Fatalf("artwork = %q, want https://example.com/art-100.jpg", payload[0].Artwork)
+	}
+}
+
+func TestDiscoveryServiceTopPodcastsRateLimited(t *testing.T) {
+	service := &discoveryService{
+		timeout:        time.Second,
+		rssBaseURL:     discoveryRSSBaseURL,
+		userAgent:      discoveryUserAgent,
+		bodyLimit:      discoveryBodyLimit,
+		topLimiter:     newRateLimiter(1, time.Minute, func() time.Time { return time.Now() }),
+		trustedProxies: trustedProxySet{},
+		cache:          newDiscoveryCache(discoveryCacheMaxKeys),
+	}
+
+	req := httptest.NewRequest(http.MethodGet, discoveryTopPodcastsRoute+"?country=us", nil)
+	service.ServeHTTP(httptest.NewRecorder(), req)
+
+	rr := httptest.NewRecorder()
+	service.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, discoveryTopPodcastsRoute+"?country=us", nil))
+	if rr.Code != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusTooManyRequests)
+	}
+
+	assertDiscoveryErrorPayload(t, rr.Body, "RATE_LIMITED")
+}
+
+func TestDiscoveryServiceTopEpisodesRateLimited(t *testing.T) {
+	service := &discoveryService{
+		timeout:        time.Second,
+		rssBaseURL:     discoveryRSSBaseURL,
+		userAgent:      discoveryUserAgent,
+		bodyLimit:      discoveryBodyLimit,
+		topLimiter:     newRateLimiter(1, time.Minute, func() time.Time { return time.Now() }),
+		trustedProxies: trustedProxySet{},
+		cache:          newDiscoveryCache(discoveryCacheMaxKeys),
+	}
+
+	req := httptest.NewRequest(http.MethodGet, discoveryTopEpisodesRoute+"?country=us", nil)
+	service.ServeHTTP(httptest.NewRecorder(), req)
+
+	rr := httptest.NewRecorder()
+	service.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, discoveryTopEpisodesRoute+"?country=us", nil))
+	if rr.Code != http.StatusTooManyRequests {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusTooManyRequests)
+	}
+
+	assertDiscoveryErrorPayload(t, rr.Body, "RATE_LIMITED")
+}
+
+func TestDiscoveryServiceNotFoundReturnsStandardErrorPayload(t *testing.T) {
+	service := newDiscoveryService()
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/discovery/unknown", nil)
+	service.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusNotFound)
+	}
+
+	assertDiscoveryErrorPayload(t, rr.Body, "NOT_FOUND")
+}
+
+func TestDiscoveryServiceTopPodcastsDropsRowsWithoutArtwork100(t *testing.T) {
+	service := &discoveryService{
+		client: &http.Client{
+			Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+				return jsonResponse(http.StatusOK, `{
+					"feed": {
+						"results": [
+							{
+								"id": "100",
+								"name": "Top Show",
+								"artistName": "Host",
+								"genres": [
+									{"name": "Arts"}
+								]
+							}
+						]
+					}
+				}`), nil
+			}),
+		},
+		timeout:    time.Second,
+		rssBaseURL: discoveryRSSBaseURL,
+		userAgent:  discoveryUserAgent,
+		bodyLimit:  discoveryBodyLimit,
+		cache:      newDiscoveryCache(discoveryCacheMaxKeys),
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, discoveryTopPodcastsRoute+"?country=us&limit=25", nil)
+	service.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusBadGateway)
+	}
+}
+
+func TestDiscoveryServiceTopPodcastsDropsRowsWithoutArtistName(t *testing.T) {
+	service := &discoveryService{
+		client: &http.Client{
+			Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+				return jsonResponse(http.StatusOK, `{
+					"feed": {
+						"results": [
+							{
+								"id": "100",
+								"name": "Top Show",
+								"artworkUrl100": "https://example.com/art-100.jpg",
+								"genres": [
+									{"name": "Arts"}
+								]
+							}
+						]
+					}
+				}`), nil
+			}),
+		},
+		timeout:    time.Second,
+		rssBaseURL: discoveryRSSBaseURL,
+		userAgent:  discoveryUserAgent,
+		bodyLimit:  discoveryBodyLimit,
+		cache:      newDiscoveryCache(discoveryCacheMaxKeys),
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, discoveryTopPodcastsRoute+"?country=us&limit=25", nil)
+	service.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusBadGateway)
+	}
+}
+
+func TestDiscoveryServiceTopPodcastsAllowsEmptyGenres(t *testing.T) {
+	service := &discoveryService{
+		client: &http.Client{
+			Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+				return jsonResponse(http.StatusOK, `{
+					"feed": {
+						"results": [
+							{
+								"id": "100",
+								"name": "Top Show",
+								"artistName": "Host",
+								"artworkUrl100": "https://example.com/art-100.jpg",
+								"genres": []
+							}
+						]
+					}
+				}`), nil
+			}),
+		},
+		timeout:    time.Second,
+		rssBaseURL: discoveryRSSBaseURL,
+		userAgent:  discoveryUserAgent,
+		bodyLimit:  discoveryBodyLimit,
+		cache:      newDiscoveryCache(discoveryCacheMaxKeys),
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, discoveryTopPodcastsRoute+"?country=us&limit=25", nil)
+	service.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	var payload []topPodcastResponse
+	decodeResponseJSON(t, rr.Body, &payload)
+
+	if len(payload) != 1 {
+		t.Fatalf("payload length = %d, want 1", len(payload))
+	}
+	if payload[0].PodcastItunesID != "100" || payload[0].Title != "Top Show" {
+		t.Fatalf("unexpected payload: %+v", payload[0])
+	}
+	if len(payload[0].Genres) != 0 {
+		t.Fatalf("genres = %+v, want empty", payload[0].Genres)
+	}
+}
+
+func TestDiscoveryServiceTopPodcastsDoesNotDependOnRemovedRawFields(t *testing.T) {
+	service := &discoveryService{
+		client: &http.Client{
+			Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+				return jsonResponse(http.StatusOK, `{
+					"feed": {
+						"results": [
+							{
+								"id": "100",
+								"name": "Top Show",
+								"artistName": "Host",
+								"artworkUrl100": "https://example.com/art-100.jpg",
+								"genres": [
+									{"name": "Arts"}
+								]
+							}
+						]
+					}
+				}`), nil
+			}),
+		},
+		timeout:    time.Second,
+		rssBaseURL: discoveryRSSBaseURL,
+		userAgent:  discoveryUserAgent,
+		bodyLimit:  discoveryBodyLimit,
+		cache:      newDiscoveryCache(discoveryCacheMaxKeys),
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, discoveryTopPodcastsRoute+"?country=us&limit=25", nil)
+	service.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	var payload []topPodcastResponse
+	decodeResponseJSON(t, rr.Body, &payload)
+
+	if len(payload) != 1 {
+		t.Fatalf("payload length = %d, want 1", len(payload))
+	}
+	if payload[0].PodcastItunesID != "100" || payload[0].Title != "Top Show" {
+		t.Fatalf("unexpected payload: %+v", payload[0])
 	}
 }
 
@@ -126,15 +372,11 @@ func TestDiscoveryServiceTopEpisodesNormalizesPayload(t *testing.T) {
 					"feed": {
 						"results": [
 							{
-								"id": "episode-1",
 								"name": "Top Episode",
 								"artistName": "JP Host",
 								"artworkUrl100": "https://example.com/episode-100.jpg",
-								"url": "https://podcasts.apple.com/top-episode",
-								"collectionId": 333,
-								"description": "summary",
-								"releaseDate": "2026-03-27T00:00:00Z",
-								"duration": 1800
+								"url": "https://podcasts.apple.com/jp/podcast/top-episode/id333?i=1000762374046",
+								"genres": [{"name": "Technology"}, {"name": "Podcast"}]
 							}
 						]
 					}
@@ -157,7 +399,7 @@ func TestDiscoveryServiceTopEpisodesNormalizesPayload(t *testing.T) {
 		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
 	}
 
-	var payload []discoveryPodcastResponse
+	var payload []topEpisodeResponse
 	decodeResponseJSON(t, rr.Body, &payload)
 
 	if len(payload) != 1 {
@@ -166,27 +408,185 @@ func TestDiscoveryServiceTopEpisodesNormalizesPayload(t *testing.T) {
 	if payload[0].PodcastItunesID != "333" {
 		t.Fatalf("podcastItunesId = %q, want 333", payload[0].PodcastItunesID)
 	}
-	if payload[0].Duration == nil || *payload[0].Duration != 1800 {
-		t.Fatalf("duration = %+v, want 1800", payload[0].Duration)
+	if len(payload[0].Genres) != 2 || payload[0].Genres[0] != "Technology" || payload[0].Genres[1] != "Podcast" {
+		t.Fatalf("genres = %+v, want [Technology Podcast]", payload[0].Genres)
+	}
+	if payload[0].Artwork != "https://example.com/episode-100.jpg" {
+		t.Fatalf("artwork = %q, want https://example.com/episode-100.jpg", payload[0].Artwork)
+	}
+}
+
+func TestDiscoveryServiceTopEpisodesDropsRowsWithoutArtwork100(t *testing.T) {
+	service := &discoveryService{
+		client: &http.Client{
+			Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+				return jsonResponse(http.StatusOK, `{
+					"feed": {
+						"results": [
+							{
+								"name": "Top Episode",
+								"artistName": "JP Host",
+								"url": "https://podcasts.apple.com/jp/podcast/top-episode/id333?i=1000762374046",
+								"genres": [{"name": "Technology"}]
+							}
+						]
+					}
+				}`), nil
+			}),
+		},
+		timeout:    time.Second,
+		rssBaseURL: discoveryRSSBaseURL,
+		userAgent:  discoveryUserAgent,
+		bodyLimit:  discoveryBodyLimit,
+		cache:      newDiscoveryCache(discoveryCacheMaxKeys),
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, discoveryTopEpisodesRoute+"?country=jp&limit=10", nil)
+	service.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusBadGateway)
+	}
+}
+
+func TestDiscoveryServiceTopEpisodesDropsRowsWithoutArtistName(t *testing.T) {
+	service := &discoveryService{
+		client: &http.Client{
+			Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+				return jsonResponse(http.StatusOK, `{
+					"feed": {
+						"results": [
+							{
+								"name": "Top Episode",
+								"artworkUrl100": "https://example.com/episode-100.jpg",
+								"url": "https://podcasts.apple.com/jp/podcast/top-episode/id333?i=1000762374046",
+								"genres": [{"name": "Technology"}]
+							}
+						]
+					}
+				}`), nil
+			}),
+		},
+		timeout:    time.Second,
+		rssBaseURL: discoveryRSSBaseURL,
+		userAgent:  discoveryUserAgent,
+		bodyLimit:  discoveryBodyLimit,
+		cache:      newDiscoveryCache(discoveryCacheMaxKeys),
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, discoveryTopEpisodesRoute+"?country=jp&limit=10", nil)
+	service.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusBadGateway)
+	}
+}
+
+func TestDiscoveryServiceTopEpisodesAllowsEmptyGenres(t *testing.T) {
+	service := &discoveryService{
+		client: &http.Client{
+			Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+				return jsonResponse(http.StatusOK, `{
+					"feed": {
+						"results": [
+							{
+								"name": "Top Episode",
+								"artistName": "JP Host",
+								"artworkUrl100": "https://example.com/episode-100.jpg",
+								"url": "https://podcasts.apple.com/jp/podcast/top-episode/id333?i=1000762374046",
+								"genres": []
+							}
+						]
+					}
+				}`), nil
+			}),
+		},
+		timeout:    time.Second,
+		rssBaseURL: discoveryRSSBaseURL,
+		userAgent:  discoveryUserAgent,
+		bodyLimit:  discoveryBodyLimit,
+		cache:      newDiscoveryCache(discoveryCacheMaxKeys),
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, discoveryTopEpisodesRoute+"?country=jp&limit=10", nil)
+	service.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	var payload []topEpisodeResponse
+	decodeResponseJSON(t, rr.Body, &payload)
+
+	if len(payload) != 1 {
+		t.Fatalf("payload length = %d, want 1", len(payload))
+	}
+	if payload[0].PodcastItunesID != "333" || payload[0].Title != "Top Episode" {
+		t.Fatalf("unexpected payload: %+v", payload[0])
+	}
+	if len(payload[0].Genres) != 0 {
+		t.Fatalf("genres = %+v, want empty", payload[0].Genres)
+	}
+}
+
+func TestDiscoveryServiceTopEpisodesDropsRowsWhenURLDoesNotContainPodcastID(t *testing.T) {
+	service := &discoveryService{
+		client: &http.Client{
+			Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+				return jsonResponse(http.StatusOK, `{
+					"feed": {
+						"results": [
+							{
+								"name": "Top Episode",
+								"artistName": "JP Host",
+								"artworkUrl100": "https://example.com/episode-100.jpg",
+								"url": "https://podcasts.apple.com/jp/podcast/top-episode?i=1000762374046",
+								"genres": [{"name": "Technology"}]
+							}
+						]
+					}
+				}`), nil
+			}),
+		},
+		timeout:    time.Second,
+		rssBaseURL: discoveryRSSBaseURL,
+		userAgent:  discoveryUserAgent,
+		bodyLimit:  discoveryBodyLimit,
+		cache:      newDiscoveryCache(discoveryCacheMaxKeys),
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, discoveryTopEpisodesRoute+"?country=jp&limit=10", nil)
+	service.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusBadGateway)
 	}
 }
 
 func TestDiscoveryServiceLookupPodcastNormalizesPayloadAndNullMiss(t *testing.T) {
 	t.Run("returns normalized podcast payload", func(t *testing.T) {
+		t.Setenv(podcastIndexAPIKeyEnv, "test-key")
+		t.Setenv(podcastIndexAPISecretEnv, "test-secret")
+		t.Setenv(podcastIndexUserAgentEnv, "readio-test")
+
 		service := &discoveryService{
 			client: &http.Client{
 				Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
 					if !strings.Contains(req.URL.String(), "id=123") {
 						t.Fatalf("unexpected lookup url = %q", req.URL.String())
 					}
-					return jsonResponse(http.StatusOK, `{"feeds":[{"id":123,"title":"Show 123","url":"https://example.com/feed.xml"}]}`), nil
+					return jsonResponse(http.StatusOK, `{"status":"true","feed":{"title":"Show 123","url":"https://example.com/feed.xml","lastUpdateTime":1613394044,"author":"Test Author","artwork":"https://example.com/artwork.jpg","description":"A test podcast","itunesId":123,"language":"en","episodeCount":50,"dead":1,"categories":{"1":"Technology"}}}`), nil
 				}),
 			},
 			timeout:            time.Second,
 			userAgent:          discoveryUserAgent,
 			bodyLimit:          discoveryBodyLimit,
 			cache:              newDiscoveryCache(0),
-			podcastIndexConfig: podcastIndexConfig{apiKey: "test", apiSecret: "test", userAgent: "test"},
+			podcastIndexConfig: podcastIndexConfig{apiKey: "test-key", apiSecret: "test-secret", userAgent: "test"},
 		}
 
 		rr := httptest.NewRecorder()
@@ -196,20 +596,33 @@ func TestDiscoveryServiceLookupPodcastNormalizesPayloadAndNullMiss(t *testing.T)
 		if rr.Code != http.StatusOK {
 			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
 		}
+
+		var payload map[string]any
+		decodeResponseJSON(t, rr.Body, &payload)
+		if payload["lastUpdateTime"] != float64(1613394044) {
+			t.Fatalf("lastUpdateTime = %v, want 1613394044", payload["lastUpdateTime"])
+		}
+		if payload["dead"] != true {
+			t.Fatalf("dead = %v, want true", payload["dead"])
+		}
 	})
 
 	t.Run("returns null when upstream has no matching podcast", func(t *testing.T) {
+		t.Setenv(podcastIndexAPIKeyEnv, "test-key")
+		t.Setenv(podcastIndexAPISecretEnv, "test-secret")
+		t.Setenv(podcastIndexUserAgentEnv, "readio-test")
+
 		service := &discoveryService{
 			client: &http.Client{
 				Transport: discoveryRoundTripper(func(_ *http.Request) (*http.Response, error) {
-					return jsonResponse(http.StatusOK, `{"feeds":[]}`), nil
+					return jsonResponse(http.StatusOK, `{"status":"true","feed":{"id":0,"title":"","url":""}}`), nil
 				}),
 			},
 			timeout:            time.Second,
 			userAgent:          discoveryUserAgent,
 			bodyLimit:          discoveryBodyLimit,
 			cache:              newDiscoveryCache(0),
-			podcastIndexConfig: podcastIndexConfig{apiKey: "test", apiSecret: "test", userAgent: "test"},
+			podcastIndexConfig: podcastIndexConfig{apiKey: "test-key", apiSecret: "test-secret", userAgent: "test"},
 		}
 
 		rr := httptest.NewRecorder()
@@ -382,36 +795,36 @@ func TestDiscoveryServiceFeedNormalizesParsedPayload(t *testing.T) {
 	if payload.Episodes[0].TranscriptURL != "https://example.com/transcript.vtt" {
 		t.Fatalf("transcriptUrl = %q", payload.Episodes[0].TranscriptURL)
 	}
-	if payload.Episodes[0].ChaptersURL != "https://example.com/chapters.json" {
-		t.Fatalf("chaptersUrl = %q", payload.Episodes[0].ChaptersURL)
-	}
 }
 
 func TestDiscoveryServiceSearchPodcastsNormalizesPayload(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("panic during test: %v", r)
+		}
+	}()
+	var capturedURL string
 	service := &discoveryService{
 		client: &http.Client{
 			Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
-				if !strings.Contains(req.URL.String(), "term=tech") || !strings.Contains(req.URL.String(), "limit=20") {
-					t.Fatalf("unexpected search url = %q", req.URL.String())
+				capturedURL = req.URL.String()
+				t.Logf("Mock transport received URL: %s", capturedURL)
+				if !strings.Contains(capturedURL, "term=tech") || !strings.Contains(capturedURL, "limit=20") {
+					t.Fatalf("unexpected search url = %q", capturedURL)
 				}
 				return jsonResponse(http.StatusOK, `{
-					"results": [
-						{
-							"kind": "podcast",
-							"collectionId": 123,
-							"collectionName": "Tech Show",
-							"artistName": "Host",
-							"artworkUrl100": "https://example.com/tech-100.jpg",
-							"artworkUrl600": "https://example.com/tech-600.jpg",
-							"feedUrl": "https://example.com/tech.xml",
-							"collectionViewUrl": "https://podcasts.apple.com/tech-show",
-							"artistId": 456,
-							"primaryGenreName": "Technology",
-							"genres": ["Technology"],
-							"trackCount": 100
-						}
-					]
-				}`), nil
+						"results": [
+							{
+								"collectionId": 123,
+								"collectionName": "Tech Show",
+								"artistName": "Tech Host",
+								"artworkUrl600": "https://example.com/tech-600.jpg",
+								"releaseDate": "2026-03-27T00:00:00Z",
+								"trackCount": 321,
+								"genres": [{"name": "Technology"}]
+							}
+						]
+					}`), nil
 			}),
 		},
 		timeout:       time.Second,
@@ -423,8 +836,10 @@ func TestDiscoveryServiceSearchPodcastsNormalizesPayload(t *testing.T) {
 	}
 
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, discoverySearchPodcastsRoute+"?term=Tech&country=us&limit=20", nil)
+	req := httptest.NewRequest(http.MethodGet, discoverySearchPodcastsRoute+"?term=tech%20show&country=us&limit=20", nil)
+	t.Logf("Request URL: %s", req.URL.String())
 	service.ServeHTTP(rr, req)
+	t.Logf("Response status: %d, body: %s", rr.Code, rr.Body.String())
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
@@ -439,27 +854,45 @@ func TestDiscoveryServiceSearchPodcastsNormalizesPayload(t *testing.T) {
 	if payload[0]["title"] != "Tech Show" {
 		t.Fatalf("title = %q, want Tech Show", payload[0]["title"])
 	}
+	if payload[0]["releaseDate"] != "2026-03-27T00:00:00Z" {
+		t.Fatalf("releaseDate = %v, want 2026-03-27T00:00:00Z", payload[0]["releaseDate"])
+	}
+	if payload[0]["episodeCount"] != float64(321) {
+		t.Fatalf("episodeCount = %v, want 321", payload[0]["episodeCount"])
+	}
+	if _, ok := payload[0]["feedUrl"]; ok {
+		t.Fatalf("feedUrl should be absent, payload = %+v", payload[0])
+	}
 }
 
 func TestDiscoveryServiceSearchPodcastsFiltersIrrelevantFallbackResults(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("panic during test: %v", r)
+		}
+	}()
 	service := &discoveryService{
 		client: &http.Client{
 			Transport: discoveryRoundTripper(func(_ *http.Request) (*http.Response, error) {
 				return jsonResponse(http.StatusOK, `{
-					"results": [
-						{
-							"kind": "podcast",
-							"collectionId": 1,
-							"collectionName": "Fan Controlled TV",
-							"artistName": "Irrelevant Host",
-							"collectionViewUrl": "https://podcasts.apple.com/fan-controlled-tv"
-						},
-						{
-							"kind": "podcast",
-							"collectionId": 2,
-							"collectionName": "The Kevin Spacey Trial",
-							"artistName": "Relevant Host",
-							"collectionViewUrl": "https://podcasts.apple.com/kevin-spacey-trial"
+						"results": [
+							{
+								"collectionId": 1,
+								"collectionName": "Fan Controlled TV",
+								"artistName": "Irrelevant Host",
+								"artworkUrl600": "https://example.com/fan-600.jpg",
+								"releaseDate": "2026-01-01T00:00:00Z",
+								"trackCount": 25,
+								"genres": [{"name": "Sports"}]
+							},
+							{
+								"collectionId": 2,
+								"collectionName": "The Kevin Spacey Trial",
+								"artistName": "Relevant Host",
+								"artworkUrl600": "https://example.com/kevin-600.jpg",
+								"releaseDate": "2026-02-01T00:00:00Z",
+								"trackCount": 12,
+							"genres": [{"name": "News"}]
 						}
 					]
 				}`), nil
@@ -498,7 +931,99 @@ func TestDiscoveryServiceSearchPodcastsFiltersIrrelevantFallbackResults(t *testi
 	}
 }
 
+func TestDiscoveryServiceSearchPodcastsDropsRowsWithoutCollectionName(t *testing.T) {
+	service := &discoveryService{
+		client: &http.Client{
+			Transport: discoveryRoundTripper(func(_ *http.Request) (*http.Response, error) {
+				return jsonResponse(http.StatusOK, `{
+					"results": [
+						{
+							"collectionId": 123,
+							"collectionName": "   ",
+							"artistName": "Host",
+							"artworkUrl600": "https://example.com/show-600.jpg",
+							"trackCount": 42,
+							"genres": [{"name": "Technology"}]
+						}
+					]
+				}`), nil
+			}),
+		},
+		timeout:       time.Second,
+		searchBaseURL: discoverySearchBaseURL,
+		userAgent:     discoveryUserAgent,
+		bodyLimit:     discoveryBodyLimit,
+		searchLimiter: newRateLimiter(100, time.Minute, func() time.Time { return time.Now() }),
+		cache:         newDiscoveryCache(discoveryCacheMaxKeys),
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, discoverySearchPodcastsRoute+"?term=show&country=us&limit=20", nil)
+	service.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	var payload []map[string]any
+	decodeResponseJSON(t, rr.Body, &payload)
+
+	if len(payload) != 0 {
+		t.Fatalf("payload length = %d, want 0", len(payload))
+	}
+}
+
+func TestDiscoveryServiceSearchPodcastsOmitsReleaseDateWhenMissing(t *testing.T) {
+	service := &discoveryService{
+		client: &http.Client{
+			Transport: discoveryRoundTripper(func(_ *http.Request) (*http.Response, error) {
+				return jsonResponse(http.StatusOK, `{
+					"results": [
+						{
+							"collectionId": 123,
+							"collectionName": "Tech Show",
+							"artistName": "Host",
+							"artworkUrl600": "https://example.com/show-600.jpg",
+							"trackCount": 42,
+							"genres": []
+						}
+					]
+				}`), nil
+			}),
+		},
+		timeout:       time.Second,
+		searchBaseURL: discoverySearchBaseURL,
+		userAgent:     discoveryUserAgent,
+		bodyLimit:     discoveryBodyLimit,
+		searchLimiter: newRateLimiter(100, time.Minute, func() time.Time { return time.Now() }),
+		cache:         newDiscoveryCache(discoveryCacheMaxKeys),
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, discoverySearchPodcastsRoute+"?term=tech&country=us&limit=20", nil)
+	service.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	var payload []map[string]any
+	decodeResponseJSON(t, rr.Body, &payload)
+
+	if len(payload) != 1 {
+		t.Fatalf("payload length = %d, want 1", len(payload))
+	}
+	if _, ok := payload[0]["releaseDate"]; ok {
+		t.Fatalf("releaseDate should be absent, payload = %+v", payload[0])
+	}
+}
+
 func TestDiscoveryServiceSearchEpisodesNormalizesPayload(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("panic during test: %v", r)
+		}
+	}()
 	service := &discoveryService{
 		client: &http.Client{
 			Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
@@ -506,24 +1031,21 @@ func TestDiscoveryServiceSearchEpisodesNormalizesPayload(t *testing.T) {
 					t.Fatalf("unexpected search url = %q", req.URL.String())
 				}
 				return jsonResponse(http.StatusOK, `{
-					"results": [
-						{
-							"kind": "podcast-episode",
-							"trackId": 999,
-							"trackName": "History Episode",
-							"artistName": "History Host",
-							"collectionName": "History Show",
-							"artworkUrl100": "https://example.com/history-100.jpg",
-							"artworkUrl600": "https://example.com/history-600.jpg",
-							"feedUrl": "https://example.com/history.xml",
-							"episodeUrl": "https://example.com/history.mp3",
-							"releaseDate": "2026-03-27T00:00:00Z",
-							"trackTimeMillis": 1800000,
-							"description": "A history episode",
-							"collectionId": 123
-						}
-					]
-				}`), nil
+						"results": [
+							{
+								"trackId": 999,
+								"trackName": "History Episode",
+								"collectionName": "History Show",
+								"collectionId": 123,
+								"artworkUrl600": "https://example.com/history-600.jpg",
+								"episodeUrl": "https://example.com/history.mp3",
+								"episodeGuid": "abc123-def456",
+								"releaseDate": "2026-03-27T00:00:00Z",
+								"trackTimeMillis": 1800000,
+								"shortDescription": "A history episode"
+							}
+						]
+					}`), nil
 			}),
 		},
 		timeout:       time.Second,
@@ -548,33 +1070,646 @@ func TestDiscoveryServiceSearchEpisodesNormalizesPayload(t *testing.T) {
 	if len(payload) != 1 {
 		t.Fatalf("payload length = %d, want 1", len(payload))
 	}
+	if _, ok := payload[0]["id"]; ok {
+		t.Fatalf("id should be absent, payload = %+v", payload[0])
+	}
+	if _, ok := payload[0]["author"]; ok {
+		t.Fatalf("author should be absent, payload = %+v", payload[0])
+	}
+	if _, ok := payload[0]["image"]; ok {
+		t.Fatalf("image should be absent, payload = %+v", payload[0])
+	}
 	if payload[0]["title"] != "History Episode" {
 		t.Fatalf("title = %q, want History Episode", payload[0]["title"])
 	}
+	if payload[0]["showTitle"] != "History Show" {
+		t.Fatalf("showTitle = %q, want History Show", payload[0]["showTitle"])
+	}
+	if payload[0]["artwork"] != "https://example.com/history-600.jpg" {
+		t.Fatalf("artwork = %q, want https://example.com/history-600.jpg", payload[0]["artwork"])
+	}
+	if payload[0]["podcastItunesId"] != "123" {
+		t.Fatalf("podcastItunesId = %q, want 123", payload[0]["podcastItunesId"])
+	}
+	if _, ok := payload[0]["feedUrl"]; ok {
+		t.Fatalf("feedUrl should be absent, payload = %+v", payload[0])
+	}
+	if _, ok := payload[0]["providerEpisodeId"]; ok {
+		t.Fatalf("providerEpisodeId should be absent, payload = %+v", payload[0])
+	}
 }
 
-func TestDiscoveryServiceSearchEpisodesFiltersIrrelevantFallbackResults(t *testing.T) {
+func TestDiscoveryServiceSearchEpisodesDropsRowsWithoutTrackName(t *testing.T) {
 	service := &discoveryService{
 		client: &http.Client{
-			Transport: discoveryRoundTripper(func(_ *http.Request) (*http.Response, error) {
-				return jsonResponse(http.StatusOK, `{"items":[{"id":2,"title":"The Kevin Spacey Trial Part 1","link":"https://example.com/relevant.mp3","datePublished":1764547200,"feed":{"title":"Court Files"}}]}`), nil
+			Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+				if !strings.Contains(req.URL.String(), "term=history") || !strings.Contains(req.URL.String(), "entity=podcastEpisode") {
+					t.Fatalf("unexpected search url = %q", req.URL.String())
+				}
+				return jsonResponse(http.StatusOK, `{
+						"results": [
+							{
+								"trackId": 999,
+								"collectionName": "History Show",
+								"artworkUrl600": "https://example.com/history-600.jpg",
+								"episodeUrl": "https://example.com/history.mp3",
+								"releaseDate": "2026-03-27T00:00:00Z",
+								"trackTimeMillis": 1800000,
+								"shortDescription": "A history episode",
+								"collectionId": 123
+							}
+						]
+					}`), nil
 			}),
 		},
-		timeout:            time.Second,
-		userAgent:          discoveryUserAgent,
-		bodyLimit:          discoveryBodyLimit,
-		cache:              newDiscoveryCache(0),
-		podcastIndexConfig: podcastIndexConfig{apiKey: "test", apiSecret: "test", userAgent: "test"},
-		searchLimiter:      newRateLimiter(100, time.Minute, func() time.Time { return time.Now() }),
+		timeout:       time.Second,
+		searchBaseURL: discoverySearchBaseURL,
+		userAgent:     discoveryUserAgent,
+		bodyLimit:     discoveryBodyLimit,
+		searchLimiter: newRateLimiter(100, time.Minute, func() time.Time { return time.Now() }),
+		cache:         newDiscoveryCache(discoveryCacheMaxKeys),
 	}
 
 	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, discoverySearchEpisodesRoute+"?term=the%20kevin%20spacey%20trial&limit=50", nil)
+	req := httptest.NewRequest(http.MethodGet, discoverySearchEpisodesRoute+"?term=history%20episode&country=us&limit=50", nil)
 	service.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
 	}
+
+	var payload []map[string]any
+	decodeResponseJSON(t, rr.Body, &payload)
+
+	if len(payload) != 0 {
+		t.Fatalf("payload length = %d, want 0", len(payload))
+	}
+}
+
+func TestDiscoveryServiceSearchEpisodesAllowsMissingReleaseDateDescriptionAndDuration(t *testing.T) {
+	service := &discoveryService{
+		client: &http.Client{
+			Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+				if !strings.Contains(req.URL.String(), "term=history") || !strings.Contains(req.URL.String(), "entity=podcastEpisode") {
+					t.Fatalf("unexpected search url = %q", req.URL.String())
+				}
+				return jsonResponse(http.StatusOK, `{
+					"results": [
+						{
+							"trackId": 999,
+							"trackName": "History Episode",
+							"collectionName": "History Show",
+							"collectionId": 123,
+							"artworkUrl600": "https://example.com/history-600.jpg",
+							"episodeUrl": "https://example.com/history.mp3",
+							"episodeGuid": "abc123-def456"
+						}
+					]
+				}`), nil
+			}),
+		},
+		timeout:       time.Second,
+		searchBaseURL: discoverySearchBaseURL,
+		userAgent:     discoveryUserAgent,
+		bodyLimit:     discoveryBodyLimit,
+		searchLimiter: newRateLimiter(100, time.Minute, func() time.Time { return time.Now() }),
+		cache:         newDiscoveryCache(discoveryCacheMaxKeys),
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, discoverySearchEpisodesRoute+"?term=history&country=us&limit=50", nil)
+	service.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	var payload []map[string]any
+	decodeResponseJSON(t, rr.Body, &payload)
+
+	if len(payload) != 1 {
+		t.Fatalf("payload length = %d, want 1", len(payload))
+	}
+	if _, ok := payload[0]["releaseDate"]; ok {
+		t.Fatalf("releaseDate should be absent, payload = %+v", payload[0])
+	}
+	if _, ok := payload[0]["shortDescription"]; ok {
+		t.Fatalf("shortDescription should be absent, payload = %+v", payload[0])
+	}
+	if _, ok := payload[0]["trackTimeMillis"]; ok {
+		t.Fatalf("trackTimeMillis should be absent, payload = %+v", payload[0])
+	}
+}
+
+func TestDiscoveryServiceSearchEpisodesDropsRowsWithoutArtwork600(t *testing.T) {
+	service := &discoveryService{
+		client: &http.Client{
+			Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+				if !strings.Contains(req.URL.String(), "term=history") || !strings.Contains(req.URL.String(), "entity=podcastEpisode") {
+					t.Fatalf("unexpected search url = %q", req.URL.String())
+				}
+				return jsonResponse(http.StatusOK, `{
+					"results": [
+						{
+							"trackName": "History Episode",
+							"collectionName": "History Show",
+							"collectionId": 123,
+							"episodeUrl": "https://example.com/history.mp3",
+							"episodeGuid": "abc123-def456"
+						}
+					]
+				}`), nil
+			}),
+		},
+		timeout:       time.Second,
+		searchBaseURL: discoverySearchBaseURL,
+		userAgent:     discoveryUserAgent,
+		bodyLimit:     discoveryBodyLimit,
+		searchLimiter: newRateLimiter(100, time.Minute, func() time.Time { return time.Now() }),
+		cache:         newDiscoveryCache(discoveryCacheMaxKeys),
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, discoverySearchEpisodesRoute+"?term=history&country=us&limit=50", nil)
+	service.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	var payload []map[string]any
+	decodeResponseJSON(t, rr.Body, &payload)
+
+	if len(payload) != 0 {
+		t.Fatalf("payload length = %d, want 0", len(payload))
+	}
+}
+
+func TestDiscoveryServiceSearchEpisodesDoesNotDependOnRemovedRawFields(t *testing.T) {
+	service := &discoveryService{
+		client: &http.Client{
+			Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+				if !strings.Contains(req.URL.String(), "term=history") || !strings.Contains(req.URL.String(), "entity=podcastEpisode") {
+					t.Fatalf("unexpected search url = %q", req.URL.String())
+				}
+				return jsonResponse(http.StatusOK, `{
+					"results": [
+						{
+							"trackName": "History Episode",
+							"collectionName": "History Show",
+							"collectionId": 123,
+							"artworkUrl600": "https://example.com/history-600.jpg",
+							"episodeUrl": "https://example.com/history.mp3",
+							"episodeGuid": "abc123-def456"
+						}
+					]
+				}`), nil
+			}),
+		},
+		timeout:       time.Second,
+		searchBaseURL: discoverySearchBaseURL,
+		userAgent:     discoveryUserAgent,
+		bodyLimit:     discoveryBodyLimit,
+		searchLimiter: newRateLimiter(100, time.Minute, func() time.Time { return time.Now() }),
+		cache:         newDiscoveryCache(discoveryCacheMaxKeys),
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, discoverySearchEpisodesRoute+"?term=history&country=us&limit=50", nil)
+	service.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	var payload []map[string]any
+	decodeResponseJSON(t, rr.Body, &payload)
+
+	if len(payload) != 1 {
+		t.Fatalf("payload length = %d, want 1", len(payload))
+	}
+	if payload[0]["title"] != "History Episode" {
+		t.Fatalf("title = %q, want History Episode", payload[0]["title"])
+	}
+	if payload[0]["showTitle"] != "History Show" {
+		t.Fatalf("showTitle = %q, want History Show", payload[0]["showTitle"])
+	}
+}
+
+func TestPodcastIndexPayloadValidation(t *testing.T) {
+	t.Run("podcast byitunesid ignores upstream status field and trusts feed payload", func(t *testing.T) {
+		t.Setenv(podcastIndexAPIKeyEnv, "test-key")
+		t.Setenv(podcastIndexAPISecretEnv, "test-secret")
+		t.Setenv(podcastIndexUserAgentEnv, "readio-test")
+
+		service := &discoveryService{
+			client: &http.Client{
+				Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+					return jsonResponse(http.StatusOK, `{
+						"status":"false",
+						"feed":{
+							"title":"Test",
+							"url":"https://example.com/feed.xml",
+							"author":"Author",
+							"artwork":"https://example.com/artwork.jpg",
+							"description":"Description",
+							"itunesId":123,
+							"lastUpdateTime":1700000000,
+							"language":"en",
+							"episodeCount":10,
+							"dead":1,
+							"categories":{"1":"Technology"}
+						}
+					}`), nil
+				}),
+			},
+			timeout:            time.Second,
+			userAgent:          discoveryUserAgent,
+			bodyLimit:          discoveryBodyLimit,
+			cache:              newDiscoveryCache(discoveryCacheMaxKeys),
+			podcastIndexConfig: podcastIndexConfig{apiKey: "test-key", apiSecret: "test-secret", userAgent: "test"},
+		}
+
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, discoveryPodcastIndexPodcastByItunesIDRoute+"?podcastItunesId=123", nil)
+		service.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+		}
+
+		var payload piPodcastResponse
+		decodeResponseJSON(t, rr.Body, &payload)
+		if payload.PodcastItunesID != "123" || payload.Title != "Test" {
+			t.Fatalf("unexpected payload: %+v", payload)
+		}
+		if !payload.Dead {
+			t.Fatalf("dead = false, want true")
+		}
+	})
+
+	t.Run("podcast byitunesid rejects zero-value feed payload", func(t *testing.T) {
+		t.Setenv(podcastIndexAPIKeyEnv, "test-key")
+		t.Setenv(podcastIndexAPISecretEnv, "test-secret")
+		t.Setenv(podcastIndexUserAgentEnv, "readio-test")
+
+		service := &discoveryService{
+			client: &http.Client{
+				Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+					return jsonResponse(http.StatusOK, `{"feed":{"title":"","url":""}}`), nil
+				}),
+			},
+			timeout:            time.Second,
+			userAgent:          discoveryUserAgent,
+			bodyLimit:          discoveryBodyLimit,
+			cache:              newDiscoveryCache(discoveryCacheMaxKeys),
+			podcastIndexConfig: podcastIndexConfig{apiKey: "test-key", apiSecret: "test-secret", userAgent: "test"},
+		}
+
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, discoveryPodcastIndexPodcastByItunesIDRoute+"?podcastItunesId=123", nil)
+		service.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+		}
+
+		if rr.Body.String() != "null" && rr.Body.String() != "null\n" {
+			var resp piPodcastResponse
+			decodeResponseJSON(t, rr.Body, &resp)
+			if resp.Title != "" && resp.PodcastItunesID != "" {
+				t.Fatalf("zero-value feed should not be returned as valid podcast, got: %+v", resp)
+			}
+		}
+	})
+
+	t.Run("batch byguid ignores upstream status field and trusts feeds payload", func(t *testing.T) {
+		t.Setenv(podcastIndexAPIKeyEnv, "test-key")
+		t.Setenv(podcastIndexAPISecretEnv, "test-secret")
+		t.Setenv(podcastIndexUserAgentEnv, "readio-test")
+
+		service := &discoveryService{
+			client: &http.Client{
+				Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+					return jsonResponse(http.StatusOK, `{"status":"false","feeds":[]}`), nil
+				}),
+			},
+			timeout:            time.Second,
+			userAgent:          discoveryUserAgent,
+			bodyLimit:          discoveryBodyLimit,
+			cache:              newDiscoveryCache(discoveryCacheMaxKeys),
+			podcastIndexConfig: podcastIndexConfig{apiKey: "test-key", apiSecret: "test-secret", userAgent: "test"},
+		}
+
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, discoveryPodcastIndexPodcastsBatchByGUIDRoute, strings.NewReader(`["guid1"]`))
+		service.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+		}
+
+		var resp []piPodcastResponse
+		decodeResponseJSON(t, rr.Body, &resp)
+		if len(resp) != 0 {
+			t.Fatalf("response length = %d, want 0", len(resp))
+		}
+	})
+}
+
+func TestPodcastIndexBatchLimits(t *testing.T) {
+	t.Run("rejects oversized batch", func(t *testing.T) {
+		service := newDiscoveryService()
+
+		guids := make([]string, 101)
+		for i := range guids {
+			guids[i] = fmt.Sprintf("guid-%d", i)
+		}
+
+		rr := httptest.NewRecorder()
+		body, _ := json.Marshal(guids)
+		req := httptest.NewRequest(http.MethodPost, discoveryPodcastIndexPodcastsBatchByGUIDRoute, strings.NewReader(string(body)))
+		service.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want %d (max 100 GUIDs)", rr.Code, http.StatusBadRequest)
+		}
+
+		var payload map[string]string
+		decodeResponseJSON(t, rr.Body, &payload)
+		if payload["code"] != "INVALID_GUID_BATCH" {
+			t.Fatalf("code = %q, want INVALID_GUID_BATCH", payload["code"])
+		}
+	})
+
+	t.Run("deduplicates duplicate GUIDs", func(t *testing.T) {
+		t.Setenv(podcastIndexAPIKeyEnv, "test-key")
+		t.Setenv(podcastIndexAPISecretEnv, "test-secret")
+		t.Setenv(podcastIndexUserAgentEnv, "readio-test")
+
+		service := &discoveryService{
+			client: &http.Client{
+				Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+					if !strings.Contains(req.URL.Path, "/podcasts/batch/byguid") {
+						t.Fatalf("unexpected url: %s", req.URL.Path)
+					}
+					var body []string
+					if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+						t.Fatalf("decode body: %v", err)
+					}
+					if len(body) != 2 {
+						t.Fatalf("upstream should receive 2 unique GUIDs, got %d: %v", len(body), body)
+					}
+					return jsonResponse(http.StatusOK, `{"feeds":[]}`), nil
+				}),
+			},
+			timeout:            time.Second,
+			userAgent:          discoveryUserAgent,
+			bodyLimit:          discoveryBodyLimit,
+			cache:              newDiscoveryCache(discoveryCacheMaxKeys),
+			podcastIndexConfig: podcastIndexConfig{apiKey: "test-key", apiSecret: "test-secret", userAgent: "test"},
+		}
+
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, discoveryPodcastIndexPodcastsBatchByGUIDRoute, strings.NewReader(`["guid-a","guid-b","guid-a","guid-b"]`))
+		service.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+		}
+	})
+
+	t.Run("normalizes duplicate GUIDs before upstream call", func(t *testing.T) {
+		t.Setenv(podcastIndexAPIKeyEnv, "test-key")
+		t.Setenv(podcastIndexAPISecretEnv, "test-secret")
+		t.Setenv(podcastIndexUserAgentEnv, "readio-test")
+
+		var receivedGUIDs []string
+		service := &discoveryService{
+			client: &http.Client{
+				Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+					if err := json.NewDecoder(req.Body).Decode(&receivedGUIDs); err != nil {
+						return jsonResponse(http.StatusOK, `{"feeds":[]}`), nil
+					}
+					return jsonResponse(http.StatusOK, `{"feeds":[
+						{"id":1,"podcastGuid":"guid1","itunesId":123456789,"title":"Show 1","author":"Author 1","description":"Description 1","url":"https://example.com/1.xml","artwork":"https://example.com/1.jpg","episodeCount":10,"language":"en","lastUpdateTime":1700000000,"categories":{"1":"Technology"}},
+						{"id":2,"podcastGuid":"guid2","itunesId":987654321,"title":"Show 2","author":"Author 2","description":"Description 2","url":"https://example.com/2.xml","artwork":"https://example.com/2.jpg","episodeCount":20,"language":"en","lastUpdateTime":1700000000,"categories":{"2":"Comedy"}}
+					]}`), nil
+				}),
+			},
+			timeout:            time.Second,
+			userAgent:          discoveryUserAgent,
+			bodyLimit:          discoveryBodyLimit,
+			cache:              newDiscoveryCache(discoveryCacheMaxKeys),
+			podcastIndexConfig: podcastIndexConfig{apiKey: "test-key", apiSecret: "test-secret", userAgent: "test"},
+		}
+
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, discoveryPodcastIndexPodcastsBatchByGUIDRoute, strings.NewReader(`["guid1","guid1","guid2"]`))
+		service.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+		}
+
+		unique := make(map[string]bool)
+		for _, g := range receivedGUIDs {
+			unique[g] = true
+		}
+		if len(unique) != len(receivedGUIDs) {
+			t.Fatalf("upstream received %d GUIDs with duplicates: %v", len(receivedGUIDs), receivedGUIDs)
+		}
+
+		var resp []piPodcastResponse
+		decodeResponseJSON(t, rr.Body, &resp)
+		if len(resp) != 2 {
+			t.Fatalf("response length = %d, want 2", len(resp))
+		}
+	})
+
+	t.Run("preserves input ordering in response", func(t *testing.T) {
+		t.Setenv(podcastIndexAPIKeyEnv, "test-key")
+		t.Setenv(podcastIndexAPISecretEnv, "test-secret")
+		t.Setenv(podcastIndexUserAgentEnv, "readio-test")
+
+		service := &discoveryService{
+			client: &http.Client{
+				Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+					return jsonResponse(http.StatusOK, `{"feeds":[
+						{"id":1,"podcastGuid":"guidC","itunesId":111,"title":"Show C","author":"Author C","description":"Description C","url":"https://example.com/c.xml","artwork":"https://example.com/c.jpg","episodeCount":30,"language":"en","lastUpdateTime":1700000000,"categories":{"1":"Technology"}},
+						{"id":2,"podcastGuid":"guidA","itunesId":222,"title":"Show A","author":"Author A","description":"Description A","url":"https://example.com/a.xml","artwork":"https://example.com/a.jpg","episodeCount":10,"language":"en","lastUpdateTime":1700000000,"categories":{"2":"Comedy"}},
+						{"id":3,"podcastGuid":"guidB","itunesId":333,"title":"Show B","author":"Author B","description":"Description B","url":"https://example.com/b.xml","artwork":"https://example.com/b.jpg","episodeCount":20,"language":"en","lastUpdateTime":1700000000,"categories":{"3":"News"}}
+					]}`), nil
+				}),
+			},
+			timeout:            time.Second,
+			userAgent:          discoveryUserAgent,
+			bodyLimit:          discoveryBodyLimit,
+			cache:              newDiscoveryCache(discoveryCacheMaxKeys),
+			podcastIndexConfig: podcastIndexConfig{apiKey: "test-key", apiSecret: "test-secret", userAgent: "test"},
+		}
+
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, discoveryPodcastIndexPodcastsBatchByGUIDRoute, strings.NewReader(`["guidC","guidA","guidB"]`))
+		service.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+		}
+
+		var resp []piPodcastResponse
+		decodeResponseJSON(t, rr.Body, &resp)
+		if len(resp) != 3 {
+			t.Fatalf("response length = %d, want 3", len(resp))
+		}
+		if resp[0].Title == "" || resp[0].PodcastItunesID == "" {
+			t.Fatalf("resp[0] missing title or podcastItunesId: %+v", resp[0])
+		}
+		if resp[1].Title == "" || resp[1].PodcastItunesID == "" {
+			t.Fatalf("resp[1] missing title or podcastItunesId: %+v", resp[1])
+		}
+		if resp[2].Title == "" || resp[2].PodcastItunesID == "" {
+			t.Fatalf("resp[2] missing title or podcastItunesId: %+v", resp[2])
+		}
+	})
+}
+
+func TestPodcastIndexOptionalNumericFields(t *testing.T) {
+	t.Run("podcast byitunesid does not emit zero for episodeCount", func(t *testing.T) {
+		t.Setenv(podcastIndexAPIKeyEnv, "test-key")
+		t.Setenv(podcastIndexAPISecretEnv, "test-secret")
+		t.Setenv(podcastIndexUserAgentEnv, "readio-test")
+
+		service := &discoveryService{
+			client: &http.Client{
+				Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+					return jsonResponse(http.StatusOK, `{
+						"feed":{"title":"Test","url":"https://example.com/feed.xml","episodeCount":0}
+					}`), nil
+				}),
+			},
+			timeout:            time.Second,
+			userAgent:          discoveryUserAgent,
+			bodyLimit:          discoveryBodyLimit,
+			cache:              newDiscoveryCache(discoveryCacheMaxKeys),
+			podcastIndexConfig: podcastIndexConfig{apiKey: "test-key", apiSecret: "test-secret", userAgent: "test"},
+		}
+
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, discoveryPodcastIndexPodcastByItunesIDRoute+"?podcastItunesId=123", nil)
+		service.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+		}
+
+		var resp piPodcastResponse
+		decodeResponseJSON(t, rr.Body, &resp)
+
+		if resp.EpisodeCount != nil && *resp.EpisodeCount == 0 {
+			t.Fatalf("episodeCount should be nil when zero, got: %v", resp.EpisodeCount)
+		}
+	})
+
+	t.Run("podcast byitunesid accepts missing optional metadata", func(t *testing.T) {
+		t.Setenv(podcastIndexAPIKeyEnv, "test-key")
+		t.Setenv(podcastIndexAPISecretEnv, "test-secret")
+		t.Setenv(podcastIndexUserAgentEnv, "readio-test")
+
+		service := &discoveryService{
+			client: &http.Client{
+				Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+					return jsonResponse(http.StatusOK, `{
+						"feed":{
+							"title":"Test",
+							"url":"https://example.com/feed.xml",
+							"author":"Author",
+							"artwork":"https://example.com/artwork.jpg",
+							"description":"Description",
+							"itunesId":123,
+							"dead":0,
+							"categories":{}
+						}
+					}`), nil
+				}),
+			},
+			timeout:            time.Second,
+			userAgent:          discoveryUserAgent,
+			bodyLimit:          discoveryBodyLimit,
+			cache:              newDiscoveryCache(discoveryCacheMaxKeys),
+			podcastIndexConfig: podcastIndexConfig{apiKey: "test-key", apiSecret: "test-secret", userAgent: "test"},
+		}
+
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, discoveryPodcastIndexPodcastByItunesIDRoute+"?podcastItunesId=123", nil)
+		service.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+		}
+
+		var resp map[string]any
+		decodeResponseJSON(t, rr.Body, &resp)
+		if resp["podcastItunesId"] != "123" {
+			t.Fatalf("podcastItunesId = %v, want 123", resp["podcastItunesId"])
+		}
+		if _, ok := resp["lastUpdateTime"]; ok {
+			t.Fatalf("lastUpdateTime should be omitted, payload = %+v", resp)
+		}
+		if _, ok := resp["episodeCount"]; ok {
+			t.Fatalf("episodeCount should be omitted, payload = %+v", resp)
+		}
+		if _, ok := resp["language"]; ok {
+			t.Fatalf("language should be omitted, payload = %+v", resp)
+		}
+		if genres, ok := resp["genres"].([]any); !ok || len(genres) != 0 {
+			t.Fatalf("genres = %v, want empty array", resp["genres"])
+		}
+	})
+
+	t.Run("podcast byitunesid uses requested itunes id as canonical identity", func(t *testing.T) {
+		t.Setenv(podcastIndexAPIKeyEnv, "test-key")
+		t.Setenv(podcastIndexAPISecretEnv, "test-secret")
+		t.Setenv(podcastIndexUserAgentEnv, "readio-test")
+
+		service := &discoveryService{
+			client: &http.Client{
+				Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+					return jsonResponse(http.StatusOK, `{
+						"feed":{
+							"title":"Test",
+							"url":"https://example.com/feed.xml",
+							"author":"Author",
+							"artwork":"https://example.com/artwork.jpg",
+							"description":"Description",
+							"dead":0,
+							"categories":{}
+						}
+					}`), nil
+				}),
+			},
+			timeout:            time.Second,
+			userAgent:          discoveryUserAgent,
+			bodyLimit:          discoveryBodyLimit,
+			cache:              newDiscoveryCache(discoveryCacheMaxKeys),
+			podcastIndexConfig: podcastIndexConfig{apiKey: "test-key", apiSecret: "test-secret", userAgent: "test"},
+		}
+
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, discoveryPodcastIndexPodcastByItunesIDRoute+"?podcastItunesId=123", nil)
+		service.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+		}
+
+		var resp piPodcastResponse
+		decodeResponseJSON(t, rr.Body, &resp)
+		if resp.PodcastItunesID != "123" {
+			t.Fatalf("podcastItunesId = %q, want 123", resp.PodcastItunesID)
+		}
+	})
+
 }
 
 func TestDiscoveryServiceRejectsInvalidParamsAndMapsUpstreamErrors(t *testing.T) {
@@ -625,173 +1760,6 @@ func TestDiscoveryServiceRejectsInvalidParamsAndMapsUpstreamErrors(t *testing.T)
 		decodeResponseJSON(t, rr.Body, &payload)
 		if payload["code"] != "UPSTREAM_TIMEOUT" {
 			t.Fatalf("code = %q, want UPSTREAM_TIMEOUT", payload["code"])
-		}
-	})
-
-	t.Run("podcastindex episodes honors limit param", func(t *testing.T) {
-		t.Setenv(podcastIndexAPIKeyEnv, "test-key")
-		t.Setenv(podcastIndexAPISecretEnv, "test-secret")
-		t.Setenv(podcastIndexUserAgentEnv, "readio-test")
-
-		service := &discoveryService{
-			client: &http.Client{
-				Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
-					if req.URL.String() != podcastIndexBaseURL+"/episodes/byitunesid?id=123&max=50" {
-						t.Fatalf("upstream url = %q", req.URL.String())
-					}
-					return jsonResponse(http.StatusOK, `{
-					"status":"true",
-					"items":[
-						{
-							"id":123,
-							"guid":"episode-guid-123",
-							"title":"PI Episode",
-							"datePublished":1764547200,
-							"enclosureUrl":"https://example.com/audio.mp3"
-						}
-					],
-					"count":1
-				}`), nil
-				}),
-			},
-			timeout:       time.Second,
-			userAgent:     discoveryUserAgent,
-			bodyLimit:     discoveryBodyLimit,
-			cache:         newDiscoveryCache(discoveryCacheMaxKeys),
-			searchLimiter: newRateLimiter(10, time.Second, time.Now),
-			podcastIndexConfig: podcastIndexConfig{
-				apiKey:    "test-key",
-				apiSecret: "test-secret",
-				userAgent: "test-agent",
-			},
-		}
-
-		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, discoveryPodcastIndexEpisodesRoute+"?podcastItunesId=123&limit=50", nil)
-		service.ServeHTTP(rr, req)
-
-		if rr.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
-		}
-
-		var payload []episodeLookupResponse
-		decodeResponseJSON(t, rr.Body, &payload)
-		if len(payload) != 1 {
-			t.Fatalf("payload length = %d, want 1", len(payload))
-		}
-		if payload[0].ID != "episode-guid-123" {
-			t.Fatalf("payload[0].ID = %q, want episode-guid-123", payload[0].ID)
-		}
-	})
-
-	t.Run("podcastindex episodes rejects missing itunes id", func(t *testing.T) {
-		service := newDiscoveryService()
-
-		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, discoveryPodcastIndexEpisodesRoute, nil)
-		service.ServeHTTP(rr, req)
-
-		if rr.Code != http.StatusBadRequest {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusBadRequest)
-		}
-
-		var payload map[string]string
-		decodeResponseJSON(t, rr.Body, &payload)
-		if payload["code"] != "MISSING_IDENTIFIER" {
-			t.Fatalf("code = %q, want MISSING_IDENTIFIER", payload["code"])
-		}
-	})
-
-	t.Run("podcastindex episodes rejects invalid itunes id", func(t *testing.T) {
-		service := newDiscoveryService()
-
-		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, discoveryPodcastIndexEpisodesRoute+"?podcastItunesId=not-a-number", nil)
-		service.ServeHTTP(rr, req)
-
-		if rr.Code != http.StatusBadRequest {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusBadRequest)
-		}
-
-		var payload map[string]string
-		decodeResponseJSON(t, rr.Body, &payload)
-		if payload["code"] != "INVALID_ITUNES_ID" {
-			t.Fatalf("code = %q, want INVALID_ITUNES_ID", payload["code"])
-		}
-	})
-
-	t.Run("podcastindex episodes rejects invalid limit", func(t *testing.T) {
-		service := newDiscoveryService()
-
-		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, discoveryPodcastIndexEpisodesRoute+"?podcastItunesId=123&limit=999", nil)
-		service.ServeHTTP(rr, req)
-
-		if rr.Code != http.StatusBadRequest {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusBadRequest)
-		}
-
-		var payload map[string]string
-		decodeResponseJSON(t, rr.Body, &payload)
-		if payload["code"] != "INVALID_LIMIT" {
-			t.Fatalf("code = %q, want INVALID_LIMIT", payload["code"])
-		}
-	})
-
-	t.Run("podcastindex_timeout_maps_to_gateway_timeout_json", func(t *testing.T) {
-		t.Setenv(podcastIndexAPIKeyEnv, "test-key")
-		t.Setenv(podcastIndexAPISecretEnv, "test-secret")
-		t.Setenv(podcastIndexUserAgentEnv, "readio-test")
-
-		service := &discoveryService{
-			client: &http.Client{
-				Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
-					<-req.Context().Done()
-					return nil, req.Context().Err()
-				}),
-			},
-			timeout:       20 * time.Millisecond,
-			userAgent:     discoveryUserAgent,
-			bodyLimit:     discoveryBodyLimit,
-			cache:         newDiscoveryCache(discoveryCacheMaxKeys),
-			searchLimiter: newRateLimiter(10, time.Second, time.Now),
-			podcastIndexConfig: podcastIndexConfig{
-				apiKey:    "test-key",
-				apiSecret: "test-secret",
-				userAgent: "test-agent",
-			},
-		}
-
-		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, discoveryPodcastIndexEpisodesRoute+"?podcastItunesId=123", nil)
-		service.ServeHTTP(rr, req)
-
-		if rr.Code != http.StatusGatewayTimeout {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusGatewayTimeout)
-		}
-
-		var payload map[string]string
-		decodeResponseJSON(t, rr.Body, &payload)
-		if payload["code"] != "UPSTREAM_TIMEOUT" {
-			t.Fatalf("code = %q, want UPSTREAM_TIMEOUT", payload["code"])
-		}
-	})
-
-	t.Run("podcastindex missing credentials maps to service config error", func(t *testing.T) {
-		service := newDiscoveryService()
-
-		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, discoveryPodcastIndexEpisodesRoute+"?podcastItunesId=123", nil)
-		service.ServeHTTP(rr, req)
-
-		if rr.Code != http.StatusServiceUnavailable {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusServiceUnavailable)
-		}
-
-		var payload map[string]string
-		decodeResponseJSON(t, rr.Body, &payload)
-		if payload["code"] != "DISCOVERY_PROVIDER_NOT_CONFIGURED" {
-			t.Fatalf("code = %q, want DISCOVERY_PROVIDER_NOT_CONFIGURED", payload["code"])
 		}
 	})
 
@@ -998,9 +1966,9 @@ func TestDecodeDiscoveryFeedSanitizesXML(t *testing.T) {
     </item>
   </channel>
 </rss>`)
-		result, err := decodeDiscoveryFeed(body, discoveryBodyLimit)
+		result, err := decodeDiscoveryFeedXML(body, discoveryBodyLimit)
 		if err != nil {
-			t.Fatalf("decodeDiscoveryFeed error = %v", err)
+			t.Fatalf("decodeDiscoveryFeedXML error = %v", err)
 		}
 		if !strings.Contains(result.Title, "Smith") {
 			t.Fatalf("title = %q, want to contain Smith", result.Title)
@@ -1025,9 +1993,9 @@ func TestDecodeDiscoveryFeedSanitizesXML(t *testing.T) {
     </item>
   </channel>
 </rss>`)
-		result, err := decodeDiscoveryFeed(body, discoveryBodyLimit)
+		result, err := decodeDiscoveryFeedXML(body, discoveryBodyLimit)
 		if err != nil {
-			t.Fatalf("decodeDiscoveryFeed error = %v", err)
+			t.Fatalf("decodeDiscoveryFeedXML error = %v", err)
 		}
 		if len(result.Episodes) != 1 {
 			t.Fatalf("episodes length = %d, want 1", len(result.Episodes))
@@ -1052,9 +2020,9 @@ func TestDecodeDiscoveryFeedSanitizesXML(t *testing.T) {
     </item>
   </channel>
 </rss>`)
-		result, err := decodeDiscoveryFeed(body, discoveryBodyLimit)
+		result, err := decodeDiscoveryFeedXML(body, discoveryBodyLimit)
 		if err != nil {
-			t.Fatalf("decodeDiscoveryFeed error = %v", err)
+			t.Fatalf("decodeDiscoveryFeedXML error = %v", err)
 		}
 		if result.Title == "" {
 			t.Fatalf("title is empty after sanitization")
@@ -1079,9 +2047,9 @@ func TestDecodeDiscoveryFeedSanitizesXML(t *testing.T) {
     </item>
   </channel>
 </rss>`)
-		result, err := decodeDiscoveryFeed(body, discoveryBodyLimit)
+		result, err := decodeDiscoveryFeedXML(body, discoveryBodyLimit)
 		if err != nil {
-			t.Fatalf("decodeDiscoveryFeed error = %v", err)
+			t.Fatalf("decodeDiscoveryFeedXML error = %v", err)
 		}
 		if len(result.Episodes) != 1 {
 			t.Fatalf("episodes length = %d, want 1", len(result.Episodes))
@@ -1096,9 +2064,9 @@ func TestDecodeDiscoveryFeedSanitizesXML(t *testing.T) {
     <description>no items</description>
   </channel>
 </rss>`)
-		result, err := decodeDiscoveryFeed(body, discoveryBodyLimit)
+		result, err := decodeDiscoveryFeedXML(body, discoveryBodyLimit)
 		if err != nil {
-			t.Fatalf("decodeDiscoveryFeed error = %v", err)
+			t.Fatalf("decodeDiscoveryFeedXML error = %v", err)
 		}
 		if result.Title != "Empty Feed" {
 			t.Fatalf("title = %q, want Empty Feed", result.Title)
@@ -1123,12 +2091,71 @@ func TestDecodeDiscoveryFeedSanitizesXML(t *testing.T) {
     </item>
   </channel>
 </rss>`)
-		result, err := decodeDiscoveryFeed(body, discoveryBodyLimit)
-		if err != nil {
-			t.Fatalf("decodeDiscoveryFeed error = %v", err)
+		_, err := decodeDiscoveryFeedXML(body, discoveryBodyLimit)
+		if err == nil {
+			t.Fatalf("decodeDiscoveryFeedXML should reject feed when every item is invalid")
 		}
-		if len(result.Episodes) != 0 {
-			t.Fatalf("episodes length = %d, want 0 (enclosure missing url should be skipped)", len(result.Episodes))
+		if !errors.Is(err, errDiscoveryXMLDecode) {
+			t.Fatalf("error = %v, want errDiscoveryXMLDecode", err)
+		}
+	})
+
+	t.Run("item missing guid rejects feed when no valid episodes remain", func(t *testing.T) {
+		body := strings.NewReader(`<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Missing GUID Feed</title>
+    <description>test</description>
+    <item>
+      <title>No GUID Episode</title>
+      <description>has audio but no guid</description>
+      <pubDate>Fri, 30 Jan 2026 12:00:00 GMT</pubDate>
+      <enclosure url="http://example.com/audio.mp3" length="1000" />
+    </item>
+  </channel>
+</rss>`)
+		_, err := decodeDiscoveryFeedXML(body, discoveryBodyLimit)
+		if err == nil {
+			t.Fatalf("decodeDiscoveryFeedXML should reject feed when every item is invalid")
+		}
+		if !errors.Is(err, errDiscoveryXMLDecode) {
+			t.Fatalf("error = %v, want errDiscoveryXMLDecode", err)
+		}
+	})
+
+	t.Run("keeps valid items when invalid items are mixed in", func(t *testing.T) {
+		body := strings.NewReader(`<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Mixed Feed</title>
+    <description>test</description>
+    <item>
+      <title>Invalid Episode</title>
+      <description>missing guid</description>
+      <pubDate>Fri, 30 Jan 2026 12:00:00 GMT</pubDate>
+      <enclosure url="http://example.com/invalid.mp3" length="1000" />
+    </item>
+    <item>
+      <title>Valid Episode</title>
+      <description>kept</description>
+      <guid>ep-valid</guid>
+      <pubDate>Sat, 31 Jan 2026 12:00:00 GMT</pubDate>
+      <enclosure url="http://example.com/valid.mp3" length="2000" />
+    </item>
+  </channel>
+</rss>`)
+		result, err := decodeDiscoveryFeedXML(body, discoveryBodyLimit)
+		if err != nil {
+			t.Fatalf("decodeDiscoveryFeedXML error = %v", err)
+		}
+		if len(result.Episodes) != 1 {
+			t.Fatalf("episodes length = %d, want 1", len(result.Episodes))
+		}
+		if result.Episodes[0].EpisodeGUID != "ep-valid" {
+			t.Fatalf("episodeGuid = %q, want ep-valid", result.Episodes[0].EpisodeGUID)
+		}
+		if result.Episodes[0].AudioURL != "http://example.com/valid.mp3" {
+			t.Fatalf("audioUrl = %q, want valid episode audio", result.Episodes[0].AudioURL)
 		}
 	})
 
@@ -1147,9 +2174,9 @@ func TestDecodeDiscoveryFeedSanitizesXML(t *testing.T) {
     </item>
   </channel>
 </rss>`)
-		_, err := decodeDiscoveryFeed(body, discoveryBodyLimit)
+		_, err := decodeDiscoveryFeedXML(body, discoveryBodyLimit)
 		if err == nil {
-			t.Fatalf("decodeDiscoveryFeed should return error for whitespace-only title")
+			t.Fatalf("decodeDiscoveryFeedXML should return error for whitespace-only title")
 		}
 	})
 }
@@ -1186,7 +2213,7 @@ func TestDiscoveryCacheBehavior(t *testing.T) {
 					return jsonResponse(http.StatusOK, `{
 						"feed": {
 							"results": [
-								{"id": "100", "name": "Cached Show", "url": "https://example.com/show"}
+								{"id": "100", "name": "Cached Show", "artistName": "Host", "artworkUrl100": "https://example.com/show.jpg", "url": "https://example.com/show", "genres": [{"name": "Tech"}]}
 							]
 						}
 					}`), nil
@@ -1237,7 +2264,7 @@ func TestDiscoveryCacheBehavior(t *testing.T) {
 					return jsonResponse(http.StatusOK, `{
 						"feed": {
 							"results": [
-								{"id": "1", "name": "Show", "url": "https://example.com/1"}
+								{"id": "1", "name": "Show", "artistName": "Host", "artworkUrl100": "https://example.com/show.jpg", "url": "https://example.com/1", "genres": [{"name": "Tech"}]}
 							]
 						}
 					}`), nil
@@ -1320,7 +2347,7 @@ func TestDiscoveryCacheBehavior(t *testing.T) {
 					return jsonResponse(http.StatusOK, fmt.Sprintf(`{
 						"feed": {
 							"results": [
-								{"id": "1", "name": %q, "url": "https://example.com/1"}
+								{"id": "1", "name": %q, "artistName": "Host", "artworkUrl100": "https://example.com/show.jpg", "url": "https://example.com/1", "genres": [{"name": "Tech"}]}
 							]
 						}
 					}`, name)), nil
@@ -1364,7 +2391,7 @@ func TestDiscoveryCacheBehavior(t *testing.T) {
 			t.Fatalf("upstreamCalls = %d, want 2 (expired entry should trigger refetch)", upstreamCalls)
 		}
 
-		var first, second []discoveryPodcastResponse
+		var first, second []topPodcastResponse
 		decodeResponseJSON(t, rr1.Body, &first)
 		decodeResponseJSON(t, rr2.Body, &second)
 		if len(first) != 1 || len(second) != 1 {
@@ -1376,21 +2403,18 @@ func TestDiscoveryCacheBehavior(t *testing.T) {
 	})
 
 	t.Run("lookup podcast is cached", func(t *testing.T) {
+		t.Setenv(podcastIndexAPIKeyEnv, "test-key")
+		t.Setenv(podcastIndexAPISecretEnv, "test-secret")
+		t.Setenv(podcastIndexUserAgentEnv, "readio-test")
+
 		upstreamCalls := 0
 		service := &discoveryService{
 			client: &http.Client{
 				Transport: discoveryRoundTripper(func(_ *http.Request) (*http.Response, error) {
 					upstreamCalls++
 					return jsonResponse(http.StatusOK, `{
-						"results": [
-							{
-								"wrapperType": "collection",
-								"kind": "podcast",
-								"collectionId": 42,
-								"collectionName": "Cached Lookup",
-								"collectionViewUrl": "https://podcasts.apple.com/show-42"
-							}
-						]
+						"status":"true",
+						"feed":{"id":42,"title":"Cached Lookup","url":"https://example.com/feed.xml"}
 					}`), nil
 				}),
 			},
@@ -1436,7 +2460,7 @@ func TestDiscoveryCacheGracefulDegradation(t *testing.T) {
 					return jsonResponse(http.StatusOK, `{
 						"feed": {
 							"results": [
-								{"id": "1", "name": "Show", "url": "https://example.com/1"}
+								{"id": "1", "name": "Show", "artistName": "Host", "artworkUrl100": "https://example.com/show.jpg", "url": "https://example.com/1", "genres": [{"name": "Tech"}]}
 							]
 						}
 					}`), nil
@@ -1464,7 +2488,7 @@ func TestDiscoveryCacheGracefulDegradation(t *testing.T) {
 			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
 		}
 
-		var items []discoveryPodcastResponse
+		var items []topPodcastResponse
 		decodeResponseJSON(t, rr.Body, &items)
 		if len(items) != 1 || items[0].Title != "Show" {
 			t.Fatalf("unexpected response body")
@@ -1481,7 +2505,7 @@ func TestDiscoveryCacheGracefulDegradation(t *testing.T) {
 						return jsonResponse(http.StatusOK, `{
 							"feed": {
 								"results": [
-									{"id": "1", "name": "Stale Show", "url": "https://example.com/1"}
+									{"id": "1", "name": "Stale Show", "artistName": "Host", "artworkUrl100": "https://example.com/show.jpg", "url": "https://example.com/1", "genres": [{"name": "Tech"}]}
 								]
 							}
 						}`), nil
@@ -1527,7 +2551,7 @@ func TestDiscoveryCacheGracefulDegradation(t *testing.T) {
 			t.Fatalf("upstreamCalls = %d, want 2", upstreamCalls)
 		}
 
-		var items []discoveryPodcastResponse
+		var items []topPodcastResponse
 		decodeResponseJSON(t, rr2.Body, &items)
 		if len(items) != 1 || items[0].Title != "Stale Show" {
 			t.Fatalf("expected stale data to be returned, got %v", items)
@@ -1544,7 +2568,7 @@ func TestDiscoveryCacheGracefulDegradation(t *testing.T) {
 					return jsonResponse(http.StatusOK, fmt.Sprintf(`{
 						"feed": {
 							"results": [
-								{"id": "1", "name": %q, "url": "https://example.com/1"}
+								{"id": "1", "name": %q, "artistName": "Host", "artworkUrl100": "https://example.com/show.jpg", "url": "https://example.com/1", "genres": [{"name": "Tech"}]}
 							]
 						}
 					}`, name)), nil
@@ -1588,7 +2612,7 @@ func TestDiscoveryCacheGracefulDegradation(t *testing.T) {
 			t.Fatalf("upstreamCalls = %d, want 2", upstreamCalls)
 		}
 
-		var first, second []discoveryPodcastResponse
+		var first, second []topPodcastResponse
 		decodeResponseJSON(t, rr1.Body, &first)
 		decodeResponseJSON(t, rr2.Body, &second)
 		if first[0].Title == second[0].Title {
@@ -1605,7 +2629,7 @@ func TestDiscoveryCacheGracefulDegradation(t *testing.T) {
 					return jsonResponse(http.StatusOK, `{
 						"feed": {
 							"results": [
-								{"id": "1", "name": "New Show", "url": "https://example.com/1"}
+								{"id": "1", "name": "New Show", "artistName": "Host", "artworkUrl100": "https://example.com/show.jpg", "url": "https://example.com/1", "genres": [{"name": "Tech"}]}
 							]
 						}
 					}`), nil
@@ -1647,7 +2671,7 @@ func TestDiscoveryCacheGracefulDegradation(t *testing.T) {
 					return jsonResponse(http.StatusOK, `{
 						"feed": {
 							"results": [
-								{"id": "1", "name": "Show", "url": "https://example.com/1"}
+								{"id": "1", "name": "Show", "artistName": "Host", "artworkUrl100": "https://example.com/show.jpg", "url": "https://example.com/1", "genres": [{"name": "Tech"}]}
 							]
 						}
 					}`), nil

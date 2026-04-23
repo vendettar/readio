@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
-import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import type { Episode, Podcast } from '../../../lib/discovery'
+import { createQueryClientWrapper } from '../../../__tests__/queryClient'
+import type { FeedEpisode, Podcast } from '../../../lib/discovery'
 import { EpisodeRow } from '../EpisodeRow'
 
 const playEpisodeMock = vi.fn()
@@ -39,6 +39,16 @@ vi.mock('../../../hooks/useEpisodePlayback', () => ({
   }),
 }))
 
+vi.mock('../../../hooks/useNetworkStatus', () => ({
+  useNetworkStatus: () => ({
+    isOnline: true,
+  }),
+}))
+
+vi.mock('../../../lib/player/remotePlayback', () => ({
+  canPlayRemoteStreamWithoutTranscript: () => true,
+}))
+
 vi.mock('../../../store/exploreStore', () => ({
   useExploreStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
@@ -73,9 +83,8 @@ vi.mock('../../interactive/InteractiveTitle', () => {
 })
 
 // Build minimal props
-const buildEpisode = (title: string, id: string): Episode => ({
-  id,
-  providerEpisodeId: id,
+const buildEpisode = (title: string, id: string): FeedEpisode => ({
+  episodeGuid: id,
   title,
   description: 'Test Desc',
   duration: 60,
@@ -88,13 +97,20 @@ const mockPodcast: Podcast = {
   title: 'Test Podcast',
   feedUrl: 'http://test.com/feed.xml',
   author: 'Test Artist',
-  image: '',
-  artwork: '',
+  artwork: 'http://test.com/art.jpg',
+  description: 'Test description',
+  lastUpdateTime: 1613394044,
+  episodeCount: 50,
+  language: 'en',
+  genres: ['Technology'],
+  dead: false,
 }
 
 describe('EpisodeRowErrorBoundary Integration', () => {
   it('renders play-without-transcript action in overflow menu', () => {
-    render(<EpisodeRow episode={buildEpisode('Safe Row 1', '1')} podcast={mockPodcast} />)
+    render(<EpisodeRow episode={buildEpisode('Safe Row 1', '1')} podcast={mockPodcast} />, {
+      wrapper: createQueryClientWrapper(),
+    })
     expect(screen.getByRole('button', { name: 'playWithoutTranscript' })).toBeDefined()
   })
 
@@ -107,7 +123,8 @@ describe('EpisodeRowErrorBoundary Integration', () => {
         <EpisodeRow episode={buildEpisode('Safe Row 1', '1')} podcast={mockPodcast} />
         <EpisodeRow episode={buildEpisode('CRASH_ME', '2')} podcast={mockPodcast} />
         <EpisodeRow episode={buildEpisode('Safe Row 3', '3')} podcast={mockPodcast} />
-      </div>
+      </div>,
+      { wrapper: createQueryClientWrapper() }
     )
 
     // 1. Verify healthy rows are present

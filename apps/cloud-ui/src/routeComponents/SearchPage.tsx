@@ -172,7 +172,7 @@ export default function SearchPage() {
                       id={String(podcast.podcastItunesId)}
                       title={podcast.title || ''}
                       subtitle={podcast.author || ''}
-                      artworkUrl={podcast.image || podcast.artwork || ''}
+                      artworkUrl={podcast.artwork || ''}
                       onClick={() => {
                         if (showRoute) {
                           void navigate(showRoute)
@@ -195,13 +195,11 @@ export default function SearchPage() {
               <div className="space-y-0">
                 {episodes.map((episode) => (
                   <SearchEpisodeItem
-                    key={episode.providerEpisodeId}
+                    key={episode.episodeUrl}
                     episode={episode}
-                    onPlay={() =>
-                      playSearchEpisode(episode, episode.feedUrl, globalCountry ?? undefined)
-                    }
+                    onPlay={() => playSearchEpisode(episode, globalCountry ?? undefined)}
                     onPlayWithoutTranscript={() =>
-                      playSearchEpisode(episode, episode.feedUrl, globalCountry ?? undefined, {
+                      playSearchEpisode(episode, globalCountry ?? undefined, {
                         mode: PLAYBACK_REQUEST_MODE.STREAM_WITHOUT_TRANSCRIPT,
                       })
                     }

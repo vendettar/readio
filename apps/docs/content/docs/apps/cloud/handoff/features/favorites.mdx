@@ -1,0 +1,22 @@
+---
+title: Favorites
+---
+
+## 1. Scope
+
+- Route: `/favorites`
+- Main authority: `apps/cloud-ui/src/store/exploreStore.ts`
+
+## 2. Key Model
+
+Favorites are still browser-local records keyed by episode identity, with show metadata including:
+
+- `feedUrl`
+- `podcastTitle`
+- `artworkUrl`
+- `podcastItunesId`
+- `countryAtSave`
+
+## 3. Routing Contract
+
+Favorite items should deep-link to canonical podcast/episode routes only when the saved routing metadata is sufficient; otherwise they degrade to direct playback behavior.
