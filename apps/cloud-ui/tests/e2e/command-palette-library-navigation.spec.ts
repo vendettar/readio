@@ -39,7 +39,7 @@ async function seedLibraryRecords(page: Page) {
       audioUrl: 'https://example.com/history.mp3',
       countryAtSave: 'jp',
       podcastItunesId: '9002',
-      providerEpisodeId: 'hist-episode-guid-9002',
+      episodeGuid: 'hist-episode-guid-9002',
     })
   })
 }

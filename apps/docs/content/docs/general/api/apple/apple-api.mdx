@@ -181,7 +181,7 @@ curl "https://itunes.apple.com/search?term=bearbrook&country=us&media=podcast&li
 > 
 > To improve user experience, Readio implements a **strict client-side filter**:
 > - We tokenize the user's query and remove stop words (`the`, `podcast`, `it`, etc.).
-> - We check if the result's `collectionName`, `trackName`, or `artistName` contains **at least one** matching token.
+> - For episode search, we currently check if the result's `collectionName` or `trackName` contains **at least one** matching token.
 > - If no tokens match, the result is discarded. This prevents showing completely unrelated podcasts.
 
 ### 📜 Search Episodes

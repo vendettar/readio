@@ -21,7 +21,7 @@ function normalizeTimestamp(value: string | number | null | undefined): number |
   return Number.isFinite(parsed) ? parsed : undefined
 }
 
-function normalizeProviderId(value: string | number | null | undefined): string | undefined {
+function normalizeStringId(value: string | number | null | undefined): string | undefined {
   if (value == null) return undefined
   const normalized = String(value).trim()
   return normalized.length > 0 ? normalized : undefined
@@ -49,11 +49,8 @@ export function mapFeedEpisodeToPlaybackPayload(
       artworkUrl: artwork,
       publishedAt: normalizeTimestamp(episode.pubDate),
       durationSeconds: episode.duration || 0,
-      episodeGuid: normalizeProviderId(episode.episodeGuid),
-      podcastItunesId: normalizeProviderId(podcast.podcastItunesId),
-      // Canonical RSS episodes only preserve stable episode identity (`episodeGuid`).
-      // Provider-specific IDs remain available only on local/history/favorite bridge records.
-      providerEpisodeId: undefined,
+      episodeGuid: normalizeStringId(episode.episodeGuid),
+      podcastItunesId: normalizeStringId(podcast.podcastItunesId),
       transcriptUrl: episode.transcriptUrl,
     },
   }
@@ -79,10 +76,8 @@ export function mapSearchEpisodeToPlaybackPayload(
       durationSeconds: episode.trackTimeMillis
         ? Math.round(episode.trackTimeMillis / 1000)
         : undefined,
-      episodeGuid: normalizeProviderId(episode.episodeGuid),
-      podcastItunesId: normalizeProviderId(episode.podcastItunesId),
-      // Search first-hop is Apple-only and does not carry canonical provider-side episode identity.
-      providerEpisodeId: undefined,
+      episodeGuid: normalizeStringId(episode.episodeGuid),
+      podcastItunesId: normalizeStringId(episode.podcastItunesId),
     },
   }
 }
@@ -103,8 +98,7 @@ export function mapFavoriteToPlaybackPayload(favorite: Favorite): PlaybackPayloa
       publishedAt: normalizeTimestamp(favorite.pubDate),
       durationSeconds: favorite.durationSeconds,
       episodeGuid: favorite.episodeGuid,
-      podcastItunesId: normalizeProviderId(favorite.podcastItunesId),
-      providerEpisodeId: normalizeProviderId(favorite.providerEpisodeId),
+      podcastItunesId: normalizeStringId(favorite.podcastItunesId),
       transcriptUrl: favorite.transcriptUrl,
     },
   }
@@ -124,8 +118,7 @@ export function mapPlaybackSessionToEpisodeMetadata(
     publishedAt: normalizeTimestamp(session.publishedAt),
     durationSeconds: session.durationSeconds,
     episodeGuid: session.episodeGuid,
-    podcastItunesId: normalizeProviderId(session.podcastItunesId),
-    providerEpisodeId: normalizeProviderId(session.providerEpisodeId),
+    podcastItunesId: normalizeStringId(session.podcastItunesId),
     transcriptUrl: session.transcriptUrl,
     countryAtSave: session.countryAtSave,
     originalAudioUrl: session.audioUrl,

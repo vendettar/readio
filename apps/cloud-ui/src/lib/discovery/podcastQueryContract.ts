@@ -9,10 +9,6 @@ export const PODCAST_QUERY_CACHE_POLICY = {
     staleTime: 24 * 60 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
   },
-  providerEpisodes: {
-    staleTime: 12 * 60 * 60 * 1000,
-    gcTime: 24 * 60 * 60 * 1000,
-  },
 } as const
 
 export function buildPodcastDetailQueryKey(

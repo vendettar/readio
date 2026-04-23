@@ -145,7 +145,6 @@ type proxyRequestSpec struct {
 	targetURL *url.URL
 	method    string
 	headers   http.Header
-	legacyGET bool
 }
 
 type proxyError struct {
@@ -553,10 +552,6 @@ func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			req.Header.Add(key, value)
 		}
 	}
-	if spec.legacyGET && req.Header.Get("Accept") == "" {
-		req.Header.Set("Accept", "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8")
-	}
-
 	resp, err := client.Do(req)
 	if err != nil {
 		if ctx.Err() != nil || errors.Is(err, context.DeadlineExceeded) {
@@ -602,38 +597,6 @@ func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (p *proxyService) parseProxyRequest(_ http.ResponseWriter, r *http.Request) (*proxyRequestSpec, error) {
 	switch r.Method {
-	case http.MethodGet, http.MethodHead:
-		rawTarget := strings.TrimSpace(r.URL.Query().Get("url"))
-		if rawTarget == "" {
-			return nil, &proxyError{status: http.StatusBadRequest, message: "missing url"}
-		}
-
-		parsedURL, err := parseProxyTargetURL(rawTarget)
-		if err != nil {
-			return nil, err
-		}
-
-		if err := validateProxyTarget(parsedURL); err != nil {
-			return nil, &proxyError{status: http.StatusBadRequest, message: err.Error()}
-		}
-
-		headers := make(http.Header)
-		if rng := r.Header.Get("Range"); rng != "" {
-			if !proxyRangePattern.MatchString(rng) {
-				return nil, &proxyError{status: http.StatusBadRequest, message: "invalid range header"}
-			}
-			headers.Set("Range", rng)
-		}
-		if ifRange := r.Header.Get("If-Range"); ifRange != "" {
-			headers.Set("If-Range", ifRange)
-		}
-
-		return &proxyRequestSpec{
-			targetURL: parsedURL,
-			method:    r.Method,
-			headers:   headers,
-			legacyGET: r.Method == http.MethodGet,
-		}, nil
 	case http.MethodPost:
 		if ct := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type"))); ct != "" && !strings.HasPrefix(ct, "application/json") {
 			return nil, &proxyError{status: http.StatusBadRequest, message: "content-type must be application/json"}
@@ -697,7 +660,7 @@ func (p *proxyService) parseProxyRequest(_ http.ResponseWriter, r *http.Request)
 			headers:   headers,
 		}, nil
 	default:
-		return nil, &proxyError{status: http.StatusMethodNotAllowed, message: "only GET and POST are allowed"}
+		return nil, &proxyError{status: http.StatusMethodNotAllowed, message: "only POST is allowed"}
 	}
 }
 

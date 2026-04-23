@@ -44,7 +44,8 @@ Cloud handoff 树现在是应用级前后端契约的当前 SSOT：
 
 ## 3. RSS 代理契约
 
-- `GET /api/proxy?url=...` 是当前代理入口。
+- `POST /api/proxy` 是当前代理入口。
+- 请求体使用 JSON 代理契约：`{ "url": "...", "method": "GET" | "HEAD", "headers"?: { ... } }`。
 - 代理在拨号前会校验目标地址，并拒绝私网、回环、链路本地或 metadata 风格目标。
 - 请求路径是 fail-closed 的：它使用已验证的固定目标集，并且不会通过重定向跳入不允许的目标。
 - 代理使用自定义 user agent，限制上游请求超时，并保留基础的内存限流。

@@ -88,7 +88,6 @@ type piPodcastResponse struct {
 	Dead            bool     `json:"dead"`
 }
 
-// Type alias for backwards compatibility with PodcastIndex episode handler
 // Discovery cache policy.
 //
 // Cached routes (and cache key dimensions):
@@ -278,7 +277,6 @@ const (
 const (
 	UpstreamKindAppleSearch  = "apple-search"
 	UpstreamKindAppleFeed    = "apple-feed"
-	UpstreamKindAppleLookup  = "apple-lookup"
 	UpstreamKindFeed         = "feed"
 	UpstreamKindPodcastIndex = "podcastindex"
 )

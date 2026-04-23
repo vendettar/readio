@@ -26,7 +26,6 @@ describe('buildRestoredRemoteSessionState', () => {
         publishedAt: 1700001234,
         episodeGuid: 'episode-guid-1',
         podcastItunesId: 'podcast-1',
-        providerEpisodeId: 'provider-1',
         transcriptUrl: 'https://example.com/transcript.vtt',
         countryAtSave: 'us',
       },

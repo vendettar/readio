@@ -36,7 +36,7 @@ import {
   toStoredFolderId,
 } from './db/types'
 
-// Re-export types for backward compatibility/internal usage
+// Re-export domain entity types for app-layer imports.
 export type {
   AudioBlob,
   CredentialEntry,
@@ -72,24 +72,19 @@ export const DB_TABLE_NAMES = {
   LOCAL_SUBTITLES: 'local_subtitles',
 } as const
 
-const TRACKS_SCHEMA_V6 =
-  'id, name, folderId, createdAt, audioId, sourceType, sourceUrlNormalized, lastAccessedAt, &[sourceType+sourceUrlNormalized], [sourceType+createdAt], [sourceType+folderId], [sourceType+folderId+createdAt]'
-const TRACKS_SCHEMA_V7 =
-  'id, name, folderId, createdAt, audioId, artworkId, sourceType, sourceUrlNormalized, lastAccessedAt, &[sourceType+sourceUrlNormalized], [sourceType+createdAt], [sourceType+folderId], [sourceType+folderId+createdAt]'
-const TRACKS_SCHEMA_V8 =
+const TRACKS_SCHEMA =
   'id, name, folderId, createdAt, audioId, artworkId, sourceType, sourceUrlNormalized, sourceEpisodeGuid, lastAccessedAt, &[sourceType+sourceUrlNormalized], [sourceType+createdAt], [sourceType+folderId], [sourceType+folderId+createdAt]'
 
 function buildSchema(tracksSchema: string) {
   return {
     [DB_TABLE_NAMES.TRACKS]: tracksSchema,
     [DB_TABLE_NAMES.PLAYBACK_SESSIONS]:
-      'id, title, lastPlayedAt, source, createdAt, audioUrl, audioFilename, localTrackId, audioId, episodeGuid, providerEpisodeId, countryAtSave',
+      'id, title, lastPlayedAt, source, createdAt, audioUrl, audioFilename, localTrackId, audioId, episodeGuid, countryAtSave',
     [DB_TABLE_NAMES.AUDIO_BLOBS]: 'id, storedAt',
     [DB_TABLE_NAMES.SUBTITLES]: 'id, storedAt, asrFingerprint',
     [DB_TABLE_NAMES.REMOTE_TRANSCRIPTS]: 'id, &url, fetchedAt, asrFingerprint',
     [DB_TABLE_NAMES.SUBSCRIPTIONS]: 'id, &feedUrl, addedAt, podcastItunesId, countryAtSave',
-    [DB_TABLE_NAMES.FAVORITES]:
-      'id, &key, addedAt, episodeGuid, providerEpisodeId, audioUrl, countryAtSave',
+    [DB_TABLE_NAMES.FAVORITES]: 'id, &key, addedAt, episodeGuid, audioUrl, countryAtSave',
     [DB_TABLE_NAMES.SETTINGS]: 'key',
     [DB_TABLE_NAMES.CREDENTIALS]: 'key',
     [DB_TABLE_NAMES.RUNTIME_CACHE]: '&key, namespace, at, [namespace+at]',
@@ -121,15 +116,7 @@ class ReadioDB extends Dexie {
   constructor() {
     super(getDbName())
 
-    // Schema migration: v7 adds tracks.artworkId index for indexed reference checks.
-    // No data backfill is required because artworkId is optional and existing rows remain valid.
-    this.version(6).stores(buildSchema(TRACKS_SCHEMA_V6))
-    this.version(7)
-      .stores(buildSchema(TRACKS_SCHEMA_V7))
-      .upgrade(() => undefined)
-    this.version(8)
-      .stores(buildSchema(TRACKS_SCHEMA_V8))
-      .upgrade(() => undefined)
+    this.version(8).stores(buildSchema(TRACKS_SCHEMA))
   }
 }
 
@@ -177,18 +164,14 @@ function normalizeRequiredCountryAtSave(
 }
 
 function normalizeSessionCountryAtSave(
-  session: Pick<
-    PlaybackSession,
-    'source' | 'countryAtSave' | 'episodeGuid' | 'providerEpisodeId' | 'podcastItunesId'
-  >,
+  session: Pick<PlaybackSession, 'source' | 'countryAtSave' | 'episodeGuid' | 'podcastItunesId'>,
   entityName: string
 ): string | undefined {
   if (session.source !== 'explore') {
     return session.countryAtSave
   }
   // Only enforce for navigable explore records (history/favorites routing anchors).
-  const isNavigableExploreRecord =
-    !!session.episodeGuid || !!session.providerEpisodeId || !!session.podcastItunesId
+  const isNavigableExploreRecord = !!session.episodeGuid || !!session.podcastItunesId
   if (!isNavigableExploreRecord) {
     return session.countryAtSave
   }
@@ -400,13 +383,6 @@ export const DB = {
   async getPlaybackSessionsByEpisodeGuid(episodeGuid: string): Promise<PlaybackSession[]> {
     if (!episodeGuid) return []
     return db.playback_sessions.where('episodeGuid').equals(episodeGuid).toArray()
-  },
-
-  async getPlaybackSessionsByProviderEpisodeId(
-    providerEpisodeId: string
-  ): Promise<PlaybackSession[]> {
-    if (!providerEpisodeId) return []
-    return db.playback_sessions.where('providerEpisodeId').equals(providerEpisodeId).toArray()
   },
 
   async getPlaybackSessionsByAudioUrl(audioUrl: string): Promise<PlaybackSession[]> {
@@ -847,11 +823,6 @@ export const DB = {
   async getFavoritesByEpisodeGuid(episodeGuid: string): Promise<Favorite[]> {
     if (!episodeGuid) return []
     return db.favorites.where('episodeGuid').equals(episodeGuid).toArray()
-  },
-
-  async getFavoritesByProviderEpisodeId(providerEpisodeId: string): Promise<Favorite[]> {
-    if (!providerEpisodeId) return []
-    return db.favorites.where('providerEpisodeId').equals(providerEpisodeId).toArray()
   },
 
   async getFavoritesByAudioUrl(audioUrl: string): Promise<Favorite[]> {

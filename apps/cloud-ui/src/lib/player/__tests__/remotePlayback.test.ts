@@ -519,7 +519,7 @@ describe('remotePlayback', () => {
     expect(play).toHaveBeenCalledTimes(1)
   })
 
-  it('uses showTitle as fallback title and does not leak episodeId', async () => {
+  it('uses showTitle as fallback title when episode title is blank', async () => {
     const setAudioUrl = vi.fn()
     const play = vi.fn()
     const pause = vi.fn()
@@ -540,7 +540,7 @@ describe('remotePlayback', () => {
     )
     expect(setAudioUrl).not.toHaveBeenLastCalledWith(
       expect.anything(),
-      'episode-id-should-not-leak',
+      '',
       expect.anything(),
       expect.anything(),
       expect.anything()

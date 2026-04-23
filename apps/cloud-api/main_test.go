@@ -10,7 +10,6 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -96,7 +95,7 @@ func TestAppHandlerServesStaticFilesAndSPA(t *testing.T) {
 
 	t.Run("rejects api routes before spa fallback", func(t *testing.T) {
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/api/proxy?url=https://example.com", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/proxy", nil)
 		handler.ServeHTTP(rr, req)
 
 		if rr.Code != http.StatusNotFound {
@@ -145,7 +144,7 @@ func TestProxyRequestSummaryEmitsCanonicalUpstreamFields(t *testing.T) {
 	}), nil)
 
 	reqURL := "http://media.example.com/audio.mp3"
-	req := httptest.NewRequest(http.MethodGet, "/api/proxy?url="+url.QueryEscape(reqURL), nil)
+	req := newProxyJSONRequest(t, http.MethodGet, reqURL, nil)
 	rr := httptest.NewRecorder()
 	proxy.ServeHTTP(rr, req)
 
@@ -187,7 +186,7 @@ func TestProxyRequestSummaryUsesActualProxyErrorStatus(t *testing.T) {
 	})
 
 	proxy := newProxyService()
-	req := httptest.NewRequest(http.MethodPut, "/api/proxy?url="+url.QueryEscape("https://media.example.com/audio.mp3"), nil)
+	req := httptest.NewRequest(http.MethodPut, "/api/proxy", nil)
 	rr := httptest.NewRecorder()
 	proxy.ServeHTTP(rr, req)
 
@@ -793,7 +792,7 @@ func TestRunCloudServerInitializesSQLiteAndShutsDownOnCancellation(t *testing.T)
 	}
 
 	rr = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "/api/proxy?url=https://feeds.example.com/feed.xml", nil)
+	req = newProxyJSONRequest(t, http.MethodGet, "https://feeds.example.com/feed.xml", nil)
 	server.Handler.ServeHTTP(rr, req)
 	if rr.Code != http.StatusOK {
 		t.Fatalf("proxy status = %d, want %d", rr.Code, http.StatusOK)
@@ -968,7 +967,7 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 		mux.Handle("/", app)
 
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/api/proxy?url=https://feeds.example.com/feed.xml", nil)
+		req := newProxyJSONRequest(t, http.MethodGet, "https://feeds.example.com/feed.xml", nil)
 		req.RemoteAddr = "198.51.100.10:12345"
 		mux.ServeHTTP(rr, req)
 
@@ -1030,7 +1029,7 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 			t.Run(tc.name, func(t *testing.T) {
 				called = 0
 				rr := httptest.NewRecorder()
-				req := httptest.NewRequest(http.MethodGet, "/api/proxy?url="+tc.target, nil)
+				req := newProxyJSONRequest(t, http.MethodGet, tc.target, nil)
 				req.RemoteAddr = "198.51.100.10:12345"
 				proxy.ServeHTTP(rr, req)
 
@@ -1068,7 +1067,7 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 		}
 
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/api/proxy?url=https://feeds.example.com/feed.xml", nil)
+		req := newProxyJSONRequest(t, http.MethodGet, "https://feeds.example.com/feed.xml", nil)
 		req.RemoteAddr = "198.51.100.10:12345"
 		proxy.ServeHTTP(rr, req)
 
@@ -1120,7 +1119,7 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 		}
 
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/api/proxy?url=http://feeds.example.com/feed.xml", nil)
+		req := newProxyJSONRequest(t, http.MethodGet, "http://feeds.example.com/feed.xml", nil)
 		req.RemoteAddr = "198.51.100.10:12345"
 		proxy.ServeHTTP(rr, req)
 
@@ -1171,7 +1170,7 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 		}
 
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/api/proxy?url=http://feeds.example.com/feed.xml", nil)
+		req := newProxyJSONRequest(t, http.MethodGet, "http://feeds.example.com/feed.xml", nil)
 		req.RemoteAddr = "198.51.100.10:12345"
 		proxy.ServeHTTP(rr, req)
 
@@ -1212,7 +1211,7 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 		}
 
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/api/proxy?url=https://feeds.example.com/feed.xml", nil)
+		req := newProxyJSONRequest(t, http.MethodGet, "https://feeds.example.com/feed.xml", nil)
 		req.RemoteAddr = "198.51.100.10:12345"
 		proxy.ServeHTTP(rr, req)
 
@@ -1251,7 +1250,7 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 			bodyLimit: proxyBodyLimit,
 		}
 
-		req := httptest.NewRequest(http.MethodGet, "/api/proxy?url=https://feeds.example.com/feed.xml", nil)
+		req := newProxyJSONRequest(t, http.MethodGet, "https://feeds.example.com/feed.xml", nil)
 		req.RemoteAddr = "198.51.100.10:12345"
 		req.Header.Set("Origin", "http://example.com")
 		rr := httptest.NewRecorder()
@@ -1277,7 +1276,7 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 			bodyLimit: proxyBodyLimit,
 		}
 
-		req := httptest.NewRequest(http.MethodGet, "/api/proxy?url=https://feeds.example.com/feed.xml", nil)
+		req := newProxyJSONRequest(t, http.MethodGet, "https://feeds.example.com/feed.xml", nil)
 		req.RemoteAddr = "198.51.100.10:12345"
 		req.Header.Set("Origin", "https://evil.example")
 		rr := httptest.NewRecorder()
@@ -1311,7 +1310,7 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 		}
 
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/api/proxy?url=https://feeds.example.com/feed.xml", nil)
+		req := newProxyJSONRequest(t, http.MethodGet, "https://feeds.example.com/feed.xml", nil)
 		req.RemoteAddr = "198.51.100.10:12345"
 		proxy.ServeHTTP(rr, req)
 
@@ -1346,7 +1345,7 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 		}
 
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/api/proxy?url=https://feeds.example.com/feed.xml", nil)
+		req := newProxyJSONRequest(t, http.MethodGet, "https://feeds.example.com/feed.xml", nil)
 		req.RemoteAddr = "198.51.100.10:12345"
 		proxy.ServeHTTP(rr, req)
 
@@ -1384,7 +1383,7 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 		}
 
 		first := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/api/proxy?url=https://feeds.example.com/feed.xml", nil)
+		req := newProxyJSONRequest(t, http.MethodGet, "https://feeds.example.com/feed.xml", nil)
 		req.RemoteAddr = "198.51.100.10:12345"
 		proxy.ServeHTTP(first, req)
 		if first.Code != http.StatusOK {
@@ -1392,7 +1391,7 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 		}
 
 		second := httptest.NewRecorder()
-		req = httptest.NewRequest(http.MethodGet, "/api/proxy?url=https://feeds.example.com/feed.xml", nil)
+		req = newProxyJSONRequest(t, http.MethodGet, "https://feeds.example.com/feed.xml", nil)
 		req.RemoteAddr = "198.51.100.10:12345"
 		proxy.ServeHTTP(second, req)
 		if second.Code != http.StatusTooManyRequests {
@@ -1405,7 +1404,7 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 }
 
 func TestProxyGetRangeForwarding(t *testing.T) {
-	t.Run("GET proxy with Range header forwards Range to upstream", func(t *testing.T) {
+	t.Run("POST proxy GET payload with Range header forwards Range to upstream", func(t *testing.T) {
 		proxy, dialedAddress := newMediaProxyTestService(t, func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodGet {
 				t.Fatalf("method = %q, want %q", r.Method, http.MethodGet)
@@ -1422,8 +1421,9 @@ func TestProxyGetRangeForwarding(t *testing.T) {
 		}, testPublicLookupIP)
 
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/api/proxy?url=http://feeds.example.com/audio.mp3", nil)
-		req.Header.Set("Range", "bytes=0-1023")
+		req := newProxyJSONRequest(t, http.MethodGet, "http://feeds.example.com/audio.mp3", map[string]string{
+			"Range": "bytes=0-1023",
+		})
 		req.RemoteAddr = "198.51.100.10:12345"
 		proxy.ServeHTTP(rr, req)
 
@@ -1438,7 +1438,7 @@ func TestProxyGetRangeForwarding(t *testing.T) {
 		}
 	})
 
-	t.Run("GET proxy with If-Range header forwards If-Range to upstream", func(t *testing.T) {
+	t.Run("POST proxy GET payload with If-Range header forwards If-Range to upstream", func(t *testing.T) {
 		proxy, _ := newMediaProxyTestService(t, func(w http.ResponseWriter, r *http.Request) {
 			if got := r.Header.Get("If-Range"); got != `"etag123"` {
 				t.Fatalf("if-range = %q, want %q", got, `"etag123"`)
@@ -1449,8 +1449,9 @@ func TestProxyGetRangeForwarding(t *testing.T) {
 		}, testPublicLookupIP)
 
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/api/proxy?url=http://feeds.example.com/audio.mp3", nil)
-		req.Header.Set("If-Range", `"etag123"`)
+		req := newProxyJSONRequest(t, http.MethodGet, "http://feeds.example.com/audio.mp3", map[string]string{
+			"If-Range": `"etag123"`,
+		})
 		req.RemoteAddr = "198.51.100.10:12345"
 		proxy.ServeHTTP(rr, req)
 
@@ -1459,7 +1460,7 @@ func TestProxyGetRangeForwarding(t *testing.T) {
 		}
 	})
 
-	t.Run("GET proxy with both Range and If-Range forwards both to upstream", func(t *testing.T) {
+	t.Run("POST proxy GET payload with both Range and If-Range forwards both to upstream", func(t *testing.T) {
 		proxy, _ := newMediaProxyTestService(t, func(w http.ResponseWriter, r *http.Request) {
 			if got := r.Header.Get("Range"); got != "bytes=500-1000" {
 				t.Fatalf("range = %q, want %q", got, "bytes=500-1000")
@@ -1474,9 +1475,10 @@ func TestProxyGetRangeForwarding(t *testing.T) {
 		}, testPublicLookupIP)
 
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/api/proxy?url=http://feeds.example.com/audio.mp3", nil)
-		req.Header.Set("Range", "bytes=500-1000")
-		req.Header.Set("If-Range", `"my-etag"`)
+		req := newProxyJSONRequest(t, http.MethodGet, "http://feeds.example.com/audio.mp3", map[string]string{
+			"Range":    "bytes=500-1000",
+			"If-Range": `"my-etag"`,
+		})
 		req.RemoteAddr = "198.51.100.10:12345"
 		proxy.ServeHTTP(rr, req)
 
@@ -1485,14 +1487,15 @@ func TestProxyGetRangeForwarding(t *testing.T) {
 		}
 	})
 
-	t.Run("GET proxy with malformed Range returns 400", func(t *testing.T) {
+	t.Run("POST proxy GET payload with malformed Range returns 400", func(t *testing.T) {
 		proxy, _ := newMediaProxyTestService(t, func(_ http.ResponseWriter, _ *http.Request) {
 			t.Fatal("upstream should not be called with invalid Range header")
 		}, testPublicLookupIP)
 
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/api/proxy?url=http://feeds.example.com/audio.mp3", nil)
-		req.Header.Set("Range", "garbage")
+		req := newProxyJSONRequest(t, http.MethodGet, "http://feeds.example.com/audio.mp3", map[string]string{
+			"Range": "garbage",
+		})
 		req.RemoteAddr = "198.51.100.10:12345"
 		proxy.ServeHTTP(rr, req)
 
@@ -1501,7 +1504,7 @@ func TestProxyGetRangeForwarding(t *testing.T) {
 		}
 	})
 
-	t.Run("GET proxy without Range header works as before", func(t *testing.T) {
+	t.Run("POST proxy GET payload without Range header streams full response", func(t *testing.T) {
 		proxy, dialedAddress := newMediaProxyTestService(t, func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodGet {
 				t.Fatalf("method = %q, want %q", r.Method, http.MethodGet)
@@ -1516,7 +1519,7 @@ func TestProxyGetRangeForwarding(t *testing.T) {
 		}, testPublicLookupIP)
 
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/api/proxy?url=http://feeds.example.com/audio.mp3", nil)
+		req := newProxyJSONRequest(t, http.MethodGet, "http://feeds.example.com/audio.mp3", nil)
 		req.RemoteAddr = "198.51.100.10:12345"
 		proxy.ServeHTTP(rr, req)
 
@@ -1712,7 +1715,7 @@ func TestProxyServiceMediaFallbackContract(t *testing.T) {
 		})
 
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/api/proxy?url=http://feeds.example.com/start", nil)
+		req := newProxyJSONRequest(t, http.MethodGet, "http://feeds.example.com/start", nil)
 		req.RemoteAddr = "198.51.100.10:12345"
 		proxy.ServeHTTP(rr, req)
 

@@ -44,7 +44,8 @@ Use the Cloud handoff tree as the current SSOT for app-level frontend/backend co
 
 ## 3. RSS Proxy Contract
 
-- `GET /api/proxy?url=...` is the current proxy surface.
+- `POST /api/proxy` is the current proxy surface.
+- The request body uses the JSON proxy contract: `{ "url": "...", "method": "GET" | "HEAD", "headers"?: { ... } }`.
 - The proxy validates the requested target before dialing and rejects private, loopback, link-local, or metadata-style destinations.
 - The request path is fail-closed: it uses a pinned validated target set and does not follow redirects into disallowed destinations.
 - The proxy uses a custom user agent, applies a bounded fetch timeout, and keeps a basic in-memory rate limit.

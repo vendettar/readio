@@ -227,19 +227,17 @@ describe('downloadService regressions', () => {
     })
   })
 
-  it('persists providerEpisodeId separately from episodeGuid', async () => {
+  it('persists episodeGuid as the only stable episode identity', async () => {
     await persistAudioBlobAsDownload(new Blob(['audio']), {
       audioUrl: 'https://example.com/audio.mp3',
       episodeTitle: 'Episode',
       showTitle: 'Podcast',
       countryAtSave: 'us',
-      providerEpisodeId: 'provider-999',
       episodeGuid: '766f112e-abcd-1234-5678-07e05e548074',
     })
 
     expect(DB.addPodcastDownload).toHaveBeenCalledWith(
       expect.objectContaining({
-        sourceProviderEpisodeId: 'provider-999',
         sourceEpisodeGuid: '766f112e-abcd-1234-5678-07e05e548074',
       })
     )

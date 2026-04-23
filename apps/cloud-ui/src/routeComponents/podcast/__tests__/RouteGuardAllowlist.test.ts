@@ -6,7 +6,7 @@ describe('route guard allowlist fixture', () => {
       source: 'history',
       feedUrl: 'https://example.com/feed.xml',
       audioUrl: 'https://example.com/audio.mp3',
-      providerEpisodeId: 'provider-1',
+      episodeGuid: 'episode-guid-1',
       sessionId: 'session-1',
     }
 

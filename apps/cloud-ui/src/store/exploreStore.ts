@@ -102,7 +102,7 @@ interface ExploreState {
     countryOverride?: string | null
   ) => Promise<void>
   removeFavorite: (key: string, signal?: AbortSignal) => Promise<void>
-  isFavorited: (feedUrl: string, audioUrl: string, id?: string, providerId?: string) => boolean
+  isFavorited: (feedUrl: string, audioUrl: string, id?: string) => boolean
 }
 
 const SETTING_KEY_COUNTRY = 'explore_country'
@@ -384,10 +384,6 @@ export const useExploreStore = create<ExploreState>((set, get) => ({
         podcast.podcastItunesId && String(podcast.podcastItunesId) !== '0'
           ? String(podcast.podcastItunesId)
           : undefined,
-      providerEpisodeId:
-        episode.providerEpisodeId && String(episode.providerEpisodeId) !== '0'
-          ? String(episode.providerEpisodeId)
-          : undefined,
       transcriptUrl: episode.transcriptUrl,
       countryAtSave,
     }
@@ -426,22 +422,14 @@ export const useExploreStore = create<ExploreState>((set, get) => ({
       }
     })
   },
-  isFavorited: (feedUrl, audioUrl, id?: string, providerId?: string) => {
+  isFavorited: (feedUrl, audioUrl, id?: string) => {
     // 1. Precise Key Match (Primary)
     const key = `${normalizeFeedUrl(feedUrl)}::${audioUrl}`
     if (get().favorites.some((f) => f.key === key)) return true
 
     // 2. ID Match (For results from Discovery APIs before we have audioUrl)
-    if (id || providerId) {
-      return get().favorites.some((f) => {
-        const idMatch =
-          id && (String(f.episodeGuid) === String(id) || String(f.providerEpisodeId) === String(id))
-        const pIdMatch =
-          providerId &&
-          (String(f.providerEpisodeId) === String(providerId) ||
-            String(f.episodeGuid) === String(providerId))
-        return idMatch || pIdMatch
-      })
+    if (id) {
+      return get().favorites.some((f) => String(f.episodeGuid) === String(id))
     }
 
     return false

@@ -1,5 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query'
-import discovery, { type NormalizedParsedFeed, type Podcast } from './index'
+import discovery, { type ParsedFeed, type Podcast } from './index'
 import {
   buildPodcastDetailQueryKey,
   buildPodcastFeedQueryKey,
@@ -33,7 +33,7 @@ export async function ensurePodcastFeed(
   queryClient: QueryClient,
   feedUrl: string,
   signal?: AbortSignal
-): Promise<NormalizedParsedFeed> {
+): Promise<ParsedFeed> {
   return queryClient.fetchQuery({
     queryKey: buildPodcastFeedQueryKey(feedUrl),
     queryFn: ({ signal: querySignal }) =>

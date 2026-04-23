@@ -27,9 +27,8 @@ export interface EpisodeMetadata {
   artworkUrl?: string
   publishedAt?: number
   durationSeconds?: number // In seconds
-  episodeGuid?: string // Stable episode identity for compact route generation (v7)
-  podcastItunesId?: string // Podcast ID for navigation (v6)
-  providerEpisodeId?: string // Episode ID for deterministic history/favorites matching
+  episodeGuid?: string // Stable episode identity for compact route generation
+  podcastItunesId?: string // Podcast ID for navigation
   originalAudioUrl?: string // Network URL identity for offline playback
   playbackRequestMode?: PlaybackRequestMode // Request-scoped playback mode flag
 }

@@ -1148,7 +1148,6 @@ async function startOnlineASRForTrack(options: {
             artworkUrl: meta?.artworkUrl,
             durationSeconds: meta?.durationSeconds,
             podcastItunesId: meta?.podcastItunesId,
-            providerEpisodeId: meta?.providerEpisodeId,
             countryAtSave: normalizeCountryParam(meta?.countryAtSave) ?? DEFAULTS.DEFAULT_COUNTRY,
           })
             .then((res) => {

@@ -15,7 +15,6 @@ import { useImageObjectUrl } from '../../hooks/useImageObjectUrl'
 import { useMediaSession } from '../../hooks/useMediaSession'
 import { usePageVisibility } from '../../hooks/usePageVisibility'
 import { usePlayerController } from '../../hooks/usePlayerController'
-import { useRemotePlaybackFallback } from '../../hooks/useRemotePlaybackFallback'
 import { useSession } from '../../hooks/useSession'
 import { useTabSync } from '../../hooks/useTabSync'
 import { usePlayerStore } from '../../store/playerStore'
@@ -108,7 +107,6 @@ export function GlobalAudioController() {
 
   useAudioElementSync({ audioRef, audioUrl, volume, playbackRate })
   useForegroundAudioPrefetch({ audioRef, audioUrl })
-  useRemotePlaybackFallback({ audioRef, audioUrl, isPlaying })
   useAudioElementEvents({
     audioRef,
     isVisibleRef,

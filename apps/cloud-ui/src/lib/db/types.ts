@@ -39,20 +39,19 @@ export interface PlaybackSession {
   audioFilename: string
   subtitleFilename: string
 
-  // Resume Playback (added in v3)
+  // Resume playback
   audioUrl?: string
-  //  file tracking (added in v4)
+  // File tracking
   localTrackId?: string | null // FK to tracks.id (UUID) (nullable)
 
-  // Episode metadata for History display (v5)
+  // Episode metadata for History display
   artworkUrl?: string // Cover art URL
   description?: string // Episode description
   podcastTitle?: string // Podcast name
   podcastFeedUrl?: string // Feed URL for favorite operations
   publishedAt?: number // Episode publishing date (timestamp)
-  episodeGuid?: string // Stable episode identity for compact route generation (v7)
-  podcastItunesId?: string // Platform-specific podcast ID for navigation (v6)
-  providerEpisodeId?: string // Platform-specific episode ID for deterministic history matching
+  episodeGuid?: string // Stable episode identity for compact route generation
+  podcastItunesId?: string // Platform-specific podcast ID for navigation
   transcriptUrl?: string // Podcast transcript source URL (Podcasting 2.0)
   countryAtSave?: string // Country snapshot when the record was persisted
 }
@@ -103,9 +102,8 @@ export interface Favorite {
   pubDate?: string // ISO date string
   durationSeconds?: number // Duration in seconds
   episodeArtworkUrl?: string // Episode-specific artwork
-  episodeGuid?: string // Stable episode identity for compact route generation (v7)
-  podcastItunesId?: string // Platform-specific podcast ID for navigation (v6)
-  providerEpisodeId?: string // Platform-specific ID (e.g. Apple Track ID) for robust matching
+  episodeGuid?: string // Stable episode identity for compact route generation
+  podcastItunesId?: string // Platform-specific podcast ID for navigation
   transcriptUrl?: string // Podcast transcript source URL (Podcasting 2.0)
   countryAtSave?: string // Country snapshot when favorited
 }
@@ -201,8 +199,7 @@ export interface PodcastDownloadTrack extends TrackBase {
   downloadedAt: number // Download completion timestamp
   countryAtSave: string // Country at time of download for routing (required invariant)
   sourcePodcastItunesId?: string // Provider podcast ID
-  sourceProviderEpisodeId?: string // Provider episode ID
-  sourceEpisodeGuid?: string // Stable episode identity for compact route generation (v7)
+  sourceEpisodeGuid?: string // Stable episode identity for compact route generation
   manualPinnedAt?: number // Timestamp when user manually selected active subtitle (Instruction 125b)
 }
 
@@ -232,7 +229,6 @@ export function isPodcastDownloadTrack(track: unknown): track is PodcastDownload
   )
 }
 
-// Keep aliases for backward compatibility in the rest of the app, to be refactored in 127d2
 export type FileTrack = UserUploadTrack
 export type PodcastDownload = PodcastDownloadTrack
 

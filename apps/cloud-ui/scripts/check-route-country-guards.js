@@ -32,7 +32,7 @@ export const ROUTE_GUARD_FORBIDDEN_PATTERNS = [
   /normalizeFeedUrl\(/,
   /new URL\(/,
   /source:\s*['"](history|favorites|subscriptions)['"]/,
-  /search:\s*\{[^}]*\b(feedUrl|audioUrl|providerEpisodeId|sessionId)\s*:/s,
+  /search:\s*\{[^}]*\b(feedUrl|audioUrl|sessionId)\s*:/s,
   /search:\s*\{[^}]*\bsource\s*:/s,
   /search:\s*\{[^}]*\bfromLayoutPrefix\s*:/s,
   /useSearch\(\{\s*strict:\s*false\s*\}\)\s+as\s+\{\s*fromLayoutPrefix\??\s*:\s*string/s,

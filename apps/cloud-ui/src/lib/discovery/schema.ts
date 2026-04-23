@@ -129,11 +129,6 @@ export type FeedEpisode = z.infer<typeof FeedEpisodeSchema>
 export type ParsedFeed = z.infer<typeof ParsedFeedSchema>
 
 /**
- * Compatibility alias for older consumers.
- */
-export type NormalizedParsedFeed = ParsedFeed
-
-/**
  * Narrow adapter type for favorites/add operations.
  * Accepts any episode-like object with the minimum required fields.
  * This is a loose type for internal bridge code, not a strict schema.
@@ -146,7 +141,6 @@ export interface FavoriteEpisodeInput {
   duration?: number
   pubDate?: string
   episodeGuid?: string
-  providerEpisodeId?: string
   transcriptUrl?: string
 }
 
@@ -174,6 +168,5 @@ export interface PlaybackEpisodeStub {
   artworkUrl?: string
   duration: number
   pubDate: string
-  providerEpisodeId?: string
   transcriptUrl?: string
 }

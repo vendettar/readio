@@ -1,8 +1,7 @@
 import { renderHook, waitFor } from '@testing-library/react'
-import type React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createQueryClientHarness } from '../../__tests__/queryClient'
-import type { NormalizedParsedFeed, ParsedFeed, Podcast } from '../../lib/discovery'
+import type { ParsedFeed, Podcast } from '../../lib/discovery'
 import {
   buildPodcastFeedQueryKey,
   buildPodcastDetailQueryKey,
@@ -148,7 +147,7 @@ describe('useEpisodeResolution cancellation semantics', () => {
       author: 'Host',
       feedUrl: 'https://example.com/feed.xml',
     })
-    const feed: NormalizedParsedFeed = {
+    const feed: ParsedFeed = {
       title: 'Warm Podcast',
       description: '',
       artworkUrl: 'https://example.com/show-600.jpg',
@@ -198,7 +197,7 @@ describe('useEpisodeResolution cancellation semantics', () => {
           pubDate: '2025-01-01T00:00:00.000Z',
         },
       ],
-    } satisfies NormalizedParsedFeed)
+    } satisfies ParsedFeed)
 
     const { result } = renderHook(
       () => useEpisodeResolution('12345', 'dm8RLqvNEjRWeAfgXlSAdA', 'us'),

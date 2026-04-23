@@ -168,7 +168,6 @@ export function useSession() {
             publishedAt: effectiveMetadata?.publishedAt,
             episodeGuid: effectiveMetadata?.episodeGuid,
             podcastItunesId: effectiveMetadata?.podcastItunesId,
-            providerEpisodeId: effectiveMetadata?.providerEpisodeId,
             countryAtSave,
           })
           if (getCurrentPlaybackIdentity() !== currentIdentity) return

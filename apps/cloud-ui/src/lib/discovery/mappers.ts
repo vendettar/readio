@@ -14,7 +14,6 @@ export type EpisodeCommonFields = {
   duration?: number
   pubDate?: string
   episodeGuid?: string
-  providerEpisodeId?: string
   transcriptUrl?: string
 }
 
@@ -27,7 +26,6 @@ function getEpisodeCommonFields(episode: FeedEpisode): EpisodeCommonFields {
     duration: episode.duration,
     pubDate: episode.pubDate,
     episodeGuid: episode.episodeGuid,
-    providerEpisodeId: undefined,
     transcriptUrl: episode.transcriptUrl,
   }
 }
@@ -36,11 +34,6 @@ export function toEpisodeCommonFields(episode: FeedEpisode): EpisodeCommonFields
   return getEpisodeCommonFields(episode)
 }
 
-/**
- * Normalize persistence-layer provider IDs.
- * Empty / sentinel values collapse to empty string because some local bridge
- * callers still expect schema-safe string output instead of `undefined`.
- */
 function parseProviderId(id: string | number | null | undefined): string {
   if (id === null || id === undefined) return ''
   const s = String(id).trim()
@@ -63,8 +56,6 @@ export interface PlaybackPodcastStub {
 /**
  * Narrow internal adapter type for non-canonical episode contexts
  * from local track/session data.
- * This intentionally keeps `providerEpisodeId` because local persistence may
- * still use it for deterministic matching even though canonical RSS episodes do not.
  */
 export interface PlaybackEpisodeStub {
   episodeGuid?: string
@@ -74,7 +65,6 @@ export interface PlaybackEpisodeStub {
   artworkUrl?: string
   duration: number
   pubDate: string
-  providerEpisodeId?: string
   transcriptUrl?: string
 }
 
@@ -104,7 +94,6 @@ export function mapTrackToDiscovery(track: PodcastDownload): {
     pubDate: track.downloadedAt
       ? new Date(track.downloadedAt).toISOString()
       : new Date().toISOString(),
-    providerEpisodeId: track.sourceProviderEpisodeId,
   }
 
   return { podcast, episode }
@@ -136,7 +125,6 @@ export function mapSessionToDiscovery(session: PlaybackSession): {
     pubDate: session.publishedAt
       ? new Date(session.publishedAt).toISOString()
       : new Date().toISOString(),
-    providerEpisodeId: session.providerEpisodeId,
     transcriptUrl: session.transcriptUrl,
   }
 

@@ -134,7 +134,6 @@ function EpisodeListItemImpl({
               artworkUrl={model.downloadArgs.artworkUrl}
               countryAtSave={model.downloadArgs.countryAtSave}
               podcastItunesId={model.downloadArgs.podcastItunesId}
-              providerEpisodeId={model.downloadArgs.providerEpisodeId}
               episodeGuid={model.downloadArgs.episodeGuid}
               durationSeconds={model.downloadArgs.durationSeconds}
               episodeStatus={status}

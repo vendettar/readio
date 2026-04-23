@@ -952,7 +952,7 @@ describe('DownloadsPage Regression', () => {
       sourceType: 'podcast_download',
       sourceUrlNormalized: 'https://example.com/route-country-missing.mp3',
       sourcePodcastItunesId: '12345',
-      sourceProviderEpisodeId: 'episode-abc',
+      sourceEpisodeGuid: 'episode-abc',
       sourceEpisodeTitle: 'Episode Country Missing',
       lastAccessedAt: 4,
       downloadedAt: 4,

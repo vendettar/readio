@@ -56,7 +56,6 @@ export function buildRestoredRemoteSessionState(input: {
     durationSeconds: input.session.durationSeconds,
     episodeGuid: input.session.episodeGuid,
     podcastItunesId: input.session.podcastItunesId,
-    providerEpisodeId: input.session.providerEpisodeId,
     originalAudioUrl: input.originalAudioUrl || input.session.audioUrl || undefined,
   }
 

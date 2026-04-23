@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
-import type { FeedEpisode, NormalizedParsedFeed, Podcast } from '@/lib/discovery'
+import type { FeedEpisode, ParsedFeed, Podcast } from '@/lib/discovery'
 import discovery from '@/lib/discovery'
 import {
   getCachedEditorPickByItunesID,
@@ -99,7 +99,7 @@ export function useEpisodeResolution(
   const feedUrl = podcast?.feedUrl
   const cachedFeed = feedUrl
     ? (queryClient.getQueryData(buildPodcastFeedQueryKey(feedUrl)) as
-        | NormalizedParsedFeed
+        | ParsedFeed
         | undefined)
     : undefined
   const cachedEpisode = findEpisodeByGuid(
@@ -113,7 +113,7 @@ export function useEpisodeResolution(
     data: fallbackFeed,
     isLoading: isLoadingFeedFallback,
     error: feedError,
-  } = useQuery<NormalizedParsedFeed>({
+  } = useQuery<ParsedFeed>({
     queryKey: buildPodcastFeedQueryKey(feedUrl),
     queryFn: ({ signal }) => discovery.fetchPodcastFeed(feedUrl ?? '', signal),
     enabled: shouldFetchRssFallback,

@@ -142,11 +142,12 @@ describe('useEpisodePlayback surface mode', () => {
 
   it('opens docked when playing a search episode', async () => {
     const episode = {
-      providerEpisodeId: '1',
       podcastItunesId: '2',
       title: 'Search Episode',
-      podcastTitle: 'Podcast',
+      showTitle: 'Podcast',
       episodeUrl: 'https://example.com/search.mp3',
+      artwork: 'https://example.com/search.jpg',
+      episodeGuid: 'search-guid-1',
     } as unknown as SearchEpisode
 
     vi.mocked(ensurePodcastDetail).mockResolvedValue(null)
@@ -165,11 +166,12 @@ describe('useEpisodePlayback surface mode', () => {
 
   it('forwards stream_without_transcript mode for search action', async () => {
     const episode = {
-      providerEpisodeId: '3',
       podcastItunesId: '4',
       title: 'Search Stream',
-      podcastTitle: 'Podcast',
+      showTitle: 'Podcast',
       episodeUrl: 'https://example.com/search-stream.mp3',
+      artwork: 'https://example.com/search-stream.jpg',
+      episodeGuid: 'search-guid-3',
     } as unknown as SearchEpisode
 
     vi.mocked(ensurePodcastDetail).mockResolvedValue(null)

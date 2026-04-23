@@ -104,14 +104,12 @@ describe('episodeMetadata mappers', () => {
       episodeArtworkUrl: 'https://example.com/episode.jpg',
       addedAt: Date.now(),
       podcastItunesId: 'pod-1',
-      providerEpisodeId: 'ep-1',
       transcriptUrl: 'https://example.com/favorite.srt',
     } as Favorite
 
     const payload = mapFavoriteToPlaybackPayload(favorite)
     expect(payload.artwork).toBe('https://example.com/episode.jpg')
     expect(payload.metadata.podcastItunesId).toBe('pod-1')
-    expect(payload.metadata.providerEpisodeId).toBe('ep-1')
     expect(payload.transcriptUrl).toBe('https://example.com/favorite.srt')
   })
 
@@ -133,7 +131,6 @@ describe('episodeMetadata mappers', () => {
       audioUrl: 'https://example.com/history.mp3',
       publishedAt: 1234,
       podcastItunesId: 'pod-2',
-      providerEpisodeId: 'ep-2',
       transcriptUrl: 'https://example.com/history.srt',
       countryAtSave: 'us',
     } as PlaybackSession
@@ -141,7 +138,6 @@ describe('episodeMetadata mappers', () => {
     const mapped = mapSessionToPlaybackPayload(session)
     expect(mapped?.audioUrl).toBe('https://example.com/history.mp3')
     expect(mapped?.metadata.countryAtSave).toBe('us')
-    expect(mapped?.metadata.providerEpisodeId).toBe('ep-2')
 
     expect(
       mapSessionToPlaybackPayload({
@@ -172,7 +168,6 @@ describe('episodeMetadata mappers', () => {
       podcastFeedUrl: 'https://example.com/feed.xml',
       publishedAt: new Date('2024-06-01T00:00:00.000Z').getTime(),
       podcastItunesId: '999',
-      providerEpisodeId: '1001',
       transcriptUrl: 'https://example.com/local.srt',
       countryAtSave: 'us',
     } as PlaybackSession
@@ -185,7 +180,6 @@ describe('episodeMetadata mappers', () => {
     expect(metadata.originalAudioUrl).toBe('https://example.com/local.mp3')
     expect(metadata.countryAtSave).toBe('us')
     expect(metadata.podcastItunesId).toBe('999')
-    expect(metadata.providerEpisodeId).toBe('1001')
     expect(metadata.publishedAt).toBe(new Date('2024-06-01T00:00:00.000Z').getTime())
   })
 })

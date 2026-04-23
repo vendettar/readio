@@ -100,8 +100,6 @@ function buildPlaybackMetadata(track: PodcastDownload) {
     countryAtSave: track.countryAtSave,
     podcastFeedUrl: track.sourceFeedUrl,
     podcastItunesId: track.sourcePodcastItunesId,
-    providerEpisodeId: track.sourceProviderEpisodeId,
-    episodeId: track.sourceProviderEpisodeId,
   }
 }
 

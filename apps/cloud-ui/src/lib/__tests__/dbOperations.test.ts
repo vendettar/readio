@@ -438,7 +438,7 @@ describe('Dexie database operations', () => {
         id: 'session-explore-missing-country',
         source: 'explore',
         title: 'Explore episode',
-        providerEpisodeId: 'provider-episode-1',
+        episodeGuid: 'episode-guid-1',
       })
     ).rejects.toThrow(/country/i)
   })

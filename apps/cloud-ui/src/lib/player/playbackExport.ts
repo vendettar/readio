@@ -448,7 +448,6 @@ async function resolveAudioExportAsset(
     feedUrl: context.identity.episodeMetadata?.podcastFeedUrl,
     artworkUrl: context.identity.episodeMetadata?.artworkUrl,
     podcastItunesId: context.identity.episodeMetadata?.podcastItunesId,
-    providerEpisodeId: context.identity.episodeMetadata?.providerEpisodeId,
     durationSeconds: context.identity.episodeMetadata?.durationSeconds,
     countryAtSave:
       normalizeCountryParam(context.identity.episodeMetadata?.countryAtSave) ??

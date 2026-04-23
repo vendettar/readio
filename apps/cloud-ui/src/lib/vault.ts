@@ -33,51 +33,34 @@ function normalizeOptionalCountryAtSave(countryAtSave: unknown): string | undefi
   return SUPPORTED_COUNTRY_SET.has(normalized) ? normalized : undefined
 }
 
-function normalizeRequiredCountryAtSave(countryAtSave: unknown): string {
-  return normalizeOptionalCountryAtSave(countryAtSave) ?? DEFAULT_COUNTRY
-}
-
-/**
- * Zod schema for PlaybackSession with legacy migration.
- */
 const playbackSessionSchema: z.ZodType<PlaybackSession> = z
-  .preprocess((val: unknown) => {
-    // Legacy migration: duration -> durationSeconds
-    if (val && typeof val === 'object' && 'duration' in val && !('durationSeconds' in val)) {
-      const v = val as Record<string, unknown>
-      return { ...v, durationSeconds: v.duration }
-    }
-    return val
-  }, z.object({}).passthrough())
-  .pipe(
-    z.object({
-      id: z.string(),
-      source: z.enum(['local', 'explore']),
-      title: z.string(),
-      createdAt: z.number(),
-      lastPlayedAt: z.number(),
-      sizeBytes: z.number(),
-      durationSeconds: z.number(),
-      audioId: z.string().nullable(),
-      subtitleId: z.string().nullable(),
-      hasAudioBlob: z.boolean(),
-      progress: z.number(),
-      audioFilename: z.string(),
-      subtitleFilename: z.string(),
-      audioUrl: z.string().optional(),
-      localTrackId: z.string().nullable().optional(),
-      artworkUrl: z.string().optional(),
-      description: z.string().optional(),
-      podcastTitle: z.string().optional(),
-      podcastFeedUrl: z.string().optional(),
-      publishedAt: z.number().optional(),
-      episodeId: z.string().optional(),
-      countryAtSave: z.preprocess(normalizeOptionalCountryAtSave, z.string().optional()),
-      podcastItunesId: z.string().optional(),
-      providerEpisodeId: z.string().optional(),
-      transcriptUrl: z.string().optional(),
-    })
-  )
+  .object({
+    id: z.string(),
+    source: z.enum(['local', 'explore']),
+    title: z.string(),
+    createdAt: z.number(),
+    lastPlayedAt: z.number(),
+    sizeBytes: z.number(),
+    durationSeconds: z.number(),
+    audioId: z.string().nullable(),
+    subtitleId: z.string().nullable(),
+    hasAudioBlob: z.boolean(),
+    progress: z.number(),
+    audioFilename: z.string(),
+    subtitleFilename: z.string(),
+    audioUrl: z.string().optional(),
+    localTrackId: z.string().nullable().optional(),
+    artworkUrl: z.string().optional(),
+    description: z.string().optional(),
+    podcastTitle: z.string().optional(),
+    podcastFeedUrl: z.string().optional(),
+    publishedAt: z.number().optional(),
+    episodeGuid: z.string().optional(),
+    countryAtSave: z.preprocess(normalizeOptionalCountryAtSave, z.string().optional()),
+    podcastItunesId: z.string().optional(),
+    transcriptUrl: z.string().optional(),
+  })
+  .passthrough()
 
 const subscriptionSchema: z.ZodType<Subscription> = z
   .object({
@@ -91,40 +74,26 @@ const subscriptionSchema: z.ZodType<Subscription> = z
   })
   .passthrough()
 
-/**
- * Zod schema for Favorite with legacy migration.
- */
 const favoriteSchema: z.ZodType<Favorite> = z
-  .preprocess((val: unknown) => {
-    // Legacy migration: duration -> durationSeconds
-    if (val && typeof val === 'object' && 'duration' in val && !('durationSeconds' in val)) {
-      const v = val as Record<string, unknown>
-      const { duration, ...rest } = v
-      return { ...rest, durationSeconds: duration }
-    }
-    return val
-  }, z.object({}).passthrough())
-  .pipe(
-    z.object({
-      id: z.string(),
-      key: z.string(),
-      feedUrl: z.string(),
-      audioUrl: z.string(),
-      episodeTitle: z.string(),
-      podcastTitle: z.string(),
-      artworkUrl: z.string(),
-      addedAt: z.number(),
-      description: z.string().optional(),
-      pubDate: z.string().optional(),
-      durationSeconds: z.number().optional(),
-      episodeArtworkUrl: z.string().optional(),
-      episodeId: z.string().optional(),
-      podcastItunesId: z.string().optional(),
-      providerEpisodeId: z.string().optional(),
-      transcriptUrl: z.string().optional(),
-      countryAtSave: z.preprocess(normalizeOptionalCountryAtSave, z.string().optional()),
-    })
-  )
+  .object({
+    id: z.string(),
+    key: z.string(),
+    feedUrl: z.string(),
+    audioUrl: z.string(),
+    episodeTitle: z.string(),
+    podcastTitle: z.string(),
+    artworkUrl: z.string(),
+    addedAt: z.number(),
+    description: z.string().optional(),
+    pubDate: z.string().optional(),
+    durationSeconds: z.number().optional(),
+    episodeArtworkUrl: z.string().optional(),
+    episodeGuid: z.string().optional(),
+    podcastItunesId: z.string().optional(),
+    transcriptUrl: z.string().optional(),
+    countryAtSave: z.preprocess(normalizeOptionalCountryAtSave, z.string().optional()),
+  })
+  .passthrough()
 
 const settingSchema: z.ZodType<Setting> = z
   .object({
@@ -175,9 +144,8 @@ const podcastDownloadSchema: z.ZodType<PodcastDownload> = z
     sourceDescription: z.string().optional(),
     sourceArtworkUrl: z.string().optional(),
     downloadedAt: z.number(),
-    countryAtSave: z.preprocess(normalizeRequiredCountryAtSave, z.string()),
+    countryAtSave: z.preprocess(normalizeOptionalCountryAtSave, z.string()),
     sourcePodcastItunesId: z.string().optional(),
-    sourceProviderEpisodeId: z.string().optional(),
     isCorrupted: z.boolean().optional(),
     sourceType: z.literal(TRACK_SOURCE.PODCAST_DOWNLOAD),
     activeSubtitleId: z.string().optional(),

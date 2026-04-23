@@ -181,7 +181,6 @@ describe('playerStore - Session Restore Prefer Local Download', () => {
       publishedAt: 1700000000,
       episodeGuid: 'ep-guid-42',
       podcastItunesId: 'pod-123',
-      providerEpisodeId: 'ep-456',
       transcriptUrl: 'https://example.com/transcript.vtt',
       countryAtSave: 'US',
     })
@@ -218,7 +217,6 @@ describe('playerStore - Session Restore Prefer Local Download', () => {
     expect(meta?.publishedAt).toBe(1700000000)
     expect(meta?.episodeGuid).toBe('ep-guid-42')
     expect(meta?.podcastItunesId).toBe('pod-123')
-    expect(meta?.providerEpisodeId).toBe('ep-456')
     expect(meta?.transcriptUrl).toBe('https://example.com/transcript.vtt')
     expect(meta?.countryAtSave).toBe('us')
     expect(meta?.durationSeconds).toBe(360)

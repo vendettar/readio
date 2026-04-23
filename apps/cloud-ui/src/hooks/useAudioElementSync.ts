@@ -27,12 +27,6 @@ export function useAudioElementSync({
     }
 
     if (audio.getAttribute('src') !== audioUrl) {
-      // Don't overwrite if the audio element is already using a proxy source
-      // for this same track (set by useRemotePlaybackFallback during fallback).
-      // When audioUrl changes to a different track, the proxy URL won't match
-      // and the new track's src must be assigned.
-      if (audio.src.includes('/api/proxy') && audio.src.includes(encodeURIComponent(audioUrl)))
-        return
       audio.src = audioUrl
     }
   }, [audioRef, audioUrl])

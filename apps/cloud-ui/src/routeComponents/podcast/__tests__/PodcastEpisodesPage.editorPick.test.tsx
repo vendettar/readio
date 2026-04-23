@@ -72,13 +72,12 @@ vi.mock('react-virtuoso', () => ({
     for (const count of groupCounts) {
       const groupIndex = groups.length
       const firstItem = data[groupStartIndex]
-      const groupKey =
-        firstItem?.id ?? firstItem?.providerEpisodeId ?? `group-${groupStartIndex}-${count}`
+      const groupKey = firstItem?.id ?? `group-${groupStartIndex}-${count}`
 
       const items = Array.from({ length: count }).map((_, indexInGroup) => {
         const item = data[flatIndex]
         const node = itemContent?.(flatIndex, groupIndex, item)
-        const itemKey = item?.id ?? item?.providerEpisodeId ?? `item-${flatIndex}-${indexInGroup}`
+        const itemKey = item?.id ?? `item-${flatIndex}-${indexInGroup}`
         flatIndex += 1
 
         return <div key={String(itemKey)}>{node}</div>

@@ -21,7 +21,6 @@ interface DownloadEpisodeButtonProps {
   artworkUrl?: string
   countryAtSave?: string
   podcastItunesId?: string
-  providerEpisodeId?: string
   episodeGuid?: string
   durationSeconds?: number
   className?: string
@@ -39,7 +38,6 @@ export function DownloadEpisodeButton({
   artworkUrl,
   countryAtSave,
   podcastItunesId,
-  providerEpisodeId,
   episodeGuid,
   durationSeconds,
   className,
@@ -79,7 +77,6 @@ export function DownloadEpisodeButton({
         transcriptUrl,
         countryAtSave: normalizedCountryAtSave,
         podcastItunesId,
-        providerEpisodeId,
         episodeGuid,
         durationSeconds,
       })
@@ -97,7 +94,6 @@ export function DownloadEpisodeButton({
     defaultCountry,
     queryClient,
     podcastItunesId,
-    providerEpisodeId,
     episodeGuid,
     durationSeconds,
     status.downloadStatus,

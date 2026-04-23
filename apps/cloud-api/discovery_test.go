@@ -1183,9 +1183,6 @@ func TestDiscoveryServiceSearchEpisodesNormalizesPayload(t *testing.T) {
 	if _, ok := payload[0]["feedUrl"]; ok {
 		t.Fatalf("feedUrl should be absent, payload = %+v", payload[0])
 	}
-	if _, ok := payload[0]["providerEpisodeId"]; ok {
-		t.Fatalf("providerEpisodeId should be absent, payload = %+v", payload[0])
-	}
 }
 
 func TestDiscoveryServiceSearchEpisodesDropsRowsWithoutTrackName(t *testing.T) {

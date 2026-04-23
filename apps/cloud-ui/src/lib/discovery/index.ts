@@ -17,7 +17,6 @@ import type {
   EditorPickPodcast,
   FavoriteEpisodeInput,
   FeedEpisode,
-  NormalizedParsedFeed,
   ParsedFeed,
   PlaybackEpisodeStub,
   PlaybackPodcastStub,
@@ -68,7 +67,6 @@ export default discovery
 export type {
   EditorPickPodcast,
   FeedEpisode,
-  NormalizedParsedFeed,
   ParsedFeed,
   Podcast,
   SearchEpisode,

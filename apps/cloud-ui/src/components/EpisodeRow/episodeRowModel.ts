@@ -48,7 +48,6 @@ export interface EpisodeRowModel {
     artworkUrl?: string
     countryAtSave?: string
     podcastItunesId?: string
-    providerEpisodeId?: string
     episodeGuid?: string
     durationSeconds?: number
   }
@@ -248,7 +247,6 @@ export function fromFavorite({
           artworkUrl: artworkSrc || favorite.artworkUrl,
           countryAtSave: favorite.countryAtSave || undefined,
           podcastItunesId: favorite.podcastItunesId,
-          providerEpisodeId: favorite.providerEpisodeId,
           episodeGuid: favorite.episodeGuid,
           durationSeconds: favorite.durationSeconds, // Populated duration
         }
@@ -291,7 +289,6 @@ export function fromPlaybackSession({
           artworkUrl: session.artworkUrl,
           countryAtSave: session.countryAtSave || undefined,
           podcastItunesId: session.podcastItunesId,
-          providerEpisodeId: session.providerEpisodeId,
           episodeGuid: session.episodeGuid,
           durationSeconds: session.durationSeconds, // Populated duration
         }

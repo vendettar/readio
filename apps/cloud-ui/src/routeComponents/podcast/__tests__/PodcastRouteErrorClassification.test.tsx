@@ -82,10 +82,10 @@ vi.mock('../../../hooks/useEpisodePlayback', () => ({
 vi.mock('../../../hooks/useEpisodeResolution', () => ({
   useEpisodeResolution: (
     podcastId: string,
-    episodeId: string,
+    episodeKey: string,
     country: string,
     routeState?: unknown
-  ) => useEpisodeResolutionMock(podcastId, episodeId, country, routeState),
+  ) => useEpisodeResolutionMock(podcastId, episodeKey, country, routeState),
 }))
 
 vi.mock('../../../lib/discovery', () => ({

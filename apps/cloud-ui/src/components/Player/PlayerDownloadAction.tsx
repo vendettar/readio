@@ -52,7 +52,6 @@ export function PlayerDownloadAction({ className }: { className?: string }) {
       transcriptUrl: episodeMetadata?.transcriptUrl,
       countryAtSave: normalizedCountryAtSave,
       podcastItunesId: episodeMetadata?.podcastItunesId,
-      providerEpisodeId: episodeMetadata?.providerEpisodeId,
       durationSeconds: episodeMetadata?.durationSeconds,
     }).then(() => {
       status.refresh()

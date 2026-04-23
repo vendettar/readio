@@ -72,7 +72,6 @@ export interface DownloadJobOptions {
   onProgress?: (progress: DownloadProgress) => void
   countryAtSave: string
   podcastItunesId?: string
-  providerEpisodeId?: string
   episodeGuid?: string
   durationSeconds?: number
   transcriptUrl?: string
@@ -255,7 +254,6 @@ export async function persistAudioBlobAsDownload(
           downloadedAt: now,
           countryAtSave: normalizedCountryAtSave,
           sourcePodcastItunesId: options.podcastItunesId || undefined,
-          sourceProviderEpisodeId: options.providerEpisodeId || undefined,
           sourceEpisodeGuid: options.episodeGuid || undefined,
           durationSeconds: options.durationSeconds,
         }

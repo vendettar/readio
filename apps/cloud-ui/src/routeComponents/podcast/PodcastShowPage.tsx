@@ -29,8 +29,8 @@ import {
 import { formatCompactNumber } from '../../lib/formatters'
 import { getDiscoveryArtworkUrl } from '../../lib/imageUtils'
 
-function getEpisodeRowKey(episode: FeedEpisode, index: number): string {
-  return episode.episodeGuid || `${episode.audioUrl}-${episode.pubDate}-${index}`
+function getEpisodeRowKey(episode: FeedEpisode): string {
+  return episode.episodeGuid
 }
 
 import { logError } from '../../lib/logger'
@@ -371,7 +371,7 @@ export default function PodcastShowPage() {
             <div className="flex flex-col">
               {episodes.slice(0, 8).map((episode, index) => (
                 <EpisodeRow
-                  key={getEpisodeRowKey(episode, index)}
+                  key={getEpisodeRowKey(episode)}
                   episode={episode}
                   podcast={podcast}
                   editorPickSnapshot={snapshot}

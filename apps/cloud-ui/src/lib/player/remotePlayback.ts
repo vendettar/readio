@@ -231,7 +231,6 @@ export async function downloadAndResolve(
     feedUrl: payload.metadata.podcastFeedUrl,
     artworkUrl: payload.artwork,
     podcastItunesId: payload.metadata.podcastItunesId,
-    providerEpisodeId: payload.metadata.providerEpisodeId,
     episodeGuid: payload.metadata.episodeGuid,
     durationSeconds: payload.metadata.durationSeconds,
     countryAtSave:

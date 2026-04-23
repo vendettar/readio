@@ -16,7 +16,7 @@ const { findRouteGuardViolations, ROUTE_GUARD_ALLOWLIST_PATTERNS, ROUTE_GUARD_FO
 describe('route guard script patterns', () => {
   it('flags production-source query-hint regressions by regex behavior', () => {
     const badSearchSource = "const route = { search: { source: 'search' } }"
-    const badProviderHint = "const route = { search: { providerEpisodeId: '42' } }"
+    const badSessionHint = "const route = { search: { sessionId: '42' } }"
     const badTransitionHint = "const route = { search: { fromLayoutPrefix: 'top' } }"
     const badLocationStateCountry = 'const country = location.state.country'
     const badLocationStateFeed = 'const feed = location.state.feedUrl'
@@ -28,7 +28,7 @@ describe('route guard script patterns', () => {
     expect(ROUTE_GUARD_FORBIDDEN_PATTERNS.some((pattern) => pattern.test(badSearchSource))).toBe(
       true
     )
-    expect(ROUTE_GUARD_FORBIDDEN_PATTERNS.some((pattern) => pattern.test(badProviderHint))).toBe(
+    expect(ROUTE_GUARD_FORBIDDEN_PATTERNS.some((pattern) => pattern.test(badSessionHint))).toBe(
       true
     )
     expect(ROUTE_GUARD_FORBIDDEN_PATTERNS.some((pattern) => pattern.test(badTransitionHint))).toBe(

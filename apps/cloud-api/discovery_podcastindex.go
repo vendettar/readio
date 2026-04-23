@@ -86,31 +86,6 @@ func (e *podcastIndexInvalidResponseError) Error() string {
 	return e.message
 }
 
-type podcastIndexEpisode struct {
-	ID              int64  `json:"id"`
-	Title           string `json:"title"`
-	Link            string `json:"link,omitempty"`
-	Description     string `json:"description,omitempty"`
-	GUID            string `json:"guid,omitempty"`
-	DatePublished   int64  `json:"datePublished"`
-	EnclosureURL    string `json:"enclosureUrl,omitempty"`
-	EnclosureType   string `json:"enclosureType,omitempty"`
-	EnclosureLength int64  `json:"enclosureLength,omitempty"`
-	Duration        int64  `json:"duration,omitempty"`
-	Image           string `json:"image,omitempty"`
-	Explicit        int    `json:"explicit,omitempty"`
-	PodcastGUID     string `json:"podcastGuid,omitempty"`
-	FeedItunesID    int64  `json:"feedItunesId,omitempty"`
-	FeedLanguage    string `json:"feedLanguage,omitempty"`
-	FeedTitle       string `json:"feedTitle,omitempty"`
-	FeedImage       string `json:"feedImage,omitempty"`
-	FeedURL         string `json:"feedUrl,omitempty"`
-}
-
-type podcastIndexEpisodesResponse struct {
-	Items []podcastIndexEpisode `json:"items"`
-}
-
 type podcastIndexCategoryNames []string
 
 func (c *podcastIndexCategoryNames) UnmarshalJSON(data []byte) error {
