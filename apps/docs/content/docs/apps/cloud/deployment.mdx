@@ -151,6 +151,11 @@ READIO_ASR_RATE_LIMIT_BURST=60
 READIO_ASR_RATE_LIMIT_WINDOW_MS=60000
 READIO_PROXY_RATE_LIMIT_BURST=5
 READIO_PROXY_RATE_LIMIT_WINDOW_MS=60000
+# Discovery feed cache (small in-memory TTL cache)
+READIO_DISCOVERY_FEED_CACHE_TTL_MS=300000
+READIO_DISCOVERY_FEED_CACHE_MAX_ENTRIES=12
+READIO_DISCOVERY_FEED_CACHE_MAX_EPISODES=300
+READIO_DISCOVERY_FEED_CACHE_MAX_BYTES=1048576
 # ASR Proxy Worker config (optional)
 READIO_ASR_WORKER_BASE_URL=https://asr-proxy.example.workers.dev
 READIO_ASR_WORKER_SHARED_SECRET=your-high-entropy-secret-string
@@ -205,6 +210,13 @@ Important details:
 - If `PODCAST_INDEX_API_KEY` or `PODCAST_INDEX_API_SECRET` is missing, `/api/v1/discovery/podcast-index/episodes` will return `503 DISCOVERY_PROVIDER_NOT_CONFIGURED`.
 - Cloud ASR relay protection is driven by `READIO_ASR_ALLOWED_ORIGINS`, `READIO_ASR_RELAY_PUBLIC_TOKEN`, `READIO_ASR_RATE_LIMIT_BURST`, and `READIO_ASR_RATE_LIMIT_WINDOW_MS`.
 - Cloud proxy rate limiting is driven by `READIO_PROXY_RATE_LIMIT_BURST` and `READIO_PROXY_RATE_LIMIT_WINDOW_MS`.
+- Discovery feed caching is driven by:
+  - `READIO_DISCOVERY_FEED_CACHE_TTL_MS` (default `300000`; set `0` or a negative value to disable the feed cache)
+  - `READIO_DISCOVERY_FEED_CACHE_MAX_ENTRIES` (default `12`; set `0` or a negative value to disable the feed cache)
+  - `READIO_DISCOVERY_FEED_CACHE_MAX_EPISODES` (default `300`)
+  - `READIO_DISCOVERY_FEED_CACHE_MAX_BYTES` (default `1048576`)
+- The discovery feed cache is an in-process, fresh-only, short TTL performance layer. It stores parsed feed payloads in memory only, never raw XML or disk-backed cache entries, and expired entries are refetched instead of served stale.
+- Feed cache misses, disabled cache mode, and admission rejects still fetch upstream normally; the cache only changes short-term reuse behavior.
 - Configure `READIO_ASR_RELAY_PUBLIC_TOKEN` once in backend runtime env. In production Cloud, `apps/cloud-api` emits the same browser-public value through dynamic `/env.js`, so the browser can send `X-Readio-Relay-Public-Token` without a separately maintained frontend runtime token. This is a lightweight abuse-control value, not a secret boundary.
 - Cloud ASR relay is a browser-facing same-origin endpoint. Requests must include a valid `Origin`; requests with a missing or disallowed `Origin` are rejected.
 - `READIO_ASR_ALLOWED_ORIGINS` is an explicit operator-authored allowlist. Write exact origins such as `https://www.readio.top` or `https://example.com:8443`; do not rely on implicit default-port normalization inside the allowlist.

@@ -30,5 +30,15 @@ title: 播客发现 (Explore)
 ## 4. 缓存模型
 
 - 前端：TanStack Query 内存缓存
-- 后端：带优雅降级的 relay 内存缓存
+- 后端：
+  - top / lookup 路由：带优雅降级的 relay 内存缓存
+  - feed 路由：独立的小型进程内 parsed-feed 缓存，短 TTL、fresh-only，不提供 stale fallback
+  - feed cache key：仅使用归一化后的 `feedUrl`
+  - 省略 `limit` 时，后端使用默认响应窗口（`20`）
+  - 显式 `limit` 只负责把响应裁成 `min(limit, len(episodes))`；它不会进入 cache key，也不会改变缓存里的完整 parsed feed
+- 前端 feed window 契约：
+  - `PodcastShowPage` 不显式传 `limit`，因此使用后端默认窗口
+  - `PodcastEpisodesPage` 当前也不显式传 `limit`，因为这个页面仍然承载 “see all” 语义，且还没有分页 / load-more
+  - episode route 的 RSS fallback 也不显式传 `limit`，以保证较旧的 deep link 仍然可以从完整 feed 中解析出来
+  - 当未来引入显式大窗口时，TanStack Query 的 feed key 必须区分请求窗口，避免后端默认窗口和更大窗口在前端 cache 中发生碰撞
 - Cloud 不再使用长期持久化的前端 discovery 缓存

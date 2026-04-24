@@ -76,6 +76,8 @@ describe('PodcastShowPage 005c same-origin feed cutover', () => {
       http.get('http://localhost:3000/api/v1/discovery/feed', ({ request }) => {
         const url = new URL(request.url)
         expect(url.searchParams.get('url')).toBe('https://example.com/feed.xml')
+        expect(url.searchParams.get('limit')).toBe('20')
+        expect(url.searchParams.get('offset')).toBe('0')
 
         return HttpResponse.json(
           makeParsedFeed({

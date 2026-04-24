@@ -151,6 +151,11 @@ READIO_ASR_RATE_LIMIT_BURST=60
 READIO_ASR_RATE_LIMIT_WINDOW_MS=60000
 READIO_PROXY_RATE_LIMIT_BURST=5
 READIO_PROXY_RATE_LIMIT_WINDOW_MS=60000
+# Discovery feed cache（小型进程内 TTL 缓存）
+READIO_DISCOVERY_FEED_CACHE_TTL_MS=300000
+READIO_DISCOVERY_FEED_CACHE_MAX_ENTRIES=12
+READIO_DISCOVERY_FEED_CACHE_MAX_EPISODES=300
+READIO_DISCOVERY_FEED_CACHE_MAX_BYTES=1048576
 # ASR Proxy Worker 配置 (可选)
 READIO_ASR_WORKER_BASE_URL=https://asr-proxy.example.workers.dev
 READIO_ASR_WORKER_SHARED_SECRET=your-high-entropy-secret-string
@@ -205,6 +210,13 @@ sudo "$SYSTEMCTL_BIN" enable "$SERVICE_NAME"
 - 如果缺少 `PODCAST_INDEX_API_KEY` 或 `PODCAST_INDEX_API_SECRET`，`/api/v1/discovery/podcast-index/episodes` 会返回 `503 DISCOVERY_PROVIDER_NOT_CONFIGURED`。
 - Cloud ASR relay 的防滥用边界依赖 `READIO_ASR_ALLOWED_ORIGINS`、`READIO_ASR_RELAY_PUBLIC_TOKEN`、`READIO_ASR_RATE_LIMIT_BURST`、`READIO_ASR_RATE_LIMIT_WINDOW_MS`。
 - Cloud `/api/proxy` 的应用级速率限制由 `READIO_PROXY_RATE_LIMIT_BURST` 和 `READIO_PROXY_RATE_LIMIT_WINDOW_MS` 控制。
+- Discovery feed cache 由以下配置控制：
+  - `READIO_DISCOVERY_FEED_CACHE_TTL_MS`（默认 `300000`；设为 `0` 或负数时禁用 feed cache）
+  - `READIO_DISCOVERY_FEED_CACHE_MAX_ENTRIES`（默认 `12`；设为 `0` 或负数时禁用 feed cache）
+  - `READIO_DISCOVERY_FEED_CACHE_MAX_EPISODES`（默认 `300`）
+  - `READIO_DISCOVERY_FEED_CACHE_MAX_BYTES`（默认 `1048576`）
+- Discovery feed cache 是进程内、fresh-only、短 TTL 的性能层。它只在内存中保存已解析的 feed payload，不保存原始 XML，也不写磁盘缓存；条目过期后会重新抓取，而不是继续返回 stale feed。
+- 在 cache miss、显式禁用或准入拒绝时，请求仍然会正常抓取上游；这个 cache 只改变短时间内的复用行为，不改变正确性。
 - `READIO_ASR_RELAY_PUBLIC_TOKEN` 只需要在后端运行时环境中配置一次。生产 Cloud 会由 `apps/cloud-api` 动态生成 `/env.js`，把同一个浏览器可见值下发给前端，因此不再需要额外维护一份前端运行时 token。它只是轻量级防滥用值，不是强 secret 边界。
 - Cloud ASR relay 是 browser-facing 的 same-origin endpoint。请求必须带合法 `Origin`；缺失或不被允许的 `Origin` 会被直接拒绝。
 - `READIO_ASR_ALLOWED_ORIGINS` 是运维显式编写的 allowlist。请写完整 origin，例如 `https://www.readio.top` 或 `https://example.com:8443`；不要依赖 allowlist 内部对默认端口做隐式归一化。

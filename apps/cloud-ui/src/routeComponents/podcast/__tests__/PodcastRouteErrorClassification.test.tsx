@@ -6,6 +6,7 @@ import PodcastEpisodesPage from '../PodcastEpisodesPage'
 import PodcastShowPage from '../PodcastShowPage'
 
 const useQueryMock = vi.fn()
+const useInfiniteQueryMock = vi.fn()
 const useEpisodeResolutionMock = vi.fn()
 const queryClientMock = {
   getQueryData: vi.fn(),
@@ -47,6 +48,28 @@ function setQueryState(input: {
       error: null,
     }
   })
+
+  useInfiniteQueryMock.mockImplementation(({ queryKey }: { queryKey: readonly unknown[] }) => {
+    if (queryKey[1] === 'feed') {
+      return {
+        data: input.feed ? { pages: [input.feed] } : undefined,
+        isLoading: false,
+        error: input.feedError ?? null,
+        isFetchingNextPage: false,
+        hasNextPage: false,
+        fetchNextPage: vi.fn(),
+      }
+    }
+
+    return {
+      data: undefined,
+      isLoading: false,
+      error: null,
+      isFetchingNextPage: false,
+      hasNextPage: false,
+      fetchNextPage: vi.fn(),
+    }
+  })
 }
 
 vi.mock('react-i18next', () => ({
@@ -59,6 +82,7 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('@tanstack/react-query', () => ({
   useQuery: (args: unknown) => useQueryMock(args),
+  useInfiniteQuery: (args: unknown) => useInfiniteQueryMock(args),
   useQueryClient: () => queryClientMock,
 }))
 
@@ -119,6 +143,7 @@ vi.mock('../../../store/playerStore', () => ({
 describe('Podcast route error classification', () => {
   beforeEach(() => {
     useQueryMock.mockReset()
+    useInfiniteQueryMock.mockReset()
     useEpisodeResolutionMock.mockReset()
     queryClientMock.getQueryData.mockReset()
     queryClientMock.getQueryData.mockReturnValue(undefined)

@@ -98,7 +98,9 @@ export function useEpisodeResolution(
 
   const feedUrl = podcast?.feedUrl
   const cachedFeed = feedUrl
-    ? (queryClient.getQueryData(buildPodcastFeedQueryKey(feedUrl)) as
+    ? (queryClient.getQueryData(
+        buildPodcastFeedQueryKey(feedUrl)
+      ) as
         | ParsedFeed
         | undefined)
     : undefined

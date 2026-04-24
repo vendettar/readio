@@ -108,6 +108,13 @@ export const FeedEpisodeSchema = z.object({
   transcriptUrl: z.url().optional(),
 })
 
+export const ParsedFeedPageInfoSchema = z.object({
+  limit: z.number().int().positive(),
+  offset: z.number().int().nonnegative(),
+  returned: z.number().int().nonnegative(),
+  hasMore: z.boolean(),
+})
+
 /**
  * Canonical parsed feed payload returned by cloud discovery.
  */
@@ -115,6 +122,7 @@ export const ParsedFeedSchema = z.object({
   title: z.string().min(1),
   description: z.string(),
   artworkUrl: z.url().optional(),
+  pageInfo: ParsedFeedPageInfoSchema.optional(),
   episodes: z.array(FeedEpisodeSchema),
 })
 
@@ -126,6 +134,7 @@ export type SearchPodcast = z.infer<typeof SearchPodcastSchema>
 export type SearchEpisode = z.infer<typeof SearchEpisodeSchema>
 export type FeedEpisode = z.infer<typeof FeedEpisodeSchema>
 export type ParsedFeed = z.infer<typeof ParsedFeedSchema>
+export type ParsedFeedPageInfo = z.infer<typeof ParsedFeedPageInfoSchema>
 
 /**
  * Narrow adapter type for favorites/add operations.

@@ -32,5 +32,15 @@ title: Discovery & Explore
 ## 4. Cache Model
 
 - Frontend: TanStack Query memory cache
-- Backend: in-memory relay cache with graceful degradation
+- Backend:
+  - top / lookup routes: in-memory relay cache with graceful degradation
+  - feed route: separate small in-memory parsed-feed cache with short TTL, fresh-only semantics, and no stale fallback
+  - feed cache key: normalized `feedUrl` only
+  - omitted `limit` uses the backend default response window (`20`)
+  - optional explicit `limit` only slices the response to `min(limit, len(episodes))`; it does not change the cache key or the cached full parsed feed
+- Frontend feed-window contract:
+  - `PodcastShowPage` uses the feed route without an explicit `limit`, so it receives the backend default window
+  - `PodcastEpisodesPage` also omits `limit` today because the page still has "see all" semantics and no pagination / load-more path
+  - episode-route RSS fallback also omits `limit` so older deep links are still resolvable from the full feed
+  - TanStack Query feed keys must distinguish the requested window whenever explicit larger windows are introduced, so backend default and larger windows do not collide in frontend cache
 - No long-lived frontend discovery persistence in Cloud

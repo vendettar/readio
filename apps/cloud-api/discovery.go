@@ -57,10 +57,21 @@ const (
 	discoveryFeedRateLimitWindow                        = time.Minute
 	discoveryFeedRateLimitBurstEnv                      = "READIO_DISCOVERY_FEED_RATE_LIMIT_BURST"
 	discoveryFeedRateLimitWindowMsEnv                   = "READIO_DISCOVERY_FEED_RATE_LIMIT_WINDOW_MS"
+	discoveryFeedCacheTTLmsEnv                          = "READIO_DISCOVERY_FEED_CACHE_TTL_MS"
+	discoveryFeedCacheMaxEntriesEnv                     = "READIO_DISCOVERY_FEED_CACHE_MAX_ENTRIES"
+	discoveryFeedCacheMaxEpisodesEnv                    = "READIO_DISCOVERY_FEED_CACHE_MAX_EPISODES"
+	discoveryFeedCacheMaxBytesEnv                       = "READIO_DISCOVERY_FEED_CACHE_MAX_BYTES"
 	discoveryPodcastIndexRateLimitBurst                 = 20
 	discoveryPodcastIndexRateLimitWindow                = time.Minute
 	discoveryPodcastIndexRateLimitBurstEnv              = "READIO_DISCOVERY_PODCAST_INDEX_RATE_LIMIT_BURST"
 	discoveryPodcastIndexRateLimitWindowMsEnv           = "READIO_DISCOVERY_PODCAST_INDEX_RATE_LIMIT_WINDOW_MS"
+)
+
+const (
+	discoveryFeedCacheTTL         = 5 * time.Minute
+	discoveryFeedCacheMaxEntries  = 12
+	discoveryFeedCacheMaxEpisodes = 300
+	discoveryFeedCacheMaxBytes    = 1 << 20
 )
 
 // Shared Discovery Response Types
@@ -95,7 +106,7 @@ type piPodcastResponse struct {
 //   - top-episodes   → country, limit           (24 hour TTL)
 //
 // Error responses (upstream failures, param errors, timeouts) are NEVER cached.
-// Feed responses are NOT cached (deferred).
+// Feed responses use a separate fresh-only short TTL cache.
 // Search responses are NOT cached (high cardinality).
 var discoveryCacheTTLTopPodcasts = 24 * time.Hour
 var discoveryCacheTTLTopEpisodes = 24 * time.Hour
@@ -295,8 +306,17 @@ type discoveryService struct {
 	podcastIndexLimiter *rateLimiter
 	trustedProxies      trustedProxySet
 	cache               *discoveryCache
+	feedCache           *discoveryFeedCache
 	cacheOwner          singleflight.Group
 	podcastIndexConfig  podcastIndexConfig
+}
+
+type discoveryFeedCacheConfig struct {
+	ttl         time.Duration
+	maxEntries  int
+	maxEpisodes int
+	maxBytes    int
+	enabled     bool
 }
 
 type discoveryParamError struct {
@@ -426,6 +446,8 @@ func newDiscoveryService() *discoveryService {
 		)
 	}
 
+	feedCacheConfig := resolveDiscoveryFeedCacheConfig()
+
 	return &discoveryService{
 		client: &http.Client{
 			Timeout: discoveryRequestTimeout,
@@ -445,6 +467,7 @@ func newDiscoveryService() *discoveryService {
 		podcastIndexLimiter: newRateLimiter(podcastIndexBurst, resolveDiscoveryPodcastIndexRateLimitWindow(), time.Now),
 		trustedProxies:      loadTrustedProxySet(slog.Default()),
 		cache:               newDiscoveryCache(discoveryCacheMaxKeys),
+		feedCache:           newDiscoveryFeedCache(feedCacheConfig, time.Now),
 		podcastIndexConfig:  getPodcastIndexConfig(),
 	}
 }
@@ -521,6 +544,69 @@ func resolveDiscoveryFeedRateLimitWindow() time.Duration {
 	return time.Duration(value) * time.Millisecond
 }
 
+func resolveDiscoveryFeedCacheConfig() discoveryFeedCacheConfig {
+	ttl := resolveDiscoveryFeedCacheTTL()
+	maxEntries := resolveDiscoveryFeedCacheMaxEntries()
+	return discoveryFeedCacheConfig{
+		ttl:         ttl,
+		maxEntries:  maxEntries,
+		maxEpisodes: resolveDiscoveryFeedCacheMaxEpisodes(),
+		maxBytes:    resolveDiscoveryFeedCacheMaxBytes(),
+		enabled:     ttl > 0 && maxEntries > 0,
+	}
+}
+
+func resolveDiscoveryFeedCacheTTL() time.Duration {
+	raw := strings.TrimSpace(os.Getenv(discoveryFeedCacheTTLmsEnv))
+	if raw == "" {
+		return discoveryFeedCacheTTL
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return discoveryFeedCacheTTL
+	}
+	if value <= 0 {
+		return 0
+	}
+	return time.Duration(value) * time.Millisecond
+}
+
+func resolveDiscoveryFeedCacheMaxEntries() int {
+	raw := strings.TrimSpace(os.Getenv(discoveryFeedCacheMaxEntriesEnv))
+	if raw == "" {
+		return discoveryFeedCacheMaxEntries
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return discoveryFeedCacheMaxEntries
+	}
+	return value
+}
+
+func resolveDiscoveryFeedCacheMaxEpisodes() int {
+	raw := strings.TrimSpace(os.Getenv(discoveryFeedCacheMaxEpisodesEnv))
+	if raw == "" {
+		return discoveryFeedCacheMaxEpisodes
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return discoveryFeedCacheMaxEpisodes
+	}
+	return value
+}
+
+func resolveDiscoveryFeedCacheMaxBytes() int {
+	raw := strings.TrimSpace(os.Getenv(discoveryFeedCacheMaxBytesEnv))
+	if raw == "" {
+		return discoveryFeedCacheMaxBytes
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil {
+		return discoveryFeedCacheMaxBytes
+	}
+	return value
+}
+
 func resolveDiscoveryPodcastIndexRateLimitBurst() int {
 	raw := strings.TrimSpace(os.Getenv(discoveryPodcastIndexRateLimitBurstEnv))
 	if raw == "" {
@@ -588,7 +674,7 @@ func logDiscoveryRequest(route, upstreamKind, upstreamHost string, elapsed time.
 		if errors.As(err, &statusErr) {
 			upstreamStatus = statusErr.status
 		}
-		if errors.Is(err, errDiscoveryTimeout) {
+		if errors.Is(err, errDiscoveryTimeout) || isDiscoveryTransportTimeout(err) {
 			timedOut = true
 		}
 	}
@@ -621,7 +707,7 @@ func classifyDiscoveryError(err error) string {
 		return "param_error"
 	}
 
-	if errors.Is(err, errDiscoveryTimeout) {
+	if errors.Is(err, errDiscoveryTimeout) || isDiscoveryTransportTimeout(err) {
 		return "timeout"
 	}
 
@@ -647,6 +733,24 @@ func classifyDiscoveryError(err error) string {
 	}
 
 	return "unknown"
+}
+
+func isDiscoveryTransportTimeout(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+	var urlErr *url.Error
+	if errors.As(err, &urlErr) && urlErr.Timeout() {
+		return true
+	}
+	return os.IsTimeout(err)
 }
 
 func (s *discoveryService) allowSearchRequest(remoteAddr string) bool {
@@ -730,6 +834,21 @@ func parseDiscoveryLimit(values url.Values, key string, fallback, maxLimit int) 
 		}
 	}
 	return value, nil
+}
+
+func parseDiscoveryPositiveInteger(values url.Values, key string) (*int, error) {
+	raw := strings.TrimSpace(values.Get(key))
+	if raw == "" {
+		return nil, nil
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 {
+		return nil, &discoveryParamError{
+			code:    "INVALID_" + strings.ToUpper(key),
+			message: fmt.Sprintf("%s must be a positive integer", key),
+		}
+	}
+	return &value, nil
 }
 
 func writeDiscoveryJSON(w http.ResponseWriter, status int, payload any) {
@@ -896,7 +1015,7 @@ func (s *discoveryService) executeJSONRequest(req *http.Request, dest any) error
 
 	resp, err := client.Do(req)
 	if err != nil {
-		if req.Context().Err() != nil {
+		if req.Context().Err() != nil || isDiscoveryTransportTimeout(err) {
 			return errDiscoveryTimeout
 		}
 		return fmt.Errorf("perform discovery upstream request: %w", err)

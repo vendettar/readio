@@ -78,6 +78,7 @@ export function makeParsedFeed(
     title: 'Cloud Feed Podcast',
     description: 'Backend-owned feed',
     artworkUrl: 'https://example.com/feed-art.jpg',
+    pageInfo: undefined,
     episodes: [makeFeedEpisode()],
     ...overrides,
   }

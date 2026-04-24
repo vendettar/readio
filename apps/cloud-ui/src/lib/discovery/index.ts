@@ -7,6 +7,7 @@ import {
   searchEpisodes as searchCloudEpisodes,
   searchPodcasts as searchCloudPodcasts,
 } from './cloudApi'
+import type { PodcastFeedPageOptions } from './cloudApi'
 import {
   type EpisodeCommonFields,
   mapSessionToDiscovery,
@@ -47,8 +48,8 @@ const discovery = {
   },
 
   // Feed
-  fetchPodcastFeed: (feedUrl: string, signal?: AbortSignal) => {
-    return fetchCloudPodcastFeed(feedUrl, signal)
+  fetchPodcastFeed: (feedUrl: string, signal?: AbortSignal, options?: PodcastFeedPageOptions) => {
+    return fetchCloudPodcastFeed(feedUrl, signal, options)
   },
 
   // Top charts (Apple first-hop via cloud relay)

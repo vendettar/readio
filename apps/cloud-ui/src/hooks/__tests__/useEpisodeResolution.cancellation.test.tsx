@@ -6,6 +6,7 @@ import {
   buildPodcastFeedQueryKey,
   buildPodcastDetailQueryKey,
 } from '../../lib/discovery/podcastQueryContract'
+import { episodeIdentityToCompactKey } from '../../lib/routes/compactKey'
 import { resolveEpisodeResolutionError, useEpisodeResolution } from '../useEpisodeResolution'
 
 const getPodcastIndexPodcastByItunesIdMock = vi.fn()
@@ -55,7 +56,10 @@ function createWrapper(options: WrapperOptions = {}) {
       }
 
       if (options.feed && options.podcast?.feedUrl) {
-        queryClient.setQueryData(buildPodcastFeedQueryKey(options.podcast.feedUrl), options.feed)
+        queryClient.setQueryData(
+          buildPodcastFeedQueryKey(options.podcast.feedUrl),
+          options.feed
+        )
       }
     },
   })
@@ -212,6 +216,54 @@ describe('useEpisodeResolution cancellation semantics', () => {
       expect.anything()
     )
     expect(result.current.episode?.title).toBe('RSS Episode')
+  })
+
+  it('resolves older deep links beyond the first 100 feed entries', async () => {
+    const olderEpisodeGuid = 'older-episode-guid'
+    const olderEpisodeKey = episodeIdentityToCompactKey(olderEpisodeGuid)
+    if (!olderEpisodeKey) throw new Error('expected older episode compact key')
+
+    getPodcastIndexPodcastByItunesIdMock.mockResolvedValue(
+      makePodcast({
+        podcastItunesId: '12345',
+        title: 'Deep Link Podcast',
+        author: 'Host',
+        feedUrl: 'https://example.com/feed.xml',
+      })
+    )
+    fetchPodcastFeedMock.mockImplementation(
+      async (_feedUrl: string, _signal?: AbortSignal, limit?: number) => ({
+        title: 'Deep Link Podcast',
+        description: '',
+        artworkUrl: 'https://example.com/show-600.jpg',
+        episodes: Array.from({ length: typeof limit === 'number' ? limit : 150 }, (_, index) => {
+          const episodeNumber = index + 1
+          return {
+            episodeGuid:
+              episodeNumber === 150 ? olderEpisodeGuid : `episode-guid-${episodeNumber}`,
+            title:
+              episodeNumber === 150 ? 'Older RSS Episode' : `Episode ${episodeNumber}`,
+            description: '',
+            audioUrl: `https://example.com/audio-${episodeNumber}.mp3`,
+            pubDate: '2025-01-01T00:00:00.000Z',
+          }
+        }),
+      })
+    )
+
+    const { result } = renderHook(
+      () => useEpisodeResolution('12345', olderEpisodeKey, 'us'),
+      {
+        wrapper: createWrapper().wrapper,
+      }
+    )
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+    expect(fetchPodcastFeedMock).toHaveBeenCalledWith(
+      'https://example.com/feed.xml',
+      expect.anything()
+    )
+    expect(result.current.episode?.title).toBe('Older RSS Episode')
   })
 
   it('returns null when feedUrl is unavailable for fallback', async () => {

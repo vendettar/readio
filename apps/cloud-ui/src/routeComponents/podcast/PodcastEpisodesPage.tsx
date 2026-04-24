@@ -1,12 +1,14 @@
-import { useQuery } from '@tanstack/react-query'
+import { useInfiniteQuery, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query'
 import { Link, useParams } from '@tanstack/react-router'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { GroupedVirtuoso } from 'react-virtuoso'
+import { Virtuoso } from 'react-virtuoso'
 import { EpisodeRow } from '../../components/EpisodeRow/EpisodeRow'
 import { Button } from '../../components/ui/button'
-import discovery, { type FeedEpisode } from '../../lib/discovery'
+import { LoadingSpinner } from '../../components/ui/loading-spinner'
+import discovery, { type FeedEpisode, type ParsedFeed } from '../../lib/discovery'
 import {
+  PODCAST_DEFAULT_FEED_QUERY_LIMIT,
   buildPodcastFeedQueryKey,
   buildPodcastDetailQueryKey,
   PODCAST_QUERY_CACHE_POLICY,
@@ -16,61 +18,15 @@ import { buildPodcastEpisodesRoute, normalizeCountryParam } from '../../lib/rout
 import { useExploreStore } from '../../store/exploreStore'
 
 const UNKNOWN_YEAR = -1
+const PODCAST_EPISODES_PAGE_SIZE = PODCAST_DEFAULT_FEED_QUERY_LIMIT
 
-interface GroupedEpisodeData {
-  flattenedEpisodes: FeedEpisode[]
-  groupCounts: number[]
-  groupYears: number[]
-  /** Cumulative item offset at the start of each group (for converting flat index → within-group index). */
-  groupStartOffsets: number[]
-}
+export type ListRow =
+  | { type: 'year-header'; year: number; key: string }
+  | { type: 'episode'; episode: FeedEpisode; isLastInYear: boolean; key: string }
 
 function resolveEpisodeYear(pubDate: string): number {
   const year = new Date(pubDate).getFullYear()
   return Number.isFinite(year) ? year : UNKNOWN_YEAR
-}
-
-function buildGroupedEpisodeData(episodes: FeedEpisode[]): GroupedEpisodeData {
-  const groupCounts: number[] = []
-  const groupYears: number[] = []
-
-  let currentYear: number | null = null
-  let currentCount = 0
-
-  for (const episode of episodes) {
-    const year = resolveEpisodeYear(episode.pubDate)
-    if (currentYear === null || year !== currentYear) {
-      if (currentYear !== null) {
-        groupYears.push(currentYear)
-        groupCounts.push(currentCount)
-      }
-      currentYear = year
-      currentCount = 1
-      continue
-    }
-
-    currentCount += 1
-  }
-
-  if (currentYear !== null) {
-    groupYears.push(currentYear)
-    groupCounts.push(currentCount)
-  }
-
-  // Precompute cumulative start offsets so we can derive within-group index from the flat index
-  const groupStartOffsets: number[] = []
-  let cumulative = 0
-  for (const count of groupCounts) {
-    groupStartOffsets.push(cumulative)
-    cumulative += count
-  }
-
-  return {
-    flattenedEpisodes: episodes,
-    groupCounts,
-    groupYears,
-    groupStartOffsets,
-  }
 }
 
 function getEpisodeRowKey(episode: FeedEpisode | undefined, index: number): string {
@@ -78,14 +34,43 @@ function getEpisodeRowKey(episode: FeedEpisode | undefined, index: number): stri
   return episode.episodeGuid || `${episode.audioUrl}-${episode.pubDate}-${index}`
 }
 
+function buildListRows(episodes: FeedEpisode[]): ListRow[] {
+  const rows: ListRow[] = []
+  let currentYear: number | null = null
+
+  for (let i = 0; i < episodes.length; i++) {
+    const episode = episodes[i]
+    const year = resolveEpisodeYear(episode.pubDate)
+
+    if (year !== currentYear) {
+      rows.push({ type: 'year-header', year, key: `header-${year}-${i}` })
+      currentYear = year
+    }
+
+    const nextEp = episodes[i + 1]
+    const isLastInYear = !nextEp || resolveEpisodeYear(nextEp.pubDate) !== year
+    rows.push({
+      type: 'episode',
+      episode,
+      isLastInYear,
+      key: getEpisodeRowKey(episode, i),
+    })
+  }
+
+  return rows
+}
+
 export default function PodcastEpisodesPage() {
   const { t } = useTranslation()
+  const queryClient = useQueryClient()
   const params = useParams({ strict: false })
   const routeCountry = (params as { country?: string }).country
   const normalizedRouteCountry = normalizeCountryParam(routeCountry)
   const id = String((params as { id?: string }).id ?? '')
   const [scrollContainer, setScrollContainer] = useState<HTMLDivElement | null>(null)
+  const hasUserScrolledForPaginationRef = useRef(false)
   const globalCountry = normalizeCountryParam(useExploreStore((s) => s.country))
+
   // Fetch podcast metadata via the active discovery path.
   const {
     data: podcast,
@@ -101,20 +86,69 @@ export default function PodcastEpisodesPage() {
 
   // Fetch episodes via the active discovery path.
   const feedUrl = podcast?.feedUrl
+  useEffect(() => {
+    hasUserScrolledForPaginationRef.current = false
+  }, [id, feedUrl])
+
+  const firstPageQueryKey = buildPodcastFeedQueryKey(feedUrl, {
+    limit: PODCAST_EPISODES_PAGE_SIZE,
+    offset: 0,
+  })
+  const cachedFirstPage = feedUrl
+    ? (queryClient.getQueryData(firstPageQueryKey) as ParsedFeed | undefined)
+    : undefined
+  const cachedFirstPageUpdatedAt = feedUrl
+    ? queryClient.getQueryState(firstPageQueryKey)?.dataUpdatedAt
+    : undefined
   const {
-    data: feed,
+    data: pagedFeed,
     isLoading: isLoadingFeed,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
     error: feedError,
-  } = useQuery({
-    queryKey: buildPodcastFeedQueryKey(feedUrl),
-    queryFn: ({ signal }) => discovery.fetchPodcastFeed(feedUrl ?? '', signal),
+  } = useInfiniteQuery({
+    // Keep the infinite list key distinct from the single-page show-page key.
+    queryKey: [
+      ...firstPageQueryKey,
+      'infinite',
+    ],
+    initialPageParam: 0,
+    initialData: cachedFirstPage
+      ? ({
+          pages: [cachedFirstPage],
+          pageParams: [0],
+        } satisfies InfiniteData<ParsedFeed, number>)
+      : undefined,
+    initialDataUpdatedAt: cachedFirstPageUpdatedAt,
+    queryFn: ({ signal, pageParam }) =>
+      discovery.fetchPodcastFeed(feedUrl ?? '', signal, {
+        limit: PODCAST_EPISODES_PAGE_SIZE,
+        offset: typeof pageParam === 'number' ? pageParam : 0,
+      }),
+    getNextPageParam: (lastPage, allPages) => {
+      if (lastPage.pageInfo) {
+        if (!lastPage.pageInfo.hasMore) {
+          return undefined
+        }
+        return lastPage.pageInfo.offset + lastPage.pageInfo.returned
+      }
+      if (lastPage.episodes.length < PODCAST_EPISODES_PAGE_SIZE) {
+        return undefined
+      }
+      return allPages.reduce((count, page) => count + page.episodes.length, 0)
+    },
     enabled: Boolean(podcast?.feedUrl && normalizedRouteCountry),
     staleTime: PODCAST_QUERY_CACHE_POLICY.feed.staleTime,
     gcTime: PODCAST_QUERY_CACHE_POLICY.feed.gcTime,
   })
 
-  const episodes = useMemo(() => feed?.episodes ?? [], [feed?.episodes])
-  const groupedEpisodeData = useMemo(() => buildGroupedEpisodeData(episodes), [episodes])
+  const episodes = useMemo(() => {
+    // Feed order is canonical. Flatten loaded pages without client-side sorting.
+    return pagedFeed?.pages.flatMap((page) => page.episodes) ?? []
+  }, [pagedFeed?.pages])
+
+  const listRows = useMemo(() => buildListRows(episodes), [episodes])
 
   if (isLoadingPodcast || isLoadingFeed) {
     return (
@@ -174,10 +208,11 @@ export default function PodcastEpisodesPage() {
     country: globalCountry,
     podcastId: id,
   })
-  const hasEpisodes = groupedEpisodeData.flattenedEpisodes.length > 0
+  const firstFeedPage = pagedFeed?.pages[0]
+  const hasEpisodes = listRows.length > 0
   const isRegionUnavailable =
     !feedError &&
-    Boolean(feed) &&
+    Boolean(firstFeedPage) &&
     !isLoadingFeed &&
     Boolean(normalizedRouteCountry && globalCountry && normalizedRouteCountry !== globalCountry) &&
     !hasEpisodes
@@ -224,38 +259,58 @@ export default function PodcastEpisodesPage() {
   return (
     <div
       ref={setScrollContainer}
+      onScroll={() => {
+        hasUserScrolledForPaginationRef.current = true
+      }}
       className="h-full overflow-y-auto bg-background text-foreground custom-scrollbar"
     >
       <div className="w-full max-w-content mx-auto px-page pt-page">
         <div className="flex flex-col">
           {scrollContainer && (
-            <GroupedVirtuoso
-              data={groupedEpisodeData.flattenedEpisodes}
-              groupCounts={groupedEpisodeData.groupCounts}
+            <Virtuoso
+              data={listRows}
               customScrollParent={scrollContainer}
-              computeItemKey={(index, episode) => getEpisodeRowKey(episode, index)}
-              components={{
-                Footer: () => <div className="pb-32" />,
+              atBottomStateChange={(atBottom) => {
+                if (
+                  atBottom &&
+                  hasUserScrolledForPaginationRef.current &&
+                  hasNextPage &&
+                  !isFetchingNextPage
+                ) {
+                  void fetchNextPage()
+                }
               }}
-              groupContent={(groupIndex) => (
-                <div className="py-4">
-                  <h2 className="text-lg font-bold text-foreground">
-                    {groupedEpisodeData.groupYears[groupIndex] === UNKNOWN_YEAR
-                      ? t('unknownTitle')
-                      : groupedEpisodeData.groupYears[groupIndex]}
-                  </h2>
-                </div>
-              )}
-              itemContent={(index, groupIndex, episode) => {
-                if (!episode) return null
-                const groupSize = groupedEpisodeData.groupCounts[groupIndex] ?? 0
-                const groupStart = groupedEpisodeData.groupStartOffsets[groupIndex] ?? 0
-                const indexInGroup = index - groupStart
+              computeItemKey={(_, item) => item.key}
+              components={{
+                Footer: () => (
+                  <div className="pb-32 pt-4 flex items-center justify-center">
+                    {isFetchingNextPage ? (
+                      <div
+                        data-testid="podcast-episodes-page-loading-more"
+                        className="flex items-center justify-center"
+                      >
+                        <LoadingSpinner size="sm" />
+                      </div>
+                    ) : null}
+                  </div>
+                ),
+              }}
+              itemContent={(_, row) => {
+                if (row.type === 'year-header') {
+                  return (
+                    <div className="py-4">
+                      <h2 className="text-lg font-bold text-foreground">
+                        {row.year === UNKNOWN_YEAR ? t('unknownTitle') : row.year}
+                      </h2>
+                    </div>
+                  )
+                }
+
                 return (
                   <EpisodeRow
-                    episode={episode}
+                    episode={row.episode}
                     podcast={podcast}
-                    isLast={indexInGroup === groupSize - 1}
+                    isLast={row.isLastInYear}
                   />
                 )
               }}

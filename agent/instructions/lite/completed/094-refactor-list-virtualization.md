@@ -1,15 +1,16 @@
-# Task: 094 - Virtualize PodcastEpisodesPage While Preserving Year Grouping UI [COMPLETED]
+# Task: 094 - Virtualize PodcastEpisodesPage With Flat Virtuoso Rows [COMPLETED]
 
 ## Objective
-Improve large-episode-list performance in `PodcastEpisodesPage` by replacing manual incremental rendering with grouped virtualization, while preserving current year-separated UI structure.
+Improve large-episode-list performance in `PodcastEpisodesPage` by replacing manual incremental rendering with flat virtualization, while preserving year-separated UI structure via flat rows.
 
 ## Product Decision (Fixed)
 1. Keep year-separated episode UI exactly as product structure (year headers remain visible).
-2. Migrate rendering to `react-virtuoso` grouped virtualization (`GroupedVirtuoso`), not flat list virtualization.
+2. Migrate rendering to `react-virtuoso` ordinary `Virtuoso` with flat rows; do not use `GroupedVirtuoso`.
 3. Remove manual incremental loading path (`visibleCount`, `IntersectionObserver`, `loaderRef`) after virtualization migration.
 4. Keep existing episode row behavior and actions unchanged (`EpisodeRow`, play actions, library context search).
 5. Keep existing “limited feed” notice behavior.
 6. Keep page-level container scroll model (do not use `useWindowScroll`).
+7. Treat feed order as canonical. Do not sort episodes in the frontend for this page.
 
 ## Scope Scan (Required)
 - Config:
@@ -28,13 +29,13 @@ Improve large-episode-list performance in `PodcastEpisodesPage` by replacing man
 - UI state:
   - Loading/error/empty states remain behaviorally consistent.
 - Tests:
-  - Add page-level rendering tests for grouped virtualization and row continuity.
+  - Add page-level rendering tests for flat virtualization and row continuity.
 
 ## Hidden Risk Sweep (Required)
 - Async control flow:
   - Virtualized rendering must not break query loading transitions or fallback feed logic.
 - Hot-path performance:
-  - Avoid expensive regrouping on every render; memoize derived grouped data.
+  - Avoid expensive row rebuilding on every render; memoize derived flat rows.
   - Keep row rendering stable via deterministic keys.
 - State transition integrity:
   - Play action, row click, and context behavior must remain intact after virtualization.
@@ -43,23 +44,24 @@ Improve large-episode-list performance in `PodcastEpisodesPage` by replacing man
   - Country-dependent query keys and feed fallback behavior remain unchanged.
 
 ## Implementation Steps (Execute in Order)
-1. **Refactor list rendering to grouped virtualization**
+1. **Refactor list rendering to flat virtualization**
    - Update:
      - `apps/lite/src/routeComponents/podcast/PodcastEpisodesPage.tsx`
-   - Use `GroupedVirtuoso` from `react-virtuoso`.
-   - Build grouped data from full `episodes` array:
-     - `groups`: ordered year metadata
-     - `groupCounts`: per-year episode count
-     - flattened episode array aligned with grouped index mapping.
+   - Use ordinary `Virtuoso` from `react-virtuoso`.
+   - Build a flat row model from the full `episodes` array:
+     - year header rows
+     - episode rows
+     - stable deterministic keys for both
+   - Preserve upstream feed order. Do not sort the `episodes` array in the page.
    - Flattened rows must use stable row identity (prefer `episodeId`; fallback `guid`/`audioUrl+publishedAt`). Do not use raw list index as row key.
 
 2. **Preserve year header UI**
-   - Use `groupContent` to render year headers with existing typography style.
-   - Ensure each group header visually matches current year separator design.
+   - Render year headers as normal flat rows with existing typography style.
+   - Ensure each header visually matches current year separator design.
 
 3. **Preserve episode row behavior**
    - Render each episode with existing `EpisodeRow` props and play callback.
-   - Keep `isLast` semantics per year group for divider behavior parity.
+   - Keep `isLast` semantics per year section for divider behavior parity.
 
 4. **Remove manual incremental loading mechanism**
    - Remove:
@@ -85,15 +87,15 @@ Improve large-episode-list performance in `PodcastEpisodesPage` by replacing man
      - `apps/lite/src/routeComponents/podcast/__tests__/PodcastEpisodesPage.virtualized.test.tsx`
    - Cover:
      - year headers are rendered.
-     - grouped episode rows render and keep play action wiring.
+     - flat episode rows render and keep play action wiring.
      - `isLast`/divider behavior remains correct at year boundaries.
      - no `IntersectionObserver` dependency in rendering path.
      - limited-feed notice condition still works.
 
 8. **Documentation sync (atomic)**
    - Update handoff docs to reflect:
-     - `PodcastEpisodesPage` now uses grouped virtualization
-     - year-grouped UI preserved
+     - `PodcastEpisodesPage` now uses ordinary `Virtuoso` with flat rows
+     - year-separated UI preserved via flat row rendering
      - manual incremental observer removed.
 
 ## Acceptance Criteria
@@ -103,14 +105,15 @@ Improve large-episode-list performance in `PodcastEpisodesPage` by replacing man
 - Divider behavior at year boundaries matches previous `isLast` semantics.
 - Manual infinite-scroll observer code path is removed.
 - Limited-feed notice still appears under the same conditions.
+- Feed order is preserved as returned upstream.
 
 ## Required Tests
 1. `apps/lite/src/routeComponents/podcast/__tests__/PodcastEpisodesPage.virtualized.test.tsx`
-   - group header rendering
+   - year header rendering
    - row interaction continuity
    - year-boundary divider parity (`isLast` semantics)
    - limited-feed notice condition
-2. Update mocks as needed for `react-virtuoso` grouped rendering in tests.
+2. Update mocks as needed for ordinary `react-virtuoso` rendering in tests.
 
 ## Verification Commands
 - `pnpm -C apps/lite lint`
@@ -129,21 +132,22 @@ Improve large-episode-list performance in `PodcastEpisodesPage` by replacing man
     - `apps/docs/content/docs/apps/lite/handoff/standards.mdx`
     - `apps/docs/content/docs/apps/lite/handoff/standards.zh.mdx`
 - Regression risks:
-  - group-to-item index mapping mismatch
+  - flat row construction mismatch
   - divider `isLast` regressions at year boundaries
   - layout height mismatch causing empty viewport
 - Required verification:
-  - grouped rendering parity checks pass
+  - flat-row rendering parity checks pass
   - page interaction tests pass
 
 ## Forbidden Dependencies
 - Do not add alternative virtualization libraries.
 - Do not flatten/remove year-grouped information architecture.
 - Do not add pagination API changes in this instruction.
+- Do not introduce frontend sorting that changes upstream feed order.
 
 ## Required Patterns
-- Memoized grouped data derivation.
-- Deterministic mapping from virtuoso group/item indices to episode records.
+- Memoized flat row derivation.
+- Deterministic mapping from flat rows to rendered year headers and episode records.
 - Keep Zustand atomic selector usage in touched components.
 
 ## Decision Log

@@ -22,7 +22,15 @@ type parsedFeedResponse struct {
 	Title       string                    `json:"title"`
 	Description string                    `json:"description"`
 	ArtworkURL  string                    `json:"artworkUrl,omitempty"`
+	PageInfo    *parsedFeedPageInfo       `json:"pageInfo,omitempty"`
 	Episodes    []parsedFeedEpisodeResult `json:"episodes"`
+}
+
+type parsedFeedPageInfo struct {
+	Limit    int  `json:"limit"`
+	Offset   int  `json:"offset"`
+	Returned int  `json:"returned"`
+	HasMore  bool `json:"hasMore"`
 }
 
 type parsedFeedEpisodeResult struct {
@@ -112,7 +120,19 @@ func (s *discoveryService) handleFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	UpstreamKindFeedURL, err := parseDiscoveryFeedURL(r.URL.Query())
+	requestURL, err := parseDiscoveryFeedURL(r.URL.Query())
+	if err != nil {
+		writeDiscoveryMappedError(w, err)
+		logDiscoveryRequest(route, UpstreamKindFeed, "", time.Since(start), err, CacheStatusUncached)
+		return
+	}
+	limit, err := parseDiscoveryPositiveInteger(r.URL.Query(), "limit")
+	if err != nil {
+		writeDiscoveryMappedError(w, err)
+		logDiscoveryRequest(route, UpstreamKindFeed, "", time.Since(start), err, CacheStatusUncached)
+		return
+	}
+	offset, err := parseDiscoveryFeedOffset(r.URL.Query())
 	if err != nil {
 		writeDiscoveryMappedError(w, err)
 		logDiscoveryRequest(route, UpstreamKindFeed, "", time.Since(start), err, CacheStatusUncached)
@@ -122,44 +142,94 @@ func (s *discoveryService) handleFeed(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), s.timeout)
 	defer cancel()
 
-	parsedURL, _ := url.ParseRequestURI(UpstreamKindFeedURL)
+	parsedURL, cacheKey, err := validateAndNormalizeDiscoveryFeedURL(requestURL)
+	if err != nil {
+		writeDiscoveryMappedError(w, err)
+		logDiscoveryRequest(route, UpstreamKindFeed, "", time.Since(start), err, CacheStatusUncached)
+		return
+	}
 	host := ""
 	if parsedURL != nil {
 		host = parsedURL.Host
 	}
 
-	payload, err := s.fetchFeed(ctx, UpstreamKindFeedURL)
+	payload, cacheStatus, err := s.fetchFeedCachedValidated(ctx, parsedURL, cacheKey)
 	if err != nil {
 		writeDiscoveryMappedError(w, err)
 		logDiscoveryRequest(route, UpstreamKindFeed, host, time.Since(start), err, CacheStatusUncached)
 		return
 	}
 
-	writeDiscoveryJSON(w, http.StatusOK, payload)
-	logDiscoveryRequest(route, UpstreamKindFeed, host, time.Since(start), nil, CacheStatusUncached)
+	writeDiscoveryJSON(
+		w,
+		http.StatusOK,
+		sliceParsedFeedResponsePage(payload, limit, offset),
+	)
+	logDiscoveryRequest(route, UpstreamKindFeed, host, time.Since(start), nil, cacheStatus)
+}
+
+func parseDiscoveryFeedOffset(values url.Values) (int, error) {
+	raw := strings.TrimSpace(values.Get("offset"))
+	if raw == "" {
+		return 0, nil
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value < 0 {
+		return 0, &discoveryParamError{
+			code:    "INVALID_OFFSET",
+			message: "offset must be a non-negative integer",
+		}
+	}
+	return value, nil
+}
+
+func sliceParsedFeedResponsePage(payload parsedFeedResponse, limit *int, offset int) parsedFeedResponse {
+	cloned := cloneParsedFeedResponse(payload)
+	cloned.PageInfo = nil
+	if limit == nil {
+		return cloned
+	}
+	if offset >= len(cloned.Episodes) {
+		cloned.Episodes = []parsedFeedEpisodeResult{}
+		cloned.PageInfo = &parsedFeedPageInfo{
+			Limit:    *limit,
+			Offset:   offset,
+			Returned: 0,
+			HasMore:  false,
+		}
+		return cloned
+	}
+	if offset > 0 {
+		cloned.Episodes = append([]parsedFeedEpisodeResult(nil), cloned.Episodes[offset:]...)
+	}
+	if limit == nil || *limit >= len(cloned.Episodes) {
+		cloned.PageInfo = &parsedFeedPageInfo{
+			Limit:    *limit,
+			Offset:   offset,
+			Returned: len(cloned.Episodes),
+			HasMore:  false,
+		}
+		return cloned
+	}
+	cloned.Episodes = append([]parsedFeedEpisodeResult(nil), cloned.Episodes[:*limit]...)
+	cloned.PageInfo = &parsedFeedPageInfo{
+		Limit:    *limit,
+		Offset:   offset,
+		Returned: len(cloned.Episodes),
+		HasMore:  offset+len(cloned.Episodes) < len(payload.Episodes),
+	}
+	return cloned
 }
 
 func (s *discoveryService) fetchFeed(ctx context.Context, requestURL string) (parsedFeedResponse, error) {
-	parsedURL, err := url.ParseRequestURI(requestURL)
+	parsedURL, _, err := validateAndNormalizeDiscoveryFeedURL(requestURL)
 	if err != nil {
-		return parsedFeedResponse{}, &discoveryParamError{
-			code:    "INVALID_URL",
-			message: "url must be a valid absolute http or https URL",
-		}
+		return parsedFeedResponse{}, err
 	}
-	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
-		return parsedFeedResponse{}, &discoveryParamError{
-			code:    "INVALID_URL",
-			message: "url must be a valid absolute http or https URL",
-		}
-	}
-	if err := validateProxyTarget(parsedURL); err != nil {
-		return parsedFeedResponse{}, &discoveryParamError{
-			code:    "INVALID_URL",
-			message: err.Error(),
-		}
-	}
+	return s.fetchFeedFromParsedURL(ctx, parsedURL)
+}
 
+func (s *discoveryService) fetchFeedFromParsedURL(ctx context.Context, parsedURL *url.URL) (parsedFeedResponse, error) {
 	proxy := &proxyService{
 		timeout:     s.timeout,
 		userAgent:   s.userAgent,

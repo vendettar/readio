@@ -41,6 +41,11 @@ export class DiscoveryInvalidPayloadError extends Error {
   }
 }
 
+export interface PodcastFeedPageOptions {
+  limit?: number
+  offset?: number
+}
+
 const DiscoveryErrorSchema = z.object({
   code: z.string(),
   message: z.string(),
@@ -239,13 +244,27 @@ export function getPodcastIndexPodcastsBatchByGuid(
 
 export function fetchPodcastFeed(
   feedUrl: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options?: PodcastFeedPageOptions
 ): Promise<ParsedFeed> {
+  const search = new URLSearchParams({ url: normalizeFeedUrl(feedUrl) })
+  const hasPagedLimit =
+    typeof options?.limit === 'number' && Number.isFinite(options.limit) && options.limit > 0
+
+  if (hasPagedLimit) {
+    search.set('limit', String(options.limit))
+  }
+  if (
+    hasPagedLimit &&
+    typeof options?.offset === 'number' &&
+    Number.isFinite(options.offset) &&
+    options.offset >= 0
+  ) {
+    search.set('offset', String(options.offset))
+  }
+
   return fetchDiscoveryJSON(
-    buildDiscoveryURL(
-      DISCOVERY_ROUTE.feed,
-      new URLSearchParams({ url: normalizeFeedUrl(feedUrl) })
-    ),
+    buildDiscoveryURL(DISCOVERY_ROUTE.feed, search),
     (value) => ParsedFeedSchema.parse(value),
     signal
   )

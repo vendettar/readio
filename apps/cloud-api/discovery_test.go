@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -21,6 +22,12 @@ type discoveryRoundTripper func(*http.Request) (*http.Response, error)
 func (fn discoveryRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) {
 	return fn(req)
 }
+
+type timeoutErr struct{}
+
+func (timeoutErr) Error() string   { return "i/o timeout" }
+func (timeoutErr) Timeout() bool   { return true }
+func (timeoutErr) Temporary() bool { return true }
 
 func newDiscoveryFeedFixtureService(
 	t *testing.T,
@@ -2369,6 +2376,32 @@ func TestDiscoveryFetchJSONMapsNonSuccessStatus(t *testing.T) {
 	var statusErr *discoveryUpstreamStatusError
 	if !errors.As(err, &statusErr) || statusErr.status != http.StatusBadGateway {
 		t.Fatalf("error = %v, want discoveryUpstreamStatusError(502)", err)
+	}
+}
+
+func TestDiscoveryFetchJSONMapsTransportTimeoutToDiscoveryTimeout(t *testing.T) {
+	service := &discoveryService{
+		client: &http.Client{
+			Transport: discoveryRoundTripper(func(_ *http.Request) (*http.Response, error) {
+				return nil, &url.Error{Op: "Get", URL: "https://example.com", Err: timeoutErr{}}
+			}),
+		},
+		timeout:    time.Second,
+		rssBaseURL: discoveryRSSBaseURL,
+		userAgent:  discoveryUserAgent,
+		bodyLimit:  discoveryBodyLimit,
+		cache:      newDiscoveryCache(discoveryCacheMaxKeys),
+	}
+
+	err := service.fetchJSON(context.Background(), "https://example.com", &map[string]any{})
+	if !errors.Is(err, errDiscoveryTimeout) {
+		t.Fatalf("error = %v, want errDiscoveryTimeout", err)
+	}
+	if got := classifyDiscoveryError(err); got != "timeout" {
+		t.Fatalf("error class = %q, want timeout", got)
+	}
+	if !os.IsTimeout(err) && !errors.Is(err, errDiscoveryTimeout) {
+		t.Fatalf("error should be recognized as timeout, got %v", err)
 	}
 }
 

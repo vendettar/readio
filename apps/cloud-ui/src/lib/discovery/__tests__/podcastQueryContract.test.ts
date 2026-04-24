@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { buildPodcastFeedQueryKey } from '../podcastQueryContract'
+import {
+  PODCAST_DEFAULT_FEED_QUERY_LIMIT,
+  buildPodcastFeedQueryKey,
+} from '../podcastQueryContract'
 
 describe('podcastQueryContract', () => {
   it('keeps normalized feedUrl input stable in the query key', () => {
@@ -7,6 +10,9 @@ describe('podcastQueryContract', () => {
       'podcast',
       'feed',
       'http://example.com/feed.xml',
+      'full',
+      'all',
+      0,
     ])
   })
 
@@ -15,6 +21,9 @@ describe('podcastQueryContract', () => {
       'podcast',
       'feed',
       'http://example.com/feed.xml',
+      'full',
+      'all',
+      0,
     ])
   })
 
@@ -23,6 +32,36 @@ describe('podcastQueryContract', () => {
       'podcast',
       'feed',
       'https://example.com/feed.xml',
+      'full',
+      'all',
+      0,
+    ])
+  })
+
+  it('distinguishes paged windows from full-feed requests', () => {
+    expect(buildPodcastFeedQueryKey('https://example.com/feed.xml', { limit: 20, offset: 0 })).toEqual([
+      'podcast',
+      'feed',
+      'https://example.com/feed.xml',
+      'page',
+      20,
+      0,
+    ])
+  })
+
+  it('distinguishes page one from later paged windows', () => {
+    expect(
+      buildPodcastFeedQueryKey('https://example.com/feed.xml', {
+        limit: PODCAST_DEFAULT_FEED_QUERY_LIMIT,
+        offset: PODCAST_DEFAULT_FEED_QUERY_LIMIT,
+      })
+    ).toEqual([
+      'podcast',
+      'feed',
+      'https://example.com/feed.xml',
+      'page',
+      PODCAST_DEFAULT_FEED_QUERY_LIMIT,
+      PODCAST_DEFAULT_FEED_QUERY_LIMIT,
     ])
   })
 })

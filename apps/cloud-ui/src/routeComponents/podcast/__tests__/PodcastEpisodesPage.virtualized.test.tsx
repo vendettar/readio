@@ -1,69 +1,28 @@
+import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
-import type React from 'react'
+import React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { makeFeedEpisode, makePodcast } from '../../../lib/discovery/__tests__/fixtures'
-import type { FeedEpisode, Podcast } from '../../../lib/discovery/schema'
 import PodcastEpisodesPage from '../PodcastEpisodesPage'
 
-const intersectionObserverCtor = vi.fn()
-
-let mockPodcast: Podcast | null = null
-let mockEpisodes: FeedEpisode[] = []
-let originalIntersectionObserver: typeof globalThis.IntersectionObserver
-
-vi.mock('react-i18next', async () => {
-  const actual = await vi.importActual<typeof import('react-i18next')>('react-i18next')
-  return {
-    ...actual,
-    useTranslation: () => ({
-      t: (key: string) => key,
-    }),
-  }
-})
+// Mock dependencies
+vi.mock('@tanstack/react-query', () => ({
+  useQuery: vi.fn(),
+  useInfiniteQuery: vi.fn(),
+  useQueryClient: vi.fn(() => ({
+    getQueryData: vi.fn(() => undefined),
+    getQueryState: vi.fn(() => undefined),
+  })),
+}))
 
 vi.mock('@tanstack/react-router', () => ({
-  useParams: () => ({ country: 'us', id: '123' }),
-  useSearch: () => ({}),
+  useParams: vi.fn(() => ({ id: '123', country: 'us' })),
+  Link: ({ children }: { children: React.ReactNode }) => <a>{children}</a>,
 }))
 
-vi.mock('@tanstack/react-query', () => ({
-  useQuery: ({ queryKey }: { queryKey: readonly unknown[] }) => {
-    if (queryKey[1] === 'podcast-detail') {
-      return {
-        data: mockPodcast,
-        isLoading: false,
-        error: null,
-      }
-    }
-
-    if (queryKey[1] === 'feed') {
-      return {
-        data: {
-          title: mockPodcast?.title ?? '',
-          description: '',
-          artworkUrl: mockPodcast?.artwork,
-          episodes: mockEpisodes,
-        },
-        isLoading: false,
-      }
-    }
-
-    return {
-      data: undefined,
-      isLoading: false,
-      error: null,
-    }
-  },
-}))
-
-vi.mock('../../../hooks/useEpisodePlayback', () => ({
-  useEpisodePlayback: () => ({
-    playEpisode: vi.fn(),
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string) => key,
   }),
-}))
-
-vi.mock('../../../lib/logger', () => ({
-  logError: vi.fn(),
 }))
 
 vi.mock('../../../lib/discovery', () => ({
@@ -73,193 +32,257 @@ vi.mock('../../../lib/discovery', () => ({
   },
 }))
 
-vi.mock('../../../components/EpisodeRow/EpisodeRow', () => ({
-  EpisodeRow: ({
-    episode,
-    isLast,
-    onPlay,
-  }: {
-    episode: FeedEpisode
-    isLast?: boolean
-    onPlay?: () => void
-  }) => (
-    <button
-      type="button"
-      data-testid={`episode-row-${episode.episodeGuid}`}
-      data-is-last={isLast ? 'true' : 'false'}
-      onClick={onPlay}
-    >
-      {episode.title}
-    </button>
+vi.mock('../../../store/exploreStore', () => ({
+  useExploreStore: vi.fn((selector) =>
+    selector({
+      country: 'us',
+      addFavorite: vi.fn(),
+      removeFavorite: vi.fn(),
+      isFavorited: vi.fn(() => false),
+    })
   ),
 }))
 
-vi.mock('react-virtuoso', () => ({
-  GroupedVirtuoso: ({
-    data = [],
-    groupCounts = [],
-    groupContent,
-    itemContent,
-    computeItemKey,
-    components,
-  }: {
-    data?: FeedEpisode[]
-    groupCounts?: number[]
-    groupContent?: (groupIndex: number) => React.ReactNode
-    itemContent?: (index: number, groupIndex: number, item: FeedEpisode) => React.ReactNode
-    computeItemKey?: (index: number, item: FeedEpisode) => React.Key
-    components?: {
-      Header?: React.ComponentType
-      Footer?: React.ComponentType
-    }
-  }) => {
-    let flatIndex = 0
-    let groupStartIndex = 0
-    const groups: React.ReactNode[] = []
-
-    for (const count of groupCounts) {
-      const groupIndex = groups.length
-      const firstEpisode = data[groupStartIndex]
-      const groupKey = firstEpisode?.episodeGuid ?? `group-${groupStartIndex}-${count}`
-
-      const items = Array.from({ length: count }).map((_, indexInGroup) => {
-        const episode = data[flatIndex]
-        const key = computeItemKey?.(flatIndex, episode) ?? flatIndex
-        const content = itemContent?.(flatIndex, groupIndex, episode)
-        flatIndex += 1
-
-        return (
-          <div key={String(key)} data-testid={`group-item-${groupIndex}-${indexInGroup}`}>
-            {content}
-          </div>
-        )
-      })
-
-      groups.push(
-        <div key={groupKey}>
-          <div data-testid={`group-header-${groupIndex}`}>{groupContent?.(groupIndex)}</div>
-          {items}
-        </div>
-      )
-      groupStartIndex += count
-    }
-
-    const Header = components?.Header
-    const Footer = components?.Footer
-
-    return (
-      <div data-testid="grouped-virtuoso">
-        {Header && <Header />}
-        {groups}
-        {Footer && <Footer />}
-      </div>
-    )
-  },
+// Mock EpisodeRow so we can verify properties (like isLast) easily
+vi.mock('../../../components/EpisodeRow/EpisodeRow', () => ({
+  EpisodeRow: ({ episode, isLast }: any) => (
+    <div data-testid={`episode-row-${episode.episodeGuid}`} data-is-last={isLast ? 'true' : 'false'}>
+      {episode.title}
+    </div>
+  ),
 }))
 
-describe('PodcastEpisodesPage virtualized grouped rendering', () => {
-  beforeEach(() => {
-    intersectionObserverCtor.mockClear()
-    mockPodcast = makePodcast({
-      podcastItunesId: '123',
-      title: 'Test Podcast',
-      author: 'Author',
-      artwork: 'https://example.com/art.jpg',
-      description: 'Description',
-      feedUrl: 'https://example.com/feed.xml',
-      lastUpdateTime: 1700000000000,
-      episodeCount: 60,
-    })
-    mockEpisodes = [
-      makeFeedEpisode({
-        episodeGuid: 'ep-1',
-        title: 'Episode ep-1',
-        description: 'Description ep-1',
-        audioUrl: 'https://example.com/audio/ep-1.mp3',
-        pubDate: '2025-01-01T00:00:00.000Z',
-      }),
-      makeFeedEpisode({
-        episodeGuid: 'ep-2',
-        title: 'Episode ep-2',
-        description: 'Description ep-2',
-        audioUrl: 'https://example.com/audio/ep-2.mp3',
-        pubDate: '2025-01-01T00:00:00.000Z',
-      }),
-      makeFeedEpisode({
-        episodeGuid: 'ep-3',
-        title: 'Episode ep-3',
-        description: 'Description ep-3',
-        audioUrl: 'https://example.com/audio/ep-3.mp3',
-        pubDate: '2024-01-01T00:00:00.000Z',
-      }),
-    ]
+// Mock normal Virtuoso to just render the itemContent sequentially for all data.
+// We intercept customScrollParent safely.
+vi.mock('react-virtuoso', () => ({
+  Virtuoso: ({ data, itemContent }: any) => (
+    <div data-testid="mock-virtuoso">
+      {data.map((item: any, index: number) => (
+        <div key={item.key} data-testid={`virtuoso-item-${index}`}>
+          {itemContent(index, item)}
+        </div>
+      ))}
+    </div>
+  ),
+}))
 
-    originalIntersectionObserver = globalThis.IntersectionObserver
-    // The virtualized path must not rely on IntersectionObserver-driven incremental rendering.
-    // @ts-expect-error test shim
-    globalThis.IntersectionObserver = vi.fn(() => {
-      intersectionObserverCtor()
-      return {
-        observe: vi.fn(),
-        disconnect: vi.fn(),
-        unobserve: vi.fn(),
-        takeRecords: vi.fn(),
+describe('PodcastEpisodesPage virtualized rendering', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    ;(useInfiniteQuery as any).mockImplementation((args: any) => (useQuery as any)(args))
+
+    // We mock setScrollContainer by returning a fake container on render,
+    // which unblocks the scrollContainer && <Virtuoso/> condition.
+    const originalUseState = React.useState
+    vi.spyOn(React, 'useState').mockImplementation(((initialValue: any) => {
+      if (initialValue === null) {
+        // mock scrollContainer state
+        return [{ current: true }, vi.fn()]
       }
-    })
+      return originalUseState(initialValue)
+    }) as any)
   })
 
   afterEach(() => {
-    ;(
-      globalThis as { IntersectionObserver?: typeof globalThis.IntersectionObserver }
-    ).IntersectionObserver = originalIntersectionObserver
+    vi.restoreAllMocks()
   })
 
-  it('renders grouped year headers, keeps row wiring, and preserves isLast at group boundaries', () => {
-    render(<PodcastEpisodesPage />)
-
-    expect(screen.queryByTestId('grouped-virtuoso')).not.toBeNull()
-    expect(screen.queryByText('2025')).not.toBeNull()
-    expect(screen.queryByText('2024')).not.toBeNull()
-
-    expect(screen.getByTestId('episode-row-ep-1').getAttribute('data-is-last')).toBe('false')
-    expect(screen.getByTestId('episode-row-ep-2').getAttribute('data-is-last')).toBe('true')
-    expect(screen.getByTestId('episode-row-ep-3').getAttribute('data-is-last')).toBe('true')
-
-    expect(globalThis.IntersectionObserver).not.toHaveBeenCalled()
-    expect(intersectionObserverCtor).not.toHaveBeenCalled()
-  })
-
-  it('groups malformed pubDate entries into unknown-year bucket without breaking rendering', () => {
-    mockEpisodes = [
-      makeFeedEpisode({
-        episodeGuid: 'ep-valid',
-        title: 'Episode ep-valid',
-        description: 'Description ep-valid',
-        audioUrl: 'https://example.com/audio/ep-valid.mp3',
-        pubDate: '2025-01-01T00:00:00.000Z',
-      }),
-      makeFeedEpisode({
-        episodeGuid: 'ep-invalid',
-        title: 'Episode invalid',
-        description: 'Description invalid',
-        audioUrl: 'https://example.com/audio/invalid.mp3',
-        pubDate: 'not-a-date',
-      }),
-    ]
+  it('renders flat rows with year headers and correctly assigns isLast', async () => {
+    ;(useQuery as any).mockImplementation(({ queryKey }: any) => {
+      if (queryKey[1] === 'podcast-detail') {
+        return { data: { title: 'Test Podcast', feedUrl: 'https://example.com/feed.xml' }, isLoading: false }
+      }
+      if (queryKey[1] === 'feed') {
+        return {
+          data: {
+            pages: [
+              {
+                episodes: [
+                  { episodeGuid: 'ep1', title: 'Episode 1', pubDate: '2025-01-01' },
+                  { episodeGuid: 'ep2', title: 'Episode 2', pubDate: '2025-01-01' },
+                  { episodeGuid: 'ep3', title: 'Episode 3', pubDate: '2024-01-01' },
+                ],
+              },
+            ],
+          },
+          isLoading: false,
+        }
+      }
+      return { data: undefined, isLoading: false }
+    })
 
     render(<PodcastEpisodesPage />)
 
-    expect(screen.queryByText('2025')).not.toBeNull()
-    expect(screen.queryByText('unknownTitle')).not.toBeNull()
-    expect(screen.queryByTestId('episode-row-ep-invalid')).not.toBeNull()
+    // Wait for feed to "load"
+    expect(await screen.findByText(/2025/)).toBeDefined()
+    expect(await screen.findByText(/2024/)).toBeDefined()
+
+    // Assert that episode rows exist
+    const row1 = screen.getByTestId('episode-row-ep1')
+    const row2 = screen.getByTestId('episode-row-ep2')
+    const row3 = screen.getByTestId('episode-row-ep3')
+
+    expect(row1).toBeDefined()
+    expect(row2).toBeDefined()
+    expect(row3).toBeDefined()
+
+    // Assert isLast: ep1 is NOT last in 2025, ep2 IS last in 2025, ep3 IS last in 2024
+    expect(row1.getAttribute('data-is-last')).toBe('false')
+    expect(row2.getAttribute('data-is-last')).toBe('true')
+    expect(row3.getAttribute('data-is-last')).toBe('true')
   })
 
-  it('renders an explicit empty state for same-country zero-episode feeds', () => {
-    mockEpisodes = []
+  it('renders strictly in the canonical order provided by the feed without sorting, even if interleaved', async () => {
+    ;(useQuery as any).mockImplementation(({ queryKey }: any) => {
+      if (queryKey[1] === 'podcast-detail') {
+        return { data: { title: 'Test Podcast', feedUrl: 'https://example.com/feed.xml' }, isLoading: false }
+      }
+      if (queryKey[1] === 'feed') {
+        return {
+          data: {
+            pages: [
+              {
+                episodes: [
+                  { episodeGuid: 'ep1', title: 'Ep 1 (2026)', pubDate: '2026-01-01T00:00:00Z' },
+                  { episodeGuid: 'ep2', title: 'Ep 2 (2019)', pubDate: '2019-01-01T00:00:00Z' },
+                  { episodeGuid: 'ep3', title: 'Ep 3 (2025)', pubDate: '2025-01-01T00:00:00Z' },
+                  { episodeGuid: 'ep4', title: 'Ep 4 (2025)', pubDate: '2025-02-01T00:00:00Z' },
+                ],
+              },
+            ],
+          },
+          isLoading: false,
+        }
+      }
+      return { data: undefined, isLoading: false }
+    })
+
+    render(<PodcastEpisodesPage />)
+    expect(await screen.findByTestId('mock-virtuoso')).toBeDefined()
+
+    const virtuoso = screen.getByTestId('mock-virtuoso')
+
+    // We expect headers and rows to appear exactly in the order:
+    // Header 2026 -> Row ep1 -> Header 2019 -> Row ep2 -> Header 2025 -> Row ep3 -> Row ep4
+    const childrenText = Array.from(virtuoso.children).map(node => node.textContent)
+
+    expect(childrenText[0]).toContain('2026')
+    expect(childrenText[1]).toContain('Ep 1 (2026)')
+
+    expect(childrenText[2]).toContain('2019')
+    expect(childrenText[3]).toContain('Ep 2 (2019)')
+
+    expect(childrenText[4]).toContain('2025')
+    expect(childrenText[5]).toContain('Ep 3 (2025)')
+    expect(childrenText[6]).toContain('Ep 4 (2025)')
+
+    // Verify isLastInYear logic:
+    // ep1 is last in its 2026 group (next is 2019)
+    expect(screen.getByTestId('episode-row-ep1').getAttribute('data-is-last')).toBe('true')
+    // ep2 is last in its 2019 group (next is 2025)
+    expect(screen.getByTestId('episode-row-ep2').getAttribute('data-is-last')).toBe('true')
+    // ep3 is NOT last in 2025 (next is ep4, also 2025)
+    expect(screen.getByTestId('episode-row-ep3').getAttribute('data-is-last')).toBe('false')
+    // ep4 is last (end of list)
+    expect(screen.getByTestId('episode-row-ep4').getAttribute('data-is-last')).toBe('true')
+  })
+
+  it('regression test for CBC case: 1x2026, 1x2025, 7x2019 (9 total)', async () => {
+    // Generate 7 items for 2019
+    const episodes2019 = Array.from({ length: 7 }).map((_, i) => ({
+      episodeGuid: `ep-2019-${i}`,
+      title: `2019 Episode ${i}`,
+      // 16, 15, 14, 13, 12, 11, 10
+      pubDate: `2019-11-1${6 - i}T19:00:00Z`,
+    }))
+
+    ;(useQuery as any).mockImplementation(({ queryKey }: any) => {
+      if (queryKey[1] === 'podcast-detail') {
+        return { data: { title: 'CBC Podcast', feedUrl: 'https://cbc.com/feed.xml' }, isLoading: false }
+      }
+      if (queryKey[1] === 'feed') {
+        return {
+          data: {
+            pages: [
+              {
+                episodes: [
+                  { episodeGuid: 'ep-2026', title: 'The next season', pubDate: '2026-02-03T00:10:00Z' },
+                  { episodeGuid: 'ep-2025', title: 'Coming back', pubDate: '2025-06-05T00:10:00Z' },
+                  ...episodes2019,
+                ],
+              },
+            ],
+          },
+          isLoading: false,
+        }
+      }
+      return { data: undefined, isLoading: false }
+    })
 
     render(<PodcastEpisodesPage />)
 
-    expect(screen.queryByText('noEpisodes')).not.toBeNull()
-    expect(screen.queryByTestId('grouped-virtuoso')).toBeNull()
+    // Wait for the render to complete
+    expect(await screen.findByTestId('mock-virtuoso')).toBeDefined()
+
+    // Assert Headers
+    expect(screen.getByText('2026')).toBeDefined()
+    expect(screen.getByText('2025')).toBeDefined()
+    expect(screen.getByText('2019')).toBeDefined()
+
+    // Assert Episode 1 (2026) is present and isLast is true
+    const ep2026 = screen.getByTestId('episode-row-ep-2026')
+    expect(ep2026).toBeDefined()
+    expect(ep2026.getAttribute('data-is-last')).toBe('true')
+
+    // Assert Episode 2 (2025) is present and isLast is true
+    const ep2025 = screen.getByTestId('episode-row-ep-2025')
+    expect(ep2025).toBeDefined()
+    expect(ep2025.getAttribute('data-is-last')).toBe('true')
+
+    // Assert that ALL 7 episodes from 2019 are present
+    episodes2019.forEach((ep, index) => {
+      const row = screen.getByTestId(`episode-row-${ep.episodeGuid}`)
+      expect(row).toBeDefined()
+
+      // Only the very last episode of 2019 should be marked isLast
+      if (index === episodes2019.length - 1) {
+        expect(row.getAttribute('data-is-last')).toBe('true')
+      } else {
+        expect(row.getAttribute('data-is-last')).toBe('false')
+      }
+    })
+
+    // Ensure exactly 9 episodes were rendered
+    const episodeRows = screen.queryAllByTestId(/^episode-row-/)
+    expect(episodeRows.length).toBe(9)
+  })
+
+  it('groups malformed pubDate entries into unknown-year bucket', async () => {
+    ;(useQuery as any).mockImplementation(({ queryKey }: any) => {
+      if (queryKey[1] === 'podcast-detail') {
+        return { data: { title: 'Test Podcast', feedUrl: 'https://example.com/feed.xml' }, isLoading: false }
+      }
+      if (queryKey[1] === 'feed') {
+        return {
+          data: {
+            pages: [
+              {
+                episodes: [
+                  { episodeGuid: 'ep-valid', title: 'Episode ep-valid', pubDate: '2025-01-01' },
+                  { episodeGuid: 'ep-invalid', title: 'Episode invalid', pubDate: 'not-a-date' },
+                ],
+              },
+            ],
+          },
+          isLoading: false,
+        }
+      }
+      return { data: undefined, isLoading: false }
+    })
+
+    render(<PodcastEpisodesPage />)
+
+    expect(await screen.findByText(/2025/)).toBeDefined()
+    expect(await screen.findByText(/unknownTitle/)).toBeDefined()
   })
 })

@@ -24,6 +24,7 @@ import {
 import {
   buildPodcastFeedQueryKey,
   buildPodcastDetailQueryKey,
+  PODCAST_DEFAULT_FEED_QUERY_LIMIT,
   PODCAST_QUERY_CACHE_POLICY,
 } from '../../lib/discovery/podcastQueryContract'
 import { formatCompactNumber } from '../../lib/formatters'
@@ -97,8 +98,15 @@ export default function PodcastShowPage() {
     isLoading: isLoadingFeed,
     error: feedError,
   } = useQuery({
-    queryKey: buildPodcastFeedQueryKey(feedUrl),
-    queryFn: ({ signal }) => discovery.fetchPodcastFeed(feedUrl ?? '', signal),
+    queryKey: buildPodcastFeedQueryKey(feedUrl, {
+      limit: PODCAST_DEFAULT_FEED_QUERY_LIMIT,
+      offset: 0,
+    }),
+    queryFn: ({ signal }) =>
+      discovery.fetchPodcastFeed(feedUrl ?? '', signal, {
+        limit: PODCAST_DEFAULT_FEED_QUERY_LIMIT,
+        offset: 0,
+      }),
     enabled: Boolean(podcast?.feedUrl && normalizedRouteCountry),
     staleTime: PODCAST_QUERY_CACHE_POLICY.feed.staleTime,
     gcTime: PODCAST_QUERY_CACHE_POLICY.feed.gcTime,
