@@ -116,9 +116,9 @@ export default function PodcastEpisodesPage() {
     initialPageParam: 0,
     initialData: cachedFirstPage
       ? ({
-          pages: [cachedFirstPage],
-          pageParams: [0],
-        } satisfies InfiniteData<ParsedFeed, number>)
+        pages: [cachedFirstPage],
+        pageParams: [0],
+      } satisfies InfiniteData<ParsedFeed, number>)
       : undefined,
     initialDataUpdatedAt: cachedFirstPageUpdatedAt,
     queryFn: ({ signal, pageParam }) =>
@@ -270,9 +270,9 @@ export default function PodcastEpisodesPage() {
             <Virtuoso
               data={listRows}
               customScrollParent={scrollContainer}
-              atBottomStateChange={(atBottom) => {
+              rangeChanged={({ endIndex }) => {
                 if (
-                  atBottom &&
+                  endIndex >= listRows.length - 1 &&
                   hasUserScrolledForPaginationRef.current &&
                   hasNextPage &&
                   !isFetchingNextPage
