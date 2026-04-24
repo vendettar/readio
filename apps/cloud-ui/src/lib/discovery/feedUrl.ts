@@ -1,3 +1,5 @@
+export type NormalizedFeedUrl = string & { readonly __normalizedFeedUrl: unique symbol }
+
 function normalizeParsedUrl(url: URL): string {
   url.protocol = url.protocol.toLowerCase()
   url.hostname = url.hostname.toLowerCase()
@@ -22,11 +24,13 @@ function tryNormalizeAbsoluteUrl(raw: string): string | undefined {
   }
 }
 
-export function normalizeFeedUrl(feedUrl: string): string {
-  return tryNormalizeAbsoluteUrl(feedUrl) ?? feedUrl.trim()
+export function normalizeFeedUrl(feedUrl: string): NormalizedFeedUrl {
+  return (tryNormalizeAbsoluteUrl(feedUrl) ?? feedUrl.trim()) as NormalizedFeedUrl
 }
 
-export function normalizeFeedUrlOrUndefined(feedUrl: string | undefined): string | undefined {
+export function normalizeFeedUrlOrUndefined(
+  feedUrl: string | undefined
+): NormalizedFeedUrl | undefined {
   if (typeof feedUrl !== 'string') return undefined
-  return tryNormalizeAbsoluteUrl(feedUrl)
+  return tryNormalizeAbsoluteUrl(feedUrl) as NormalizedFeedUrl | undefined
 }

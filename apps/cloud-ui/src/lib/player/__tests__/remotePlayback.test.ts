@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
 import { useTranscriptStore } from '../../../store/transcriptStore'
 import { TRACK_SOURCE } from '../../db/types'
 import type { Favorite, PlaybackSession } from '../../dexieDb'
@@ -32,7 +33,7 @@ function makePodcast(overrides: Partial<Podcast> = {}): Podcast {
     author: 'Test Author',
     artwork: 'https://example.com/art.jpg',
     description: 'Test description',
-    feedUrl: 'https://example.com/feed.xml',
+    feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
     lastUpdateTime: 1704067200,
     episodeCount: 10,
     language: 'en',
@@ -163,7 +164,7 @@ describe('remotePlayback', () => {
         author: 'Author',
         artwork: 'https://example.com/art.jpg',
         description: 'Description',
-        feedUrl: 'https://example.com/feed.xml',
+        feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
         lastUpdateTime: 1700000000000,
         podcastItunesId: '12345',
         episodeCount: 10,
@@ -247,13 +248,14 @@ describe('remotePlayback', () => {
     const favorite = {
       id: 'fav-1',
       key: 'k',
-      feedUrl: 'https://example.com/feed.xml',
+      feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
       audioUrl: 'https://example.com/favorite.mp3',
       episodeTitle: 'Favorite',
       podcastTitle: 'Podcast',
       artworkUrl: 'https://example.com/art.jpg',
       addedAt: Date.now(),
       transcriptUrl: 'https://example.com/favorite.srt',
+      countryAtSave: 'us',
     } as Favorite
 
     await playFavoriteWithDeps({ setAudioUrl, play, pause }, favorite, {

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
 import type { LocalSearchResult } from '../../hooks/useGlobalSearch'
 import { executeLocalSearchAction, type LocalSearchActionDeps } from '../localSearchActions'
 
@@ -35,7 +36,12 @@ vi.mock('../dexieDb', () => ({
     getAudioBlob: vi.fn(),
     getSubtitle: vi.fn(),
   },
-  isNavigableExplorePlaybackSession: (session: { source?: string; countryAtSave?: string; podcastItunesId?: string; episodeGuid?: string }) =>
+  isNavigableExplorePlaybackSession: (session: {
+    source?: string
+    countryAtSave?: string
+    podcastItunesId?: string
+    episodeGuid?: string
+  }) =>
     session.source === 'explore' &&
     !!session.countryAtSave &&
     (!!session.podcastItunesId || !!session.episodeGuid),
@@ -70,7 +76,7 @@ describe('localSearchActions remote playback delegation', () => {
       data: {
         id: 'fav-db-id',
         key: 'feed::audio',
-        feedUrl: 'https://example.com/feed.xml',
+        feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
         audioUrl: 'https://example.com/audio.mp3',
         episodeTitle: 'Fallback Episode',
         podcastTitle: 'Podcast',

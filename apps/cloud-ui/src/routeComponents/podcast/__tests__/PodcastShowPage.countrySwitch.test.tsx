@@ -2,10 +2,8 @@ import { render, screen, waitFor } from '@testing-library/react'
 import type React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createQueryClientWrapper } from '../../../__tests__/queryClient'
-import {
-  makeFeedEpisode,
-  makeMinimalPodcast,
-} from '../../../lib/discovery/__tests__/fixtures'
+import { makeFeedEpisode, makeMinimalPodcast } from '../../../lib/discovery/__tests__/fixtures'
+import { normalizeFeedUrl } from '../../../lib/discovery/feedUrl'
 import PodcastShowPage from '../PodcastShowPage'
 
 const getPodcastMock = vi.fn()
@@ -95,15 +93,17 @@ describe('PodcastShowPage country switch cancellation', () => {
         title: `Feed ${country}`,
         description: '',
         artworkUrl: '',
-        episodes: [makeFeedEpisode({
-          episodeGuid: `${country}-ep-1`,
-          title: `${country.toUpperCase()} Episode`,
-          description: '',
-          audioUrl: `https://example.com/${country}/audio.mp3`,
-          pubDate: '2025-01-01T00:00:00.000Z',
-          artworkUrl: undefined,
-          duration: undefined,
-        })],
+        episodes: [
+          makeFeedEpisode({
+            episodeGuid: `${country}-ep-1`,
+            title: `${country.toUpperCase()} Episode`,
+            description: '',
+            audioUrl: `https://example.com/${country}/audio.mp3`,
+            pubDate: '2025-01-01T00:00:00.000Z',
+            artworkUrl: undefined,
+            duration: undefined,
+          }),
+        ],
       })
     })
     const wrapper = createQueryClientWrapper()
@@ -121,7 +121,7 @@ describe('PodcastShowPage country switch cancellation', () => {
         podcastItunesId: '123',
         title: 'JP Podcast',
         author: 'JP Author',
-        feedUrl: 'https://example.com/jp/feed.xml',
+        feedUrl: normalizeFeedUrl('https://example.com/jp/feed.xml'),
         artwork: 'https://example.com/jp/art-600.jpg',
         genres: ['Tech'],
       }),
@@ -137,7 +137,7 @@ describe('PodcastShowPage country switch cancellation', () => {
         podcastItunesId: '123',
         title: 'US Podcast',
         author: 'US Author',
-        feedUrl: 'https://example.com/us/feed.xml',
+        feedUrl: normalizeFeedUrl('https://example.com/us/feed.xml'),
         artwork: 'https://example.com/us/art-600.jpg',
         genres: ['Tech'],
       }),

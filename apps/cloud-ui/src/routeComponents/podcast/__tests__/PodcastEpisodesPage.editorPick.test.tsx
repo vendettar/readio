@@ -4,7 +4,12 @@ import type React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createQueryClientHarness, createQueryClientWrapper } from '../../../__tests__/queryClient'
 import { server } from '../../../__tests__/setup'
-import { makeFeedEpisode, makeParsedFeed, makePodcast } from '../../../lib/discovery/__tests__/fixtures'
+import {
+  makeFeedEpisode,
+  makeParsedFeed,
+  makePodcast,
+} from '../../../lib/discovery/__tests__/fixtures'
+import { normalizeFeedUrl } from '../../../lib/discovery/feedUrl'
 import { buildPodcastFeedQueryKey } from '../../../lib/discovery/podcastQueryContract'
 import PodcastEpisodesPage from '../PodcastEpisodesPage'
 
@@ -51,8 +56,10 @@ vi.mock('../../../components/EpisodeRow/EpisodeRow', () => ({
 }))
 
 vi.mock('react-virtuoso', () => ({
+  // biome-ignore lint/suspicious/noExplicitAny: necessary for mock
   Virtuoso: ({ data, itemContent, components, customScrollParent, rangeChanged }: any) => (
     <div data-testid="mock-virtuoso">
+      {/* biome-ignore lint/suspicious/noExplicitAny: necessary for mock */}
       {data.map((item: any, index: number) => (
         <div key={item.key || index} data-testid={`virtuoso-item-${index}`}>
           {itemContent(index, item)}
@@ -60,6 +67,7 @@ vi.mock('react-virtuoso', () => ({
       ))}
       {components?.Footer?.()}
       <button
+        type="button"
         data-testid="auto-range-end"
         onClick={() => {
           rangeChanged?.({ startIndex: 0, endIndex: data.length - 1 })
@@ -68,6 +76,7 @@ vi.mock('react-virtuoso', () => ({
         auto range end
       </button>
       <button
+        type="button"
         data-testid="load-more"
         onClick={() => {
           if (customScrollParent) {
@@ -120,7 +129,7 @@ describe('PodcastEpisodesPage editor pick path', () => {
               title: 'Editor Pick Podcast',
               artwork: 'https://example.com/show-600.jpg',
               description: 'Editor pick description',
-              feedUrl: 'https://example.com/show-feed.xml',
+              feedUrl: normalizeFeedUrl('https://example.com/show-feed.xml'),
               lastUpdateTime: 1711497600,
               episodeCount: 2,
             })
@@ -172,7 +181,7 @@ describe('PodcastEpisodesPage editor pick path', () => {
         author: 'Host',
         artwork: 'https://example.com/show-600.jpg',
         description: 'Editor pick description',
-        feedUrl: 'https://example.com/show-feed.xml',
+        feedUrl: normalizeFeedUrl('https://example.com/show-feed.xml'),
         lastUpdateTime: 1711497600,
         podcastItunesId: '12345',
         genres: ['Technology'],
@@ -303,7 +312,7 @@ describe('PodcastEpisodesPage editor pick path', () => {
     const harness = createQueryClientHarness({
       setup: (queryClient) => {
         queryClient.setQueryData(
-          buildPodcastFeedQueryKey('https://example.com/show-feed.xml', {
+          buildPodcastFeedQueryKey(normalizeFeedUrl('https://example.com/show-feed.xml'), {
             limit: 20,
             offset: 0,
           }),
@@ -390,7 +399,7 @@ describe('PodcastEpisodesPage editor pick path', () => {
     const harness = createQueryClientHarness({
       setup: (queryClient) => {
         queryClient.setQueryData(
-          buildPodcastFeedQueryKey('https://example.com/show-feed.xml', {
+          buildPodcastFeedQueryKey(normalizeFeedUrl('https://example.com/show-feed.xml'), {
             limit: 20,
             offset: 0,
           }),

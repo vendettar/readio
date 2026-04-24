@@ -5,7 +5,10 @@ import path from 'node:path'
 const srcRoot = path.resolve(process.cwd(), 'src')
 
 const allowlistPatterns = [/\.test\./, /__tests__/, /routeTree\.gen\.ts$/]
-const forbiddenPatterns = [/['"]\/podcast\/\$id(?:[/'"]|$)/, /createFileRoute\(['"]\/podcast\//]
+const forbiddenPatterns = [
+  /['"]\/podcast\/\$id(?:[/'"]|$)/,
+  /createFileRoute\(['"]\/podcast\/(?!\$country\b)/,
+]
 
 function walk(dir) {
   const out = []

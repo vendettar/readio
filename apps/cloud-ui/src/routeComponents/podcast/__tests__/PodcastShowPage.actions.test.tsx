@@ -5,6 +5,7 @@ import {
   makeParsedFeed,
   makePodcast,
 } from '../../../lib/discovery/__tests__/fixtures'
+import { normalizeFeedUrl } from '../../../lib/discovery/feedUrl'
 import PodcastShowPage from '../PodcastShowPage'
 
 const subscribeMock = vi.fn()
@@ -13,7 +14,7 @@ const playEpisodeMock = vi.fn()
 
 const podcast = makePodcast({
   podcastItunesId: 'pod-1',
-  feedUrl: 'https://example.com/feed.xml',
+  feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
   title: 'Podcast Show',
   genres: ['News'],
 })

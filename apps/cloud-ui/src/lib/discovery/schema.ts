@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { normalizeFeedUrl } from './feedUrl'
 
 /**
  * Shared podcast fields across PI detail and editor-pick snapshot contracts.
@@ -9,7 +10,10 @@ const PIBasePodcastSchema = z.object({
   author: z.string().min(1),
   artwork: z.url(),
   description: z.string().min(1),
-  feedUrl: z.string().min(1),
+  feedUrl: z
+    .string()
+    .min(1)
+    .transform((value) => normalizeFeedUrl(value)),
   lastUpdateTime: z.number().int().nonnegative().optional(),
   podcastItunesId: z.string().min(1),
   episodeCount: z.number().int().nonnegative().optional(),

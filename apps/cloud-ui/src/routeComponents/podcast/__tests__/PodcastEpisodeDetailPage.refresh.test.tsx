@@ -6,6 +6,7 @@ import {
   makeFeedEpisode,
   makeMinimalPodcast,
 } from '../../../lib/discovery/__tests__/fixtures'
+import { normalizeFeedUrl } from '../../../lib/discovery/feedUrl'
 import PodcastEpisodeDetailPage from '../PodcastEpisodeDetailPage'
 
 const useEpisodeResolutionMock = vi.fn()
@@ -103,13 +104,13 @@ describe('PodcastEpisodeDetailPage canonical refresh', () => {
           title: 'Modern Love',
           author: 'The New York Times',
           artwork: 'https://example.com/show-600.jpg',
-          feedUrl: 'https://feeds.simplecast.com/eHEJ08b1',
+          feedUrl: normalizeFeedUrl('https://feeds.simplecast.com/eHEJ08b1'),
         }),
         editorPickSnapshot: makeEditorPickSnapshot({
           title: 'Modern Love',
           author: 'The New York Times',
           artwork: 'https://example.com/show-600.jpg',
-          feedUrl: 'https://feeds.simplecast.com/eHEJ08b1',
+          feedUrl: normalizeFeedUrl('https://feeds.simplecast.com/eHEJ08b1'),
           podcastItunesId: '1065559535',
           genres: [],
         }),

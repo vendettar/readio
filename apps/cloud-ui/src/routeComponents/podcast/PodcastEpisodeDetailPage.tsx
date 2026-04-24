@@ -306,9 +306,7 @@ export default function PodcastEpisodeDetailPage() {
                     {(relativeTime ||
                       episodeLabel ||
                       duration ||
-                      (episode.episodeType && episode.episodeType !== 'full')) && (
-                      <span>·</span>
-                    )}
+                      (episode.episodeType && episode.episodeType !== 'full')) && <span>·</span>}
                     <span className="text-red-500 flex items-center gap-0.5">
                       <AlertTriangle size={10} strokeWidth={3} />
                       {t('episodeExplicit')}

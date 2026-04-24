@@ -1,3 +1,4 @@
+import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
 import 'fake-indexeddb/auto'
 import { describe, expect, it, vi } from 'vitest'
 import { DB, db } from '../../dexieDb'
@@ -17,7 +18,7 @@ describe('LibraryRepository', () => {
     const removeFavSpy = vi.spyOn(DB, 'removeFavoriteByKey').mockResolvedValue()
 
     const sub = {
-      feedUrl: 'https://example.com/feed.xml',
+      feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
       title: 't',
       author: 'a',
       artworkUrl: '',
@@ -27,7 +28,7 @@ describe('LibraryRepository', () => {
     }
     const fav = {
       key: 'k',
-      feedUrl: 'https://example.com/feed.xml',
+      feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
       podcastTitle: 'p',
       episodeTitle: 'e',
       audioUrl: 'https://example.com/audio.mp3',
@@ -63,7 +64,7 @@ describe('LibraryRepository', () => {
     await db.subscriptions.clear()
     await db.subscriptions.put({
       id: 'existing-sub',
-      feedUrl: 'https://example.com/existing.xml',
+      feedUrl: normalizeFeedUrl('https://example.com/existing.xml'),
       title: 'Existing',
       author: 'Author',
       artworkUrl: '',
@@ -73,21 +74,21 @@ describe('LibraryRepository', () => {
 
     const inserted = await LibraryRepository.bulkAddSubscriptionsIfMissing([
       {
-        feedUrl: 'https://example.com/existing.xml',
+        feedUrl: normalizeFeedUrl('https://example.com/existing.xml'),
         title: 'Existing New',
         author: 'Imported',
         artworkUrl: '',
         countryAtSave: 'us',
       },
       {
-        feedUrl: 'https://example.com/new.xml',
+        feedUrl: normalizeFeedUrl('https://example.com/new.xml'),
         title: 'New',
         author: 'Imported',
         artworkUrl: '',
         countryAtSave: 'us',
       },
       {
-        feedUrl: 'https://example.com/new.xml',
+        feedUrl: normalizeFeedUrl('https://example.com/new.xml'),
         title: 'New Duplicate Input',
         author: 'Imported',
         artworkUrl: '',

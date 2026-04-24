@@ -1,15 +1,15 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useCallback, useMemo } from 'react'
 import type { Favorite } from '../lib/dexieDb'
-import { type FeedEpisode, type Podcast, type SearchEpisode } from '../lib/discovery'
+import type { FeedEpisode, Podcast, SearchEpisode } from '../lib/discovery'
 import { ensurePodcastDetail } from '../lib/discovery/queryCache'
+import { logError } from '../lib/logger'
 import { PLAYBACK_REQUEST_MODE, type PlaybackRequestMode } from '../lib/player/playbackMode'
 import {
   playFavoriteWithDeps,
   playFeedEpisodeWithDeps,
   playSearchEpisodeWithDeps,
 } from '../lib/player/remotePlayback'
-import { logError } from '../lib/logger'
 import {
   applySurfacePolicy,
   deriveSurfacePolicyFromEpisode,
@@ -32,17 +32,14 @@ export function useEpisodePlayback() {
   const pause = usePlayerStore((state) => state.pause)
   const setPlaybackTrackId = usePlayerStore((state) => state.setPlaybackTrackId)
 
-  const resolveRequiredCountryAtSave = useCallback(
-    (candidate?: string): string | null => {
-      const normalized = normalizeCountryParam(candidate)
-      if (normalized) return normalized
-      if (import.meta.env.DEV) {
-        logError('[useEpisodePlayback] Missing required countryAtSave for remote playback')
-      }
-      return null
-    },
-    []
-  )
+  const resolveRequiredCountryAtSave = useCallback((candidate?: string): string | null => {
+    const normalized = normalizeCountryParam(candidate)
+    if (normalized) return normalized
+    if (import.meta.env.DEV) {
+      logError('[useEpisodePlayback] Missing required countryAtSave for remote playback')
+    }
+    return null
+  }, [])
 
   /**
    * Standard playback for FeedEpisode + Podcast objects
@@ -86,11 +83,7 @@ export function useEpisodePlayback() {
    * Playback for SearchEpisode objects (from Global Search)
    */
   const playSearchEpisode = useCallback(
-    (
-      episode: SearchEpisode,
-      countryAtSave?: string,
-      options?: { mode?: PlaybackRequestMode }
-    ) => {
+    (episode: SearchEpisode, countryAtSave?: string, options?: { mode?: PlaybackRequestMode }) => {
       const globalCountry = useExploreStore.getState().country
       const resolvedCountryAtSave = resolveRequiredCountryAtSave(countryAtSave ?? globalCountry)
       if (!resolvedCountryAtSave) return
@@ -109,15 +102,11 @@ export function useEpisodePlayback() {
           }
         }
 
-        await playSearchEpisodeWithDeps(
-          { setAudioUrl, play, pause, setPlaybackTrackId },
-          episode,
-          {
-            podcastFeedUrl,
-            countryAtSave: resolvedCountryAtSave,
-            mode: options?.mode ?? PLAYBACK_REQUEST_MODE.DEFAULT,
-          }
-        )
+        await playSearchEpisodeWithDeps({ setAudioUrl, play, pause, setPlaybackTrackId }, episode, {
+          podcastFeedUrl,
+          countryAtSave: resolvedCountryAtSave,
+          mode: options?.mode ?? PLAYBACK_REQUEST_MODE.DEFAULT,
+        })
       })()
     },
     [

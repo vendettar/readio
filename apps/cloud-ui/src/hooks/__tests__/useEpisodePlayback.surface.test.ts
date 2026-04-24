@@ -1,7 +1,8 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
 import type { Favorite } from '../../lib/dexieDb'
-import { type FeedEpisode, type Podcast, type SearchEpisode } from '../../lib/discovery'
+import type { FeedEpisode, Podcast, SearchEpisode } from '../../lib/discovery'
 import { ensurePodcastDetail } from '../../lib/discovery/queryCache'
 import { PLAYBACK_REQUEST_MODE } from '../../lib/player/playbackMode'
 import { useEpisodePlayback } from '../useEpisodePlayback'
@@ -79,7 +80,7 @@ describe('useEpisodePlayback surface mode', () => {
     const podcast: Podcast = {
       podcastItunesId: '1',
       title: 'Podcast',
-      feedUrl: 'https://example.com/feed.xml',
+      feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
       author: '',
       artwork: '',
       description: '',
@@ -111,7 +112,7 @@ describe('useEpisodePlayback surface mode', () => {
     const podcast: Podcast = {
       podcastItunesId: '2',
       title: 'Podcast 2',
-      feedUrl: 'https://example.com/feed.xml',
+      feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
       author: '',
       artwork: '',
       description: '',
@@ -195,7 +196,7 @@ describe('useEpisodePlayback surface mode', () => {
     const favorite = {
       id: 'fav-1',
       key: 'feed::audio',
-      feedUrl: 'https://example.com/feed.xml',
+      feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
       audioUrl: 'https://example.com/favorite.mp3',
       episodeTitle: 'Favorite',
       podcastTitle: 'Podcast',
@@ -220,7 +221,7 @@ describe('useEpisodePlayback surface mode', () => {
     const favorite = {
       id: 'fav-2',
       key: 'feed::audio-2',
-      feedUrl: 'https://example.com/feed.xml',
+      feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
       audioUrl: 'https://example.com/favorite-2.mp3',
       episodeTitle: 'Favorite 2',
       podcastTitle: 'Podcast',

@@ -12,11 +12,11 @@ const getDbName = () => getAppConfig().DB_NAME
 import type {
   AudioBlob,
   CredentialEntry,
+  ExplorePlaybackSession,
   Favorite,
   FileFolder,
   FileSubtitle,
   FileTrack,
-  ExplorePlaybackSession,
   LocalPlaybackSession,
   PlaybackSession,
   PlaybackSessionCreateInput,

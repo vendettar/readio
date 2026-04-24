@@ -1,6 +1,7 @@
 import { render } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
+import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
 import FavoritesPage from '../FavoritesPage'
 
 const buildPodcastEpisodeRouteMock = vi.fn((_args?: unknown) => ({
@@ -29,7 +30,7 @@ vi.mock('../../store/exploreStore', () => ({
         {
           id: 'fav-1',
           key: 'feed::audio',
-          feedUrl: 'feed',
+          feedUrl: normalizeFeedUrl('feed'),
           audioUrl: 'audio',
           podcastItunesId: '123',
           episodeGuid: '75f3241b-439d-4786-8968-07e05e548074',

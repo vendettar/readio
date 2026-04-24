@@ -11,10 +11,7 @@ import { OverflowMenu } from '../components/ui/overflow-menu'
 import { useNetworkStatus } from '../hooks/useNetworkStatus'
 import { useSubscriptionMap } from '../hooks/useSubscriptionMap'
 import { formatTimeSmart } from '../lib/dateUtils'
-import {
-  isNavigableExplorePlaybackSession,
-  type PlaybackSession,
-} from '../lib/db/types'
+import { isNavigableExplorePlaybackSession, type PlaybackSession } from '../lib/db/types'
 import { mapSessionToDiscovery } from '../lib/discovery/mappers'
 import { formatDateShort } from '../lib/formatters'
 import { logError } from '../lib/logger'
@@ -214,7 +211,11 @@ export default function HistoryPage() {
 
   const handleToggleFavorite = useCallback(
     async (session: PlaybackSession, favorited: boolean) => {
-      if (!isNavigableExplorePlaybackSession(session) || !session.podcastFeedUrl || !session.audioUrl)
+      if (
+        !isNavigableExplorePlaybackSession(session) ||
+        !session.podcastFeedUrl ||
+        !session.audioUrl
+      )
         return
 
       const key = `${session.podcastFeedUrl}::${session.audioUrl}`

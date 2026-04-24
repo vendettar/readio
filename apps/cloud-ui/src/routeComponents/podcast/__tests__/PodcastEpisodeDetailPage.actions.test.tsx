@@ -1,12 +1,10 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FeedEpisode } from '../../../lib/discovery'
-import {
-  makeFeedEpisode,
-  makePodcast,
-} from '../../../lib/discovery/__tests__/fixtures'
-import PodcastEpisodeDetailPage from '../PodcastEpisodeDetailPage'
 import type { ExpandableDescriptionProps } from '../../../components/ui/expandable-description'
+import type { FeedEpisode } from '../../../lib/discovery'
+import { makeFeedEpisode, makePodcast } from '../../../lib/discovery/__tests__/fixtures'
+import { normalizeFeedUrl } from '../../../lib/discovery/feedUrl'
+import PodcastEpisodeDetailPage from '../PodcastEpisodeDetailPage'
 
 const addFavoriteMock = vi.fn()
 const removeFavoriteMock = vi.fn()
@@ -28,7 +26,7 @@ let resolvedEpisode: FeedEpisode = makeFeedEpisode({
 const podcast = makePodcast({
   podcastItunesId: 'pod-1',
   title: 'Podcast Show',
-  feedUrl: 'https://example.com/feed.xml',
+  feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
 })
 
 vi.mock('react-i18next', () => ({

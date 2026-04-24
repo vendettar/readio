@@ -789,18 +789,18 @@ func buildDiscoveryFeedXMLWithMetadata(
 	var builder strings.Builder
 	builder.WriteString(`<?xml version="1.0" encoding="UTF-8"?>`)
 	builder.WriteString(`<rss version="2.0"><channel>`)
-	builder.WriteString(fmt.Sprintf(`<title>%s</title><description>%s</description>`, title, description))
+	fmt.Fprintf(&builder, `<title>%s</title><description>%s</description>`, title, description)
 	if artworkURL != "" {
-		builder.WriteString(fmt.Sprintf(`<image><url>%s</url></image>`, artworkURL))
+		fmt.Fprintf(&builder, `<image><url>%s</url></image>`, artworkURL)
 	}
 	for i := 0; i < episodeCount; i++ {
-		builder.WriteString(fmt.Sprintf(
+		fmt.Fprintf(&builder,
 			`<item><title>Episode %d</title><description>Body %d</description><guid>ep-%d</guid><pubDate>Fri, 30 Jan 2026 12:00:00 GMT</pubDate><enclosure url="http://example.com/audio-%d.mp3" length="123"/></item>`,
 			i+1,
 			i+1,
 			i+1,
 			i+1,
-		))
+		)
 	}
 	builder.WriteString(`</channel></rss>`)
 	return builder.String()

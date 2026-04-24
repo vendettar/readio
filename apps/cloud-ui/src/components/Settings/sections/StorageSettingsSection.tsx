@@ -137,9 +137,7 @@ export const StorageSettingsSection = memo(function StorageSettingsSection({
                     <span>{formatTimestamp(item.lastPlayedAt, language)}</span>
                     <span>•</span>
                     <span className="capitalize">
-                      {item.source === 'local'
-                        ? t('sourceLocal')
-                        : t('sourcePodcast')}
+                      {item.source === 'local' ? t('sourceLocal') : t('sourcePodcast')}
                     </span>
                     <span>•</span>
                     <span>{formatBytes(item.sizeBytes)}</span>

@@ -1,4 +1,9 @@
-import { useInfiniteQuery, useQuery, useQueryClient, type InfiniteData } from '@tanstack/react-query'
+import {
+  type InfiniteData,
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 import { Link, useParams } from '@tanstack/react-router'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -8,9 +13,9 @@ import { Button } from '../../components/ui/button'
 import { LoadingSpinner } from '../../components/ui/loading-spinner'
 import discovery, { type FeedEpisode, type ParsedFeed } from '../../lib/discovery'
 import {
-  PODCAST_DEFAULT_FEED_QUERY_LIMIT,
-  buildPodcastFeedQueryKey,
   buildPodcastDetailQueryKey,
+  buildPodcastFeedQueryKey,
+  PODCAST_DEFAULT_FEED_QUERY_LIMIT,
   PODCAST_QUERY_CACHE_POLICY,
 } from '../../lib/discovery/podcastQueryContract'
 import { logError } from '../../lib/logger'
@@ -86,9 +91,10 @@ export default function PodcastEpisodesPage() {
 
   // Fetch episodes via the active discovery path.
   const feedUrl = podcast?.feedUrl
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reset gate on podcast change
   useEffect(() => {
     hasUserScrolledForPaginationRef.current = false
-  }, [id, feedUrl])
+  }, [id])
 
   const firstPageQueryKey = buildPodcastFeedQueryKey(feedUrl, {
     limit: PODCAST_EPISODES_PAGE_SIZE,
@@ -109,16 +115,13 @@ export default function PodcastEpisodesPage() {
     error: feedError,
   } = useInfiniteQuery({
     // Keep the infinite list key distinct from the single-page show-page key.
-    queryKey: [
-      ...firstPageQueryKey,
-      'infinite',
-    ],
+    queryKey: [...firstPageQueryKey, 'infinite'],
     initialPageParam: 0,
     initialData: cachedFirstPage
       ? ({
-        pages: [cachedFirstPage],
-        pageParams: [0],
-      } satisfies InfiniteData<ParsedFeed, number>)
+          pages: [cachedFirstPage],
+          pageParams: [0],
+        } satisfies InfiniteData<ParsedFeed, number>)
       : undefined,
     initialDataUpdatedAt: cachedFirstPageUpdatedAt,
     queryFn: ({ signal, pageParam }) =>
@@ -307,11 +310,7 @@ export default function PodcastEpisodesPage() {
                 }
 
                 return (
-                  <EpisodeRow
-                    episode={row.episode}
-                    podcast={podcast}
-                    isLast={row.isLastInYear}
-                  />
+                  <EpisodeRow episode={row.episode} podcast={podcast} isLast={row.isLastInYear} />
                 )
               }}
             />

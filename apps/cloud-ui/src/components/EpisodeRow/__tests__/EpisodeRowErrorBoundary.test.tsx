@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
+import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
 import { createQueryClientWrapper } from '../../../__tests__/queryClient'
 import type { FeedEpisode, Podcast } from '../../../lib/discovery'
 import { EpisodeRow } from '../EpisodeRow'
@@ -96,7 +97,7 @@ const buildEpisode = (title: string, id: string): FeedEpisode => ({
 const mockPodcast: Podcast = {
   podcastItunesId: '101',
   title: 'Test Podcast',
-  feedUrl: 'http://test.com/feed.xml',
+  feedUrl: normalizeFeedUrl('http://test.com/feed.xml'),
   author: 'Test Artist',
   artwork: 'http://test.com/art.jpg',
   description: 'Test description',

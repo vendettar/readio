@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
 import { createQueryClientWrapper } from '../../../__tests__/queryClient'
 import type { Podcast, SearchEpisode } from '../../../lib/discovery'
 import { makePodcast, makeSearchEpisode } from '../../../lib/discovery/__tests__/fixtures'
@@ -76,7 +77,7 @@ describe('SearchEpisodeItem favorite enrichment', () => {
       podcastItunesId: '999',
       title: 'Search Show',
       artwork: 'https://example.com/episode-600.jpg',
-      feedUrl: 'https://example.com/feed.xml',
+      feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
     })
     vi.mocked(ensurePodcastDetail).mockResolvedValue(lookupPodcast)
 
@@ -99,7 +100,7 @@ describe('SearchEpisodeItem favorite enrichment', () => {
     expect(ensurePodcastDetail).toHaveBeenCalledWith(expect.anything(), '999', 'us')
     expect(payload.podcast).toMatchObject({
       title: 'Search Show',
-      feedUrl: 'https://example.com/feed.xml',
+      feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
       podcastItunesId: '999',
       artwork: 'https://example.com/episode-600.jpg',
     })
@@ -116,7 +117,7 @@ describe('SearchEpisodeItem favorite enrichment', () => {
       podcastItunesId: '999',
       title: 'Show',
       artwork: 'https://example.com/art-600.jpg',
-      feedUrl: 'https://example.com/feed.xml',
+      feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
     })
     vi.mocked(ensurePodcastDetail).mockResolvedValue(lookupPodcast)
 

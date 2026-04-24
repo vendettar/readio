@@ -11,8 +11,8 @@ import {
   upsertEditorPickInCache,
 } from '@/lib/discovery/editorPicks'
 import {
-  buildPodcastFeedQueryKey,
   buildPodcastDetailQueryKey,
+  buildPodcastFeedQueryKey,
   PODCAST_QUERY_CACHE_POLICY,
 } from '@/lib/discovery/podcastQueryContract'
 import { compactKeyToEpisodeIdentity } from '@/lib/routes/compactKey'
@@ -98,19 +98,13 @@ export function useEpisodeResolution(
 
   const feedUrl = podcast?.feedUrl
   const cachedFeed = feedUrl
-    ? (queryClient.getQueryData(
-        buildPodcastFeedQueryKey(feedUrl)
-      ) as
-        | ParsedFeed
-        | undefined)
+    ? (queryClient.getQueryData(buildPodcastFeedQueryKey(feedUrl)) as ParsedFeed | undefined)
     : undefined
   const cachedEpisode = findEpisodeByGuid(
     cachedFeed?.episodes as FeedEpisode[] | undefined,
     targetEpisodeGuid
   )
-  const shouldFetchRssFallback = Boolean(
-    feedUrl && targetEpisodeGuid && !cachedEpisode
-  )
+  const shouldFetchRssFallback = Boolean(feedUrl && targetEpisodeGuid && !cachedEpisode)
   const {
     data: fallbackFeed,
     isLoading: isLoadingFeedFallback,
