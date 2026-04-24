@@ -1,6 +1,8 @@
 import { HttpResponse, http } from 'msw'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
 import { server } from '../../../__tests__/setup'
+import discovery from '../index'
 import {
   makeEditorPickPodcast,
   makeMinimalPodcast,
@@ -8,7 +10,6 @@ import {
   makeTopEpisode,
   makeTopPodcast,
 } from './fixtures'
-import discovery from '../index'
 
 describe('cloud discovery 005a same-origin cutover', () => {
   let appleLookupHits = 0
@@ -84,7 +85,7 @@ describe('cloud discovery 005a same-origin cutover', () => {
               title: 'JP Podcast',
               author: 'JP Host',
               artwork: 'https://example.com/jp-art-600.jpg',
-              feedUrl: 'https://example.com/jp-feed.xml',
+              feedUrl: normalizeFeedUrl('https://example.com/jp-feed.xml'),
               genres: ['Technology'],
               episodeCount: 30,
               lastUpdateTime: 1613394044,
@@ -110,7 +111,7 @@ describe('cloud discovery 005a same-origin cutover', () => {
             title: 'JP Podcast',
             author: 'JP Host',
             artwork: 'https://example.com/jp-art-600.jpg',
-            feedUrl: 'https://example.com/jp-feed.xml',
+            feedUrl: normalizeFeedUrl('https://example.com/jp-feed.xml'),
           })
         )
       )
@@ -139,7 +140,7 @@ describe('cloud discovery 005a same-origin cutover', () => {
           return HttpResponse.json([
             makeEditorPickPodcast({
               title: 'The Daily',
-              feedUrl: 'https://example.com/daily.xml',
+              feedUrl: normalizeFeedUrl('https://example.com/daily.xml'),
               author: 'NYT',
               description: 'Daily news',
               artwork: 'https://example.com/daily.jpg',
@@ -150,7 +151,7 @@ describe('cloud discovery 005a same-origin cutover', () => {
             }),
             makeEditorPickPodcast({
               title: 'This American Life',
-              feedUrl: 'https://example.com/tal.xml',
+              feedUrl: normalizeFeedUrl('https://example.com/tal.xml'),
               author: 'TAL',
               description: 'Stories',
               artwork: 'https://example.com/tal.jpg',
@@ -192,7 +193,7 @@ describe('cloud discovery 005a same-origin cutover', () => {
               author: 'NYT',
               description: 'Daily news',
               artwork: 'https://example.com/show-600.jpg',
-              feedUrl: 'https://example.com/feed.xml',
+              feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
               lastUpdateTime: 1613394044,
               genres: ['News'],
               episodeCount: 42,

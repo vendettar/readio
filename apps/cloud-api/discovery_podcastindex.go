@@ -502,9 +502,4 @@ func mapPodcastIndexPodcastToPIPodcast(feed podcastIndexPodcastFeed, podcastItun
 	}, true
 }
 
-func formatUnixTimestamp(ts int64) string {
-	if ts == 0 {
-		return ""
-	}
-	return time.Unix(ts, 0).UTC().Format(time.RFC3339)
-}
+

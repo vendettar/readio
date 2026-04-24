@@ -5,8 +5,8 @@ import { usePlayerSurfaceStore } from '../store/playerSurfaceStore'
 import type { ASRCue } from './asr/types'
 import {
   DB,
-  isNavigableExplorePlaybackSession,
   type Favorite,
+  isNavigableExplorePlaybackSession,
   type PlaybackSession,
   type Subscription,
 } from './dexieDb'

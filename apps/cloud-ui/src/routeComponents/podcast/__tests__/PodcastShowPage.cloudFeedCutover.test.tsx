@@ -4,7 +4,12 @@ import type React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createQueryClientWrapper } from '../../../__tests__/queryClient'
 import { server } from '../../../__tests__/setup'
-import { makeFeedEpisode, makeParsedFeed, makePodcast } from '../../../lib/discovery/__tests__/fixtures'
+import {
+  makeFeedEpisode,
+  makeParsedFeed,
+  makePodcast,
+} from '../../../lib/discovery/__tests__/fixtures'
+import { normalizeFeedUrl } from '../../../lib/discovery/feedUrl'
 import PodcastShowPage from '../PodcastShowPage'
 
 let appleLookupHits = 0
@@ -66,7 +71,7 @@ describe('PodcastShowPage 005c same-origin feed cutover', () => {
             makePodcast({
               podcastItunesId: '123',
               title: 'Cloud Feed Podcast',
-              feedUrl: 'https://example.com/feed.xml',
+              feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
               description: 'Cloud feed show',
               episodeCount: 2,
             })

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
 import type { FeedEpisode } from '../../discovery'
 import { downloadEpisode, removeDownloadedTrack } from '../../downloadService'
 import * as playbackSource from '../playbackSource'
@@ -49,7 +50,7 @@ describe('remotePlayback ASR-Fallback Regression', () => {
     const podcast = {
       podcastItunesId: '123',
       title: 'Pod',
-      feedUrl: 'https://feed.com',
+      feedUrl: normalizeFeedUrl('https://feed.com'),
       author: 'Author',
       artwork: 'https://example.com/art.jpg',
       description: 'Description',

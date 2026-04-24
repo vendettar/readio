@@ -1,5 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
 import { createQueryClientWrapper } from '../../__tests__/queryClient'
 import { DB, type Favorite } from '../../lib/dexieDb'
 import type { FeedEpisode, Podcast } from '../../lib/discovery'
@@ -53,7 +54,7 @@ function makePodcast(overrides: Partial<Podcast> = {}): Podcast {
     author: 'Host',
     artwork: 'https://example.com/art.jpg',
     description: 'A podcast',
-    feedUrl: 'https://example.com/feed.xml',
+    feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
     lastUpdateTime: 1613394044,
     episodeCount: 50,
     language: 'en',
@@ -66,7 +67,7 @@ function makeFavorite(overrides: Partial<Favorite> = {}): Favorite {
   return {
     id: 'fav-1',
     key: 'https://example.com/feed.xml::https://example.com/fav.mp3',
-    feedUrl: 'https://example.com/feed.xml',
+    feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
     audioUrl: 'https://example.com/fav.mp3',
     episodeTitle: 'Favorite Episode',
     podcastTitle: 'Favorite Podcast',
@@ -104,7 +105,7 @@ Hello transcript
       pubDate: 'Mon, 01 Jan 2024 00:00:00 GMT',
       transcriptUrl: 'https://example.com/ep-1.srt',
     })
-    const podcast = makePodcast({ feedUrl: 'https://example.com/feed.xml' })
+    const podcast = makePodcast({ feedUrl: normalizeFeedUrl('https://example.com/feed.xml') })
 
     const { result } = renderHook(() => useEpisodePlayback(), {
       wrapper: createQueryClientWrapper(),

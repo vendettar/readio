@@ -4,7 +4,12 @@ import type React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createQueryClientWrapper } from '../../../__tests__/queryClient'
 import { server } from '../../../__tests__/setup'
-import { makeFeedEpisode, makeParsedFeed, makePodcast } from '../../../lib/discovery/__tests__/fixtures'
+import {
+  makeFeedEpisode,
+  makeParsedFeed,
+  makePodcast,
+} from '../../../lib/discovery/__tests__/fixtures'
+import { normalizeFeedUrl } from '../../../lib/discovery/feedUrl'
 import PodcastShowPage from '../PodcastShowPage'
 
 let appleLookupHits = 0
@@ -75,7 +80,7 @@ describe('PodcastShowPage editor pick path', () => {
               title: 'Editor Pick Podcast',
               artwork: 'https://example.com/show-600.jpg',
               description: 'Editor pick description',
-              feedUrl: 'https://example.com/show-feed.xml',
+              feedUrl: normalizeFeedUrl('https://example.com/show-feed.xml'),
               lastUpdateTime: 1711497600,
               episodeCount: 2,
             })
@@ -133,7 +138,7 @@ describe('PodcastShowPage editor pick path', () => {
         author: 'Host',
         artwork: 'https://example.com/show-600.jpg',
         description: 'Snapshot description',
-        feedUrl: 'https://example.com/show-feed.xml',
+        feedUrl: normalizeFeedUrl('https://example.com/show-feed.xml'),
         lastUpdateTime: 1711497600,
         podcastItunesId: '12345',
         genres: ['Technology'],
@@ -157,7 +162,7 @@ describe('PodcastShowPage editor pick path', () => {
         author: 'Host',
         artwork: 'https://example.com/show-600.jpg',
         description: 'Editor pick description',
-        feedUrl: 'https://example.com/show-feed.xml',
+        feedUrl: normalizeFeedUrl('https://example.com/show-feed.xml'),
         lastUpdateTime: 1711497600,
         podcastItunesId: '12345',
         genres: ['Technology'],

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
 import { ROOT_FOLDER_ID, TRACK_SOURCE } from '../db/types'
 import { isTrackFolderOrphaned, verifyOpmlIntegrity, verifyVaultIntegrity } from '../integrity'
 import type { VaultData } from '../vault'
@@ -40,7 +41,7 @@ describe('Integrity Verification', () => {
         subscriptions: [
           {
             id: 'sub-id-1',
-            feedUrl: 'http://example.com/feed.xml',
+            feedUrl: normalizeFeedUrl('http://example.com/feed.xml'),
             title: 'Podcast',
             author: 'Author',
             artworkUrl: '',
@@ -52,7 +53,7 @@ describe('Integrity Verification', () => {
           {
             id: 'fav-1',
             key: 'key-1',
-            feedUrl: 'url-1',
+            feedUrl: normalizeFeedUrl('url-1'),
             audioUrl: 'a-1',
             episodeTitle: 'E1',
             podcastTitle: 'P1',

@@ -22,8 +22,8 @@ import {
   mapEditorPickToPodcast,
 } from '../../lib/discovery/editorPicks'
 import {
-  buildPodcastFeedQueryKey,
   buildPodcastDetailQueryKey,
+  buildPodcastFeedQueryKey,
   PODCAST_DEFAULT_FEED_QUERY_LIMIT,
   PODCAST_QUERY_CACHE_POLICY,
 } from '../../lib/discovery/podcastQueryContract'

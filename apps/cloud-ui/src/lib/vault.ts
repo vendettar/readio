@@ -192,21 +192,23 @@ const localSubtitleSchema: z.ZodType<FileSubtitle> = z
  * Zod schema for the entire Personal Vault JSON structure.
  * This ensures data integrity during import.
  */
-export const vaultSchema = z.object({
-  version: z.literal(VAULT_VERSION),
-  exportedAt: z.number(),
-  data: z
-    .object({
-      folders: z.array(folderSchema),
-      tracks: z.array(z.union([localTrackSchema, podcastDownloadSchema])),
-      local_subtitles: z.array(localSubtitleSchema),
-      subscriptions: z.array(subscriptionSchema),
-      favorites: z.array(favoriteSchema),
-      playback_sessions: z.array(playbackSessionSchema),
-      settings: z.array(settingSchema),
-    })
-    .strict(),
-}).strict()
+export const vaultSchema = z
+  .object({
+    version: z.literal(VAULT_VERSION),
+    exportedAt: z.number(),
+    data: z
+      .object({
+        folders: z.array(folderSchema),
+        tracks: z.array(z.union([localTrackSchema, podcastDownloadSchema])),
+        local_subtitles: z.array(localSubtitleSchema),
+        subscriptions: z.array(subscriptionSchema),
+        favorites: z.array(favoriteSchema),
+        playback_sessions: z.array(playbackSessionSchema),
+        settings: z.array(settingSchema),
+      })
+      .strict(),
+  })
+  .strict()
 
 export type VaultData = z.infer<typeof vaultSchema>
 

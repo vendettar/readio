@@ -1,7 +1,9 @@
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Podcast } from '../../../lib/discovery'
+import { normalizeFeedUrl } from '../../../lib/discovery/feedUrl'
 import PodcastEpisodesPage from '../PodcastEpisodesPage'
 
 // Mock dependencies
@@ -16,7 +18,7 @@ vi.mock('@tanstack/react-query', () => ({
 
 vi.mock('@tanstack/react-router', () => ({
   useParams: vi.fn(() => ({ id: '123', country: 'us' })),
-  Link: ({ children }: { children: React.ReactNode }) => <a>{children}</a>,
+  Link: ({ children }: { children: React.ReactNode }) => <a href="/">{children}</a>,
 }))
 
 vi.mock('react-i18next', () => ({
@@ -45,8 +47,10 @@ vi.mock('../../../store/exploreStore', () => ({
 }))
 
 // A more capable Virtuoso mock that exposes its callbacks for testing
+// biome-ignore lint/suspicious/noExplicitAny: necessary for capturing props in mock
 let virtuosoCallbacks: any = {}
 vi.mock('react-virtuoso', () => ({
+  // biome-ignore lint/suspicious/noExplicitAny: necessary for mock
   Virtuoso: (props: any) => {
     virtuosoCallbacks = props
     return <div data-testid="mock-virtuoso">Virtuoso Mock</div>
@@ -59,8 +63,9 @@ describe('PodcastEpisodesPage Pagination Gating', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     virtuosoCallbacks = {}
-    
+
     // Default mock implementation
+    // biome-ignore lint/suspicious/noExplicitAny: necessary for mocking hook
     ;(useInfiniteQuery as any).mockImplementation(() => ({
       data: {
         pages: [
@@ -79,20 +84,34 @@ describe('PodcastEpisodesPage Pagination Gating', () => {
       fetchNextPage: mockFetchNextPage,
     }))
 
+    // biome-ignore lint/suspicious/noExplicitAny: necessary for mocking hook
     ;(useQuery as any).mockImplementation(({ queryKey }: any) => {
       if (queryKey[1] === 'podcast-detail') {
-        return { data: { title: 'Test Podcast', feedUrl: 'https://example.com/feed.xml' }, isLoading: false }
+        return {
+          data: {
+            title: 'Test Podcast',
+            feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
+            podcastItunesId: '123',
+            author: 'Test Author',
+            artwork: 'https://example.com/art.jpg',
+            description: 'Test description',
+            genres: [],
+          } satisfies Podcast,
+          isLoading: false,
+        }
       }
       return { data: undefined, isLoading: false }
     })
 
     // Mock scrollContainer state to unblock rendering
     const originalUseState = React.useState
+    // biome-ignore lint/suspicious/noExplicitAny: necessary for spying on useState
     vi.spyOn(React, 'useState').mockImplementation(((initialValue: any) => {
       if (initialValue === null) {
         return [{ current: true }, vi.fn()]
       }
       return originalUseState(initialValue)
+      // biome-ignore lint/suspicious/noExplicitAny: necessary for mock
     }) as any)
   })
 
@@ -116,7 +135,8 @@ describe('PodcastEpisodesPage Pagination Gating', () => {
     expect(await screen.findByTestId('mock-virtuoso')).toBeDefined()
 
     // 1. Simulate a real scroll event on the container
-    const container = screen.getByTestId('mock-virtuoso').parentElement?.parentElement?.parentElement
+    const container =
+      screen.getByTestId('mock-virtuoso').parentElement?.parentElement?.parentElement
     if (container) {
       fireEvent.scroll(container)
     }
@@ -131,8 +151,13 @@ describe('PodcastEpisodesPage Pagination Gating', () => {
 
   it('[P1] does NOT repeat fetch requests while a fetch is already in progress', async () => {
     // Override mock to simulate fetching state
+    // biome-ignore lint/suspicious/noExplicitAny: necessary for mocking hook
     ;(useInfiniteQuery as any).mockImplementation(() => ({
-      data: { pages: [{ episodes: [{ episodeGuid: 'ep-busy', title: 'Busy Ep', pubDate: '2025-01-01' }] }] },
+      data: {
+        pages: [
+          { episodes: [{ episodeGuid: 'ep-busy', title: 'Busy Ep', pubDate: '2025-01-01' }] },
+        ],
+      },
       isLoading: false,
       hasNextPage: true,
       isFetchingNextPage: true, // Fetching is active
@@ -140,19 +165,25 @@ describe('PodcastEpisodesPage Pagination Gating', () => {
     }))
 
     render(<PodcastEpisodesPage />)
-    
+
     // Simulate scroll and range change
-    const container = screen.getByTestId('mock-virtuoso').parentElement?.parentElement?.parentElement
+    const container =
+      screen.getByTestId('mock-virtuoso').parentElement?.parentElement?.parentElement
     if (container) fireEvent.scroll(container)
-    
+
     virtuosoCallbacks.rangeChanged({ endIndex: 100 }) // Far beyond any limit
 
     expect(mockFetchNextPage).not.toHaveBeenCalled()
   })
 
   it('[P1] does NOT fetch when hasNextPage is false', async () => {
+    // biome-ignore lint/suspicious/noExplicitAny: necessary for mocking hook
     ;(useInfiniteQuery as any).mockImplementation(() => ({
-      data: { pages: [{ episodes: [{ episodeGuid: 'ep-none', title: 'Last Ep', pubDate: '2025-01-01' }] }] },
+      data: {
+        pages: [
+          { episodes: [{ episodeGuid: 'ep-none', title: 'Last Ep', pubDate: '2025-01-01' }] },
+        ],
+      },
       isLoading: false,
       hasNextPage: false, // No more pages
       isFetchingNextPage: false,
@@ -160,10 +191,11 @@ describe('PodcastEpisodesPage Pagination Gating', () => {
     }))
 
     render(<PodcastEpisodesPage />)
-    
-    const container = screen.getByTestId('mock-virtuoso').parentElement?.parentElement?.parentElement
+
+    const container =
+      screen.getByTestId('mock-virtuoso').parentElement?.parentElement?.parentElement
     if (container) fireEvent.scroll(container)
-    
+
     virtuosoCallbacks.rangeChanged({ endIndex: 100 })
 
     expect(mockFetchNextPage).not.toHaveBeenCalled()

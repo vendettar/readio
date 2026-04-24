@@ -1,3 +1,4 @@
+import type { PodcastFeedPageOptions } from './cloudApi'
 import {
   fetchPodcastFeed as fetchCloudPodcastFeed,
   fetchTopEpisodes as fetchCloudTopEpisodes,
@@ -7,7 +8,6 @@ import {
   searchEpisodes as searchCloudEpisodes,
   searchPodcasts as searchCloudPodcasts,
 } from './cloudApi'
-import type { PodcastFeedPageOptions } from './cloudApi'
 import {
   type EpisodeCommonFields,
   mapSessionToDiscovery,

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
 import { createTestQueryClient } from '../../../__tests__/queryClient'
 import discovery from '../index'
 import { PODCAST_DEFAULT_FEED_QUERY_LIMIT } from '../podcastQueryContract'
@@ -31,7 +32,7 @@ describe('discovery query cache helpers', () => {
       author: 'Host',
       artwork: 'https://example.com/art.jpg',
       description: 'desc',
-      feedUrl: 'https://example.com/feed.xml',
+      feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
       lastUpdateTime: 1,
       episodeCount: 10,
       language: 'en',
@@ -72,6 +73,25 @@ describe('discovery query cache helpers', () => {
     expect(discovery.fetchPodcastFeed).toHaveBeenCalledTimes(1)
     expect(discovery.fetchPodcastFeed).toHaveBeenCalledWith(
       'https://example.com/feed.xml',
+      expect.any(AbortSignal),
+      undefined
+    )
+  })
+
+  it('canonicalizes raw feedUrl before building the feed query key', async () => {
+    vi.mocked(discovery.fetchPodcastFeed).mockResolvedValue({
+      title: 'Podcast',
+      description: 'desc',
+      artworkUrl: 'https://example.com/art.jpg',
+      episodes: [],
+    })
+
+    await ensurePodcastFeed(queryClient, 'HTTP://Example.com:80/feed.xml#frag')
+    await ensurePodcastFeed(queryClient, 'http://example.com/feed.xml')
+
+    expect(discovery.fetchPodcastFeed).toHaveBeenCalledTimes(1)
+    expect(discovery.fetchPodcastFeed).toHaveBeenCalledWith(
+      'http://example.com/feed.xml',
       expect.any(AbortSignal),
       undefined
     )

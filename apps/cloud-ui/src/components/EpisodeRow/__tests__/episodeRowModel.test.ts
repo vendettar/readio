@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Favorite, PlaybackSession } from '@/lib/db/types'
 import type { FeedEpisode, Podcast, SearchEpisode } from '@/lib/discovery'
+import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
 import {
   fromEpisode,
   fromFavorite,
@@ -36,7 +37,7 @@ describe('episodeRowModel', () => {
       author: 'Host',
       artwork: 'https://example.com/cover-600.jpg',
       description: 'A show',
-      feedUrl: 'https://example.com/feed.xml',
+      feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
       lastUpdateTime: 1613394044,
       episodeCount: 50,
       language: 'en',
@@ -74,7 +75,7 @@ describe('episodeRowModel', () => {
       author: 'Host',
       artwork: 'https://example.com/cover-600.jpg',
       description: 'A show',
-      feedUrl: 'https://example.com/feed.xml',
+      feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
       lastUpdateTime: 1613394044,
       episodeCount: 50,
       language: 'en',
@@ -104,7 +105,7 @@ describe('episodeRowModel', () => {
       link: 'https://www.nytimes.com/the-daily',
       genres: [],
       description: 'desc',
-      feedUrl: 'https://feeds.simplecast.com/54nAGcIl',
+      feedUrl: normalizeFeedUrl('https://feeds.simplecast.com/54nAGcIl'),
       podcastGuid: '304b84f0-07b0-5265-b6b7-da5cf5aeb56e',
       podcastItunesId: '1200361736',
     }
@@ -113,7 +114,7 @@ describe('episodeRowModel', () => {
       title: 'The Daily',
       author: 'The New York Times',
       artwork: 'cover-600',
-      feedUrl: 'https://feeds.simplecast.com/54nAGcIl',
+      feedUrl: normalizeFeedUrl('https://feeds.simplecast.com/54nAGcIl'),
       description: 'Description',
       lastUpdateTime: 1700000000000,
       episodeCount: 100,
@@ -158,7 +159,7 @@ describe('episodeRowModel', () => {
       link: 'https://www.nytimes.com/the-daily',
       genres: [],
       description: 'desc',
-      feedUrl: 'https://feeds.simplecast.com/54nAGcIl',
+      feedUrl: normalizeFeedUrl('https://feeds.simplecast.com/54nAGcIl'),
       podcastGuid: '304b84f0-07b0-5265-b6b7-da5cf5aeb56e',
       podcastItunesId: '1200361736',
     }
@@ -167,7 +168,7 @@ describe('episodeRowModel', () => {
       title: 'The Daily',
       author: 'The New York Times',
       artwork: 'cover-600',
-      feedUrl: 'https://feeds.simplecast.com/54nAGcIl',
+      feedUrl: normalizeFeedUrl('https://feeds.simplecast.com/54nAGcIl'),
       description: 'Description',
       lastUpdateTime: 1700000000000,
       episodeCount: 100,
@@ -221,7 +222,7 @@ describe('episodeRowModel', () => {
     const favorite = {
       id: 'fav-1',
       key: 'feed::audio',
-      feedUrl: 'feed',
+      feedUrl: normalizeFeedUrl('feed'),
       audioUrl: 'audio',
       episodeTitle: 'Fav FeedEpisode',
       podcastTitle: 'Fav Show',

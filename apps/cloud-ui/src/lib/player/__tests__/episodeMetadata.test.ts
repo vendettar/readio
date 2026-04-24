@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
 import type { Favorite, PlaybackSession } from '../../dexieDb'
 import type { FeedEpisode, Podcast, SearchEpisode } from '../../discovery'
 import {
@@ -27,7 +28,7 @@ function makePodcast(overrides: Partial<Podcast> = {}): Podcast {
     author: 'Test Author',
     artwork: 'https://example.com/art.jpg',
     description: 'Test description',
-    feedUrl: 'https://example.com/feed.xml',
+    feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
     lastUpdateTime: 1704067200,
     episodeCount: 10,
     language: 'en',
@@ -50,7 +51,7 @@ describe('episodeMetadata mappers', () => {
     })
     const podcast = makePodcast({
       title: 'Podcast',
-      feedUrl: 'https://example.com/feed.xml',
+      feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
       podcastItunesId: '123',
       author: 'Host',
       artwork: 'https://example.com/podcast-600.jpg',
@@ -94,19 +95,20 @@ describe('episodeMetadata mappers', () => {
     const favorite = {
       id: 'fav-1',
       key: 'k',
-      feedUrl: 'https://example.com/feed.xml',
+      feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
       audioUrl: 'https://example.com/favorite.mp3',
       episodeTitle: 'Favorite',
       podcastTitle: 'Podcast',
       artworkUrl: 'https://example.com/podcast.jpg',
-      episodeArtworkUrl: 'https://example.com/episode.jpg',
+      episodeArtworkUrl: 'https://example.com/art.jpg',
       addedAt: Date.now(),
       podcastItunesId: 'pod-1',
       transcriptUrl: 'https://example.com/favorite.srt',
+      countryAtSave: 'us',
     } as Favorite
 
     const payload = mapFavoriteToPlaybackPayload(favorite)
-    expect(payload.artwork).toBe('https://example.com/episode.jpg')
+    expect(payload.artwork).toBe('https://example.com/art.jpg')
     expect(payload.metadata.podcastItunesId).toBe('pod-1')
     expect(payload.transcriptUrl).toBe('https://example.com/favorite.srt')
   })

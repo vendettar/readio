@@ -3,7 +3,7 @@ import { Play, Star } from 'lucide-react'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNetworkStatus } from '../../hooks/useNetworkStatus'
-import { type FavoriteEpisodeInput, type SearchEpisode } from '../../lib/discovery'
+import type { FavoriteEpisodeInput, SearchEpisode } from '../../lib/discovery'
 import { ensurePodcastDetail } from '../../lib/discovery/queryCache'
 import { canPlayRemoteStreamWithoutTranscript } from '../../lib/player/remotePlayback'
 import { normalizeCountryParam } from '../../lib/routes/podcastRoutes'
@@ -54,11 +54,7 @@ export function SearchEpisodeItem({
       if (!podcastItunesId) {
         throw new Error('Missing podcastItunesId for metadata lookup')
       }
-      const podcast = await ensurePodcastDetail(
-        queryClient,
-        String(podcastItunesId),
-        globalCountry
-      )
+      const podcast = await ensurePodcastDetail(queryClient, String(podcastItunesId), globalCountry)
       if (!podcast) throw new Error('Podcast not found')
 
       const episodeObj: FavoriteEpisodeInput = {

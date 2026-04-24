@@ -1,8 +1,8 @@
 import { HttpResponse, http } from 'msw'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { server } from '../../../__tests__/setup'
-import { makeSearchEpisode, makeSearchPodcast } from './fixtures'
 import discovery from '../index'
+import { makeSearchEpisode, makeSearchPodcast } from './fixtures'
 
 describe('cloud discovery 005b same-origin search cutover', () => {
   let appleSearchHits = 0

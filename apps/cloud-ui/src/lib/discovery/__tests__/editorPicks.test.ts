@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { makeEditorPickPodcast } from './fixtures'
 import {
   buildEpisodeCompactKey,
   getCanonicalEditorPickPodcastID,
   getEpisodeGuid,
   matchesEditorPickRouteID,
 } from '../editorPicks'
+import { makeEditorPickPodcast } from './fixtures'
 
 describe('editorPicks canonical identifiers', () => {
   it('builds compact episode keys for valid UUIDs', () => {

@@ -76,11 +76,7 @@ const (
 
 // Shared Discovery Response Types
 
-type discoveryGenre struct {
-	GenreID string `json:"genreId"`
-	Name    string `json:"name"`
-	URL     string `json:"url,omitempty"`
-}
+
 
 // PodcastIndex episode detail (episodeGuid as identity)
 // PI Podcast response (canonical format for PI podcast-byitunesid and batch-byguid)
@@ -346,10 +342,7 @@ var (
 		code:    "RATE_LIMITED",
 		message: "rate limit exceeded",
 	}
-	discoveryErrMissingIdentifier = discoveryErrorSpec{
-		code:    "MISSING_IDENTIFIER",
-		message: "podcastItunesId query parameter is required",
-	}
+
 	discoveryErrBodyTooLarge = discoveryErrorSpec{
 		code:    "BODY_TOO_LARGE",
 		message: "request body exceeds maximum allowed size",

@@ -1,3 +1,4 @@
+import { normalizeFeedUrl } from '../feedUrl'
 import type {
   EditorPickPodcast,
   FeedEpisode,
@@ -9,24 +10,20 @@ import type {
   TopPodcast,
 } from '../schema'
 
-export function makeMinimalPodcast(
-  overrides: Partial<Podcast> = {}
-): Podcast {
+export function makeMinimalPodcast(overrides: Partial<Podcast> = {}): Podcast {
   return {
     podcastItunesId: 'podcast-123',
     title: 'Minimal Podcast',
     author: 'Host',
     artwork: 'https://example.com/podcast-600.jpg',
     description: 'A podcast',
-    feedUrl: 'https://example.com/feed.xml',
+    feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
     genres: [],
     ...overrides,
   }
 }
 
-export function makeSearchPodcast(
-  overrides: Partial<SearchPodcast> = {}
-): SearchPodcast {
+export function makeSearchPodcast(overrides: Partial<SearchPodcast> = {}): SearchPodcast {
   return {
     podcastItunesId: 'podcast-123',
     title: 'Tech Podcast',
@@ -39,9 +36,7 @@ export function makeSearchPodcast(
   }
 }
 
-export function makeSearchEpisode(
-  overrides: Partial<SearchEpisode> = {}
-): SearchEpisode {
+export function makeSearchEpisode(overrides: Partial<SearchEpisode> = {}): SearchEpisode {
   return {
     podcastItunesId: 'podcast-123',
     title: 'Episode Name',
@@ -56,9 +51,7 @@ export function makeSearchEpisode(
   }
 }
 
-export function makeFeedEpisode(
-  overrides: Partial<FeedEpisode> = {}
-): FeedEpisode {
+export function makeFeedEpisode(overrides: Partial<FeedEpisode> = {}): FeedEpisode {
   return {
     episodeGuid: 'feed-episode-guid-1',
     title: 'Feed Episode',
@@ -71,9 +64,7 @@ export function makeFeedEpisode(
   }
 }
 
-export function makeParsedFeed(
-  overrides: Partial<ParsedFeed> = {}
-): ParsedFeed {
+export function makeParsedFeed(overrides: Partial<ParsedFeed> = {}): ParsedFeed {
   return {
     title: 'Cloud Feed Podcast',
     description: 'Backend-owned feed',
@@ -90,7 +81,7 @@ export function makePodcast(overrides: Partial<Podcast> = {}): Podcast {
       podcastItunesId: '123',
       title: 'Cloud Feed Podcast',
       artwork: 'https://example.com/art-600.jpg',
-      feedUrl: 'https://example.com/feed.xml',
+      feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
     }),
     lastUpdateTime: 1613394044,
     episodeCount: 50,
@@ -118,9 +109,7 @@ export function makeEditorPickSnapshot(
   return makeEditorPickPodcast(overrides)
 }
 
-export function makeTopPodcast(
-  overrides: Partial<TopPodcast> = {}
-): TopPodcast {
+export function makeTopPodcast(overrides: Partial<TopPodcast> = {}): TopPodcast {
   return {
     podcastItunesId: 'top-1',
     title: 'Top Show',
@@ -131,9 +120,7 @@ export function makeTopPodcast(
   }
 }
 
-export function makeTopEpisode(
-  overrides: Partial<TopEpisode> = {}
-): TopEpisode {
+export function makeTopEpisode(overrides: Partial<TopEpisode> = {}): TopEpisode {
   return {
     podcastItunesId: '123',
     title: 'Top Episode',

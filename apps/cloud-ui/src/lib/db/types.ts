@@ -67,8 +67,10 @@ export interface ExplorePlaybackSession extends PlaybackSessionBase {
 
 export type PlaybackSession = LocalPlaybackSession | ExplorePlaybackSession
 
-export type NavigableExplorePlaybackSession = ExplorePlaybackSession &
-  { podcastItunesId: string; episodeGuid: string }
+export type NavigableExplorePlaybackSession = ExplorePlaybackSession & {
+  podcastItunesId: string
+  episodeGuid: string
+}
 
 export function isNavigableExplorePlaybackSession(
   session: PlaybackSession

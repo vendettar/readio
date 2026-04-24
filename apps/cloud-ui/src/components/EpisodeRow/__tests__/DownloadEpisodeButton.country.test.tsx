@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
 import { ensurePodcastDetail } from '../../../lib/discovery/queryCache'
 import { DownloadEpisodeButton } from '../DownloadEpisodeButton'
 
@@ -73,7 +74,9 @@ describe('DownloadEpisodeButton country normalization', () => {
     await waitFor(() => {
       expect(downloadEpisodeMock).toHaveBeenCalledTimes(1)
     })
-    expect(downloadEpisodeMock).toHaveBeenCalledWith(expect.objectContaining({ countryAtSave: expected }))
+    expect(downloadEpisodeMock).toHaveBeenCalledWith(
+      expect.objectContaining({ countryAtSave: expected })
+    )
   })
 
   it('resolves canonical feedUrl from PI when direct feedUrl is absent', async () => {
@@ -83,7 +86,7 @@ describe('DownloadEpisodeButton country normalization', () => {
       author: 'Host',
       artwork: 'https://example.com/art.jpg',
       description: 'desc',
-      feedUrl: 'https://example.com/canonical-feed.xml',
+      feedUrl: normalizeFeedUrl('https://example.com/canonical-feed.xml'),
       lastUpdateTime: 1,
       episodeCount: 10,
       language: 'en',
@@ -106,7 +109,9 @@ describe('DownloadEpisodeButton country normalization', () => {
       expect(ensurePodcastDetail).toHaveBeenCalledWith(expect.anything(), '123', 'us')
     })
     expect(downloadEpisodeMock).toHaveBeenCalledWith(
-      expect.objectContaining({ feedUrl: 'https://example.com/canonical-feed.xml' })
+      expect.objectContaining({
+        feedUrl: normalizeFeedUrl('https://example.com/canonical-feed.xml'),
+      })
     )
   })
 
@@ -129,7 +134,9 @@ describe('DownloadEpisodeButton country normalization', () => {
     })
     expect(ensurePodcastDetail).not.toHaveBeenCalled()
     expect(downloadEpisodeMock).toHaveBeenCalledWith(
-      expect.objectContaining({ feedUrl: 'https://example.com/already-known.xml' })
+      expect.objectContaining({
+        feedUrl: normalizeFeedUrl('https://example.com/already-known.xml'),
+      })
     )
   })
 })

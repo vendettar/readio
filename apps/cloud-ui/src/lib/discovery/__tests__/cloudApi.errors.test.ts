@@ -98,7 +98,8 @@ describe('cloudApi discovery error mapping', () => {
 
     await expect(fetchPodcastFeed('https://example.com/feed.xml')).rejects.toMatchObject({
       name: 'DiscoveryInvalidPayloadError',
-      message: 'GET /api/v1/discovery/feed?url=https%3A%2F%2Fexample.com%2Ffeed.xml: discovery payload validation failed',
+      message:
+        'GET /api/v1/discovery/feed?url=https%3A%2F%2Fexample.com%2Ffeed.xml: discovery payload validation failed',
     })
   })
 })

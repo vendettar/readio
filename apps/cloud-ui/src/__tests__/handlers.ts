@@ -1,4 +1,5 @@
 import { HttpResponse, http } from 'msw'
+import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
 
 export const handlers = [
   // Mock iTunes Search
@@ -24,7 +25,7 @@ export const handlers = [
           artistName: 'Test Artist',
           artworkUrl100: 'https://example.com/art100.jpg',
           artworkUrl600: 'https://example.com/art600.jpg',
-          feedUrl: 'https://example.com/feed.xml',
+          feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
           genres: ['Technology'],
           trackCount: 10,
           kind: 'podcast',
@@ -44,7 +45,7 @@ export const handlers = [
           artistName: 'Test Artist',
           artworkUrl100: 'https://example.com/art100.jpg',
           artworkUrl600: 'https://example.com/art600.jpg',
-          feedUrl: 'https://example.com/feed.xml',
+          feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
           genres: ['Technology'],
           kind: 'podcast',
         },

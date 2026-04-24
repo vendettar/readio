@@ -1,4 +1,4 @@
-import { normalizeFeedUrl } from './feedUrl'
+import type { NormalizedFeedUrl } from './feedUrl'
 
 export const PODCAST_DEFAULT_FEED_QUERY_LIMIT = 20
 
@@ -13,10 +13,7 @@ export const PODCAST_QUERY_CACHE_POLICY = {
   },
 } as const
 
-export function buildPodcastDetailQueryKey(
-  podcastId: string,
-  country: string | null | undefined
-) {
+export function buildPodcastDetailQueryKey(podcastId: string, country: string | null | undefined) {
   return ['podcast', 'podcast-detail', podcastId.trim(), country ?? ''] as const
 }
 
@@ -34,20 +31,14 @@ function isNonNegativeFeedOffset(offset: number | null | undefined) {
 }
 
 export function buildPodcastFeedQueryKey(
-  normalizedFeedUrl: string | null | undefined,
+  normalizedFeedUrl: NormalizedFeedUrl | '' | null | undefined,
   options?: PodcastFeedQueryOptions
 ) {
   const hasPagedWindow = isPositiveFeedLimit(options?.limit)
   const modeToken = hasPagedWindow ? 'page' : 'full'
   const limitToken = hasPagedWindow ? options?.limit : 'all'
-  const offsetToken = hasPagedWindow && isNonNegativeFeedOffset(options?.offset) ? options?.offset : 0
+  const offsetToken =
+    hasPagedWindow && isNonNegativeFeedOffset(options?.offset) ? options?.offset : 0
 
-  return [
-    'podcast',
-    'feed',
-    normalizeFeedUrl(normalizedFeedUrl ?? ''),
-    modeToken,
-    limitToken,
-    offsetToken,
-  ] as const
+  return ['podcast', 'feed', normalizedFeedUrl ?? '', modeToken, limitToken, offsetToken] as const
 }

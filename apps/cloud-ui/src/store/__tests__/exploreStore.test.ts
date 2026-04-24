@@ -1,6 +1,8 @@
 // src/__tests__/exploreStore.test.ts
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DB } from '../../lib/dexieDb'
+import type { Podcast } from '../../lib/discovery'
+import { normalizeFeedUrl } from '../../lib/discovery/feedUrl'
 import { LibraryRepository } from '../../lib/repositories/LibraryRepository'
 import { __resetRequestManagerStateForTests } from '../../lib/requestManager'
 import { __testOnlyResetExploreStoreFlags, useExploreStore } from '../exploreStore'
@@ -54,12 +56,12 @@ describe('ExploreStore', () => {
   })
 
   describe('Subscriptions', () => {
-    const mockPodcast = {
+    const mockPodcast: Podcast = {
       podcastItunesId: '123',
       title: 'Test Podcast',
       author: 'Test Artist',
       artwork: 'http://example.com/art-large.jpg',
-      feedUrl: 'http://example.com/feed.xml',
+      feedUrl: normalizeFeedUrl('http://example.com/feed.xml'),
       description: 'A test podcast',
       lastUpdateTime: 1613394044,
       episodeCount: 50,
@@ -157,7 +159,7 @@ describe('ExploreStore', () => {
         subscriptions: [
           {
             id: 'sub-remove',
-            feedUrl: 'http://example.com/feed.xml',
+            feedUrl: normalizeFeedUrl('http://example.com/feed.xml'),
             title: 'Test Podcast',
             author: 'Test Artist',
             artworkUrl: 'http://example.com/art-large.jpg',
@@ -237,12 +239,12 @@ describe('ExploreStore', () => {
   })
 
   describe('Favorites', () => {
-    const mockPodcast = {
+    const mockPodcast: Podcast = {
       podcastItunesId: '123',
       title: 'Test Podcast',
       author: 'Test Artist',
       artwork: 'http://example.com/art-large.jpg',
-      feedUrl: 'http://example.com/feed.xml',
+      feedUrl: normalizeFeedUrl('http://example.com/feed.xml'),
       description: 'A test podcast',
       lastUpdateTime: 1613394044,
       episodeCount: 50,
@@ -394,7 +396,7 @@ describe('ExploreStore', () => {
           {
             id: 'fav-remove',
             key,
-            feedUrl: 'http://example.com/feed.xml',
+            feedUrl: normalizeFeedUrl('http://example.com/feed.xml'),
             podcastTitle: 'Test Podcast',
             episodeTitle: 'Episode 1',
             pubDate: '2024-01-01',
@@ -440,7 +442,7 @@ describe('ExploreStore', () => {
     it('retries subscription lazy hydration after transient failure', async () => {
       const subscription = {
         id: 'sub-retry',
-        feedUrl: 'https://example.com/feed.xml',
+        feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
         title: 'Subscription Retry',
         author: 'Author',
         artworkUrl: '',
@@ -473,7 +475,7 @@ describe('ExploreStore', () => {
       const favorite = {
         id: 'fav-retry',
         key: 'fav-retry-key',
-        feedUrl: 'https://example.com/feed.xml',
+        feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
         podcastTitle: 'Podcast Retry',
         episodeTitle: 'Episode Retry',
         audioUrl: 'https://example.com/audio.mp3',
@@ -506,7 +508,7 @@ describe('ExploreStore', () => {
       const subscriptions = [
         {
           id: 'sub-1',
-          feedUrl: 'https://example.com/feed.xml',
+          feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
           title: 'Subscription',
           author: 'Author',
           artworkUrl: '',
@@ -519,7 +521,7 @@ describe('ExploreStore', () => {
         {
           id: 'fav-1',
           key: 'k1',
-          feedUrl: 'https://example.com/feed.xml',
+          feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
           podcastTitle: 'Podcast',
           episodeTitle: 'Episode',
           audioUrl: 'https://example.com/audio.mp3',

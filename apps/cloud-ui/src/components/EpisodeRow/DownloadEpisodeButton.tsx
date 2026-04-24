@@ -60,7 +60,11 @@ export function DownloadEpisodeButton({
 
       if (!resolvedFeedUrl && normalizedPodcastItunesId) {
         try {
-          const podcast = await ensurePodcastDetail(queryClient, normalizedPodcastItunesId, normalizedCountryAtSave)
+          const podcast = await ensurePodcastDetail(
+            queryClient,
+            normalizedPodcastItunesId,
+            normalizedCountryAtSave
+          )
           resolvedFeedUrl = podcast?.feedUrl
         } catch {
           resolvedFeedUrl = undefined

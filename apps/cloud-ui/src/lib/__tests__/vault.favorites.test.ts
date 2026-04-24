@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
+import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
 import { DB, db } from '../dexieDb'
 import { exportVault, importVault } from '../vault'
 
@@ -11,7 +12,7 @@ describe('Vault Favorites Regression', () => {
     // 1. Setup a favorite
     await DB.addFavorite({
       key: 'https://example.com/feed.xml|https://example.com/audio.mp3',
-      feedUrl: 'https://example.com/feed.xml',
+      feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
       audioUrl: 'https://example.com/audio.mp3',
       episodeTitle: 'Test Episode',
       podcastTitle: 'Test Podcast',

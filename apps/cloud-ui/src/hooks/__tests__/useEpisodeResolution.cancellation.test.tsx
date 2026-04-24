@@ -1,10 +1,11 @@
 import { renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
 import { createQueryClientHarness } from '../../__tests__/queryClient'
 import type { ParsedFeed, Podcast } from '../../lib/discovery'
 import {
-  buildPodcastFeedQueryKey,
   buildPodcastDetailQueryKey,
+  buildPodcastFeedQueryKey,
 } from '../../lib/discovery/podcastQueryContract'
 import { episodeIdentityToCompactKey } from '../../lib/routes/compactKey'
 import { resolveEpisodeResolutionError, useEpisodeResolution } from '../useEpisodeResolution'
@@ -56,10 +57,7 @@ function createWrapper(options: WrapperOptions = {}) {
       }
 
       if (options.feed && options.podcast?.feedUrl) {
-        queryClient.setQueryData(
-          buildPodcastFeedQueryKey(options.podcast.feedUrl),
-          options.feed
-        )
+        queryClient.setQueryData(buildPodcastFeedQueryKey(options.podcast.feedUrl), options.feed)
       }
     },
   })
@@ -118,7 +116,7 @@ describe('useEpisodeResolution cancellation semantics', () => {
         podcastItunesId: '12345',
         title: 'JP Podcast',
         author: 'Host',
-        feedUrl: 'https://example.com/jp-feed.xml',
+        feedUrl: normalizeFeedUrl('https://example.com/jp-feed.xml'),
       })
     )
 
@@ -134,7 +132,7 @@ describe('useEpisodeResolution cancellation semantics', () => {
         podcastItunesId: '12345',
         title: 'US Podcast',
         author: 'Host',
-        feedUrl: 'https://example.com/us-feed.xml',
+        feedUrl: normalizeFeedUrl('https://example.com/us-feed.xml'),
       })
     )
 
@@ -148,7 +146,7 @@ describe('useEpisodeResolution cancellation semantics', () => {
       podcastItunesId: '12345',
       title: 'Warm Podcast',
       author: 'Host',
-      feedUrl: 'https://example.com/feed.xml',
+      feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
     })
     const feed: ParsedFeed = {
       title: 'Warm Podcast',
@@ -184,7 +182,7 @@ describe('useEpisodeResolution cancellation semantics', () => {
         podcastItunesId: '12345',
         title: 'Cold Podcast',
         author: 'Host',
-        feedUrl: 'https://example.com/feed.xml',
+        feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
       })
     )
     fetchPodcastFeedMock.mockResolvedValue({
@@ -228,7 +226,7 @@ describe('useEpisodeResolution cancellation semantics', () => {
         podcastItunesId: '12345',
         title: 'Deep Link Podcast',
         author: 'Host',
-        feedUrl: 'https://example.com/feed.xml',
+        feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
       })
     )
     fetchPodcastFeedMock.mockImplementation(
@@ -239,10 +237,8 @@ describe('useEpisodeResolution cancellation semantics', () => {
         episodes: Array.from({ length: typeof limit === 'number' ? limit : 150 }, (_, index) => {
           const episodeNumber = index + 1
           return {
-            episodeGuid:
-              episodeNumber === 150 ? olderEpisodeGuid : `episode-guid-${episodeNumber}`,
-            title:
-              episodeNumber === 150 ? 'Older RSS Episode' : `Episode ${episodeNumber}`,
+            episodeGuid: episodeNumber === 150 ? olderEpisodeGuid : `episode-guid-${episodeNumber}`,
+            title: episodeNumber === 150 ? 'Older RSS Episode' : `Episode ${episodeNumber}`,
             description: '',
             audioUrl: `https://example.com/audio-${episodeNumber}.mp3`,
             pubDate: '2025-01-01T00:00:00.000Z',
@@ -251,12 +247,9 @@ describe('useEpisodeResolution cancellation semantics', () => {
       })
     )
 
-    const { result } = renderHook(
-      () => useEpisodeResolution('12345', olderEpisodeKey, 'us'),
-      {
-        wrapper: createWrapper().wrapper,
-      }
-    )
+    const { result } = renderHook(() => useEpisodeResolution('12345', olderEpisodeKey, 'us'), {
+      wrapper: createWrapper().wrapper,
+    })
 
     await waitFor(() => expect(result.current.isLoading).toBe(false))
     expect(fetchPodcastFeedMock).toHaveBeenCalledWith(
@@ -272,7 +265,7 @@ describe('useEpisodeResolution cancellation semantics', () => {
         podcastItunesId: '12345',
         title: 'Cold Podcast',
         author: 'Host',
-        feedUrl: '',
+        feedUrl: normalizeFeedUrl(''),
       })
     )
 

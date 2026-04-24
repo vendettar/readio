@@ -1,5 +1,6 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
 import { useEpisodeRowFavoriteAction } from '../useEpisodeRowFavoriteAction'
 
 const logError = vi.fn()
@@ -126,7 +127,7 @@ describe('useEpisodeRowFavoriteAction', () => {
         podcastItunesId: '1',
         title: 'Show',
         artwork: 'https://example.com/show.jpg',
-        feedUrl: 'feed',
+        feedUrl: normalizeFeedUrl('feed'),
       },
       episode: {
         id: 'ep-1',
@@ -167,7 +168,7 @@ describe('useEpisodeRowFavoriteAction', () => {
         podcastItunesId: '1',
         title: 'Show',
         artwork: 'https://example.com/show.jpg',
-        feedUrl: 'feed',
+        feedUrl: normalizeFeedUrl('feed'),
       },
       episode: {
         id: 'ep-1',
@@ -209,7 +210,7 @@ describe('useEpisodeRowFavoriteAction', () => {
         podcastItunesId: '1',
         title: 'Show',
         artwork: 'https://example.com/show.jpg',
-        feedUrl: 'feed',
+        feedUrl: normalizeFeedUrl('feed'),
       },
       episode: {
         id: 'ep-1',
@@ -246,7 +247,7 @@ describe('useEpisodeRowFavoriteAction', () => {
         podcastItunesId: '1',
         title: 'Show',
         artwork: '',
-        feedUrl: 'feed',
+        feedUrl: normalizeFeedUrl('feed'),
       },
       episode: {
         id: 'ep-1',
