@@ -57,8 +57,8 @@ const DISCOVERY_ROUTE = {
   searchPodcasts: '/api/v1/discovery/search/podcasts',
   searchEpisodes: '/api/v1/discovery/search/episodes',
   topEpisodes: '/api/v1/discovery/top-episodes',
-  piPodcastByItunesId: '/api/v1/discovery/podcast-index/podcast-byitunesid',
-  piPodcastsBatchByGuid: '/api/v1/discovery/podcast-index/podcasts-batch-byguid',
+  podcasts: '/api/v1/discovery/podcasts',
+  podcastsBatch: '/api/v1/discovery/podcasts/batch',
   feed: '/api/v1/discovery/feed',
 } as const
 
@@ -220,8 +220,8 @@ export function getPodcastIndexPodcastByItunesId(
 ): Promise<Podcast | null> {
   return fetchDiscoveryJSON(
     buildDiscoveryURL(
-      DISCOVERY_ROUTE.piPodcastByItunesId,
-      new URLSearchParams({ podcastItunesId })
+      `${DISCOVERY_ROUTE.podcasts}/${encodeURIComponent(podcastItunesId)}`,
+      new URLSearchParams()
     ),
     (value) => (value === null ? null : PIPodcastSchema.parse(value)),
     signal
@@ -235,7 +235,7 @@ export function getPodcastIndexPodcastsBatchByGuid(
   if (guids.length === 0) return Promise.resolve([])
 
   return postDiscoveryJSON(
-    DISCOVERY_ROUTE.piPodcastsBatchByGuid,
+    DISCOVERY_ROUTE.podcastsBatch,
     guids,
     (value) => z.array(EditorPickPodcastSchema).parse(value),
     signal

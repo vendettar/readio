@@ -1,5 +1,6 @@
 import { HttpResponse, http } from 'msw'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { DISCOVERY_TEST_ROUTE, discoveryUrl } from '../../../__tests__/constants'
 import { server } from '../../../__tests__/setup'
 import { fetchPodcastFeed, fetchTopPodcasts, getPodcastIndexPodcastsBatchByGuid } from '../cloudApi'
 
@@ -10,7 +11,7 @@ describe('cloudApi discovery error mapping', () => {
 
   it('throws DiscoveryParseError with method and path context for invalid JSON', async () => {
     server.use(
-      http.get('http://localhost:3000/api/v1/discovery/top-podcasts', () => {
+      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.topPodcasts), () => {
         return new HttpResponse('not-json', {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
@@ -25,21 +26,20 @@ describe('cloudApi discovery error mapping', () => {
 
   it('throws DiscoveryInvalidPayloadError with method and path context for invalid POST payloads', async () => {
     server.use(
-      http.post('http://localhost:3000/api/v1/discovery/podcast-index/podcasts-batch-byguid', () =>
+      http.post(discoveryUrl(DISCOVERY_TEST_ROUTE.podcastsBatch), () =>
         HttpResponse.json({ not: 'an array' })
       )
     )
 
     await expect(getPodcastIndexPodcastsBatchByGuid(['guid-1'])).rejects.toMatchObject({
       name: 'DiscoveryInvalidPayloadError',
-      message:
-        'POST /api/v1/discovery/podcast-index/podcasts-batch-byguid: discovery payload validation failed',
+      message: 'POST /api/v1/discovery/podcasts/batch: discovery payload validation failed',
     })
   })
 
   it('throws FetchError with cloud-api error payload details for non-2xx discovery responses', async () => {
     server.use(
-      http.get('http://localhost:3000/api/v1/discovery/top-podcasts', () =>
+      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.topPodcasts), () =>
         HttpResponse.json(
           {
             code: 'rate_limited',
@@ -63,7 +63,7 @@ describe('cloudApi discovery error mapping', () => {
 
   it('falls back to generic FetchError when a non-2xx discovery response is not the standard error payload', async () => {
     server.use(
-      http.get('http://localhost:3000/api/v1/discovery/top-podcasts', () =>
+      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.topPodcasts), () =>
         HttpResponse.json({ error: 'bad gateway' }, { status: 502 })
       )
     )
@@ -79,7 +79,7 @@ describe('cloudApi discovery error mapping', () => {
 
   it('fails closed when feed payload omits canonical episodeGuid', async () => {
     server.use(
-      http.get('http://localhost:3000/api/v1/discovery/feed', () =>
+      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.feed), () =>
         HttpResponse.json({
           title: 'Podcast',
           description: 'desc',

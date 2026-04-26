@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
 import { buildPodcastFeedQueryKey } from '../podcastQueryContract'
-import { EditorPickPodcastSchema, PIPodcastSchema } from '../schema'
+import { EditorPickPodcastSchema, PIPodcastSchema, TopEpisodeSchema } from '../schema'
 
 describe('discovery schema feedUrl canonicalization', () => {
   it('canonicalizes PI podcast feedUrl at parse boundary', () => {
@@ -60,5 +60,17 @@ describe('discovery schema feedUrl canonicalization', () => {
       'all',
       0,
     ])
+  })
+
+  it('uses author for top-episode creator labels', () => {
+    const episode = TopEpisodeSchema.parse({
+      podcastItunesId: '123',
+      title: 'Episode',
+      author: 'The New York Times',
+      artwork: 'https://example.com/art.jpg',
+      genres: ['Technology'],
+    })
+
+    expect(episode.author).toBe('The New York Times')
   })
 })

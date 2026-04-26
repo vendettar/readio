@@ -11,6 +11,7 @@ const useEpisodeResolutionMock = vi.fn()
 const queryClientMock = {
   getQueryData: vi.fn(),
   setQueryData: vi.fn(),
+  getQueryState: vi.fn(() => ({ dataUpdatedAt: 0 })),
 }
 
 const mockPodcast = makePodcast({

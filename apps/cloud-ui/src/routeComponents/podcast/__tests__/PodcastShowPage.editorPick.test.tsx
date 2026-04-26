@@ -2,13 +2,15 @@ import { render, screen } from '@testing-library/react'
 import { HttpResponse, http } from 'msw'
 import type React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createQueryClientWrapper } from '../../../__tests__/queryClient'
+import { DISCOVERY_TEST_ROUTE, discoveryUrl } from '../../../__tests__/constants'
+import { createQueryClientHarness, createQueryClientWrapper } from '../../../__tests__/queryClient'
 import { server } from '../../../__tests__/setup'
 import {
   makeFeedEpisode,
   makeParsedFeed,
   makePodcast,
 } from '../../../lib/discovery/__tests__/fixtures'
+import { getCanonicalPodcastFeedCacheEntry } from '../../../lib/discovery/feedCache'
 import { normalizeFeedUrl } from '../../../lib/discovery/feedUrl'
 import PodcastShowPage from '../PodcastShowPage'
 
@@ -67,27 +69,22 @@ describe('PodcastShowPage editor pick path', () => {
         appleLookupHits += 1
         return HttpResponse.json({ resultCount: 0, results: [] })
       }),
-      http.get(
-        'http://localhost:3000/api/v1/discovery/podcast-index/podcast-byitunesid',
-        ({ request }) => {
-          piItunesLookupHits += 1
-          const url = new URL(request.url)
-          expect(url.searchParams.get('podcastItunesId')).toBe('12345')
+      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.podcastByItunesId('12345')), () => {
+        piItunesLookupHits += 1
 
-          return HttpResponse.json(
-            makePodcast({
-              podcastItunesId: '12345',
-              title: 'Editor Pick Podcast',
-              artwork: 'https://example.com/show-600.jpg',
-              description: 'Editor pick description',
-              feedUrl: normalizeFeedUrl('https://example.com/show-feed.xml'),
-              lastUpdateTime: 1711497600,
-              episodeCount: 2,
-            })
-          )
-        }
-      ),
-      http.get('http://localhost:3000/api/v1/discovery/feed', ({ request }) => {
+        return HttpResponse.json(
+          makePodcast({
+            podcastItunesId: '12345',
+            title: 'Editor Pick Podcast',
+            artwork: 'https://example.com/show-600.jpg',
+            description: 'Editor pick description',
+            feedUrl: normalizeFeedUrl('https://example.com/show-feed.xml'),
+            lastUpdateTime: 1711497600,
+            episodeCount: 2,
+          })
+        )
+      }),
+      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.feed), ({ request }) => {
         feedHits += 1
         const url = new URL(request.url)
         expect(url.searchParams.get('url')).toBe('https://example.com/show-feed.xml')
@@ -114,7 +111,7 @@ describe('PodcastShowPage editor pick path', () => {
     )
   })
 
-  it('loads editor pick show routes through podcast-byitunesid then RSS', async () => {
+  it('loads editor pick show routes through podcast lookup then RSS', async () => {
     render(<PodcastShowPage />, { wrapper: createQueryClientWrapper() })
 
     expect(await screen.findByText('Editor Pick Podcast')).not.toBeNull()
@@ -124,7 +121,21 @@ describe('PodcastShowPage editor pick path', () => {
     expect(feedHits).toBe(1)
   })
 
-  it('still performs PI byitunesid lookup when snapshot exists (not snapshot-only short-circuit)', async () => {
+  it('seeds the canonical feed cache from the first-page show fetch', async () => {
+    const harness = createQueryClientHarness()
+
+    render(<PodcastShowPage />, { wrapper: harness.wrapper })
+
+    expect(await screen.findByText('Feed Episode 1')).not.toBeNull()
+    expect(
+      getCanonicalPodcastFeedCacheEntry(harness.queryClient, 'https://example.com/show-feed.xml')
+    ).toMatchObject({
+      feedUrl: 'https://example.com/show-feed.xml',
+      coveredRanges: [{ start: 0, end: 1 }],
+    })
+  })
+
+  it('still performs podcast lookup when snapshot exists (not snapshot-only short-circuit)', async () => {
     // This is the critical test: verify the code change in PodcastShowPage.tsx
     // The OLD behavior was: enabled: Boolean(normalizedRouteCountry && !initialPodcast)
     // which would skip the query when snapshot existed.
@@ -172,7 +183,7 @@ describe('PodcastShowPage editor pick path', () => {
     }
 
     server.use(
-      http.get('http://localhost:3000/api/v1/discovery/feed', () => {
+      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.feed), () => {
         feedHits += 1
         return HttpResponse.error()
       })

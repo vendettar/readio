@@ -11,10 +11,17 @@ import {
   upsertEditorPickInCache,
 } from '@/lib/discovery/editorPicks'
 import {
+  findEpisodeInCanonicalPodcastFeed,
+  getCanonicalPodcastFeedCacheEntry,
+  isCanonicalFeedCoverageComplete,
+  isCanonicalPodcastFeedCacheFresh,
+} from '@/lib/discovery/feedCache'
+import {
   buildPodcastDetailQueryKey,
   buildPodcastFeedQueryKey,
   PODCAST_QUERY_CACHE_POLICY,
 } from '@/lib/discovery/podcastQueryContract'
+import { readOrFetchPodcastFeed } from '@/lib/discovery/queryCache'
 import { compactKeyToEpisodeIdentity } from '@/lib/routes/compactKey'
 import { normalizeCountryParam } from '@/lib/routes/podcastRoutes'
 
@@ -97,27 +104,34 @@ export function useEpisodeResolution(
   })
 
   const feedUrl = podcast?.feedUrl
-  const cachedFeed = feedUrl
-    ? (queryClient.getQueryData(buildPodcastFeedQueryKey(feedUrl)) as ParsedFeed | undefined)
-    : undefined
-  const cachedEpisode = findEpisodeByGuid(
-    cachedFeed?.episodes as FeedEpisode[] | undefined,
-    targetEpisodeGuid
+  const cachedEpisode = findEpisodeInCanonicalPodcastFeed(queryClient, feedUrl, (episode) =>
+    matchesEpisodeGuid(episode, targetEpisodeGuid)
   )
-  const shouldFetchRssFallback = Boolean(feedUrl && targetEpisodeGuid && !cachedEpisode)
+  const cachedCanonicalFeed = getCanonicalPodcastFeedCacheEntry(queryClient, feedUrl)
+  const isCachedCanonicalFeedFresh = isCanonicalPodcastFeedCacheFresh(cachedCanonicalFeed)
+  const shouldFetchRssFallback = Boolean(
+    feedUrl &&
+      targetEpisodeGuid &&
+      !cachedEpisode &&
+      (!isCachedCanonicalFeedFresh || !isCanonicalFeedCoverageComplete(cachedCanonicalFeed))
+  )
   const {
     data: fallbackFeed,
     isLoading: isLoadingFeedFallback,
     error: feedError,
   } = useQuery<ParsedFeed>({
     queryKey: buildPodcastFeedQueryKey(feedUrl),
-    queryFn: ({ signal }) => discovery.fetchPodcastFeed(feedUrl ?? '', signal),
+    queryFn: ({ signal }) => readOrFetchPodcastFeed(queryClient, feedUrl ?? '', signal),
     enabled: shouldFetchRssFallback,
     staleTime: PODCAST_QUERY_CACHE_POLICY.feed.staleTime,
     gcTime: PODCAST_QUERY_CACHE_POLICY.feed.gcTime,
   })
 
-  const rssFallbackEpisode = findEpisodeByGuid(fallbackFeed?.episodes, targetEpisodeGuid)
+  const rssFallbackEpisode =
+    findEpisodeByGuid(fallbackFeed?.episodes, targetEpisodeGuid) ??
+    findEpisodeInCanonicalPodcastFeed(queryClient, feedUrl, (episode) =>
+      matchesEpisodeGuid(episode, targetEpisodeGuid)
+    )
   const episode = cachedEpisode ?? rssFallbackEpisode
 
   const isLoading = !country || isLoadingPodcast || (!episode && isLoadingFeedFallback)

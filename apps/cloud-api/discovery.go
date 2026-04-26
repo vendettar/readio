@@ -23,49 +23,65 @@ import (
 )
 
 const (
-	discoveryRoutePrefix                                = "/api/v1/discovery/"
-	discoverySearchPodcastsRoute                        = "/api/v1/discovery/search/podcasts"
-	discoverySearchEpisodesRoute                        = "/api/v1/discovery/search/episodes"
-	discoveryTopPodcastsRoute                           = "/api/v1/discovery/top-podcasts"
-	discoveryTopEpisodesRoute                           = "/api/v1/discovery/top-episodes"
-	discoveryFeedRoute                                  = "/api/v1/discovery/feed"
-	discoveryPodcastIndexPodcastsBatchByGUIDRoute       = "/api/v1/discovery/podcast-index/podcasts-batch-byguid"
-	discoveryPodcastIndexPodcastByItunesIDRoute         = "/api/v1/discovery/podcast-index/podcast-byitunesid"
-	discoverySearchBaseURL                              = "https://itunes.apple.com/search"
-	discoveryRSSBaseURL                                 = "https://rss.marketingtools.apple.com/api/v2"
-	discoveryUserAgent                                  = "Readio/1.0 (Cloud Discovery; +https://www.readio.top)"
-	discoveryBrowserUserAgent                           = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-	discoveryRequestTimeout                             = 15 * time.Second
-	discoveryBodyLimit                            int64 = 30 << 20
-	discoverySlowRequestThreshold                       = 5 * time.Second
-	defaultDiscoveryCountry                             = "us"
-	defaultDiscoveryPodcastSearchLimit                  = 20
-	defaultDiscoveryEpisodeSearchLimit                  = 50
-	defaultDiscoveryTopLimit                            = 25
-	maxDiscoverySearchLimit                             = 200
-	maxDiscoveryTopLimit                                = 100
-	discoveryCacheMaxKeys                               = 256
-	discoverySearchRateLimitBurst                       = 30
-	discoverySearchRateLimitWindow                      = time.Minute
-	discoverySearchRateLimitBurstEnv                    = "READIO_DISCOVERY_SEARCH_RATE_LIMIT_BURST"
-	discoverySearchRateLimitWindowMsEnv                 = "READIO_DISCOVERY_SEARCH_RATE_LIMIT_WINDOW_MS"
-	discoveryTopRateLimitBurst                          = 20
-	discoveryTopRateLimitWindow                         = time.Minute
-	discoveryTopRateLimitBurstEnv                       = "READIO_DISCOVERY_TOP_RATE_LIMIT_BURST"
-	discoveryTopRateLimitWindowMsEnv                    = "READIO_DISCOVERY_TOP_RATE_LIMIT_WINDOW_MS"
-	discoveryFeedRateLimitBurst                         = 20
-	discoveryFeedRateLimitWindow                        = time.Minute
-	discoveryFeedRateLimitBurstEnv                      = "READIO_DISCOVERY_FEED_RATE_LIMIT_BURST"
-	discoveryFeedRateLimitWindowMsEnv                   = "READIO_DISCOVERY_FEED_RATE_LIMIT_WINDOW_MS"
-	discoveryFeedCacheTTLmsEnv                          = "READIO_DISCOVERY_FEED_CACHE_TTL_MS"
-	discoveryFeedCacheMaxEntriesEnv                     = "READIO_DISCOVERY_FEED_CACHE_MAX_ENTRIES"
-	discoveryFeedCacheMaxEpisodesEnv                    = "READIO_DISCOVERY_FEED_CACHE_MAX_EPISODES"
-	discoveryFeedCacheMaxBytesEnv                       = "READIO_DISCOVERY_FEED_CACHE_MAX_BYTES"
-	discoveryPodcastIndexRateLimitBurst                 = 20
-	discoveryPodcastIndexRateLimitWindow                = time.Minute
-	discoveryPodcastIndexRateLimitBurstEnv              = "READIO_DISCOVERY_PODCAST_INDEX_RATE_LIMIT_BURST"
-	discoveryPodcastIndexRateLimitWindowMsEnv           = "READIO_DISCOVERY_PODCAST_INDEX_RATE_LIMIT_WINDOW_MS"
+	discoveryRoutePrefix                            = "/api/v1/discovery/"
+	discoverySearchPodcastsRoute                    = "/api/v1/discovery/search/podcasts"
+	discoverySearchEpisodesRoute                    = "/api/v1/discovery/search/episodes"
+	discoveryTopPodcastsRoute                       = "/api/v1/discovery/top-podcasts"
+	discoveryTopEpisodesRoute                       = "/api/v1/discovery/top-episodes"
+	discoveryFeedRoute                              = "/api/v1/discovery/feed"
+	discoveryPodcastsRoute                          = "/api/v1/discovery/podcasts"
+	discoveryPodcastsBatchRoute                     = "/api/v1/discovery/podcasts/batch"
+	discoveryPodcastByItunesIDRoutePattern          = "/api/v1/discovery/podcasts/:itunesId"
+	discoverySearchBaseURL                          = "https://itunes.apple.com/search"
+	discoveryRSSBaseURL                             = "https://rss.marketingtools.apple.com/api/v2"
+	discoveryUserAgent                              = "Readio/1.0 (Cloud Discovery; +https://www.readio.top)"
+	discoveryBrowserUserAgent                       = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+	discoveryRequestTimeout                         = 15 * time.Second
+	discoveryBodyLimit                        int64 = 30 << 20
+	discoverySlowRequestThreshold                   = 5 * time.Second
+	defaultDiscoveryCountry                         = "us"
+	defaultDiscoveryPodcastSearchLimit              = 20
+	defaultDiscoveryEpisodeSearchLimit              = 50
+	defaultDiscoveryTopLimit                        = 25
+	maxDiscoverySearchLimit                         = 200
+	maxDiscoveryTopLimit                            = 100
+	discoveryCacheMaxKeys                           = 256
+	discoverySearchRateLimitBurst                   = 30
+	discoverySearchRateLimitWindow                  = time.Minute
+	discoverySearchRateLimitBurstEnv                = "READIO_DISCOVERY_SEARCH_RATE_LIMIT_BURST"
+	discoverySearchRateLimitWindowMsEnv             = "READIO_DISCOVERY_SEARCH_RATE_LIMIT_WINDOW_MS"
+	discoveryTopRateLimitBurst                      = 20
+	discoveryTopRateLimitWindow                     = time.Minute
+	discoveryTopRateLimitBurstEnv                   = "READIO_DISCOVERY_TOP_RATE_LIMIT_BURST"
+	discoveryTopRateLimitWindowMsEnv                = "READIO_DISCOVERY_TOP_RATE_LIMIT_WINDOW_MS"
+	discoveryFeedRateLimitBurst                     = 20
+	discoveryFeedRateLimitWindow                    = time.Minute
+	discoveryFeedRateLimitBurstEnv                  = "READIO_DISCOVERY_FEED_RATE_LIMIT_BURST"
+	discoveryFeedRateLimitWindowMsEnv               = "READIO_DISCOVERY_FEED_RATE_LIMIT_WINDOW_MS"
+	discoveryFeedCacheTTLmsEnv                      = "READIO_DISCOVERY_FEED_CACHE_TTL_MS"
+	discoveryFeedCacheMaxEntriesEnv                 = "READIO_DISCOVERY_FEED_CACHE_MAX_ENTRIES"
+	discoveryFeedCacheMaxEpisodesEnv                = "READIO_DISCOVERY_FEED_CACHE_MAX_EPISODES"
+	discoveryFeedCacheMaxBytesEnv                   = "READIO_DISCOVERY_FEED_CACHE_MAX_BYTES"
+	discoveryPodcastIndexRateLimitBurst             = 20
+	discoveryPodcastIndexRateLimitWindow            = time.Minute
+	discoveryPodcastIndexRateLimitBurstEnv          = "READIO_DISCOVERY_PODCAST_INDEX_RATE_LIMIT_BURST"
+	discoveryPodcastIndexRateLimitWindowMsEnv       = "READIO_DISCOVERY_PODCAST_INDEX_RATE_LIMIT_WINDOW_MS"
 )
+
+func discoveryPodcastByItunesIDFromPath(requestPath string) (string, bool) {
+	cleanedPath := path.Clean(requestPath)
+	prefix := discoveryPodcastsRoute + "/"
+	if !strings.HasPrefix(cleanedPath, prefix) || cleanedPath == discoveryPodcastsBatchRoute {
+		return "", false
+	}
+
+	rawID := strings.TrimPrefix(cleanedPath, prefix)
+	if rawID == "" || strings.Contains(rawID, "/") {
+		return "", false
+	}
+
+	return rawID, true
+}
 
 const (
 	discoveryFeedCacheTTL         = 5 * time.Minute
@@ -75,8 +91,6 @@ const (
 )
 
 // Shared Discovery Response Types
-
-
 
 // PodcastIndex episode detail (episodeGuid as identity)
 // PI Podcast response (canonical format for PI podcast-byitunesid and batch-byguid)
@@ -625,14 +639,16 @@ func resolveDiscoveryPodcastIndexRateLimitWindow() time.Duration {
 }
 
 func (s *discoveryService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	allowedMethod := r.Method == http.MethodGet || (r.Method == http.MethodPost && (path.Clean(r.URL.Path) == discoveryPodcastIndexPodcastsBatchByGUIDRoute))
+	cleanedPath := path.Clean(r.URL.Path)
+	_, isPodcastByItunesIDRoute := discoveryPodcastByItunesIDFromPath(cleanedPath)
+	allowedMethod := r.Method == http.MethodGet || (r.Method == http.MethodPost && cleanedPath == discoveryPodcastsBatchRoute)
 	if !allowedMethod {
 		w.Header().Set("Allow", strings.Join([]string{http.MethodGet, http.MethodPost}, ", "))
 		writeDiscoveryErrorSpec(w, http.StatusMethodNotAllowed, discoveryErrMethodNotAllowed)
 		return
 	}
 
-	switch path.Clean(r.URL.Path) {
+	switch cleanedPath {
 	case discoverySearchPodcastsRoute:
 		s.handleSearchPodcasts(w, r)
 	case discoverySearchEpisodesRoute:
@@ -643,11 +659,13 @@ func (s *discoveryService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.handleTopEpisodes(w, r)
 	case discoveryFeedRoute:
 		s.handleFeed(w, r)
-	case discoveryPodcastIndexPodcastsBatchByGUIDRoute:
+	case discoveryPodcastsBatchRoute:
 		s.handlePodcastIndexPodcastsBatchByGUID(w, r)
-	case discoveryPodcastIndexPodcastByItunesIDRoute:
-		s.handlePodcastIndexPodcastByItunesID(w, r)
 	default:
+		if isPodcastByItunesIDRoute {
+			s.handlePodcastIndexPodcastByItunesID(w, r)
+			return
+		}
 		writeDiscoveryErrorSpec(w, http.StatusNotFound, discoveryErrNotFound)
 	}
 }

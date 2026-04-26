@@ -93,6 +93,10 @@ vi.mock('../../hooks/useSubscriptionMap', () => ({
   useSubscriptionMap: () => new Map<string, string>(),
 }))
 
+vi.mock('../../hooks/useEpisodeStatus', () => ({
+  useEpisodeStatus: () => ({ playable: true, disabledReason: null }),
+}))
+
 vi.mock('../../hooks/useNetworkStatus', () => ({
   useNetworkStatus: () => ({ isOnline: true }),
 }))

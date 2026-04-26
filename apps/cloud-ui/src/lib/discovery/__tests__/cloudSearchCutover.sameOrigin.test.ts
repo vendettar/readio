@@ -1,5 +1,6 @@
 import { HttpResponse, http } from 'msw'
 import { beforeEach, describe, expect, it } from 'vitest'
+import { DISCOVERY_TEST_ROUTE, discoveryUrl } from '../../../__tests__/constants'
 import { server } from '../../../__tests__/setup'
 import discovery from '../index'
 import { makeSearchEpisode, makeSearchPodcast } from './fixtures'
@@ -19,7 +20,7 @@ describe('cloud discovery 005b same-origin search cutover', () => {
 
   it('uses same-origin endpoint for podcast search', async () => {
     server.use(
-      http.get('http://localhost:3000/api/v1/discovery/search/podcasts', ({ request }) => {
+      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.searchPodcasts), ({ request }) => {
         const url = new URL(request.url)
         expect(url.searchParams.get('term')).toBe('tech')
         expect(url.searchParams.get('country')).toBe('us')
@@ -41,7 +42,7 @@ describe('cloud discovery 005b same-origin search cutover', () => {
 
   it('uses same-origin endpoint for episode search', async () => {
     server.use(
-      http.get('http://localhost:3000/api/v1/discovery/search/episodes', ({ request }) => {
+      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.searchEpisodes), ({ request }) => {
         const url = new URL(request.url)
         expect(url.searchParams.get('term')).toBe('history')
         expect(url.searchParams.get('country')).toBe('jp')

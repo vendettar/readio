@@ -1,9 +1,18 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { PodcastEpisodesGrid } from '../PodcastEpisodesGrid'
 
 const navigateMock = vi.fn()
+
+function createTestQueryClient(): QueryClient {
+  return new QueryClient({ defaultOptions: { queries: { retry: false } } })
+}
+
+function wrapper({ children }: { children: ReactNode }) {
+  return <QueryClientProvider client={createTestQueryClient()}>{children}</QueryClientProvider>
+}
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -69,33 +78,56 @@ describe('PodcastEpisodesGrid navigation', () => {
     vi.clearAllMocks()
   })
 
-  it('navigates directly to the show route using podcastItunesId', async () => {
+  it('navigates to the transitional route with canonical title search params', async () => {
     render(
       <PodcastEpisodesGrid
         episodes={
           [
             {
               title: 'Top Episode',
-              author: 'Host',
+              author: 'The New York Times',
               artwork: 'https://example.com/art.jpg',
               podcastItunesId: '12345',
               genres: [],
             },
           ] as never
         }
-      />
+      />,
+      { wrapper }
     )
 
     fireEvent.click(screen.getByRole('button', { name: 'Top Episode' }))
 
     await waitFor(() => {
-      expect(navigateMock).toHaveBeenCalledWith({
-        to: '/podcast/$country/$id',
-        params: {
-          country: 'us',
-          id: '12345',
-        },
-      })
+      expect(navigateMock).toHaveBeenCalled()
+      const call = navigateMock.mock.calls[0][0]
+      expect(call.to).toBe('/podcast/$country/$id/top-episode')
+      expect(call.params.country).toBe('us')
+      expect(call.params.id).toBe('12345')
+      expect(call.search).toEqual({ title: 'Top Episode' })
     })
+  })
+
+  it('does not navigate when required top-episode route identity is missing', async () => {
+    render(
+      <PodcastEpisodesGrid
+        episodes={
+          [
+            {
+              title: 'NonExistent Episode',
+              author: 'The New York Times',
+              artwork: 'https://example.com/art.jpg',
+              podcastItunesId: '',
+              genres: [],
+            },
+          ] as never
+        }
+      />,
+      { wrapper }
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'NonExistent Episode' }))
+
+    await waitFor(() => expect(navigateMock).not.toHaveBeenCalled())
   })
 })

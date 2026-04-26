@@ -42,3 +42,9 @@ export function buildPodcastFeedQueryKey(
 
   return ['podcast', 'feed', normalizedFeedUrl ?? '', modeToken, limitToken, offsetToken] as const
 }
+
+export function buildPodcastCanonicalFeedQueryKey(
+  normalizedFeedUrl: NormalizedFeedUrl | '' | null | undefined
+) {
+  return ['podcast', 'feed', normalizedFeedUrl ?? '', 'canonical'] as const
+}

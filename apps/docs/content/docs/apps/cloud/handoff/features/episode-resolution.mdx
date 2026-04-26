@@ -18,3 +18,89 @@ title: Episode Resolution Contract
 ## 3. Rule
 
 Cloud must keep episode detail resolution backend-owned for PI/RSS lookups and must not reintroduce Apple supplemental episode resolution as a normal path.
+
+## 4. Entry-Point Strategy
+
+Episode resolution is not the same for every discovery entry point.
+
+### TopEpisode
+
+`TopEpisode` is a budgeted resolver flow, not a canonical direct-identity route.
+
+Rules:
+
+- `TopEpisode` first-hop payload must not be treated as canonical episode identity
+- the app may use `podcastItunesId` plus title to run a feed-backed resolver
+- the resolver budget is explicit:
+  - stop when scanned episodes become older than `now - 30 days`
+  - stop after scanning 60 feed episodes total
+- once that budget is exhausted, fall back to the canonical podcast show page
+- do not escalate from this budgeted resolver into an unconditional full-feed fetch
+
+This means `TopEpisode` is an enhancement path:
+
+- if high-confidence resolution succeeds inside the budget, navigate to the episode detail page
+- otherwise, navigate to the show page
+
+### SearchEpisode
+
+`SearchEpisode` is a canonical episode-route entry when it already carries a valid stable episode identity.
+
+Rules:
+
+- if `podcastItunesId + episodeGuid + valid route country` are present, the app may build the canonical episode route directly
+- this direct route is allowed because the destination episode page still performs canonical hydration
+- `SearchEpisode` direct routing must not add query-hint route params such as `feedUrl`, `audioUrl`, `title`, or `source`
+
+### Cold Episode URL
+
+A cold-opened canonical episode URL follows the same canonical episode-detail hydration path as a direct-routed `SearchEpisode`.
+
+That means:
+
+- the route itself is already canonical
+- the destination page must hydrate via canonical cache / PI lookup / RSS lookup
+- this path is not subject to the `TopEpisode` 30-day / 60-episode resolver budget
+
+## 5. Failure Policy
+
+### TopEpisode failure
+
+If the `TopEpisode` budgeted resolver cannot produce a unique high-confidence episode match inside the resolver budget, the app must fall back to the canonical podcast show page.
+
+### SearchEpisode and cold canonical episode URL failure
+
+For `SearchEpisode` direct-route entries and cold canonical episode URLs, the destination episode page follows this policy:
+
+1. check canonical feed cache first
+2. if the target episode is not present and feed coverage is incomplete, fetch full feed and update canonical cache
+3. if the target episode is still not resolvable after canonical hydration, fall back to the canonical podcast show page
+
+This failure policy is intentionally different from `TopEpisode`.
+
+- `TopEpisode` is budget-limited before navigation
+- `SearchEpisode` and cold canonical episode URLs are canonical routes first, then hydrate, then fall back only after canonical resolution fails
+
+## 6. Canonical Feed Cache Contract
+
+Episode resolution, show page bootstrap, and `See all` pagination all share one frontend canonical feed cache keyed only by normalized `feedUrl`.
+
+Rules:
+
+- freshness is feed-level, not page-level
+- show page, `See all`, and episode detail must reuse the same canonical feed cache semantics
+- paged feed responses may populate the canonical cache, but they do not create separate freshness authorities
+- stale canonical data may be used only as bootstrap `initialData`; it must not suppress the authoritative refetch
+
+Invalidation rules:
+
+- when a stale page-0 refresh returns a different head ordering or a different newest-episode set, prior tail coverage must be discarded
+- this is required because offset-based tail windows are no longer trustworthy after head drift
+- when an authoritative refresh reports a shorter feed, canonical tail coverage must shrink to the new terminal end
+- the app must not continue serving stale tail episodes that are no longer present upstream
+
+Implication:
+
+- `TopEpisode` remains a budgeted pre-navigation resolver
+- `SearchEpisode` and cold canonical episode URLs remain canonical-route-first hydration flows
+- but all of those paths must converge on the same canonical `feedUrl` cache contract once RSS hydration begins

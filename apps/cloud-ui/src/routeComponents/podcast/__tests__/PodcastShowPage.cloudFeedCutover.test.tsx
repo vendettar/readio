@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react'
 import { HttpResponse, http } from 'msw'
 import type React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { DISCOVERY_TEST_ROUTE, discoveryUrl } from '../../../__tests__/constants'
 import { createQueryClientWrapper } from '../../../__tests__/queryClient'
 import { server } from '../../../__tests__/setup'
 import {
@@ -61,24 +62,18 @@ describe('PodcastShowPage 005c same-origin feed cutover', () => {
         directFeedHits += 1
         return new HttpResponse('unexpected direct feed call', { status: 500 })
       }),
-      http.get(
-        'http://localhost:3000/api/v1/discovery/podcast-index/podcast-byitunesid',
-        ({ request }) => {
-          const url = new URL(request.url)
-          expect(url.searchParams.get('podcastItunesId')).toBe('123')
-
-          return HttpResponse.json(
-            makePodcast({
-              podcastItunesId: '123',
-              title: 'Cloud Feed Podcast',
-              feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
-              description: 'Cloud feed show',
-              episodeCount: 2,
-            })
-          )
-        }
-      ),
-      http.get('http://localhost:3000/api/v1/discovery/feed', ({ request }) => {
+      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.podcastByItunesId('123')), () => {
+        return HttpResponse.json(
+          makePodcast({
+            podcastItunesId: '123',
+            title: 'Cloud Feed Podcast',
+            feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
+            description: 'Cloud feed show',
+            episodeCount: 2,
+          })
+        )
+      }),
+      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.feed), ({ request }) => {
         const url = new URL(request.url)
         expect(url.searchParams.get('url')).toBe('https://example.com/feed.xml')
         expect(url.searchParams.get('limit')).toBe('20')

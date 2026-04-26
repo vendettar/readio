@@ -18,3 +18,89 @@ title: 单集解析契约
 ## 3. 规则
 
 Cloud 必须保持单集详情解析由后端承载 PI / RSS lookup，不得重新把 Apple supplemental episode resolution 引回主路径。
+
+## 4. 入口策略
+
+不同 discovery 入口的单集解析策略并不相同。
+
+### TopEpisode
+
+`TopEpisode` 属于预算型 resolver 流程，不是 canonical 直接身份路由。
+
+规则：
+
+- `TopEpisode` 的 first-hop payload 不能被当作 canonical 单集身份
+- 应用可以使用 `podcastItunesId + title` 运行一个基于 feed 的 resolver
+- 这个 resolver 的预算是显式的：
+  - 当扫描到的单集早于 `now - 30 days` 时停止
+  - 总扫描量达到 60 条单集时停止
+- 一旦预算耗尽，必须回退到 canonical 节目详情页
+- 不允许从这个预算型 resolver 再升级成“无条件拉取 full feed”
+
+这意味着 `TopEpisode` 只是增强路径：
+
+- 如果在预算内高置信度解析成功，就进入单集详情页
+- 否则进入节目详情页
+
+### SearchEpisode
+
+当 `SearchEpisode` 已经携带有效稳定单集身份时，它属于 canonical 单集路由入口。
+
+规则：
+
+- 当 `podcastItunesId + episodeGuid + valid route country` 均存在时，允许直接构造 canonical 单集路由
+- 允许 direct route 的原因是：目标单集详情页仍然会继续执行 canonical hydration
+- `SearchEpisode` direct routing 不得追加 `feedUrl`、`audioUrl`、`title`、`source` 等 query-hint 路由参数
+
+### 冷打开单集 URL
+
+冷打开的 canonical 单集 URL 与 direct-route 的 `SearchEpisode` 走同一条 canonical 单集详情 hydration 链路。
+
+也就是说：
+
+- 路由本身已经是 canonical
+- 目标页面必须继续通过 canonical cache / PI lookup / RSS lookup 完成 hydration
+- 这条路径不受 `TopEpisode` 的 `30 days / 60 episodes` resolver 预算约束
+
+## 5. 失败策略
+
+### TopEpisode 失败
+
+如果 `TopEpisode` 的预算型 resolver 无法在预算内产出唯一且高置信度的单集匹配，应用必须回退到 canonical 节目详情页。
+
+### SearchEpisode 与冷 canonical 单集 URL 失败
+
+对于 `SearchEpisode` 的 direct-route 入口以及冷 canonical 单集 URL，目标单集页遵循下面的失败策略：
+
+1. 先检查 canonical feed cache
+2. 如果目标单集不在 cache 中，且 feed coverage 还不完整，则拉取 full feed 并更新 canonical cache
+3. 如果 canonical hydration 完成后仍无法解析出目标单集，则回退到 canonical 节目详情页
+
+这条失败策略与 `TopEpisode` 是故意不同的：
+
+- `TopEpisode` 是“导航前、预算型”的 resolver
+- `SearchEpisode` 与冷 canonical 单集 URL 是“先进入 canonical route，再 hydration，再在失败后回退”
+
+## 6. Canonical Feed Cache 契约
+
+单集解析、节目详情页首屏以及 `See all` 分页，共享同一份前端 canonical feed cache；cache key 只允许使用归一化后的 `feedUrl`。
+
+规则：
+
+- freshness 是 feed-level，不是 page-level
+- 节目详情页、`See all`、单集详情页必须复用同一套 canonical feed cache 语义
+- 分页 feed 响应可以回填 canonical cache，但不能形成独立的 freshness authority
+- stale 的 canonical 数据只允许作为 bootstrap `initialData` 使用，不能阻止后续的 authoritative refetch
+
+失效规则：
+
+- 当 stale 的 page-0 刷新返回了不同的头部顺序，或者最新几集集合发生变化时，旧的 tail coverage 必须整体废弃
+- 原因是：一旦 head drift，基于 offset 的 tail window 就不再可信
+- 当 authoritative refresh 表明 feed 变短时，canonical tail coverage 必须收缩到新的 terminal end
+- 应用不得继续返回 upstream 已不存在的 stale tail episodes
+
+这意味着：
+
+- `TopEpisode` 仍然是导航前的预算型 resolver
+- `SearchEpisode` 与冷 canonical 单集 URL 仍然是 canonical-route-first 的 hydration 流程
+- 但一旦进入 RSS hydration，这几条路径都必须收敛到同一份 canonical `feedUrl` cache 契约

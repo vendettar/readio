@@ -1,12 +1,10 @@
 import { renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { writePodcastFeedPageToCaches } from '@/lib/discovery/feedCache'
 import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
 import { createQueryClientHarness } from '../../__tests__/queryClient'
 import type { ParsedFeed, Podcast } from '../../lib/discovery'
-import {
-  buildPodcastDetailQueryKey,
-  buildPodcastFeedQueryKey,
-} from '../../lib/discovery/podcastQueryContract'
+import { buildPodcastDetailQueryKey } from '../../lib/discovery/podcastQueryContract'
 import { episodeIdentityToCompactKey } from '../../lib/routes/compactKey'
 import { resolveEpisodeResolutionError, useEpisodeResolution } from '../useEpisodeResolution'
 
@@ -57,7 +55,7 @@ function createWrapper(options: WrapperOptions = {}) {
       }
 
       if (options.feed && options.podcast?.feedUrl) {
-        queryClient.setQueryData(buildPodcastFeedQueryKey(options.podcast.feedUrl), options.feed)
+        writePodcastFeedPageToCaches(queryClient, options.podcast.feedUrl, options.feed)
       }
     },
   })
@@ -68,6 +66,7 @@ describe('useEpisodeResolution cancellation semantics', () => {
     getPodcastIndexPodcastByItunesIdMock.mockReset()
     fetchPodcastFeedMock.mockReset()
     fetchPodcastFeedMock.mockResolvedValue({ episodes: [] })
+    vi.useRealTimers()
   })
 
   it('returns feed errors when no higher-priority lookup error exists', () => {
@@ -152,6 +151,12 @@ describe('useEpisodeResolution cancellation semantics', () => {
       title: 'Warm Podcast',
       description: '',
       artworkUrl: 'https://example.com/show-600.jpg',
+      pageInfo: {
+        limit: 20,
+        offset: 0,
+        returned: 1,
+        hasMore: true,
+      },
       episodes: [
         {
           episodeGuid: '766f112e-abcd-1234-5678-07e05e548074',
@@ -211,7 +216,8 @@ describe('useEpisodeResolution cancellation semantics', () => {
     expect(getPodcastIndexPodcastByItunesIdMock).toHaveBeenCalledWith('12345', expect.anything())
     expect(fetchPodcastFeedMock).toHaveBeenCalledWith(
       'https://example.com/feed.xml',
-      expect.anything()
+      expect.anything(),
+      undefined
     )
     expect(result.current.episode?.title).toBe('RSS Episode')
   })
@@ -254,9 +260,75 @@ describe('useEpisodeResolution cancellation semantics', () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false))
     expect(fetchPodcastFeedMock).toHaveBeenCalledWith(
       'https://example.com/feed.xml',
-      expect.anything()
+      expect.anything(),
+      undefined
     )
     expect(result.current.episode?.title).toBe('Older RSS Episode')
+  })
+
+  it('does not let a stale complete canonical cache block deep-link refresh for a missing guid', async () => {
+    const targetGuid = 'fresh-guid'
+    const targetKey = episodeIdentityToCompactKey(targetGuid)
+    if (!targetKey) throw new Error('expected target compact key')
+
+    const podcast: Podcast = makePodcast({
+      podcastItunesId: '12345',
+      title: 'Stale Complete Podcast',
+      author: 'Host',
+      feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
+    })
+
+    const staleFeed: ParsedFeed = {
+      title: 'Stale Complete Podcast',
+      description: '',
+      artworkUrl: 'https://example.com/show-600.jpg',
+      episodes: [
+        {
+          episodeGuid: 'stale-guid',
+          title: 'Old Episode',
+          description: '',
+          audioUrl: 'https://example.com/old.mp3',
+          pubDate: '2025-01-01T00:00:00.000Z',
+        },
+      ],
+    }
+
+    const staleFeedUpdatedAt = Date.now() - 2 * 24 * 60 * 60 * 1000
+    const { wrapper } = createQueryClientHarness({
+      setup: (queryClient) => {
+        queryClient.setQueryData(buildPodcastDetailQueryKey('12345', 'us'), podcast)
+        writePodcastFeedPageToCaches(
+          queryClient,
+          podcast.feedUrl,
+          staleFeed,
+          undefined,
+          staleFeedUpdatedAt
+        )
+      },
+    })
+
+    fetchPodcastFeedMock.mockResolvedValue({
+      title: 'Stale Complete Podcast',
+      description: '',
+      artworkUrl: 'https://example.com/show-600.jpg',
+      episodes: [
+        {
+          episodeGuid: targetGuid,
+          title: 'Fresh Episode',
+          description: '',
+          audioUrl: 'https://example.com/fresh.mp3',
+          pubDate: '2025-01-02T00:00:00.000Z',
+        },
+      ],
+    } satisfies ParsedFeed)
+
+    const { result } = renderHook(() => useEpisodeResolution('12345', targetKey, 'us'), {
+      wrapper,
+    })
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+    expect(fetchPodcastFeedMock).toHaveBeenCalledTimes(1)
+    expect(result.current.episode?.title).toBe('Fresh Episode')
   })
 
   it('returns null when feedUrl is unavailable for fallback', async () => {
