@@ -1,6 +1,7 @@
 import { HttpResponse, http } from 'msw'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
+import { DISCOVERY_TEST_ROUTE, discoveryUrl } from '../../../__tests__/constants'
 import { server } from '../../../__tests__/setup'
 import discovery from '../index'
 import {
@@ -26,14 +27,14 @@ describe('cloud discovery 005a same-origin cutover', () => {
 
   it('uses same-origin discovery endpoints for explore top lists', async () => {
     server.use(
-      http.get('http://localhost:3000/api/v1/discovery/top-podcasts', ({ request }) => {
+      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.topPodcasts), ({ request }) => {
         const url = new URL(request.url)
         expect(url.searchParams.get('country')).toBe('us')
         expect(url.searchParams.get('limit')).toBeNull()
 
         return HttpResponse.json([makeTopPodcast()])
       }),
-      http.get('http://localhost:3000/api/v1/discovery/top-episodes', ({ request }) => {
+      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.topEpisodes), ({ request }) => {
         const url = new URL(request.url)
         expect(url.searchParams.get('country')).toBe('us')
         expect(url.searchParams.get('limit')).toBeNull()
@@ -54,10 +55,10 @@ describe('cloud discovery 005a same-origin cutover', () => {
 
   it('accepts empty genres for apple chart first-hop payloads', async () => {
     server.use(
-      http.get('http://localhost:3000/api/v1/discovery/top-podcasts', () =>
+      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.topPodcasts), () =>
         HttpResponse.json([makeTopPodcast({ genres: [] })])
       ),
-      http.get('http://localhost:3000/api/v1/discovery/top-episodes', () =>
+      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.topEpisodes), () =>
         HttpResponse.json([makeTopEpisode({ genres: [] })])
       )
     )
@@ -72,28 +73,24 @@ describe('cloud discovery 005a same-origin cutover', () => {
 
   it('uses explicit PI same-origin endpoint for podcast detail lookups', async () => {
     server.use(
-      http.get(
-        'http://localhost:3000/api/v1/discovery/podcast-index/podcast-byitunesid',
-        ({ request }) => {
-          const url = new URL(request.url)
-          expect(url.searchParams.get('podcastItunesId')).toBe('123')
-          expect(url.searchParams.get('country')).toBeNull()
+      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.podcastByItunesId('123')), ({ request }) => {
+        const url = new URL(request.url)
+        expect(url.searchParams.get('country')).toBeNull()
 
-          return HttpResponse.json(
-            makeMinimalPodcast({
-              podcastItunesId: '123',
-              title: 'JP Podcast',
-              author: 'JP Host',
-              artwork: 'https://example.com/jp-art-600.jpg',
-              feedUrl: normalizeFeedUrl('https://example.com/jp-feed.xml'),
-              genres: ['Technology'],
-              episodeCount: 30,
-              lastUpdateTime: 1613394044,
-              language: 'en',
-            })
-          )
-        }
-      )
+        return HttpResponse.json(
+          makeMinimalPodcast({
+            podcastItunesId: '123',
+            title: 'JP Podcast',
+            author: 'JP Host',
+            artwork: 'https://example.com/jp-art-600.jpg',
+            feedUrl: normalizeFeedUrl('https://example.com/jp-feed.xml'),
+            genres: ['Technology'],
+            episodeCount: 30,
+            lastUpdateTime: 1613394044,
+            language: 'en',
+          })
+        )
+      })
     )
 
     const podcast = await discovery.getPodcastIndexPodcastByItunesId('123')
@@ -104,7 +101,7 @@ describe('cloud discovery 005a same-origin cutover', () => {
 
   it('accepts PI podcast payloads with missing optional metadata', async () => {
     server.use(
-      http.get('http://localhost:3000/api/v1/discovery/podcast-index/podcast-byitunesid', () =>
+      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.podcastByItunesId('123')), () =>
         HttpResponse.json(
           makeMinimalPodcast({
             podcastItunesId: '123',
@@ -129,40 +126,37 @@ describe('cloud discovery 005a same-origin cutover', () => {
 
   it('uses same-origin discovery endpoint for editor pick guid batch lookup', async () => {
     server.use(
-      http.post(
-        'http://localhost:3000/api/v1/discovery/podcast-index/podcasts-batch-byguid',
-        async ({ request }) => {
-          expect(await request.json()).toEqual([
-            '304b84f0-07b0-5265-b6b7-da5cf5aeb56e',
-            'f1ebeaa1-bc5a-534f-8528-0738ae374d55',
-          ])
+      http.post(discoveryUrl(DISCOVERY_TEST_ROUTE.podcastsBatch), async ({ request }) => {
+        expect(await request.json()).toEqual([
+          '304b84f0-07b0-5265-b6b7-da5cf5aeb56e',
+          'f1ebeaa1-bc5a-534f-8528-0738ae374d55',
+        ])
 
-          return HttpResponse.json([
-            makeEditorPickPodcast({
-              title: 'The Daily',
-              feedUrl: normalizeFeedUrl('https://example.com/daily.xml'),
-              author: 'NYT',
-              description: 'Daily news',
-              artwork: 'https://example.com/daily.jpg',
-              lastUpdateTime: 1613394044,
-              genres: ['News'],
-              podcastItunesId: '1200361736',
-              episodeCount: 500,
-            }),
-            makeEditorPickPodcast({
-              title: 'This American Life',
-              feedUrl: normalizeFeedUrl('https://example.com/tal.xml'),
-              author: 'TAL',
-              description: 'Stories',
-              artwork: 'https://example.com/tal.jpg',
-              lastUpdateTime: 1613395200,
-              genres: ['Society'],
-              podcastItunesId: '201671138',
-              episodeCount: 800,
-            }),
-          ])
-        }
-      )
+        return HttpResponse.json([
+          makeEditorPickPodcast({
+            title: 'The Daily',
+            feedUrl: normalizeFeedUrl('https://example.com/daily.xml'),
+            author: 'NYT',
+            description: 'Daily news',
+            artwork: 'https://example.com/daily.jpg',
+            lastUpdateTime: 1613394044,
+            genres: ['News'],
+            podcastItunesId: '1200361736',
+            episodeCount: 500,
+          }),
+          makeEditorPickPodcast({
+            title: 'This American Life',
+            feedUrl: normalizeFeedUrl('https://example.com/tal.xml'),
+            author: 'TAL',
+            description: 'Stories',
+            artwork: 'https://example.com/tal.jpg',
+            lastUpdateTime: 1613395200,
+            genres: ['Society'],
+            podcastItunesId: '201671138',
+            episodeCount: 800,
+          }),
+        ])
+      })
     )
 
     const podcasts = await discovery.getPodcastIndexPodcastsBatchByGuid([
@@ -180,27 +174,21 @@ describe('cloud discovery 005a same-origin cutover', () => {
 
   it('uses same-origin discovery endpoint for show lookup by podcastItunesId', async () => {
     server.use(
-      http.get(
-        'http://localhost:3000/api/v1/discovery/podcast-index/podcast-byitunesid',
-        ({ request }) => {
-          const url = new URL(request.url)
-          expect(url.searchParams.get('podcastItunesId')).toBe('1200361736')
-
-          return HttpResponse.json(
-            makePodcast({
-              podcastItunesId: '1200361736',
-              title: 'The Daily',
-              author: 'NYT',
-              description: 'Daily news',
-              artwork: 'https://example.com/show-600.jpg',
-              feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
-              lastUpdateTime: 1613394044,
-              genres: ['News'],
-              episodeCount: 42,
-            })
-          )
-        }
-      )
+      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.podcastByItunesId('1200361736')), () => {
+        return HttpResponse.json(
+          makePodcast({
+            podcastItunesId: '1200361736',
+            title: 'The Daily',
+            author: 'NYT',
+            description: 'Daily news',
+            artwork: 'https://example.com/show-600.jpg',
+            feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
+            lastUpdateTime: 1613394044,
+            genres: ['News'],
+            episodeCount: 42,
+          })
+        )
+      })
     )
 
     const podcast = await discovery.getPodcastIndexPodcastByItunesId('1200361736')

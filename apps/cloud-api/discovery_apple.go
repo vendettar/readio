@@ -135,18 +135,19 @@ func isRelevantAppleEpisodeSearchItem(item rawAppleEpisodeSearchItem, queryToken
 		return true
 	}
 
-	searchText := strings.ToLower(
-		strings.Join(
-			[]string{
-				strings.TrimSpace(item.TrackName),
-				strings.TrimSpace(item.CollectionName),
-			},
-			" ",
-		),
+	rawText := strings.Join(
+		[]string{
+			strings.TrimSpace(item.TrackName),
+			strings.TrimSpace(item.CollectionName),
+		},
+		" ",
 	)
+	searchText := strings.ToLower(rawText)
+	searchTextNoSpace := strings.ReplaceAll(searchText, " ", "")
 
 	for _, token := range queryTokens {
-		if strings.Contains(searchText, token) {
+		token = strings.ToLower(token)
+		if strings.Contains(searchText, token) || strings.Contains(searchTextNoSpace, token) {
 			return true
 		}
 	}
@@ -192,18 +193,19 @@ func isRelevantApplePodcastSearchItem(item rawApplePodcastSearchItem, queryToken
 		return true
 	}
 
-	searchText := strings.ToLower(
-		strings.Join(
-			[]string{
-				strings.TrimSpace(item.CollectionName),
-				strings.TrimSpace(item.ArtistName),
-			},
-			" ",
-		),
+	rawText := strings.Join(
+		[]string{
+			strings.TrimSpace(item.CollectionName),
+			strings.TrimSpace(item.ArtistName),
+		},
+		" ",
 	)
+	searchText := strings.ToLower(rawText)
+	searchTextNoSpace := strings.ReplaceAll(searchText, " ", "")
 
 	for _, token := range queryTokens {
-		if strings.Contains(searchText, token) {
+		token = strings.ToLower(token)
+		if strings.Contains(searchText, token) || strings.Contains(searchTextNoSpace, token) {
 			return true
 		}
 	}
@@ -451,6 +453,8 @@ func (s *discoveryService) handleSearchPodcasts(w http.ResponseWriter, r *http.R
 
 	queryTokens := tokenizeDiscoveryQuery(term)
 	items := make([]discoverySearchPodcastResponseItem, 0, len(payload.Results))
+	seen := make(map[string]struct{})
+
 	for _, item := range payload.Results {
 		if !isRelevantApplePodcastSearchItem(item, queryTokens) {
 			continue
@@ -460,6 +464,12 @@ func (s *discoveryService) handleSearchPodcasts(w http.ResponseWriter, r *http.R
 		if !ok {
 			continue
 		}
+
+		if _, dupe := seen[mapped.PodcastItunesID]; dupe {
+			continue
+		}
+		seen[mapped.PodcastItunesID] = struct{}{}
+
 		items = append(items, mapped)
 	}
 
@@ -515,6 +525,8 @@ func (s *discoveryService) handleSearchEpisodes(w http.ResponseWriter, r *http.R
 
 	queryTokens := tokenizeDiscoveryQuery(term)
 	items := make([]discoverySearchEpisodeResponseItem, 0, len(payload.Results))
+	seen := make(map[string]struct{})
+
 	for _, item := range payload.Results {
 		if !isRelevantAppleEpisodeSearchItem(item, queryTokens) {
 			continue
@@ -524,6 +536,15 @@ func (s *discoveryService) handleSearchEpisodes(w http.ResponseWriter, r *http.R
 		if !ok {
 			continue
 		}
+
+		// Deduplicate by GUID + URL to handle edge cases where GUID might be shared but URLs differ
+		// Or just GUID if it's supposed to be unique.
+		dupeKey := mapped.EpisodeGUID + "|" + mapped.EpisodeURL
+		if _, dupe := seen[dupeKey]; dupe {
+			continue
+		}
+		seen[dupeKey] = struct{}{}
+
 		items = append(items, mapped)
 	}
 

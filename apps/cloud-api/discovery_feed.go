@@ -202,7 +202,7 @@ func sliceParsedFeedResponsePage(payload parsedFeedResponse, limit *int, offset 
 	if offset > 0 {
 		cloned.Episodes = append([]parsedFeedEpisodeResult(nil), cloned.Episodes[offset:]...)
 	}
-	if limit == nil || *limit >= len(cloned.Episodes) {
+	if *limit >= len(cloned.Episodes) {
 		cloned.PageInfo = &parsedFeedPageInfo{
 			Limit:    *limit,
 			Offset:   offset,
@@ -515,6 +515,9 @@ func deriveParsedFeedDescription(item feedItem) (string, string) {
 	}
 	if looksLikeHTMLDescription(plainDescription) {
 		return plainDescription, plainDescription
+	}
+	if looksLikeHTMLDescription(plainSummary) {
+		return plainSummary, plainSummary
 	}
 	if len(plainDescription) >= len(plainSummary) {
 		return plainDescription, ""

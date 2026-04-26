@@ -242,11 +242,11 @@ func TestDiscoveryServicePodcastIndexByItunesRateLimited(t *testing.T) {
 		podcastIndexConfig:  podcastIndexConfig{apiKey: "test-key", apiSecret: "test-secret", userAgent: "readio-test"},
 	}
 
-	req := httptest.NewRequest(http.MethodGet, discoveryPodcastIndexPodcastByItunesIDRoute+"?podcastItunesId=123", nil)
+	req := httptest.NewRequest(http.MethodGet, discoveryPodcastsRoute+"/123", nil)
 	service.ServeHTTP(httptest.NewRecorder(), req)
 
 	rr := httptest.NewRecorder()
-	service.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, discoveryPodcastIndexPodcastByItunesIDRoute+"?podcastItunesId=123", nil))
+	service.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, discoveryPodcastsRoute+"/123", nil))
 	if rr.Code != http.StatusTooManyRequests {
 		t.Fatalf("status = %d, want %d", rr.Code, http.StatusTooManyRequests)
 	}
@@ -263,11 +263,11 @@ func TestDiscoveryServicePodcastIndexBatchRateLimited(t *testing.T) {
 		podcastIndexLimiter: newRateLimiter(1, time.Minute, func() time.Time { return time.Now() }),
 	}
 
-	firstReq := httptest.NewRequest(http.MethodPost, discoveryPodcastIndexPodcastsBatchByGUIDRoute, strings.NewReader("[]"))
+	firstReq := httptest.NewRequest(http.MethodPost, discoveryPodcastsBatchRoute, strings.NewReader("[]"))
 	service.ServeHTTP(httptest.NewRecorder(), firstReq)
 
 	rr := httptest.NewRecorder()
-	secondReq := httptest.NewRequest(http.MethodPost, discoveryPodcastIndexPodcastsBatchByGUIDRoute, strings.NewReader("[]"))
+	secondReq := httptest.NewRequest(http.MethodPost, discoveryPodcastsBatchRoute, strings.NewReader("[]"))
 	service.ServeHTTP(rr, secondReq)
 	if rr.Code != http.StatusTooManyRequests {
 		t.Fatalf("status = %d, want %d", rr.Code, http.StatusTooManyRequests)
@@ -469,7 +469,7 @@ func TestDiscoveryServiceTopEpisodesNormalizesPayload(t *testing.T) {
 						"results": [
 							{
 								"name": "Top Episode",
-								"artistName": "JP Host",
+								"artistName": "The New York Times",
 								"artworkUrl100": "https://example.com/episode-100.jpg",
 								"url": "https://podcasts.apple.com/jp/podcast/top-episode/id333?i=1000762374046",
 								"genres": [{"name": "Technology"}, {"name": "Podcast"}]
@@ -509,6 +509,9 @@ func TestDiscoveryServiceTopEpisodesNormalizesPayload(t *testing.T) {
 	}
 	if payload[0].Artwork != "https://example.com/episode-100.jpg" {
 		t.Fatalf("artwork = %q, want https://example.com/episode-100.jpg", payload[0].Artwork)
+	}
+	if payload[0].Author != "The New York Times" {
+		t.Fatalf("author = %q, want The New York Times", payload[0].Author)
 	}
 }
 
@@ -588,8 +591,8 @@ func TestDiscoveryServiceTopEpisodesAllowsEmptyGenres(t *testing.T) {
 					"feed": {
 						"results": [
 							{
+								"artistName": "The New York Times",
 								"name": "Top Episode",
-								"artistName": "JP Host",
 								"artworkUrl100": "https://example.com/episode-100.jpg",
 								"url": "https://podcasts.apple.com/jp/podcast/top-episode/id333?i=1000762374046",
 								"genres": []
@@ -686,7 +689,7 @@ func TestDiscoveryServiceLookupPodcastNormalizesPayloadAndNullMiss(t *testing.T)
 		}
 
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, discoveryPodcastIndexPodcastByItunesIDRoute+"?podcastItunesId=123", nil)
+		req := httptest.NewRequest(http.MethodGet, discoveryPodcastsRoute+"/123", nil)
 		service.ServeHTTP(rr, req)
 
 		if rr.Code != http.StatusOK {
@@ -722,7 +725,7 @@ func TestDiscoveryServiceLookupPodcastNormalizesPayloadAndNullMiss(t *testing.T)
 		}
 
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, discoveryPodcastIndexPodcastByItunesIDRoute+"?podcastItunesId=123", nil)
+		req := httptest.NewRequest(http.MethodGet, discoveryPodcastsRoute+"/123", nil)
 		service.ServeHTTP(rr, req)
 
 		if rr.Code != http.StatusOK {
@@ -1424,7 +1427,7 @@ func TestPodcastIndexPayloadValidation(t *testing.T) {
 		}
 
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, discoveryPodcastIndexPodcastByItunesIDRoute+"?podcastItunesId=123", nil)
+		req := httptest.NewRequest(http.MethodGet, discoveryPodcastsRoute+"/123", nil)
 		service.ServeHTTP(rr, req)
 
 		if rr.Code != http.StatusOK {
@@ -1460,7 +1463,7 @@ func TestPodcastIndexPayloadValidation(t *testing.T) {
 		}
 
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, discoveryPodcastIndexPodcastByItunesIDRoute+"?podcastItunesId=123", nil)
+		req := httptest.NewRequest(http.MethodGet, discoveryPodcastsRoute+"/123", nil)
 		service.ServeHTTP(rr, req)
 
 		if rr.Code != http.StatusOK {
@@ -1506,7 +1509,7 @@ func TestPodcastIndexPayloadValidation(t *testing.T) {
 		}
 
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, discoveryPodcastIndexPodcastByItunesIDRoute+"?podcastItunesId=123", nil)
+		req := httptest.NewRequest(http.MethodGet, discoveryPodcastsRoute+"/123", nil)
 		service.ServeHTTP(rr, req)
 
 		if rr.Code != http.StatusOK {
@@ -1536,7 +1539,7 @@ func TestPodcastIndexPayloadValidation(t *testing.T) {
 		}
 
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, discoveryPodcastIndexPodcastsBatchByGUIDRoute, strings.NewReader(`["guid1"]`))
+		req := httptest.NewRequest(http.MethodPost, discoveryPodcastsBatchRoute, strings.NewReader(`["guid1"]`))
 		service.ServeHTTP(rr, req)
 
 		if rr.Code != http.StatusOK {
@@ -1572,7 +1575,7 @@ func TestPodcastIndexPayloadValidation(t *testing.T) {
 		}
 
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, discoveryPodcastIndexPodcastsBatchByGUIDRoute, strings.NewReader(`["guid1","guid2"]`))
+		req := httptest.NewRequest(http.MethodPost, discoveryPodcastsBatchRoute, strings.NewReader(`["guid1","guid2"]`))
 		service.ServeHTTP(rr, req)
 
 		if rr.Code != http.StatusOK {
@@ -1604,7 +1607,7 @@ func TestPodcastIndexBatchLimits(t *testing.T) {
 
 		rr := httptest.NewRecorder()
 		body, _ := json.Marshal(guids)
-		req := httptest.NewRequest(http.MethodPost, discoveryPodcastIndexPodcastsBatchByGUIDRoute, strings.NewReader(string(body)))
+		req := httptest.NewRequest(http.MethodPost, discoveryPodcastsBatchRoute, strings.NewReader(string(body)))
 		service.ServeHTTP(rr, req)
 
 		if rr.Code != http.StatusBadRequest {
@@ -1647,7 +1650,7 @@ func TestPodcastIndexBatchLimits(t *testing.T) {
 		}
 
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, discoveryPodcastIndexPodcastsBatchByGUIDRoute, strings.NewReader(`["guid-a","guid-b","guid-a","guid-b"]`))
+		req := httptest.NewRequest(http.MethodPost, discoveryPodcastsBatchRoute, strings.NewReader(`["guid-a","guid-b","guid-a","guid-b"]`))
 		service.ServeHTTP(rr, req)
 
 		if rr.Code != http.StatusOK {
@@ -1681,7 +1684,7 @@ func TestPodcastIndexBatchLimits(t *testing.T) {
 		}
 
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, discoveryPodcastIndexPodcastsBatchByGUIDRoute, strings.NewReader(`["guid1","guid1","guid2"]`))
+		req := httptest.NewRequest(http.MethodPost, discoveryPodcastsBatchRoute, strings.NewReader(`["guid1","guid1","guid2"]`))
 		service.ServeHTTP(rr, req)
 
 		if rr.Code != http.StatusOK {
@@ -1726,7 +1729,7 @@ func TestPodcastIndexBatchLimits(t *testing.T) {
 		}
 
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, discoveryPodcastIndexPodcastsBatchByGUIDRoute, strings.NewReader(`["guidC","guidA","guidB"]`))
+		req := httptest.NewRequest(http.MethodPost, discoveryPodcastsBatchRoute, strings.NewReader(`["guidC","guidA","guidB"]`))
 		service.ServeHTTP(rr, req)
 
 		if rr.Code != http.StatusOK {
@@ -1772,7 +1775,7 @@ func TestPodcastIndexOptionalNumericFields(t *testing.T) {
 		}
 
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, discoveryPodcastIndexPodcastByItunesIDRoute+"?podcastItunesId=123", nil)
+		req := httptest.NewRequest(http.MethodGet, discoveryPodcastsRoute+"/123", nil)
 		service.ServeHTTP(rr, req)
 
 		if rr.Code != http.StatusOK {
@@ -1817,7 +1820,7 @@ func TestPodcastIndexOptionalNumericFields(t *testing.T) {
 		}
 
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, discoveryPodcastIndexPodcastByItunesIDRoute+"?podcastItunesId=123", nil)
+		req := httptest.NewRequest(http.MethodGet, discoveryPodcastsRoute+"/123", nil)
 		service.ServeHTTP(rr, req)
 
 		if rr.Code != http.StatusOK {
@@ -1872,7 +1875,7 @@ func TestPodcastIndexOptionalNumericFields(t *testing.T) {
 		}
 
 		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, discoveryPodcastIndexPodcastByItunesIDRoute+"?podcastItunesId=123", nil)
+		req := httptest.NewRequest(http.MethodGet, discoveryPodcastsRoute+"/123", nil)
 		service.ServeHTTP(rr, req)
 
 		if rr.Code != http.StatusOK {
@@ -2634,7 +2637,7 @@ func TestDiscoveryCacheBehavior(t *testing.T) {
 			},
 		}
 
-		req := httptest.NewRequest(http.MethodGet, discoveryPodcastIndexPodcastByItunesIDRoute+"?podcastItunesId=42", nil)
+		req := httptest.NewRequest(http.MethodGet, discoveryPodcastsRoute+"/42", nil)
 
 		rr1 := httptest.NewRecorder()
 		service.ServeHTTP(rr1, req)
@@ -2851,7 +2854,7 @@ func TestDiscoveryCacheGracefulDegradation(t *testing.T) {
 
 		time.Sleep(20 * time.Millisecond)
 
-		req := httptest.NewRequest(http.MethodGet, discoveryPodcastIndexPodcastByItunesIDRoute+"?podcastItunesId=42", nil)
+		req := httptest.NewRequest(http.MethodGet, discoveryPodcastsRoute+"/42", nil)
 		rr := httptest.NewRecorder()
 		service.ServeHTTP(rr, req)
 
@@ -2911,7 +2914,7 @@ func TestDiscoveryCacheGracefulDegradation(t *testing.T) {
 		discoveryCacheTTLLookup = 50 * time.Millisecond
 		defer func() { discoveryCacheTTLLookup = origTTL }()
 
-		req := httptest.NewRequest(http.MethodGet, discoveryPodcastIndexPodcastByItunesIDRoute+"?podcastItunesId=42", nil)
+		req := httptest.NewRequest(http.MethodGet, discoveryPodcastsRoute+"/42", nil)
 
 		rr1 := httptest.NewRecorder()
 		service.ServeHTTP(rr1, req)
@@ -3038,4 +3041,164 @@ func TestDiscoveryCacheGracefulDegradation(t *testing.T) {
 			t.Fatalf("concurrentCalls = %d, want 2 (initial + one refresh due to singleflight)", concurrentCalls)
 		}
 	})
+}
+
+func TestDiscoveryServiceRegressionSearchPodcastsSpaceStrippedMatch(t *testing.T) {
+	service := &discoveryService{
+		client: &http.Client{
+			Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+				return jsonResponse(http.StatusOK, `{
+						"results": [
+							{
+								"collectionId": 1423306695,
+								"collectionName": "Bear Brook",
+								"artistName": "NHPR",
+								"artworkUrl600": "https://example.com/bear-600.jpg",
+								"trackCount": 10,
+								"genres": [{"name": "Crime"}]
+							}
+						]
+					}`), nil
+			}),
+		},
+		timeout:       time.Second,
+		searchBaseURL: discoverySearchBaseURL,
+		userAgent:     discoveryUserAgent,
+		bodyLimit:     discoveryBodyLimit,
+		searchLimiter: newRateLimiter(100, time.Minute, time.Now),
+		cache:         newDiscoveryCache(discoveryCacheMaxKeys),
+	}
+
+	rr := httptest.NewRecorder()
+	// Querying "bearbrook" (no space) should match "Bear Brook" (with space)
+	req := httptest.NewRequest(http.MethodGet, discoverySearchPodcastsRoute+"?term=bearbrook&country=us&limit=20", nil)
+	service.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	var payload []discoverySearchPodcastResponseItem
+	decodeResponseJSON(t, rr.Body, &payload)
+
+	if len(payload) != 1 {
+		t.Fatalf("expected 1 result for 'bearbrook', got %d", len(payload))
+	}
+	if payload[0].Title != "Bear Brook" {
+		t.Fatalf("title = %q, want 'Bear Brook'", payload[0].Title)
+	}
+}
+
+func TestDiscoveryServiceRegressionSearchPodcastsDeduplication(t *testing.T) {
+	service := &discoveryService{
+		client: &http.Client{
+			Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+				return jsonResponse(http.StatusOK, `{
+						"results": [
+							{
+								"collectionId": 123,
+								"collectionName": "Show A",
+								"artistName": "Artist A",
+								"artworkUrl600": "https://example.com/a.jpg",
+								"trackCount": 5,
+								"genres": []
+							},
+							{
+								"collectionId": 123,
+								"collectionName": "Show A",
+								"artistName": "Artist A",
+								"artworkUrl600": "https://example.com/a.jpg",
+								"trackCount": 5,
+								"genres": []
+							}
+						]
+					}`), nil
+			}),
+		},
+		timeout:       time.Second,
+		searchBaseURL: discoverySearchBaseURL,
+		userAgent:     discoveryUserAgent,
+		bodyLimit:     discoveryBodyLimit,
+		searchLimiter: newRateLimiter(100, time.Minute, time.Now),
+		cache:         newDiscoveryCache(discoveryCacheMaxKeys),
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, discoverySearchPodcastsRoute+"?term=show&country=us", nil)
+	service.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	var payload []discoverySearchPodcastResponseItem
+	decodeResponseJSON(t, rr.Body, &payload)
+
+	if len(payload) != 1 {
+		t.Fatalf("expected 1 deduplicated result, got %d", len(payload))
+	}
+}
+
+func TestDiscoveryServiceRegressionSearchEpisodesDeduplication(t *testing.T) {
+	service := &discoveryService{
+		client: &http.Client{
+			Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+				return jsonResponse(http.StatusOK, `{
+						"results": [
+							{
+								"collectionId": 123,
+								"collectionName": "Show A",
+								"trackName": "Episode 1",
+								"artworkUrl600": "https://example.com/art.jpg",
+								"episodeUrl": "https://example.com/audio.mp3",
+								"episodeGuid": "guid-1"
+							},
+							{
+								"collectionId": 123,
+								"collectionName": "Show A",
+								"trackName": "Episode 1",
+								"artworkUrl600": "https://example.com/art.jpg",
+								"episodeUrl": "https://example.com/audio.mp3",
+								"episodeGuid": "guid-1"
+							}
+						]
+					}`), nil
+			}),
+		},
+		timeout:       time.Second,
+		searchBaseURL: discoverySearchBaseURL,
+		userAgent:     discoveryUserAgent,
+		bodyLimit:     discoveryBodyLimit,
+		searchLimiter: newRateLimiter(100, time.Minute, time.Now),
+		cache:         newDiscoveryCache(discoveryCacheMaxKeys),
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, discoverySearchEpisodesRoute+"?term=episode&country=us", nil)
+	service.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	var payload []discoverySearchEpisodeResponseItem
+	decodeResponseJSON(t, rr.Body, &payload)
+
+	if len(payload) != 1 {
+		t.Fatalf("expected 1 deduplicated episode, got %d", len(payload))
+	}
+}
+
+func TestDeriveParsedFeedDescriptionSummaryHTML(t *testing.T) {
+	item := feedItem{
+		Description: "Plain text description",
+		Summary:     "<p>Rich summary with HTML</p>",
+	}
+	desc, descHTML := deriveParsedFeedDescription(item)
+	if desc != item.Summary {
+		t.Errorf("desc = %q, want summary", desc)
+	}
+	if descHTML != item.Summary {
+		t.Errorf("descHTML = %q, want summary", descHTML)
+	}
 }

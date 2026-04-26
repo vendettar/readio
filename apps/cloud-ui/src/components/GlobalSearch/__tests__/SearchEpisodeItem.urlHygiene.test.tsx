@@ -85,7 +85,7 @@ vi.mock('../../../lib/toast', () => ({
 }))
 
 describe('SearchEpisodeItem URL hygiene', () => {
-  it('does not build a direct episode route from first-hop search payload alone', () => {
+  it('does build a direct episode route from first-hop search payload alone', () => {
     render(
       <SearchEpisodeItem
         episode={{
@@ -105,18 +105,20 @@ describe('SearchEpisodeItem URL hygiene', () => {
 
     expect(screen.getByRole('button', { name: 'Episode Name' })).toBeTruthy()
 
-    expect(screen.getByTestId('route-to').textContent).toBe('')
+    expect(screen.getByTestId('route-to').textContent).toBe('/podcast/$country/$id/$episodeKey')
     const routeParamsText = screen.getByTestId('route-params').textContent ?? '{}'
-    expect(routeParamsText).toBe('{}')
+    expect(routeParamsText).toContain('"country":"us"')
+    expect(routeParamsText).toContain('"id":"7"')
+    expect(routeParamsText).toContain('"episodeKey":')
     expect(screen.getByTestId('route-search').textContent).toBe('undefined')
   })
 
-  it('returns null route for first-hop search payload alone', () => {
+  it('returns direct episode route when guid is a simple string (non-UUID)', () => {
     render(
       <SearchEpisodeItem
         episode={{
           podcastItunesId: '7',
-          title: 'Episode Without GUID',
+          title: 'Episode With Simple GUID',
           showTitle: 'Show Name',
           episodeUrl: 'https://example.com/audio2.mp3',
           episodeGuid: 'guid-2',
@@ -129,11 +131,39 @@ describe('SearchEpisodeItem URL hygiene', () => {
       />
     )
 
+    expect(screen.getByRole('button', { name: 'Episode With Simple GUID' })).toBeTruthy()
+
+    expect(screen.getByTestId('route-to').textContent).toBe('/podcast/$country/$id/$episodeKey')
+    const routeParamsText = screen.getByTestId('route-params').textContent ?? '{}'
+    expect(routeParamsText).toContain('"country":"us"')
+    expect(routeParamsText).toContain('"id":"7"')
+    expect(routeParamsText).toContain('"episodeKey":')
+  })
+
+  it('falls back to show route when episodeGuid is missing', () => {
+    render(
+      <SearchEpisodeItem
+        episode={{
+          podcastItunesId: '7',
+          title: 'Episode Without GUID',
+          showTitle: 'Show Name',
+          episodeUrl: 'https://example.com/audio3.mp3',
+          episodeGuid: '',
+          releaseDate: '2025-01-02T00:00:00Z',
+          trackTimeMillis: 62000,
+          shortDescription: 'desc',
+          artwork: 'https://example.com/artwork-600.jpg',
+        }}
+        onPlay={() => {}}
+      />
+    )
+
     expect(screen.getByRole('button', { name: 'Episode Without GUID' })).toBeTruthy()
 
-    expect(screen.getByTestId('route-to').textContent).toBe('')
+    expect(screen.getByTestId('route-to').textContent).toBe('/podcast/$country/$id')
     const routeParamsText = screen.getByTestId('route-params').textContent ?? '{}'
-    expect(routeParamsText).toBe('{}')
+    expect(routeParamsText).toContain('"country":"us"')
+    expect(routeParamsText).toContain('"id":"7"')
   })
 
   it('uses play semantics for non-artwork play affordance', () => {

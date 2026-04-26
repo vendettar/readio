@@ -1,5 +1,5 @@
 import { useId, useMemo } from 'react'
-import { sanitizeHtml, stripHtml } from '../../lib/htmlUtils'
+import { linkifyHtml, sanitizeHtml, stripHtml } from '../../lib/htmlUtils'
 import { cn } from '../../lib/utils'
 import { Button } from './button'
 
@@ -44,7 +44,7 @@ export function ExpandableDescription({
     [safeContent, mode]
   )
   const sanitizedHtml = useMemo(
-    () => (mode === 'html' ? sanitizeHtml(safeContent) : null),
+    () => (mode === 'html' ? linkifyHtml(sanitizeHtml(safeContent)) : null),
     [safeContent, mode]
   )
   if (!safeContent) return null
@@ -61,9 +61,12 @@ export function ExpandableDescription({
   return (
     <div className={cn('relative group', maxWidthClassName)}>
       {mode === 'plain' ? (
-        <div id={contentId} className={bodyClassName}>
-          {plainText}
-        </div>
+        <div
+          id={contentId}
+          className={bodyClassName}
+          // biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized and linkified
+          dangerouslySetInnerHTML={{ __html: linkifyHtml(plainText) }}
+        />
       ) : (
         <div className="prose-isolate">
           <div

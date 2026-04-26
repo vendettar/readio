@@ -124,7 +124,7 @@ export function makeTopEpisode(overrides: Partial<TopEpisode> = {}): TopEpisode 
   return {
     podcastItunesId: '123',
     title: 'Top Episode',
-    author: 'Host',
+    author: 'The New York Times',
     artwork: 'https://example.com/top-ep-1.jpg',
     genres: ['Technology'],
     ...overrides,

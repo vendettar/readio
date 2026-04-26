@@ -5,7 +5,10 @@ import { useTranslation } from 'react-i18next'
 import { CAROUSEL_DEFAULTS } from '../../constants/layout'
 import { useCarouselLayout } from '../../hooks/useCarouselLayout'
 import type { TopEpisode } from '../../lib/discovery'
-import { buildPodcastShowRoute, normalizeCountryParam } from '../../lib/routes/podcastRoutes'
+import {
+  buildTopEpisodeResolutionRoute,
+  normalizeCountryParam,
+} from '../../lib/routes/podcastRoutes'
 import { cn } from '../../lib/utils'
 import { useExploreStore } from '../../store/exploreStore'
 import { AnimatedList } from '../bits/AnimatedList'
@@ -47,13 +50,14 @@ export function PodcastEpisodesGrid({ episodes, isLoading }: PodcastEpisodesGrid
     const podcastId = String(episode.podcastItunesId ?? '').trim()
     if (!podcastId || !normalizedCountry) return
 
-    const showRoute = buildPodcastShowRoute({
+    const route = buildTopEpisodeResolutionRoute({
       country: normalizedCountry,
       podcastId,
+      title: episode.title,
     })
 
-    if (showRoute) {
-      await navigate(showRoute)
+    if (route) {
+      await navigate(route)
     }
   }
 
@@ -144,12 +148,6 @@ export function PodcastEpisodesGrid({ episodes, isLoading }: PodcastEpisodesGrid
                         <span className="text-xs text-foreground/70 truncate font-normal pointer-events-none">
                           {episode.author}
                         </span>
-
-                        {episode.genres?.[0] && (
-                          <span className="text-xxs text-muted-foreground/60 uppercase tracking-wide mt-0 pointer-events-none">
-                            {episode.genres[0]}
-                          </span>
-                        )}
                       </div>
                     </div>
 

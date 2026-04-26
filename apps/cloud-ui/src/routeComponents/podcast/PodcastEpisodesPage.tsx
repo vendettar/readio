@@ -13,11 +13,16 @@ import { Button } from '../../components/ui/button'
 import { LoadingSpinner } from '../../components/ui/loading-spinner'
 import discovery, { type FeedEpisode, type ParsedFeed } from '../../lib/discovery'
 import {
+  getPodcastFeedBootstrapSnapshot,
+  readPodcastFeedSliceFromCanonicalCache,
+} from '../../lib/discovery/feedCache'
+import {
   buildPodcastDetailQueryKey,
   buildPodcastFeedQueryKey,
   PODCAST_DEFAULT_FEED_QUERY_LIMIT,
   PODCAST_QUERY_CACHE_POLICY,
 } from '../../lib/discovery/podcastQueryContract'
+import { fetchAndCachePodcastFeedPage } from '../../lib/discovery/queryCache'
 import { logError } from '../../lib/logger'
 import { buildPodcastEpisodesRoute, normalizeCountryParam } from '../../lib/routes/podcastRoutes'
 import { useExploreStore } from '../../store/exploreStore'
@@ -100,12 +105,17 @@ export default function PodcastEpisodesPage() {
     limit: PODCAST_EPISODES_PAGE_SIZE,
     offset: 0,
   })
-  const cachedFirstPage = feedUrl
-    ? (queryClient.getQueryData(firstPageQueryKey) as ParsedFeed | undefined)
-    : undefined
-  const cachedFirstPageUpdatedAt = feedUrl
-    ? queryClient.getQueryState(firstPageQueryKey)?.dataUpdatedAt
-    : undefined
+  const firstPageOptions = {
+    limit: PODCAST_EPISODES_PAGE_SIZE,
+    offset: 0,
+  } as const
+  const feedBootstrap = getPodcastFeedBootstrapSnapshot(queryClient, feedUrl, firstPageOptions)
+  const cachedFirstPage =
+    feedBootstrap?.data ??
+    (feedUrl ? (queryClient.getQueryData(firstPageQueryKey) as ParsedFeed | undefined) : undefined)
+  const cachedFirstPageUpdatedAt =
+    feedBootstrap?.updatedAt ??
+    (feedUrl ? queryClient.getQueryState(firstPageQueryKey)?.dataUpdatedAt : undefined)
   const {
     data: pagedFeed,
     isLoading: isLoadingFeed,
@@ -124,11 +134,18 @@ export default function PodcastEpisodesPage() {
         } satisfies InfiniteData<ParsedFeed, number>)
       : undefined,
     initialDataUpdatedAt: cachedFirstPageUpdatedAt,
-    queryFn: ({ signal, pageParam }) =>
-      discovery.fetchPodcastFeed(feedUrl ?? '', signal, {
+    queryFn: async ({ signal, pageParam }) => {
+      const pageOptions = {
         limit: PODCAST_EPISODES_PAGE_SIZE,
         offset: typeof pageParam === 'number' ? pageParam : 0,
-      }),
+      }
+      const cachedPage = readPodcastFeedSliceFromCanonicalCache(queryClient, feedUrl, pageOptions)
+      if (cachedPage) {
+        return cachedPage
+      }
+
+      return fetchAndCachePodcastFeedPage(queryClient, feedUrl ?? '', signal, pageOptions)
+    },
     getNextPageParam: (lastPage, allPages) => {
       if (lastPage.pageInfo) {
         if (!lastPage.pageInfo.hasMore) {

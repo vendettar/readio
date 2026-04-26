@@ -27,6 +27,7 @@ import { Route as LegalPrivacyRouteImport } from './routes/legal/privacy'
 import { Route as PodcastCountryIdRouteImport } from './routes/podcast/$country/$id'
 import { Route as FilesFolderFolderIdRouteImport } from './routes/files/folder/$folderId'
 import { Route as PodcastCountryIdIndexRouteImport } from './routes/podcast/$country/$id/index'
+import { Route as PodcastCountryIdTopEpisodeRouteImport } from './routes/podcast/$country/$id/top-episode'
 import { Route as PodcastCountryIdEpisodesRouteImport } from './routes/podcast/$country/$id/episodes'
 import { Route as PodcastCountryIdEpisodeKeyRouteImport } from './routes/podcast/$country/$id/$episodeKey'
 
@@ -120,6 +121,12 @@ const PodcastCountryIdIndexRoute = PodcastCountryIdIndexRouteImport.update({
   path: '/',
   getParentRoute: () => PodcastCountryIdRoute,
 } as any)
+const PodcastCountryIdTopEpisodeRoute =
+  PodcastCountryIdTopEpisodeRouteImport.update({
+    id: '/top-episode',
+    path: '/top-episode',
+    getParentRoute: () => PodcastCountryIdRoute,
+  } as any)
 const PodcastCountryIdEpisodesRoute =
   PodcastCountryIdEpisodesRouteImport.update({
     id: '/episodes',
@@ -153,6 +160,7 @@ export interface FileRoutesByFullPath {
   '/podcast/$country/$id': typeof PodcastCountryIdRouteWithChildren
   '/podcast/$country/$id/$episodeKey': typeof PodcastCountryIdEpisodeKeyRoute
   '/podcast/$country/$id/episodes': typeof PodcastCountryIdEpisodesRoute
+  '/podcast/$country/$id/top-episode': typeof PodcastCountryIdTopEpisodeRoute
   '/podcast/$country/$id/': typeof PodcastCountryIdIndexRoute
 }
 export interface FileRoutesByTo {
@@ -173,6 +181,7 @@ export interface FileRoutesByTo {
   '/files/folder/$folderId': typeof FilesFolderFolderIdRoute
   '/podcast/$country/$id/$episodeKey': typeof PodcastCountryIdEpisodeKeyRoute
   '/podcast/$country/$id/episodes': typeof PodcastCountryIdEpisodesRoute
+  '/podcast/$country/$id/top-episode': typeof PodcastCountryIdTopEpisodeRoute
   '/podcast/$country/$id': typeof PodcastCountryIdIndexRoute
 }
 export interface FileRoutesById {
@@ -196,6 +205,7 @@ export interface FileRoutesById {
   '/podcast/$country/$id': typeof PodcastCountryIdRouteWithChildren
   '/podcast/$country/$id/$episodeKey': typeof PodcastCountryIdEpisodeKeyRoute
   '/podcast/$country/$id/episodes': typeof PodcastCountryIdEpisodesRoute
+  '/podcast/$country/$id/top-episode': typeof PodcastCountryIdTopEpisodeRoute
   '/podcast/$country/$id/': typeof PodcastCountryIdIndexRoute
 }
 export interface FileRouteTypes {
@@ -220,6 +230,7 @@ export interface FileRouteTypes {
     | '/podcast/$country/$id'
     | '/podcast/$country/$id/$episodeKey'
     | '/podcast/$country/$id/episodes'
+    | '/podcast/$country/$id/top-episode'
     | '/podcast/$country/$id/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -240,6 +251,7 @@ export interface FileRouteTypes {
     | '/files/folder/$folderId'
     | '/podcast/$country/$id/$episodeKey'
     | '/podcast/$country/$id/episodes'
+    | '/podcast/$country/$id/top-episode'
     | '/podcast/$country/$id'
   id:
     | '__root__'
@@ -262,6 +274,7 @@ export interface FileRouteTypes {
     | '/podcast/$country/$id'
     | '/podcast/$country/$id/$episodeKey'
     | '/podcast/$country/$id/episodes'
+    | '/podcast/$country/$id/top-episode'
     | '/podcast/$country/$id/'
   fileRoutesById: FileRoutesById
 }
@@ -408,6 +421,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PodcastCountryIdIndexRouteImport
       parentRoute: typeof PodcastCountryIdRoute
     }
+    '/podcast/$country/$id/top-episode': {
+      id: '/podcast/$country/$id/top-episode'
+      path: '/top-episode'
+      fullPath: '/podcast/$country/$id/top-episode'
+      preLoaderRoute: typeof PodcastCountryIdTopEpisodeRouteImport
+      parentRoute: typeof PodcastCountryIdRoute
+    }
     '/podcast/$country/$id/episodes': {
       id: '/podcast/$country/$id/episodes'
       path: '/episodes'
@@ -452,12 +472,14 @@ const LegalRouteWithChildren = LegalRoute._addFileChildren(LegalRouteChildren)
 interface PodcastCountryIdRouteChildren {
   PodcastCountryIdEpisodeKeyRoute: typeof PodcastCountryIdEpisodeKeyRoute
   PodcastCountryIdEpisodesRoute: typeof PodcastCountryIdEpisodesRoute
+  PodcastCountryIdTopEpisodeRoute: typeof PodcastCountryIdTopEpisodeRoute
   PodcastCountryIdIndexRoute: typeof PodcastCountryIdIndexRoute
 }
 
 const PodcastCountryIdRouteChildren: PodcastCountryIdRouteChildren = {
   PodcastCountryIdEpisodeKeyRoute: PodcastCountryIdEpisodeKeyRoute,
   PodcastCountryIdEpisodesRoute: PodcastCountryIdEpisodesRoute,
+  PodcastCountryIdTopEpisodeRoute: PodcastCountryIdTopEpisodeRoute,
   PodcastCountryIdIndexRoute: PodcastCountryIdIndexRoute,
 }
 

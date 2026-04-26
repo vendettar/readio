@@ -21,12 +21,14 @@ import {
   getEditorPickRouteState,
   mapEditorPickToPodcast,
 } from '../../lib/discovery/editorPicks'
+import { getPodcastFeedBootstrapSnapshot } from '../../lib/discovery/feedCache'
 import {
   buildPodcastDetailQueryKey,
   buildPodcastFeedQueryKey,
   PODCAST_DEFAULT_FEED_QUERY_LIMIT,
   PODCAST_QUERY_CACHE_POLICY,
 } from '../../lib/discovery/podcastQueryContract'
+import { fetchAndCachePodcastFeedPage } from '../../lib/discovery/queryCache'
 import { formatCompactNumber } from '../../lib/formatters'
 import { getDiscoveryArtworkUrl } from '../../lib/imageUtils'
 
@@ -92,21 +94,22 @@ export default function PodcastShowPage() {
   const podcast = useMemo(() => queryData || initialPodcast, [initialPodcast, queryData])
 
   const feedUrl = podcast?.feedUrl
+  const firstPageOptions = {
+    limit: PODCAST_DEFAULT_FEED_QUERY_LIMIT,
+    offset: 0,
+  } as const
+  const feedBootstrap = getPodcastFeedBootstrapSnapshot(queryClient, feedUrl, firstPageOptions)
 
   const {
     data: feed,
     isLoading: isLoadingFeed,
     error: feedError,
   } = useQuery({
-    queryKey: buildPodcastFeedQueryKey(feedUrl, {
-      limit: PODCAST_DEFAULT_FEED_QUERY_LIMIT,
-      offset: 0,
-    }),
+    queryKey: buildPodcastFeedQueryKey(feedUrl, firstPageOptions),
+    initialData: feedBootstrap?.data,
+    initialDataUpdatedAt: feedBootstrap?.updatedAt,
     queryFn: ({ signal }) =>
-      discovery.fetchPodcastFeed(feedUrl ?? '', signal, {
-        limit: PODCAST_DEFAULT_FEED_QUERY_LIMIT,
-        offset: 0,
-      }),
+      fetchAndCachePodcastFeedPage(queryClient, feedUrl ?? '', signal, firstPageOptions),
     enabled: Boolean(podcast?.feedUrl && normalizedRouteCountry),
     staleTime: PODCAST_QUERY_CACHE_POLICY.feed.staleTime,
     gcTime: PODCAST_QUERY_CACHE_POLICY.feed.gcTime,

@@ -265,7 +265,7 @@ func (s *discoveryService) fetchPodcastIndexPodcastsBatchByGUID(ctx context.Cont
 
 func (s *discoveryService) handlePodcastIndexPodcastsBatchByGUID(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
-	route := discoveryPodcastIndexPodcastsBatchByGUIDRoute
+	route := discoveryPodcastsBatchRoute
 
 	if r.Method != http.MethodPost {
 		writeDiscoveryErrorSpec(w, http.StatusMethodNotAllowed, discoveryErrSimpleMethodNotAllowed)
@@ -365,7 +365,7 @@ func (s *discoveryService) handlePodcastIndexPodcastsBatchByGUID(w http.Response
 
 func (s *discoveryService) handlePodcastIndexPodcastByItunesID(w http.ResponseWriter, r *http.Request) {
 	start := time.Now()
-	route := discoveryPodcastIndexPodcastByItunesIDRoute
+	route := discoveryPodcastByItunesIDRoutePattern
 
 	if !s.allowPodcastIndexRequest(effectiveClientIP(r, s.trustedProxies)) {
 		writeDiscoveryErrorSpec(w, http.StatusTooManyRequests, discoveryErrRateLimited)
@@ -373,7 +373,14 @@ func (s *discoveryService) handlePodcastIndexPodcastByItunesID(w http.ResponseWr
 		return
 	}
 
-	podcastItunesID, err := normalizeItunesID(r.URL.Query().Get("podcastItunesId"))
+	rawPodcastItunesID, ok := discoveryPodcastByItunesIDFromPath(r.URL.Path)
+	if !ok {
+		writeDiscoveryErrorSpec(w, http.StatusNotFound, discoveryErrNotFound)
+		logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), nil, CacheStatusUncached)
+		return
+	}
+
+	podcastItunesID, err := normalizeItunesID(rawPodcastItunesID)
 	if err != nil {
 		writeDiscoveryMappedError(w, err)
 		logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, CacheStatusMissError)
@@ -501,5 +508,3 @@ func mapPodcastIndexPodcastToPIPodcast(feed podcastIndexPodcastFeed, podcastItun
 		Genres:          genres,
 	}, true
 }
-
-

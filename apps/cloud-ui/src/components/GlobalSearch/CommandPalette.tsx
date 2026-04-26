@@ -6,13 +6,9 @@ import { useTranslation } from 'react-i18next'
 import { type LocalSearchResult, useGlobalSearch } from '../../hooks/useGlobalSearch'
 import { useNetworkStatus } from '../../hooks/useNetworkStatus'
 import type { SearchPodcast as PodcastType, SearchEpisode } from '../../lib/discovery'
-import { buildEpisodeCompactKey } from '../../lib/discovery/editorPicks'
 import { executeLocalSearchAction } from '../../lib/localSearchActions'
-import {
-  buildPodcastEpisodeRoute,
-  buildPodcastShowRoute,
-  normalizeCountryParam,
-} from '../../lib/routes/podcastRoutes'
+import { buildSearchEpisodeRoute } from '../../lib/routes/episodeResolver'
+import { buildPodcastShowRoute, normalizeCountryParam } from '../../lib/routes/podcastRoutes'
 import { getAppConfig } from '../../lib/runtimeConfig'
 import { cn } from '../../lib/utils'
 import { useExploreStore } from '../../store/exploreStore'
@@ -218,35 +214,13 @@ export function CommandPalette() {
   const handleSelectEpisode = async (episode: SearchEpisode) => {
     closeOverlay()
     toMini()
-    const podcastId = episode.podcastItunesId?.toString()
-
-    if (!podcastId) return
-
-    const episodeIdentity = episode.episodeGuid?.trim()
-    if (!episodeIdentity) {
-      const showRoute = buildPodcastShowRoute({ country: globalCountry, podcastId })
-      if (showRoute) {
-        void navigate(showRoute)
-      }
-      return
-    }
-
-    const episodeKey = buildEpisodeCompactKey(episodeIdentity)
-    if (!episodeKey) {
-      const showRoute = buildPodcastShowRoute({ country: globalCountry, podcastId })
-      if (showRoute) {
-        void navigate(showRoute)
-      }
-      return
-    }
-
-    const episodeRoute = buildPodcastEpisodeRoute({
-      country: globalCountry,
-      podcastId,
-      episodeKey,
-    })
-    if (episodeRoute) {
-      void navigate(episodeRoute)
+    const route = buildSearchEpisodeRoute(
+      episode.podcastItunesId?.toString(),
+      episode.episodeGuid,
+      globalCountry
+    )
+    if (route) {
+      void navigate(route)
     }
   }
 

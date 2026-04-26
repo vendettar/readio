@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -7,6 +8,14 @@ import DownloadsPage from '../DownloadsPage'
 import ExplorePage from '../ExplorePage'
 import FavoritesPage from '../FavoritesPage'
 import HistoryPage from '../HistoryPage'
+
+function createTestQueryClient(): QueryClient {
+  return new QueryClient({ defaultOptions: { queries: { retry: false } } })
+}
+
+function wrapper({ children }: { children: ReactNode }) {
+  return <QueryClientProvider client={createTestQueryClient()}>{children}</QueryClientProvider>
+}
 
 vi.mock('../../components/EpisodeRow', () => ({
   EpisodeListItem: ({ model }: { model: { title: string } }) => (
@@ -391,7 +400,7 @@ describe('ExplorePage i18n Fix', () => {
     const mockResponse = createTranslationResponse(tSpy, i18n)
     vi.mocked(useTranslation).mockReturnValue(mockResponse)
 
-    render(<ExplorePage />)
+    render(<ExplorePage />, { wrapper })
 
     expect(tSpy).toHaveBeenCalledWith('offline.explanation')
     const call = tSpy.mock.calls.find((c) => c[0] === 'offline.explanation')
@@ -441,7 +450,7 @@ describe('ExplorePage i18n Fix', () => {
     const topEpisodes: TopEpisode[] = [
       {
         title: 'Top Episode',
-        author: 'Host',
+        author: 'The New York Times',
         artwork: 'https://example.com/episode.jpg',
         genres: ['Technology'],
         podcastItunesId: '102',
@@ -461,7 +470,7 @@ describe('ExplorePage i18n Fix', () => {
       isLoading: false,
     })
 
-    render(<ExplorePage />)
+    render(<ExplorePage />, { wrapper })
 
     expect(screen.getByText('editorPicksTitle')).toBeDefined()
     expect(screen.getByText('topShowsTitle')).toBeDefined()

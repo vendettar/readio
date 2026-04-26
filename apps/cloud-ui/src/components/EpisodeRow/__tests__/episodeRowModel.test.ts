@@ -145,8 +145,10 @@ describe('episodeRowModel', () => {
       id: '1200361736',
       episodeKey: expect.stringMatching(/^[A-Za-z0-9_-]{22}$/),
     })
-    expect(model.route?.state).toEqual({
-      editorPickSnapshot,
+    expect(model.route).toMatchObject({
+      state: {
+        editorPickSnapshot,
+      },
     })
   })
 
@@ -215,7 +217,13 @@ describe('episodeRowModel', () => {
     expect(model.subtitle).toBe('REL(2025-01-02) • Search Show')
     expect(model.description).toBe('CLEAN(desc)')
     expect(model.playAriaLabel).toBe('ariaPlayEpisode')
-    expect(model.route).toBeNull()
+    expect(model.route).not.toBeNull()
+    expect(model.route?.to).toBe('/podcast/$country/$id/$episodeKey')
+    expect(model.route?.params.country).toBe('us')
+    expect(model.route?.params.id).toBe('9')
+    if (model.route?.to === '/podcast/$country/$id/$episodeKey') {
+      expect(model.route.params.episodeKey).toBe('e_c2VhcmNoLWd1aWQtMQ')
+    }
   })
 
   it('maps favorites and keeps podcastItunesId fallback via subscription map', () => {
@@ -286,10 +294,24 @@ describe('episodeRowModel', () => {
     expect(model.meta).toBe('DUR(240)')
   })
 
-  it('returns null route when guid and provider id missing for routing', () => {
+  it('falls back to show route when episodeGuid is missing', () => {
     const episode = {
       podcastItunesId: '900',
-      title: 'No ID Episode',
+      title: 'No GUID Episode',
+      episodeUrl: 'http://cdn/a.mp3',
+    } as unknown as SearchEpisode
+
+    const model = fromSearchEpisode({ episode, routeCountry: 'us', language: 'en', t })
+    expect(model.route).not.toBeNull()
+    expect(model.route?.to).toBe('/podcast/$country/$id')
+    expect(model.route?.params.country).toBe('us')
+    expect(model.route?.params.id).toBe('900')
+  })
+
+  it('returns null route when both episodeGuid and podcastItunesId are missing', () => {
+    const episode = {
+      podcastItunesId: '',
+      title: 'No IDs Episode',
       episodeUrl: 'http://cdn/a.mp3',
     } as unknown as SearchEpisode
 

@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { HttpResponse, http } from 'msw'
 import type React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { DISCOVERY_TEST_ROUTE, discoveryUrl } from '../../../__tests__/constants'
 import { createQueryClientHarness, createQueryClientWrapper } from '../../../__tests__/queryClient'
 import { server } from '../../../__tests__/setup'
 import {
@@ -9,8 +10,8 @@ import {
   makeParsedFeed,
   makePodcast,
 } from '../../../lib/discovery/__tests__/fixtures'
+import { writePodcastFeedPageToCaches } from '../../../lib/discovery/feedCache'
 import { normalizeFeedUrl } from '../../../lib/discovery/feedUrl'
-import { buildPodcastFeedQueryKey } from '../../../lib/discovery/podcastQueryContract'
 import PodcastEpisodesPage from '../PodcastEpisodesPage'
 
 let appleLookupHits = 0
@@ -116,27 +117,22 @@ describe('PodcastEpisodesPage editor pick path', () => {
         appleLookupHits += 1
         return HttpResponse.json({ resultCount: 0, results: [] })
       }),
-      http.get(
-        'http://localhost:3000/api/v1/discovery/podcast-index/podcast-byitunesid',
-        ({ request }) => {
-          piItunesLookupHits += 1
-          const url = new URL(request.url)
-          expect(url.searchParams.get('podcastItunesId')).toBe('12345')
+      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.podcastByItunesId('12345')), () => {
+        piItunesLookupHits += 1
 
-          return HttpResponse.json(
-            makePodcast({
-              podcastItunesId: '12345',
-              title: 'Editor Pick Podcast',
-              artwork: 'https://example.com/show-600.jpg',
-              description: 'Editor pick description',
-              feedUrl: normalizeFeedUrl('https://example.com/show-feed.xml'),
-              lastUpdateTime: 1711497600,
-              episodeCount: 2,
-            })
-          )
-        }
-      ),
-      http.get('http://localhost:3000/api/v1/discovery/feed', ({ request }) => {
+        return HttpResponse.json(
+          makePodcast({
+            podcastItunesId: '12345',
+            title: 'Editor Pick Podcast',
+            artwork: 'https://example.com/show-600.jpg',
+            description: 'Editor pick description',
+            feedUrl: normalizeFeedUrl('https://example.com/show-feed.xml'),
+            lastUpdateTime: 1711497600,
+            episodeCount: 2,
+          })
+        )
+      }),
+      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.feed), ({ request }) => {
         feedHits += 1
         const url = new URL(request.url)
         expect(url.searchParams.get('url')).toBe('https://example.com/show-feed.xml')
@@ -165,7 +161,7 @@ describe('PodcastEpisodesPage editor pick path', () => {
     )
   })
 
-  it('loads editor pick episode lists through podcast-byitunesid then RSS', async () => {
+  it('loads editor pick episode lists through podcast lookup then RSS', async () => {
     render(<PodcastEpisodesPage />, { wrapper: createQueryClientWrapper() })
 
     expect(await screen.findByText('Feed Episode 1')).not.toBeNull()
@@ -191,7 +187,7 @@ describe('PodcastEpisodesPage editor pick path', () => {
     }
 
     server.use(
-      http.get('http://localhost:3000/api/v1/discovery/feed', () => {
+      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.feed), () => {
         feedHits += 1
         return HttpResponse.error()
       })
@@ -207,7 +203,7 @@ describe('PodcastEpisodesPage editor pick path', () => {
 
   it('keeps see all semantics by incrementally loading more pages', async () => {
     server.use(
-      http.get('http://localhost:3000/api/v1/discovery/feed', async ({ request }) => {
+      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.feed), async ({ request }) => {
         feedHits += 1
         const url = new URL(request.url)
         expect(url.searchParams.get('url')).toBe('https://example.com/show-feed.xml')
@@ -273,7 +269,7 @@ describe('PodcastEpisodesPage editor pick path', () => {
 
   it('reuses the cached first page from show page before requesting later pages', async () => {
     server.use(
-      http.get('http://localhost:3000/api/v1/discovery/feed', async ({ request }) => {
+      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.feed), async ({ request }) => {
         feedHits += 1
         const url = new URL(request.url)
         expect(url.searchParams.get('url')).toBe('https://example.com/show-feed.xml')
@@ -311,11 +307,9 @@ describe('PodcastEpisodesPage editor pick path', () => {
 
     const harness = createQueryClientHarness({
       setup: (queryClient) => {
-        queryClient.setQueryData(
-          buildPodcastFeedQueryKey(normalizeFeedUrl('https://example.com/show-feed.xml'), {
-            limit: 20,
-            offset: 0,
-          }),
+        writePodcastFeedPageToCaches(
+          queryClient,
+          normalizeFeedUrl('https://example.com/show-feed.xml'),
           makeParsedFeed({
             title: 'Editor Pick Podcast',
             description: 'Feed description',
@@ -337,7 +331,11 @@ describe('PodcastEpisodesPage editor pick path', () => {
                 duration: 123,
               })
             ),
-          })
+          }),
+          {
+            limit: 20,
+            offset: 0,
+          }
         )
       },
     })
@@ -360,7 +358,7 @@ describe('PodcastEpisodesPage editor pick path', () => {
 
   it('does not auto-fetch page 2 when Virtuoso reports the last row visible before user scrolls', async () => {
     server.use(
-      http.get('http://localhost:3000/api/v1/discovery/feed', async ({ request }) => {
+      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.feed), async ({ request }) => {
         feedHits += 1
         const url = new URL(request.url)
         const offset = Number(url.searchParams.get('offset') || '0')
@@ -398,11 +396,9 @@ describe('PodcastEpisodesPage editor pick path', () => {
 
     const harness = createQueryClientHarness({
       setup: (queryClient) => {
-        queryClient.setQueryData(
-          buildPodcastFeedQueryKey(normalizeFeedUrl('https://example.com/show-feed.xml'), {
-            limit: 20,
-            offset: 0,
-          }),
+        writePodcastFeedPageToCaches(
+          queryClient,
+          normalizeFeedUrl('https://example.com/show-feed.xml'),
           makeParsedFeed({
             title: 'Editor Pick Podcast',
             description: 'Feed description',
@@ -424,7 +420,11 @@ describe('PodcastEpisodesPage editor pick path', () => {
                 duration: 123,
               })
             ),
-          })
+          }),
+          {
+            limit: 20,
+            offset: 0,
+          }
         )
       },
     })

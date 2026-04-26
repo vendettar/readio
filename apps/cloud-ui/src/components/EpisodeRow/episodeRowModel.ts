@@ -9,18 +9,13 @@ import {
   getEpisodeGuid,
 } from '@/lib/discovery/editorPicks'
 import { stripHtml } from '@/lib/htmlUtils'
-import { buildPodcastEpisodeRoute } from '@/lib/routes/podcastRoutes'
+import { buildSearchEpisodeRoute } from '@/lib/routes/episodeResolver'
+import {
+  buildPodcastEpisodeRoute,
+  type PodcastContentRouteWithState,
+} from '@/lib/routes/podcastRoutes'
 
-interface EpisodeRowModelRoute {
-  to: '/podcast/$country/$id/$episodeKey'
-  params: {
-    country: string
-    id: string
-    episodeKey: string
-  }
-  search?: { [x: string]: never }
-  state?: EditorPickRouteState
-}
+type EpisodeRowModelRoute = PodcastContentRouteWithState<EditorPickRouteState>
 
 interface ModelContext {
   language: string
@@ -181,7 +176,8 @@ export function fromSearchEpisode({
   t,
 }: SearchEpisodeModelArgs): EpisodeRowModel {
   const podcastId = episode.podcastItunesId?.toString()
-  const route = null
+  const episodeGuid = episode.episodeGuid
+  const route = buildSearchEpisodeRoute(podcastId, episodeGuid, routeCountry)
   const artwork = episode.artwork
 
   return {
@@ -196,7 +192,7 @@ export function fromSearchEpisode({
     artworkFallbackSrc: artwork,
     artworkSize: 'xl',
     playIconSize: 20,
-    route,
+    route: route ?? null,
     playAriaLabel: t('ariaPlayEpisode'),
     downloadArgs: episode.episodeUrl
       ? {
