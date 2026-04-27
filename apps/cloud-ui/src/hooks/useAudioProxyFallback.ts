@@ -28,9 +28,11 @@ export function useAudioProxyFallback({ audioRef, audioUrl }: UseAudioProxyFallb
   const pendingResumePlaybackRef = useRef(false)
 
   useEffect(() => {
-    attemptedAudioUrlRef.current = null
-    pendingResumeTimeRef.current = null
-    pendingResumePlaybackRef.current = false
+    if (audioUrl || !audioUrl) {
+      attemptedAudioUrlRef.current = null
+      pendingResumeTimeRef.current = null
+      pendingResumePlaybackRef.current = false
+    }
   }, [audioUrl])
 
   const handleError = useCallback(() => {

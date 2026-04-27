@@ -87,3 +87,13 @@ export async function fetchAdminHealth(token: string): Promise<AdminHealthRespon
 export async function fetchAdminMetricsSummary(token: string): Promise<AdminMetricsSummary> {
   return adminFetch<AdminMetricsSummary>(token, `${ADMIN_BASE}/metrics/summary`)
 }
+
+export async function clearAdminLogs(token: string): Promise<void> {
+  const url = new URL(`${ADMIN_BASE}/logs/clear`, window.location.origin)
+  const res = await fetch(url.toString(), {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (res.status === 401) throw new Error('UNAUTHORIZED')
+  if (!res.ok) throw new Error(`Admin API error: ${res.status}`)
+}

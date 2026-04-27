@@ -12,6 +12,7 @@ import { Switch } from '../components/ui/switch'
 import {
   type AdminHealthResponse,
   type AdminLogEntry,
+  clearAdminLogs,
   fetchAdminHealth,
   fetchAdminLogs,
 } from '../lib/adminApi'
@@ -106,6 +107,7 @@ function FilterBar({
   autoRefresh,
   onAutoRefreshChange,
   onRefresh,
+  onClearLogs,
 }: {
   levelFilter: string
   onLevelFilterChange: (val: string) => void
@@ -115,6 +117,7 @@ function FilterBar({
   autoRefresh: boolean
   onAutoRefreshChange: (val: boolean) => void
   onRefresh: () => void
+  onClearLogs: () => void
 }) {
   return (
     <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -149,9 +152,12 @@ function FilterBar({
           ))}
         </SelectContent>
       </Select>
-
       <Button variant="outline" size="sm" onClick={onRefresh}>
         Refresh
+      </Button>
+
+      <Button variant="outline" size="sm" onClick={onClearLogs}>
+        Clear
       </Button>
 
       <div className="flex items-center gap-2 text-sm">
@@ -442,6 +448,22 @@ export default function AdminLogsPage() {
     setError(null)
   }, [hasToken])
 
+  const handleClearLogs = useCallback(async () => {
+    if (!token) return
+    setIsLoading(true)
+    try {
+      await clearAdminLogs(token)
+      await loadData(token)
+    } catch (e) {
+      if (e instanceof Error && e.message === 'UNAUTHORIZED') {
+        clearToken('invalid', 'Unauthorized — check your token')
+      } else {
+        setError(e instanceof Error ? e.message : 'Unknown error')
+      }
+      setIsLoading(false)
+    }
+  }, [token, loadData, clearToken])
+
   useEffect(() => {
     if (!hasToken) return
     if (skipNextAutoLoadRef.current) {
@@ -546,6 +568,9 @@ export default function AdminLogsPage() {
         onAutoRefreshChange={setAutoRefresh}
         onRefresh={() => {
           void loadData()
+        }}
+        onClearLogs={() => {
+          void handleClearLogs()
         }}
       />
 

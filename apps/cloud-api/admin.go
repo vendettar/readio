@@ -89,6 +89,16 @@ func (rb *adminRingBuffer) size() int {
 	return rb.cap
 }
 
+func (rb *adminRingBuffer) clear() {
+	rb.mu.Lock()
+	defer rb.mu.Unlock()
+	rb.count = 0
+	rb.pos = 0
+	for i := range rb.entries {
+		rb.entries[i] = adminLogEntry{}
+	}
+}
+
 var sensitivePatterns = []string{
 	"authorization",
 	"apikey",
@@ -292,6 +302,7 @@ func setupAdminHandler(mux *http.ServeMux) *adminHandler {
 	}
 
 	mux.HandleFunc("/admin/logs", h.handleAdminLogs)
+	mux.HandleFunc("/admin/logs/clear", h.handleAdminLogsClear)
 	mux.HandleFunc("/admin/health", h.handleAdminHealth)
 	mux.HandleFunc("/admin/metrics/summary", h.handleAdminMetricsSummary)
 
@@ -364,6 +375,15 @@ func (h *adminHandler) handleAdminLogs(w http.ResponseWriter, r *http.Request) {
 		"total":           h.buffer.size(),
 		"buffer_capacity": h.buffer.cap,
 	})
+}
+
+func (h *adminHandler) handleAdminLogsClear(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost && r.Method != http.MethodDelete {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	h.buffer.clear()
+	w.WriteHeader(http.StatusOK)
 }
 
 func (h *adminHandler) handleAdminHealth(w http.ResponseWriter, _ *http.Request) {
