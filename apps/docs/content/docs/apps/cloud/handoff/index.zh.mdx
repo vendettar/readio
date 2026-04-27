@@ -42,10 +42,12 @@ Cloud handoff 树现在是应用级前后端契约的当前 SSOT：
 - `/api/*` 路由由 API 处理器独占，不能回退到 SPA shell。
 - 后端会优先读取显式的 `READIO_CLOUD_UI_DIST_DIR`，否则回退到同目录 `dist/` 或仓库内的 `apps/cloud-ui/dist`。
 
-## 3. RSS 代理契约
+## 3. 代理契约
 
-- `POST /api/proxy` 是当前代理入口。
-- 请求体使用 JSON 代理契约：`{ "url": "...", "method": "GET" | "HEAD", "headers"?: { ... } }`。
+- `POST /api/proxy` 仍然是 JS 客户端使用的代理入口。
+- POST 请求体使用 JSON 代理契约：`{ "url": "...", "method": "GET" | "HEAD", "headers"?: { ... } }`。
+- `GET /api/proxy?url=...` 只用于内建的同源原生 audio fallback，只允许透传一小组媒体安全请求头（如 `Range`、`If-Range` 及相关 cache-safe header）。
+- 运行时 `READIO_NETWORK_PROXY_AUTH_HEADER` / `READIO_NETWORK_PROXY_AUTH_VALUE` 仍是给带认证的 JS proxy POST 调用使用的浏览器公开配置；它们不是秘密存储。
 - 代理在拨号前会校验目标地址，并拒绝私网、回环、链路本地或 metadata 风格目标。
 - 请求路径是 fail-closed 的：它使用已验证的固定目标集，并且不会通过重定向跳入不允许的目标。
 - 代理使用自定义 user agent，限制上游请求超时，并保留基础的内存限流。

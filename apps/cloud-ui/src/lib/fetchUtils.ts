@@ -1,13 +1,13 @@
 import { log } from './logger'
 import { CircuitBreaker, CircuitTripError } from './networking/circuitBreaker'
-import { buildProxyUrl, getCorsProxyConfig } from './networking/proxyUrl'
+import { buildProxyUrl, getNetworkProxyConfig } from './networking/proxyUrl'
 import { createTimeoutController, sleepWithAbort } from './networking/timeouts'
 import { getAppConfig, isRuntimeConfigReady } from './runtimeConfig'
 
 const DEFAULT_PROXY_HEALTH_CHECK_TIMEOUT_MS = 8000
 
 export { buildProxyUrl }
-export { CircuitTripError, getCorsProxyConfig }
+export { CircuitTripError, getNetworkProxyConfig }
 
 interface ProxyAuthConfig {
   authHeader: string
@@ -49,7 +49,7 @@ function normalizeProxyUrl(value: string): string {
 }
 
 function resolveProxyConfig(overrides?: ProxyConfigOverrides): ProxyConfig {
-  const stored = getCorsProxyConfig()
+  const stored = getNetworkProxyConfig()
   return {
     proxyUrl: normalizeProxyUrl(overrides?.proxyUrl ?? stored.proxyUrl),
     authHeader: String(overrides?.authHeader ?? stored.authHeader ?? '').trim(),
@@ -84,7 +84,7 @@ async function fetchViaProxy(
   signal: AbortSignal,
   authConfig?: ProxyAuthConfig
 ): Promise<{ status?: number }> {
-  const proxyAuthHeaders = buildProxyAuthHeaders(authConfig ?? getCorsProxyConfig())
+  const proxyAuthHeaders = buildProxyAuthHeaders(authConfig ?? getNetworkProxyConfig())
   const init: RequestInit = { signal, credentials: 'omit' }
 
   // Custom proxy: Always use POST JSON { url } contract (no GET fallback per 084)
@@ -107,7 +107,7 @@ async function fetchViaProxy(
   return {}
 }
 
-export async function checkCorsProxyHealth(options?: {
+export async function checkNetworkProxyHealth(options?: {
   targetUrl?: string
   timeoutMs?: number
   signal?: AbortSignal
@@ -630,7 +630,7 @@ export async function fetchWithFallback<T = string>(
     source: FetchSource,
     attemptSignal: AbortSignal
   ): Promise<T> => {
-    const proxyAuthHeaders = buildProxyAuthHeaders(getCorsProxyConfig())
+    const proxyAuthHeaders = buildProxyAuthHeaders(getNetworkProxyConfig())
     const init: RequestInit = { signal: attemptSignal, credentials: 'omit' }
 
     // Custom proxy: POST JSON { url } (no GET fallback per 084)
@@ -678,7 +678,7 @@ export async function fetchWithFallback<T = string>(
 
   try {
     const runtimeConfigReady = isRuntimeConfigReady()
-    const { proxyUrl, authHeader, authValue } = getCorsProxyConfig()
+    const { proxyUrl, authHeader, authValue } = getNetworkProxyConfig()
     const isProxyConfigured = !!proxyUrl && runtimeConfigReady && (!authHeader || !!authValue)
     if (import.meta.env.DEV && proxyUrl && !isProxyConfigured) {
       log(

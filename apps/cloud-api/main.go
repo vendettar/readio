@@ -66,6 +66,9 @@ var browserEnvAllowlist = []string{
 	"READIO_DEFAULT_PODCAST_CONTENT_COUNTRY",
 	"READIO_DEFAULT_LANGUAGE",
 	"READIO_FALLBACK_PODCAST_IMAGE",
+	"READIO_NETWORK_PROXY_URL",
+	"READIO_NETWORK_PROXY_AUTH_HEADER",
+	"READIO_NETWORK_PROXY_AUTH_VALUE",
 }
 
 var proxyAllowedRequestHeaders = map[string]struct{}{
@@ -370,6 +373,9 @@ func buildBrowserRuntimeEnv(r *http.Request) map[string]any {
 			"READIO_FALLBACK_PODCAST_IMAGE",
 			defaultFallbackPodcastImage,
 		),
+		"READIO_NETWORK_PROXY_URL":         envOrDefault("READIO_NETWORK_PROXY_URL", "/api/proxy"),
+		"READIO_NETWORK_PROXY_AUTH_HEADER": envOrDefault("READIO_NETWORK_PROXY_AUTH_HEADER", ""),
+		"READIO_NETWORK_PROXY_AUTH_VALUE":  envOrDefault("READIO_NETWORK_PROXY_AUTH_VALUE", ""),
 	}
 }
 
@@ -597,6 +603,36 @@ func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (p *proxyService) parseProxyRequest(_ http.ResponseWriter, r *http.Request) (*proxyRequestSpec, error) {
 	switch r.Method {
+	case http.MethodGet:
+		rawTarget := r.URL.Query().Get("url")
+		if rawTarget == "" {
+			return nil, &proxyError{status: http.StatusBadRequest, message: "missing url"}
+		}
+
+		parsedURL, err := parseProxyTargetURL(rawTarget)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := validateProxyTarget(parsedURL); err != nil {
+			return nil, &proxyError{status: http.StatusBadRequest, message: err.Error()}
+		}
+
+		headers, err := filterProxyForwardHeaders(r.Header)
+		if err != nil {
+			var proxyErr *proxyError
+			if errors.As(err, &proxyErr) {
+				return nil, proxyErr
+			}
+			return nil, &proxyError{status: http.StatusBadRequest, message: "invalid proxy headers"}
+		}
+
+		return &proxyRequestSpec{
+			targetURL: parsedURL,
+			method:    http.MethodGet,
+			headers:   headers,
+		}, nil
+
 	case http.MethodPost:
 		if ct := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type"))); ct != "" && !strings.HasPrefix(ct, "application/json") {
 			return nil, &proxyError{status: http.StatusBadRequest, message: "content-type must be application/json"}
@@ -645,7 +681,7 @@ func (p *proxyService) parseProxyRequest(_ http.ResponseWriter, r *http.Request)
 			return nil, &proxyError{status: http.StatusBadRequest, message: "unsupported proxy method"}
 		}
 
-		headers, err := validateProxyForwardHeaders(payload.Headers)
+		headers, err := validateProxyForwardHeaders(proxyPayloadHeaders(payload.Headers))
 		if err != nil {
 			var proxyErr *proxyError
 			if errors.As(err, &proxyErr) {
@@ -660,13 +696,16 @@ func (p *proxyService) parseProxyRequest(_ http.ResponseWriter, r *http.Request)
 			headers:   headers,
 		}, nil
 	default:
-		return nil, &proxyError{status: http.StatusMethodNotAllowed, message: "only POST is allowed"}
+		return nil, &proxyError{status: http.StatusMethodNotAllowed, message: "only GET and POST are allowed"}
 	}
 }
 
 func (p *proxyService) respondProxyError(w http.ResponseWriter, err error, allowedOrigin string) {
 	var proxyErr *proxyError
 	if errors.As(err, &proxyErr) {
+		if proxyErr.status == http.StatusMethodNotAllowed {
+			w.Header().Set("Allow", "GET, POST")
+		}
 		writeProxyError(w, proxyErr.status, proxyErr.message, allowedOrigin)
 		return
 	}
@@ -699,11 +738,19 @@ func parseProxyTargetURL(raw string) (*url.URL, error) {
 	return parsedURL, nil
 }
 
-func validateProxyForwardHeaders(headers map[string]string) (http.Header, error) {
+func proxyPayloadHeaders(headers map[string]string) http.Header {
+	payloadHeaders := make(http.Header, len(headers))
+	for key, value := range headers {
+		payloadHeaders.Set(key, value)
+	}
+	return payloadHeaders
+}
+
+func validateProxyForwardHeaders(headers http.Header) (http.Header, error) {
 	forwarded := make(http.Header)
-	for rawName, rawValue := range headers {
+	rangeValueCount := 0
+	for rawName, values := range headers {
 		name := http.CanonicalHeaderKey(strings.TrimSpace(rawName))
-		value := strings.TrimSpace(rawValue)
 		if name == "" {
 			return nil, &proxyError{status: http.StatusBadRequest, message: "invalid proxy headers"}
 		}
@@ -712,15 +759,57 @@ func validateProxyForwardHeaders(headers map[string]string) (http.Header, error)
 			return nil, &proxyError{status: http.StatusBadRequest, message: "unsupported proxy header"}
 		}
 
-		if name == "Range" && !proxyRangePattern.MatchString(value) {
-			return nil, &proxyError{status: http.StatusBadRequest, message: "invalid range header"}
+		for _, rawValue := range values {
+			value := strings.TrimSpace(rawValue)
+			if value == "" {
+				return nil, &proxyError{status: http.StatusBadRequest, message: "invalid proxy headers"}
+			}
+
+			if name == "Range" {
+				rangeValueCount++
+				if rangeValueCount > 1 || !proxyRangePattern.MatchString(value) {
+					return nil, &proxyError{status: http.StatusBadRequest, message: "invalid range header"}
+				}
+			}
+
+			forwarded.Add(name, value)
+		}
+	}
+
+	return forwarded, nil
+}
+
+func filterProxyForwardHeaders(headers http.Header) (http.Header, error) {
+	// GET /api/proxy is only used by browser-native media fallback, so we keep
+	// a narrow allowlist and silently drop ambient browser headers instead of
+	// treating them as caller-controlled contract violations like the POST path.
+	forwarded := make(http.Header)
+	rangeValueCount := 0
+	for rawName, values := range headers {
+		name := http.CanonicalHeaderKey(strings.TrimSpace(rawName))
+		if name == "" {
+			continue
 		}
 
-		if value == "" {
-			return nil, &proxyError{status: http.StatusBadRequest, message: "invalid proxy headers"}
+		if _, ok := proxyAllowedRequestHeaders[strings.ToLower(name)]; !ok {
+			continue
 		}
 
-		forwarded.Set(name, value)
+		for _, rawValue := range values {
+			value := strings.TrimSpace(rawValue)
+			if value == "" {
+				continue
+			}
+
+			if name == "Range" {
+				rangeValueCount++
+				if rangeValueCount > 1 || !proxyRangePattern.MatchString(value) {
+					return nil, &proxyError{status: http.StatusBadRequest, message: "invalid range header"}
+				}
+			}
+
+			forwarded.Add(name, value)
+		}
 	}
 
 	return forwarded, nil
@@ -811,6 +900,35 @@ func validateProxyTarget(target *url.URL) error {
 func (p *proxyService) authorizeOrigin(r *http.Request) (string, error) {
 	origin := strings.TrimSpace(r.Header.Get("Origin"))
 	if origin == "" {
+		if r.Method == http.MethodGet {
+			// Browser media-element GET requests may omit Origin, so the native-audio
+			// fallback path proves same-origin intent via Referer instead.
+			referer := strings.TrimSpace(r.Header.Get("Referer"))
+			if referer == "" {
+				return "", &proxyError{status: http.StatusForbidden, message: "origin not allowed"}
+			}
+
+			parsedReferer, err := url.Parse(referer)
+			if err != nil || parsedReferer.Host == "" || parsedReferer.User != nil {
+				return "", &proxyError{status: http.StatusForbidden, message: "origin not allowed"}
+			}
+			if parsedReferer.Scheme != "http" && parsedReferer.Scheme != "https" {
+				return "", &proxyError{status: http.StatusForbidden, message: "origin not allowed"}
+			}
+
+			normalizedReferer := parsedReferer.Scheme + "://" + parsedReferer.Host
+			if len(p.allowedOrigins) > 0 {
+				if _, ok := p.allowedOrigins[normalizedReferer]; ok {
+					return "", nil
+				}
+				return "", &proxyError{status: http.StatusForbidden, message: "origin not allowed"}
+			}
+
+			requestScheme, requestHost, ok := proxyRequestOriginContext(r, p.trustedProxies)
+			if !ok || !isSameOrigin(parsedReferer.Scheme, parsedReferer.Host, requestScheme, requestHost) {
+				return "", &proxyError{status: http.StatusForbidden, message: "origin not allowed"}
+			}
+		}
 		return "", nil
 	}
 
@@ -830,26 +948,36 @@ func (p *proxyService) authorizeOrigin(r *http.Request) (string, error) {
 		return "", &proxyError{status: http.StatusForbidden, message: "origin not allowed"}
 	}
 
-	requestHost := strings.TrimSpace(r.Host)
-	if requestHost == "" {
+	requestScheme, requestHost, ok := proxyRequestOriginContext(r, p.trustedProxies)
+	if !ok {
 		return "", &proxyError{status: http.StatusForbidden, message: "origin not allowed"}
-	}
-	requestScheme := "http"
-	if r.TLS != nil {
-		requestScheme = "https"
-	}
-	if peerHost, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-		if peerIP := net.ParseIP(peerHost); peerIP != nil && p.trustedProxies.contains(peerIP) {
-			if proto := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")); proto == "https" || proto == "http" {
-				requestScheme = proto
-			}
-		}
 	}
 	if !isSameOrigin(parsed.Scheme, parsed.Host, requestScheme, requestHost) {
 		return "", &proxyError{status: http.StatusForbidden, message: "origin not allowed"}
 	}
 
 	return normalized, nil
+}
+
+func proxyRequestOriginContext(r *http.Request, trusted trustedProxySet) (scheme string, host string, ok bool) {
+	requestHost := strings.TrimSpace(r.Host)
+	if requestHost == "" {
+		return "", "", false
+	}
+
+	requestScheme := "http"
+	if r.TLS != nil {
+		requestScheme = "https"
+	}
+	if peerHost, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+		if peerIP := net.ParseIP(peerHost); peerIP != nil && trusted.contains(peerIP) {
+			if proto := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")); proto == "https" || proto == "http" {
+				requestScheme = proto
+			}
+		}
+	}
+
+	return requestScheme, requestHost, true
 }
 
 func resolveProxyAllowedOrigins() map[string]struct{} {

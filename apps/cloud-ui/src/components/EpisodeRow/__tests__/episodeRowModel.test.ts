@@ -221,6 +221,14 @@ describe('episodeRowModel', () => {
     expect(model.route?.to).toBe('/podcast/$country/$id/$episodeKey')
     expect(model.route?.params.country).toBe('us')
     expect(model.route?.params.id).toBe('9')
+    expect(model.route?.state).toEqual({
+      episodeSnapshot: {
+        title: 'Search FeedEpisode',
+        audioUrl: 'audio',
+        description: 'desc',
+        pubDate: '2025-01-02',
+      },
+    })
     if (model.route?.to === '/podcast/$country/$id/$episodeKey') {
       expect(model.route.params.episodeKey).toBe('e_c2VhcmNoLWd1aWQtMQ')
     }

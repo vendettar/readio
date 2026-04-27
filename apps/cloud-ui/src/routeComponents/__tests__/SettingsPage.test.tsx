@@ -223,7 +223,7 @@ describe('SettingsPage', () => {
     expect(screen.queryByText('settingsDictionary')).toBeNull()
   })
 
-  it('keeps settings sections aligned while removing the CORS proxy block', () => {
+  it('keeps settings sections aligned while removing the Network proxy block', () => {
     render(<SettingsPage />)
 
     expect(screen.getByTestId('asr-settings-section')).not.toBeNull()

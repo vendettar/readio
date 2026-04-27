@@ -41,6 +41,8 @@ These fields are safe to expose to the browser, but in production Cloud they sho
 | `READIO_ASR_MODEL` | backend `/env.js` allowlist | `apps/cloud-ui/src/lib/runtimeConfig.ts` | browser-visible default only |
 | `READIO_ENABLED_ASR_PROVIDERS` | backend `/env.js` allowlist | `apps/cloud-ui/src/lib/runtimeConfig.ts` | browser-visible feature toggle |
 | `READIO_DISABLED_ASR_PROVIDERS` | backend `/env.js` allowlist | `apps/cloud-ui/src/lib/runtimeConfig.ts` | browser-visible feature toggle |
+| `READIO_NETWORK_PROXY_AUTH_HEADER` | backend `/env.js` allowlist | `apps/cloud-ui/src/lib/runtimeConfig.ts`, `src/lib/networking/proxyUrl.ts` | browser-public authenticated JS proxy setting; not a secret boundary |
+| `READIO_NETWORK_PROXY_AUTH_VALUE` | backend `/env.js` allowlist | `apps/cloud-ui/src/lib/runtimeConfig.ts`, `src/lib/networking/proxyUrl.ts` | browser-public authenticated JS proxy setting; not a secret boundary |
 | `READIO_EN_DICTIONARY_API_URL` | backend `/env.js` allowlist | `apps/cloud-ui/src/lib/selection/api.ts` via `getAppConfig()` | browser-visible endpoint choice |
 | `READIO_EN_DICTIONARY_API_TRANSPORT` | backend `/env.js` allowlist | `apps/cloud-ui/src/lib/selection/api.ts` via `getAppConfig()` | explicit browser transport contract |
 | `READIO_DISCOVERY_LOOKUP_URL` | backend `/env.js` allowlist | `apps/cloud-ui/src/lib/discovery/cloudApi.ts` via `getAppConfig()` | production Cloud now owns same-origin discovery roots |
@@ -58,7 +60,6 @@ These values remain browser-owned and are not migrated into backend runtime env 
 | --- | --- | --- | --- |
 | `READIO_ASR_API_KEY` | browser-local runtime / user settings | `apps/cloud-ui/src/lib/runtimeConfig.ts`, ASR flows | user-owned provider credential |
 | `READIO_OPENAI_API_KEY` | browser-local runtime / user settings | `apps/cloud-ui/src/lib/runtimeConfig.ts` | user-owned provider credential |
-| `READIO_CORS_PROXY_URL` and auth fields | browser-local runtime / user settings | `apps/cloud-ui/src/lib/fetchUtils.ts`, `src/lib/networking/proxyUrl.ts` | Cloud no longer treats these as production-owned runtime |
 | `READIO_DB_NAME` | browser-local runtime | `apps/cloud-ui/src/lib/dexieDb.ts` | local IndexedDB namespace |
 | audio/download/transcript cache settings | browser-local runtime | `storageQuota.ts`, `downloadCapacity.ts`, `dictCache.ts` | local storage quota behavior remains browser-owned |
 | playback/session state | browser storage and in-memory stores | player stores and hooks | user/session-local state |

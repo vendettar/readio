@@ -9,6 +9,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useAudioElementEvents } from '../../hooks/useAudioElementEvents'
 import { useAudioElementSync } from '../../hooks/useAudioElementSync'
+import { useAudioProxyFallback } from '../../hooks/useAudioProxyFallback'
 import { useAutoplayRetry } from '../../hooks/useAutoplayRetry'
 import { useForegroundAudioPrefetch } from '../../hooks/useForegroundAudioPrefetch'
 import { useImageObjectUrl } from '../../hooks/useImageObjectUrl'
@@ -117,6 +118,7 @@ export function GlobalAudioController() {
     t,
   })
   useAutoplayRetry({ audioRef, audioUrl, isPlaying })
+  useAudioProxyFallback({ audioRef, audioUrl })
 
   // Monitor pendingSeek and sync to audio element
   useEffect(() => {

@@ -50,6 +50,8 @@ Rules:
 
 - if `podcastItunesId + episodeGuid + valid route country` are present, the app may build the canonical episode route directly
 - this direct route is allowed because the destination episode page still performs canonical hydration
+- search-driven direct routes may carry an ephemeral route `state.episodeSnapshot` with lightweight fields such as `title`, `audioUrl`, `description`, and `pubDate`
+- this route-state snapshot is only a hydration hint for the destination page; it is not canonical route identity and must not override GUID / canonical-cache / RSS authority
 - `SearchEpisode` direct routing must not add query-hint route params such as `feedUrl`, `audioUrl`, `title`, or `source`
 
 ### Cold Episode URL
@@ -72,8 +74,8 @@ If the `TopEpisode` budgeted resolver cannot produce a unique high-confidence ep
 
 For `SearchEpisode` direct-route entries and cold canonical episode URLs, the destination episode page follows this policy:
 
-1. check canonical feed cache first
-2. if the target episode is not present and feed coverage is incomplete, fetch full feed and update canonical cache
+1. check canonical feed cache by stable episode identity first, then allow `state.episodeSnapshot` title / audio matching as a non-authoritative hint
+2. if the target episode is not present and feed coverage is incomplete, fetch full feed, re-run stable-identity matching first, then allow `state.episodeSnapshot` title / audio matching, and update canonical cache
 3. if the target episode is still not resolvable after canonical hydration, fall back to the canonical podcast show page
 
 This failure policy is intentionally different from `TopEpisode`.

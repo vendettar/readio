@@ -88,30 +88,30 @@ export const AppConfigSchema = z.object({
     .string()
     .default(DEFAULTS.APP_VERSION)
     .catch(catchWithLog('APP_VERSION', DEFAULTS.APP_VERSION)),
-  CORS_PROXY_URL: z
+  NETWORK_PROXY_URL: z
     .union([
       z.literal(''),
-      UrlSchema.refine((url) => url.startsWith('https://'), {
-        message: 'Only HTTPS URLs allowed for CORS Proxy',
+      UriSchema.refine((url) => url.startsWith('https://') || url.startsWith('/'), {
+        message: 'Only HTTPS or relative URLs allowed for Network Proxy',
       }),
     ])
-    .default(DEFAULTS.CORS_PROXY_URL)
-    .catch(catchWithLog('CORS_PROXY_URL', DEFAULTS.CORS_PROXY_URL)),
-  CORS_PROXY_AUTH_HEADER: z
+    .default(DEFAULTS.NETWORK_PROXY_URL)
+    .catch(catchWithLog('NETWORK_PROXY_URL', DEFAULTS.NETWORK_PROXY_URL)),
+  NETWORK_PROXY_AUTH_HEADER: z
     .string()
     .refine(
       (val) => {
         if (!val) return true
         return val.toLowerCase() === 'x-proxy-token'
       },
-      { message: 'CORS_PROXY_AUTH_HEADER must be exactly "x-proxy-token"' }
+      { message: 'NETWORK_PROXY_AUTH_HEADER must be exactly "x-proxy-token"' }
     )
-    .default(DEFAULTS.CORS_PROXY_AUTH_HEADER)
-    .catch(catchWithLog('CORS_PROXY_AUTH_HEADER', DEFAULTS.CORS_PROXY_AUTH_HEADER)),
-  CORS_PROXY_AUTH_VALUE: z
+    .default(DEFAULTS.NETWORK_PROXY_AUTH_HEADER)
+    .catch(catchWithLog('NETWORK_PROXY_AUTH_HEADER', DEFAULTS.NETWORK_PROXY_AUTH_HEADER)),
+  NETWORK_PROXY_AUTH_VALUE: z
     .string()
-    .default(DEFAULTS.CORS_PROXY_AUTH_VALUE)
-    .catch(catchWithLog('CORS_PROXY_AUTH_VALUE', DEFAULTS.CORS_PROXY_AUTH_VALUE)),
+    .default(DEFAULTS.NETWORK_PROXY_AUTH_VALUE)
+    .catch(catchWithLog('NETWORK_PROXY_AUTH_VALUE', DEFAULTS.NETWORK_PROXY_AUTH_VALUE)),
   // Browser runtime-config only: known upstream secret formats are fail-closed
   // in runtimeConfig.ts (e.g., sk-, sk-proj-, gsk_, gsk-).
   ASR_API_KEY: z.string().optional(),
@@ -262,9 +262,9 @@ export type AppConfig = z.infer<typeof AppConfigSchema>
 export const ENV_MAP: Record<keyof AppConfig, string> = {
   APP_NAME: 'READIO_APP_NAME',
   APP_VERSION: 'READIO_APP_VERSION',
-  CORS_PROXY_URL: 'READIO_CORS_PROXY_URL',
-  CORS_PROXY_AUTH_HEADER: 'READIO_CORS_PROXY_AUTH_HEADER',
-  CORS_PROXY_AUTH_VALUE: 'READIO_CORS_PROXY_AUTH_VALUE',
+  NETWORK_PROXY_URL: 'READIO_NETWORK_PROXY_URL',
+  NETWORK_PROXY_AUTH_HEADER: 'READIO_NETWORK_PROXY_AUTH_HEADER',
+  NETWORK_PROXY_AUTH_VALUE: 'READIO_NETWORK_PROXY_AUTH_VALUE',
   ASR_API_KEY: 'READIO_ASR_API_KEY',
   ASR_RELAY_PUBLIC_TOKEN: 'READIO_ASR_RELAY_PUBLIC_TOKEN',
   OPENAI_API_KEY: 'READIO_OPENAI_API_KEY',

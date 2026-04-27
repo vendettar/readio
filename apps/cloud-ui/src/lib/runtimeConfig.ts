@@ -8,9 +8,9 @@ declare global {
     __READIO_ENV__?: {
       READIO_APP_NAME?: string
       READIO_APP_VERSION?: string
-      READIO_CORS_PROXY_URL?: string
-      READIO_CORS_PROXY_AUTH_HEADER?: string
-      READIO_CORS_PROXY_AUTH_VALUE?: string
+      READIO_NETWORK_PROXY_URL?: string
+      READIO_NETWORK_PROXY_AUTH_HEADER?: string
+      READIO_NETWORK_PROXY_AUTH_VALUE?: string
       READIO_ASR_API_KEY?: string
       READIO_ASR_RELAY_PUBLIC_TOKEN?: string
       READIO_OPENAI_API_KEY?: string
@@ -110,23 +110,23 @@ export function getAppConfig(): AppConfig {
   try {
     const parsedConfig = AppConfigSchema.parse(rawConfig)
     const config = sanitizeBrowserRuntimeSecrets(parsedConfig)
-    const hasProxyUrl = config.CORS_PROXY_URL.trim().length > 0
+    const hasProxyUrl = config.NETWORK_PROXY_URL.trim().length > 0
 
-    if (hasProxyUrl && config.CORS_PROXY_AUTH_HEADER && !config.CORS_PROXY_AUTH_VALUE) {
+    if (hasProxyUrl && config.NETWORK_PROXY_AUTH_HEADER && !config.NETWORK_PROXY_AUTH_VALUE) {
       if (import.meta.env.DEV) {
         logError(
-          '[runtimeConfig] CORS_PROXY_AUTH_HEADER is set but CORS_PROXY_AUTH_VALUE is missing. Auth will not work.'
+          '[runtimeConfig] NETWORK_PROXY_AUTH_HEADER is set but NETWORK_PROXY_AUTH_VALUE is missing. Auth will not work.'
         )
       }
     }
 
     if (
-      config.CORS_PROXY_AUTH_HEADER &&
-      config.CORS_PROXY_AUTH_HEADER.toLowerCase() !== 'x-proxy-token'
+      config.NETWORK_PROXY_AUTH_HEADER &&
+      config.NETWORK_PROXY_AUTH_HEADER.toLowerCase() !== 'x-proxy-token'
     ) {
       if (import.meta.env.DEV) {
         logError(
-          '[runtimeConfig] Invalid CORS_PROXY_AUTH_HEADER. Use "x-proxy-token" to match worker CORS contract.'
+          '[runtimeConfig] Invalid NETWORK_PROXY_AUTH_HEADER. Use "x-proxy-token" to match worker proxy contract.'
         )
       }
     }

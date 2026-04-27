@@ -13,7 +13,6 @@ import {
 import type { ASRProvider } from '../asr/types'
 import { translate } from '../i18nUtils'
 import { getAppConfig } from '../runtimeConfig'
-import { DEFAULTS } from '../runtimeConfig.defaults'
 import { getJson } from '../storage'
 
 export { SETTINGS_STORAGE_KEY }
@@ -21,13 +20,6 @@ export { SETTINGS_STORAGE_KEY }
 export function getEnabledAsrProviders(): ASRProvider[] {
   const config = getAppConfig()
   return resolveEnabledAsrProviders(config)
-}
-const PROXY_AUTH_HEADER = DEFAULTS.CORS_PROXY_AUTH_HEADER
-
-export function normalizeProxyAuthHeader(value: unknown): string {
-  if (typeof value !== 'string') return ''
-  const normalized = value.trim()
-  return normalized === PROXY_AUTH_HEADER ? PROXY_AUTH_HEADER : ''
 }
 
 export function normalizeAsrProvider(value: unknown): ASRProvider | '' {
@@ -96,7 +88,6 @@ export function normalizeAsrPreferenceValues(raw: { asrProvider: unknown; asrMod
  * Creates schema with current locale error messages
  * - translateKey: API key for translation services (OpenAI, etc.)
  * - asrKey: API key for ASR services (Groq, etc.)
- * - proxyUrl: Empty string allowed, but if provided must be a valid URL
  */
 export function createSettingsFormSchema() {
   return z
@@ -107,24 +98,6 @@ export function createSettingsFormSchema() {
       translateKey: z.string().refine((val) => val === '' || val.startsWith('sk-'), {
         message: translate('validationApiKeyPrefix'),
       }),
-      proxyUrl: z.string().refine((val) => val === '' || z.url().safeParse(val).success, {
-        message: translate('validationUrlInvalid'),
-      }),
-      proxyAuthHeader: z
-        .string()
-        .trim()
-        .superRefine((val, ctx) => {
-          if (val !== '' && val !== PROXY_AUTH_HEADER) {
-            ctx.addIssue({
-              code: z.ZodIssueCode.custom,
-              message: translate('validationProxyAuthHeaderInvalid', {
-                header: PROXY_AUTH_HEADER,
-                defaultValue: `Auth header must be "${PROXY_AUTH_HEADER}"`,
-              }),
-            })
-          }
-        }),
-      proxyAuthValue: z.string().trim(),
       pauseOnDictionaryLookup: z.boolean(),
     })
     .superRefine((values, ctx) => {
@@ -192,12 +165,7 @@ export type SettingsFormValues = z.infer<ReturnType<typeof createSettingsFormSch
 export type SettingsCredentialValues = Pick<SettingsFormValues, 'asrKey' | 'translateKey'>
 export type SettingsPreferenceValues = Pick<
   SettingsFormValues,
-  | 'asrProvider'
-  | 'asrModel'
-  | 'proxyUrl'
-  | 'proxyAuthHeader'
-  | 'proxyAuthValue'
-  | 'pauseOnDictionaryLookup'
+  'asrProvider' | 'asrModel' | 'pauseOnDictionaryLookup'
 >
 
 export function getSettingsSnapshot(): SettingsPreferenceValues {
@@ -218,11 +186,6 @@ export function getSettingsSnapshot(): SettingsPreferenceValues {
   return {
     asrProvider: normalizedAsr.asrProvider,
     asrModel: normalizedAsr.asrModel,
-    proxyUrl: stored?.proxyUrl ?? config.CORS_PROXY_URL ?? '',
-    proxyAuthHeader:
-      normalizeProxyAuthHeader(stored?.proxyAuthHeader) ||
-      normalizeProxyAuthHeader(config.CORS_PROXY_AUTH_HEADER),
-    proxyAuthValue: stored?.proxyAuthValue ?? config.CORS_PROXY_AUTH_VALUE ?? '',
     pauseOnDictionaryLookup: stored?.pauseOnDictionaryLookup ?? true,
   }
 }

@@ -72,7 +72,6 @@ describe('useSettingsForm', () => {
       JSON.stringify({
         asrProvider: 'groq',
         asrModel: 'whisper-large-v3-turbo',
-        proxyUrl: 'https://proxy.local',
       })
     )
     getAllCredentialsMock.mockResolvedValue({
@@ -89,7 +88,6 @@ describe('useSettingsForm', () => {
     expect(result.current.form.getValues()).toMatchObject({
       asrProvider: 'groq',
       asrModel: 'whisper-large-v3-turbo',
-      proxyUrl: 'https://proxy.local',
       translateKey: 'sk-hydrated',
       asrKey: VALID_GROQ_KEY,
     })
@@ -102,7 +100,6 @@ describe('useSettingsForm', () => {
     })
 
     act(() => {
-      result.current.form.setValue('proxyUrl', 'https://save.local')
       result.current.form.setValue('translateKey', 'sk-save')
       result.current.form.setValue('asrKey', VALID_GROQ_KEY)
     })
@@ -125,10 +122,6 @@ describe('useSettingsForm', () => {
       JSON.stringify({
         asrProvider: 'groq',
         asrModel: 'whisper-large-v3-turbo',
-
-        proxyUrl: 'https://save.local',
-        proxyAuthHeader: 'x-proxy-token',
-        proxyAuthValue: '',
         pauseOnDictionaryLookup: true,
       })
     )
@@ -189,10 +182,6 @@ describe('useSettingsForm', () => {
       JSON.stringify({
         asrProvider: 'groq',
         asrModel: '',
-
-        proxyUrl: '',
-        proxyAuthHeader: 'x-proxy-token',
-        proxyAuthValue: '',
         pauseOnDictionaryLookup: true,
       })
     )
@@ -223,10 +212,6 @@ describe('useSettingsForm', () => {
       JSON.stringify({
         asrProvider: '',
         asrModel: '',
-
-        proxyUrl: 'https://persisted.proxy',
-        proxyAuthHeader: 'x-proxy-token',
-        proxyAuthValue: 'persisted-secret',
       })
     )
     getAllCredentialsMock.mockResolvedValue({
@@ -244,7 +229,6 @@ describe('useSettingsForm', () => {
       result.current.form.setValue('asrModel', 'whisper-large-v3')
 
       result.current.form.setValue('asrKey', VALID_GROQ_KEY)
-      result.current.form.setValue('proxyUrl', 'not-a-url')
       result.current.form.setValue('translateKey', 'invalid-translate-key')
     })
 
@@ -256,10 +240,6 @@ describe('useSettingsForm', () => {
       JSON.stringify({
         asrProvider: 'groq',
         asrModel: 'whisper-large-v3',
-
-        proxyUrl: 'https://persisted.proxy',
-        proxyAuthHeader: 'x-proxy-token',
-        proxyAuthValue: 'persisted-secret',
         pauseOnDictionaryLookup: true,
       })
     )

@@ -3,8 +3,9 @@ import { useEffect } from 'react'
 import type { FeedEpisode, ParsedFeed, Podcast } from '@/lib/discovery'
 import discovery from '@/lib/discovery'
 import {
-  getCachedEditorPickByItunesID,
   getEditorPickRouteState,
+  type EditorPickRouteState,
+  getCachedEditorPickByItunesID,
   getEpisodeGuid,
   mapEditorPickToPodcast,
   matchesEditorPickRouteID,
@@ -23,6 +24,7 @@ import {
 } from '@/lib/discovery/podcastQueryContract'
 import { readOrFetchPodcastFeed } from '@/lib/discovery/queryCache'
 import { compactKeyToEpisodeIdentity } from '@/lib/routes/compactKey'
+import { titlesAreEqual } from '@/lib/routes/episodeTitleNormalization'
 import { normalizeCountryParam } from '@/lib/routes/podcastRoutes'
 
 interface UseEpisodeResolutionResult {
@@ -61,6 +63,18 @@ function findEpisodeByGuid(
   return episodes.find((episode) => matchesEpisodeGuid(episode, targetGuid))
 }
 
+function matchesResolvedEpisodeCandidate(
+  episode: FeedEpisode,
+  targetEpisodeGuid: string,
+  episodeSnapshot?: EditorPickRouteState['episodeSnapshot']
+): boolean {
+  return Boolean(
+    matchesEpisodeGuid(episode, targetEpisodeGuid) ||
+      (episodeSnapshot && titlesAreEqual(episode.title, episodeSnapshot.title)) ||
+      (episodeSnapshot?.audioUrl && episode.audioUrl === episodeSnapshot.audioUrl)
+  )
+}
+
 /**
  * Hook to resolve an episode and its podcast metadata from URL params.
  * Country authority in content routes is route-param only.
@@ -74,7 +88,9 @@ export function useEpisodeResolution(
   const queryClient = useQueryClient()
   const country = normalizeCountryParam(routeCountry)
   const normalizedPodcastId = podcastId.trim()
-  const routeSnapshot = getEditorPickRouteState(routeState)?.editorPickSnapshot
+  const routeStateTyped = getEditorPickRouteState(routeState) ?? undefined
+  const routeSnapshot = routeStateTyped?.editorPickSnapshot
+  const episodeSnapshot = routeStateTyped?.episodeSnapshot
   const editorPickSnapshot =
     routeSnapshot && matchesEditorPickRouteID(routeSnapshot, normalizedPodcastId)
       ? routeSnapshot
@@ -105,7 +121,7 @@ export function useEpisodeResolution(
 
   const feedUrl = podcast?.feedUrl
   const cachedEpisode = findEpisodeInCanonicalPodcastFeed(queryClient, feedUrl, (episode) =>
-    matchesEpisodeGuid(episode, targetEpisodeGuid)
+    matchesResolvedEpisodeCandidate(episode, targetEpisodeGuid, episodeSnapshot)
   )
   const cachedCanonicalFeed = getCanonicalPodcastFeedCacheEntry(queryClient, feedUrl)
   const isCachedCanonicalFeedFresh = isCanonicalPodcastFeedCacheFresh(cachedCanonicalFeed)
@@ -129,8 +145,13 @@ export function useEpisodeResolution(
 
   const rssFallbackEpisode =
     findEpisodeByGuid(fallbackFeed?.episodes, targetEpisodeGuid) ??
+    (episodeSnapshot
+      ? fallbackFeed?.episodes?.find((episode) =>
+          matchesResolvedEpisodeCandidate(episode, targetEpisodeGuid, episodeSnapshot)
+        )
+      : undefined) ??
     findEpisodeInCanonicalPodcastFeed(queryClient, feedUrl, (episode) =>
-      matchesEpisodeGuid(episode, targetEpisodeGuid)
+      matchesResolvedEpisodeCandidate(episode, targetEpisodeGuid, episodeSnapshot)
     )
   const episode = cachedEpisode ?? rssFallbackEpisode
 

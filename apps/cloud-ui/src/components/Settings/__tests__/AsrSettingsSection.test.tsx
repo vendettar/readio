@@ -129,12 +129,8 @@ function Harness({
     defaultValues: {
       asrProvider: 'groq',
       asrModel: 'whisper-large-v3',
-
       asrKey: VALID_GROQ_KEY,
       translateKey: '',
-      proxyUrl: '',
-      proxyAuthHeader: '',
-      proxyAuthValue: '',
       ...defaults,
     },
   })
