@@ -42,10 +42,12 @@ Use the Cloud handoff tree as the current SSOT for app-level frontend/backend co
 - `/api/*` routes remain owned by API handlers and must not fall back to the SPA shell.
 - The backend resolves `dist/` from an explicit `READIO_CLOUD_UI_DIST_DIR` override first, then falls back to colocated `dist/` or repository-local `apps/cloud-ui/dist`.
 
-## 3. RSS Proxy Contract
+## 3. Proxy Contract
 
-- `POST /api/proxy` is the current proxy surface.
-- The request body uses the JSON proxy contract: `{ "url": "...", "method": "GET" | "HEAD", "headers"?: { ... } }`.
+- `POST /api/proxy` remains the JS client proxy surface.
+- The POST request body uses the JSON proxy contract: `{ "url": "...", "method": "GET" | "HEAD", "headers"?: { ... } }`.
+- `GET /api/proxy?url=...` is supported only for the built-in same-origin native-audio fallback, with a narrow request-header allowlist (`Range`, `If-Range`, and related cache-safe media headers).
+- Runtime `READIO_NETWORK_PROXY_AUTH_HEADER` / `READIO_NETWORK_PROXY_AUTH_VALUE` remain browser-public configuration for authenticated JS proxy POST calls; they are not a secret store.
 - The proxy validates the requested target before dialing and rejects private, loopback, link-local, or metadata-style destinations.
 - The request path is fail-closed: it uses a pinned validated target set and does not follow redirects into disallowed destinations.
 - The proxy uses a custom user agent, applies a bounded fetch timeout, and keeps a basic in-memory rate limit.

@@ -1,28 +1,101 @@
 import type { QueryClient } from '@tanstack/react-query'
 import { episodeIdentityToCompactKey } from '../routes/compactKey'
-import type { EditorPickPodcast, FeedEpisode, Podcast } from './schema'
+import type { EditorPickPodcast, FeedEpisode, Podcast, SearchEpisode } from './schema'
 import { EditorPickPodcastSchema } from './schema'
 
 export function parseEditorPickPodcast(data: unknown): EditorPickPodcast {
   return EditorPickPodcastSchema.parse(data)
 }
 
+export type EpisodeSnapshot = {
+  title: string
+  audioUrl?: string
+  description?: string
+  pubDate?: string
+}
+
 export type EditorPickRouteState = {
-  editorPickSnapshot: EditorPickPodcast
+  editorPickSnapshot?: EditorPickPodcast
+  episodeSnapshot?: EpisodeSnapshot
 } & Record<string, unknown>
+
+type SearchEpisodeSnapshotSource = Pick<
+  SearchEpisode,
+  'title' | 'episodeUrl' | 'shortDescription' | 'releaseDate'
+>
 
 function normalizeOptionalString(value: string | null | undefined): string | undefined {
   const trimmed = value?.trim()
   return trimmed ? trimmed : undefined
 }
 
+function parseEpisodeSnapshot(value: unknown): EpisodeSnapshot | undefined {
+  if (!value || typeof value !== 'object') return undefined
+
+  const snapshot = value as {
+    title?: unknown
+    audioUrl?: unknown
+    description?: unknown
+    pubDate?: unknown
+  }
+
+  const title = typeof snapshot.title === 'string' ? snapshot.title.trim() : ''
+  const audioUrl = normalizeOptionalString(
+    typeof snapshot.audioUrl === 'string' ? snapshot.audioUrl : undefined
+  )
+  const description =
+    typeof snapshot.description === 'string' ? snapshot.description : undefined
+  const pubDate = typeof snapshot.pubDate === 'string' ? snapshot.pubDate : undefined
+
+  if (!title && !audioUrl) return undefined
+
+  return {
+    title,
+    ...(audioUrl ? { audioUrl } : {}),
+    ...(description ? { description } : {}),
+    ...(pubDate ? { pubDate } : {}),
+  }
+}
+
 export function getEditorPickRouteState(state: unknown): EditorPickRouteState | null {
   if (!state || typeof state !== 'object') return null
-  const snapshot = (state as { editorPickSnapshot?: unknown }).editorPickSnapshot
-  if (!snapshot || typeof snapshot !== 'object') return null
-  const podcastItunesId = (snapshot as { podcastItunesId?: unknown }).podcastItunesId
-  if (typeof podcastItunesId !== 'string' || podcastItunesId.trim().length === 0) return null
-  return state as EditorPickRouteState
+  const inputState = state as {
+    editorPickSnapshot?: unknown
+    episodeSnapshot?: unknown
+  }
+  const snapshot = inputState.editorPickSnapshot
+  const episodeSnapshot = parseEpisodeSnapshot(inputState.episodeSnapshot)
+
+  let editorPickSnapshot: EditorPickPodcast | undefined
+  if (snapshot && typeof snapshot === 'object') {
+    const podcastItunesId = (snapshot as { podcastItunesId?: unknown }).podcastItunesId
+    if (typeof podcastItunesId === 'string' && podcastItunesId.trim().length > 0) {
+      editorPickSnapshot = snapshot as EditorPickPodcast
+    }
+  }
+
+  if (!editorPickSnapshot && !episodeSnapshot) {
+    return null
+  }
+
+  return {
+    ...(state as Record<string, unknown>),
+    ...(editorPickSnapshot ? { editorPickSnapshot } : {}),
+    ...(episodeSnapshot ? { episodeSnapshot } : {}),
+  }
+}
+
+export function buildSearchEpisodeRouteState(
+  episode: SearchEpisodeSnapshotSource
+): EditorPickRouteState {
+  return {
+    episodeSnapshot: {
+      title: episode.title || '',
+      audioUrl: episode.episodeUrl,
+      description: episode.shortDescription,
+      pubDate: episode.releaseDate,
+    },
+  }
 }
 
 export function matchesEditorPickRouteID(

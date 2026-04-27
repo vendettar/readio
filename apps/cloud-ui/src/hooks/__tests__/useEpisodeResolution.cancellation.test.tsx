@@ -222,6 +222,143 @@ describe('useEpisodeResolution cancellation semantics', () => {
     expect(result.current.episode?.title).toBe('RSS Episode')
   })
 
+  it('resolves a warm cached episode from route-state snapshot when audioUrl matches', async () => {
+    const podcast: Podcast = makePodcast({
+      podcastItunesId: '12345',
+      title: 'Warm Podcast',
+      author: 'Host',
+      feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
+    })
+    const feed: ParsedFeed = {
+      title: 'Warm Podcast',
+      description: '',
+      artworkUrl: 'https://example.com/show-600.jpg',
+      pageInfo: {
+        limit: 20,
+        offset: 0,
+        returned: 1,
+        hasMore: false,
+      },
+      episodes: [
+        {
+          episodeGuid: 'feed-guid-1',
+          title: 'Canonical Feed Title',
+          description: '',
+          audioUrl: 'https://example.com/search.mp3',
+          pubDate: '2025-01-03T00:00:00.000Z',
+        },
+      ],
+    }
+
+    const { result } = renderHook(
+      () =>
+        useEpisodeResolution('12345', 'e_bWlzbWF0Y2gtZ3VpZA', 'us', {
+          episodeSnapshot: {
+            title: 'Different Search Title',
+            audioUrl: 'https://example.com/search.mp3',
+          },
+        }),
+      {
+        wrapper: createWrapper({ podcast, feed }).wrapper,
+      }
+    )
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+    expect(fetchPodcastFeedMock).not.toHaveBeenCalled()
+    expect(result.current.episode?.episodeGuid).toBe('feed-guid-1')
+  })
+
+  it('resolves a cold fetched episode from route-state snapshot when title matches', async () => {
+    getPodcastIndexPodcastByItunesIdMock.mockResolvedValue(
+      makePodcast({
+        podcastItunesId: '12345',
+        title: 'Cold Podcast',
+        author: 'Host',
+        feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
+      })
+    )
+    fetchPodcastFeedMock.mockResolvedValue({
+      title: 'Cold Podcast',
+      description: '',
+      artworkUrl: 'https://example.com/show-600.jpg',
+      episodes: [
+        {
+          episodeGuid: 'fetched-guid',
+          title: 'Snapshot Matched Episode',
+          description: '',
+          audioUrl: 'https://example.com/cold-search.mp3',
+          pubDate: '2025-01-04T00:00:00.000Z',
+        },
+      ],
+    } satisfies ParsedFeed)
+
+    const { result } = renderHook(
+      () =>
+        useEpisodeResolution('12345', 'e_bWlzbWF0Y2gtY29sZA', 'us', {
+          episodeSnapshot: {
+            title: 'Snapshot Matched Episode',
+          },
+        }),
+      {
+        wrapper: createWrapper().wrapper,
+      }
+    )
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+    expect(fetchPodcastFeedMock).toHaveBeenCalledTimes(1)
+    expect(result.current.episode?.episodeGuid).toBe('fetched-guid')
+  })
+
+  it('coexists with editor-pick bootstrap and route-state episode snapshot matching', async () => {
+    const mismatchedKey = episodeIdentityToCompactKey('snapshot-miss')
+    if (!mismatchedKey) throw new Error('expected snapshot mismatch compact key')
+
+    const editorPickSnapshot = {
+      id: '304b84f0-07b0-5265-b6b7-da5cf5aeb56e',
+      title: 'Snapshot Podcast',
+      author: 'Host',
+      artwork: 'https://example.com/show-600.jpg',
+      link: 'https://example.com/show',
+      genres: ['Technology'],
+      description: 'snapshot description',
+      feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
+      podcastGuid: '304b84f0-07b0-5265-b6b7-da5cf5aeb56e',
+      podcastItunesId: '12345',
+    }
+
+    fetchPodcastFeedMock.mockResolvedValue({
+      title: 'Snapshot Podcast',
+      description: '',
+      artworkUrl: 'https://example.com/show-600.jpg',
+      episodes: [
+        {
+          episodeGuid: 'snapshot-guid',
+          title: 'Snapshot Episode',
+          description: '',
+          audioUrl: 'https://example.com/snapshot.mp3',
+          pubDate: '2025-01-05T00:00:00.000Z',
+        },
+      ],
+    } satisfies ParsedFeed)
+
+    const { result } = renderHook(
+      () =>
+        useEpisodeResolution('12345', mismatchedKey, 'us', {
+          editorPickSnapshot,
+          episodeSnapshot: {
+            title: 'Snapshot Episode',
+          },
+        }),
+      {
+        wrapper: createWrapper().wrapper,
+      }
+    )
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+    expect(result.current.podcast?.title).toBe('Snapshot Podcast')
+    expect(result.current.episode?.episodeGuid).toBe('snapshot-guid')
+  })
+
   it('resolves older deep links beyond the first 100 feed entries', async () => {
     const olderEpisodeGuid = 'older-episode-guid'
     const olderEpisodeKey = episodeIdentityToCompactKey(olderEpisodeGuid)

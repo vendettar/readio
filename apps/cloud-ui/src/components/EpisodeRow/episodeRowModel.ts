@@ -3,6 +3,7 @@ import { formatDateStandard, formatDuration, formatRelativeTime } from '@/lib/da
 import type { Favorite, PlaybackSession } from '@/lib/db/types'
 import type { EditorPickPodcast, FeedEpisode, Podcast, SearchEpisode } from '@/lib/discovery'
 import {
+  buildSearchEpisodeRouteState,
   buildEpisodeCompactKey,
   type EditorPickRouteState,
   getCanonicalEditorPickPodcastID,
@@ -177,7 +178,13 @@ export function fromSearchEpisode({
 }: SearchEpisodeModelArgs): EpisodeRowModel {
   const podcastId = episode.podcastItunesId?.toString()
   const episodeGuid = episode.episodeGuid
-  const route = buildSearchEpisodeRoute(podcastId, episodeGuid, routeCountry)
+  const routeObject = buildSearchEpisodeRoute(podcastId, episodeGuid, routeCountry)
+  const route: EpisodeRowModelRoute | null = routeObject
+    ? {
+        ...routeObject,
+        state: buildSearchEpisodeRouteState(episode),
+      }
+    : null
   const artwork = episode.artwork
 
   return {

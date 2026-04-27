@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildSearchEpisodeRouteState,
   buildEpisodeCompactKey,
+  getEditorPickRouteState,
   getCanonicalEditorPickPodcastID,
   getEpisodeGuid,
   matchesEditorPickRouteID,
@@ -63,5 +65,71 @@ describe('editorPicks canonical identifiers', () => {
         episodeGuid: '',
       })
     ).toBeUndefined()
+  })
+
+  it('builds search episode route state with a typed episode snapshot', () => {
+    const state = buildSearchEpisodeRouteState({
+      title: 'Search Episode',
+      episodeUrl: 'https://example.com/search.mp3',
+      shortDescription: 'desc',
+      releaseDate: '2025-01-02',
+    })
+
+    expect(state).toEqual({
+      episodeSnapshot: {
+        title: 'Search Episode',
+        audioUrl: 'https://example.com/search.mp3',
+        description: 'desc',
+        pubDate: '2025-01-02',
+      },
+    })
+  })
+
+  it('parses route state when only episodeSnapshot is present', () => {
+    const state = getEditorPickRouteState({
+      episodeSnapshot: {
+        title: 'Search Episode',
+        audioUrl: 'https://example.com/search.mp3',
+      },
+    })
+
+    expect(state).toEqual({
+      episodeSnapshot: {
+        title: 'Search Episode',
+        audioUrl: 'https://example.com/search.mp3',
+      },
+    })
+  })
+
+  it('preserves both editorPickSnapshot and episodeSnapshot when both are valid', () => {
+    const editorPickSnapshot = makeEditorPickPodcast({
+      podcastItunesId: '1200361736',
+    })
+
+    const state = getEditorPickRouteState({
+      editorPickSnapshot,
+      episodeSnapshot: {
+        title: 'Search Episode',
+        audioUrl: 'https://example.com/search.mp3',
+      },
+    })
+
+    expect(state).toEqual({
+      editorPickSnapshot,
+      episodeSnapshot: {
+        title: 'Search Episode',
+        audioUrl: 'https://example.com/search.mp3',
+      },
+    })
+  })
+
+  it('rejects route state without a usable editor pick or episode snapshot', () => {
+    expect(
+      getEditorPickRouteState({
+        episodeSnapshot: {
+          title: '   ',
+        },
+      })
+    ).toBeNull()
   })
 })

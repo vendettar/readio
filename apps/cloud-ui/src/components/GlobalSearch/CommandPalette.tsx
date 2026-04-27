@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { type LocalSearchResult, useGlobalSearch } from '../../hooks/useGlobalSearch'
 import { useNetworkStatus } from '../../hooks/useNetworkStatus'
 import type { SearchPodcast as PodcastType, SearchEpisode } from '../../lib/discovery'
+import { buildSearchEpisodeRouteState } from '../../lib/discovery/editorPicks'
 import { executeLocalSearchAction } from '../../lib/localSearchActions'
 import { buildSearchEpisodeRoute } from '../../lib/routes/episodeResolver'
 import { buildPodcastShowRoute, normalizeCountryParam } from '../../lib/routes/podcastRoutes'
@@ -214,13 +215,16 @@ export function CommandPalette() {
   const handleSelectEpisode = async (episode: SearchEpisode) => {
     closeOverlay()
     toMini()
-    const route = buildSearchEpisodeRoute(
+    const routeObject = buildSearchEpisodeRoute(
       episode.podcastItunesId?.toString(),
       episode.episodeGuid,
       globalCountry
     )
-    if (route) {
-      void navigate(route)
+    if (routeObject) {
+      void navigate({
+        ...routeObject,
+        state: buildSearchEpisodeRouteState(episode) as never,
+      })
     }
   }
 

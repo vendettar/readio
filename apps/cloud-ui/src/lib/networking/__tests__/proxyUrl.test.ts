@@ -5,7 +5,7 @@ vi.mock('../../runtimeConfig', () => ({
 }))
 
 import { getAppConfig } from '../../runtimeConfig'
-import { buildProxyUrl, getCorsProxyConfig } from '../proxyUrl'
+import { buildProxyUrl, getNetworkProxyConfig } from '../proxyUrl'
 
 describe('networking/proxyUrl', () => {
   beforeEach(() => {
@@ -28,10 +28,10 @@ describe('networking/proxyUrl', () => {
 
   it('returns custom proxy config with normalized URL', () => {
     vi.mocked(getAppConfig).mockReturnValue({
-      CORS_PROXY_URL: 'https://custom.proxy///',
+      NETWORK_PROXY_URL: 'https://custom.proxy///',
     } as never)
 
-    expect(getCorsProxyConfig()).toEqual({
+    expect(getNetworkProxyConfig()).toEqual({
       proxyUrl: 'https://custom.proxy',
       authHeader: '',
       authValue: '',
@@ -40,10 +40,10 @@ describe('networking/proxyUrl', () => {
 
   it('returns empty proxyUrl when custom is empty', () => {
     vi.mocked(getAppConfig).mockReturnValue({
-      CORS_PROXY_URL: '',
+      NETWORK_PROXY_URL: '',
     } as never)
 
-    expect(getCorsProxyConfig()).toEqual({
+    expect(getNetworkProxyConfig()).toEqual({
       proxyUrl: '',
       authHeader: '',
       authValue: '',

@@ -506,6 +506,14 @@ describe('CommandPalette', () => {
           id: '7',
           episodeKey: buildEpisodeCompactKey('75f3241b-439d-4786-8968-07e05e548074'),
         },
+        state: {
+          episodeSnapshot: {
+            title: 'Episode Name',
+            audioUrl: 'https://example.com/audio.mp3',
+            description: 'desc',
+            pubDate: undefined,
+          },
+        },
       })
     })
     expect(useSearchStore.getState().isOverlayOpen).toBe(false)
@@ -541,6 +549,14 @@ describe('CommandPalette', () => {
           country: 'us',
           id: '7',
           episodeKey: buildEpisodeCompactKey('abc123-def456'),
+        },
+        state: {
+          episodeSnapshot: {
+            title: 'Episode Name',
+            audioUrl: 'https://example.com/audio.mp3',
+            description: 'desc',
+            pubDate: undefined,
+          },
         },
       })
     })

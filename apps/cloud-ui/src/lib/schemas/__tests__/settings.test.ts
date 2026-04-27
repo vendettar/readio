@@ -11,12 +11,8 @@ function makeBaseSettings() {
   return {
     asrProvider: '',
     asrModel: '',
-
     translateKey: '',
     asrKey: '',
-    proxyUrl: '',
-    proxyAuthHeader: '',
-    proxyAuthValue: '',
     pauseOnDictionaryLookup: true,
   }
 }
@@ -36,33 +32,6 @@ function mockAppConfig(
 describe('settings schema', () => {
   afterEach(() => {
     vi.restoreAllMocks()
-  })
-
-  it('accepts empty proxy auth header', () => {
-    const schema = createSettingsFormSchema()
-    const result = schema.safeParse(makeBaseSettings())
-    expect(result.success).toBe(true)
-  })
-
-  it('accepts x-proxy-token as proxy auth header', () => {
-    const schema = createSettingsFormSchema()
-    const result = schema.safeParse({
-      ...makeBaseSettings(),
-      proxyAuthHeader: 'x-proxy-token',
-      proxyAuthValue: 'secret',
-    })
-    expect(result.success).toBe(true)
-  })
-
-  it('rejects unsupported proxy auth header', () => {
-    const schema = createSettingsFormSchema()
-    const result = schema.safeParse({
-      ...makeBaseSettings(),
-      proxyAuthHeader: 'authorization',
-      proxyAuthValue: 'secret',
-    })
-
-    expect(result.success).toBe(false)
   })
 
   it('accepts valid provider+model pair', () => {

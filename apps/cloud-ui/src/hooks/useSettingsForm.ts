@@ -20,7 +20,6 @@ import {
   getSettingsSnapshot,
   getSettingsWriteEpoch,
   normalizeAsrPreferenceValues,
-  normalizeProxyAuthHeader,
   SETTINGS_STORAGE_KEY,
   type SettingsCredentialValues,
   type SettingsFormValues,
@@ -68,9 +67,6 @@ export function useSettingsForm() {
       asrModel: '',
       asrKey: '',
       translateKey: '',
-      proxyUrl: '',
-      proxyAuthHeader: '',
-      proxyAuthValue: '',
       pauseOnDictionaryLookup: true,
     },
     mode: 'onBlur', // Validate on blur for better UX
@@ -122,9 +118,6 @@ export function useSettingsForm() {
 
     const preferences: SettingsPreferenceValues = {
       ...normalizedAsr,
-      proxyUrl: values.proxyUrl,
-      proxyAuthHeader: normalizeProxyAuthHeader(values.proxyAuthHeader),
-      proxyAuthValue: values.proxyAuthValue,
       pauseOnDictionaryLookup: values.pauseOnDictionaryLookup,
     }
     const credentials: SettingsCredentialValues = {

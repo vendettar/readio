@@ -1,7 +1,4 @@
-import { SETTINGS_STORAGE_KEY } from '../../constants/storage'
 import { getAppConfig } from '../runtimeConfig'
-import type { SettingsPreferenceValues } from '../schemas/settings'
-import { getJson } from '../storage'
 
 function normalizeCustomProxyUrl(url: string): string {
   const trimmed = String(url || '').trim()
@@ -9,18 +6,16 @@ function normalizeCustomProxyUrl(url: string): string {
   return trimmed.replace(/\/+$/, '')
 }
 
-export function getCorsProxyConfig(): { proxyUrl: string; authHeader: string; authValue: string } {
+export function getNetworkProxyConfig(): {
+  proxyUrl: string
+  authHeader: string
+  authValue: string
+} {
   const config = getAppConfig()
-  const userSettings = getJson<SettingsPreferenceValues>(SETTINGS_STORAGE_KEY)
 
-  const rawUrl = userSettings?.proxyUrl || config.CORS_PROXY_URL || ''
-  const proxyUrl = normalizeCustomProxyUrl(rawUrl)
-  const authHeader = String(
-    userSettings?.proxyAuthHeader || config.CORS_PROXY_AUTH_HEADER || ''
-  ).trim()
-  const authValue = String(
-    userSettings?.proxyAuthValue || config.CORS_PROXY_AUTH_VALUE || ''
-  ).trim()
+  const proxyUrl = normalizeCustomProxyUrl(config.NETWORK_PROXY_URL || '')
+  const authHeader = String(config.NETWORK_PROXY_AUTH_HEADER || '').trim()
+  const authValue = String(config.NETWORK_PROXY_AUTH_VALUE || '').trim()
 
   return {
     proxyUrl,

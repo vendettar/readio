@@ -5,7 +5,7 @@ import {
   __resetCloudBackendBreakerForTests,
   buildProxyUrl,
   CLOUD_BACKEND_FALLBACK_CLASSES,
-  checkCorsProxyHealth,
+  checkNetworkProxyHealth,
   fetchWithFallback,
 } from '../fetchUtils'
 import type { AppConfig } from '../runtimeConfig'
@@ -45,7 +45,7 @@ describe('fetchUtils: fetchWithFallback', () => {
     vi.mocked(runtimeConfig.getAppConfig).mockReturnValue({
       PROXY_TIMEOUT_MS: 100,
       DIRECT_TIMEOUT_MS: 50,
-      CORS_PROXY_URL: '',
+      NETWORK_PROXY_URL: '',
       ...overrides,
     } as AppConfig)
     vi.mocked(runtimeConfig.isRuntimeConfigReady).mockReturnValue(true)
@@ -70,7 +70,7 @@ describe('fetchUtils: fetchWithFallback', () => {
   })
 
   it('Scenario 2: Direct fails (CORS) and NO proxy configured', async () => {
-    setupConfig({ CORS_PROXY_URL: '' })
+    setupConfig({ NETWORK_PROXY_URL: '' })
     server.use(http.get(url, () => HttpResponse.error()))
 
     await expect(fetchWithFallback(url)).rejects.toThrow(/Network failure/)
@@ -79,9 +79,9 @@ describe('fetchUtils: fetchWithFallback', () => {
   it('Scenario 3: Custom Proxy priority (POST-only contract)', async () => {
     const customProxy = 'https://my-proxy.com'
     setupConfig({
-      CORS_PROXY_URL: customProxy,
-      CORS_PROXY_AUTH_HEADER: 'x-proxy-token',
-      CORS_PROXY_AUTH_VALUE: 'test-token',
+      NETWORK_PROXY_URL: customProxy,
+      NETWORK_PROXY_AUTH_HEADER: 'x-proxy-token',
+      NETWORK_PROXY_AUTH_VALUE: 'test-token',
     })
 
     server.use(
@@ -103,7 +103,7 @@ describe('fetchUtils: fetchWithFallback', () => {
   it('Scenario 3b: HEAD request via Custom Proxy (POST transport)', async () => {
     const customProxy = 'https://my-proxy.com'
     setupConfig({
-      CORS_PROXY_URL: customProxy,
+      NETWORK_PROXY_URL: customProxy,
     })
 
     server.use(
@@ -123,7 +123,7 @@ describe('fetchUtils: fetchWithFallback', () => {
 
   it('Scenario 3c: POST with body and custom headers via Custom Proxy', async () => {
     const customProxy = 'https://my-proxy.com'
-    setupConfig({ CORS_PROXY_URL: customProxy })
+    setupConfig({ NETWORK_PROXY_URL: customProxy })
 
     server.use(
       http.post(url, () => HttpResponse.error()),
@@ -156,9 +156,9 @@ describe('fetchUtils: fetchWithFallback', () => {
   it('skips invalid dynamic auth header when auth value exists but header name is empty', async () => {
     const customProxy = 'https://my-proxy.com'
     setupConfig({
-      CORS_PROXY_URL: customProxy,
-      CORS_PROXY_AUTH_HEADER: '',
-      CORS_PROXY_AUTH_VALUE: 'test-token',
+      NETWORK_PROXY_URL: customProxy,
+      NETWORK_PROXY_AUTH_HEADER: '',
+      NETWORK_PROXY_AUTH_VALUE: 'test-token',
     })
 
     server.use(
@@ -191,7 +191,7 @@ describe('fetchUtils: fetchWithFallback', () => {
   it('Scenario 5: Timeout skips to next in chain', async () => {
     const customProxy = 'https://my-proxy.com'
     setupConfig({
-      CORS_PROXY_URL: customProxy,
+      NETWORK_PROXY_URL: customProxy,
       DIRECT_TIMEOUT_MS: 50,
       PROXY_TIMEOUT_MS: 100,
     })
@@ -215,7 +215,7 @@ describe('fetchUtils: fetchWithFallback', () => {
   it('skips custom proxy when runtime config is not ready', async () => {
     const customProxy = 'https://my-proxy.com'
     setupConfig({
-      CORS_PROXY_URL: customProxy,
+      NETWORK_PROXY_URL: customProxy,
     })
     vi.mocked(runtimeConfig.isRuntimeConfigReady).mockReturnValue(false)
 
@@ -234,7 +234,7 @@ describe('fetchUtils: fetchWithFallback', () => {
   it('Scenario: 5xx Upstream Retry (wait and retry proxy-only)', async () => {
     vi.useFakeTimers()
     setupConfig({
-      CORS_PROXY_URL: 'https://my-proxy.com/',
+      NETWORK_PROXY_URL: 'https://my-proxy.com/',
       PROXY_TIMEOUT_MS: 100,
     })
 
@@ -467,10 +467,10 @@ describe('fetchUtils: fetchWithFallback', () => {
   })
 })
 
-describe('fetchUtils: checkCorsProxyHealth', () => {
+describe('fetchUtils: checkNetworkProxyHealth', () => {
   const setupConfig = (overrides: Partial<AppConfig> = {}) => {
     vi.mocked(runtimeConfig.getAppConfig).mockReturnValue({
-      CORS_PROXY_URL: '',
+      NETWORK_PROXY_URL: '',
       ...overrides,
     } as AppConfig)
   }
@@ -483,9 +483,9 @@ describe('fetchUtils: checkCorsProxyHealth', () => {
   it('reports "custom" type when using user proxy (POST contract)', async () => {
     const myProxy = 'https://my-worker.io'
     setupConfig({
-      CORS_PROXY_URL: myProxy,
-      CORS_PROXY_AUTH_HEADER: 'x-proxy-token',
-      CORS_PROXY_AUTH_VALUE: 'test-token',
+      NETWORK_PROXY_URL: myProxy,
+      NETWORK_PROXY_AUTH_HEADER: 'x-proxy-token',
+      NETWORK_PROXY_AUTH_VALUE: 'test-token',
     })
 
     server.use(
@@ -494,12 +494,12 @@ describe('fetchUtils: checkCorsProxyHealth', () => {
       })
     )
 
-    const result = await checkCorsProxyHealth()
+    const result = await checkNetworkProxyHealth()
     expect(result.ok).toBe(true)
   })
 
   it('uses runtime proxy overrides (unsaved form values) during verify', async () => {
-    setupConfig({ CORS_PROXY_URL: '' })
+    setupConfig({ NETWORK_PROXY_URL: '' })
     const formProxy = 'https://unsaved-proxy.example'
 
     server.use(
@@ -509,7 +509,7 @@ describe('fetchUtils: checkCorsProxyHealth', () => {
       })
     )
 
-    const result = await checkCorsProxyHealth({
+    const result = await checkNetworkProxyHealth({
       proxyConfig: {
         proxyUrl: formProxy,
         authHeader: 'x-proxy-token',
@@ -522,8 +522,8 @@ describe('fetchUtils: checkCorsProxyHealth', () => {
   })
 
   it('reports failed state cleanly when no proxy and health check fails', async () => {
-    setupConfig({ CORS_PROXY_URL: '' })
-    const result = await checkCorsProxyHealth()
+    setupConfig({ NETWORK_PROXY_URL: '' })
+    const result = await checkNetworkProxyHealth()
     expect(result.ok).toBe(false)
     if (!result.ok) {
       expect(result.error).toBe('No proxy configured')

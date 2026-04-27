@@ -18,7 +18,9 @@ describe('runtimeConfig schema parity', () => {
 
   it('maps representative runtime env values with expected coercion', async () => {
     window.__READIO_ENV__ = {
-      READIO_CORS_PROXY_URL: 'https://proxy.example.com',
+      READIO_NETWORK_PROXY_URL: 'https://proxy.example.com',
+      READIO_NETWORK_PROXY_AUTH_HEADER: 'x-proxy-token',
+      READIO_NETWORK_PROXY_AUTH_VALUE: 'proxy-public-token',
       READIO_ASR_RELAY_PUBLIC_TOKEN: 'relay-public-token',
       READIO_PROXY_TIMEOUT_MS: '1234',
       READIO_DEFAULT_LANGUAGE: 'ZH-CN',
@@ -32,7 +34,9 @@ describe('runtimeConfig schema parity', () => {
     const { getAppConfig } = await import('../runtimeConfig')
     const config = getAppConfig()
 
-    expect(config.CORS_PROXY_URL).toBe('https://proxy.example.com')
+    expect(config.NETWORK_PROXY_URL).toBe('https://proxy.example.com')
+    expect(config.NETWORK_PROXY_AUTH_HEADER).toBe('x-proxy-token')
+    expect(config.NETWORK_PROXY_AUTH_VALUE).toBe('proxy-public-token')
     expect(config.ASR_RELAY_PUBLIC_TOKEN).toBe('relay-public-token')
     expect(config.PROXY_TIMEOUT_MS).toBe(1234)
     expect(config.DEFAULT_LANGUAGE).toBe('zh')
@@ -41,6 +45,17 @@ describe('runtimeConfig schema parity', () => {
     expect(config.ASR_API_KEY).toBe('public_asr_token')
     expect(config.OPENAI_API_KEY).toBe('public_translate_token')
     expect(config.FALLBACK_PODCAST_IMAGE).toBe('/placeholder.svg')
+  })
+
+  it('accepts the default same-origin proxy route as a relative runtime URL', async () => {
+    window.__READIO_ENV__ = {
+      READIO_NETWORK_PROXY_URL: '/api/proxy',
+    }
+
+    const { getAppConfig } = await import('../runtimeConfig')
+    const config = getAppConfig()
+
+    expect(config.NETWORK_PROXY_URL).toBe('/api/proxy')
   })
 
   it('rejects known upstream secret key formats from browser runtime env', async () => {
@@ -58,14 +73,14 @@ describe('runtimeConfig schema parity', () => {
 
   it('falls back to defaults on invalid values', async () => {
     window.__READIO_ENV__ = {
-      READIO_CORS_PROXY_AUTH_HEADER: 'authorization',
+      READIO_NETWORK_PROXY_AUTH_HEADER: 'authorization',
       READIO_MAX_CONCURRENT_REQUESTS: '-1',
     }
 
     const { getAppConfig, DEFAULTS } = await import('../runtimeConfig')
     const config = getAppConfig()
 
-    expect(config.CORS_PROXY_AUTH_HEADER).toBe(DEFAULTS.CORS_PROXY_AUTH_HEADER)
+    expect(config.NETWORK_PROXY_AUTH_HEADER).toBe(DEFAULTS.NETWORK_PROXY_AUTH_HEADER)
     expect(config.MAX_CONCURRENT_REQUESTS).toBe(DEFAULTS.MAX_CONCURRENT_REQUESTS)
   })
 
@@ -161,6 +176,9 @@ describe('runtimeConfig schema parity', () => {
     'READIO_DEFAULT_PODCAST_CONTENT_COUNTRY',
     'READIO_DEFAULT_LANGUAGE',
     'READIO_FALLBACK_PODCAST_IMAGE',
+    'READIO_NETWORK_PROXY_URL',
+    'READIO_NETWORK_PROXY_AUTH_HEADER',
+    'READIO_NETWORK_PROXY_AUTH_VALUE',
   ] as const
 
   it('verifies Go allowlist keys exist in frontend ENV_MAP', async () => {

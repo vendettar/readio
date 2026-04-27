@@ -115,16 +115,24 @@ export function truncateText(text: string, maxLength: number): string {
 }
 /**
  * Automatically convert text URLs into clickable links.
- * Simple implementation that avoids double-wrapping existing links.
+ * Safe implementation that ignores URLs already inside HTML tags.
  */
 export function linkifyHtml(html: string): string {
   if (!html) return ''
 
-  // Regex to find URLs that are not already part of an <a> tag
-  // This is a heuristic: it avoids URLs preceded by href=" or >
-  // but it's not perfect for all HTML cases.
-  const URL_REGEX = /(?<!href="|">)(https?:\/\/[^\s<]+)/g
-  return html.replace(URL_REGEX, (url) => {
-    return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`
+  // Regex to find URLs that are not already part of an <a> tag or any other HTML tag.
+  // 1. (<a\b[^>]*>[\s\S]*?<\/a>) Matches entire <a> tags and their contents to ignore them.
+  // 2. (<[^>]+>) Matches any other HTML tag to ignore them.
+  // 3. (https?:\/\/[^\s<"']+) Matches URLs in plain text.
+  const regex = /(<a\b[^>]*>[\s\S]*?<\/a>)|(<[^>]+>)|(https?:\/\/[^\s<"']+)/gi
+
+  return html.replace(regex, (match, aTag, otherTag, url) => {
+    if (aTag || otherTag) {
+      return match // Leave HTML tags untouched
+    }
+    if (url) {
+      return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`
+    }
+    return match
   })
 }
