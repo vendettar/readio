@@ -43,8 +43,7 @@ function parseEpisodeSnapshot(value: unknown): EpisodeSnapshot | undefined {
   const audioUrl = normalizeOptionalString(
     typeof snapshot.audioUrl === 'string' ? snapshot.audioUrl : undefined
   )
-  const description =
-    typeof snapshot.description === 'string' ? snapshot.description : undefined
+  const description = typeof snapshot.description === 'string' ? snapshot.description : undefined
   const pubDate = typeof snapshot.pubDate === 'string' ? snapshot.pubDate : undefined
 
   if (!title && !audioUrl) return undefined

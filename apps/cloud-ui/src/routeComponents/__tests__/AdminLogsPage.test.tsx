@@ -148,7 +148,7 @@ describe('AdminLogsPage token UX', () => {
     expect(screen.queryByPlaceholderText('Bearer token')).toBeNull()
     expect(screen.getByText('Token loaded')).not.toBeNull()
     expect(screen.getByRole('button', { name: 'Change' })).not.toBeNull()
-    expect(screen.getByRole('button', { name: 'Clear' })).not.toBeNull()
+    expect(screen.getAllByRole('button', { name: 'Clear' })[0]).not.toBeNull()
     expect(screen.queryByRole('button', { name: 'Use token' })).toBeNull()
 
     await waitFor(() => {
@@ -177,7 +177,7 @@ describe('AdminLogsPage token UX', () => {
     render(<AdminLogsPage />)
 
     await screen.findByText('Token loaded')
-    fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
+    fireEvent.click(screen.getAllByRole('button', { name: 'Clear' })[0])
 
     expect(sessionStorage.getItem(SESSION_KEY)).toBeNull()
     expect(screen.getByPlaceholderText('Bearer token')).not.toBeNull()
@@ -216,7 +216,7 @@ describe('AdminLogsPage token UX', () => {
     expect(fetchAdminLogsMock).toHaveBeenCalledTimes(2)
     expect(fetchAdminHealthMock).toHaveBeenCalledTimes(2)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Clear' }))
+    fireEvent.click(screen.getAllByRole('button', { name: 'Clear' })[0])
 
     await act(async () => {
       vi.advanceTimersByTime(20000)
