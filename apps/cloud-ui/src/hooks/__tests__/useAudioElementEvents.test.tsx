@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { PlaybackRepository } from '../../lib/repositories/PlaybackRepository'
 import { usePlayerStore } from '../../store/playerStore'
 import { useSleepTimerStore } from '../../store/sleepTimerStore'
+import type { AudioFallbackRecoveryState } from '../audioFallbackRecovery'
 import { useAudioElementEvents } from '../useAudioElementEvents'
 
 vi.mock('../../lib/logger', () => ({
@@ -40,6 +41,7 @@ function Harness({
   const audioRef = useRef<HTMLAudioElement>(null)
   const isVisibleRef = useRef(isVisible)
   const lastProgressUpdateRef = useRef(0)
+  const recoveryRef = useRef<AudioFallbackRecoveryState>({ isRecovering: false })
 
   useAudioElementEvents({
     audioRef,
@@ -48,6 +50,7 @@ function Harness({
     onPlay,
     onPause,
     onLoadedMetadata,
+    recoveryRef,
     t,
   })
 
@@ -117,6 +120,58 @@ describe('useAudioElementEvents', () => {
     })
     expect(usePlayerStore.getState().status).toBe('error')
     expect(usePlayerStore.getState().isPlaying).toBe(false)
+  })
+
+  it('suppresses error and pause state transitions while a proxy fallback recovery is in progress', async () => {
+    const onPause = vi.fn()
+
+    function RecoveryHarness() {
+      const audioRef = useRef<HTMLAudioElement>(null)
+      const isVisibleRef = useRef(true)
+      const lastProgressUpdateRef = useRef(0)
+      const recoveryRef = useRef<AudioFallbackRecoveryState>({ isRecovering: true })
+
+      useAudioElementEvents({
+        audioRef,
+        isVisibleRef,
+        lastProgressUpdateRef,
+        onPlay: vi.fn(),
+        onPause,
+        onLoadedMetadata: vi.fn(),
+        recoveryRef,
+        t: ((key: string) => key) as unknown as TFunction,
+      })
+
+      // biome-ignore lint/a11y/useMediaCaption: test-only audio element
+      return <audio ref={audioRef} data-testid="audio-events-target" />
+    }
+
+    const { getByTestId } = render(<RecoveryHarness />)
+    const audio = getByTestId('audio-events-target') as HTMLAudioElement
+
+    act(() => {
+      usePlayerStore.getState().setAudioUrl('https://example.com/audio.mp3', 'Track')
+      usePlayerStore.getState().play()
+      usePlayerStore.getState().setStatus('loading')
+    })
+
+    Object.defineProperty(audio, 'error', {
+      configurable: true,
+      get: () =>
+        ({
+          code: 2,
+          message: 'network down',
+        }) as MediaError,
+    })
+
+    await act(async () => {
+      fireEvent.pause(audio)
+      fireEvent.error(audio)
+    })
+
+    expect(onPause).not.toHaveBeenCalled()
+    expect(usePlayerStore.getState().status).toBe('loading')
+    expect(usePlayerStore.getState().isPlaying).toBe(true)
   })
 
   it('persists ended session as completed progress=0 to prevent tail resume', async () => {

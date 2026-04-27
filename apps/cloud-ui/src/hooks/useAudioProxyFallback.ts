@@ -2,11 +2,14 @@ import type React from 'react'
 import { useCallback, useEffect, useRef } from 'react'
 import { warn } from '../lib/logger'
 import { buildProxyUrl, getNetworkProxyConfig } from '../lib/networking/proxyUrl'
+import { usePlayerStore } from '../store/playerStore'
+import type { AudioFallbackRecoveryState } from './audioFallbackRecovery'
 import { useEventListener } from './useEventListener'
 
 interface UseAudioProxyFallbackParams {
   audioRef: React.RefObject<HTMLAudioElement | null>
   audioUrl: string | null
+  recoveryRef: React.MutableRefObject<AudioFallbackRecoveryState>
 }
 
 function isSameOriginProxyUrl(proxyUrl: string): boolean {
@@ -22,18 +25,28 @@ function isSameOriginProxyUrl(proxyUrl: string): boolean {
   }
 }
 
-export function useAudioProxyFallback({ audioRef, audioUrl }: UseAudioProxyFallbackParams): void {
+function clearRecoveryState(recoveryRef: React.MutableRefObject<AudioFallbackRecoveryState>): void {
+  recoveryRef.current.isRecovering = false
+}
+
+export function useAudioProxyFallback({
+  audioRef,
+  audioUrl,
+  recoveryRef,
+}: UseAudioProxyFallbackParams): void {
   const attemptedAudioUrlRef = useRef<string | null>(null)
   const pendingResumeTimeRef = useRef<number | null>(null)
   const pendingResumePlaybackRef = useRef(false)
 
   useEffect(() => {
-    if (audioUrl || !audioUrl) {
-      attemptedAudioUrlRef.current = null
-      pendingResumeTimeRef.current = null
-      pendingResumePlaybackRef.current = false
-    }
-  }, [audioUrl])
+    const nextAudioUrl = audioUrl
+    if (nextAudioUrl === attemptedAudioUrlRef.current) return
+
+    attemptedAudioUrlRef.current = null
+    pendingResumeTimeRef.current = null
+    pendingResumePlaybackRef.current = false
+    clearRecoveryState(recoveryRef)
+  }, [audioUrl, recoveryRef])
 
   const handleError = useCallback(() => {
     const audio = audioRef.current
@@ -42,6 +55,7 @@ export function useAudioProxyFallback({ audioRef, audioUrl }: UseAudioProxyFallb
     const { proxyUrl: proxyBase } = getNetworkProxyConfig()
     if (!proxyBase) return
     if (!isSameOriginProxyUrl(proxyBase)) {
+      clearRecoveryState(recoveryRef)
       warn(
         '[AudioProxyFallback] Skipping proxy retry because audio fallback only supports same-origin proxy URLs.',
         { proxyUrl: proxyBase }
@@ -50,6 +64,7 @@ export function useAudioProxyFallback({ audioRef, audioUrl }: UseAudioProxyFallb
     }
 
     if (attemptedAudioUrlRef.current === audioUrl) {
+      clearRecoveryState(recoveryRef)
       warn('[AudioProxyFallback] Proxy also failed, giving up.', { audioUrl })
       return
     }
@@ -61,28 +76,35 @@ export function useAudioProxyFallback({ audioRef, audioUrl }: UseAudioProxyFallb
         proxied: proxiedUrl,
       })
 
+      recoveryRef.current.isRecovering = true
       attemptedAudioUrlRef.current = audioUrl
       pendingResumeTimeRef.current = Number.isFinite(audio.currentTime) ? audio.currentTime : null
-      pendingResumePlaybackRef.current = !audio.paused
+      pendingResumePlaybackRef.current = usePlayerStore.getState().isPlaying
+
+      // Keep the player surface in loading until the fallback chain reaches a final outcome.
+      usePlayerStore.getState().setStatus('loading')
 
       audio.src = proxiedUrl
       audio.load()
     } catch (err) {
+      clearRecoveryState(recoveryRef)
       pendingResumeTimeRef.current = null
       pendingResumePlaybackRef.current = false
       warn('[AudioProxyFallback] Failed to build proxy URL:', err)
     }
-  }, [audioRef, audioUrl])
+  }, [audioRef, audioUrl, recoveryRef])
 
   const handleLoadedMetadata = useCallback(() => {
     const audio = audioRef.current
     if (!audio) return
 
     const resumeTime = pendingResumeTimeRef.current
-    const shouldResumePlayback = pendingResumePlaybackRef.current
+    const shouldResumePlayback =
+      pendingResumePlaybackRef.current && usePlayerStore.getState().isPlaying
 
     pendingResumeTimeRef.current = null
     pendingResumePlaybackRef.current = false
+    clearRecoveryState(recoveryRef)
 
     if (resumeTime !== null) {
       try {
@@ -97,7 +119,7 @@ export function useAudioProxyFallback({ audioRef, audioUrl }: UseAudioProxyFallb
         // Autoplay might be blocked after recovery; keep the retry best-effort.
       })
     }
-  }, [audioRef])
+  }, [audioRef, recoveryRef])
 
   useEventListener('error', handleError, audioRef)
   useEventListener('loadedmetadata', handleLoadedMetadata, audioRef)

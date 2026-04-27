@@ -1,6 +1,8 @@
 import { fireEvent, render } from '@testing-library/react'
 import { useRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { usePlayerStore } from '../../store/playerStore'
+import type { AudioFallbackRecoveryState } from '../audioFallbackRecovery'
 import { useAudioProxyFallback } from '../useAudioProxyFallback'
 
 const { buildProxyUrlMock, getNetworkProxyConfigMock, warnMock } = vi.hoisted(() => ({
@@ -29,7 +31,8 @@ interface HarnessProps {
 
 function Harness({ audioUrl }: HarnessProps) {
   const audioRef = useRef<HTMLAudioElement>(null)
-  useAudioProxyFallback({ audioRef, audioUrl })
+  const recoveryRef = useRef<AudioFallbackRecoveryState>({ isRecovering: false })
+  useAudioProxyFallback({ audioRef, audioUrl, recoveryRef })
 
   // biome-ignore lint/a11y/useMediaCaption: test-only audio element
   return <audio ref={audioRef} data-testid="audio-proxy-fallback-target" />
@@ -37,6 +40,7 @@ function Harness({ audioUrl }: HarnessProps) {
 
 describe('useAudioProxyFallback', () => {
   beforeEach(() => {
+    usePlayerStore.getState().reset()
     vi.clearAllMocks()
     getNetworkProxyConfigMock.mockReturnValue({
       proxyUrl: '/api/proxy',
@@ -56,11 +60,16 @@ describe('useAudioProxyFallback', () => {
     const loadSpy = vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {})
     const playSpy = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined)
 
+    usePlayerStore.setState({
+      isPlaying: true,
+      status: 'loading',
+    })
+
     const { getByTestId } = render(<Harness audioUrl="https://cdn.example.com/audio.mp3" />)
     const audio = getByTestId('audio-proxy-fallback-target') as HTMLAudioElement
 
     Object.defineProperty(audio, 'currentTime', { value: 37, writable: true, configurable: true })
-    Object.defineProperty(audio, 'paused', { value: false, configurable: true })
+    Object.defineProperty(audio, 'paused', { value: true, configurable: true })
 
     fireEvent.error(audio)
 
@@ -75,6 +84,7 @@ describe('useAudioProxyFallback', () => {
 
     expect(audio.currentTime).toBe(37)
     expect(playSpy).toHaveBeenCalledTimes(1)
+    expect(usePlayerStore.getState().status).toBe('loading')
   })
 
   it('does not retry indefinitely when proxied playback also errors', () => {

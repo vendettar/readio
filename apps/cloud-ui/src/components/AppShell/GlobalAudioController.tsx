@@ -7,6 +7,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import type { AudioFallbackRecoveryState } from '../../hooks/audioFallbackRecovery'
 import { useAudioElementEvents } from '../../hooks/useAudioElementEvents'
 import { useAudioElementSync } from '../../hooks/useAudioElementSync'
 import { useAudioProxyFallback } from '../../hooks/useAudioProxyFallback'
@@ -23,6 +24,7 @@ import { usePlayerStore } from '../../store/playerStore'
 export function GlobalAudioController() {
   const { t } = useTranslation()
   const audioRef = useRef<HTMLAudioElement>(null)
+  const recoveryRef = useRef<AudioFallbackRecoveryState>({ isRecovering: false })
   const isVisible = usePageVisibility()
   const isVisibleRef = useRef(isVisible)
   const lastProgressUpdateRef = useRef(0)
@@ -108,6 +110,7 @@ export function GlobalAudioController() {
 
   useAudioElementSync({ audioRef, audioUrl, volume, playbackRate })
   useForegroundAudioPrefetch({ audioRef, audioUrl })
+  useAudioProxyFallback({ audioRef, audioUrl, recoveryRef })
   useAudioElementEvents({
     audioRef,
     isVisibleRef,
@@ -115,10 +118,10 @@ export function GlobalAudioController() {
     onPlay: handlePlay,
     onPause: handlePause,
     onLoadedMetadata: handleMetadataReady,
+    recoveryRef,
     t,
   })
   useAutoplayRetry({ audioRef, audioUrl, isPlaying })
-  useAudioProxyFallback({ audioRef, audioUrl })
 
   // Monitor pendingSeek and sync to audio element
   useEffect(() => {
