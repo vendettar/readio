@@ -4,6 +4,7 @@ import { mapAudioErrorMessage } from '../lib/audioErrors'
 import { warn } from '../lib/logger'
 import { usePlayerStore } from '../store/playerStore'
 import { useSleepTimerStore } from '../store/sleepTimerStore'
+import type { AudioFallbackRecoveryState } from './audioFallbackRecovery'
 import { useEventListener } from './useEventListener'
 
 interface UseAudioElementEventsParams {
@@ -13,6 +14,7 @@ interface UseAudioElementEventsParams {
   onPlay: () => void
   onPause: () => void
   onLoadedMetadata?: () => void
+  recoveryRef: React.MutableRefObject<AudioFallbackRecoveryState>
   t: TFunction
 }
 
@@ -23,6 +25,7 @@ export function useAudioElementEvents({
   onPlay,
   onPause,
   onLoadedMetadata,
+  recoveryRef,
   t,
 }: UseAudioElementEventsParams): void {
   useEventListener(
@@ -61,7 +64,16 @@ export function useAudioElementEvents({
   )
 
   useEventListener('play', onPlay, audioRef)
-  useEventListener('pause', onPause, audioRef)
+  useEventListener(
+    'pause',
+    () => {
+      if (recoveryRef.current.isRecovering && usePlayerStore.getState().isPlaying) {
+        return
+      }
+      onPause()
+    },
+    audioRef
+  )
 
   useEventListener(
     'ended',
@@ -111,6 +123,10 @@ export function useAudioElementEvents({
   useEventListener(
     'error',
     () => {
+      if (recoveryRef.current.isRecovering) {
+        return
+      }
+
       const audio = audioRef.current
       if (!audio) return
       const err = audio.error

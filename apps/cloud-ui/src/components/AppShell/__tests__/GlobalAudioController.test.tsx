@@ -5,6 +5,10 @@ import { usePlayerStore } from '../../../store/playerStore'
 import { GlobalAudioController } from '../GlobalAudioController'
 
 const { useMediaSessionMock } = vi.hoisted(() => ({ useMediaSessionMock: vi.fn() }))
+const { buildProxyUrlMock, getNetworkProxyConfigMock } = vi.hoisted(() => ({
+  buildProxyUrlMock: vi.fn(),
+  getNetworkProxyConfigMock: vi.fn(),
+}))
 const { prevSmartSpy, nextSmartSpy } = vi.hoisted(() => ({
   prevSmartSpy: vi.fn(),
   nextSmartSpy: vi.fn(),
@@ -34,6 +38,10 @@ vi.mock('../../../hooks/useSession', () => ({
 }))
 vi.mock('../../../hooks/useTabSync', () => ({ useTabSync: vi.fn() }))
 vi.mock('../../../lib/toast', () => ({ toast: { infoKey: vi.fn(), errorKey: vi.fn() } }))
+vi.mock('../../../lib/networking/proxyUrl', () => ({
+  buildProxyUrl: (...args: unknown[]) => buildProxyUrlMock(...args),
+  getNetworkProxyConfig: () => getNetworkProxyConfigMock(),
+}))
 
 // VERY IMPORTANT: Mock HTMLMediaElement.prototype.play/pause BEFORE use
 if (typeof HTMLMediaElement !== 'undefined') {
@@ -48,6 +56,14 @@ describe('GlobalAudioController', () => {
       usePlayerStore.getState().reset()
     })
     vi.clearAllMocks()
+    getNetworkProxyConfigMock.mockReturnValue({
+      proxyUrl: '/api/proxy',
+      authHeader: '',
+      authValue: '',
+    })
+    buildProxyUrlMock.mockImplementation((proxyBase: string, audioUrl: string) => {
+      return `${proxyBase}?url=${encodeURIComponent(audioUrl)}`
+    })
   })
 
   it('updates player progress on audio timeupdate', async () => {
@@ -201,6 +217,205 @@ describe('GlobalAudioController', () => {
     expect(usePlayerStore.getState().status).toBe('paused')
 
     playSpy.mockRestore()
+  })
+
+  it('keeps the player in loading during recoverable direct-audio failure until proxy recovery finishes', async () => {
+    const playSpy = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined)
+    const setPlayerErrorSpy = vi.spyOn(usePlayerStore.getState(), 'setPlayerError')
+    const pauseSpy = vi.spyOn(usePlayerStore.getState(), 'pause')
+    const { container, rerender } = render(<GlobalAudioController />)
+
+    await act(async () => {
+      usePlayerStore.getState().setAudioUrl('https://cdn.example.com/audio.mp3', 'Fallback Track')
+      usePlayerStore.getState().play()
+      usePlayerStore.getState().setStatus('loading')
+    })
+
+    rerender(<GlobalAudioController />)
+    const audio = container.querySelector('audio') as HTMLAudioElement
+    expect(audio).toBeTruthy()
+
+    Object.defineProperty(audio, 'currentTime', {
+      configurable: true,
+      value: 12,
+      writable: true,
+    })
+    Object.defineProperty(audio, 'paused', {
+      configurable: true,
+      get: () => true,
+    })
+    Object.defineProperty(audio, 'error', {
+      configurable: true,
+      get: () =>
+        ({
+          code: 4,
+          message: 'source unavailable',
+        }) as MediaError,
+    })
+
+    playSpy.mockClear()
+
+    await act(async () => {
+      fireEvent.error(audio)
+      fireEvent.pause(audio)
+    })
+
+    expect(buildProxyUrlMock).toHaveBeenCalledWith(
+      '/api/proxy',
+      'https://cdn.example.com/audio.mp3'
+    )
+    expect(audio.src).toContain('/api/proxy?url=')
+    expect(setPlayerErrorSpy).not.toHaveBeenCalled()
+    expect(pauseSpy).not.toHaveBeenCalled()
+    expect(usePlayerStore.getState().status).toBe('loading')
+    expect(usePlayerStore.getState().isPlaying).toBe(true)
+  })
+
+  it('auto-resumes playback after proxied metadata loads without requiring another click', async () => {
+    const playSpy = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined)
+    const { container, rerender } = render(<GlobalAudioController />)
+
+    await act(async () => {
+      usePlayerStore.getState().setAudioUrl('https://cdn.example.com/audio.mp3', 'Fallback Track')
+      usePlayerStore.getState().play()
+      usePlayerStore.getState().setStatus('loading')
+    })
+
+    rerender(<GlobalAudioController />)
+    const audio = container.querySelector('audio') as HTMLAudioElement
+    expect(audio).toBeTruthy()
+
+    Object.defineProperty(audio, 'currentTime', {
+      configurable: true,
+      value: 18,
+      writable: true,
+    })
+    Object.defineProperty(audio, 'paused', {
+      configurable: true,
+      get: () => true,
+    })
+    Object.defineProperty(audio, 'error', {
+      configurable: true,
+      get: () =>
+        ({
+          code: 2,
+          message: 'network closed',
+        }) as MediaError,
+    })
+
+    playSpy.mockClear()
+
+    await act(async () => {
+      fireEvent.error(audio)
+      fireEvent.pause(audio)
+    })
+
+    await act(async () => {
+      fireEvent(audio, new Event('loadedmetadata'))
+    })
+
+    expect(playSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not auto-resume after proxy recovery if the user pauses during recovery', async () => {
+    const playSpy = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined)
+    const { container, rerender } = render(<GlobalAudioController />)
+
+    await act(async () => {
+      usePlayerStore.getState().setAudioUrl('https://cdn.example.com/audio.mp3', 'Fallback Track')
+      usePlayerStore.getState().play()
+      usePlayerStore.getState().setStatus('loading')
+    })
+
+    rerender(<GlobalAudioController />)
+    const audio = container.querySelector('audio') as HTMLAudioElement
+    expect(audio).toBeTruthy()
+
+    Object.defineProperty(audio, 'currentTime', {
+      configurable: true,
+      value: 21,
+      writable: true,
+    })
+    Object.defineProperty(audio, 'paused', {
+      configurable: true,
+      get: () => true,
+    })
+    Object.defineProperty(audio, 'error', {
+      configurable: true,
+      get: () =>
+        ({
+          code: 2,
+          message: 'network closed',
+        }) as MediaError,
+    })
+
+    playSpy.mockClear()
+
+    await act(async () => {
+      fireEvent.error(audio)
+    })
+
+    act(() => {
+      usePlayerStore.getState().pause()
+    })
+
+    await act(async () => {
+      fireEvent(audio, new Event('loadedmetadata'))
+    })
+
+    expect(playSpy).not.toHaveBeenCalled()
+    expect(usePlayerStore.getState().isPlaying).toBe(false)
+    expect(usePlayerStore.getState().status).toBe('paused')
+  })
+
+  it('transitions to error only after the proxied retry also fails', async () => {
+    const setPlayerErrorSpy = vi.spyOn(usePlayerStore.getState(), 'setPlayerError')
+    const { container, rerender } = render(<GlobalAudioController />)
+
+    await act(async () => {
+      usePlayerStore.getState().setAudioUrl('https://cdn.example.com/audio.mp3', 'Fallback Track')
+      usePlayerStore.getState().play()
+      usePlayerStore.getState().setStatus('loading')
+    })
+
+    rerender(<GlobalAudioController />)
+    const audio = container.querySelector('audio') as HTMLAudioElement
+    expect(audio).toBeTruthy()
+
+    Object.defineProperty(audio, 'currentTime', {
+      configurable: true,
+      value: 7,
+      writable: true,
+    })
+    Object.defineProperty(audio, 'paused', {
+      configurable: true,
+      get: () => true,
+    })
+    Object.defineProperty(audio, 'error', {
+      configurable: true,
+      get: () =>
+        ({
+          code: 2,
+          message: 'connection dropped',
+        }) as MediaError,
+    })
+
+    await act(async () => {
+      fireEvent.error(audio)
+      fireEvent.pause(audio)
+    })
+
+    expect(setPlayerErrorSpy).not.toHaveBeenCalled()
+    expect(usePlayerStore.getState().status).toBe('loading')
+    expect(usePlayerStore.getState().isPlaying).toBe(true)
+
+    await act(async () => {
+      fireEvent.error(audio)
+    })
+
+    expect(setPlayerErrorSpy).toHaveBeenCalledTimes(1)
+    expect(usePlayerStore.getState().status).toBe('error')
+    expect(usePlayerStore.getState().isPlaying).toBe(false)
   })
 
   it('resets sleep timer on onEnded if isEndOfEpisode is true', async () => {
