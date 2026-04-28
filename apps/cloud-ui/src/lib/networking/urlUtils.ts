@@ -16,6 +16,7 @@ const TRACKING_PREFIXES = [
   /^https?:\/\/podmetrics\.co\/[a-zA-Z0-9-]+\//i,
   /^https?:\/\/prfx\.byspotify\.com\/e\//i,
   /^https?:\/\/chtbl\.com\/track\/[a-zA-Z0-9-]+\//i,
+  /^https?:\/\/prefix\.up\.audio\/s\//i,
 ]
 
 const REMOVE_QUERY_KEYS = new Set([

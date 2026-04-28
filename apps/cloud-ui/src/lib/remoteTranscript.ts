@@ -736,6 +736,12 @@ async function fetchRemoteAudioBlob(audioUrl: string, signal?: AbortSignal): Pro
       purpose: 'ASR-Fetch',
       cloudBackendFallbackClass: CLOUD_BACKEND_FALLBACK_CLASSES.ASR_AUDIO,
     })
+
+    const contentType = response.headers.get('content-type') || ''
+    if (contentType.includes('text/html') || contentType.includes('application/json')) {
+      throw new AudioDownloadError(`Received non-audio response (${contentType})`)
+    }
+
     return await response.blob()
   } catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
