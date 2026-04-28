@@ -1,11 +1,6 @@
 # Instruction 023b: Built-In ASR Per-User Governance Plan
 
-Execute only after `023` is implemented and reviewed, with these minimum artifacts already in place:
-- persistent built-in usage ledger with stable request IDs
-- stable global built-in quota semantics
-- mutable built-in quota policy in SQLite
-- public built-in status contract
-- any future-facing migration seam intentionally kept from `023`
+Execute only after `023` is implemented and reviewed.
 
 This instruction is intentionally a **planning/design instruction**, not an immediate coding instruction. The goal is to define how Cloud should evolve from a global built-in ASR daily quota to finer-grained per-user governance without pretending that current Cloud already has a trustworthy user identity layer.
 
@@ -51,13 +46,6 @@ Decide which subject identity model is acceptable for Cloud's next phase. Evalua
 - IP/UA only as operator hints, never as the primary identity boundary
 
 The plan must explicitly recommend one primary model and explain why the rejected alternatives are insufficient.
-- The recommended identity model must also define full lifecycle semantics:
-  - issuance
-  - signature/verification rules
-  - rotation
-  - browser storage reset / reinstall behavior
-  - future merge behavior if authenticated accounts arrive later
-  - revocation / ban behavior
 
 ### 4.2 Policy Hierarchy
 
@@ -71,16 +59,6 @@ At minimum, answer:
 - Does whitelist bypass the per-user cap only, or both per-user and global quota?
 - If a subject is over their cap but global quota remains, what exact error code is returned?
 - If global quota is exhausted, can whitelist still pass?
-- The plan must also provide an explicit precedence truth table covering:
-  - global quota exhausted
-  - per-subject cap exhausted
-  - whitelist enabled
-  - temporary ban enabled
-  - built-in globally disabled / unavailable
-- For each outcome, define:
-  - winning rule
-  - returned HTTP status and machine-readable code
-  - whether the rejected attempt is still logged for ops
 
 ### 4.3 Data Model
 
@@ -91,7 +69,6 @@ Propose a minimal persistence model for:
 - policy audit trail if needed
 
 Prefer additive evolution from the `023` usage ledger, not a rewrite.
-- If `023` intentionally ships without subject placeholders, the plan must explain the additive migration needed to introduce subject attribution later.
 
 ### 4.4 Operator Surface
 
@@ -103,12 +80,6 @@ Plan the `/ops` additions needed for:
 - viewing current effective policy
 
 The plan should respect the existing `/ops` admin-token-only contract.
-- The plan must also define scale/privacy boundaries for subject tooling:
-  - pagination
-  - max page size
-  - searchable fields
-  - sortable fields
-  - which subject attributes are safe to display to operators
 
 ## 5. Recommended Deliverables
 
@@ -129,11 +100,6 @@ The final plan may revise this, but it should evaluate endpoints like:
 - `GET /admin/asr/subjects/:id/usage`
 
 This is only a planning seed, not an implementation mandate.
-- The final plan should still pin:
-  - list/read pagination contract
-  - policy update request shape
-  - search/filter fields
-  - privacy redaction rules for subject display fields
 
 ## 7. Verification For The Plan
 
@@ -143,7 +109,6 @@ The plan is complete only if it answers:
 - how policy precedence works
 - how ops users will inspect and edit policy
 - what parts of `023` can be reused directly
-- how identity lifecycle behaves over reset, reinstall, rotation, and later account binding
 
 ## 8. Return
 
