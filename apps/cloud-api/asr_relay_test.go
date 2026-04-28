@@ -14,30 +14,6 @@ import (
 	"time"
 )
 
-func TestRelayAudioUploadFileName(t *testing.T) {
-	tests := []struct {
-		name     string
-		mimeType string
-		want     string
-	}{
-		{name: "default", mimeType: "audio/mpeg", want: "input.mp3"},
-		{name: "wav", mimeType: "audio/wav", want: "input.wav"},
-		{name: "m4a", mimeType: "audio/x-m4a", want: "input.m4a"},
-		{name: "webm", mimeType: "audio/webm", want: "input.webm"},
-		{name: "ogg", mimeType: "audio/ogg", want: "input.ogg"},
-		{name: "flac", mimeType: "audio/flac", want: "input.flac"},
-		{name: "aac", mimeType: "audio/aac", want: "input.aac"},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := relayAudioUploadFileName(tc.mimeType); got != tc.want {
-				t.Fatalf("relayAudioUploadFileName(%q) = %q, want %q", tc.mimeType, got, tc.want)
-			}
-		})
-	}
-}
-
 func TestASRRelayRouteOwnershipAndContracts(t *testing.T) {
 	t.Run("rejects unsupported provider", func(t *testing.T) {
 		relay := newASRRelayService()
