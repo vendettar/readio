@@ -16,9 +16,26 @@ type ASRVerifyRelayResponsePayload = {
   ok?: unknown
 }
 
+function relayAudioExtensionForMimeType(mimeType: string): string {
+  const lowerMimeType = mimeType.toLowerCase()
+  if (lowerMimeType.includes('wav')) return 'wav'
+  if (
+    lowerMimeType.includes('mp4') ||
+    lowerMimeType.includes('m4a') ||
+    lowerMimeType.includes('x-m4a')
+  ) {
+    return 'm4a'
+  }
+  if (lowerMimeType.includes('webm')) return 'webm'
+  if (lowerMimeType.includes('ogg')) return 'ogg'
+  if (lowerMimeType.includes('flac')) return 'flac'
+  if (lowerMimeType.includes('aac')) return 'aac'
+  return 'mp3'
+}
+
 function toRelayAudioFile(blob: Blob): File {
-  const fileName = blob.type.includes('wav') ? 'audio.wav' : 'audio.mp3'
-  if (blob instanceof File) return blob
+  const fileName = `audio.${relayAudioExtensionForMimeType(blob.type)}`
+  if (blob instanceof File) return new File([blob], fileName, { type: blob.type })
   return new File([blob], fileName, { type: blob.type || 'audio/mpeg' })
 }
 

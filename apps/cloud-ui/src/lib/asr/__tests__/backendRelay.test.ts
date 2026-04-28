@@ -29,6 +29,7 @@ describe('ASR backend relay', () => {
       const audio = payload.get('audio')
       expect(audio).toBeInstanceOf(File)
       expect((audio as File).type).toBe('audio/mpeg')
+      expect((audio as File).name).toBe('audio.mp3')
 
       return new Response(
         JSON.stringify({
@@ -57,6 +58,39 @@ describe('ASR backend relay', () => {
     expect(result.provider).toBe('groq')
     expect(result.model).toBe('whisper-large-v3')
     expect(result.cues[0]?.text).toBe('relay text')
+  })
+
+  it('normalizes relay upload filename for m4a-family audio blobs', async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const payload = init?.body as FormData
+      const audio = payload.get('audio')
+      expect(audio).toBeInstanceOf(File)
+      expect((audio as File).type).toBe('audio/x-m4a')
+      expect((audio as File).name).toBe('audio.m4a')
+
+      return new Response(
+        JSON.stringify({
+          cues: [],
+          provider: 'groq',
+          model: 'whisper-large-v3',
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }
+      )
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    await transcribeViaCloudRelay({
+      blob: new Blob(['audio'], { type: 'audio/x-m4a' }),
+      apiKey: 'gsk_test',
+      provider: 'groq',
+      model: 'whisper-large-v3',
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
   it('maps unauthorized relay responses to ASRClientError', async () => {

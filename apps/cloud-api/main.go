@@ -31,7 +31,7 @@ const defaultPort = "8080"
 
 const cloudUIDistEnv = "READIO_CLOUD_UI_DIST_DIR"
 const browserEnvRoute = "/env.js"
-const proxyUserAgent = "Readio/1.0 (Cloud Proxy)"
+const proxyBrowserLikeUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Readio/1.0"
 const proxyRequestTimeout = 10 * time.Second
 const proxyBodyLimit = 2 << 20
 const proxyRateLimitWindow = time.Minute
@@ -458,11 +458,18 @@ func newProxyService() *proxyService {
 		limiter:        newRateLimiter(burst, resolveProxyRateLimitWindow(), time.Now),
 		allowedOrigins: resolveProxyAllowedOrigins(),
 		timeout:        proxyRequestTimeout,
-		userAgent:      proxyUserAgent,
+		userAgent:      resolveProxyUpstreamUserAgent(),
 		bodyLimit:      proxyBodyLimit,
 		lookupIP:       net.DefaultResolver.LookupIPAddr,
 		trustedProxies: loadTrustedProxySet(slog.Default()),
 	}
+}
+
+func resolveProxyUpstreamUserAgent() string {
+	// Some media hosts reject obvious service-style proxy user agents. The proxy
+	// keeps a browser-like upstream UA so audio fetch and playback fallback share
+	// the same acceptance profile.
+	return proxyBrowserLikeUserAgent
 }
 
 func newRateLimiter(limit int, window time.Duration, now func() time.Time) *rateLimiter {
