@@ -4,7 +4,6 @@ import type { ExplorePlaybackSession, PlaybackSession } from '../dexieDb'
 export interface RestoredPlaybackState {
   sessionId: string
   audioUrl: string
-  playbackSourceUrl: string
   audioLoaded: true
   audioTitle: string
   coverArtUrl: string | Blob | null
@@ -27,7 +26,6 @@ export function buildRestoredLocalBlobState(input: {
   return {
     sessionId: input.session.id,
     audioUrl: input.audioUrl,
-    playbackSourceUrl: input.audioUrl,
     audioLoaded: true,
     audioTitle: input.audioTitle,
     coverArtUrl: input.coverArtUrl,
@@ -64,7 +62,6 @@ export function buildRestoredRemoteSessionState(input: {
   return {
     sessionId: input.session.id,
     audioUrl: input.audioUrl,
-    playbackSourceUrl: input.audioUrl,
     audioLoaded: true,
     audioTitle: input.session.title || '',
     coverArtUrl: input.coverArtUrl,

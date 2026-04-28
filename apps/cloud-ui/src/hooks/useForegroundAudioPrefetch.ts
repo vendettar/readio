@@ -6,34 +6,31 @@ import { useEventListener } from './useEventListener'
 interface UseForegroundAudioPrefetchParams {
   audioRef: React.RefObject<HTMLAudioElement | null>
   audioUrl: string | null
-  playbackSourceUrl: string | null
 }
 
 export function useForegroundAudioPrefetch({
   audioRef,
   audioUrl,
-  playbackSourceUrl,
 }: UseForegroundAudioPrefetchParams): void {
   const schedulerRef = useRef(new AudioPrefetchScheduler())
-  const schedulerSourceId = audioUrl || playbackSourceUrl
 
   useEffect(() => {
-    if (!schedulerSourceId || !playbackSourceUrl) {
+    if (!audioUrl) {
       schedulerRef.current.teardown()
       return
     }
 
-    schedulerRef.current.resetForSource(schedulerSourceId)
-  }, [playbackSourceUrl, schedulerSourceId])
+    schedulerRef.current.resetForSource(audioUrl)
+  }, [audioUrl])
 
   useEventListener(
     'timeupdate',
     () => {
       const audio = audioRef.current
-      if (!audio || !schedulerSourceId || !playbackSourceUrl) return
+      if (!audio || !audioUrl) return
       void schedulerRef.current.maybePrefetch({
-        sourceId: schedulerSourceId,
-        sourceUrl: playbackSourceUrl,
+        sourceId: audioUrl,
+        sourceUrl: audioUrl,
         audio,
       })
     },

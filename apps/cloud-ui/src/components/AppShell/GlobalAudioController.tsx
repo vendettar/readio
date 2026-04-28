@@ -35,7 +35,6 @@ export function GlobalAudioController() {
 
   // Use atomic selectors to avoid subscribing to rapidly changing state
   const audioUrl = usePlayerStore((s) => s.audioUrl)
-  const playbackSourceUrl = usePlayerStore((s) => s.playbackSourceUrl)
   const audioTitle = usePlayerStore((s) => s.audioTitle)
   const coverArtUrl = usePlayerStore((s) => s.coverArtUrl)
   const episodeMetadata = usePlayerStore((s) => s.episodeMetadata)
@@ -109,9 +108,9 @@ export function GlobalAudioController() {
     }
   }, [isVisible])
 
-  useAudioElementSync({ audioRef, playbackSourceUrl, volume, playbackRate })
-  useForegroundAudioPrefetch({ audioRef, audioUrl, playbackSourceUrl })
-  useAudioProxyFallback({ audioRef, audioUrl, playbackSourceUrl, recoveryRef })
+  useAudioElementSync({ audioRef, audioUrl, volume, playbackRate })
+  useForegroundAudioPrefetch({ audioRef, audioUrl })
+  useAudioProxyFallback({ audioRef, audioUrl, recoveryRef })
   useAudioElementEvents({
     audioRef,
     isVisibleRef,
