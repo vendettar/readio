@@ -977,7 +977,7 @@ func proxyRequestOriginContext(r *http.Request, trusted trustedProxySet) (scheme
 		requestScheme = "https"
 	}
 	if peerHost, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-		if peerIP := net.ParseIP(peerHost); peerIP != nil && trusted.contains(peerIP) {
+		if peerIP := net.ParseIP(peerHost); peerIP != nil && (peerIP.IsLoopback() || trusted.contains(peerIP)) {
 			if proto := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")); proto == "https" || proto == "http" {
 				requestScheme = proto
 			}
