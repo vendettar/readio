@@ -378,6 +378,7 @@ func (s *asrRelayService) authorizeRequest(r *http.Request) *asrRelayErrorPayloa
 func (s *asrRelayService) originAuthorizationError(r *http.Request) *asrRelayErrorPayload {
 	origin := strings.TrimSpace(r.Header.Get("Origin"))
 	if origin == "" {
+		s.logOriginAuthorizationFailure(r, "ASR_MISSING_OR_DISALLOWED_ORIGIN")
 		return &asrRelayErrorPayload{
 			Status:  http.StatusForbidden,
 			Code:    "ASR_MISSING_OR_DISALLOWED_ORIGIN",
@@ -385,6 +386,7 @@ func (s *asrRelayService) originAuthorizationError(r *http.Request) *asrRelayErr
 		}
 	}
 	if !s.isAllowedOrigin(r) {
+		s.logOriginAuthorizationFailure(r, "ASR_ORIGIN_NOT_ALLOWED")
 		return &asrRelayErrorPayload{
 			Status:  http.StatusForbidden,
 			Code:    "ASR_ORIGIN_NOT_ALLOWED",
@@ -392,6 +394,33 @@ func (s *asrRelayService) originAuthorizationError(r *http.Request) *asrRelayErr
 		}
 	}
 	return nil
+}
+
+func (s *asrRelayService) logOriginAuthorizationFailure(r *http.Request, code string) {
+	requestScheme, requestHost, requestContextOK := proxyRequestOriginContext(r, s.trustedProxies)
+
+	peerHost, _, splitOK := net.SplitHostPort(r.RemoteAddr)
+	peerIP := net.ParseIP(peerHost)
+	trustedProxyMatch := peerIP != nil && s.trustedProxies.contains(peerIP)
+	loopbackPeer := peerIP != nil && peerIP.IsLoopback()
+
+	slog.Warn("asr relay origin authorization failed",
+		"code", code,
+		"remote_addr", r.RemoteAddr,
+		"host", r.Host,
+		"origin", strings.TrimSpace(r.Header.Get("Origin")),
+		"referer", strings.TrimSpace(r.Header.Get("Referer")),
+		"x_forwarded_proto", strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")),
+		"x_forwarded_for", strings.TrimSpace(r.Header.Get("X-Forwarded-For")),
+		"x_real_ip", strings.TrimSpace(r.Header.Get("X-Real-IP")),
+		"trusted_proxy_match", trustedProxyMatch,
+		"loopback_peer", loopbackPeer,
+		"tls", r.TLS != nil,
+		"resolved_request_scheme", requestScheme,
+		"resolved_request_host", requestHost,
+		"request_context_ok", requestContextOK,
+		"remote_addr_split_ok", splitOK,
+	)
 }
 
 // normalizeHostPort returns (hostname, effectivePort) from a host:port string.
@@ -446,21 +475,9 @@ func (s *asrRelayService) isAllowedOrigin(r *http.Request) bool {
 		return ok
 	}
 
-	requestHost := strings.TrimSpace(r.Host)
-	if requestHost == "" {
+	requestScheme, requestHost, ok := proxyRequestOriginContext(r, s.trustedProxies)
+	if !ok {
 		return false
-	}
-	requestScheme := "http"
-	if r.TLS != nil {
-		requestScheme = "https"
-	}
-	// Only trust X-Forwarded-Proto from trusted proxies.
-	if peerHost, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-		if peerIP := net.ParseIP(peerHost); peerIP != nil && s.trustedProxies.contains(peerIP) {
-			if proto := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")); proto == "https" || proto == "http" {
-				requestScheme = proto
-			}
-		}
 	}
 	return isSameOrigin(parsed.Scheme, parsed.Host, requestScheme, requestHost)
 }
