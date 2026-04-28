@@ -745,7 +745,7 @@ func TestRunCloudServerInitializesSQLiteAndShutsDownOnCancellation(t *testing.T)
 			lookupIP:  testPublicLookupIP,
 			limiter:   newRateLimiter(5, time.Minute, func() time.Time { return time.Unix(0, 0) }),
 			timeout:   100 * time.Millisecond,
-			userAgent: proxyBrowserLikeUserAgent,
+			userAgent: proxyUserAgent,
 			bodyLimit: proxyBodyLimit,
 		}
 	}
@@ -967,7 +967,7 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 			lookupIP:  testPublicLookupIP,
 			limiter:   newRateLimiter(5, time.Minute, func() time.Time { return time.Unix(0, 0) }),
 			timeout:   100 * time.Millisecond,
-			userAgent: proxyBrowserLikeUserAgent,
+			userAgent: proxyUserAgent,
 			bodyLimit: proxyBodyLimit,
 		}
 
@@ -1016,7 +1016,7 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 			lookupIP:  testPublicLookupIP,
 			limiter:   newRateLimiter(5, time.Minute, func() time.Time { return time.Unix(0, 0) }),
 			timeout:   100 * time.Millisecond,
-			userAgent: proxyBrowserLikeUserAgent,
+			userAgent: proxyUserAgent,
 			bodyLimit: proxyBodyLimit,
 		}
 
@@ -1071,7 +1071,7 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 			},
 			limiter:   newRateLimiter(5, time.Minute, func() time.Time { return time.Unix(0, 0) }),
 			timeout:   100 * time.Millisecond,
-			userAgent: proxyBrowserLikeUserAgent,
+			userAgent: proxyUserAgent,
 			bodyLimit: proxyBodyLimit,
 		}
 
@@ -1123,7 +1123,7 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 			},
 			limiter:   newRateLimiter(5, time.Minute, func() time.Time { return time.Unix(0, 0) }),
 			timeout:   100 * time.Millisecond,
-			userAgent: proxyBrowserLikeUserAgent,
+			userAgent: proxyUserAgent,
 			bodyLimit: proxyBodyLimit,
 		}
 
@@ -1174,7 +1174,7 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 			},
 			limiter:   newRateLimiter(5, time.Minute, func() time.Time { return time.Unix(0, 0) }),
 			timeout:   100 * time.Millisecond,
-			userAgent: proxyBrowserLikeUserAgent,
+			userAgent: proxyUserAgent,
 			bodyLimit: proxyBodyLimit,
 		}
 
@@ -1215,7 +1215,7 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 			lookupIP:  testPublicLookupIP,
 			limiter:   newRateLimiter(5, time.Minute, func() time.Time { return time.Unix(0, 0) }),
 			timeout:   100 * time.Millisecond,
-			userAgent: proxyBrowserLikeUserAgent,
+			userAgent: proxyUserAgent,
 			bodyLimit: proxyBodyLimit,
 		}
 
@@ -1227,8 +1227,8 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 		if rr.Code != http.StatusOK {
 			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
 		}
-		if gotUserAgent != proxyBrowserLikeUserAgent {
-			t.Fatalf("user-agent = %q, want %q", gotUserAgent, proxyBrowserLikeUserAgent)
+		if gotUserAgent != proxyUserAgent {
+			t.Fatalf("user-agent = %q, want %q", gotUserAgent, proxyUserAgent)
 		}
 		if rr.Header().Get("Access-Control-Allow-Origin") != "" {
 			t.Fatalf("acao = %q, want empty", rr.Header().Get("Access-Control-Allow-Origin"))
@@ -1255,7 +1255,7 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 			lookupIP:  testPublicLookupIP,
 			limiter:   newRateLimiter(5, time.Minute, func() time.Time { return time.Unix(0, 0) }),
 			timeout:   100 * time.Millisecond,
-			userAgent: proxyBrowserLikeUserAgent,
+			userAgent: proxyUserAgent,
 			bodyLimit: proxyBodyLimit,
 		}
 
@@ -1281,7 +1281,7 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 			lookupIP:  testPublicLookupIP,
 			limiter:   newRateLimiter(5, time.Minute, func() time.Time { return time.Unix(0, 0) }),
 			timeout:   100 * time.Millisecond,
-			userAgent: proxyBrowserLikeUserAgent,
+			userAgent: proxyUserAgent,
 			bodyLimit: proxyBodyLimit,
 		}
 
@@ -1314,7 +1314,7 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 			lookupIP:  testPublicLookupIP,
 			limiter:   newRateLimiter(5, time.Minute, func() time.Time { return time.Unix(0, 0) }),
 			timeout:   10 * time.Millisecond,
-			userAgent: proxyBrowserLikeUserAgent,
+			userAgent: proxyUserAgent,
 			bodyLimit: proxyBodyLimit,
 		}
 
@@ -1349,7 +1349,7 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 			lookupIP:  testPublicLookupIP,
 			limiter:   newRateLimiter(5, time.Minute, func() time.Time { return time.Unix(0, 0) }),
 			timeout:   100 * time.Millisecond,
-			userAgent: proxyBrowserLikeUserAgent,
+			userAgent: proxyUserAgent,
 			bodyLimit: proxyBodyLimit,
 		}
 
@@ -1387,7 +1387,7 @@ func TestProxyRouteOwnershipAndContracts(t *testing.T) {
 			lookupIP:  testPublicLookupIP,
 			limiter:   newRateLimiter(1, time.Minute, func() time.Time { return time.Unix(0, 0) }),
 			timeout:   100 * time.Millisecond,
-			userAgent: proxyBrowserLikeUserAgent,
+			userAgent: proxyUserAgent,
 			bodyLimit: proxyBodyLimit,
 		}
 
@@ -1741,8 +1741,8 @@ func TestProxyServiceMediaFallbackContract(t *testing.T) {
 			if r.Method != http.MethodHead {
 				t.Fatalf("method = %q, want %q", r.Method, http.MethodHead)
 			}
-			if got := r.Header.Get("User-Agent"); got != proxyBrowserLikeUserAgent {
-				t.Fatalf("user-agent = %q, want %q", got, proxyBrowserLikeUserAgent)
+			if got := r.Header.Get("User-Agent"); got != proxyUserAgent {
+				t.Fatalf("user-agent = %q, want %q", got, proxyUserAgent)
 			}
 
 			w.Header().Set("Content-Type", "audio/mpeg")
@@ -2024,7 +2024,7 @@ func newMediaProxyTestService(
 		},
 		limiter:   newRateLimiter(5, time.Minute, func() time.Time { return time.Unix(0, 0) }),
 		timeout:   200 * time.Millisecond,
-		userAgent: proxyBrowserLikeUserAgent,
+		userAgent: proxyUserAgent,
 		bodyLimit: proxyBodyLimit,
 	}
 

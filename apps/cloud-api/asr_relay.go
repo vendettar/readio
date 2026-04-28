@@ -100,26 +100,6 @@ type asrRelayErrorPayload struct {
 
 func (e *asrRelayErrorPayload) Error() string { return e.Message }
 
-func relayAudioUploadFileName(audioMimeType string) string {
-	lowerMime := strings.ToLower(audioMimeType)
-	switch {
-	case strings.Contains(lowerMime, "wav"):
-		return "input.wav"
-	case strings.Contains(lowerMime, "mp4"), strings.Contains(lowerMime, "m4a"), strings.Contains(lowerMime, "x-m4a"):
-		return "input.m4a"
-	case strings.Contains(lowerMime, "webm"):
-		return "input.webm"
-	case strings.Contains(lowerMime, "ogg"):
-		return "input.ogg"
-	case strings.Contains(lowerMime, "flac"):
-		return "input.flac"
-	case strings.Contains(lowerMime, "aac"):
-		return "input.aac"
-	default:
-		return "input.mp3"
-	}
-}
-
 // Sentinel ASR error values for use with errors.Is().
 // Only errors with fully static messages are exposed as sentinels.
 // Errors with dynamic messages (e.g., err.Error()) must be constructed inline.
@@ -719,7 +699,10 @@ func (s *asrRelayService) transcribeViaWorker(
 	// Build the same multipart body that transcribeOpenAICompatible builds.
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
-	fileName := relayAudioUploadFileName(audioMimeType)
+	fileName := "input.mp3"
+	if strings.Contains(strings.ToLower(audioMimeType), "wav") {
+		fileName = "input.wav"
+	}
 	part, err := writer.CreateFormFile("file", fileName)
 	if err != nil {
 		return nil, asrRelayInternalError("failed to build worker transcription request"), true
@@ -852,7 +835,10 @@ func (s *asrRelayService) transcribeOpenAICompatible(
 ) (*asrRelayResponsePayload, *asrRelayErrorPayload) {
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
-	fileName := relayAudioUploadFileName(audioMimeType)
+	fileName := "input.mp3"
+	if strings.Contains(strings.ToLower(audioMimeType), "wav") {
+		fileName = "input.wav"
+	}
 	part, err := writer.CreateFormFile("file", fileName)
 	if err != nil {
 		return nil, asrRelayInternalError("failed to build transcription request")
