@@ -2,61 +2,30 @@
 title: 数据库与持久化
 ---
 
-## 1. 持久化分层
+## 1. 持久化模型
 
-Cloud 现在有两层不能混淆的持久化：
-
-- 前端浏览器本地持久化
-- `apps/cloud-api` 后端 SQLite 持久化
-
-## 2. 前端浏览器本地持久化
-
-Cloud 前端仍然通过 IndexedDB 和 localStorage 保存浏览器拥有的状态。
+Cloud 前端仍然通过 IndexedDB 和 localStorage 做浏览器本地持久化。
 
 - IndexedDB：元数据、sessions、downloads、subtitles、browser-local library state
 - localStorage：仅非敏感轻量设置
 - `credentials` 表：按需要保存浏览器本地 provider credential
 
-关键约束：
+## 2. 关键约束
 
-- Cloud 后端当前仍然没有替代浏览器本地图书馆模型
+Cloud 后端当前并没有替代浏览器本地图书馆模型。
+
 - Favorites、Subscriptions、History、下载音频、本地 transcript 产物仍然只存在于浏览器
 - 清除站点数据仍会删除它们
 
-## 3. 后端 SQLite 持久化
+## 3. Runtime Cache 现状
 
-Cloud 后端现在也拥有服务端 SQLite 持久化，用于后端治理的状态。
-
-当前和规划中的后端 SQLite 职责包括：
-
-- built-in ASR 的 quota / reservation / idempotency 状态
-- feed parsed snapshot 存储，以及有界 episode 保留窗口
-- 其他需要跨进程重启保留的后端运营状态
-
-这层后端 SQLite 不是浏览器本地用户库数据的通用替代品。
-
-## 4. Runtime Cache 现状
-
-Cloud 中 discovery / search / feed 前端已不再依赖长期持久化的 IndexedDB 缓存。
-
-- 前端 discovery 主要依赖 TanStack Query 内存缓存
-- 后端 discovery 可按功能路径依赖后端内存缓存和/或 SQLite-backed cache
+- Cloud 中 discovery / search / feed 前端已不再依赖长期持久化的 IndexedDB 缓存
+- 现在 discovery 缓存主要依赖：
+  - 前端 TanStack Query 内存缓存
+  - 后端 Apple / PodcastIndex relay 的内存缓存
 - `runtime_cache` 仍存在，但只服务于当前仍有 owner 的浏览器运行时缓存
 
-## 5. 后端 SQLite 治理摘要
-
-所有 Cloud 后端 SQLite 功能都必须遵循同一套规则：
-
-- schema 变更必须走 versioned SQL migrations
-- 使用 `goose` 作为 migration 机制
-- 后端启动时必须先应用 pending migrations，再开始对外服务
-- 不允许 route-local 或 feature-local 的 ad hoc DDL
-- production 与 test 必须依赖同一条 schema 路径
-- source of truth 表与 helper/derived state 的边界必须明确记录
-
-更细的后端规则见 [后端 SQLite 治理](/apps/cloud/handoff/backend-sqlite-governance)。
-
-## 6. 对 Cloud UI 仍然重要的前端表
+## 4. 对 Cloud UI 仍然重要的表
 
 - `sessions`
 - `audioBlobs`
@@ -71,10 +40,10 @@ Cloud 中 discovery / search / feed 前端已不再依赖长期持久化的 Inde
 - `credentials`
 - `runtime_cache`
 
-## 7. 文档边界
+## 5. 运行规则
 
-Cloud 文档必须如实描述持久化 ownership：
+Cloud 前端文档必须如实描述 browser-local persistence：
 
-- 浏览器本地 library state 没有账号同步
-- 仅存在浏览器的数据没有服务端恢复能力
-- 除非具体功能明确声明，否则不能把 backend SQLite 描述成用户归档存储
+- 没有账号同步
+- 没有服务端恢复
+- 不保证长期归档

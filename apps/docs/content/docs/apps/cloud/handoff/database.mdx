@@ -2,63 +2,30 @@
 title: Database & Persistence
 ---
 
-## 1. Persistence Layers
+## 1. Persistence Model
 
-Cloud now has two distinct persistence layers that must not be conflated:
-
-- browser-local persistence in the frontend
-- backend SQLite persistence in `apps/cloud-api`
-
-## 2. Frontend Browser-Local Persistence
-
-Cloud frontend still uses IndexedDB and localStorage for browser-owned state.
+Cloud frontend still uses browser-local persistence through IndexedDB and localStorage.
 
 - IndexedDB: metadata, sessions, downloads, subtitles, browser-local library state
 - localStorage: lightweight non-sensitive settings only
 - credentials table: browser-local provider credentials when applicable
 
-Important constraint:
+## 2. Important Constraint
 
-- Cloud backend still does not replace the browser-local library model.
+Cloud backend does not currently replace the browser-local library model.
+
 - Favorites, subscriptions, history, downloaded tracks, and local transcript artifacts remain local to the browser.
 - Clearing site data still removes them.
 
-## 3. Backend SQLite Persistence
+## 3. Runtime Cache Status
 
-Cloud backend now also owns server-side SQLite persistence for backend-governed features.
+- Discovery/search/feed frontend persistence is no longer a long-lived IndexedDB cache in Cloud.
+- Cloud discovery now relies on:
+  - frontend TanStack Query memory cache
+  - backend in-memory cache for Apple / PodcastIndex relay paths
+- `runtime_cache` still exists for remaining browser-local runtime caches that still have owners.
 
-Current and planned backend-owned SQLite responsibilities include:
-
-- built-in ASR quota / reservation / idempotency state
-- parsed feed snapshot storage and bounded feed-episode retention
-- other backend-owned operational state that must survive process restarts
-
-This backend SQLite layer is not a generic replacement for browser-local user library data.
-
-## 4. Runtime Cache Status
-
-Discovery/search/feed frontend persistence is no longer modeled as a long-lived IndexedDB cache in Cloud.
-
-- frontend discovery relies on TanStack Query memory cache
-- backend discovery may rely on backend-managed memory cache and/or SQLite-backed cache layers depending on the feature path
-- `runtime_cache` still exists for remaining browser-local runtime caches that still have owners
-
-## 5. Backend SQLite Governance Summary
-
-All backend SQLite features in Cloud must follow the same operational rules:
-
-- schema changes must go through versioned SQL migrations
-- `goose` is the migration mechanism
-- backend startup must apply pending migrations before serving requests
-- no route-local or feature-local ad hoc DDL
-- production and tests must rely on the same schema path
-- source-of-truth tables and helper/derived state must be documented explicitly
-
-The detailed backend rules live in [Backend SQLite Governance](/apps/cloud/handoff/backend-sqlite-governance).
-
-## 6. Key Frontend Tables Still Relevant to Cloud UI
-
-These browser-local tables still matter to Cloud UI behavior:
+## 4. Key Tables Still Relevant to Cloud UI
 
 - `sessions`
 - `audioBlobs`
@@ -73,10 +40,10 @@ These browser-local tables still matter to Cloud UI behavior:
 - `credentials`
 - `runtime_cache`
 
-## 7. Documentation Boundary
+## 5. Operational Rule
 
-Cloud docs must describe persistence ownership honestly:
+Cloud frontend docs should describe browser-local persistence honestly:
 
-- no account sync for browser-local library state
-- no server-backed recovery for browser-local-only data
-- no claim that backend SQLite is a user archive unless a feature explicitly defines that contract
+- no account sync
+- no server-backed recovery
+- no long-term archival guarantee

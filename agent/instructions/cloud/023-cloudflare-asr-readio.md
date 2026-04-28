@@ -13,10 +13,9 @@ This instruction replaces the earlier draft that targeted `apps/lite` and overlo
 - **Decision**: Built-in Cloudflare quota is a **global daily quota** for the Cloud deployment, enforced server-side, with a **hard stop** when exhausted.
 - **Decision**: Built-in ASR requests must carry a stable request identity / idempotency key so retries, duplicate submits, and refresh-triggered replays do not double-consume quota.
 - **Decision**: Built-in ASR needs both a **daily quota** and an **in-flight concurrency limit**. Daily quota controls budget; concurrency limit controls backend/upstream pressure.
-- **Decision**: `023` treats SQLite-backed built-in quota enforcement as the source of truth. Do not satisfy the “global” quota/concurrency contract with process-local memory only.
 - **Decision**: The admin surface under `/ops` becomes a small multi-page operator console with a left-side section nav. The first two sections are `Logs` and `ASR Usage`.
 - **Decision**: Built-in provider/model selection is backend-owned. The browser may choose "built-in mode", but must not control the actual built-in Cloudflare model identifier.
-- **Decision**: Built-in usage views must distinguish `reserved`, `consumed`, `released`, and `failed`. Structured admin audit persistence is optional in `023`; simple admin mutation logging is acceptable for a single-operator deployment.
+- **Decision**: Admin-managed quota changes must be auditable, and built-in usage views must distinguish `reserved`, `consumed`, `released`, and `failed`.
 - **Decision**: Built-in ASR storage/logging must follow a privacy-minimizing contract: no transcript text persistence, no raw audio persistence, no credential persistence.
 - **Decision**: Per-user usage, per-user cap, and whitelist policy are explicitly deferred to `023b` because current Cloud handoff docs do **not** define a real multi-user identity contract yet.
 - **Decision**: Built-in provider readiness and quota state must have their own contract. Do **not** overload the existing BYOK verification route with built-in readiness semantics.
@@ -83,15 +82,6 @@ Docs:
   3. Otherwise, surface a blocking action state that asks the user to configure their own ASR provider/key.
 - If the UI exposes an explicit ASR mode selector, the selected mode may override the default, but the product must still make the default priority above unambiguous.
 - Built-in readiness and built-in quota state must only influence requests that actually route to built-in Cloudflare. They must not block an otherwise valid BYOK request.
-- The browser must send an explicit routing preference field, for example `asrMode`, with the narrow enum:
-  - `auto`
-  - `builtin`
-  - `byok`
-- The backend remains authoritative for effective routing. It must not blindly trust the browser if the request payload is inconsistent with the stored user-owned credential state.
-- Required routing rules:
-  - `auto` -> backend applies the product priority above
-  - `builtin` -> backend must reject the request if built-in is unavailable; it must not silently fall through to BYOK
-  - `byok` -> backend must require a valid user-owned provider/key path; missing/invalid user-owned credentials are caller errors, not built-in fallback triggers
 
 ### 3.4 Built-In Readiness Boundary
 
@@ -104,33 +94,6 @@ Docs:
   - `disabled`
   - `quota_exhausted`
   - `service_unavailable`
-- The public built-in status surface must stay intentionally narrow. It may expose:
-  - availability boolean
-  - machine-readable unavailability reason
-- It must not expose:
-  - exact daily limit
-  - exact remaining quota
-  - reset timestamp
-  - backend credential/configuration detail beyond the narrow reason code
-  - raw upstream error detail
-
-### 3.4.1 Status Reason To Request-Time Error Mapping
-
-The built-in status surface and built-in request-time error matrix must not drift.
-
-Required mapping:
-- `not_configured` -> request-time failures must use `ASR_BUILTIN_NOT_CONFIGURED`
-- `disabled` -> request-time failures must use `ASR_BUILTIN_DISABLED`
-- `quota_exhausted` -> request-time failures must use `ASR_BUILTIN_QUOTA_EXCEEDED`
-- `service_unavailable` -> request-time failures should normally use `ASR_BUILTIN_SERVICE_UNAVAILABLE`
-
-Clarifications:
-- `busy` is a request-time backpressure outcome, not a durable built-in status reason. It does not need to appear in the public built-in status endpoint.
-- If the built-in status endpoint reports `available = true`, a specific request may still fail with:
-  - `ASR_BUILTIN_BUSY`
-  - `ASR_BUILTIN_INVALID_PAYLOAD`
-  - `ASR_BUILTIN_SERVICE_UNAVAILABLE`
-- The frontend must treat the status endpoint as a narrow readiness hint, not as a guarantee that every future built-in request will succeed.
 
 ### 3.5 Built-In Error Semantics
 
@@ -148,24 +111,6 @@ Clarifications:
   - `busy` -> retry-later semantics
   - `invalid_payload` -> caller/problem-state, not provider outage
 - BYOK requests must continue to use their existing error semantics and must not be polluted by built-in-only errors.
-- The standard built-in error envelope should be pinned before implementation. Recommended minimum fields:
-  - `code`
-  - `message`
-  - optional `retryAfterSeconds`
-  - optional `resetAt`
-- Recommended HTTP statuses:
-  - `ASR_BUILTIN_NOT_CONFIGURED` -> `503`
-  - `ASR_BUILTIN_DISABLED` -> `403`
-  - `ASR_BUILTIN_QUOTA_EXCEEDED` -> `403`
-  - `ASR_BUILTIN_BUSY` -> `429`
-  - `ASR_BUILTIN_INVALID_PAYLOAD` -> `400`
-  - `ASR_BUILTIN_SERVICE_UNAVAILABLE` -> `503`
-- Retry guidance:
-  - `BUSY` -> retryable; include `retryAfterSeconds` if practical
-  - `SERVICE_UNAVAILABLE` -> retryable
-  - `QUOTA_EXCEEDED` -> not retryable until the next reset window
-  - `DISABLED` / `NOT_CONFIGURED` -> not retryable without operator action
-  - `INVALID_PAYLOAD` -> not retryable without caller correction
 
 ## 4. Quota And Usage Contract
 
@@ -193,48 +138,6 @@ Clarifications:
   - backend-visible network retry where the first attempt may already have reserved quota
 - The request identity should be persisted alongside the built-in usage ledger.
 - BYOK requests do not need to share the same accounting semantics, but the relay contract should still allow a stable request identifier to flow through for debugging/correlation.
-- The relay wire contract should pin the built-in request fields explicitly in the JSON body:
-  - `asrMode`
-  - `requestId`
-  - `estimatedDurationSeconds`
-  - optional bounded chunk metadata such as `chunkIndex` / `chunkCount`
-- Idempotency semantics must be explicit:
-  - same `requestId` + same canonical payload fingerprint + same UTC day -> idempotent replay
-  - same `requestId` + different canonical payload fingerprint + same UTC day -> conflict, reject
-  - duplicate replay while the original request is still in `reserved` -> return the same logical request outcome path, do not double-reserve
-  - replay after terminal success/failure within the retention window -> do not create a new usage row
-- The backend, not the frontend, owns canonical payload fingerprinting for idempotency comparison.
-
-### 4.3.1 Canonical Payload Fingerprint Contract
-
-The canonical payload fingerprint must be pinned before implementation. It must be derived by the backend from a deterministic serialization of the logical built-in request, not from transport incidental details.
-
-Required inclusion set:
-- `asrMode`
-- canonical built-in provider identifier
-- canonical built-in model identifier
-- canonical audio input identity for this request
-- canonical chunk boundary metadata if chunking is used, for example:
-  - `chunkIndex`
-  - `chunkCount`
-  - bounded logical chunk start/end metadata if present
-
-Required exclusion set:
-- raw `requestId`
-- operator policy values such as current quota limit
-- transient timestamps
-- retry counters
-- HTTP headers unrelated to logical input identity
-
-`estimatedDurationSeconds` rule:
-- it must participate in backend validation
-- it should not be the sole identity signal for the fingerprint
-- if the implementation includes it in the fingerprint, that choice must be documented and applied consistently across replay/conflict handling
-
-Audio identity rule:
-- if the browser uploads raw audio bytes, the backend should derive a stable content-based identity or bounded canonical upload fingerprint for idempotency comparison
-- if the request references a stable previously known blob/object identity, that canonical identity may be used instead
-- the implementation must not treat two materially different audio payloads as equivalent merely because they share the same `requestId`
 
 ### 4.4 Reservation Model
 
@@ -247,28 +150,6 @@ Audio identity rule:
   3. Finalize the reservation on success.
   4. Release or mark failed reservations on upstream failure, cancellation, or invalid payload.
 - This reservation flow must be transaction-safe enough to avoid obvious concurrent overspend races.
-- The request ledger must support a narrow state machine with non-terminal and terminal states:
-  - non-terminal: `reserved`
-  - terminal: `consumed`, `released`, `failed`
-- `reserved` rows must have an expiry/lease contract. `023` must define:
-  - reservation TTL
-  - cleanup behavior on crash/restart
-  - reclaim behavior for stale reservations
-  - how stale reservations appear in ops views
-- Stale reservation cleanup must not require transcript or audio persistence.
-- `estimatedDurationSeconds` is an operational quota estimate, not a trusted billing truth. The backend must reject clearly invalid or obviously inconsistent values according to the chosen fail-fast validation contract.
-
-### 4.4.1 Stale Reservation Finalization Rule
-
-Stale reservation cleanup must converge on a single terminal non-consuming state.
-
-For `023`, the required rule is:
-- stale `reserved` rows reclaimed by sweeper logic must transition to `released`
-
-Clarifications:
-- `released` means capacity was reserved operationally but must not count against final consumed quota
-- `failed` is reserved for requests that reached a terminal failure outcome while still needing to remain visibly distinct from normal reservation release
-- ops views and derived summaries must count stale reclaimed reservations under `released`, not under `failed`
 
 ### 4.5 In-Flight Concurrency And Backpressure
 
@@ -279,7 +160,6 @@ Clarifications:
   - do not enqueue an internal unbounded backlog
   - reject excess built-in requests immediately with `ASR_BUILTIN_BUSY`
   - keep BYOK requests outside this built-in concurrency accounting unless a later instruction explicitly unifies the scheduler
-- `023` assumes deployment-global correctness for built-in quota and in-flight enforcement. Do not satisfy this contract with process-local counters alone if the deployment can run multiple `cloud-api` instances.
 
 ### 4.6 Exhaustion Behavior
 
@@ -319,45 +199,42 @@ Clarifications:
   - Is built-in quota currently available?
   - What is the current unavailability reason, if any?
 - Do not leak secrets or raw admin settings through this surface.
-- Recommended response shape:
-  - `available: boolean`
-  - `reason: 'healthy' | 'not_configured' | 'disabled' | 'quota_exhausted' | 'service_unavailable'`
-- Keep exact remaining quota and reset timestamps admin-only in `023`.
 
 ### 5.4 Persistence
 
 - Because ops must be able to update the daily limit at runtime, `023` requires minimal persistent backend storage for:
   - built-in ASR quota policy
   - built-in ASR usage reservations/events
+  - admin-side quota/policy audit events
 - Use Cloud SQLite, not browser state and not env.js, for mutable admin-managed quota state.
 - Keep schema narrow and additive. Avoid inventing a large generic config subsystem if two small tables will do.
-- `023` should treat [023c](./023c-cloudflare-asr-sqlite-schema-plan.md) as the SQLite schema companion SSOT.
-- Minimum required persistent tables in `023`:
-  - `asr_builtin_quota_config`
-  - `asr_builtin_usage_requests`
-- Optional tables that may be deferred in a single-operator deployment:
-  - `asr_builtin_admin_audit`
-  - `asr_builtin_usage_daily`
-- Startup/bootstrap behavior must be explicit:
-  - if built-in env credentials exist but the policy row does not, built-in ASR is `disabled/not_configured`
-  - do not auto-create an enabled default policy row on first boot
-  - BYOK routes remain usable even if built-in SQLite policy state is absent or unreadable
 
-### 5.4a Implementation Sequencing
+Recommended minimal backend persistence split:
+- `asr_builtin_quota_config`
+  - `id`
+  - `enabled`
+  - `daily_limit_seconds`
+  - `updated_at`
+- `asr_builtin_usage_events`
+  - `id`
+  - `request_id`
+  - `day_key_utc`
+  - `provider`
+  - `model`
+  - `estimated_seconds`
+  - `status` (`reserved`, `consumed`, `released`, `failed`)
+  - `failure_reason`
+  - `created_at`
+  - `finalized_at`
+- `asr_builtin_admin_audit`
+  - `id`
+  - `action`
+  - `actor_hint`
+  - `before_json`
+  - `after_json`
+  - `created_at`
 
-Implement `023` in ordered slices:
-1. Phase 0: SQLite policy/usage store, constructor wiring, bootstrap behavior
-2. Phase 1: built-in provider execution + public status endpoint
-3. Phase 2: reservation/idempotency/concurrency enforcement
-4. Phase 3: frontend routing mode + built-in status UX
-5. Phase 4: `/ops` ASR Usage page + mutable quota policy UI
-6. Phase 5: docs sync
-
-Rollout guidance:
-- deploy backend support first with built-in still disabled by policy
-- validate public status + admin quota endpoints
-- explicitly enable built-in from `/ops`
-- rollback path is built-in disablement; BYOK must remain intact
+The exact table names may differ, but the separation of policy vs usage ledger should remain.
 
 ### 5.5 Fail-Fast Limits
 
@@ -386,22 +263,13 @@ Rollout guidance:
   - user/provider credentials
   - full sensitive upstream error payloads when a redacted summary will do
 - If request correlation is needed, prefer stable opaque identifiers such as `requestId` instead of user content.
-- Deterministic test seams are required for:
-  - UTC day-boundary behavior
-  - stale-reservation cleanup
-  - retry/idempotency replay
-  - built-in busy/backpressure paths
-- If metrics infrastructure already exists, prefer counters/gauges for:
-  - current built-in in-flight count
-  - reserved/consumed/released/failed totals
-  - rejection totals by built-in error code
-  - stale-reservation cleanup count
 
 ### 5.8 Forward-Compatible Subject Hooks
 
-- `023` should remain global-quota-only.
-- `023` does not need to persist a `subject_hint` placeholder if the identity model is not yet decided.
-- `023b` may add authoritative subject-attribution fields later through additive migration.
+- `023` should remain global-quota-only, but the built-in usage schema should leave room for a later `023b` migration without destructive rewrites.
+- It is acceptable to add an optional future-facing field such as `subject_hint` or `installation_id` placeholder, as long as:
+  - it is not treated as a real per-user policy boundary in `023`
+  - it is clearly documented as non-authoritative until `023b`
 
 ## 6. Frontend Implementation Requirements
 
@@ -418,11 +286,6 @@ Rollout guidance:
 - `transcribeViaCloudRelay()` currently hard-fails on empty `apiKey`. That must be narrowed.
 - For built-in Cloudflare mode, the frontend must be able to call the relay without a user key.
 - Do not model this as a generic "empty key is always fine". Keep the exception explicit and provider-aware.
-- The frontend state model should make routing intent explicit with a narrow mode enum such as:
-  - `auto`
-  - `builtin`
-  - `byok`
-- That mode is the browser preference, not the final authority. The backend still computes the effective route.
 - The request path should also carry:
   - `estimatedDurationSeconds` for built-in quota reservation
   - a stable built-in request identity / idempotency key
@@ -477,17 +340,17 @@ Rollout guidance:
   - recent usage events
   - form to enable/disable built-in mode
   - form to set/update daily limit
+  - explicit emergency stop / kill-switch action semantics
 - If cost estimation is shown, label it clearly as estimated and derived from the configured rate assumption.
 - If usage events are shown, they should prefer operational fields such as request id, timestamps, model, estimated seconds, and status. Do not show transcript text or raw audio metadata.
 
 ### 7.4 Admin Audit Visibility
 
-- Structured audit history is optional in `023`.
-- In a single-operator deployment, admin mutation logging is sufficient if a dedicated audit table is deferred.
-- If an audit table is implemented, it should answer:
+- The ops surface should expose enough audit history to answer:
   - who or what changed built-in policy
   - when the change happened
   - what values changed
+- If the current admin surface has no real operator identity, `actor_hint` may be limited, but the audit trail should still record the event itself.
 
 ### 7.5 Admin APIs
 
@@ -497,13 +360,15 @@ Rollout guidance:
   - `PUT /admin/asr/builtin/quota`
   - `GET /admin/asr/builtin/usage/summary`
   - `GET /admin/asr/builtin/usage/events`
+  - `GET /admin/asr/builtin/audit`
 - Keep all admin responses `Cache-Control: no-store`.
 - Do not emit admin token or admin-only URLs into `/env.js`.
 - The quota policy update contract should also cover:
   - built-in enable/disable
+  - emergency kill switch behavior
   - in-flight concurrency limit
   - daily limit
-- If a same-day manual reset operation is introduced later, it must be explicitly guarded; do not make silent destructive quota resets a casual UI action.
+- If a same-day manual reset operation is introduced, it must be auditable and explicitly guarded; do not make silent destructive quota resets a casual UI action.
 
 ## 8. Documentation Requirements
 
@@ -543,29 +408,26 @@ Rollout guidance:
 Backend:
 1. Built-in Cloudflare transcription succeeds without user key when server credentials and quota are available.
 2. Replays/retries of the same built-in request identity do not double-consume quota.
-3. Same `requestId` with different canonical payload fingerprint is rejected.
-4. Empty DB policy state keeps built-in disabled while leaving BYOK intact.
-5. Stale reservations are recoverable and do not permanently block quota.
-6. Built-in request is rejected with `ASR_BUILTIN_QUOTA_EXCEEDED` when reservation would exceed today's limit.
-7. Failed or aborted built-in requests release reservations and do not permanently consume quota.
-8. Built-in in-flight cap rejects excess requests with a built-in busy error instead of queueing unboundedly.
-9. When a valid user-owned provider/key is configured, transcription routes to the user-owned path and does not consume built-in quota.
-10. BYOK providers still require user credentials and are unaffected by built-in mode.
-11. Built-in status endpoint reports `not_configured`, `disabled`, `quota_exhausted`, and healthy states correctly.
-12. Built-in fail-fast byte/duration limits reject oversized requests before upstream.
-13. Admin quota endpoints require valid admin bearer token and return `no-store`.
+3. Built-in request is rejected with `ASR_BUILTIN_QUOTA_EXCEEDED` when reservation would exceed today's limit.
+4. Failed or aborted built-in requests release reservations and do not permanently consume quota.
+5. Built-in in-flight cap rejects excess requests with a built-in busy error instead of queueing unboundedly.
+6. When a valid user-owned provider/key is configured, transcription routes to the user-owned path and does not consume built-in quota.
+7. BYOK providers still require user credentials and are unaffected by built-in mode.
+8. Built-in status endpoint reports `not_configured`, `disabled`, `quota_exhausted`, and healthy states correctly.
+9. Built-in fail-fast byte/duration limits reject oversized requests before upstream.
+10. Admin quota endpoints require valid admin bearer token and return `no-store`.
+11. Admin policy changes create auditable records.
 
 Frontend:
 1. Built-in Cloudflare mode can submit relay requests without user key.
 2. Built-in mode sends bounded `estimatedDurationSeconds`.
 3. Built-in mode sends a stable request identity / idempotency key.
-4. `auto`, `builtin`, and `byok` mode routing semantics are explicit and consistent with backend behavior.
-5. If a valid user-owned provider/key is configured, the frontend routes transcription to that user-owned path by default.
-6. Built-in quota exhaustion error shows blocking UX with Settings CTA only when the request actually targets built-in Cloudflare.
-7. Built-in busy/backpressure error renders a retry-later state distinct from quota exhaustion.
-8. Ops route renders left nav with `Logs` and `ASR Usage`.
-9. ASR Usage page can read and update quota policy through admin APIs.
-10. Ops usage UI shows reservation breakdown and does not expose transcript/raw-audio content.
+4. If a valid user-owned provider/key is configured, the frontend routes transcription to that user-owned path by default.
+5. Built-in quota exhaustion error shows blocking UX with Settings CTA only when the request actually targets built-in Cloudflare.
+6. Built-in busy/backpressure error renders a retry-later state distinct from quota exhaustion.
+7. Ops route renders left nav with `Logs` and `ASR Usage`.
+8. ASR Usage page can read and update quota policy through admin APIs.
+9. Ops usage UI shows reservation breakdown and does not expose transcript/raw-audio content.
 
 ### Manual Verification
 
