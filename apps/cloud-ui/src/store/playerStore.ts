@@ -64,6 +64,7 @@ interface PlayerState {
   // audio state
   audioLoaded: boolean
   audioUrl: string | null
+  playbackSourceUrl: string | null
   audioTitle: string
   coverArtUrl: string | Blob | null
   isPlaying: boolean
@@ -100,6 +101,7 @@ interface PlayerState {
     metadata?: EpisodeMetadata | null,
     isPlaying?: boolean
   ) => void
+  setPlaybackSourceUrl: (url: string | null) => void
 
   setSessionId: (id: string | null) => void
   suspendSessionPersistence: () => void
@@ -134,6 +136,7 @@ interface PlayerState {
 const initialState = {
   audioLoaded: false,
   audioUrl: null as string | null,
+  playbackSourceUrl: null as string | null,
   audioTitle: '',
   coverArtUrl: null as string | Blob | null,
   isPlaying: false,
@@ -230,6 +233,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
       set({
         audioUrl: normalizedUrl,
+        playbackSourceUrl: normalizedUrl,
         audioTitle: title,
         coverArtUrl: coverArt,
         episodeMetadata: metadata,
@@ -252,6 +256,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
     set((state) => ({
       audioUrl: normalizedUrl,
+      playbackSourceUrl: normalizedUrl,
       audioLoaded: !!normalizedUrl,
       audioTitle: title,
       coverArtUrl: coverArt,
@@ -279,6 +284,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   },
 
   setSessionId: (id) => set({ sessionId: id }),
+  setPlaybackSourceUrl: (url) => set({ playbackSourceUrl: url }),
   suspendSessionPersistence: () => set({ sessionPersistenceSuspended: true, sessionId: null }),
   setPlaybackTrackId: (id) => set({ localTrackId: id }),
   setEpisodeMetadata: (metadata) => set({ episodeMetadata: metadata }),
@@ -391,6 +397,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
       return {
         audioUrl: url,
+        playbackSourceUrl: url,
         audioLoaded: true,
         audioTitle: file.name,
         coverArtUrl: null,
@@ -423,6 +430,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
 
       return {
         audioUrl: url,
+        playbackSourceUrl: url,
         audioLoaded: true,
         audioTitle: title,
         coverArtUrl: artwork || null,

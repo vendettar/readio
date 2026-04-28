@@ -56,6 +56,7 @@ describe('GlobalAudioController', () => {
       usePlayerStore.getState().reset()
     })
     vi.clearAllMocks()
+    vi.useRealTimers()
     getNetworkProxyConfigMock.mockReturnValue({
       proxyUrl: '/api/proxy',
       authHeader: '',
@@ -416,6 +417,129 @@ describe('GlobalAudioController', () => {
     expect(setPlayerErrorSpy).toHaveBeenCalledTimes(1)
     expect(usePlayerStore.getState().status).toBe('error')
     expect(usePlayerStore.getState().isPlaying).toBe(false)
+  })
+
+  it('keeps the active playback source pinned to proxy for the same track session after remount', async () => {
+    const { container, unmount } = render(<GlobalAudioController />)
+
+    await act(async () => {
+      usePlayerStore.getState().setAudioUrl('https://cdn.example.com/audio.mp3', 'Sticky Track')
+      usePlayerStore.getState().play()
+      usePlayerStore.getState().setStatus('loading')
+    })
+
+    const audio = container.querySelector('audio') as HTMLAudioElement
+
+    Object.defineProperty(audio, 'currentTime', {
+      configurable: true,
+      value: 4,
+      writable: true,
+    })
+    Object.defineProperty(audio, 'paused', {
+      configurable: true,
+      get: () => true,
+    })
+    Object.defineProperty(audio, 'error', {
+      configurable: true,
+      get: () =>
+        ({
+          code: 2,
+          message: 'connection closed',
+        }) as MediaError,
+    })
+
+    await act(async () => {
+      fireEvent.error(audio)
+    })
+
+    const proxiedSrc = audio.getAttribute('src')
+    expect(proxiedSrc).toContain('/api/proxy?url=')
+
+    unmount()
+
+    const { container: remountedContainer } = render(<GlobalAudioController />)
+    await act(async () => {
+      await Promise.resolve()
+    })
+    const remountedAudio = remountedContainer.querySelector('audio') as HTMLAudioElement
+    expect(remountedAudio.getAttribute('src')).toBe(proxiedSrc)
+  })
+
+  it('fails over to proxy after 3 seconds of direct-load stall without success progress', async () => {
+    vi.useFakeTimers()
+    const { container, rerender } = render(<GlobalAudioController />)
+
+    await act(async () => {
+      usePlayerStore.getState().setAudioUrl('https://cdn.example.com/stalled.mp3', 'Stalled Track')
+      usePlayerStore.getState().play()
+      usePlayerStore.getState().setStatus('loading')
+    })
+
+    rerender(<GlobalAudioController />)
+    const audio = container.querySelector('audio') as HTMLAudioElement
+    await act(async () => {
+      fireEvent.loadStart(audio)
+      await Promise.resolve()
+    })
+
+    await act(async () => {
+      vi.advanceTimersByTime(3000)
+    })
+
+    expect(audio.getAttribute('src')).toContain('/api/proxy?url=')
+    vi.useRealTimers()
+  })
+
+  it('continues using proxy source after seek within the same sticky proxy session', async () => {
+    const { container, rerender } = render(<GlobalAudioController />)
+
+    await act(async () => {
+      usePlayerStore.getState().setAudioUrl('https://cdn.example.com/audio.mp3', 'Seek Track')
+      usePlayerStore.getState().play()
+      usePlayerStore.getState().setStatus('loading')
+    })
+
+    rerender(<GlobalAudioController />)
+    const audio = container.querySelector('audio') as HTMLAudioElement
+
+    Object.defineProperty(audio, 'currentTime', {
+      configurable: true,
+      value: 9,
+      writable: true,
+    })
+    Object.defineProperty(audio, 'paused', {
+      configurable: true,
+      get: () => true,
+    })
+    Object.defineProperty(audio, 'error', {
+      configurable: true,
+      get: () =>
+        ({
+          code: 2,
+          message: 'network closed',
+        }) as MediaError,
+    })
+    Object.defineProperty(audio, 'readyState', {
+      configurable: true,
+      get: () => 1,
+    })
+
+    await act(async () => {
+      fireEvent.error(audio)
+      fireEvent(audio, new Event('loadedmetadata'))
+    })
+
+    const proxiedSrc = audio.getAttribute('src')
+    expect(proxiedSrc).toContain('/api/proxy?url=')
+
+    await act(async () => {
+      usePlayerStore.getState().seekTo(142)
+    })
+
+    rerender(<GlobalAudioController />)
+
+    expect(audio.currentTime).toBe(142)
+    expect(audio.getAttribute('src')).toBe(proxiedSrc)
   })
 
   it('resets sleep timer on onEnded if isEndOfEpisode is true', async () => {

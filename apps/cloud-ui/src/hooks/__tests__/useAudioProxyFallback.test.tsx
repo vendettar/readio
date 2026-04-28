@@ -1,9 +1,9 @@
-import { fireEvent, render } from '@testing-library/react'
+import { act, fireEvent, render } from '@testing-library/react'
 import { useRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { usePlayerStore } from '../../store/playerStore'
 import type { AudioFallbackRecoveryState } from '../audioFallbackRecovery'
-import { useAudioProxyFallback } from '../useAudioProxyFallback'
+import { AUDIO_DIRECT_FAILOVER_TIMEOUT_MS, useAudioProxyFallback } from '../useAudioProxyFallback'
 
 const { buildProxyUrlMock, getNetworkProxyConfigMock, warnMock } = vi.hoisted(() => ({
   buildProxyUrlMock: vi.fn(),
@@ -27,12 +27,18 @@ vi.mock('../../lib/logger', () => ({
 
 interface HarnessProps {
   audioUrl: string | null
+  playbackSourceUrl?: string | null
 }
 
-function Harness({ audioUrl }: HarnessProps) {
+function Harness({ audioUrl, playbackSourceUrl }: HarnessProps) {
   const audioRef = useRef<HTMLAudioElement>(null)
   const recoveryRef = useRef<AudioFallbackRecoveryState>({ isRecovering: false })
-  useAudioProxyFallback({ audioRef, audioUrl, recoveryRef })
+  useAudioProxyFallback({
+    audioRef,
+    audioUrl,
+    playbackSourceUrl: playbackSourceUrl ?? audioUrl,
+    recoveryRef,
+  })
 
   // biome-ignore lint/a11y/useMediaCaption: test-only audio element
   return <audio ref={audioRef} data-testid="audio-proxy-fallback-target" />
@@ -40,6 +46,7 @@ function Harness({ audioUrl }: HarnessProps) {
 
 describe('useAudioProxyFallback', () => {
   beforeEach(() => {
+    vi.useFakeTimers()
     usePlayerStore.getState().reset()
     vi.clearAllMocks()
     getNetworkProxyConfigMock.mockReturnValue({
@@ -53,6 +60,7 @@ describe('useAudioProxyFallback', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.restoreAllMocks()
   })
 
@@ -63,6 +71,7 @@ describe('useAudioProxyFallback', () => {
     usePlayerStore.setState({
       isPlaying: true,
       status: 'loading',
+      playbackSourceUrl: 'https://cdn.example.com/audio.mp3',
     })
 
     const { getByTestId } = render(<Harness audioUrl="https://cdn.example.com/audio.mp3" />)
@@ -85,6 +94,7 @@ describe('useAudioProxyFallback', () => {
     expect(audio.currentTime).toBe(37)
     expect(playSpy).toHaveBeenCalledTimes(1)
     expect(usePlayerStore.getState().status).toBe('loading')
+    expect(usePlayerStore.getState().playbackSourceUrl).toContain('/api/proxy?url=')
   })
 
   it('does not retry indefinitely when proxied playback also errors', () => {
@@ -104,6 +114,26 @@ describe('useAudioProxyFallback', () => {
     expect(warnMock).toHaveBeenCalledWith('[AudioProxyFallback] Proxy also failed, giving up.', {
       audioUrl: 'https://cdn.example.com/audio.mp3',
     })
+  })
+
+  it('fails over to proxy after 3 seconds without ready progress on direct source', async () => {
+    const loadSpy = vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {})
+    usePlayerStore.setState({
+      playbackSourceUrl: 'https://cdn.example.com/audio.mp3',
+    })
+
+    const { getByTestId } = render(<Harness audioUrl="https://cdn.example.com/audio.mp3" />)
+    const audio = getByTestId('audio-proxy-fallback-target') as HTMLAudioElement
+
+    Object.defineProperty(audio, 'currentTime', { value: 0, writable: true, configurable: true })
+
+    await act(async () => {
+      fireEvent.loadStart(audio)
+      vi.advanceTimersByTime(AUDIO_DIRECT_FAILOVER_TIMEOUT_MS)
+    })
+
+    expect(loadSpy).toHaveBeenCalledTimes(1)
+    expect(usePlayerStore.getState().playbackSourceUrl).toContain('/api/proxy?url=')
   })
 
   it('resets retry state when the track changes', () => {
