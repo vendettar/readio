@@ -13,6 +13,7 @@ It does **not** replace:
 Define the minimal SQLite schema needed for:
 - mutable built-in ASR runtime policy
 - request-level quota accounting with idempotency
+- shared transcript asset indexing and lookup
 - optional future admin audit history
 - optional future daily summary acceleration
 
@@ -39,6 +40,7 @@ Keep these in SQLite:
 - daily quota limit
 - in-flight concurrency limit
 - built-in usage ledger
+- shared transcript asset metadata and asset-to-request linkage
 - optional future admin audit trail
 
 These are operator-managed runtime controls and must be mutable without editing env or restarting the service.
@@ -108,6 +110,7 @@ CREATE TABLE asr_builtin_usage_requests (
   estimated_seconds INTEGER NOT NULL,
   status TEXT NOT NULL,
   payload_fingerprint TEXT NOT NULL,
+  transcript_key TEXT,
   failure_code TEXT,
   reserved_at TEXT NOT NULL,
   finalized_at TEXT,
@@ -147,10 +150,54 @@ Required state rules:
 - successful upstream completion finalizes to `consumed`
 - requests that fail before successful completion finalize to `released` or `failed` according to the contract chosen in `023`
 - terminal rows must not transition back to `reserved`
+- `transcript_key` may be null until a shared transcript asset is successfully produced or linked
 
 Minimum replay semantics this table must support:
 - same `request_id` + same `payload_fingerprint` + same `day_key_utc` -> idempotent replay path
 - same `request_id` + different `payload_fingerprint` + same `day_key_utc` -> conflict
+
+## 4.3 `asr_transcript_artifacts`
+
+Purpose:
+- store shared transcript asset metadata
+- support cross-user transcript reuse
+- keep large transcript payloads out of SQLite while preserving deterministic lookup
+
+Recommended shape:
+
+```sql
+CREATE TABLE asr_transcript_artifacts (
+  transcript_key TEXT PRIMARY KEY,
+  itunes_id TEXT NOT NULL,
+  episode_title TEXT NOT NULL,
+  title_slug TEXT NOT NULL,
+  short_key TEXT NOT NULL,
+  audio_fingerprint TEXT NOT NULL,
+  provider TEXT NOT NULL,
+  model TEXT NOT NULL,
+  schema_version INTEGER NOT NULL,
+  normalized_audio_url TEXT,
+  artifact_path TEXT NOT NULL,
+  artifact_encoding TEXT NOT NULL,
+  artifact_size_bytes INTEGER NOT NULL,
+  artifact_sha256 TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  last_accessed_at TEXT,
+  status TEXT NOT NULL
+);
+```
+
+Required semantics:
+- `transcript_key` is the authoritative asset identity
+- `artifact_path` points to a backend-owned file under `PODCASR_TRANSCRIPTS_DIR`
+- `title_slug` and `short_key` are stored path components, not the authoritative identity
+- `normalized_audio_url` is optional lookup/debug metadata, not a substitute for `audio_fingerprint`
+- `status` must distinguish at least reusable vs non-reusable assets if the first implementation chooses to model it
+
+Required boundary:
+- SQLite stores transcript asset metadata only
+- the transcript payload itself lives on disk as a compressed JSON file
 
 ## 5. Optional Future Tables
 
@@ -216,6 +263,19 @@ CREATE INDEX idx_asr_builtin_usage_reserved_at
 ON asr_builtin_usage_requests(reserved_at DESC);
 ```
 
+For shared transcript assets, add:
+
+```sql
+CREATE INDEX idx_asr_transcript_artifacts_itunes_id
+ON asr_transcript_artifacts(itunes_id);
+
+CREATE INDEX idx_asr_transcript_artifacts_audio_fingerprint
+ON asr_transcript_artifacts(audio_fingerprint);
+
+CREATE INDEX idx_asr_transcript_artifacts_last_accessed_at
+ON asr_transcript_artifacts(last_accessed_at);
+```
+
 If the optional audit table is implemented later:
 
 ```sql
@@ -269,7 +329,7 @@ This document deliberately avoids creating per-subject quota tables now.
 
 - Do not store Cloudflare credentials in SQLite.
 - Do not build a generic config subsystem for one built-in ASR feature.
-- Do not store transcript text.
+- Do not store large inline transcript text in SQLite.
 - Do not store raw audio blobs or raw uploaded audio payloads.
 - Do not make request-level audit/state rows unbounded without a retention strategy.
 - Do not add speculative subject-identity columns before `023b` defines the model.
@@ -278,9 +338,10 @@ This document deliberately avoids creating per-subject quota tables now.
 
 1. Add schema migration for `asr_builtin_quota_config`
 2. Add schema migration for `asr_builtin_usage_requests`
-3. Add repository/helpers for policy read/write and reservation insert/finalize
-4. Only then wire built-in ASR provider execution on top of those primitives
-5. Treat audit and daily summary tables as later add-ons if they become operationally necessary
+3. Add schema migration for `asr_transcript_artifacts` plus `transcript_key` linkage
+4. Add repository/helpers for policy read/write, reservation insert/finalize, and transcript-asset lookup/linking
+5. Only then wire built-in ASR provider execution on top of those primitives
+6. Treat audit and daily summary tables as later add-ons if they become operationally necessary
 
 This order reduces drift between quota logic and persistence.
 
@@ -291,8 +352,9 @@ At minimum, implementation should prove:
 1. Empty DB + valid env credentials still yields built-in `disabled/not_configured`
 2. Duplicate `request_id` on the same UTC day does not double-insert usage rows
 3. Same `request_id` with different payload fingerprint is rejected
-4. Admin policy writes increment `version`
-5. Stale `reserved` rows are queryable and recoverable
+4. Shared transcript assets can be looked up deterministically without reading large inline SQLite blobs
+5. Admin policy writes increment `version`
+6. Stale `reserved` rows are queryable and recoverable
 
 If an optional audit table is added later, test it then rather than forcing it into `023`.
 

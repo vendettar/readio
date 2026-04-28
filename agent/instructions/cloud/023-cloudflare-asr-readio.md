@@ -17,7 +17,7 @@ This instruction replaces the earlier draft that targeted `apps/lite` and overlo
 - **Decision**: The admin surface under `/ops` becomes a small multi-page operator console with a left-side section nav. The first two sections are `Logs` and `ASR Usage`.
 - **Decision**: Built-in provider/model selection is backend-owned. The browser may choose "built-in mode", but must not control the actual built-in Cloudflare model identifier.
 - **Decision**: Built-in usage views must distinguish `reserved`, `consumed`, `released`, and `failed`. Structured admin audit persistence is optional in `023`; simple admin mutation logging is acceptable for a single-operator deployment.
-- **Decision**: Built-in ASR storage/logging must follow a privacy-minimizing contract: no transcript text persistence, no raw audio persistence, no credential persistence.
+- **Decision**: Built-in ASR storage/logging must follow a privacy-minimizing contract: no raw audio persistence, no credential persistence, and no large inline transcript-text persistence in SQLite. Shared transcript assets may be persisted as backend-owned file artifacts for cross-user reuse.
 - **Decision**: Per-user usage, per-user cap, and whitelist policy are explicitly deferred to `023b` because current Cloud handoff docs do **not** define a real multi-user identity contract yet.
 - **Decision**: Built-in provider readiness and quota state must have their own contract. Do **not** overload the existing BYOK verification route with built-in readiness semantics.
 - **Bilingual Sync**: Required for `apps/docs`.
@@ -186,6 +186,9 @@ Clarifications:
 
 - Every built-in request must carry a stable request identity, for example `requestId` or `idempotencyKey`.
 - The backend must treat retries of the same built-in request identity as the same accounting unit, not as new quota-consuming work.
+- Request-level idempotency and shared transcript reuse are separate contracts:
+  - request identity prevents duplicate quota consumption for the same logical submit
+  - shared transcript assets allow later viewers to reuse an already produced transcript without re-running ASR
 - This applies to:
   - browser retry after transient failure
   - duplicate submit from UI race
@@ -202,7 +205,8 @@ Clarifications:
   - same `requestId` + same canonical payload fingerprint + same UTC day -> idempotent replay
   - same `requestId` + different canonical payload fingerprint + same UTC day -> conflict, reject
   - duplicate replay while the original request is still in `reserved` -> return the same logical request outcome path, do not double-reserve
-  - replay after terminal success/failure within the retention window -> do not create a new usage row
+  - replay after terminal success -> do not create a new usage row; return or relink to the same shared transcript asset when available
+  - replay after terminal failure -> do not create a new usage row; return the same logical failure outcome path
 - The backend, not the frontend, owns canonical payload fingerprinting for idempotency comparison.
 
 ### 4.3.1 Canonical Payload Fingerprint Contract

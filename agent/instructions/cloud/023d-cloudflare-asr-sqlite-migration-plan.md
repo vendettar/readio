@@ -57,6 +57,9 @@ apps/cloud-api/
     0001_create_asr_builtin_quota_config.sql
     0002_create_asr_builtin_usage_requests.sql
     0003_create_asr_builtin_usage_indexes.sql
+    0004_add_asr_builtin_usage_transcript_key.sql
+    0005_create_asr_transcript_artifacts.sql
+    0006_create_asr_transcript_artifact_indexes.sql
   ...
 ```
 
@@ -185,6 +188,7 @@ This plan should scale to later work such as:
 - `023b` subject-governance tables
 - optional audit table addition
 - optional daily summary table addition
+- transcript-asset lifecycle/index changes required by `023e`
 
 Those later schema changes should arrive as new versioned migrations, not as edits to historical migration files.
 
@@ -202,7 +206,10 @@ For the first implementation that follows `023c`, the expected initial migration
 
 1. create `asr_builtin_quota_config`
 2. create `asr_builtin_usage_requests`
-3. create the required indexes defined in `023c`
+3. create the required usage-ledger indexes defined in `023c`
+4. add `transcript_key` linkage to `asr_builtin_usage_requests`
+5. create `asr_transcript_artifacts`
+6. create the required transcript-asset indexes defined in `023c`
 
 If optional future tables are later approved, add them in later numbered migrations rather than front-loading them now.
 

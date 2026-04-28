@@ -76,6 +76,7 @@ The deployment guide assumes those prerequisites already exist. If any are missi
 The workflow expects this layout on the VPS:
 
 - `/opt/readio/shared/data/` for persistent SQLite data
+- `/opt/readio/shared/data/podcast/transcripts/` for backend-owned shared podcast transcript assets
 - `/opt/readio/releases/<git-sha>/` for release artifacts
 - `/opt/readio/current` as the runtime pointer
 
@@ -84,6 +85,8 @@ Runtime contract:
 - the service should execute the binary from the `current` release path or use `WorkingDirectory=/opt/readio/current`
 - the Cloud app must be able to resolve the colocated `dist/` directory from the active release
 - the SQLite database path must stay under `/opt/readio/shared/data/` (or another shared persistent path outside release directories)
+- `READIO_CLOUD_DB_PATH` should point directly to a database file under the shared persistent data root, for example `/opt/readio/shared/data/readio.db`
+- shared built-in podcast transcript assets must stay under `/opt/readio/shared/data/podcast/transcripts/` (or another shared persistent path outside release directories)
 - the service must export `PORT` for the listen port; do not use `READIO_PORT` for this contract
 
 Each release directory contains:
@@ -92,6 +95,12 @@ Each release directory contains:
 - `dist/`
 
 The workflow creates the remote directories before transfer and never wipes the parent deployment tree, so the SQLite `data/` directory is preserved.
+
+Database startup contract:
+
+- the deployer must pre-create the parent directory of `READIO_CLOUD_DB_PATH`
+- `apps/cloud-api` applies goose migrations automatically during startup before serving requests
+- if a required migration fails, startup fails closed and the service should remain unavailable until the migration problem is fixed
 
 ## 3a. VPS bootstrap for a fresh host
 
@@ -136,16 +145,18 @@ SERVICE_NAME="readio-cloud"
 REMOTE_ROOT="/opt/readio"
 RELEASES_DIR="$REMOTE_ROOT/releases"
 SHARED_DATA_DIR="$REMOTE_ROOT/shared/data"
+PODCASR_TRANSCRIPTS_DIR="$SHARED_DATA_DIR/podcast/transcripts"
 CURRENT_DIR="$REMOTE_ROOT/current"
 DB_PATH="$SHARED_DATA_DIR/readio.db"
 
 sudo mkdir -p "$RELEASES_DIR"
 sudo mkdir -p "$SHARED_DATA_DIR"
+sudo mkdir -p "$PODCASR_TRANSCRIPTS_DIR"
 sudo mkdir -p /etc/readio
 sudo chown -R "$DEPLOY_USER:$DEPLOY_GROUP" "$REMOTE_ROOT"
 
 sudo tee /etc/readio/readio-cloud.env >/dev/null <<EOF
-READIO_ASR_ALLOWED_ORIGINS=https://www.readio.top
+READIO_ASR_ALLOWED_ORIGINS=https://readio.top,https://www.readio.top
 READIO_ASR_RELAY_PUBLIC_TOKEN=replace-with-a-long-random-token
 READIO_ASR_RATE_LIMIT_BURST=60
 READIO_ASR_RATE_LIMIT_WINDOW_MS=60000
@@ -162,6 +173,9 @@ READIO_ASR_WORKER_SHARED_SECRET=your-high-entropy-secret-string
 # Built-in Cloudflare ASR config (required for "system-provided" Cloudflare ASR)
 READIO_CF_ACCOUNT_ID=your-cloudflare-account-id
 READIO_CF_API_TOKEN=your-cloudflare-api-token
+READIO_ASR_BUILTIN_ALLOWED=true
+# Optional built-in model override; omit to use the backend default.
+# READIO_ASR_BUILTIN_MODEL=@cf/openai/whisper-large-v3-turbo
 # PodcastIndex supplementary hydration config (required for PodcastIndex cutover)
 PODCAST_INDEX_API_KEY=your-podcastindex-api-key
 PODCAST_INDEX_API_SECRET=your-podcastindex-api-secret
@@ -205,10 +219,14 @@ Important details:
 - The binary path is `/opt/readio/current/readio-cloud`.
 - The static Cloud UI assets are served from `/opt/readio/current/dist`.
 - The SQLite file stays outside release directories, for example `/opt/readio/shared/data/readio.db`.
+- Shared built-in podcast transcript assets should stay outside release directories, for example `/opt/readio/shared/data/podcast/transcripts/`.
+- The deployer is responsible for pre-creating the parent directory of `READIO_CLOUD_DB_PATH`; the service may assume that directory already exists.
 - `/etc/readio/readio-cloud.env` is the recommended home for mutable Cloud runtime configuration.
 - PodcastIndex supplementary hydration credentials and user agent also belong in `/etc/readio/readio-cloud.env`.
 - If `PODCAST_INDEX_API_KEY` or `PODCAST_INDEX_API_SECRET` is missing, `/api/v1/discovery/podcast-index/episodes` will return `503 DISCOVERY_PROVIDER_NOT_CONFIGURED`.
 - Cloud ASR relay protection is driven by `READIO_ASR_ALLOWED_ORIGINS`, `READIO_ASR_RELAY_PUBLIC_TOKEN`, `READIO_ASR_RATE_LIMIT_BURST`, and `READIO_ASR_RATE_LIMIT_WINDOW_MS`.
+- Built-in Cloudflare ASR capability is gated by `READIO_CF_ACCOUNT_ID`, `READIO_CF_API_TOKEN`, and `READIO_ASR_BUILTIN_ALLOWED`.
+- Built-in ASR quota policy is **not** auto-enabled on first boot. After deployment, go to `/ops` -> `ASR Usage` and set the runtime policy row explicitly.
 - Cloud proxy rate limiting is driven by `READIO_PROXY_RATE_LIMIT_BURST` and `READIO_PROXY_RATE_LIMIT_WINDOW_MS`.
 - Discovery feed caching is driven by:
   - `READIO_DISCOVERY_FEED_CACHE_TTL_MS` (default `300000`; set `0` or a negative value to disable the feed cache)
@@ -220,6 +238,7 @@ Important details:
 - Configure `READIO_ASR_RELAY_PUBLIC_TOKEN` once in backend runtime env. In production Cloud, `apps/cloud-api` emits the same browser-public value through dynamic `/env.js`, so the browser can send `X-Readio-Relay-Public-Token` without a separately maintained frontend runtime token. This is a lightweight abuse-control value, not a secret boundary.
 - Cloud ASR relay is a browser-facing same-origin endpoint. Requests must include a valid `Origin`; requests with a missing or disallowed `Origin` are rejected.
 - `READIO_ASR_ALLOWED_ORIGINS` is an explicit operator-authored allowlist. Write exact origins such as `https://www.readio.top` or `https://example.com:8443`; do not rely on implicit default-port normalization inside the allowlist.
+- Built-in ASR readiness is exposed through `GET /api/v1/asr/builtin/status`. It intentionally reports only availability plus a narrow reason code; exact quota remains operator-only in `/ops`.
 - The workflow already uses `sudo -n`, so the deploy user must be able to run both `systemctl restart` and `systemctl is-active` without a password prompt.
 - The workflow points `/opt/readio/current` at the new release before it restarts the service, so the first restart on a fresh host needs that release directory to exist.
 
@@ -232,9 +251,13 @@ sudo systemctl daemon-reload
 sudo systemctl restart readio-cloud
 ```
 
+When startup fails immediately after a release, inspect the service logs first. Cloud startup now includes automatic goose migrations, so a migration error is expected to keep the service down rather than serving against a mismatched schema.
+
 ## 4. Publish flow
 
 The deployment is release-scoped and atomic at the pointer level:
+
+Before production rollout, run the same release in a pre-production environment that uses the same startup path, SQLite/goose wiring, and shared-data layout shape. Production should not be the first environment where a new migration set is exercised.
 
 1. Build Cloud UI and Cloud API on the GitHub runner.
 2. Stage artifacts locally under `release/`.
