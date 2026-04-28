@@ -1426,15 +1426,22 @@ func asrRelayStatusToError(resp *http.Response) *asrRelayErrorPayload {
 			base = ErrASRProviderClientError
 		}
 	}
-	if retryAfterMs != nil && *retryAfterMs > 0 {
-		return &asrRelayErrorPayload{
-			Status:       base.Status,
-			Code:         base.Code,
-			Message:      base.Message,
-			RetryAfterMs: retryAfterMs,
-		}
+
+	errMsg := base.Message
+	if body, err := io.ReadAll(resp.Body); err == nil && len(body) > 0 {
+		errMsg = fmt.Sprintf("%s (HTTP %d): %s", base.Message, resp.StatusCode, string(body))
 	}
-	return base
+
+	payload := &asrRelayErrorPayload{
+		Status:  base.Status,
+		Code:    base.Code,
+		Message: errMsg,
+	}
+
+	if retryAfterMs != nil && *retryAfterMs > 0 {
+		payload.RetryAfterMs = retryAfterMs
+	}
+	return payload
 }
 
 func asrRelayInternalError(message string) *asrRelayErrorPayload {

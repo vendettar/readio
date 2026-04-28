@@ -1,4 +1,12 @@
 {
   "title": "Cloud 交接文档",
-  "pages": ["index", "environment", "standards", "architecture", "database", "features"]
+  "pages": [
+    "index",
+    "environment",
+    "standards",
+    "architecture",
+    "database",
+    "backend-sqlite-governance",
+    "features"
+  ]
 }
