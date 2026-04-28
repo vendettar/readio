@@ -76,6 +76,7 @@ SSH 安全规则：
 工作流在 VPS 上预期如下布局：
 
 - `/opt/readio/shared/data/`：持久化 SQLite 数据
+- `/opt/readio/shared/data/podcast/transcripts/`：后端持有、可跨用户复用的播客字幕资产
 - `/opt/readio/releases/<git-sha>/`：发布产物
 - `/opt/readio/current`：运行时指针
 
@@ -84,6 +85,8 @@ SSH 安全规则：
 - 服务应从 `current` 指向的发布目录执行二进制，或在 `systemd` 中使用 `WorkingDirectory=/opt/readio/current`
 - Cloud 应用必须能从当前激活发布目录解析同目录下的 `dist/`
 - SQLite 数据库路径必须保持在 `/opt/readio/shared/data/` 下，或其他位于发布目录之外的共享持久路径中
+- `READIO_CLOUD_DB_PATH` 应直接指向 shared persistent data root 下的数据库文件，例如 `/opt/readio/shared/data/readio.db`
+- 共享的 built-in 播客字幕资产必须保持在 `/opt/readio/shared/data/podcast/transcripts/` 下，或其他位于发布目录之外的共享持久路径中
 - 服务必须为监听端口导出 `PORT`；不要在这个契约里使用 `READIO_PORT`
 
 每个发布目录包含：
@@ -92,6 +95,12 @@ SSH 安全规则：
 - `dist/`
 
 工作流会先创建远程目录再传输，且不会清空部署根目录，因此 SQLite 的 `data/` 会被保留。
+
+数据库启动契约：
+
+- deployer 必须预先创建 `READIO_CLOUD_DB_PATH` 的父目录
+- `apps/cloud-api` 会在启动时、开始提供请求之前自动执行 goose migrations
+- 如果必需的 migration 失败，启动应 fail closed，服务保持不可用，直到 migration 问题被修复
 
 ## 3a. 新主机 VPS 启动
 
@@ -136,16 +145,18 @@ SERVICE_NAME="readio-cloud"
 REMOTE_ROOT="/opt/readio"
 RELEASES_DIR="$REMOTE_ROOT/releases"
 SHARED_DATA_DIR="$REMOTE_ROOT/shared/data"
+PODCASR_TRANSCRIPTS_DIR="$SHARED_DATA_DIR/podcast/transcripts"
 CURRENT_DIR="$REMOTE_ROOT/current"
 DB_PATH="$SHARED_DATA_DIR/readio.db"
 
 sudo mkdir -p "$RELEASES_DIR"
 sudo mkdir -p "$SHARED_DATA_DIR"
+sudo mkdir -p "$PODCASR_TRANSCRIPTS_DIR"
 sudo mkdir -p /etc/readio
 sudo chown -R "$DEPLOY_USER:$DEPLOY_GROUP" "$REMOTE_ROOT"
 
 sudo tee /etc/readio/readio-cloud.env >/dev/null <<EOF
-READIO_ASR_ALLOWED_ORIGINS=https://www.readio.top
+READIO_ASR_ALLOWED_ORIGINS=https://readio.top,https://www.readio.top
 READIO_ASR_RELAY_PUBLIC_TOKEN=replace-with-a-long-random-token
 READIO_ASR_RATE_LIMIT_BURST=60
 READIO_ASR_RATE_LIMIT_WINDOW_MS=60000
@@ -162,6 +173,9 @@ READIO_ASR_WORKER_SHARED_SECRET=your-high-entropy-secret-string
 # 内置 Cloudflare ASR 配置 (使用“系统提供”模式时必填)
 READIO_CF_ACCOUNT_ID=your-cloudflare-account-id
 READIO_CF_API_TOKEN=your-cloudflare-api-token
+READIO_ASR_BUILTIN_ALLOWED=true
+# 可选的 built-in model override；不写时使用后端默认值。
+# READIO_ASR_BUILTIN_MODEL=@cf/openai/whisper-large-v3-turbo
 # PodcastIndex 补充历史 episode 配置 (切换到 PodcastIndex supplementary hydration 时必填)
 PODCAST_INDEX_API_KEY=your-podcastindex-api-key
 PODCAST_INDEX_API_SECRET=your-podcastindex-api-secret
@@ -205,10 +219,14 @@ sudo "$SYSTEMCTL_BIN" enable "$SERVICE_NAME"
 - 二进制路径是 `/opt/readio/current/readio-cloud`。
 - Cloud UI 静态资源从 `/opt/readio/current/dist` 提供。
 - SQLite 文件应保留在发布目录之外，例如 `/opt/readio/shared/data/readio.db`。
+- 共享的 built-in 播客字幕资产也应保留在发布目录之外，例如 `/opt/readio/shared/data/podcast/transcripts/`。
+- `READIO_CLOUD_DB_PATH` 的父目录由 deployer 预先创建；服务可以假设该目录已经存在。
 - `/etc/readio/readio-cloud.env` 是推荐的 Cloud 可变运行时配置位置。
 - PodcastIndex supplementary hydration 的凭证和 user agent 也应写在 `/etc/readio/readio-cloud.env`。
 - 如果缺少 `PODCAST_INDEX_API_KEY` 或 `PODCAST_INDEX_API_SECRET`，`/api/v1/discovery/podcast-index/episodes` 会返回 `503 DISCOVERY_PROVIDER_NOT_CONFIGURED`。
 - Cloud ASR relay 的防滥用边界依赖 `READIO_ASR_ALLOWED_ORIGINS`、`READIO_ASR_RELAY_PUBLIC_TOKEN`、`READIO_ASR_RATE_LIMIT_BURST`、`READIO_ASR_RATE_LIMIT_WINDOW_MS`。
+- Built-in Cloudflare ASR 能力由 `READIO_CF_ACCOUNT_ID`、`READIO_CF_API_TOKEN` 和 `READIO_ASR_BUILTIN_ALLOWED` 共同决定。
+- Built-in ASR 的 quota policy 不会在首次启动时自动启用。部署完成后，需要进入 `/ops` -> `ASR Usage` 显式写入运行时 policy row。
 - Cloud `/api/proxy` 的应用级速率限制由 `READIO_PROXY_RATE_LIMIT_BURST` 和 `READIO_PROXY_RATE_LIMIT_WINDOW_MS` 控制。
 - Discovery feed cache 由以下配置控制：
   - `READIO_DISCOVERY_FEED_CACHE_TTL_MS`（默认 `300000`；设为 `0` 或负数时禁用 feed cache）
@@ -220,6 +238,7 @@ sudo "$SYSTEMCTL_BIN" enable "$SERVICE_NAME"
 - `READIO_ASR_RELAY_PUBLIC_TOKEN` 只需要在后端运行时环境中配置一次。生产 Cloud 会由 `apps/cloud-api` 动态生成 `/env.js`，把同一个浏览器可见值下发给前端，因此不再需要额外维护一份前端运行时 token。它只是轻量级防滥用值，不是强 secret 边界。
 - Cloud ASR relay 是 browser-facing 的 same-origin endpoint。请求必须带合法 `Origin`；缺失或不被允许的 `Origin` 会被直接拒绝。
 - `READIO_ASR_ALLOWED_ORIGINS` 是运维显式编写的 allowlist。请写完整 origin，例如 `https://www.readio.top` 或 `https://example.com:8443`；不要依赖 allowlist 内部对默认端口做隐式归一化。
+- Built-in ASR readiness 通过 `GET /api/v1/asr/builtin/status` 暴露。它刻意只返回 availability 与窄 reason code；精确 quota 仍然只在 `/ops` 中对运维可见。
 - 工作流已经使用 `sudo -n`，因此部署用户必须能够无密码执行 `systemctl restart` 和 `systemctl is-active`。
 - 工作流会在重启服务前把 `/opt/readio/current` 指向新发布目录，所以新主机第一次重启前必须已经存在对应发布目录。
 
@@ -232,6 +251,8 @@ sudo systemctl daemon-reload
 sudo systemctl restart readio-cloud
 ```
 
+如果一次发布后服务在启动阶段立刻失败，先看 service logs。Cloud 启动链路现在包含自动 goose migrations，因此 migration error 本来就应该阻止服务继续启动，而不是带着不匹配的 schema 提供请求。
+
 建议在 VPS 上做的预启动验证：
 
 ```bash
@@ -243,6 +264,8 @@ curl -fsS http://127.0.0.1:8080/healthz
 ## 4. 发布流程
 
 部署采用按版本号分段的发布方式，并且仅在指针层面保持原子性：
+
+正式生产发布前，先在 pre-production 环境跑同一个 release，并确保它使用相同的启动路径、SQLite/goose wiring 和 shared-data 布局形态。生产环境不应该成为第一次执行一组新 migrations 的环境。
 
 1. 在 GitHub runner 上构建 Cloud UI 和 Cloud API。
 2. 将产物先暂存到本地 `release/`。

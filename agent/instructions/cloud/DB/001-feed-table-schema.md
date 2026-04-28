@@ -8,7 +8,7 @@ This file is now the **master plan / parent instruction**.
 Implementation should be executed through the child instructions below, in order.
 
 This master plan now inherits the repository-wide SQLite migration delivery rules pinned in:
-- [023d-cloudflare-asr-sqlite-migration-plan.md](/Users/Leo_Qiu/Documents/dev/readio/agent/instructions/cloud/023d-cloudflare-asr-sqlite-migration-plan.md)
+- [023a-cloud-backend-sqlite-goose-foundation.md](/Users/Leo_Qiu/Documents/dev/readio/agent/instructions/cloud/023a-cloud-backend-sqlite-goose-foundation.md)
 
 That means the feed-cache schema must follow the same backend DB discipline:
 - versioned SQL migrations
