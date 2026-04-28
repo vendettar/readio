@@ -3,14 +3,14 @@ import { useEffect } from 'react'
 
 interface UseAudioElementSyncParams {
   audioRef: React.RefObject<HTMLAudioElement | null>
-  audioUrl: string | null
+  playbackSourceUrl: string | null
   volume: number
   playbackRate: number
 }
 
 export function useAudioElementSync({
   audioRef,
-  audioUrl,
+  playbackSourceUrl,
   volume,
   playbackRate,
 }: UseAudioElementSyncParams): void {
@@ -18,7 +18,7 @@ export function useAudioElementSync({
     const audio = audioRef.current
     if (!audio) return
 
-    if (!audioUrl) {
+    if (!playbackSourceUrl) {
       if (audio.getAttribute('src') !== null) {
         audio.removeAttribute('src')
         audio.load()
@@ -26,22 +26,22 @@ export function useAudioElementSync({
       return
     }
 
-    if (audio.getAttribute('src') !== audioUrl) {
-      audio.src = audioUrl
+    if (audio.getAttribute('src') !== playbackSourceUrl) {
+      audio.src = playbackSourceUrl
     }
-  }, [audioRef, audioUrl])
+  }, [audioRef, playbackSourceUrl])
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: Re-sync volume when audio source changes
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.volume = volume
     }
-  }, [audioRef, volume, audioUrl])
+  }, [audioRef, volume, playbackSourceUrl])
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: Re-sync playbackRate when audio source changes
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.playbackRate = playbackRate
     }
-  }, [audioRef, playbackRate, audioUrl])
+  }, [audioRef, playbackRate, playbackSourceUrl])
 }

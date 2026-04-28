@@ -166,12 +166,12 @@ export function useSession() {
     async (audioElement: HTMLAudioElement) => {
       const state = usePlayerStore.getState()
       const currentSessionId = state.sessionId
-      const audioIdentity = audioElement.currentSrc || audioElement.src || state.audioUrl || ''
+      const audioIdentity = resolveSessionAudioSnapshot(state.audioUrl, state.episodeMetadata) ?? ''
       const restoreKey = `${currentSessionId ?? ''}::${audioIdentity}`
       const isRestoreTargetCurrent = (): boolean => {
         const liveState = usePlayerStore.getState()
         const liveAudioIdentity =
-          audioElement.currentSrc || audioElement.src || liveState.audioUrl || ''
+          resolveSessionAudioSnapshot(liveState.audioUrl, liveState.episodeMetadata) ?? ''
         return liveState.sessionId === currentSessionId && liveAudioIdentity === audioIdentity
       }
 
