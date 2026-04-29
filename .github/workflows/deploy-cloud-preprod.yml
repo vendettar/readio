@@ -1,0 +1,143 @@
+name: Deploy Cloud Pre-Production
+
+on:
+  workflow_run:
+    workflows: ["Release Cloud Build"]
+    types:
+      - completed
+    branches: [main]
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: cloud-preproduction-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: cloud-preproduction
+    env:
+      SSH_HOST: ${{ secrets.CLOUD_SSH_HOST }}
+      SSH_PORT: ${{ secrets.CLOUD_SSH_PORT || '22' }}
+      SSH_USER: ${{ secrets.CLOUD_SSH_USER }}
+      REMOTE_ROOT: ${{ vars.CLOUD_REMOTE_ROOT }}
+      SERVICE_NAME: ${{ vars.CLOUD_SERVICE_NAME }}
+      CLOUD_PORT: ${{ vars.CLOUD_PORT }}
+
+    steps:
+      - name: Resolve release artifact source
+        id: resolve-artifact
+        uses: actions/github-script@v8
+        with:
+          script: |
+            core.setOutput('run_id', String(context.payload.workflow_run.id))
+            core.setOutput('sha', context.payload.workflow_run.head_sha)
+
+      - name: Download release artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: cloud-release-${{ steps.resolve-artifact.outputs.sha }}
+          run-id: ${{ steps.resolve-artifact.outputs.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Display artifact contents
+        run: |
+          echo "=== Release Artifact ==="
+          ls -la
+          echo ""
+          echo "=== Manifest ==="
+          cat manifest.json
+
+      - name: Derive remote paths
+        run: |
+          echo "RELEASE_SHA=${{ steps.resolve-artifact.outputs.sha }}" >> "$GITHUB_ENV"
+          echo "REMOTE_RELEASES_DIR=$REMOTE_ROOT/releases" >> "$GITHUB_ENV"
+          echo "REMOTE_CURRENT_DIR=$REMOTE_ROOT/current" >> "$GITHUB_ENV"
+          echo "REMOTE_SHARED_DATA_DIR=$REMOTE_ROOT/shared/data" >> "$GITHUB_ENV"
+          echo "RESOLVED_RELEASE_DIR=$REMOTE_ROOT/releases/${{ steps.resolve-artifact.outputs.sha }}" >> "$GITHUB_ENV"
+
+      - name: Setup SSH known hosts
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.CLOUD_SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          printf '%s\n' "${{ secrets.CLOUD_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/known_hosts ~/.ssh/id_ed25519
+
+      - name: Create remote release directory
+        run: |
+          ssh -i ~/.ssh/id_ed25519 \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -p "$SSH_PORT" \
+            "$SSH_USER@$SSH_HOST" \
+            "mkdir -p '$REMOTE_ROOT' '$REMOTE_SHARED_DATA_DIR' '$RESOLVED_RELEASE_DIR'"
+
+      - name: Transfer release artifacts
+        run: |
+          rsync -a \
+            -e "ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts -p $SSH_PORT" \
+            ./ \
+            "$SSH_USER@$SSH_HOST:$RESOLVED_RELEASE_DIR/"
+
+      - name: Publish release and restart
+        run: |
+          ssh -i ~/.ssh/id_ed25519 \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -p "$SSH_PORT" \
+            "$SSH_USER@$SSH_HOST" \
+            "set -euo pipefail
+            chmod 755 '$RESOLVED_RELEASE_DIR/readio-cloud'
+            test -d '$RESOLVED_RELEASE_DIR/dist'
+            ln -sfn '$RESOLVED_RELEASE_DIR' '$REMOTE_CURRENT_DIR'
+
+            if ! sudo -n /usr/bin/systemctl restart '$SERVICE_NAME'; then
+              sudo -n /usr/bin/systemctl status '$SERVICE_NAME' --no-pager -l || true
+              sudo -n /usr/bin/journalctl -u '$SERVICE_NAME' -n 100 --no-pager || true
+              exit 1
+            fi
+
+            if ! sudo -n /usr/bin/systemctl is-active --quiet '$SERVICE_NAME'; then
+              sudo -n /usr/bin/systemctl status '$SERVICE_NAME' --no-pager -l || true
+              sudo -n /usr/bin/journalctl -u '$SERVICE_NAME' -n 100 --no-pager || true
+              exit 1
+            fi"
+
+      - name: Smoke test
+        run: |
+          echo "=== Smoke Tests ==="
+          echo "1. Checking binary exists on server..."
+          ssh -i ~/.ssh/id_ed25519 \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -p "$SSH_PORT" \
+            "$SSH_USER@$SSH_HOST" \
+            "test -x '$REMOTE_CURRENT_DIR/readio-cloud' && echo 'Binary: OK' || (echo 'Binary: MISSING' && exit 1)"
+
+          echo "2. Checking localhost healthz endpoint..."
+          ssh -i ~/.ssh/id_ed25519 \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -p "$SSH_PORT" \
+            "$SSH_USER@$SSH_HOST" \
+            "curl -fsS 'http://127.0.0.1:${CLOUD_PORT}/healthz' >/dev/null && echo 'healthz: OK' || (echo 'healthz: FAILED' && exit 1)"
+
+          echo "3. Checking localhost env.js endpoint..."
+          ssh -i ~/.ssh/id_ed25519 \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            -p "$SSH_PORT" \
+            "$SSH_USER@$SSH_HOST" \
+            "curl -fsS 'http://127.0.0.1:${CLOUD_PORT}/env.js' >/dev/null && echo 'env.js: OK' || (echo 'env.js: FAILED' && exit 1)"
+
+          echo "=== All smoke tests passed ==="

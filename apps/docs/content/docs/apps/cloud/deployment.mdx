@@ -5,7 +5,13 @@ description: Operational guide for the Cloud CD workflow and remote release layo
 
 # Cloud Deployment Guide
 
-This guide matches `.github/workflows/cd-cloud.yml` and documents the deployment contract only.
+This guide matches:
+
+- `.github/workflows/release-cloud-build.yml`
+- `.github/workflows/deploy-cloud-preprod.yml`
+- `.github/workflows/deploy-cloud-prod.yml`
+
+and documents the deployment contract only.
 It does not provision the VPS, nginx, TLS, firewall rules, or `systemd`.
 
 ## 0a. Production Runtime Config Contract
@@ -35,7 +41,15 @@ See `handoff/runtime-config-ownership-audit.md` for the full config audit.
 
 ## 2. Required GitHub configuration
 
-Use the protected `cloud-production` GitHub Environment for deploy secrets and optional approval.
+Use two GitHub Environments:
+
+- `cloud-preproduction` for the automatic pre-production deployment
+- `cloud-production` for the manual production promotion
+
+Environment-scoped configuration split:
+
+- `cloud-preproduction` needs the SSH secrets and host identity material required to deploy to the VPS, plus the pre-production deployment topology variables listed below
+- `cloud-production` uses the same SSH secrets and also expects the production-facing variables below
 
 Secrets:
 
@@ -47,8 +61,27 @@ Secrets:
 
 Variables:
 
-- `CLOUD_SERVICE_NAME` with default `readio-cloud`
-- `CLOUD_PORT` with default `8080`
+Shared deployment topology variables, defined separately per GitHub Environment:
+
+- `CLOUD_REMOTE_ROOT`
+- `CLOUD_SERVICE_NAME`
+- `CLOUD_PORT`
+
+Additional production variable:
+
+- `CLOUD_PUBLIC_BASE_URL` for the browser-facing production smoke checks
+
+Recommended values:
+
+- `cloud-preproduction`
+  - `CLOUD_REMOTE_ROOT=/opt/readio-pre`
+  - `CLOUD_SERVICE_NAME=readio-cloud-pre`
+  - `CLOUD_PORT=8079`
+- `cloud-production`
+  - `CLOUD_REMOTE_ROOT=/opt/readio`
+  - `CLOUD_SERVICE_NAME=readio-cloud`
+  - `CLOUD_PORT=8080`
+  - `CLOUD_PUBLIC_BASE_URL=https://readio.top`
 
 SSH security rules:
 
@@ -64,7 +97,9 @@ Before the workflow can succeed, the target VPS must already provide:
 - SSH access for that user with the uploaded private key
 - `rsync` installed on the VPS
 - `curl` installed on the VPS for the health probe
-- `systemd` with an existing service whose name matches `CLOUD_SERVICE_NAME`
+- `systemd` with:
+  - an existing production service whose name matches `CLOUD_SERVICE_NAME`
+  - an existing pre-production service named `readio-cloud-pre`
 - permission for the SSH user to restart and inspect that service
   - either the SSH user directly owns the service
   - or the SSH user has non-interactive permission to run the required `systemctl` commands
@@ -138,8 +173,8 @@ Example bootstrap script:
 #!/usr/bin/env bash
 set -euo pipefail
 
-DEPLOY_USER="$(id -un)"
-DEPLOY_GROUP="$(id -gn)"
+DEPLOY_USER="${SUDO_USER:-$(id -un)}"
+DEPLOY_GROUP="$(id -gn "$DEPLOY_USER")"
 SYSTEMCTL_BIN="$(command -v systemctl)"
 SERVICE_NAME="readio-cloud"
 REMOTE_ROOT="/opt/readio"
@@ -148,6 +183,9 @@ SHARED_DATA_DIR="$REMOTE_ROOT/shared/data"
 PODCASR_TRANSCRIPTS_DIR="$SHARED_DATA_DIR/podcast/transcripts"
 CURRENT_DIR="$REMOTE_ROOT/current"
 DB_PATH="$SHARED_DATA_DIR/readio.db"
+ENV_FILE="/etc/readio/readio-cloud.env"
+SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+SUDOERS_FILE="/etc/sudoers.d/readio-cloud-cd"
 
 sudo mkdir -p "$RELEASES_DIR"
 sudo mkdir -p "$SHARED_DATA_DIR"
@@ -155,9 +193,9 @@ sudo mkdir -p "$PODCASR_TRANSCRIPTS_DIR"
 sudo mkdir -p /etc/readio
 sudo chown -R "$DEPLOY_USER:$DEPLOY_GROUP" "$REMOTE_ROOT"
 
-sudo tee /etc/readio/readio-cloud.env >/dev/null <<EOF
+sudo tee "$ENV_FILE" >/dev/null <<'EOF'
 READIO_ASR_ALLOWED_ORIGINS=https://readio.top,https://www.readio.top
-READIO_ASR_RELAY_PUBLIC_TOKEN=replace-with-a-long-random-token
+READIO_ADMIN_TOKEN=replace-with-a-long-random-admin-token
 READIO_ASR_RATE_LIMIT_BURST=60
 READIO_ASR_RATE_LIMIT_WINDOW_MS=60000
 READIO_PROXY_RATE_LIMIT_BURST=5
@@ -167,9 +205,15 @@ READIO_DISCOVERY_FEED_CACHE_TTL_MS=300000
 READIO_DISCOVERY_FEED_CACHE_MAX_ENTRIES=12
 READIO_DISCOVERY_FEED_CACHE_MAX_EPISODES=300
 READIO_DISCOVERY_FEED_CACHE_MAX_BYTES=1048576
+
+READIO_TRUSTED_PROXY_CIDRS=replace-with-your-trusted-proxy-cidrs
+
 # ASR Proxy Worker config (optional)
 READIO_ASR_WORKER_BASE_URL=https://asr-proxy.example.workers.dev
 READIO_ASR_WORKER_SHARED_SECRET=your-high-entropy-secret-string
+
+READIO_ASR_RELAY_PUBLIC_TOKEN=replace-with-a-long-random-token
+
 # Built-in Cloudflare ASR config (required for "system-provided" Cloudflare ASR)
 READIO_CF_ACCOUNT_ID=your-cloudflare-account-id
 READIO_CF_API_TOKEN=your-cloudflare-api-token
@@ -181,9 +225,9 @@ PODCAST_INDEX_API_KEY=your-podcastindex-api-key
 PODCAST_INDEX_API_SECRET=your-podcastindex-api-secret
 PODCAST_INDEX_USER_AGENT=Readio/1.0 (+https://www.readio.top)
 EOF
-sudo chmod 600 /etc/readio/readio-cloud.env
+sudo chmod 600 "$ENV_FILE"
 
-sudo tee "/etc/systemd/system/${SERVICE_NAME}.service" >/dev/null <<EOF
+sudo tee "$SERVICE_FILE" >/dev/null <<EOF
 [Unit]
 Description=Readio Cloud Backend
 After=network.target
@@ -194,7 +238,7 @@ User=$DEPLOY_USER
 WorkingDirectory=$CURRENT_DIR
 ExecStart=$CURRENT_DIR/readio-cloud
 Restart=always
-EnvironmentFile=/etc/readio/readio-cloud.env
+EnvironmentFile=$ENV_FILE
 
 Environment=PORT=8080
 Environment=READIO_CLOUD_UI_DIST_DIR=$CURRENT_DIR/dist
@@ -204,10 +248,10 @@ Environment=READIO_CLOUD_DB_PATH=$DB_PATH
 WantedBy=multi-user.target
 EOF
 
-sudo tee "/etc/sudoers.d/readio-cloud-cd" >/dev/null <<EOF
-$DEPLOY_USER ALL=(root) NOPASSWD: $SYSTEMCTL_BIN restart $SERVICE_NAME, $SYSTEMCTL_BIN is-active $SERVICE_NAME
+sudo tee "$SUDOERS_FILE" >/dev/null <<EOF
+$DEPLOY_USER ALL=(root) NOPASSWD: $SYSTEMCTL_BIN restart $SERVICE_NAME, $SYSTEMCTL_BIN is-active --quiet $SERVICE_NAME, $SYSTEMCTL_BIN status $SERVICE_NAME --no-pager -l, /usr/bin/journalctl -u $SERVICE_NAME -n 100 --no-pager
 EOF
-sudo chmod 440 /etc/sudoers.d/readio-cloud-cd
+sudo chmod 440 "$SUDOERS_FILE"
 
 sudo "$SYSTEMCTL_BIN" daemon-reload
 sudo "$SYSTEMCTL_BIN" enable "$SERVICE_NAME"
@@ -244,11 +288,136 @@ Important details:
 
 If the VPS sudoers entry only allows `systemctl restart readio-cloud` and does not also allow `systemctl is-active readio-cloud`, the non-interactive smoke step will still fail in GitHub Actions.
 
+## 3b. Pre-production bootstrap delta
+
+Do not duplicate the entire production bootstrap script for pre-production. Reuse the same structure, but change the environment-specific values below:
+
+- `REMOTE_ROOT=/opt/readio-pre`
+- `RELEASES_DIR=/opt/readio-pre/releases`
+- `SHARED_DATA_DIR=/opt/readio-pre/shared/data`
+- `PODCASR_TRANSCRIPTS_DIR=/opt/readio-pre/shared/data/podcast/transcripts`
+- `CURRENT_DIR=/opt/readio-pre/current`
+- `DB_PATH=/opt/readio-pre/shared/data/readio.db`
+- `SERVICE_NAME=readio-cloud-pre`
+- `EnvironmentFile=/etc/readio/readio-cloud-pre.env`
+- `Environment=PORT=8079`
+
+Pre-production should also keep these boundaries:
+
+- use a dedicated `systemd` unit (`readio-cloud-pre.service`)
+- use a dedicated env file (`/etc/readio/readio-cloud-pre.env`)
+- use dedicated SQLite data and transcript assets under `/opt/readio-pre/shared/data/`
+- protect `pre.readio.top` with Cloudflare Access rather than an in-app token gate
+- keep the service on-demand; data should persist even when the pre-production service is stopped
+
+When applying the pre-production variant, reload `systemd` and restart `readio-cloud-pre.service`, not `readio-cloud.service`.
+
+Example pre-production bootstrap script:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+DEPLOY_USER="${SUDO_USER:-$(id -un)}"
+DEPLOY_GROUP="$(id -gn "$DEPLOY_USER")"
+SYSTEMCTL_BIN="$(command -v systemctl)"
+
+SERVICE_NAME="readio-cloud-pre"
+REMOTE_ROOT="/opt/readio-pre"
+RELEASES_DIR="$REMOTE_ROOT/releases"
+SHARED_DATA_DIR="$REMOTE_ROOT/shared/data"
+PODCASR_TRANSCRIPTS_DIR="$SHARED_DATA_DIR/podcast/transcripts"
+CURRENT_DIR="$REMOTE_ROOT/current"
+DB_PATH="$SHARED_DATA_DIR/readio.db"
+ENV_FILE="/etc/readio/readio-cloud-pre.env"
+SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+SUDOERS_FILE="/etc/sudoers.d/readio-cloud-pre-cd"
+
+sudo mkdir -p "$RELEASES_DIR"
+sudo mkdir -p "$SHARED_DATA_DIR"
+sudo mkdir -p "$PODCASR_TRANSCRIPTS_DIR"
+sudo mkdir -p /etc/readio
+sudo chown -R "$DEPLOY_USER:$DEPLOY_GROUP" "$REMOTE_ROOT"
+
+sudo tee "$ENV_FILE" >/dev/null <<'EOF'
+READIO_ASR_ALLOWED_ORIGINS=https://pre.readio.top
+READIO_ASR_RELAY_PUBLIC_TOKEN=replace-with-a-long-random-token
+READIO_ASR_RATE_LIMIT_BURST=20
+READIO_ASR_RATE_LIMIT_WINDOW_MS=60000
+READIO_PROXY_RATE_LIMIT_BURST=3
+READIO_PROXY_RATE_LIMIT_WINDOW_MS=60000
+
+READIO_DISCOVERY_FEED_CACHE_TTL_MS=300000
+READIO_DISCOVERY_FEED_CACHE_MAX_ENTRIES=12
+READIO_DISCOVERY_FEED_CACHE_MAX_EPISODES=300
+READIO_DISCOVERY_FEED_CACHE_MAX_BYTES=1048576
+
+READIO_TRUSTED_PROXY_CIDRS=127.0.0.1/32,::1/128
+
+READIO_ASR_WORKER_BASE_URL=https://asr-proxy.example.workers.dev
+READIO_ASR_WORKER_SHARED_SECRET=your-high-entropy-secret-string
+
+READIO_ADMIN_TOKEN=replace-with-a-long-random-admin-token
+
+READIO_CF_ACCOUNT_ID=your-cloudflare-account-id
+READIO_CF_API_TOKEN=your-cloudflare-api-token
+READIO_ASR_BUILTIN_ALLOWED=true
+# READIO_ASR_BUILTIN_MODEL=@cf/openai/whisper-large-v3-turbo
+
+PODCAST_INDEX_API_KEY=your-podcastindex-api-key
+PODCAST_INDEX_API_SECRET=your-podcastindex-api-secret
+PODCAST_INDEX_USER_AGENT=Readio-Preprod/1.0 (+https://pre.readio.top)
+EOF
+sudo chmod 600 "$ENV_FILE"
+
+sudo tee "$SERVICE_FILE" >/dev/null <<EOF
+[Unit]
+Description=Readio Cloud Pre-Production
+After=network.target
+
+[Service]
+Type=simple
+User=$DEPLOY_USER
+WorkingDirectory=$CURRENT_DIR
+ExecStart=$CURRENT_DIR/readio-cloud
+Restart=always
+EnvironmentFile=$ENV_FILE
+
+Environment=PORT=8079
+Environment=READIO_CLOUD_UI_DIST_DIR=$CURRENT_DIR/dist
+Environment=READIO_CLOUD_DB_PATH=$DB_PATH
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+sudo tee "$SUDOERS_FILE" >/dev/null <<EOF
+$DEPLOY_USER ALL=(root) NOPASSWD: $SYSTEMCTL_BIN restart $SERVICE_NAME, $SYSTEMCTL_BIN is-active --quiet $SERVICE_NAME, $SYSTEMCTL_BIN status $SERVICE_NAME --no-pager -l, /usr/bin/journalctl -u $SERVICE_NAME -n 100 --no-pager
+EOF
+sudo chmod 440 "$SUDOERS_FILE"
+
+sudo "$SYSTEMCTL_BIN" daemon-reload
+sudo "$SYSTEMCTL_BIN" enable "$SERVICE_NAME"
+
+echo "Pre-production bootstrap complete."
+echo "Edit $ENV_FILE with real values before first start."
+echo "Service file: $SERVICE_FILE"
+echo "Data root: $REMOTE_ROOT"
+echo "DB path: $DB_PATH"
+echo "Transcript dir: $PODCASR_TRANSCRIPTS_DIR"
+echo
+echo "Next:"
+echo "  sudo systemctl start $SERVICE_NAME"
+echo "  sudo systemctl status $SERVICE_NAME --no-pager -l"
+```
+
+Before first start, replace the placeholder values in `/etc/readio/readio-cloud-pre.env` with real tokens and credentials.
+
 After editing either the unit or the env file:
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl restart readio-cloud
+sudo systemctl restart readio-cloud-pre
 ```
 
 When startup fails immediately after a release, inspect the service logs first. Cloud startup now includes automatic goose migrations, so a migration error is expected to keep the service down rather than serving against a mismatched schema.
@@ -257,28 +426,49 @@ When startup fails immediately after a release, inspect the service logs first. 
 
 The deployment is release-scoped and atomic at the pointer level:
 
+The required release flow is:
+
+1. `Release Cloud Build` runs on `main` and uploads one release artifact per commit SHA.
+2. `Deploy Cloud Pre-Production` runs automatically after a successful build on `main`.
+3. Pre-production rehearsal happens against that exact SHA.
+4. `Deploy Cloud Production` is triggered manually only after pre-production succeeds.
+5. Production must deploy the same SHA and artifact that already passed pre-production. Do not rebuild or silently switch to a newer commit during promotion.
+
 Before production rollout, run the same release in a pre-production environment that uses the same startup path, SQLite/goose wiring, and shared-data layout shape. Production should not be the first environment where a new migration set is exercised.
 
-1. Build Cloud UI and Cloud API on the GitHub runner.
-2. Stage artifacts locally under `release/`.
-3. Create the remote release directory for the current commit SHA.
-4. Transfer only `release/` into `/opt/readio/releases/<git-sha>/`.
-5. Switch `/opt/readio/current` to the new release with `ln -sfn`.
-6. Restart the service named by `CLOUD_SERVICE_NAME` with the default `readio-cloud`.
-7. Verify the service is active.
-8. Verify the deployed binary and static asset directory exist.
-9. Probe `http://127.0.0.1:${CLOUD_PORT}` with the default `8080` on the VPS at `/healthz`.
+Pre-production environment rules:
+
+- pre-production may run on the same VPS as production if resources are sufficient
+- if pre-production shares the same host, it must still use an isolated port, release root, shared data root, SQLite file, transcript asset directory, `systemd` unit, and env file
+- do not point pre-production at production SQLite data or production transcript assets
+- protect browser entry with an infrastructure access control layer such as Cloudflare Access; do not rely on a frontend-only token gate
+- pre-production may run on demand instead of 24/7, but its persistent data should remain in place between rehearsals
+- after rehearsal completes, stopping the pre-production service manually is an acceptable operating model
+
+Promotion rules:
+
+- production deployment is manual, not automatic on `main`
+- the manual production workflow must receive an explicit commit SHA to promote
+- that SHA must already have both:
+  - a successful `Release Cloud Build`
+  - a successful `Deploy Cloud Pre-Production`
+- if pre-production did not pass for that SHA, production promotion should stop
 
 This is not an in-place overwrite deploy. The workflow never deletes persistent data first and does not copy build artifacts directly into the live runtime path.
 
 ## 5. Restart and smoke verification
 
-The workflow uses the service name from `CLOUD_SERVICE_NAME` and checks:
+The deploy workflows check:
 
 - `systemctl is-active --quiet <service>`
 - the `readio-cloud` binary exists in the current release
 - the `dist/` directory exists in the current release
 - `curl -fsS http://127.0.0.1:${CLOUD_PORT}/healthz`
+
+Smoke-check target differences:
+
+- pre-production deploy checks the locally bound service on `127.0.0.1:8079` because the public browser entry is expected to sit behind Cloudflare Access
+- production deploy checks the browser-facing production base URL via `CLOUD_PUBLIC_BASE_URL`
 
 Use the same checks manually after a deployment if you need to validate the runtime state.
 
