@@ -68,16 +68,6 @@ jobs:
           printf '%s\n' "${{ secrets.CLOUD_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/known_hosts ~/.ssh/id_ed25519
 
-      - name: Debug remote identity
-        run: |
-          ssh -i ~/.ssh/id_ed25519 \
-            -o IdentitiesOnly=yes \
-            -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -p "$SSH_PORT" \
-            "$SSH_USER@$SSH_HOST" \
-            "whoami && id && sudo -n -l || true"
-
       - name: Create remote release directory
         run: |
           ssh -i ~/.ssh/id_ed25519 \
