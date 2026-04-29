@@ -18,7 +18,7 @@ This instruction replaces the earlier draft that targeted `apps/lite` and overlo
 - **Decision**: Built-in provider/model selection is backend-owned. The browser may choose "built-in mode", but must not control the actual built-in Cloudflare model identifier.
 - **Decision**: Built-in usage views must distinguish `reserved`, `consumed`, `released`, and `failed`. Structured admin audit persistence is optional in `023`; simple admin mutation logging is acceptable for a single-operator deployment.
 - **Decision**: Built-in ASR storage/logging must follow a privacy-minimizing contract: no raw audio persistence, no credential persistence, and no large inline transcript-text persistence in SQLite. Shared transcript assets may be persisted as backend-owned file artifacts for cross-user reuse.
-- **Decision**: Per-user usage, per-user cap, and whitelist policy are explicitly deferred to `023b` because current Cloud handoff docs do **not** define a real multi-user identity contract yet.
+- **Decision**: Per-user usage, per-user cap, and whitelist policy are explicitly deferred to `023d` because current Cloud handoff docs do **not** define a real multi-user identity contract yet.
 - **Decision**: Built-in provider readiness and quota state must have their own contract. Do **not** overload the existing BYOK verification route with built-in readiness semantics.
 - **Bilingual Sync**: Required for `apps/docs`.
 
@@ -335,7 +335,7 @@ Clarifications:
   - built-in ASR usage reservations/events
 - Use Cloud SQLite, not browser state and not env.js, for mutable admin-managed quota state.
 - Keep schema narrow and additive. Avoid inventing a large generic config subsystem if two small tables will do.
-- `023` should treat [023c](./023c-cloudflare-asr-sqlite-schema-plan.md) as the SQLite schema companion SSOT.
+- `023` should treat `023a` as the SQLite/goose foundation companion and `023b` as the shared transcript asset storage companion.
 - Minimum required persistent tables in `023`:
   - `asr_builtin_quota_config`
   - `asr_builtin_usage_requests`
@@ -405,7 +405,7 @@ Rollout guidance:
 
 - `023` should remain global-quota-only.
 - `023` does not need to persist a `subject_hint` placeholder if the identity model is not yet decided.
-- `023b` may add authoritative subject-attribution fields later through additive migration.
+- `023d` may add authoritative subject-attribution fields later through additive migration.
 
 ## 6. Frontend Implementation Requirements
 
@@ -536,7 +536,7 @@ Rollout guidance:
 - Do not allow the browser to choose arbitrary built-in Cloudflare models.
 - Do not let duplicate retries consume built-in quota multiple times for the same logical request.
 - Do not keep built-in usage/audit rows forever without a cleanup policy.
-- Do not make per-user quota claims in `023`; that belongs in `023b`.
+- Do not make per-user quota claims in `023`; that belongs in `023d`.
 - Do not expose Cloudflare server credentials, admin token material, or mutable quota policy through `/env.js`.
 - Do not build a large generalized billing system in this instruction.
 
