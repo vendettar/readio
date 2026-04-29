@@ -1,8 +1,10 @@
-# Instruction 023b: Cloud Podcast Transcript Asset Storage
+# Instruction 023b: Cloud Shared Podcast Transcript Asset Storage
 
 Discuss and approve this document before implementation.
 
 This document defines how podcast transcript/subtitle results are persisted and reused in Cloud.
+
+It replaces the earlier separate replay-artifact/storage split. Shared transcript asset storage is now defined in this single document.
 
 It must be implemented before the built-in Cloudflare ASR product cutover.
 
@@ -15,18 +17,30 @@ Required product rule:
 - the resulting subtitle asset should be reusable later
 - later viewers should read the same backend-owned asset instead of re-running ASR
 
+This is a content-scoped storage contract, not a request-scoped retry blob contract.
+
 ## 2. Decisions
 
 - Persist podcast transcript results as backend-owned shared assets.
+- Keep request-level quota/idempotency state separate from content-level transcript asset state.
 - Store the large transcript payload on disk, not inline in SQLite.
 - Store transcript metadata and lookup identity in SQLite.
 - Use structured `cues` JSON as the canonical stored payload.
 - Compress the file as `json.gz`.
 - Use `PODCASR_TRANSCRIPTS_DIR` as the transcript root path variable name.
 
-## 3. Storage Split
+## 3. Request Ledger vs Shared Asset
 
-SQLite owns:
+Two different persistence concerns must stay separate.
+
+Request ledger owns:
+- request identity
+- payload fingerprint
+- reservation/finalization state
+- quota/accounting state
+- linkage to the resulting shared transcript asset when one exists
+
+Shared transcript asset storage owns:
 - transcript asset identity
 - podcast/episode metadata needed for lookup
 - audio fingerprint / canonical audio identity
@@ -35,6 +49,8 @@ SQLite owns:
 
 Filesystem owns:
 - the actual compressed transcript payload file
+
+Do not collapse request identity and transcript asset identity into one field.
 
 ## 4. Canonical Payload
 
@@ -140,6 +156,7 @@ Minimum expectations:
 - `transcript_key` is authoritative
 - `artifact_path` is relative to `PODCASR_TRANSCRIPTS_DIR`
 - large transcript body stays on disk
+- SQLite stores relative paths only; runtime derives absolute paths from `PODCASR_TRANSCRIPTS_DIR`
 
 ## 9. Reuse Contract
 
@@ -157,6 +174,9 @@ Before running ASR for an episode/audio:
 - treat missing/corrupt files as invalid assets
 - do not persist raw audio
 - do not expose transcript files as public static assets
+- do not key shared transcript file paths by request date
+- do not key shared transcript file paths by `requestId`
+- do not persist duplicate canonical `json`, `vtt`, and `srt` assets for the same transcript in this phase
 
 ## 11. Verification
 

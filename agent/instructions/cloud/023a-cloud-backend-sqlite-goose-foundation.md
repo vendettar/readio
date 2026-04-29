@@ -34,23 +34,21 @@ This document defines that foundation.
 
 Cloud backend runtime data must live outside release directories.
 
-Required shape:
-- release artifacts under `/opt/readio/releases/<git-sha>/`
-- runtime pointer at `/opt/readio/current`
-- persistent backend data under a shared path such as `/opt/readio/shared/data/`
-
-Examples:
-- SQLite database: `/opt/readio/shared/data/readio.db`
-- shared podcast transcript assets: `PODCASR_TRANSCRIPTS_DIR`
-
 Rule:
-- anything that must survive deploys/restarts belongs under shared persistent data, not under `current/` or `dist/`
+- anything that must survive deploys/restarts belongs under persistent backend-owned storage, not under ephemeral release-local directories
+- `023a` does not define a universal absolute path layout
+- concrete deployment topology belongs in deployment docs and deploy automation, not in this foundation instruction
+
+Reference deployment examples may place:
+- the SQLite database at a persistent path such as `/opt/readio/shared/data/readio.db`
+- backend-owned filesystem artifacts under sibling persistent directories
+
+Those are reference deployment shapes, not universal platform invariants.
 
 Shared data root rule:
 - the default shared data root is derived from the parent directory of `READIO_CLOUD_DB_PATH`
 - later work may introduce a dedicated override env for the shared data root or feature-specific artifact roots
 - unless and until such an override is explicitly introduced, features should treat the parent directory of `READIO_CLOUD_DB_PATH` as the authoritative shared data root
-- `READIO_CLOUD_DB_PATH` is expected to live directly under that authoritative shared data root, not inside a deeper nested feature subtree
 
 Feature artifact namespace rule:
 - feature-owned filesystem artifacts must live under stable feature-specific subdirectories inside the shared data root
@@ -83,11 +81,12 @@ Artifact path rule:
 ## 5. Migration Contract
 
 Required migration rules:
-- versioned SQL migrations only by default
+- versioned SQL migrations are the required schema path
 - filenames are ordered and immutable once shipped
 - prefer additive changes
 - fix bad shipped migrations with new forward migrations
 - do not rely on runtime down-migration behavior
+- any exception to the versioned-SQL + goose path requires a separate explicitly approved foundation-level instruction
 
 Recommended layout:
 
@@ -111,8 +110,11 @@ Request handlers must not start before migration completion.
 
 Directory bootstrap responsibility:
 - deployer is responsible for pre-creating the parent directory of `READIO_CLOUD_DB_PATH`
-- service startup may rely on that parent directory already existing
+- if the parent directory of `READIO_CLOUD_DB_PATH` is missing at startup, `cloud-api` must fail fast rather than silently creating it
 - feature-specific artifact subdirectories may be created later by the owning feature implementation when needed
+- this split is intentional:
+  - deployment automation owns preparation of the base persistent directory contract
+  - feature implementations may create their own stable subdirectories inside that already-prepared persistent area
 
 ## 7. Empty-DB Bootstrap Rules
 
@@ -121,7 +123,8 @@ Feature enablement is not.
 
 Meaning:
 - an empty DB with schema present is valid
-- startup may create tables/indexes
+- startup may materialize schema only by applying goose migrations
+- startup must not create tables/indexes through ad hoc feature-local DDL
 - startup must not silently seed feature rows unless a feature contract explicitly says so
 - feature code must handle empty-table bootstrap states
 
@@ -162,6 +165,14 @@ Why this baseline:
 - `NORMAL` is the current default durability/performance balance for Cloud's workload
 
 Other pragma tuning is intentionally out of scope for the first foundation contract and should be introduced later only with workload-specific justification.
+
+Pragma enforcement model:
+- implementations must make pragma behavior consistent for both migration-time and runtime database use
+- it is not enough to configure pragmas on a one-off migration connection if later runtime work may execute through differently configured connections
+- the implementation must choose one explicit model and apply it consistently:
+  - either a single long-lived configured SQLite handle for runtime work
+  - or a per-connection initialization path that guarantees required pragmas are set on every runtime connection before use
+- verification must cover the actual runtime connection model, not only initial startup wiring
 
 ## 10. Cross-Feature Governance Rules
 
