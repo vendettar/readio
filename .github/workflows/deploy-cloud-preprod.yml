@@ -108,15 +108,15 @@ jobs:
             test -d '$RESOLVED_RELEASE_DIR/dist'
             ln -sfn '$RESOLVED_RELEASE_DIR' '$REMOTE_CURRENT_DIR'
 
-            if ! sudo -n /usr/bin/systemctl restart readio-cloud-pre; then
-              sudo -n /usr/bin/systemctl status readio-cloud-pre --no-pager -l || true
-              sudo -n /usr/bin/journalctl -u readio-cloud-pre -n 100 --no-pager || true
+            if ! sudo -n /usr/bin/systemctl restart '$SERVICE_NAME'; then
+              sudo -n /usr/bin/systemctl status '$SERVICE_NAME' --no-pager -l || true
+              sudo -n /usr/bin/journalctl -u '$SERVICE_NAME' -n 100 --no-pager || true
               exit 1
             fi
 
-            if ! sudo -n /usr/bin/systemctl is-active --quiet readio-cloud-pre; then
-              sudo -n /usr/bin/systemctl status readio-cloud-pre --no-pager -l || true
-              sudo -n /usr/bin/journalctl -u readio-cloud-pre -n 100 --no-pager || true
+            if ! sudo -n /usr/bin/systemctl is-active --quiet '$SERVICE_NAME'; then
+              sudo -n /usr/bin/systemctl status '$SERVICE_NAME' --no-pager -l || true
+              sudo -n /usr/bin/journalctl -u '$SERVICE_NAME' -n 100 --no-pager || true
               exit 1
             fi"
 
