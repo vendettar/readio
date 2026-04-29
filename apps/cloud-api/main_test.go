@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"io"
@@ -15,6 +16,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 )
 
@@ -461,10 +463,39 @@ func TestResolveCloudUIDistDirUsesCoLocatedDist(t *testing.T) {
 }
 
 func TestResolveCloudDBPathUsesEnvOverride(t *testing.T) {
+	want := filepath.Join(t.TempDir(), "cloud.db")
+	t.Setenv(cloudDBEnv, want)
+
+	got, err := resolveCloudDBPath()
+	if err != nil {
+		t.Fatalf("resolve cloud db path: %v", err)
+	}
+	if got != want {
+		t.Fatalf("path = %q, want %q", got, want)
+	}
+}
+
+func TestResolveCloudDBPathRequiresExplicitEnv(t *testing.T) {
+	t.Setenv(cloudDBEnv, "")
+
+	_, err := resolveCloudDBPath()
+	if err == nil {
+		t.Fatal("resolve cloud db path unexpectedly succeeded without env")
+	}
+	if !strings.Contains(err.Error(), cloudDBEnv) {
+		t.Fatalf("resolve cloud db path error = %v, want mention of %s", err, cloudDBEnv)
+	}
+}
+
+func TestResolveCloudDBPathRejectsRelativePath(t *testing.T) {
 	t.Setenv(cloudDBEnv, filepath.Join("state", "cloud.db"))
 
-	if got := resolveCloudDBPath(); got != filepath.Join("state", "cloud.db") {
-		t.Fatalf("path = %q, want %q", got, filepath.Join("state", "cloud.db"))
+	_, err := resolveCloudDBPath()
+	if err == nil {
+		t.Fatal("resolve cloud db path unexpectedly succeeded with relative path")
+	}
+	if !strings.Contains(err.Error(), "absolute path") {
+		t.Fatalf("resolve cloud db path error = %v, want mention of absolute path", err)
 	}
 }
 
@@ -650,12 +681,57 @@ func TestProxyServiceUsesConfiguredRateLimitWindow(t *testing.T) {
 	}
 }
 
-func TestOpenCloudSQLiteInitializesPragmasAndCreatesParentDir(t *testing.T) {
+func TestOpenCloudSQLiteFailsWhenParentDirMissing(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "missing", "cloud.db")
+
+	db, err := openCloudSQLite(context.Background(), dbPath)
+	if err == nil {
+		if db != nil {
+			_ = db.Close()
+		}
+		t.Fatal("open sqlite unexpectedly succeeded with missing parent dir")
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("open sqlite error = %v, want os.ErrNotExist", err)
+	}
+}
+
+func TestCloudSQLiteDSNAppliesConnectionPragmasOnEveryConnection(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "cloud.db")
+	db, err := sql.Open("sqlite", buildCloudSQLiteDSN(dbPath))
+	if err != nil {
+		t.Fatalf("open sqlite with cloud dsn: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = db.Close()
+	})
+
+	db.SetMaxIdleConns(0)
+	db.SetMaxOpenConns(2)
+
+	ctx := context.Background()
+	conn1, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatalf("open first sqlite conn: %v", err)
+	}
+	defer func() { _ = conn1.Close() }()
+
+	conn2, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatalf("open second sqlite conn: %v", err)
+	}
+	defer func() { _ = conn2.Close() }()
+
+	assertCloudSQLiteConnectionPragmas(t, ctx, conn1)
+	assertCloudSQLiteConnectionPragmas(t, ctx, conn2)
+}
+
+func TestOpenCloudSQLiteInitializesPragmasAndRunsMigrations(t *testing.T) {
 	if testing.Short() {
 		t.Skip("sqlite bootstrap integration test")
 	}
 
-	dbPath := filepath.Join(t.TempDir(), "nested", "cloud.db")
+	dbPath := filepath.Join(t.TempDir(), "cloud.db")
 	db, err := openCloudSQLite(context.Background(), dbPath)
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
@@ -664,23 +740,67 @@ func TestOpenCloudSQLiteInitializesPragmasAndCreatesParentDir(t *testing.T) {
 		_ = db.Close()
 	})
 
-	if _, err := os.Stat(filepath.Dir(dbPath)); err != nil {
-		t.Fatalf("stat db dir: %v", err)
-	}
 	if _, err := os.Stat(dbPath); err != nil {
 		t.Fatalf("stat db file: %v", err)
 	}
 
+	assertCloudSQLitePragmas(t, context.Background(), db)
+
+	var gooseTableCount int
+	if err := db.QueryRowContext(
+		context.Background(),
+		"SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'goose_db_version';",
+	).Scan(&gooseTableCount); err != nil {
+		t.Fatalf("query goose table: %v", err)
+	}
+	if gooseTableCount != 1 {
+		t.Fatalf("goose table count = %d, want %d", gooseTableCount, 1)
+	}
+}
+
+func TestOpenCloudSQLiteRunsMigrationsAfterPragmas(t *testing.T) {
+	origRunMigrations := cloudRunSQLiteMigrations
+	t.Cleanup(func() {
+		cloudRunSQLiteMigrations = origRunMigrations
+	})
+
+	cloudRunSQLiteMigrations = func(ctx context.Context, db *sql.DB) error {
+		assertCloudSQLitePragmas(t, ctx, db)
+		return nil
+	}
+
+	db, err := openCloudSQLite(context.Background(), filepath.Join(t.TempDir(), "cloud.db"))
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = db.Close()
+	})
+}
+
+func assertCloudSQLitePragmas(t *testing.T, ctx context.Context, db *sql.DB) {
+	t.Helper()
+
 	var journalMode string
-	if err := db.QueryRowContext(context.Background(), "PRAGMA journal_mode;").Scan(&journalMode); err != nil {
+	if err := db.QueryRowContext(ctx, "PRAGMA journal_mode;").Scan(&journalMode); err != nil {
 		t.Fatalf("query journal_mode: %v", err)
 	}
 	if !strings.EqualFold(journalMode, "wal") {
 		t.Fatalf("journal_mode = %q, want %q", journalMode, "wal")
 	}
 
+	assertCloudSQLiteConnectionPragmas(t, ctx, db)
+}
+
+type pragmaQueryer interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func assertCloudSQLiteConnectionPragmas(t *testing.T, ctx context.Context, queryer pragmaQueryer) {
+	t.Helper()
+
 	var synchronous int
-	if err := db.QueryRowContext(context.Background(), "PRAGMA synchronous;").Scan(&synchronous); err != nil {
+	if err := queryer.QueryRowContext(ctx, "PRAGMA synchronous;").Scan(&synchronous); err != nil {
 		t.Fatalf("query synchronous: %v", err)
 	}
 	if synchronous != 1 {
@@ -688,11 +808,115 @@ func TestOpenCloudSQLiteInitializesPragmasAndCreatesParentDir(t *testing.T) {
 	}
 
 	var foreignKeys int
-	if err := db.QueryRowContext(context.Background(), "PRAGMA foreign_keys;").Scan(&foreignKeys); err != nil {
+	if err := queryer.QueryRowContext(ctx, "PRAGMA foreign_keys;").Scan(&foreignKeys); err != nil {
 		t.Fatalf("query foreign_keys: %v", err)
 	}
 	if foreignKeys != 1 {
 		t.Fatalf("foreign_keys = %d, want %d", foreignKeys, 1)
+	}
+
+	var busyTimeout int
+	if err := queryer.QueryRowContext(ctx, "PRAGMA busy_timeout;").Scan(&busyTimeout); err != nil {
+		t.Fatalf("query busy_timeout: %v", err)
+	}
+	if busyTimeout != 5000 {
+		t.Fatalf("busy_timeout = %d, want %d", busyTimeout, 5000)
+	}
+}
+
+func TestOpenCloudSQLiteMigrationsAreIdempotentAcrossRestarts(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "cloud.db")
+
+	db1, err := openCloudSQLite(context.Background(), dbPath)
+	if err != nil {
+		t.Fatalf("first open sqlite: %v", err)
+	}
+	if err := db1.Close(); err != nil {
+		t.Fatalf("close first db: %v", err)
+	}
+
+	db2, err := openCloudSQLite(context.Background(), dbPath)
+	if err != nil {
+		t.Fatalf("second open sqlite: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = db2.Close()
+	})
+
+	var version int64
+	if err := db2.QueryRowContext(context.Background(), "SELECT MAX(version_id) FROM goose_db_version;").Scan(&version); err != nil {
+		t.Fatalf("query goose version: %v", err)
+	}
+	if version < 1 {
+		t.Fatalf("goose version = %d, want >= 1", version)
+	}
+}
+
+func TestRunCloudSQLiteMigrationsRetriesAfterFailedAttempt(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "cloud.db")
+	db, err := openCloudSQLite(context.Background(), dbPath)
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = db.Close()
+	})
+
+	badMigrations := fstest.MapFS{
+		"migrations/00002_create_retry_table.sql": &fstest.MapFile{
+			Data: []byte("-- +goose Up\nCREATE TABLE retry_table (id INTEGER PRIMARY KEY);\n\n-- +goose Down\nDROP TABLE retry_table;\n"),
+		},
+		"migrations/00003_fail.sql": &fstest.MapFile{
+			Data: []byte("-- +goose Up\nTHIS IS NOT VALID SQL;\n\n-- +goose Down\nSELECT 1;\n"),
+		},
+	}
+
+	err = runCloudSQLiteMigrationsFS(context.Background(), db, badMigrations, "migrations")
+	if err == nil {
+		t.Fatal("runCloudSQLiteMigrationsFS unexpectedly succeeded with failing migration")
+	}
+
+	var retryTableCount int
+	if err := db.QueryRowContext(
+		context.Background(),
+		"SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'retry_table';",
+	).Scan(&retryTableCount); err != nil {
+		t.Fatalf("query retry table after failed run: %v", err)
+	}
+	if retryTableCount != 1 {
+		t.Fatalf("retry table count after failed run = %d, want 1", retryTableCount)
+	}
+
+	fixedMigrations := fstest.MapFS{
+		"migrations/00002_create_retry_table.sql": &fstest.MapFile{
+			Data: []byte("-- +goose Up\nCREATE TABLE retry_table (id INTEGER PRIMARY KEY);\n\n-- +goose Down\nDROP TABLE retry_table;\n"),
+		},
+		"migrations/00003_create_retry_index.sql": &fstest.MapFile{
+			Data: []byte("-- +goose Up\nCREATE INDEX retry_table_id_idx ON retry_table (id);\n\n-- +goose Down\nDROP INDEX retry_table_id_idx;\n"),
+		},
+	}
+
+	if err := runCloudSQLiteMigrationsFS(context.Background(), db, fixedMigrations, "migrations"); err != nil {
+		t.Fatalf("runCloudSQLiteMigrationsFS retry: %v", err)
+	}
+
+	var retryIndexCount int
+	if err := db.QueryRowContext(
+		context.Background(),
+		"SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'retry_table_id_idx';",
+	).Scan(&retryIndexCount); err != nil {
+		t.Fatalf("query retry index after retry: %v", err)
+	}
+	if retryIndexCount != 1 {
+		t.Fatalf("retry index count after retry = %d, want 1", retryIndexCount)
+	}
+
+	var latestVersion int64
+	if err := db.QueryRowContext(context.Background(), "SELECT MAX(version_id) FROM goose_db_version;").Scan(&latestVersion); err != nil {
+		t.Fatalf("query goose version after retry: %v", err)
+	}
+	if latestVersion != 3 {
+		t.Fatalf("goose version after retry = %d, want 3", latestVersion)
 	}
 }
 
@@ -841,6 +1065,78 @@ func TestRunCloudServerInitializesSQLiteAndShutsDownOnCancellation(t *testing.T)
 	case <-closed:
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for sqlite close")
+	}
+}
+
+func TestRunCloudServerReturnsMigrationErrorBeforeListen(t *testing.T) {
+	distDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(distDir, "index.html"), []byte("index"), 0o644); err != nil {
+		t.Fatalf("write index: %v", err)
+	}
+
+	t.Setenv(cloudUIDistEnv, distDir)
+	t.Setenv(cloudDBEnv, filepath.Join(t.TempDir(), "cloud.db"))
+
+	origRunMigrations := cloudRunSQLiteMigrations
+	origListen := cloudListenAndServe
+	t.Cleanup(func() {
+		cloudRunSQLiteMigrations = origRunMigrations
+		cloudListenAndServe = origListen
+	})
+
+	migrationErr := errors.New("migration failed")
+	listenCalled := false
+
+	cloudRunSQLiteMigrations = func(context.Context, *sql.DB) error {
+		return migrationErr
+	}
+	cloudListenAndServe = func(_ context.Context, _ *http.Server) error {
+		listenCalled = true
+		return nil
+	}
+
+	err := runCloudServer(context.Background())
+	if !errors.Is(err, migrationErr) {
+		t.Fatalf("runCloudServer error = %v, want %v", err, migrationErr)
+	}
+	if listenCalled {
+		t.Fatal("listen should not run when migrations fail")
+	}
+}
+
+func TestRunCloudServerRequiresExplicitDBPath(t *testing.T) {
+	distDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(distDir, "index.html"), []byte("index"), 0o644); err != nil {
+		t.Fatalf("write index: %v", err)
+	}
+
+	t.Setenv(cloudUIDistEnv, distDir)
+	t.Setenv(cloudDBEnv, "")
+
+	err := runCloudServer(context.Background())
+	if err == nil {
+		t.Fatal("runCloudServer unexpectedly succeeded without READIO_CLOUD_DB_PATH")
+	}
+	if !strings.Contains(err.Error(), cloudDBEnv) {
+		t.Fatalf("runCloudServer error = %v, want mention of %s", err, cloudDBEnv)
+	}
+}
+
+func TestRunCloudServerRejectsRelativeDBPath(t *testing.T) {
+	distDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(distDir, "index.html"), []byte("index"), 0o644); err != nil {
+		t.Fatalf("write index: %v", err)
+	}
+
+	t.Setenv(cloudUIDistEnv, distDir)
+	t.Setenv(cloudDBEnv, filepath.Join("state", "cloud.db"))
+
+	err := runCloudServer(context.Background())
+	if err == nil {
+		t.Fatal("runCloudServer unexpectedly succeeded with relative READIO_CLOUD_DB_PATH")
+	}
+	if !strings.Contains(err.Error(), "absolute path") {
+		t.Fatalf("runCloudServer error = %v, want mention of absolute path", err)
 	}
 }
 

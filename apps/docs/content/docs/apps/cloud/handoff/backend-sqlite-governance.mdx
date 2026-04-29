@@ -28,6 +28,10 @@ That means:
 - startup may create/apply schema, but does not need to seed feature rows
 - feature code must handle empty-table bootstrap states cleanly
 - absence of rows is not itself a corruption signal
+- `READIO_CLOUD_DB_PATH` is required runtime configuration, must be absolute, and `apps/cloud-api` does not fall back to a release-local default database path
+- the deployer must pre-create the parent directory of `READIO_CLOUD_DB_PATH`; `apps/cloud-api` fails fast if that directory is missing
+- Cloud startup order is `open -> initial ping -> runtime pragmas -> migrations -> ready`
+- the current runtime keeps one open SQLite connection, and also encodes `foreign_keys=ON`, `busy_timeout=5000`, and `synchronous=NORMAL` in the DSN so any later connection inherits the same baseline; `journal_mode=WAL` is established in the ordered startup path before migrations
 
 ## 4. Source Of Truth Discipline
 

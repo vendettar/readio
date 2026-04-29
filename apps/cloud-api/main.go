@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"embed"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
@@ -24,6 +26,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite"
 )
 
@@ -42,7 +45,6 @@ const proxyAllowedOriginsEnv = "READIO_PROXY_ALLOWED_ORIGINS"
 const proxyRoute = "/api/proxy"
 const proxyMaxRedirects = 20
 const cloudDBEnv = "READIO_CLOUD_DB_PATH"
-const cloudDBDefaultPath = "./data/readio.db"
 const defaultRuntimeAppName = "Readio"
 const defaultRuntimeAppVersion = "1.0.0"
 const defaultDictionaryAPIURL = "https://api.dictionaryapi.dev/api/v2/entries/en/"
@@ -50,6 +52,8 @@ const defaultDictionaryTransport = "direct"
 const defaultPodcastCountry = "us"
 const defaultLanguage = "en"
 const defaultFallbackPodcastImage = "/placeholder-podcast.svg"
+const cloudSQLiteMigrationDialect = "sqlite3"
+const cloudSQLiteMigrationDir = "migrations"
 
 // browserEnvAllowlist is the exhaustive set of keys emitted into /env.js.
 // Every key listed here MUST have a corresponding entry in buildBrowserRuntimeEnv.
@@ -159,14 +163,20 @@ func (e *proxyError) Error() string {
 	return e.message
 }
 
+//go:embed migrations/*.sql
+var cloudSQLiteMigrations embed.FS
+
 var (
 	cloudOpenSQLite sqliteOpener = func(ctx context.Context, dbPath string) (sqliteCloser, error) {
 		return openCloudSQLite(ctx, dbPath)
 	}
-	cloudNewProxyService    = newProxyService
-	cloudNewASRRelayService = newASRRelayService
-	cloudCloseSQLite        = func(db sqliteCloser) error { return db.Close() }
-	cloudListenAndServe     = func(_ context.Context, server *http.Server) error {
+	cloudNewProxyService     = newProxyService
+	cloudNewASRRelayService  = newASRRelayService
+	cloudRunSQLiteMigrations = func(ctx context.Context, db *sql.DB) error {
+		return runCloudSQLiteMigrations(ctx, db)
+	}
+	cloudCloseSQLite    = func(db sqliteCloser) error { return db.Close() }
+	cloudListenAndServe = func(_ context.Context, server *http.Server) error {
 		return server.ListenAndServe()
 	}
 	cloudShutdownServer = func(ctx context.Context, server *http.Server) error {
@@ -201,7 +211,10 @@ func runCloudServer(parent context.Context) error {
 		return fmt.Errorf("invalid lite dist: %w", err)
 	}
 
-	dbPath := resolveCloudDBPath()
+	dbPath, err := resolveCloudDBPath()
+	if err != nil {
+		return fmt.Errorf("invalid cloud db path: %w", err)
+	}
 	db, err := cloudOpenSQLite(parent, dbPath)
 	if err != nil {
 		return fmt.Errorf("unable to open sqlite db: %w", err)
@@ -1297,20 +1310,42 @@ func validateDistDir(distDir string) error {
 	return nil
 }
 
-func resolveCloudDBPath() string {
+func resolveCloudDBPath() (string, error) {
 	if override := strings.TrimSpace(os.Getenv(cloudDBEnv)); override != "" {
-		return override
+		if !filepath.IsAbs(override) {
+			return "", fmt.Errorf("%s must be an absolute path", cloudDBEnv)
+		}
+
+		return filepath.Clean(override), nil
 	}
 
-	return cloudDBDefaultPath
+	return "", fmt.Errorf("%s is required", cloudDBEnv)
+}
+
+func buildCloudSQLiteDSN(dbPath string) string {
+	query := url.Values{}
+	query.Add("_pragma", "foreign_keys(1)")
+	query.Add("_pragma", "busy_timeout(5000)")
+	query.Add("_pragma", "synchronous(NORMAL)")
+
+	return (&url.URL{
+		Scheme:   "file",
+		Path:     filepath.ToSlash(dbPath),
+		RawQuery: query.Encode(),
+	}).String()
 }
 
 func openCloudSQLite(ctx context.Context, dbPath string) (*sql.DB, error) {
-	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
-		return nil, fmt.Errorf("create sqlite directory: %w", err)
+	parentDir := filepath.Dir(dbPath)
+	parentInfo, err := os.Stat(parentDir)
+	if err != nil {
+		return nil, fmt.Errorf("stat sqlite parent directory %q: %w", parentDir, err)
+	}
+	if !parentInfo.IsDir() {
+		return nil, fmt.Errorf("sqlite parent directory %q is not a directory", parentDir)
 	}
 
-	db, err := sql.Open("sqlite", dbPath)
+	db, err := sql.Open("sqlite", buildCloudSQLiteDSN(dbPath))
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite database: %w", err)
 	}
@@ -1324,16 +1359,15 @@ func openCloudSQLite(ctx context.Context, dbPath string) (*sql.DB, error) {
 		return nil, fmt.Errorf("ping sqlite database: %w", err)
 	}
 
-	pragmas := []string{
-		"PRAGMA journal_mode=WAL",
-		"PRAGMA synchronous=NORMAL",
-		"PRAGMA foreign_keys=ON",
+	// journal_mode is a file-level setting, so keep it in the ordered startup path.
+	if _, err := db.ExecContext(ctx, "PRAGMA journal_mode=WAL"); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("initialize sqlite pragma %q: %w", "PRAGMA journal_mode=WAL", err)
 	}
-	for _, pragma := range pragmas {
-		if _, err := db.ExecContext(ctx, pragma); err != nil {
-			_ = db.Close()
-			return nil, fmt.Errorf("initialize sqlite pragma %q: %w", pragma, err)
-		}
+
+	if err := cloudRunSQLiteMigrations(ctx, db); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("run sqlite migrations: %w", err)
 	}
 
 	if err := db.PingContext(ctx); err != nil {
@@ -1342,6 +1376,25 @@ func openCloudSQLite(ctx context.Context, dbPath string) (*sql.DB, error) {
 	}
 
 	return db, nil
+}
+
+func runCloudSQLiteMigrations(ctx context.Context, db *sql.DB) error {
+	return runCloudSQLiteMigrationsFS(ctx, db, cloudSQLiteMigrations, cloudSQLiteMigrationDir)
+}
+
+func runCloudSQLiteMigrationsFS(ctx context.Context, db *sql.DB, migrationFS fs.FS, migrationDir string) error {
+	goose.SetBaseFS(migrationFS)
+	defer goose.SetBaseFS(nil)
+
+	if err := goose.SetDialect(cloudSQLiteMigrationDialect); err != nil {
+		return fmt.Errorf("set goose dialect: %w", err)
+	}
+
+	if err := goose.UpContext(ctx, db, migrationDir); err != nil {
+		return fmt.Errorf("apply goose migrations: %w", err)
+	}
+
+	return nil
 }
 
 func resolvePort() (string, error) {

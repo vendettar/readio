@@ -133,8 +133,9 @@ The workflow creates the remote directories before transfer and never wipes the 
 
 Database startup contract:
 
+- `READIO_CLOUD_DB_PATH` must be set explicitly as an absolute path; `apps/cloud-api` does not fall back to a release-local default database path
 - the deployer must pre-create the parent directory of `READIO_CLOUD_DB_PATH`
-- `apps/cloud-api` applies goose migrations automatically during startup before serving requests
+- `apps/cloud-api` opens SQLite, verifies connectivity, establishes `journal_mode=WAL`, applies the remaining runtime pragmas through the SQLite DSN, and runs goose migrations automatically during startup before serving requests
 - if a required migration fails, startup fails closed and the service should remain unavailable until the migration problem is fixed
 
 ## 3a. VPS bootstrap for a fresh host

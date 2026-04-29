@@ -133,8 +133,9 @@ SSH 安全规则：
 
 数据库启动契约：
 
+- 必须显式把 `READIO_CLOUD_DB_PATH` 设置为绝对路径；`apps/cloud-api` 不会回退到 release-local 的默认数据库路径
 - deployer 必须预先创建 `READIO_CLOUD_DB_PATH` 的父目录
-- `apps/cloud-api` 会在启动时、开始提供请求之前自动执行 goose migrations
+- `apps/cloud-api` 会在启动时先打开 SQLite、验证连通性、建立 `journal_mode=WAL`，再通过 SQLite DSN 应用其余 runtime pragmas，随后自动执行 goose migrations，然后才开始提供请求
 - 如果必需的 migration 失败，启动应 fail closed，服务保持不可用，直到 migration 问题被修复
 
 ## 3a. 新主机 VPS 启动
