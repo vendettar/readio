@@ -1,183 +1,92 @@
-name: Deploy Cloud Production
+name: Deploy Cloud (Production)
 
 on:
-  workflow_dispatch:
-    inputs:
-      artifact_sha:
-        description: Commit SHA to promote to production. Must already have a successful pre-production deployment.
-        required: true
-        type: string
+  push:
+    branches:
+      - main
+    paths:
+      - 'apps/cloud-api/**'
+      - '.github/workflows/deploy-cloud-prod.yml'
+      - 'go.mod'
+      - 'go.sum'
 
 permissions:
   contents: read
-  actions: read
-
-concurrency:
-  group: cloud-production-deploy
-  cancel-in-progress: false
+  packages: write
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    environment: cloud-production
-    env:
-      SSH_HOST: ${{ secrets.CLOUD_SSH_HOST }}
-      SSH_PORT: ${{ secrets.CLOUD_SSH_PORT || '22' }}
-      SSH_USER: ${{ secrets.CLOUD_SSH_USER }}
-      CLOUD_PUBLIC_BASE_URL: ${{ vars.CLOUD_PUBLIC_BASE_URL }}
-      REMOTE_ROOT: ${{ vars.CLOUD_REMOTE_ROOT }}
-      SERVICE_NAME: ${{ vars.CLOUD_SERVICE_NAME }}
-      CLOUD_PORT: ${{ vars.CLOUD_PORT }}
-
     steps:
-      - name: Resolve release artifact source
-        id: resolve-artifact
-        uses: actions/github-script@v8
-        env:
-          REQUESTED_SHA: ${{ inputs.artifact_sha }}
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
         with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./apps/cloud-api
+          push: true
+
+          tags: ghcr.io/${{ github.repository_owner }}/readio-cloud-api:latest
+
+      - name: Transfer Docker Compose
+
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ vars.READIO_CLOUD_SSH_HOST }}
+          username: ${{ vars.READIO_CLOUD_SSH_USER }}
+          key: ${{ secrets.READIO_CLOUD_SSH_KEY }}
+          source: "docker-compose.readio.yml"
+          target: "/etc/readio/"
+
+      - name: Deploy and Wait for Health
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ vars.READIO_CLOUD_SSH_HOST }}
+          username: ${{ vars.READIO_CLOUD_SSH_USER }}
+          key: ${{ secrets.READIO_CLOUD_SSH_KEY }}
           script: |
-            const requestedSha = process.env.REQUESTED_SHA.trim()
-            if (!requestedSha) {
-              core.setFailed('artifact_sha is required')
-              return
+            env_file="/etc/readio/readio.env"
+            touch "$env_file" && chmod 600 "$env_file"
+            
+            # Clean sync function using printf (safe for special chars)
+            sync_env() {
+              local key=$1
+              local val=$2
+              if [ -n "$val" ]; then
+                grep -q "^${key}=" "$env_file" && sed -i "/^${key}=/c\\${key}=${val}" "$env_file" || printf '%s=%s\n' "$key" "$val" >> "$env_file"
+              fi
             }
 
-            const buildRuns = await github.paginate(github.rest.actions.listWorkflowRuns, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'release-cloud-build.yml',
-              branch: 'main',
-              status: 'completed',
-              per_page: 100,
-            })
+            sync_env "READIO_ADMIN_TOKEN" "${{ secrets.READIO_ADMIN_TOKEN }}"
+            sync_env "PODCAST_INDEX_API_KEY" "${{ secrets.PODCAST_INDEX_API_KEY }}"
+            sync_env "PODCAST_INDEX_API_SECRET" "${{ secrets.PODCAST_INDEX_API_SECRET }}"
+            sync_env "READIO_ASR_RELAY_PUBLIC_TOKEN" "${{ secrets.READIO_ASR_RELAY_PUBLIC_TOKEN }}"
+            sync_env "READIO_ASR_WORKER_SHARED_SECRET" "${{ secrets.READIO_ASR_WORKER_SHARED_SECRET }}"
+            sync_env "READIO_ASR_API_KEY" "${{ secrets.READIO_ASR_API_KEY }}"
+            sync_env "READIO_OPENAI_API_KEY" "${{ secrets.READIO_OPENAI_API_KEY }}"
+            sync_env "READIO_GRAFANA_OTLP_TOKEN" "${{ secrets.READIO_GRAFANA_OTLP_TOKEN }}"
+            sync_env "READIO_GRAFANA_OTLP_ENDPOINT" "${{ secrets.READIO_GRAFANA_OTLP_ENDPOINT }}"
+            sync_env "READIO_GRAFANA_OTLP_INSTANCE_ID" "${{ secrets.READIO_GRAFANA_OTLP_INSTANCE_ID }}"
+            sync_env "READIO_ASR_ALLOWED_ORIGINS" "${{ vars.READIO_ASR_ALLOWED_ORIGINS }}"
+            sync_env "READIO_PROXY_ALLOWED_ORIGINS" "${{ vars.READIO_PROXY_ALLOWED_ORIGINS }}"
 
-            const successfulBuildRun = buildRuns.find(
-              (run) => run.conclusion === 'success' && run.head_sha === requestedSha,
-            )
+            cd /etc/readio
+            docker compose -f docker-compose.readio.yml pull readio-api-prod
+            docker compose -f docker-compose.readio.yml up -d readio-api-prod --wait --remove-orphans
+            docker image prune -f
 
-            if (!successfulBuildRun) {
-              core.setFailed(`No successful Release Cloud Build run found for commit ${requestedSha}`)
-              return
-            }
-
-            const preprodRuns = await github.paginate(github.rest.actions.listWorkflowRuns, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              workflow_id: 'deploy-cloud-preprod.yml',
-              branch: 'main',
-              status: 'completed',
-              per_page: 100,
-            })
-
-            const successfulPreprodRun = preprodRuns.find(
-              (run) => run.conclusion === 'success' && run.head_sha === requestedSha,
-            )
-
-            if (!successfulPreprodRun) {
-              core.setFailed(
-                `Commit ${requestedSha} has no successful Deploy Cloud Pre-Production run and cannot be promoted to production`,
-              )
-              return
-            }
-
-            core.setOutput('run_id', String(successfulBuildRun.id))
-            core.setOutput('sha', successfulBuildRun.head_sha)
-
-      - name: Download release artifact
-        uses: actions/download-artifact@v8
+      - name: Cleanup old container images
+        uses: actions/delete-package-versions@v5
         with:
-          name: cloud-release-${{ steps.resolve-artifact.outputs.sha }}
-          run-id: ${{ steps.resolve-artifact.outputs.run_id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Display artifact contents
-        run: |
-          echo "=== Release Artifact ==="
-          ls -la
-          echo ""
-          echo "=== Manifest ==="
-          cat manifest.json
-
-      - name: Derive remote paths
-        run: |
-          echo "RELEASE_SHA=${{ steps.resolve-artifact.outputs.sha }}" >> "$GITHUB_ENV"
-          echo "REMOTE_RELEASES_DIR=$REMOTE_ROOT/releases" >> "$GITHUB_ENV"
-          echo "REMOTE_CURRENT_DIR=$REMOTE_ROOT/current" >> "$GITHUB_ENV"
-          echo "REMOTE_SHARED_DATA_DIR=$REMOTE_ROOT/shared/data" >> "$GITHUB_ENV"
-          echo "RESOLVED_RELEASE_DIR=$REMOTE_ROOT/releases/${{ steps.resolve-artifact.outputs.sha }}" >> "$GITHUB_ENV"
-
-      - name: Setup SSH known hosts
-        run: |
-          mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.CLOUD_SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
-          printf '%s\n' "${{ secrets.CLOUD_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/known_hosts ~/.ssh/id_ed25519
-
-      - name: Create remote release directory
-        run: |
-          ssh -i ~/.ssh/id_ed25519 \
-            -o IdentitiesOnly=yes \
-            -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -p "$SSH_PORT" \
-            "$SSH_USER@$SSH_HOST" \
-            "mkdir -p '$REMOTE_ROOT' '$REMOTE_SHARED_DATA_DIR' '$RESOLVED_RELEASE_DIR'"
-
-      - name: Transfer release artifacts
-        run: |
-          rsync -a \
-            -e "ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts -p $SSH_PORT" \
-            ./ \
-            "$SSH_USER@$SSH_HOST:$RESOLVED_RELEASE_DIR/"
-
-      - name: Publish release and restart
-        run: |
-          ssh -i ~/.ssh/id_ed25519 \
-            -o IdentitiesOnly=yes \
-            -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -p "$SSH_PORT" \
-            "$SSH_USER@$SSH_HOST" \
-            "set -euo pipefail
-            chmod 755 '$RESOLVED_RELEASE_DIR/readio-cloud'
-            test -d '$RESOLVED_RELEASE_DIR/dist'
-            ln -sfn '$RESOLVED_RELEASE_DIR' '$REMOTE_CURRENT_DIR'
-
-            if ! sudo -n /usr/bin/systemctl restart '$SERVICE_NAME'; then
-              sudo -n /usr/bin/systemctl status '$SERVICE_NAME' --no-pager -l || true
-              sudo -n /usr/bin/journalctl -u '$SERVICE_NAME' -n 100 --no-pager || true
-              exit 1
-            fi
-
-            if ! sudo -n /usr/bin/systemctl is-active --quiet '$SERVICE_NAME'; then
-              sudo -n /usr/bin/systemctl status '$SERVICE_NAME' --no-pager -l || true
-              sudo -n /usr/bin/journalctl -u '$SERVICE_NAME' -n 100 --no-pager || true
-              exit 1
-            fi"
-
-      - name: Smoke test
-        run: |
-          if [ -z "${CLOUD_PUBLIC_BASE_URL:-}" ]; then
-            echo "CLOUD_PUBLIC_BASE_URL is not configured"
-            exit 1
-          fi
-
-          echo "=== Smoke Tests ==="
-          echo "1. Checking binary exists on server..."
-          ssh -i ~/.ssh/id_ed25519 \
-            -o IdentitiesOnly=yes \
-            -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -p "$SSH_PORT" \
-            "$SSH_USER@$SSH_HOST" \
-            "test -x '$REMOTE_CURRENT_DIR/readio-cloud' && echo 'Binary: OK' || (echo 'Binary: MISSING' && exit 1)"
-
-          echo "2. Checking healthz endpoint..."
-          curl -f "${CLOUD_PUBLIC_BASE_URL%/}/healthz" >/dev/null 2>&1 && echo "healthz: OK" || (echo "healthz: FAILED" && exit 1)
-
-          echo "3. Checking env.js endpoint..."
-          curl -f "${CLOUD_PUBLIC_BASE_URL%/}/env.js" >/dev/null 2>&1 && echo "env.js: OK" || (echo "env.js: FAILED" && exit 1)
-
-          echo "=== All smoke tests passed ==="
+          package-name: 'readio-cloud-api'
+          package-type: 'container'
+          min-versions-to-keep: 5
+          delete-only-untagged-versions: 'true'

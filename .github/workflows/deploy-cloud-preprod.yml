@@ -1,143 +1,100 @@
-name: Deploy Cloud Pre-Production
+name: Deploy Cloud (Pre-production)
 
 on:
-  workflow_run:
-    workflows: ["Release Cloud Build"]
-    types:
-      - completed
-    branches: [main]
+  push:
+    branches:
+      - pre
+    paths:
+      - 'apps/cloud-api/**'
+      - '.github/workflows/deploy-cloud-preprod.yml'
+      - 'go.mod'
+      - 'go.sum'
 
 permissions:
   contents: read
-  actions: read
-
-concurrency:
-  group: cloud-preproduction-deploy
-  cancel-in-progress: false
+  packages: write
 
 jobs:
   deploy:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    environment: cloud-preproduction
-    env:
-      SSH_HOST: ${{ secrets.CLOUD_SSH_HOST }}
-      SSH_PORT: ${{ secrets.CLOUD_SSH_PORT || '22' }}
-      SSH_USER: ${{ secrets.CLOUD_SSH_USER }}
-      REMOTE_ROOT: ${{ vars.CLOUD_REMOTE_ROOT }}
-      SERVICE_NAME: ${{ vars.CLOUD_SERVICE_NAME }}
-      CLOUD_PORT: ${{ vars.CLOUD_PORT }}
-
     steps:
-      - name: Resolve release artifact source
-        id: resolve-artifact
-        uses: actions/github-script@v8
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
         with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./apps/cloud-api
+          push: true
+
+          tags: ghcr.io/${{ github.repository_owner }}/readio-cloud-api:pre
+
+      - name: Prepare Server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ vars.READIO_CLOUD_SSH_HOST }}
+          username: ${{ vars.READIO_CLOUD_SSH_USER }}
+          key: ${{ secrets.READIO_CLOUD_SSH_KEY }}
           script: |
-            core.setOutput('run_id', String(context.payload.workflow_run.id))
-            core.setOutput('sha', context.payload.workflow_run.head_sha)
+            mkdir -p /etc/readio
 
-      - name: Download release artifact
-        uses: actions/download-artifact@v8
+      - name: Transfer Docker Compose
+        uses: appleboy/scp-action@v0.1.7
         with:
-          name: cloud-release-${{ steps.resolve-artifact.outputs.sha }}
-          run-id: ${{ steps.resolve-artifact.outputs.run_id }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          host: ${{ vars.READIO_CLOUD_SSH_HOST }}
+          username: ${{ vars.READIO_CLOUD_SSH_USER }}
+          key: ${{ secrets.READIO_CLOUD_SSH_KEY }}
+          source: "docker-compose.readio.yml"
+          target: "/etc/readio/"
 
-      - name: Display artifact contents
-        run: |
-          echo "=== Release Artifact ==="
-          ls -la
-          echo ""
-          echo "=== Manifest ==="
-          cat manifest.json
+      - name: Deploy and Wait for Health
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ vars.READIO_CLOUD_SSH_HOST }}
+          username: ${{ vars.READIO_CLOUD_SSH_USER }}
+          key: ${{ secrets.READIO_CLOUD_SSH_KEY }}
+          script: |
+            env_file="/etc/readio/readio-pre.env"
+            touch "$env_file" && chmod 600 "$env_file"
+            
+            # Clean sync function using printf (safe for special chars)
+            sync_env() {
+              local key=$1
+              local val=$2
+              if [ -n "$val" ]; then
+                grep -q "^${key}=" "$env_file" && sed -i "/^${key}=/c\\${key}=${val}" "$env_file" || printf '%s=%s\n' "$key" "$val" >> "$env_file"
+              fi
+            }
 
-      - name: Derive remote paths
-        run: |
-          echo "RELEASE_SHA=${{ steps.resolve-artifact.outputs.sha }}" >> "$GITHUB_ENV"
-          echo "REMOTE_RELEASES_DIR=$REMOTE_ROOT/releases" >> "$GITHUB_ENV"
-          echo "REMOTE_CURRENT_DIR=$REMOTE_ROOT/current" >> "$GITHUB_ENV"
-          echo "REMOTE_SHARED_DATA_DIR=$REMOTE_ROOT/shared/data" >> "$GITHUB_ENV"
-          echo "RESOLVED_RELEASE_DIR=$REMOTE_ROOT/releases/${{ steps.resolve-artifact.outputs.sha }}" >> "$GITHUB_ENV"
+            sync_env "READIO_ADMIN_TOKEN" "${{ secrets.READIO_ADMIN_TOKEN }}"
+            sync_env "PODCAST_INDEX_API_KEY" "${{ secrets.PODCAST_INDEX_API_KEY }}"
+            sync_env "PODCAST_INDEX_API_SECRET" "${{ secrets.PODCAST_INDEX_API_SECRET }}"
+            sync_env "READIO_ASR_RELAY_PUBLIC_TOKEN" "${{ secrets.READIO_ASR_RELAY_PUBLIC_TOKEN }}"
+            sync_env "READIO_ASR_WORKER_SHARED_SECRET" "${{ secrets.READIO_ASR_WORKER_SHARED_SECRET }}"
+            sync_env "READIO_ASR_API_KEY" "${{ secrets.READIO_ASR_API_KEY }}"
+            sync_env "READIO_OPENAI_API_KEY" "${{ secrets.READIO_OPENAI_API_KEY }}"
+            sync_env "READIO_GRAFANA_OTLP_TOKEN" "${{ secrets.READIO_GRAFANA_OTLP_TOKEN }}"
+            sync_env "READIO_GRAFANA_OTLP_ENDPOINT" "${{ secrets.READIO_GRAFANA_OTLP_ENDPOINT }}"
+            sync_env "READIO_GRAFANA_OTLP_INSTANCE_ID" "${{ secrets.READIO_GRAFANA_OTLP_INSTANCE_ID }}"
+            sync_env "READIO_ASR_ALLOWED_ORIGINS" "${{ vars.READIO_ASR_ALLOWED_ORIGINS }}"
+            sync_env "READIO_PROXY_ALLOWED_ORIGINS" "${{ vars.READIO_PROXY_ALLOWED_ORIGINS }}"
 
-      - name: Setup SSH known hosts
-        run: |
-          mkdir -p ~/.ssh
-          printf '%s\n' "${{ secrets.CLOUD_SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
-          printf '%s\n' "${{ secrets.CLOUD_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/known_hosts ~/.ssh/id_ed25519
+            cd /etc/readio
+            docker compose -f docker-compose.readio.yml pull readio-api-pre
+            docker compose -f docker-compose.readio.yml up -d readio-api-pre --wait --remove-orphans
+            docker image prune -f
 
-      - name: Create remote release directory
-        run: |
-          ssh -i ~/.ssh/id_ed25519 \
-            -o IdentitiesOnly=yes \
-            -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -p "$SSH_PORT" \
-            "$SSH_USER@$SSH_HOST" \
-            "mkdir -p '$REMOTE_ROOT' '$REMOTE_SHARED_DATA_DIR' '$RESOLVED_RELEASE_DIR'"
-
-      - name: Transfer release artifacts
-        run: |
-          rsync -a \
-            -e "ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts -p $SSH_PORT" \
-            ./ \
-            "$SSH_USER@$SSH_HOST:$RESOLVED_RELEASE_DIR/"
-
-      - name: Publish release and restart
-        run: |
-          ssh -i ~/.ssh/id_ed25519 \
-            -o IdentitiesOnly=yes \
-            -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -p "$SSH_PORT" \
-            "$SSH_USER@$SSH_HOST" \
-            "set -euo pipefail
-            chmod 755 '$RESOLVED_RELEASE_DIR/readio-cloud'
-            test -d '$RESOLVED_RELEASE_DIR/dist'
-            ln -sfn '$RESOLVED_RELEASE_DIR' '$REMOTE_CURRENT_DIR'
-
-            if ! sudo -n /usr/bin/systemctl restart '$SERVICE_NAME'; then
-              sudo -n /usr/bin/systemctl status '$SERVICE_NAME' --no-pager -l || true
-              sudo -n /usr/bin/journalctl -u '$SERVICE_NAME' -n 100 --no-pager || true
-              exit 1
-            fi
-
-            if ! sudo -n /usr/bin/systemctl is-active --quiet '$SERVICE_NAME'; then
-              sudo -n /usr/bin/systemctl status '$SERVICE_NAME' --no-pager -l || true
-              sudo -n /usr/bin/journalctl -u '$SERVICE_NAME' -n 100 --no-pager || true
-              exit 1
-            fi"
-
-      - name: Smoke test
-        run: |
-          echo "=== Smoke Tests ==="
-          echo "1. Checking binary exists on server..."
-          ssh -i ~/.ssh/id_ed25519 \
-            -o IdentitiesOnly=yes \
-            -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -p "$SSH_PORT" \
-            "$SSH_USER@$SSH_HOST" \
-            "test -x '$REMOTE_CURRENT_DIR/readio-cloud' && echo 'Binary: OK' || (echo 'Binary: MISSING' && exit 1)"
-
-          echo "2. Checking localhost healthz endpoint..."
-          ssh -i ~/.ssh/id_ed25519 \
-            -o IdentitiesOnly=yes \
-            -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -p "$SSH_PORT" \
-            "$SSH_USER@$SSH_HOST" \
-            "curl -fsS 'http://127.0.0.1:${CLOUD_PORT}/healthz' >/dev/null && echo 'healthz: OK' || (echo 'healthz: FAILED' && exit 1)"
-
-          echo "3. Checking localhost env.js endpoint..."
-          ssh -i ~/.ssh/id_ed25519 \
-            -o IdentitiesOnly=yes \
-            -o StrictHostKeyChecking=yes \
-            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
-            -p "$SSH_PORT" \
-            "$SSH_USER@$SSH_HOST" \
-            "curl -fsS 'http://127.0.0.1:${CLOUD_PORT}/env.js' >/dev/null && echo 'env.js: OK' || (echo 'env.js: FAILED' && exit 1)"
-
-          echo "=== All smoke tests passed ==="
+      - name: Cleanup old container images
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: 'readio-cloud-api'
+          package-type: 'container'
+          min-versions-to-keep: 3
+          delete-only-untagged-versions: 'true'
