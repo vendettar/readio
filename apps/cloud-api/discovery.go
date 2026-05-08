@@ -23,49 +23,41 @@ import (
 )
 
 const (
-	discoveryRoutePrefix                            = "/api/v1/discovery/"
-	discoverySearchPodcastsRoute                    = "/api/v1/discovery/search/podcasts"
-	discoverySearchEpisodesRoute                    = "/api/v1/discovery/search/episodes"
-	discoveryTopPodcastsRoute                       = "/api/v1/discovery/top-podcasts"
-	discoveryTopEpisodesRoute                       = "/api/v1/discovery/top-episodes"
-	discoveryFeedRoute                              = "/api/v1/discovery/feed"
-	discoveryPodcastsRoute                          = "/api/v1/discovery/podcasts"
-	discoveryPodcastsBatchRoute                     = "/api/v1/discovery/podcasts/batch"
-	discoveryPodcastByItunesIDRoutePattern          = "/api/v1/discovery/podcasts/:itunesId"
-	discoverySearchBaseURL                          = "https://itunes.apple.com/search"
-	discoveryRSSBaseURL                             = "https://rss.marketingtools.apple.com/api/v2"
-	discoveryUserAgent                              = "Readio/1.0 (Cloud Discovery; +https://www.readio.top)"
-	discoveryBrowserUserAgent                       = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-	discoveryRequestTimeout                         = 15 * time.Second
-	discoveryBodyLimit                        int64 = 30 << 20
-	discoverySlowRequestThreshold                   = 5 * time.Second
-	defaultDiscoveryCountry                         = "us"
-	defaultDiscoveryPodcastSearchLimit              = 20
-	defaultDiscoveryEpisodeSearchLimit              = 50
-	defaultDiscoveryTopLimit                        = 25
-	maxDiscoverySearchLimit                         = 200
-	maxDiscoveryTopLimit                            = 100
-	discoveryCacheMaxKeys                           = 256
-	discoverySearchRateLimitBurst                   = 30
-	discoverySearchRateLimitWindow                  = time.Minute
-	discoverySearchRateLimitBurstEnv                = "READIO_DISCOVERY_SEARCH_RATE_LIMIT_BURST"
-	discoverySearchRateLimitWindowMsEnv             = "READIO_DISCOVERY_SEARCH_RATE_LIMIT_WINDOW_MS"
-	discoveryTopRateLimitBurst                      = 20
-	discoveryTopRateLimitWindow                     = time.Minute
-	discoveryTopRateLimitBurstEnv                   = "READIO_DISCOVERY_TOP_RATE_LIMIT_BURST"
-	discoveryTopRateLimitWindowMsEnv                = "READIO_DISCOVERY_TOP_RATE_LIMIT_WINDOW_MS"
-	discoveryFeedRateLimitBurst                     = 20
-	discoveryFeedRateLimitWindow                    = time.Minute
-	discoveryFeedRateLimitBurstEnv                  = "READIO_DISCOVERY_FEED_RATE_LIMIT_BURST"
-	discoveryFeedRateLimitWindowMsEnv               = "READIO_DISCOVERY_FEED_RATE_LIMIT_WINDOW_MS"
-	discoveryFeedCacheTTLmsEnv                      = "READIO_DISCOVERY_FEED_CACHE_TTL_MS"
-	discoveryFeedCacheMaxEntriesEnv                 = "READIO_DISCOVERY_FEED_CACHE_MAX_ENTRIES"
-	discoveryFeedCacheMaxEpisodesEnv                = "READIO_DISCOVERY_FEED_CACHE_MAX_EPISODES"
-	discoveryFeedCacheMaxBytesEnv                   = "READIO_DISCOVERY_FEED_CACHE_MAX_BYTES"
-	discoveryPodcastIndexRateLimitBurst             = 20
-	discoveryPodcastIndexRateLimitWindow            = time.Minute
-	discoveryPodcastIndexRateLimitBurstEnv          = "READIO_DISCOVERY_PODCAST_INDEX_RATE_LIMIT_BURST"
-	discoveryPodcastIndexRateLimitWindowMsEnv       = "READIO_DISCOVERY_PODCAST_INDEX_RATE_LIMIT_WINDOW_MS"
+	discoveryRoutePrefix                                 = "/api/v1/discovery/"
+	discoverySearchPodcastsRoute                         = "/api/v1/discovery/search/podcasts"
+	discoverySearchEpisodesRoute                         = "/api/v1/discovery/search/episodes"
+	discoveryTopPodcastsRoute                            = "/api/v1/discovery/top-podcasts"
+	discoveryTopEpisodesRoute                            = "/api/v1/discovery/top-episodes"
+	discoveryPodcastsRoute                               = "/api/v1/discovery/podcasts"
+	discoveryPodcastsBatchRoute                          = "/api/v1/discovery/podcasts/batch"
+	discoveryPodcastByItunesIDRoutePattern               = "/api/v1/discovery/podcasts/:itunesId"
+	discoveryPodcastEpisodesByItunesIDRoutePattern       = "/api/v1/discovery/podcasts/:itunesId/episodes"
+	discoverySearchBaseURL                               = "https://itunes.apple.com/search"
+	discoveryAppleChartsBaseURL                          = "https://rss.marketingtools.apple.com/api/v2"
+	discoveryUserAgent                                   = "Readio/1.0 (Cloud Discovery; +https://www.readio.top)"
+	discoveryBrowserUserAgent                            = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+	discoveryRequestTimeout                              = 15 * time.Second
+	discoveryBodyLimit                             int64 = 30 << 20
+	discoverySlowRequestThreshold                        = 5 * time.Second
+	defaultDiscoveryCountry                              = "us"
+	defaultDiscoveryPodcastSearchLimit                   = 20
+	defaultDiscoveryEpisodeSearchLimit                   = 50
+	defaultDiscoveryTopLimit                             = 25
+	maxDiscoverySearchLimit                              = 200
+	maxDiscoveryTopLimit                                 = 100
+	discoveryCacheMaxKeys                                = 256
+	discoverySearchRateLimitBurst                        = 30
+	discoverySearchRateLimitWindow                       = time.Minute
+	discoverySearchRateLimitBurstEnv                     = "READIO_DISCOVERY_SEARCH_RATE_LIMIT_BURST"
+	discoverySearchRateLimitWindowMsEnv                  = "READIO_DISCOVERY_SEARCH_RATE_LIMIT_WINDOW_MS"
+	discoveryTopRateLimitBurst                           = 20
+	discoveryTopRateLimitWindow                          = time.Minute
+	discoveryTopRateLimitBurstEnv                        = "READIO_DISCOVERY_TOP_RATE_LIMIT_BURST"
+	discoveryTopRateLimitWindowMsEnv                     = "READIO_DISCOVERY_TOP_RATE_LIMIT_WINDOW_MS"
+	discoveryPodcastIndexRateLimitBurst                  = 20
+	discoveryPodcastIndexRateLimitWindow                 = time.Minute
+	discoveryPodcastIndexRateLimitBurstEnv               = "READIO_DISCOVERY_PODCAST_INDEX_RATE_LIMIT_BURST"
+	discoveryPodcastIndexRateLimitWindowMsEnv            = "READIO_DISCOVERY_PODCAST_INDEX_RATE_LIMIT_WINDOW_MS"
 )
 
 func discoveryPodcastByItunesIDFromPath(requestPath string) (string, bool) {
@@ -83,16 +75,25 @@ func discoveryPodcastByItunesIDFromPath(requestPath string) (string, bool) {
 	return rawID, true
 }
 
-const (
-	discoveryFeedCacheTTL         = 5 * time.Minute
-	discoveryFeedCacheMaxEntries  = 12
-	discoveryFeedCacheMaxEpisodes = 300
-	discoveryFeedCacheMaxBytes    = 1 << 20
-)
+func discoveryPodcastEpisodesByItunesIDFromPath(requestPath string) (string, bool) {
+	cleanedPath := path.Clean(requestPath)
+	prefix := discoveryPodcastsRoute + "/"
+	if !strings.HasPrefix(cleanedPath, prefix) || cleanedPath == discoveryPodcastsBatchRoute {
+		return "", false
+	}
+
+	suffix := strings.TrimPrefix(cleanedPath, prefix)
+	parts := strings.Split(suffix, "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] != "episodes" {
+		return "", false
+	}
+
+	return parts[0], true
+}
 
 // Shared Discovery Response Types
 
-// PodcastIndex episode detail (episodeGuid as identity)
+// PodcastIndex episode detail (guid as identity)
 // PI Podcast response (canonical format for PI podcast-byitunesid and batch-byguid)
 // Identity: podcastItunesId
 type piPodcastResponse struct {
@@ -100,10 +101,9 @@ type piPodcastResponse struct {
 	Author          string   `json:"author"`
 	Artwork         string   `json:"artwork"`
 	Description     string   `json:"description"`
-	FeedURL         string   `json:"feedUrl"`
-	LastUpdateTime  *int64   `json:"lastUpdateTime,omitempty"`
+	LastUpdateTime  int64    `json:"lastUpdateTime"`
 	PodcastItunesID string   `json:"podcastItunesId"`
-	EpisodeCount    *int64   `json:"episodeCount,omitempty"`
+	EpisodeCount    int64    `json:"episodeCount"`
 	Language        string   `json:"language,omitempty"`
 	Genres          []string `json:"genres"`
 }
@@ -114,9 +114,9 @@ type piPodcastResponse struct {
 //
 //   - top-podcasts   → country, limit           (24 hour TTL)
 //   - top-episodes   → country, limit           (24 hour TTL)
+//   - PI lookups     → route-specific keys      (24 hour TTL)
 //
 // Error responses (upstream failures, param errors, timeouts) are NEVER cached.
-// Feed responses use a separate fresh-only short TTL cache.
 // Search responses are NOT cached (high cardinality).
 var discoveryCacheTTLTopPodcasts = 24 * time.Hour
 var discoveryCacheTTLTopEpisodes = 24 * time.Hour
@@ -199,6 +199,17 @@ func getWithGracefulDegradation[T any](
 	ttl time.Duration,
 	fetch func(context.Context) (T, error),
 ) (T, string, error) {
+	return getWithGracefulDegradationWithCachePolicy(s, ctx, cacheKey, ttl, fetch, nil)
+}
+
+func getWithGracefulDegradationWithCachePolicy[T any](
+	s *discoveryService,
+	ctx context.Context,
+	cacheKey string,
+	ttl time.Duration,
+	fetch func(context.Context) (T, error),
+	shouldCache func(T) bool,
+) (T, string, error) {
 	var zero T
 	data, status, ok := discoveryCacheGetWithStatus[T](s.cache, cacheKey)
 	if ok && status == "fresh" {
@@ -220,7 +231,9 @@ func getWithGracefulDegradation[T any](
 		return zero, CacheStatusMissError, fmt.Errorf("discovery cache type mismatch for key %s", cacheKey)
 	}
 
-	discoveryCacheSet(s.cache, cacheKey, result, ttl)
+	if shouldCache == nil || shouldCache(result) {
+		discoveryCacheSet(s.cache, cacheKey, result, ttl)
+	}
 	return result, CacheStatusRefreshed, nil
 }
 
@@ -256,12 +269,12 @@ var (
 	errDiscoveryTimeout        = errors.New("discovery upstream timeout")
 	errDiscoveryTooLarge       = errors.New("discovery upstream response too large")
 	errDiscoveryDecode         = errors.New("discovery upstream response invalid")
-	errDiscoveryXMLDecode      = errors.New("discovery upstream response invalid XML")
 
-	errDiscoveryUpstreamError    = errors.New("discovery upstream error")
-	errDiscoveryRateLimited      = errors.New("discovery request rate limited")
-	errDiscoveryHostUnresolvable = errors.New("discovery host unresolvable")
-	discoveryStopWords           = map[string]struct{}{
+	errDiscoveryUpstreamError         = errors.New("discovery upstream error")
+	errDiscoveryRateLimited           = errors.New("discovery request rate limited")
+	errDiscoveryHostUnresolvable      = errors.New("discovery host unresolvable")
+	errDiscoveryMethodNotAllowedError = errors.New("method not allowed")
+	discoveryStopWords                = map[string]struct{}{
 		"the": {}, "a": {}, "an": {}, "and": {}, "or": {}, "of": {}, "in": {}, "on": {},
 		"at": {}, "to": {}, "for": {}, "with": {}, "by": {}, "is": {}, "it": {}, "that": {},
 		"this": {}, "podcast": {}, "audio": {}, "episode": {}, "episodes": {},
@@ -296,15 +309,14 @@ const (
 // Upstream kind constants for observability.
 const (
 	UpstreamKindAppleSearch  = "apple-search"
-	UpstreamKindAppleFeed    = "apple-feed"
-	UpstreamKindFeed         = "feed"
+	UpstreamKindAppleCharts  = "apple-charts"
 	UpstreamKindPodcastIndex = "podcastindex"
 )
 
 type discoveryService struct {
 	client              *http.Client
 	timeout             time.Duration
-	rssBaseURL          string
+	appleChartsBaseURL  string
 	searchBaseURL       string
 	userAgent           string
 	bodyLimit           int64
@@ -312,22 +324,14 @@ type discoveryService struct {
 	dialContext         func(context.Context, string, string) (net.Conn, error)
 	searchLimiter       *rateLimiter
 	topLimiter          *rateLimiter
-	feedLimiter         *rateLimiter
 	podcastIndexLimiter *rateLimiter
 	trustedProxies      trustedProxySet
 	cache               *discoveryCache
-	feedCache           *discoveryFeedCache
 	cacheOwner          singleflight.Group
 	podcastIndexConfig  podcastIndexConfig
+	allowedOrigins      []string
 }
 
-type discoveryFeedCacheConfig struct {
-	ttl         time.Duration
-	maxEntries  int
-	maxEpisodes int
-	maxBytes    int
-	enabled     bool
-}
 
 type discoveryParamError struct {
 	code    string
@@ -389,10 +393,6 @@ var (
 		code:    "UPSTREAM_TOO_LARGE",
 		message: "discovery upstream response exceeded the allowed size",
 	}
-	discoveryErrInvalidUpstreamXML = discoveryErrorSpec{
-		code:    "INVALID_UPSTREAM_XML",
-		message: "discovery upstream response was not valid XML",
-	}
 	discoveryErrInvalidUpstreamPayload = discoveryErrorSpec{
 		code:    "INVALID_UPSTREAM_PAYLOAD",
 		message: "discovery upstream response was not valid JSON",
@@ -436,14 +436,6 @@ func newDiscoveryService() *discoveryService {
 			topBurst,
 		)
 	}
-	feedBurst := resolveDiscoveryFeedRateLimitBurst()
-	if feedBurst <= 0 {
-		slog.Warn(
-			"application-layer rate limiting disabled for discovery feed routes",
-			discoveryFeedRateLimitBurstEnv,
-			feedBurst,
-		)
-	}
 	podcastIndexBurst := resolveDiscoveryPodcastIndexRateLimitBurst()
 	if podcastIndexBurst <= 0 {
 		slog.Warn(
@@ -452,9 +444,6 @@ func newDiscoveryService() *discoveryService {
 			podcastIndexBurst,
 		)
 	}
-
-	feedCacheConfig := resolveDiscoveryFeedCacheConfig()
-
 	return &discoveryService{
 		client: &http.Client{
 			Timeout: discoveryRequestTimeout,
@@ -464,20 +453,20 @@ func newDiscoveryService() *discoveryService {
 		},
 		timeout:             discoveryRequestTimeout,
 		searchBaseURL:       discoverySearchBaseURL,
-		rssBaseURL:          discoveryRSSBaseURL,
+		appleChartsBaseURL:  discoveryAppleChartsBaseURL,
 		userAgent:           discoveryUserAgent,
 		bodyLimit:           discoveryBodyLimit,
 		lookupIP:            net.DefaultResolver.LookupIPAddr,
 		searchLimiter:       newRateLimiter(burst, resolveDiscoverySearchRateLimitWindow(), time.Now),
 		topLimiter:          newRateLimiter(topBurst, resolveDiscoveryTopRateLimitWindow(), time.Now),
-		feedLimiter:         newRateLimiter(feedBurst, resolveDiscoveryFeedRateLimitWindow(), time.Now),
 		podcastIndexLimiter: newRateLimiter(podcastIndexBurst, resolveDiscoveryPodcastIndexRateLimitWindow(), time.Now),
 		trustedProxies:      loadTrustedProxySet(slog.Default()),
 		cache:               newDiscoveryCache(discoveryCacheMaxKeys),
-		feedCache:           newDiscoveryFeedCache(feedCacheConfig, time.Now),
 		podcastIndexConfig:  getPodcastIndexConfig(),
+		allowedOrigins:      resolveProxyAllowedOrigins(), // Re-use the same allowed origins
 	}
 }
+
 
 func resolveDiscoverySearchRateLimitBurst() int {
 	raw := strings.TrimSpace(os.Getenv(discoverySearchRateLimitBurstEnv))
@@ -527,93 +516,6 @@ func resolveDiscoveryTopRateLimitWindow() time.Duration {
 	return time.Duration(value) * time.Millisecond
 }
 
-func resolveDiscoveryFeedRateLimitBurst() int {
-	raw := strings.TrimSpace(os.Getenv(discoveryFeedRateLimitBurstEnv))
-	if raw == "" {
-		return discoveryFeedRateLimitBurst
-	}
-	value, err := strconv.Atoi(raw)
-	if err != nil {
-		return discoveryFeedRateLimitBurst
-	}
-	return value
-}
-
-func resolveDiscoveryFeedRateLimitWindow() time.Duration {
-	raw := strings.TrimSpace(os.Getenv(discoveryFeedRateLimitWindowMsEnv))
-	if raw == "" {
-		return discoveryFeedRateLimitWindow
-	}
-	value, err := strconv.Atoi(raw)
-	if err != nil || value <= 0 {
-		return discoveryFeedRateLimitWindow
-	}
-	return time.Duration(value) * time.Millisecond
-}
-
-func resolveDiscoveryFeedCacheConfig() discoveryFeedCacheConfig {
-	ttl := resolveDiscoveryFeedCacheTTL()
-	maxEntries := resolveDiscoveryFeedCacheMaxEntries()
-	return discoveryFeedCacheConfig{
-		ttl:         ttl,
-		maxEntries:  maxEntries,
-		maxEpisodes: resolveDiscoveryFeedCacheMaxEpisodes(),
-		maxBytes:    resolveDiscoveryFeedCacheMaxBytes(),
-		enabled:     ttl > 0 && maxEntries > 0,
-	}
-}
-
-func resolveDiscoveryFeedCacheTTL() time.Duration {
-	raw := strings.TrimSpace(os.Getenv(discoveryFeedCacheTTLmsEnv))
-	if raw == "" {
-		return discoveryFeedCacheTTL
-	}
-	value, err := strconv.Atoi(raw)
-	if err != nil {
-		return discoveryFeedCacheTTL
-	}
-	if value <= 0 {
-		return 0
-	}
-	return time.Duration(value) * time.Millisecond
-}
-
-func resolveDiscoveryFeedCacheMaxEntries() int {
-	raw := strings.TrimSpace(os.Getenv(discoveryFeedCacheMaxEntriesEnv))
-	if raw == "" {
-		return discoveryFeedCacheMaxEntries
-	}
-	value, err := strconv.Atoi(raw)
-	if err != nil {
-		return discoveryFeedCacheMaxEntries
-	}
-	return value
-}
-
-func resolveDiscoveryFeedCacheMaxEpisodes() int {
-	raw := strings.TrimSpace(os.Getenv(discoveryFeedCacheMaxEpisodesEnv))
-	if raw == "" {
-		return discoveryFeedCacheMaxEpisodes
-	}
-	value, err := strconv.Atoi(raw)
-	if err != nil {
-		return discoveryFeedCacheMaxEpisodes
-	}
-	return value
-}
-
-func resolveDiscoveryFeedCacheMaxBytes() int {
-	raw := strings.TrimSpace(os.Getenv(discoveryFeedCacheMaxBytesEnv))
-	if raw == "" {
-		return discoveryFeedCacheMaxBytes
-	}
-	value, err := strconv.Atoi(raw)
-	if err != nil {
-		return discoveryFeedCacheMaxBytes
-	}
-	return value
-}
-
 func resolveDiscoveryPodcastIndexRateLimitBurst() int {
 	raw := strings.TrimSpace(os.Getenv(discoveryPodcastIndexRateLimitBurstEnv))
 	if raw == "" {
@@ -639,12 +541,26 @@ func resolveDiscoveryPodcastIndexRateLimitWindow() time.Duration {
 }
 
 func (s *discoveryService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+
+	// CORS Authorization
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	if origin != "" {
+		if match, ok := matchOrigin(s.allowedOrigins, origin); ok {
+			w.Header().Set("Access-Control-Allow-Origin", match)
+			w.Header().Set("Vary", "Origin")
+		}
+	}
+
 	cleanedPath := path.Clean(r.URL.Path)
+
+	_, isPodcastEpisodesByItunesIDRoute := discoveryPodcastEpisodesByItunesIDFromPath(cleanedPath)
 	_, isPodcastByItunesIDRoute := discoveryPodcastByItunesIDFromPath(cleanedPath)
 	allowedMethod := r.Method == http.MethodGet || (r.Method == http.MethodPost && cleanedPath == discoveryPodcastsBatchRoute)
 	if !allowedMethod {
 		w.Header().Set("Allow", strings.Join([]string{http.MethodGet, http.MethodPost}, ", "))
 		writeDiscoveryErrorSpec(w, http.StatusMethodNotAllowed, discoveryErrMethodNotAllowed)
+		recordHTTPMetric(cleanedPath, http.StatusMethodNotAllowed, "invalid_method", time.Since(start))
 		return
 	}
 
@@ -657,20 +573,27 @@ func (s *discoveryService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.handleTopPodcasts(w, r)
 	case discoveryTopEpisodesRoute:
 		s.handleTopEpisodes(w, r)
-	case discoveryFeedRoute:
-		s.handleFeed(w, r)
 	case discoveryPodcastsBatchRoute:
 		s.handlePodcastIndexPodcastsBatchByGUID(w, r)
 	default:
+		if isPodcastEpisodesByItunesIDRoute {
+			s.handlePodcastIndexPodcastEpisodesByItunesID(w, r)
+			return
+		}
 		if isPodcastByItunesIDRoute {
 			s.handlePodcastIndexPodcastByItunesID(w, r)
 			return
 		}
 		writeDiscoveryErrorSpec(w, http.StatusNotFound, discoveryErrNotFound)
+		recordHTTPMetric(cleanedPath, http.StatusNotFound, "unknown", time.Since(start))
 	}
 }
 
 func logDiscoveryRequest(route, upstreamKind, upstreamHost string, elapsed time.Duration, err error, cacheStatus string) {
+	logDiscoveryRequestWithStatus(route, upstreamKind, upstreamHost, elapsed, err, cacheStatus, discoveryMetricStatus(err))
+}
+
+func logDiscoveryRequestWithStatus(route, upstreamKind, upstreamHost string, elapsed time.Duration, err error, cacheStatus string, httpStatus int) {
 	// Extract hostname if a full URL was passed.
 	if parsed, parseErr := url.Parse(upstreamHost); parseErr == nil && parsed.Host != "" {
 		upstreamHost = parsed.Host
@@ -690,6 +613,11 @@ func logDiscoveryRequest(route, upstreamKind, upstreamHost string, elapsed time.
 		}
 	}
 
+	recordHTTPMetric(route, httpStatus, errorClass, elapsed)
+	if shouldRecordDiscoveryUpstreamMetric(route, upstreamKind, err, cacheStatus) {
+		recordUpstreamMetric(upstreamKind, route, httpStatus, errorClass, cacheStatus, elapsed)
+	}
+
 	attrs := []any{
 		slog.String("route", route),
 		slog.String("upstream_kind", upstreamKind),
@@ -706,6 +634,85 @@ func logDiscoveryRequest(route, upstreamKind, upstreamHost string, elapsed time.
 	} else {
 		slog.Info("discovery request", attrs...)
 	}
+}
+
+func discoveryMetricStatus(err error) int {
+	if err == nil {
+		return http.StatusOK
+	}
+
+	var paramErr *discoveryParamError
+	if errors.As(err, &paramErr) {
+		return http.StatusBadRequest
+	}
+
+	var configErr *discoveryProviderConfigError
+	if errors.As(err, &configErr) {
+		return http.StatusServiceUnavailable
+	}
+
+	if errors.Is(err, errDiscoveryRateLimited) {
+		return http.StatusTooManyRequests
+	}
+	if errors.Is(err, errDiscoveryTimeout) || isDiscoveryTransportTimeout(err) {
+		return http.StatusGatewayTimeout
+	}
+	if isDiscoveryMethodNotAllowedError(err) {
+		return http.StatusMethodNotAllowed
+	}
+	if isDiscoveryBodyTooLargeError(err) {
+		return http.StatusRequestEntityTooLarge
+	}
+
+	return http.StatusBadGateway
+}
+
+func shouldRecordDiscoveryUpstreamMetric(route, upstreamKind string, err error, cacheStatus string) bool {
+	if strings.TrimSpace(upstreamKind) == "" {
+		return false
+	}
+	if cacheStatus == CacheStatusFreshHit {
+		return false
+	}
+	if isDiscoveryLocalRejection(route, err, cacheStatus) {
+		return false
+	}
+	if route == discoverySearchPodcastsRoute || route == discoverySearchEpisodesRoute {
+		return true
+	}
+	switch cacheStatus {
+	case CacheStatusRefreshed, CacheStatusStaleFallback, CacheStatusMissError:
+		return true
+	default:
+		return false
+	}
+}
+
+func isDiscoveryLocalRejection(route string, err error, cacheStatus string) bool {
+	if err == nil {
+		return route == discoveryPodcastsBatchRoute && cacheStatus == CacheStatusUncached
+	}
+
+	var paramErr *discoveryParamError
+	if errors.As(err, &paramErr) {
+		return true
+	}
+	var configErr *discoveryProviderConfigError
+	if errors.As(err, &configErr) {
+		return true
+	}
+	var syntaxErr *json.SyntaxError
+	if errors.As(err, &syntaxErr) {
+		return true
+	}
+	var unmarshalTypeErr *json.UnmarshalTypeError
+	if errors.As(err, &unmarshalTypeErr) {
+		return true
+	}
+
+	return errors.Is(err, errDiscoveryRateLimited) ||
+		isDiscoveryMethodNotAllowedError(err) ||
+		isDiscoveryBodyTooLargeError(err)
 }
 
 func classifyDiscoveryError(err error) string {
@@ -731,11 +738,7 @@ func classifyDiscoveryError(err error) string {
 		return "decode"
 	}
 
-	if errors.Is(err, errDiscoveryXMLDecode) {
-		return "xml_decode"
-	}
-
-	if errors.Is(err, errDiscoveryTooLarge) {
+	if errors.Is(err, errDiscoveryTooLarge) || isDiscoveryBodyTooLargeError(err) {
 		return "too_large"
 	}
 
@@ -743,7 +746,19 @@ func classifyDiscoveryError(err error) string {
 		return "rate_limit"
 	}
 
+	if isDiscoveryMethodNotAllowedError(err) {
+		return "invalid_method"
+	}
+
 	return "unknown"
+}
+
+func isDiscoveryMethodNotAllowedError(err error) bool {
+	return errors.Is(err, errDiscoveryMethodNotAllowedError)
+}
+
+func isDiscoveryBodyTooLargeError(err error) bool {
+	return err != nil && strings.EqualFold(strings.TrimSpace(err.Error()), "body too large")
 }
 
 func isDiscoveryTransportTimeout(err error) bool {
@@ -780,14 +795,6 @@ func (s *discoveryService) allowTopRequest(remoteAddr string) bool {
 	return s.topLimiter.allow(remoteAddr)
 }
 
-func (s *discoveryService) allowFeedRequest(remoteAddr string) bool {
-	if s == nil || s.feedLimiter == nil {
-		return true
-	}
-
-	return s.feedLimiter.allow(remoteAddr)
-}
-
 func (s *discoveryService) allowPodcastIndexRequest(remoteAddr string) bool {
 	if s == nil || s.podcastIndexLimiter == nil {
 		return true
@@ -819,17 +826,6 @@ func parseDiscoveryTerm(values url.Values) (string, error) {
 		}
 	}
 	return term, nil
-}
-
-func parseDiscoveryFeedURL(values url.Values) (string, error) {
-	raw := strings.TrimSpace(values.Get("url"))
-	if raw == "" {
-		return "", &discoveryParamError{
-			code:    "MISSING_URL",
-			message: "url is required",
-		}
-	}
-	return raw, nil
 }
 
 func parseDiscoveryLimit(values url.Values, key string, fallback, maxLimit int) (int, error) {
@@ -906,8 +902,6 @@ func writeDiscoveryMappedError(w http.ResponseWriter, err error) {
 		writeDiscoveryErrorSpec(w, http.StatusGatewayTimeout, discoveryErrUpstreamTimeout)
 	case errors.Is(err, errDiscoveryTooLarge):
 		writeDiscoveryErrorSpec(w, http.StatusBadGateway, discoveryErrUpstreamTooLarge)
-	case errors.Is(err, errDiscoveryXMLDecode):
-		writeDiscoveryErrorSpec(w, http.StatusBadGateway, discoveryErrInvalidUpstreamXML)
 	case errors.Is(err, errDiscoveryDecode):
 		writeDiscoveryErrorSpec(w, http.StatusBadGateway, discoveryErrInvalidUpstreamPayload)
 	default:

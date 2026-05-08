@@ -36,7 +36,7 @@ func buildApplePodcastEpisodeSearchURL(base, term, country string, limit int) st
 	return buildAppleSearchURL(base, term, country, limit, "podcastEpisode")
 }
 
-func buildAppleFeedURL(base, country string, limit int, resource string) string {
+func buildAppleChartsURL(base, country string, limit int, resource string) string {
 	return fmt.Sprintf(
 		"%s/%s/podcasts/top/%d/%s.json",
 		strings.TrimRight(base, "/"),
@@ -94,7 +94,7 @@ type discoverySearchPodcastResponseItem struct {
 	Title           string   `json:"title"`
 	Author          string   `json:"author"`
 	Artwork         string   `json:"artwork"`
-	ReleaseDate     string   `json:"releaseDate,omitempty"`
+	ReleaseDate     string   `json:"releaseDate"`
 	EpisodeCount    int64    `json:"episodeCount"`
 	PodcastItunesID string   `json:"podcastItunesId"`
 	Genres          []string `json:"genres"`
@@ -106,11 +106,11 @@ type discoverySearchEpisodeResponseItem struct {
 	Title            string `json:"title"`
 	ShowTitle        string `json:"showTitle"`
 	Artwork          string `json:"artwork"`
-	EpisodeURL       string `json:"episodeUrl"`
-	EpisodeGUID      string `json:"episodeGuid"`
-	ReleaseDate      string `json:"releaseDate,omitempty"`
+	AudioURL         string `json:"audioUrl"`
+	GUID             string `json:"guid"`
+	ReleaseDate      string `json:"releaseDate"`
 	TrackTimeMillis  *int64 `json:"trackTimeMillis,omitempty"`
-	ShortDescription string `json:"shortDescription,omitempty"`
+	ShortDescription string `json:"shortDescription"`
 }
 
 // Route-specific raw types for Apple episode search
@@ -156,22 +156,30 @@ func isRelevantAppleEpisodeSearchItem(item rawAppleEpisodeSearchItem, queryToken
 }
 
 func mapAppleEpisodeSearchItem(item rawAppleEpisodeSearchItem) (discoverySearchEpisodeResponseItem, bool) {
-	audioURL := strings.TrimSpace(item.EpisodeURL)
+	audioURL, ok := normalizeRequiredHTTPURL(item.EpisodeURL)
+	if !ok {
+		return discoverySearchEpisodeResponseItem{}, false
+	}
+
 	releaseDate := strings.TrimSpace(item.ReleaseDate)
 	title := strings.TrimSpace(item.TrackName)
 	showTitle := strings.TrimSpace(item.CollectionName)
 	episodeGUID := strings.TrimSpace(item.EpisodeGUID)
 	itunesIDStr := asStringID(item.CollectionID)
-	artwork := strings.TrimSpace(item.ArtworkURL600)
+	artwork, ok := normalizeRequiredHTTPURL(item.ArtworkURL600)
+	if !ok {
+		return discoverySearchEpisodeResponseItem{}, false
+	}
+
 	shortDescription := strings.TrimSpace(item.ShortDescription)
 	durationMs := asOptionalInt64(item.TrackTimeMillis)
 
-	if audioURL == "" ||
-		title == "" ||
+	if title == "" ||
 		showTitle == "" ||
 		episodeGUID == "" ||
 		itunesIDStr == "" ||
-		artwork == "" {
+		releaseDate == "" ||
+		shortDescription == "" {
 		return discoverySearchEpisodeResponseItem{}, false
 	}
 
@@ -180,8 +188,8 @@ func mapAppleEpisodeSearchItem(item rawAppleEpisodeSearchItem) (discoverySearchE
 		Title:            title,
 		ShowTitle:        showTitle,
 		Artwork:          artwork,
-		EpisodeURL:       audioURL,
-		EpisodeGUID:      episodeGUID,
+		AudioURL:         audioURL,
+		GUID:             episodeGUID,
 		ReleaseDate:      releaseDate,
 		TrackTimeMillis:  durationMs,
 		ShortDescription: shortDescription,
@@ -218,7 +226,11 @@ func mapApplePodcastSearchItem(
 ) (discoverySearchPodcastResponseItem, bool) {
 	itunesIDStr := asStringID(item.CollectionID)
 	title := strings.TrimSpace(item.CollectionName)
-	artwork := strings.TrimSpace(item.ArtworkURL600)
+	artwork, ok := normalizeRequiredHTTPURL(item.ArtworkURL600)
+	if !ok {
+		return discoverySearchPodcastResponseItem{}, false
+	}
+
 	releaseDate := strings.TrimSpace(item.ReleaseDate)
 	author := strings.TrimSpace(item.ArtistName)
 	genres := mapDiscoveryGenreNames(item.Genres)
@@ -226,8 +238,8 @@ func mapApplePodcastSearchItem(
 
 	if itunesIDStr == "" ||
 		title == "" ||
-		artwork == "" ||
 		author == "" ||
+		releaseDate == "" ||
 		episodeCount == nil {
 		return discoverySearchPodcastResponseItem{}, false
 	}
@@ -283,20 +295,20 @@ func (s *discoveryService) handleTopPodcasts(w http.ResponseWriter, r *http.Requ
 
 	if !s.allowTopRequest(effectiveClientIP(r, s.trustedProxies)) {
 		writeDiscoveryErrorSpec(w, http.StatusTooManyRequests, discoveryErrRateLimited)
-		logDiscoveryRequest(route, UpstreamKindAppleFeed, s.rssBaseURL, time.Since(start), errDiscoveryRateLimited, CacheStatusUncached)
+		logDiscoveryRequest(route, UpstreamKindAppleCharts, s.appleChartsBaseURL, time.Since(start), errDiscoveryRateLimited, CacheStatusUncached)
 		return
 	}
 
 	country, err := parseDiscoveryCountry(r.URL.Query())
 	if err != nil {
 		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, UpstreamKindAppleFeed, s.rssBaseURL, time.Since(start), err, CacheStatusMissError)
+		logDiscoveryRequest(route, UpstreamKindAppleCharts, s.appleChartsBaseURL, time.Since(start), err, CacheStatusMissError)
 		return
 	}
 	limit, err := parseDiscoveryLimit(r.URL.Query(), "limit", defaultDiscoveryTopLimit, maxDiscoveryTopLimit)
 	if err != nil {
 		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, UpstreamKindAppleFeed, s.rssBaseURL, time.Since(start), err, CacheStatusMissError)
+		logDiscoveryRequest(route, UpstreamKindAppleCharts, s.appleChartsBaseURL, time.Since(start), err, CacheStatusMissError)
 		return
 	}
 
@@ -305,7 +317,7 @@ func (s *discoveryService) handleTopPodcasts(w http.ResponseWriter, r *http.Requ
 	defer cancel()
 
 	fetch := func(ctx context.Context) ([]topPodcastResponse, error) {
-		upstreamURL := buildAppleFeedURL(s.rssBaseURL, country, limit, "podcasts")
+		upstreamURL := buildAppleChartsURL(s.appleChartsBaseURL, country, limit, "podcasts")
 		var payload rawAppleTopPodcastFeedResponse
 		if err := s.fetchJSON(ctx, upstreamURL, &payload); err != nil {
 			return nil, errors.Join(errDiscoveryUpstreamError, err)
@@ -333,12 +345,12 @@ func (s *discoveryService) handleTopPodcasts(w http.ResponseWriter, r *http.Requ
 	data, cacheStatus, err := getWithGracefulDegradation(s, ctx, cacheKey, discoveryCacheTTLTopPodcasts, fetch)
 	if err != nil {
 		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, UpstreamKindAppleFeed, s.rssBaseURL, time.Since(start), err, cacheStatus)
+		logDiscoveryRequest(route, UpstreamKindAppleCharts, s.appleChartsBaseURL, time.Since(start), err, cacheStatus)
 		return
 	}
 
 	writeDiscoveryJSON(w, http.StatusOK, data)
-	logDiscoveryRequest(route, UpstreamKindAppleFeed, s.rssBaseURL, time.Since(start), nil, cacheStatus)
+	logDiscoveryRequest(route, UpstreamKindAppleCharts, s.appleChartsBaseURL, time.Since(start), nil, cacheStatus)
 }
 
 func (s *discoveryService) handleTopEpisodes(w http.ResponseWriter, r *http.Request) {
@@ -347,20 +359,20 @@ func (s *discoveryService) handleTopEpisodes(w http.ResponseWriter, r *http.Requ
 
 	if !s.allowTopRequest(effectiveClientIP(r, s.trustedProxies)) {
 		writeDiscoveryErrorSpec(w, http.StatusTooManyRequests, discoveryErrRateLimited)
-		logDiscoveryRequest(route, UpstreamKindAppleFeed, s.rssBaseURL, time.Since(start), errDiscoveryRateLimited, CacheStatusUncached)
+		logDiscoveryRequest(route, UpstreamKindAppleCharts, s.appleChartsBaseURL, time.Since(start), errDiscoveryRateLimited, CacheStatusUncached)
 		return
 	}
 
 	country, err := parseDiscoveryCountry(r.URL.Query())
 	if err != nil {
 		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, UpstreamKindAppleFeed, s.rssBaseURL, time.Since(start), err, CacheStatusMissError)
+		logDiscoveryRequest(route, UpstreamKindAppleCharts, s.appleChartsBaseURL, time.Since(start), err, CacheStatusMissError)
 		return
 	}
 	limit, err := parseDiscoveryLimit(r.URL.Query(), "limit", defaultDiscoveryTopLimit, maxDiscoveryTopLimit)
 	if err != nil {
 		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, UpstreamKindAppleFeed, s.rssBaseURL, time.Since(start), err, CacheStatusMissError)
+		logDiscoveryRequest(route, UpstreamKindAppleCharts, s.appleChartsBaseURL, time.Since(start), err, CacheStatusMissError)
 		return
 	}
 
@@ -369,7 +381,7 @@ func (s *discoveryService) handleTopEpisodes(w http.ResponseWriter, r *http.Requ
 	defer cancel()
 
 	fetch := func(ctx context.Context) ([]topEpisodeResponse, error) {
-		upstreamURL := buildAppleFeedURL(s.rssBaseURL, country, limit, "podcast-episodes")
+		upstreamURL := buildAppleChartsURL(s.appleChartsBaseURL, country, limit, "podcast-episodes")
 		var payload rawAppleTopEpisodeFeedResponse
 		if err := s.fetchJSON(ctx, upstreamURL, &payload); err != nil {
 			return nil, errors.Join(errDiscoveryUpstreamError, err)
@@ -397,12 +409,12 @@ func (s *discoveryService) handleTopEpisodes(w http.ResponseWriter, r *http.Requ
 	data, cacheStatus, err := getWithGracefulDegradation(s, ctx, cacheKey, discoveryCacheTTLTopEpisodes, fetch)
 	if err != nil {
 		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, UpstreamKindAppleFeed, s.rssBaseURL, time.Since(start), err, cacheStatus)
+		logDiscoveryRequest(route, UpstreamKindAppleCharts, s.appleChartsBaseURL, time.Since(start), err, cacheStatus)
 		return
 	}
 
 	writeDiscoveryJSON(w, http.StatusOK, data)
-	logDiscoveryRequest(route, UpstreamKindAppleFeed, s.rssBaseURL, time.Since(start), nil, cacheStatus)
+	logDiscoveryRequest(route, UpstreamKindAppleCharts, s.appleChartsBaseURL, time.Since(start), nil, cacheStatus)
 }
 
 func (s *discoveryService) handleSearchPodcasts(w http.ResponseWriter, r *http.Request) {
@@ -537,13 +549,11 @@ func (s *discoveryService) handleSearchEpisodes(w http.ResponseWriter, r *http.R
 			continue
 		}
 
-		// Deduplicate by GUID + URL to handle edge cases where GUID might be shared but URLs differ
-		// Or just GUID if it's supposed to be unique.
-		dupeKey := mapped.EpisodeGUID + "|" + mapped.EpisodeURL
-		if _, dupe := seen[dupeKey]; dupe {
+		identityKey := mapped.PodcastItunesID + "::" + mapped.GUID
+		if _, dupe := seen[identityKey]; dupe {
 			continue
 		}
-		seen[dupeKey] = struct{}{}
+		seen[identityKey] = struct{}{}
 
 		items = append(items, mapped)
 	}
@@ -556,10 +566,14 @@ func mapTopPodcast(item rawAppleTopPodcastItem) (topPodcastResponse, bool) {
 	id := asStringID(item.ID)
 	title := strings.TrimSpace(item.Name)
 	author := strings.TrimSpace(item.ArtistName)
-	artwork := strings.TrimSpace(item.ArtworkURL100)
+	artwork, ok := normalizeRequiredHTTPURL(item.ArtworkURL100)
+	if !ok {
+		return topPodcastResponse{}, false
+	}
+
 	genres := mapDiscoveryGenreNames(item.Genres)
 
-	if id == "" || title == "" || author == "" || artwork == "" {
+	if id == "" || title == "" || author == "" {
 		return topPodcastResponse{}, false
 	}
 
@@ -583,13 +597,18 @@ func mapTopEpisode(item rawAppleTopEpisodeItem) (topEpisodeResponse, bool) {
 		return topEpisodeResponse{}, false
 	}
 
-	podcastItunesID := extractPodcastIDFromURL(strings.TrimSpace(item.URL))
+	itemURL, ok := normalizeRequiredHTTPURL(item.URL)
+	if !ok {
+		return topEpisodeResponse{}, false
+	}
+
+	podcastItunesID := extractPodcastIDFromURL(itemURL)
 	if podcastItunesID == "" {
 		return topEpisodeResponse{}, false
 	}
 
-	artwork := strings.TrimSpace(item.ArtworkURL100)
-	if artwork == "" {
+	artwork, ok := normalizeRequiredHTTPURL(item.ArtworkURL100)
+	if !ok {
 		return topEpisodeResponse{}, false
 	}
 

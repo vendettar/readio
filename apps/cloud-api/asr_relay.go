@@ -150,7 +150,7 @@ type asrRelayService struct {
 	bodyLimit          int64
 	providers          map[string]asrRelayProviderConfig
 	limiter            *rateLimiter
-	allowedOrigins     map[string]struct{}
+	allowedOrigins     []string
 	relayPublicToken   string
 	trustedProxies     trustedProxySet
 	workerBaseURL      string
@@ -250,13 +250,23 @@ func (s *asrRelayService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var httpStatus int
 	var upstreamKind string
 	var upstreamHost string
+	metricProviderLabel := "unknown"
+	metricModeLabel := "unknown"
 
 	defer func() {
+		elapsed := time.Since(start)
+		recordHTTPMetric(route, httpStatus, errClass, elapsed)
+		if upstreamKind != "" {
+			recordUpstreamMetric(upstreamKind, route, httpStatus, errClass, CacheStatusUncached, elapsed)
+		}
+		if route == "asr-relay/transcriptions" {
+			recordASRRelayMetric(metricProviderLabel, metricModeLabel, httpStatus, errClass)
+		}
 		slog.Info("asr-relay request",
 			"route", route,
 			"upstream_kind", upstreamKind,
 			"upstream_host", upstreamHost,
-			"elapsed_ms", time.Since(start).Milliseconds(),
+			"elapsed_ms", elapsed.Milliseconds(),
 			"error_class", errClass,
 			"status", httpStatus,
 		)
@@ -287,6 +297,8 @@ func (s *asrRelayService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			writeASRRelayError(w, relayErr.Status, relayErr.Message, relayErr.Code, relayErr.RetryAfterMs)
 			return
 		}
+		metricProviderLabel = payload.Provider
+		metricModeLabel = metricASRMode(s.asrWorkerTransportEnabled(), payload.Provider)
 		upstreamKind, upstreamHost = s.asrRequestUpstream(payload.Provider, false)
 		result, relayErr := s.transcribe(r.Context(), *payload)
 		if relayErr != nil {
@@ -461,17 +473,8 @@ func (s *asrRelayService) isAllowedOrigin(r *http.Request) bool {
 		return false
 	}
 
-	parsed, err := url.Parse(origin)
-	if err != nil || parsed.Host == "" || parsed.User != nil {
-		return false
-	}
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return false
-	}
-
-	normalized := parsed.Scheme + "://" + parsed.Host
 	if len(s.allowedOrigins) > 0 {
-		_, ok := s.allowedOrigins[normalized]
+		_, ok := matchOrigin(s.allowedOrigins, origin)
 		return ok
 	}
 
@@ -479,29 +482,30 @@ func (s *asrRelayService) isAllowedOrigin(r *http.Request) bool {
 	if !ok {
 		return false
 	}
+	parsed, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
 	return isSameOrigin(parsed.Scheme, parsed.Host, requestScheme, requestHost)
 }
 
-func resolveASRRelayAllowedOrigins() map[string]struct{} {
+
+func resolveASRRelayAllowedOrigins() []string {
 	raw := strings.TrimSpace(os.Getenv(asrRelayAllowedOriginsEnv))
 	if raw == "" {
 		return nil
 	}
 
-	origins := make(map[string]struct{})
+	var origins []string
 	for _, part := range strings.Split(raw, ",") {
 		candidate := strings.TrimSpace(part)
 		if candidate == "" {
 			continue
 		}
-		parsed, err := url.Parse(candidate)
-		if err != nil || parsed.Host == "" || parsed.User != nil {
+		if !strings.Contains(candidate, "://") {
 			continue
 		}
-		if parsed.Scheme != "http" && parsed.Scheme != "https" {
-			continue
-		}
-		origins[parsed.Scheme+"://"+parsed.Host] = struct{}{}
+		origins = append(origins, candidate)
 	}
 
 	if len(origins) == 0 {
@@ -509,6 +513,7 @@ func resolveASRRelayAllowedOrigins() map[string]struct{} {
 	}
 	return origins
 }
+
 
 func resolveASRRelayRateLimitBurst() int {
 	raw := strings.TrimSpace(os.Getenv(asrRelayRateLimitBurstEnv))

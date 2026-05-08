@@ -9,7 +9,9 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -24,6 +26,8 @@ const (
 	podcastIndexUserAgentEnv     = "PODCAST_INDEX_USER_AGENT"
 	podcastIndexMaxBatchGUIDs    = 100
 	podcastIndexMaxBatchBodySize = 10 * 1024
+	podcastIndexPageEpisodesMax  = 1000
+	podcastIndexArchiveCacheMax  = 1 << 20
 )
 
 type podcastIndexConfig struct {
@@ -117,16 +121,17 @@ type podcastIndexPodcastFeed struct {
 	Description    string                    `json:"description"`
 	Author         string                    `json:"author"`
 	Artwork        string                    `json:"artwork"`
-	LastUpdateTime int64                     `json:"lastUpdateTime"`
+	LastUpdateTime *int64                    `json:"lastUpdateTime"`
 	ItunesID       int64                     `json:"itunesId"`
 	Language       string                    `json:"language"`
-	EpisodeCount   int64                     `json:"episodeCount"`
+	EpisodeCount   *int64                    `json:"episodeCount"`
 	Dead           int                       `json:"dead"`
 	Categories     podcastIndexCategoryNames `json:"categories"`
 }
 
 type podcastIndexPodcastResponse struct {
-	Feed podcastIndexPodcastFeed `json:"feed"`
+	Status string                  `json:"status"`
+	Feed   podcastIndexPodcastFeed `json:"feed"`
 }
 
 type podcastIndexBatchFeed struct {
@@ -135,7 +140,54 @@ type podcastIndexBatchFeed struct {
 }
 
 type podcastIndexBatchPodcastResponse struct {
-	Feeds []podcastIndexBatchFeed `json:"feeds"`
+	Status string                  `json:"status"`
+	Feeds  []podcastIndexBatchFeed `json:"feeds"`
+}
+
+type podcastIndexEpisodeItem struct {
+	Title           string  `json:"title"`
+	Link            string  `json:"link"`
+	Description     string  `json:"description"`
+	GUID            string  `json:"guid"`
+	DatePublished   int64   `json:"datePublished"`
+	EnclosureURL    string  `json:"enclosureUrl"`
+	EnclosureLength *int64  `json:"enclosureLength"`
+	Explicit        int     `json:"explicit"`
+	Image           string  `json:"image"`
+	FeedImage       string  `json:"feedImage"`
+	Duration        *int64  `json:"duration"`
+	Episode         *int64  `json:"episode"`
+	EpisodeType     *string `json:"episodeType"`
+	Season          *int64  `json:"season"`
+	FeedItunesID    *int64  `json:"feedItunesId"`
+	ChaptersURL     *string `json:"chaptersUrl"`
+	TranscriptURL   *string `json:"transcriptUrl"`
+}
+
+type podcastIndexEpisodesResponse struct {
+	Status string                    `json:"status"`
+	Items  []podcastIndexEpisodeItem `json:"items"`
+}
+
+type piEpisodeResponse struct {
+	GUID          string `json:"guid"`
+	Title         string `json:"title"`
+	Description   string `json:"description"`
+	AudioURL      string `json:"audioUrl"`
+	PubDate       string `json:"pubDate"`
+	ArtworkURL    string `json:"artworkUrl"`
+	FileSize      int64  `json:"fileSize"`
+	Duration      int64  `json:"duration"`
+	Explicit      bool   `json:"explicit"`
+	Link          string `json:"link"`
+	SeasonNumber  *int64 `json:"seasonNumber,omitempty"`
+	EpisodeNumber *int64 `json:"episodeNumber,omitempty"`
+	EpisodeType   string `json:"episodeType,omitempty"`
+	TranscriptURL string `json:"transcriptUrl,omitempty"`
+}
+
+type piPodcastEpisodesResponse struct {
+	Episodes []piEpisodeResponse `json:"episodes"`
 }
 
 // Route-local bridge for batch-by-guid only.
@@ -223,7 +275,43 @@ func (s *discoveryService) fetchPodcastIndexPodcastByItunesID(ctx context.Contex
 		return nil, err
 	}
 
+	if result.Status == "false" {
+		return nil, fmt.Errorf("podcastindex: upstream reports status=failed")
+	}
+
 	return &result.Feed, nil
+}
+
+func (s *discoveryService) fetchPodcastIndexEpisodesByItunesID(
+	ctx context.Context,
+	itunesID string,
+	maxEpisodes int,
+) ([]podcastIndexEpisodeItem, error) {
+	normalizedItunesID, err := normalizeItunesID(itunesID)
+	if err != nil {
+		return nil, fmt.Errorf("podcastindex: invalid itunes id: %w", err)
+	}
+
+	req, err := s.buildPodcastIndexRequest(ctx, http.MethodGet, "/episodes/byitunesid", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	q := req.URL.Query()
+	q.Set("id", normalizedItunesID)
+	q.Set("max", strconv.Itoa(maxEpisodes))
+	req.URL.RawQuery = q.Encode()
+
+	var result podcastIndexEpisodesResponse
+	if err := s.executeJSONRequest(req, &result); err != nil {
+		return nil, err
+	}
+
+	if result.Status == "false" {
+		return nil, fmt.Errorf("podcastindex: upstream reports status=failed")
+	}
+
+	return result.Items, nil
 }
 
 func (s *discoveryService) fetchPodcastIndexPodcastsBatchByGUID(ctx context.Context, guids []string) ([]podcastIndexBatchFeed, error) {
@@ -260,6 +348,10 @@ func (s *discoveryService) fetchPodcastIndexPodcastsBatchByGUID(ctx context.Cont
 		return nil, err
 	}
 
+	if result.Status == "false" {
+		return nil, fmt.Errorf("podcastindex: upstream reports status=failed")
+	}
+
 	return result.Feeds, nil
 }
 
@@ -269,7 +361,7 @@ func (s *discoveryService) handlePodcastIndexPodcastsBatchByGUID(w http.Response
 
 	if r.Method != http.MethodPost {
 		writeDiscoveryErrorSpec(w, http.StatusMethodNotAllowed, discoveryErrSimpleMethodNotAllowed)
-		logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), errors.New("method not allowed"), CacheStatusMissError)
+		logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), errDiscoveryMethodNotAllowedError, CacheStatusMissError)
 		return
 	}
 
@@ -376,7 +468,15 @@ func (s *discoveryService) handlePodcastIndexPodcastByItunesID(w http.ResponseWr
 	rawPodcastItunesID, ok := discoveryPodcastByItunesIDFromPath(r.URL.Path)
 	if !ok {
 		writeDiscoveryErrorSpec(w, http.StatusNotFound, discoveryErrNotFound)
-		logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), nil, CacheStatusUncached)
+		logDiscoveryRequestWithStatus(
+			route,
+			UpstreamKindPodcastIndex,
+			podcastIndexBaseURL,
+			time.Since(start),
+			errors.New("not found"),
+			CacheStatusUncached,
+			http.StatusNotFound,
+		)
 		return
 	}
 
@@ -433,6 +533,100 @@ func (s *discoveryService) handlePodcastIndexPodcastByItunesID(w http.ResponseWr
 	logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), nil, cacheStatus)
 }
 
+func (s *discoveryService) handlePodcastIndexPodcastEpisodesByItunesID(w http.ResponseWriter, r *http.Request) {
+	start := time.Now()
+	route := discoveryPodcastEpisodesByItunesIDRoutePattern
+
+	if !s.allowPodcastIndexRequest(effectiveClientIP(r, s.trustedProxies)) {
+		writeDiscoveryErrorSpec(w, http.StatusTooManyRequests, discoveryErrRateLimited)
+		logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), errDiscoveryRateLimited, CacheStatusUncached)
+		return
+	}
+
+	rawPodcastItunesID, ok := discoveryPodcastEpisodesByItunesIDFromPath(r.URL.Path)
+	if !ok {
+		writeDiscoveryErrorSpec(w, http.StatusNotFound, discoveryErrNotFound)
+		logDiscoveryRequestWithStatus(
+			route,
+			UpstreamKindPodcastIndex,
+			podcastIndexBaseURL,
+			time.Since(start),
+			errors.New("not found"),
+			CacheStatusUncached,
+			http.StatusNotFound,
+		)
+		return
+	}
+
+	podcastItunesID, err := normalizeItunesID(rawPodcastItunesID)
+	if err != nil {
+		writeDiscoveryMappedError(w, err)
+		logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, CacheStatusMissError)
+		return
+	}
+
+	cacheKey := fmt.Sprintf("podcastindex-episodes-itunes:%s", podcastItunesID)
+
+	ctx, cancel := context.WithTimeout(r.Context(), s.timeout)
+	defer cancel()
+
+	fetch := func(ctx context.Context) (*piPodcastEpisodesResponse, error) {
+		items, err := s.fetchPodcastIndexEpisodesByItunesID(ctx, podcastItunesID, podcastIndexPageEpisodesMax)
+		if err != nil {
+			return nil, errors.Join(errDiscoveryUpstreamError, err)
+		}
+
+		episodes := make([]piEpisodeResponse, 0, len(items))
+		seenEpisodeGUIDs := make(map[string]struct{}, len(items))
+		for _, item := range items {
+			mapped, err := mapPodcastIndexEpisodeToPIEpisode(item, podcastItunesID)
+			if err != nil {
+				if errors.Is(err, errSkipPodcastIndexEpisode) {
+					continue
+				}
+				return nil, err
+			}
+			if _, seen := seenEpisodeGUIDs[mapped.GUID]; seen {
+				continue
+			}
+			seenEpisodeGUIDs[mapped.GUID] = struct{}{}
+			episodes = append(episodes, mapped)
+		}
+
+		return &piPodcastEpisodesResponse{
+			Episodes: episodes,
+		}, nil
+	}
+
+	data, cacheStatus, err := getWithGracefulDegradationWithCachePolicy(
+		s,
+		ctx,
+		cacheKey,
+		discoveryCacheTTLLookup,
+		fetch,
+		func(payload *piPodcastEpisodesResponse) bool {
+			return payload == nil || estimatePodcastEpisodeArchiveSize(payload) <= podcastIndexArchiveCacheMax
+		},
+	)
+	if err != nil {
+		var configErr *discoveryProviderConfigError
+		if errors.As(err, &configErr) {
+			slog.Error("podcastindex itunesId episodes lookup unavailable", "error", err, "provider", configErr.provider)
+			writeDiscoveryErrorSpec(w, http.StatusServiceUnavailable, discoveryErrProviderNotConfigured)
+			logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, cacheStatus)
+			return
+		}
+
+		slog.Warn("podcastindex itunesId episodes lookup failed", "error", err)
+		writeDiscoveryMappedError(w, err)
+		logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, cacheStatus)
+		return
+	}
+
+	writeDiscoveryJSON(w, http.StatusOK, data)
+	logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), nil, cacheStatus)
+}
+
 func mapPodcastIndexBatchFeedBridge(feed podcastIndexBatchFeed) (podcastIndexBatchFeedBridge, bool) {
 	orderingGUID := strings.TrimSpace(feed.PodcastGUID)
 	if orderingGUID == "" {
@@ -460,13 +654,15 @@ func mapPodcastIndexPodcastToPIPodcast(feed podcastIndexPodcastFeed, podcastItun
 
 	title := strings.TrimSpace(feed.Title)
 	author := strings.TrimSpace(feed.Author)
-	artwork := strings.TrimSpace(feed.Artwork)
+	artworkRaw := strings.TrimSpace(feed.Artwork)
 	description := strings.TrimSpace(feed.Description)
-	feedURL := strings.TrimSpace(feed.URL)
 	itunesIDStr := strings.TrimSpace(podcastItunesID)
-	lastUpdateTime := feed.LastUpdateTime
-	episodeCount := feed.EpisodeCount
 	language := strings.TrimSpace(feed.Language)
+
+	artwork, ok := normalizeRequiredHTTPURL(artworkRaw)
+	if !ok {
+		return piPodcastResponse{}, false
+	}
 
 	genres := make([]string, 0, len(feed.Categories))
 	for _, name := range feed.Categories {
@@ -475,24 +671,16 @@ func mapPodcastIndexPodcastToPIPodcast(feed podcastIndexPodcastFeed, podcastItun
 			genres = append(genres, name)
 		}
 	}
+	sort.Strings(genres)
 
 	if title == "" ||
 		author == "" ||
 		artwork == "" ||
 		description == "" ||
-		feedURL == "" ||
-		itunesIDStr == "" {
+		itunesIDStr == "" ||
+		feed.LastUpdateTime == nil ||
+		feed.EpisodeCount == nil {
 		return piPodcastResponse{}, false
-	}
-
-	var lastUpdateTimeValue *int64
-	if lastUpdateTime > 0 {
-		lastUpdateTimeValue = &lastUpdateTime
-	}
-
-	var episodeCountValue *int64
-	if episodeCount > 0 {
-		episodeCountValue = &episodeCount
 	}
 
 	return piPodcastResponse{
@@ -500,11 +688,148 @@ func mapPodcastIndexPodcastToPIPodcast(feed podcastIndexPodcastFeed, podcastItun
 		Author:          author,
 		Artwork:         artwork,
 		Description:     description,
-		FeedURL:         feedURL,
-		LastUpdateTime:  lastUpdateTimeValue,
+		LastUpdateTime:  *feed.LastUpdateTime,
 		PodcastItunesID: itunesIDStr,
-		EpisodeCount:    episodeCountValue,
+		EpisodeCount:    *feed.EpisodeCount,
 		Language:        language,
 		Genres:          genres,
 	}, true
+}
+
+var errSkipPodcastIndexEpisode = errors.New("skip podcastindex episode")
+
+func mapPodcastIndexEpisodeToPIEpisode(item podcastIndexEpisodeItem, requestedPodcastItunesID string) (piEpisodeResponse, error) {
+	title := strings.TrimSpace(item.Title)
+	description := strings.TrimSpace(item.Description)
+	guid := strings.TrimSpace(item.GUID)
+	image := strings.TrimSpace(item.Image)
+	feedImage := strings.TrimSpace(item.FeedImage)
+
+	if item.FeedItunesID != nil && strconv.FormatInt(*item.FeedItunesID, 10) != requestedPodcastItunesID {
+		return piEpisodeResponse{}, errSkipPodcastIndexEpisode
+	}
+	if title == "" || guid == "" || item.DatePublished <= 0 || item.Duration == nil || item.EnclosureLength == nil {
+		return piEpisodeResponse{}, errSkipPodcastIndexEpisode
+	}
+
+	audioURL, ok := normalizeRequiredHTTPURL(item.EnclosureURL)
+	if !ok {
+		return piEpisodeResponse{}, &podcastIndexInvalidResponseError{
+			message: "podcastindex episode item has invalid audio url",
+		}
+	}
+
+	link, ok := normalizeRequiredHTTPURL(item.Link)
+	if !ok {
+		return piEpisodeResponse{}, errSkipPodcastIndexEpisode
+	}
+	artworkURL, ok := normalizeRequiredHTTPURL(image)
+	if !ok {
+		artworkURL, ok = normalizeRequiredHTTPURL(feedImage)
+		if !ok {
+			return piEpisodeResponse{}, errSkipPodcastIndexEpisode
+		}
+	}
+
+	pubDate := time.Unix(item.DatePublished, 0).UTC().Format(time.RFC3339)
+	duration := *item.Duration
+	fileSize := *item.EnclosureLength
+
+	var seasonNumber *int64
+	if item.Season != nil && *item.Season >= 0 {
+		season := *item.Season
+		seasonNumber = &season
+	}
+
+	var episodeNumber *int64
+	if item.Episode != nil && *item.Episode >= 0 {
+		episode := *item.Episode
+		episodeNumber = &episode
+	}
+
+	episodeType := normalizePodcastIndexEpisodeType(item.EpisodeType)
+	transcriptURL := normalizeOptionalHTTPURL(item.TranscriptURL)
+
+	return piEpisodeResponse{
+		GUID:          guid,
+		Title:         title,
+		Description:   description,
+		AudioURL:      audioURL,
+		PubDate:       pubDate,
+		ArtworkURL:    artworkURL,
+		FileSize:      fileSize,
+		Duration:      duration,
+		Explicit:      item.Explicit != 0,
+		Link:          link,
+		SeasonNumber:  seasonNumber,
+		EpisodeNumber: episodeNumber,
+		EpisodeType:   episodeType,
+		TranscriptURL: transcriptURL,
+	}, nil
+}
+
+func estimatePodcastEpisodeArchiveSize(payload *piPodcastEpisodesResponse) int {
+	if payload == nil {
+		return 0
+	}
+
+	// Rough heuristic to avoid large json.Marshal allocations:
+	size := len(payload.Episodes) * 512
+	for _, ep := range payload.Episodes {
+		size += len(ep.Description) + len(ep.Title) + len(ep.TranscriptURL)
+	}
+	return size
+}
+
+func normalizePodcastIndexEpisodeType(raw *string) string {
+	if raw == nil {
+		return ""
+	}
+
+	switch strings.ToLower(strings.TrimSpace(*raw)) {
+	case "full", "trailer", "bonus":
+		return strings.ToLower(strings.TrimSpace(*raw))
+	default:
+		return ""
+	}
+}
+
+func normalizeOptionalTrimmedString(raw *string) string {
+	if raw == nil {
+		return ""
+	}
+	return strings.TrimSpace(*raw)
+}
+
+func normalizeOptionalHTTPURL(raw *string) string {
+	if raw == nil {
+		return ""
+	}
+
+	normalized, ok := normalizeRequiredHTTPURL(*raw)
+	if !ok {
+		return ""
+	}
+
+	return normalized
+}
+
+func normalizeRequiredHTTPURL(raw string) (string, bool) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return "", false
+	}
+
+	parsed, err := url.Parse(trimmed)
+	if err != nil {
+		return "", false
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return "", false
+	}
+	if parsed.Host == "" {
+		return "", false
+	}
+
+	return parsed.String(), true
 }
