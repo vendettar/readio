@@ -4,18 +4,23 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"embed"
 	"encoding/json"
 	"errors"
+	"flag"
+
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
 	"net/netip"
 	"net/url"
 	"os"
+
 	"os/signal"
-	"path"
+
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -24,13 +29,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite"
 )
 
 const defaultPort = "8080"
 
-const cloudUIDistEnv = "READIO_CLOUD_UI_DIST_DIR"
-const browserEnvRoute = "/env.js"
+const browserConfigRoute = "/api/v1/config"
+
 const proxyBrowserLikeUserAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Readio/1.0"
 const proxyRequestTimeout = 10 * time.Second
 const proxyBodyLimit = 2 << 20
@@ -42,7 +48,6 @@ const proxyAllowedOriginsEnv = "READIO_PROXY_ALLOWED_ORIGINS"
 const proxyRoute = "/api/proxy"
 const proxyMaxRedirects = 20
 const cloudDBEnv = "READIO_CLOUD_DB_PATH"
-const cloudDBDefaultPath = "./data/readio.db"
 const defaultRuntimeAppName = "Readio"
 const defaultRuntimeAppVersion = "1.0.0"
 const defaultDictionaryAPIURL = "https://api.dictionaryapi.dev/api/v2/entries/en/"
@@ -50,6 +55,8 @@ const defaultDictionaryTransport = "direct"
 const defaultPodcastCountry = "us"
 const defaultLanguage = "en"
 const defaultFallbackPodcastImage = "/placeholder-podcast.svg"
+const cloudSQLiteMigrationDialect = "sqlite3"
+const cloudSQLiteMigrationDir = "migrations"
 
 // browserEnvAllowlist is the exhaustive set of keys emitted into /env.js.
 // Every key listed here MUST have a corresponding entry in buildBrowserRuntimeEnv.
@@ -69,6 +76,10 @@ var browserEnvAllowlist = []string{
 	"READIO_NETWORK_PROXY_URL",
 	"READIO_NETWORK_PROXY_AUTH_HEADER",
 	"READIO_NETWORK_PROXY_AUTH_VALUE",
+	"VITE_GRAFANA_FARO_URL",
+	"VITE_GRAFANA_FARO_APP_NAME",
+	"VITE_GRAFANA_FARO_ENV",
+	"VITE_GRAFANA_FARO_SAMPLE_RATE",
 }
 
 var proxyAllowedRequestHeaders = map[string]struct{}{
@@ -100,16 +111,10 @@ var proxyAllowedResponseHeaders = []string{
 
 var proxyRangePattern = regexp.MustCompile(`^bytes=(?:\d+-\d*|\d*-\d+)$`)
 
-type appHandler struct {
-	distDir   string
-	fileServe http.Handler
-	indexPath string
-}
-
 type proxyService struct {
 	client         *http.Client
 	limiter        *rateLimiter
-	allowedOrigins map[string]struct{}
+	allowedOrigins []string
 	timeout        time.Duration
 	userAgent      string
 	bodyLimit      int64
@@ -159,14 +164,20 @@ func (e *proxyError) Error() string {
 	return e.message
 }
 
+//go:embed migrations/*.sql
+var cloudSQLiteMigrations embed.FS
+
 var (
 	cloudOpenSQLite sqliteOpener = func(ctx context.Context, dbPath string) (sqliteCloser, error) {
 		return openCloudSQLite(ctx, dbPath)
 	}
-	cloudNewProxyService    = newProxyService
-	cloudNewASRRelayService = newASRRelayService
-	cloudCloseSQLite        = func(db sqliteCloser) error { return db.Close() }
-	cloudListenAndServe     = func(_ context.Context, server *http.Server) error {
+	cloudNewProxyService     = newProxyService
+	cloudNewASRRelayService  = newASRRelayService
+	cloudRunSQLiteMigrations = func(ctx context.Context, db *sql.DB) error {
+		return runCloudSQLiteMigrations(ctx, db)
+	}
+	cloudCloseSQLite    = func(db sqliteCloser) error { return db.Close() }
+	cloudListenAndServe = func(_ context.Context, server *http.Server) error {
 		return server.ListenAndServe()
 	}
 	cloudShutdownServer = func(ctx context.Context, server *http.Server) error {
@@ -176,6 +187,29 @@ var (
 )
 
 func main() {
+	checkHealth := flag.Bool("check-health", false, "执行健康检查并退出")
+	flag.Parse()
+
+	if *checkHealth {
+		port := os.Getenv("PORT")
+		if port == "" {
+			port = defaultPort
+		}
+		client := http.Client{Timeout: 5 * time.Second}
+		resp, err := client.Get("http://localhost:" + port + "/healthz")
+		if err != nil {
+			fmt.Printf("Health check failed: %v\n", err)
+			os.Exit(1)
+		}
+		defer func() { _ = resp.Body.Close() }()
+		if resp.StatusCode != http.StatusOK {
+			fmt.Printf("Health check failed: status %d\n", resp.StatusCode)
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
+
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
@@ -191,17 +225,10 @@ func runCloudServer(parent context.Context) error {
 		return fmt.Errorf("invalid cloud port: %w", err)
 	}
 
-	distDir, err := resolveCloudUIDistDir()
+	dbPath, err := resolveCloudDBPath()
 	if err != nil {
-		return fmt.Errorf("unable to resolve cloud-ui dist: %w", err)
+		return fmt.Errorf("invalid cloud db path: %w", err)
 	}
-
-	handler, err := newAppHandler(distDir)
-	if err != nil {
-		return fmt.Errorf("invalid lite dist: %w", err)
-	}
-
-	dbPath := resolveCloudDBPath()
 	db, err := cloudOpenSQLite(parent, dbPath)
 	if err != nil {
 		return fmt.Errorf("unable to open sqlite db: %w", err)
@@ -214,13 +241,26 @@ func runCloudServer(parent context.Context) error {
 
 	slog.Info("sqlite database ready", "path", dbPath)
 
+	shutdownObservability, err := initObservability(parent)
+	if err != nil {
+		return fmt.Errorf("unable to initialize observability: %w", err)
+	}
+	defer func() {
+		flushCtx, flushCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer flushCancel()
+		if flushErr := shutdownObservability(flushCtx); flushErr != nil {
+			slog.Warn("observability shutdown failed", "error", flushErr)
+		}
+	}()
+
 	proxy := cloudNewProxyService()
 	asrRelay := cloudNewASRRelayService()
 	discovery := newDiscoveryService()
 
 	addr := ":" + port
 
-	mux := newCloudMux(handler, proxy, asrRelay, discovery)
+	mux := newCloudMux(proxy, asrRelay, discovery)
+
 	_ = setupAdminHandler(mux)
 
 	server := &http.Server{
@@ -229,7 +269,7 @@ func runCloudServer(parent context.Context) error {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	slog.Info("starting cloud scaffold server", "addr", addr, "distDir", distDir, "dbPath", dbPath)
+	slog.Info("starting cloud scaffold server", "addr", addr, "dbPath", dbPath)
 
 	ctx, stop := cloudNotifyContext(parent, os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -271,82 +311,21 @@ func runCloudServer(parent context.Context) error {
 	return nil
 }
 
-func newAppHandler(distDir string) (http.Handler, error) {
-	indexPath := filepath.Join(distDir, "index.html")
-	if _, err := os.Stat(indexPath); err != nil {
-		return nil, fmt.Errorf("missing index.html in cloud-ui dist: %w", err)
-	}
-
-	return &appHandler{
-		distDir:   distDir,
-		fileServe: http.FileServer(http.Dir(distDir)),
-		indexPath: indexPath,
-	}, nil
-}
-
-func newCloudMux(app http.Handler, proxy http.Handler, asrRelay http.Handler, discovery http.Handler) *http.ServeMux {
+func newCloudMux(proxy http.Handler, asrRelay http.Handler, discovery http.Handler) *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", healthHandler)
-	mux.Handle(browserEnvRoute, newBrowserRuntimeEnvHandler())
+	mux.HandleFunc(browserConfigRoute, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Access-Control-Allow-Origin", "*") // Config is public-info
+		_ = json.NewEncoder(w).Encode(buildBrowserRuntimeEnv(r))
+	})
 	mux.Handle(asrRelayRoute, asrRelay)
 	mux.Handle(asrVerifyRoute, asrRelay)
 	mux.Handle(discoveryRoutePrefix, discovery)
 	mux.Handle(proxyRoute, proxy)
-	mux.Handle("/", app)
+
 	return mux
-}
-
-func (h *appHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path == "/api" || strings.HasPrefix(r.URL.Path, "/api/") {
-		http.NotFound(w, r)
-		return
-	}
-
-	cleanPath := path.Clean("/" + r.URL.Path)
-	if cleanPath == "/" || strings.HasSuffix(r.URL.Path, "/") {
-		http.ServeFile(w, r, h.indexPath)
-		return
-	}
-
-	if fileExists(h.distDir, cleanPath) {
-		h.fileServe.ServeHTTP(w, r)
-		return
-	}
-
-	if path.Ext(cleanPath) != "" {
-		http.NotFound(w, r)
-		return
-	}
-
-	http.ServeFile(w, r, h.indexPath)
-}
-
-func newBrowserRuntimeEnvHandler() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet && r.Method != http.MethodHead {
-			w.Header().Set("Allow", "GET, HEAD")
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		payload, err := json.Marshal(buildBrowserRuntimeEnv(r))
-		if err != nil {
-			http.Error(w, "unable to build runtime env", http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
-		w.Header().Set("Cache-Control", "no-store")
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-
-		if r.Method == http.MethodHead {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
-		_, _ = fmt.Fprintf(w, "window.__READIO_ENV__ = %s;\n", payload)
-	})
 }
 
 // buildBrowserRuntimeEnv returns browser-safe runtime config.
@@ -376,6 +355,10 @@ func buildBrowserRuntimeEnv(r *http.Request) map[string]any {
 		"READIO_NETWORK_PROXY_URL":         envOrDefault("READIO_NETWORK_PROXY_URL", "/api/proxy"),
 		"READIO_NETWORK_PROXY_AUTH_HEADER": envOrDefault("READIO_NETWORK_PROXY_AUTH_HEADER", ""),
 		"READIO_NETWORK_PROXY_AUTH_VALUE":  envOrDefault("READIO_NETWORK_PROXY_AUTH_VALUE", ""),
+		"VITE_GRAFANA_FARO_URL":            envOrDefault("VITE_GRAFANA_FARO_URL", ""),
+		"VITE_GRAFANA_FARO_APP_NAME":       envOrDefault("VITE_GRAFANA_FARO_APP_NAME", ""),
+		"VITE_GRAFANA_FARO_ENV":            envOrDefault("VITE_GRAFANA_FARO_ENV", ""),
+		"VITE_GRAFANA_FARO_SAMPLE_RATE":    envOrDefault("VITE_GRAFANA_FARO_SAMPLE_RATE", "0"),
 	}
 }
 
@@ -384,45 +367,6 @@ func envOrDefault(name, fallback string) string {
 		return value
 	}
 	return fallback
-}
-
-func fileExists(distDir, requestPath string) bool {
-	fullPath := filepath.Join(distDir, filepath.FromSlash(strings.TrimPrefix(requestPath, "/")))
-	info, err := os.Stat(fullPath)
-	return err == nil && !info.IsDir()
-}
-
-func resolveCloudUIDistDir() (string, error) {
-	if override := strings.TrimSpace(os.Getenv(cloudUIDistEnv)); override != "" {
-		if err := validateDistDir(override); err != nil {
-			return "", err
-		}
-
-		return override, nil
-	}
-
-	candidates := candidateRoots()
-	for _, root := range candidates {
-		for {
-			distDir := filepath.Join(root, "dist")
-			if err := validateDistDir(distDir); err == nil {
-				return distDir, nil
-			}
-
-			distDir = filepath.Join(root, "apps", "cloud-ui", "dist")
-			if err := validateDistDir(distDir); err == nil {
-				return distDir, nil
-			}
-
-			parent := filepath.Dir(root)
-			if parent == root {
-				break
-			}
-			root = parent
-		}
-	}
-
-	return "", fmt.Errorf("unable to locate cloud-ui dist; set %s", cloudUIDistEnv)
 }
 
 func resolveProxyRateLimitBurst() int {
@@ -491,14 +435,20 @@ func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	var httpStatus int
 	var upstreamKind string
 	var upstreamHost string
+	attemptedUpstream := false
 	allowedOrigin := ""
 
 	defer func() {
+		elapsed := time.Since(start)
+		recordHTTPMetric("proxy/media", httpStatus, errClass, elapsed)
+		if attemptedUpstream && upstreamKind != "" {
+			recordUpstreamMetric(upstreamKind, "proxy/media", httpStatus, errClass, CacheStatusUncached, elapsed)
+		}
 		slog.Info("proxy request",
 			"route", "proxy/media",
 			"upstream_kind", upstreamKind,
 			"upstream_host", upstreamHost,
-			"elapsed_ms", time.Since(start).Milliseconds(),
+			"elapsed_ms", elapsed.Milliseconds(),
 			"error_class", errClass,
 			"status", httpStatus,
 		)
@@ -565,6 +515,7 @@ func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			req.Header.Add(key, value)
 		}
 	}
+	attemptedUpstream = true
 	resp, err := client.Do(req)
 	if err != nil {
 		if ctx.Err() != nil || errors.Is(err, context.DeadlineExceeded) {
@@ -925,8 +876,8 @@ func (p *proxyService) authorizeOrigin(r *http.Request) (string, error) {
 
 			normalizedReferer := parsedReferer.Scheme + "://" + parsedReferer.Host
 			if len(p.allowedOrigins) > 0 {
-				if _, ok := p.allowedOrigins[normalizedReferer]; ok {
-					return "", nil
+				if match, ok := matchOrigin(p.allowedOrigins, normalizedReferer); ok {
+					return match, nil
 				}
 				return "", &proxyError{status: http.StatusForbidden, message: "origin not allowed"}
 			}
@@ -939,18 +890,9 @@ func (p *proxyService) authorizeOrigin(r *http.Request) (string, error) {
 		return "", nil
 	}
 
-	parsed, err := url.Parse(origin)
-	if err != nil || parsed.Host == "" || parsed.User != nil {
-		return "", &proxyError{status: http.StatusForbidden, message: "origin not allowed"}
-	}
-	if parsed.Scheme != "http" && parsed.Scheme != "https" {
-		return "", &proxyError{status: http.StatusForbidden, message: "origin not allowed"}
-	}
-
-	normalized := parsed.Scheme + "://" + parsed.Host
 	if len(p.allowedOrigins) > 0 {
-		if _, ok := p.allowedOrigins[normalized]; ok {
-			return normalized, nil
+		if match, ok := matchOrigin(p.allowedOrigins, origin); ok {
+			return match, nil
 		}
 		return "", &proxyError{status: http.StatusForbidden, message: "origin not allowed"}
 	}
@@ -959,11 +901,12 @@ func (p *proxyService) authorizeOrigin(r *http.Request) (string, error) {
 	if !ok {
 		return "", &proxyError{status: http.StatusForbidden, message: "origin not allowed"}
 	}
-	if !isSameOrigin(parsed.Scheme, parsed.Host, requestScheme, requestHost) {
+	parsed, err := url.Parse(origin)
+	if err != nil || !isSameOrigin(parsed.Scheme, parsed.Host, requestScheme, requestHost) {
 		return "", &proxyError{status: http.StatusForbidden, message: "origin not allowed"}
 	}
 
-	return normalized, nil
+	return origin, nil
 }
 
 func proxyRequestOriginContext(r *http.Request, trusted trustedProxySet) (scheme string, host string, ok bool) {
@@ -987,26 +930,23 @@ func proxyRequestOriginContext(r *http.Request, trusted trustedProxySet) (scheme
 	return requestScheme, requestHost, true
 }
 
-func resolveProxyAllowedOrigins() map[string]struct{} {
+func resolveProxyAllowedOrigins() []string {
 	raw := strings.TrimSpace(os.Getenv(proxyAllowedOriginsEnv))
 	if raw == "" {
 		return nil
 	}
 
-	origins := make(map[string]struct{})
+	var origins []string
 	for _, part := range strings.Split(raw, ",") {
 		candidate := strings.TrimSpace(part)
 		if candidate == "" {
 			continue
 		}
-		parsed, err := url.Parse(candidate)
-		if err != nil || parsed.Host == "" || parsed.User != nil {
+		// Basic validation: must have scheme and host
+		if !strings.Contains(candidate, "://") {
 			continue
 		}
-		if parsed.Scheme != "http" && parsed.Scheme != "https" {
-			continue
-		}
-		origins[parsed.Scheme+"://"+parsed.Host] = struct{}{}
+		origins = append(origins, candidate)
 	}
 
 	if len(origins) == 0 {
@@ -1016,13 +956,45 @@ func resolveProxyAllowedOrigins() map[string]struct{} {
 }
 
 func applyProxyCORSHeaders(headers http.Header, allowedOrigin string) {
-	if strings.TrimSpace(allowedOrigin) == "" {
+	if allowedOrigin == "" || allowedOrigin == "*" {
 		return
 	}
 
 	headers.Set("Access-Control-Allow-Origin", allowedOrigin)
 	headers.Set("Access-Control-Expose-Headers", strings.Join(proxyAllowedResponseHeaders, ", "))
 	headers.Add("Vary", "Origin")
+}
+
+func matchOrigin(patterns []string, origin string) (string, bool) {
+	if origin == "" {
+		return "", false
+	}
+	parsed, err := url.Parse(origin)
+	if err != nil || parsed.Host == "" {
+		return "", false
+	}
+	normalized := parsed.Scheme + "://" + parsed.Host
+
+	for _, p := range patterns {
+		if p == normalized {
+			return normalized, true
+		}
+		// Wildcard support: https://*.readio.top matches https://foo.readio.top and https://readio.top
+		if strings.Contains(p, "://*.") {
+			parts := strings.SplitN(p, "://*.", 2)
+			scheme := parts[0]
+			suffix := "." + parts[1]
+			base := parts[1]
+
+			if parsed.Scheme == scheme {
+				host := parsed.Hostname()
+				if strings.HasSuffix(host, suffix) || host == base {
+					return normalized, true
+				}
+			}
+		}
+	}
+	return "", false
 }
 
 func (p *proxyService) resolveProxyTargetAddresses(ctx context.Context, target *url.URL) ([]netip.Addr, error) {
@@ -1260,57 +1232,43 @@ func mapProxyErrorToCode(message string) string {
 	}
 }
 
-func candidateRoots() []string {
-	roots := make([]string, 0, 2)
 
-	if exe, err := os.Executable(); err == nil {
-		roots = append(roots, filepath.Dir(exe))
-	}
-
-	if wd, err := os.Getwd(); err == nil {
-		roots = append(roots, wd)
-	}
-
-	return roots
-}
-
-func validateDistDir(distDir string) error {
-	info, err := os.Stat(distDir)
-	if err != nil {
-		return err
-	}
-
-	if !info.IsDir() {
-		return fmt.Errorf("%s is not a directory", distDir)
-	}
-
-	indexPath := filepath.Join(distDir, "index.html")
-	indexInfo, err := os.Stat(indexPath)
-	if err != nil {
-		return err
-	}
-
-	if indexInfo.IsDir() {
-		return fmt.Errorf("%s is not a file", indexPath)
-	}
-
-	return nil
-}
-
-func resolveCloudDBPath() string {
+func resolveCloudDBPath() (string, error) {
 	if override := strings.TrimSpace(os.Getenv(cloudDBEnv)); override != "" {
-		return override
+		if !filepath.IsAbs(override) {
+			return "", fmt.Errorf("%s must be an absolute path", cloudDBEnv)
+		}
+
+		return filepath.Clean(override), nil
 	}
 
-	return cloudDBDefaultPath
+	return "", fmt.Errorf("%s is required", cloudDBEnv)
+}
+
+func buildCloudSQLiteDSN(dbPath string) string {
+	query := url.Values{}
+	query.Add("_pragma", "foreign_keys(1)")
+	query.Add("_pragma", "busy_timeout(5000)")
+	query.Add("_pragma", "synchronous(NORMAL)")
+
+	return (&url.URL{
+		Scheme:   "file",
+		Path:     filepath.ToSlash(dbPath),
+		RawQuery: query.Encode(),
+	}).String()
 }
 
 func openCloudSQLite(ctx context.Context, dbPath string) (*sql.DB, error) {
-	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
-		return nil, fmt.Errorf("create sqlite directory: %w", err)
+	parentDir := filepath.Dir(dbPath)
+	parentInfo, err := os.Stat(parentDir)
+	if err != nil {
+		return nil, fmt.Errorf("stat sqlite parent directory %q: %w", parentDir, err)
+	}
+	if !parentInfo.IsDir() {
+		return nil, fmt.Errorf("sqlite parent directory %q is not a directory", parentDir)
 	}
 
-	db, err := sql.Open("sqlite", dbPath)
+	db, err := sql.Open("sqlite", buildCloudSQLiteDSN(dbPath))
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite database: %w", err)
 	}
@@ -1324,16 +1282,15 @@ func openCloudSQLite(ctx context.Context, dbPath string) (*sql.DB, error) {
 		return nil, fmt.Errorf("ping sqlite database: %w", err)
 	}
 
-	pragmas := []string{
-		"PRAGMA journal_mode=WAL",
-		"PRAGMA synchronous=NORMAL",
-		"PRAGMA foreign_keys=ON",
+	// journal_mode is a file-level setting, so keep it in the ordered startup path.
+	if _, err := db.ExecContext(ctx, "PRAGMA journal_mode=WAL"); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("initialize sqlite pragma %q: %w", "PRAGMA journal_mode=WAL", err)
 	}
-	for _, pragma := range pragmas {
-		if _, err := db.ExecContext(ctx, pragma); err != nil {
-			_ = db.Close()
-			return nil, fmt.Errorf("initialize sqlite pragma %q: %w", pragma, err)
-		}
+
+	if err := cloudRunSQLiteMigrations(ctx, db); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("run sqlite migrations: %w", err)
 	}
 
 	if err := db.PingContext(ctx); err != nil {
@@ -1342,6 +1299,25 @@ func openCloudSQLite(ctx context.Context, dbPath string) (*sql.DB, error) {
 	}
 
 	return db, nil
+}
+
+func runCloudSQLiteMigrations(ctx context.Context, db *sql.DB) error {
+	return runCloudSQLiteMigrationsFS(ctx, db, cloudSQLiteMigrations, cloudSQLiteMigrationDir)
+}
+
+func runCloudSQLiteMigrationsFS(ctx context.Context, db *sql.DB, migrationFS fs.FS, migrationDir string) error {
+	goose.SetBaseFS(migrationFS)
+	defer goose.SetBaseFS(nil)
+
+	if err := goose.SetDialect(cloudSQLiteMigrationDialect); err != nil {
+		return fmt.Errorf("set goose dialect: %w", err)
+	}
+
+	if err := goose.UpContext(ctx, db, migrationDir); err != nil {
+		return fmt.Errorf("apply goose migrations: %w", err)
+	}
+
+	return nil
 }
 
 func resolvePort() (string, error) {
