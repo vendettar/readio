@@ -1,28 +1,26 @@
 import { describe, expect, it } from 'vitest'
 import {
-  type EpisodeMetadataInput,
   createCanonicalRemoteEpisodeMetadata,
   createLocalEpisodeMetadata,
+  type EpisodeMetadataInput,
   isLocalEpisodeMetadata,
   normalizeEpisodeMetadata,
-  resolvePlaybackStateIdentity,
-  resolvePlaybackContentIdentityKey,
   resolveCanonicalRemotePlaybackSource,
+  resolvePlaybackContentIdentityKey,
   resolvePlaybackSourceAudioUrl,
+  resolvePlaybackStateIdentity,
   withPlaybackRequestMode,
 } from '../playbackMetadata'
 
 describe('playbackMetadata normalization', () => {
   it('rejects remote-shaped metadata when canonical country snapshot is missing', () => {
     expect(
-      normalizeEpisodeMetadata(
-        {
-          showTitle: 'Podcast',
-          artworkUrl: 'https://example.com/art.jpg',
-          episodeGuid: 'episode-1',
-          podcastItunesId: 'podcast-1',
-        } as unknown as EpisodeMetadataInput
-      )
+      normalizeEpisodeMetadata({
+        showTitle: 'Podcast',
+        artworkUrl: 'https://example.com/art.jpg',
+        episodeGuid: 'episode-1',
+        podcastItunesId: 'podcast-1',
+      } as unknown as EpisodeMetadataInput)
     ).toBeNull()
   })
 

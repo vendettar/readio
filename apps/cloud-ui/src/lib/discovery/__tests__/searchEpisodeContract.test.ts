@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { makeSearchEpisode } from './fixtures'
 import {
   getCanonicalSearchEpisodeIdentity,
   toCanonicalSearchEpisodeRecord,
 } from '../searchEpisodeContract'
+import { makeSearchEpisode } from './fixtures'
 
 describe('searchEpisodeContract', () => {
   it('projects SearchEpisode into one canonical record shared by downstream flows', () => {

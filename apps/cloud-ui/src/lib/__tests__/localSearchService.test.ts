@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FileTrack, PlaybackSession, PodcastDownload } from '../dexieDb'
 import { TRACK_SOURCE } from '../db/types'
+import type { FileTrack, PlaybackSession, PodcastDownload } from '../dexieDb'
 import { loadLocalSearchDbSnapshot } from '../localSearchService'
 import { DownloadsRepository } from '../repositories/DownloadsRepository'
 import { FilesRepository } from '../repositories/FilesRepository'

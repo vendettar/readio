@@ -8,10 +8,7 @@ import {
 } from '../../lib/storageMaintenanceService'
 import { useStorageMaintenance } from '../useStorageMaintenance'
 
-const {
-  toastSuccessKeyMock,
-  toastErrorKeyMock,
-} = vi.hoisted(() => ({
+const { toastSuccessKeyMock, toastErrorKeyMock } = vi.hoisted(() => ({
   toastSuccessKeyMock: vi.fn(),
   toastErrorKeyMock: vi.fn(),
 }))

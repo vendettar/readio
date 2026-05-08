@@ -5,8 +5,8 @@ import { cn } from '@/lib/utils'
 import { type EpisodeStatus, useEpisodeStatus } from '../../hooks/useEpisodeStatus'
 import {
   buildDownloadJobOptionsFromEpisodeProps,
-  type EpisodeDownloadProps,
   downloadEpisode,
+  type EpisodeDownloadProps,
 } from '../../lib/downloadService'
 import { Button } from '../ui/button'
 import { CircularProgress } from '../ui/circular-progress'

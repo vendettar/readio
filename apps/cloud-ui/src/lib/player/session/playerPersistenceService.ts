@@ -1,6 +1,6 @@
-import type { ASRCue } from '../asr/types'
-import { checkDownloadCapacity } from '../downloadCapacity'
-import { PlaybackRepository } from '../repositories/PlaybackRepository'
+import type { ASRCue } from '../../asr/types'
+import { checkDownloadCapacity } from '../../downloadCapacity'
+import { PlaybackRepository } from '../../repositories/PlaybackRepository'
 
 export const MANUAL_PLAYBACK_AUDIO_PERSIST_REASON = {
   STORED: 'stored',

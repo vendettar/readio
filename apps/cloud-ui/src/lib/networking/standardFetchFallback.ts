@@ -1,10 +1,10 @@
 import { log } from '../logger'
-import { CircuitBreaker } from './circuitBreaker'
-import { FetchError, NetworkError, type FetchSource } from './fetchErrors'
-import { buildProxyAuthHeaders } from './proxyAuth'
-import { createTimeoutController, sleepWithAbort } from './timeouts'
-import { getNetworkProxyConfig } from './proxyUrl'
 import { getAppConfig, isRuntimeConfigReady } from '../runtimeConfig'
+import { CircuitBreaker } from './circuitBreaker'
+import { FetchError, type FetchSource, NetworkError } from './fetchErrors'
+import { buildProxyAuthHeaders } from './proxyAuth'
+import { getNetworkProxyConfig } from './proxyUrl'
+import { createTimeoutController, sleepWithAbort } from './timeouts'
 
 export interface StandardFetchFallbackOptions {
   signal?: AbortSignal
@@ -99,7 +99,12 @@ export async function fetchStandardWithFallback<T = string>(
         ...(requestBody !== undefined ? { body: requestBody } : {}),
       })
       if (!response.ok) {
-        throw new FetchError(`Direct fetch failed: ${response.status}`, url, response.status, 'direct')
+        throw new FetchError(
+          `Direct fetch failed: ${response.status}`,
+          url,
+          response.status,
+          'direct'
+        )
       }
       if (raw) return response as unknown as T
       return json ? await response.json() : ((await response.text()) as unknown as T)

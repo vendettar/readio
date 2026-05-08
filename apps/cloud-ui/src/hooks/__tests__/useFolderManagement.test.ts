@@ -1,10 +1,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { createManagedFolder, deleteManagedFolder } from '../../lib/folderManagementService'
 import { useFolderManagement } from '../useFolderManagement'
-import {
-  createManagedFolder,
-  deleteManagedFolder,
-} from '../../lib/folderManagementService'
 
 const { toastErrorKeyMock } = vi.hoisted(() => ({
   toastErrorKeyMock: vi.fn(),

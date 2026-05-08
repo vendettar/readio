@@ -230,7 +230,10 @@ export const FilesRepository = {
             )
           }
 
-          const audioId = await DB.addAudioBlob(preparedTrack.audioFile, preparedTrack.audioFile.name)
+          const audioId = await DB.addAudioBlob(
+            preparedTrack.audioFile,
+            preparedTrack.audioFile.name
+          )
           const trackId = await DB.addFileTrack({
             folderId: preparedTrack.folderId,
             name: finalTrackName,
@@ -404,11 +407,7 @@ export const FilesRepository = {
       const now = Date.now()
 
       const allVersions = await db.local_subtitles.where('trackId').equals(input.trackId).toArray()
-      const matchedVersion = findLatestAsrSubtitleVersion(
-        allVersions,
-        input.provider,
-        input.model
-      )
+      const matchedVersion = findLatestAsrSubtitleVersion(allVersions, input.provider, input.model)
 
       const subtitleId = await DB.addSubtitle(input.cues, input.subtitleFilename, input.fingerprint)
 

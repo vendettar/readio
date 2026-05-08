@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildRestoredRemoteSessionState } from '../playerSessionRestore'
+import { buildRestoredRemoteSessionState } from '../session/playerSessionRestore'
 
 describe('buildRestoredRemoteSessionState', () => {
   it('restores remote session metadata needed by download and export flows', () => {

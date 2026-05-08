@@ -1,8 +1,11 @@
-import { initializeFaro as initializeGrafanaFaro, WebVitalsInstrumentation } from '@grafana/faro-web-sdk'
 import type { Faro } from '@grafana/faro-web-sdk'
-import type { AppConfig } from './runtimeConfig'
-import { logError } from './logger'
+import {
+  initializeFaro as initializeGrafanaFaro,
+  WebVitalsInstrumentation,
+} from '@grafana/faro-web-sdk'
 import { setErrorReporter } from './errorReporter'
+import { logError } from './logger'
+import type { AppConfig } from './runtimeConfig'
 
 type FaroConfig = Pick<
   AppConfig,
@@ -43,7 +46,10 @@ export function resetFaroForTests(): void {
   setErrorReporter(() => {})
 }
 
-export function initializeFaro(config: FaroConfig, init: FaroInitializer = initializeGrafanaFaro): Faro | null {
+export function initializeFaro(
+  config: FaroConfig,
+  init: FaroInitializer = initializeGrafanaFaro
+): Faro | null {
   if (faroInitialized) return faroInstance
   faroInitialized = true
 

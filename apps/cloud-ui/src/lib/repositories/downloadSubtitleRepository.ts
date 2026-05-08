@@ -2,7 +2,7 @@ import type { ASRCue } from '../asr/types'
 import { isPodcastDownloadTrack } from '../db/types'
 import type { FileSubtitle, PodcastDownload, SubtitleText } from '../dexieDb'
 import { DB, db } from '../dexieDb'
-import { error as logError, log } from '../logger'
+import { log, error as logError } from '../logger'
 import { parseSubtitles } from '../subtitles'
 import { buildPrioritizedSubtitleCandidates } from './SubtitleCandidateBuilder'
 import {
@@ -116,7 +116,11 @@ export const DownloadSubtitleRepository = {
     return sortSubtitleVersionsNewestFirst(versions)
   },
 
-  async setActiveSubtitle(trackId: string, subtitleId: string, isManual: boolean): Promise<boolean> {
+  async setActiveSubtitle(
+    trackId: string,
+    subtitleId: string,
+    isManual: boolean
+  ): Promise<boolean> {
     return db.transaction('rw', [db.tracks, db.local_subtitles], async () => {
       const download = await db.tracks.get(trackId)
       if (!isPodcastDownloadTrack(download)) {
@@ -295,11 +299,7 @@ export const DownloadSubtitleRepository = {
       const now = Date.now()
       const allVersions = await db.local_subtitles.where('trackId').equals(input.trackId).toArray()
       const matchedVersion = findLatestAsrSubtitleVersion(allVersions, input.provider, input.model)
-      const subtitleId = await DB.addSubtitle(
-        input.cues,
-        input.subtitleFilename,
-        input.fingerprint
-      )
+      const subtitleId = await DB.addSubtitle(input.cues, input.subtitleFilename, input.fingerprint)
 
       if (matchedVersion) {
         await replaceSubtitleVersionContentAndCleanup({

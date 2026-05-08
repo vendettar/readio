@@ -12,19 +12,19 @@ import {
 import { buildEpisodeCompactKey } from './discovery/editorPicks'
 import { logError } from './logger'
 import { mapPlaybackSessionToEpisodeMetadata } from './player/episodeMetadata'
-import { loadSessionSubtitleCues } from './player/localSessionRestore'
-import { PlaybackRepository } from './repositories/PlaybackRepository'
 import {
   bumpPlaybackEpoch,
   getPlaybackEpoch,
   playFavoriteWithDeps,
   playHistorySessionWithDeps,
 } from './player/remotePlayback'
+import { loadSessionSubtitleCues } from './player/session/playerSessionSubtitleLoader'
 import {
   applySurfacePolicy,
   deriveSurfacePolicyFromFavorite,
   deriveSurfacePolicyFromHistorySession,
 } from './player/surfacePolicy'
+import { PlaybackRepository } from './repositories/PlaybackRepository'
 import {
   buildPodcastEpisodeRoute,
   buildPodcastShowRoute,

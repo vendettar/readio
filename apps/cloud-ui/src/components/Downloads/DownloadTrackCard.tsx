@@ -1,10 +1,5 @@
 import { cva } from 'class-variance-authority'
-import {
-  Clock,
-  FileAudio,
-  Package,
-  Star,
-} from 'lucide-react'
+import { Clock, FileAudio, Package, Star } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatDateStandard, formatDuration } from '../../lib/dateUtils'

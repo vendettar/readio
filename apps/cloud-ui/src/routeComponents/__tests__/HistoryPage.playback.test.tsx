@@ -162,7 +162,7 @@ vi.mock('../../lib/remoteTranscript', () => ({
   }),
 }))
 
-vi.mock('../../lib/player/localSessionRestore', () => ({
+vi.mock('../../lib/player/session/playerSessionSubtitleLoader', () => ({
   loadSessionSubtitleCues: loadSessionSubtitleCuesMock,
 }))
 

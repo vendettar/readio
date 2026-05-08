@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PlaybackSession } from '../../dexieDb'
+import { PlaybackRepository } from '../../repositories/PlaybackRepository'
 import {
   CREATE_MANAGED_PLAYBACK_SESSION_REASON,
   createManagedPlaybackSession,
   findManagedPlaybackSessionCandidate,
-} from '../playerSessionManagementService'
-import { PlaybackRepository } from '../../repositories/PlaybackRepository'
+} from '../session/playerSessionManagementService'
 
 vi.mock('../../repositories/PlaybackRepository', () => ({
   PlaybackRepository: {
@@ -39,7 +39,7 @@ function makeLocalSession(id: string): PlaybackSession {
   }
 }
 
-describe('playerSessionManagementService', () => {
+describe('player/session/playerSessionManagementService', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })

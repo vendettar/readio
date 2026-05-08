@@ -11,34 +11,22 @@ export function resolveSkipBackwardTarget(progress: number): number {
   return Math.max(0, progress - DEFAULT_SKIP_SECONDS)
 }
 
-export function resolveSkipForwardTarget(
-  progress: number,
-  duration: number
-): number | null {
+export function resolveSkipForwardTarget(progress: number, duration: number): number | null {
   if (!(duration > 0)) return null
   return clampToDuration(progress + DEFAULT_SKIP_SECONDS, duration)
 }
 
-export function resolveSeekBackwardTarget(
-  progress: number,
-  duration: number
-): number | null {
+export function resolveSeekBackwardTarget(progress: number, duration: number): number | null {
   if (!(duration > 0)) return null
   return clampToDuration(progress - SEEK_BACK_SECONDS, duration)
 }
 
-export function resolveSeekForwardTarget(
-  progress: number,
-  duration: number
-): number | null {
+export function resolveSeekForwardTarget(progress: number, duration: number): number | null {
   if (!(duration > 0)) return null
   return clampToDuration(progress + SEEK_FORWARD_SECONDS, duration)
 }
 
-export function resolveSeekToTarget(
-  seekTime: number,
-  duration: number
-): number | null {
+export function resolveSeekToTarget(seekTime: number, duration: number): number | null {
   if (!Number.isFinite(seekTime) || !(duration > 0)) return null
   return clampToDuration(seekTime, duration)
 }

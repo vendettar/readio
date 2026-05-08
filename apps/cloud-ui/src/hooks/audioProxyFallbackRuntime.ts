@@ -1,7 +1,10 @@
 import type { MutableRefObject } from 'react'
-import type { AudioFallbackRecoveryState } from './audioFallbackRecovery'
 
 export const AUDIO_DIRECT_FAILOVER_TIMEOUT_MS = 3000
+
+export interface AudioFallbackRecoveryState {
+  isRecovering: boolean
+}
 
 type ProxyFailoverReason = 'error' | 'timeout'
 

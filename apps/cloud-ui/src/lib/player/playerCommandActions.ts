@@ -96,5 +96,9 @@ export function executeKeyboardSeekBackward(): void {
 
 export function executeKeyboardSeekForward(): void {
   const { progress, duration, seekTo } = usePlayerStore.getState()
-  seekTo(duration > 0 ? Math.min(duration, progress + KEYBOARD_SEEK_SECONDS) : progress + KEYBOARD_SEEK_SECONDS)
+  seekTo(
+    duration > 0
+      ? Math.min(duration, progress + KEYBOARD_SEEK_SECONDS)
+      : progress + KEYBOARD_SEEK_SECONDS
+  )
 }

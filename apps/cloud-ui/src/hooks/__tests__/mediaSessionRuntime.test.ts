@@ -2,10 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   bindMediaSessionActionHandlers,
   buildMediaSessionMetadataInit,
-  syncMediaSessionMetadata,
-  syncMediaSessionPlaybackState,
   type MediaSessionActions,
   type MediaSessionTrack,
+  syncMediaSessionMetadata,
+  syncMediaSessionPlaybackState,
 } from '../mediaSessionRuntime'
 
 const {

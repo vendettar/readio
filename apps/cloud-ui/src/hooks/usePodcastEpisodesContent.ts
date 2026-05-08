@@ -55,19 +55,16 @@ export function usePodcastEpisodesContent(
   podcastItunesId: string,
   routeCountry: string | undefined
 ): UsePodcastEpisodesContentResult {
-  const {
-    podcast,
-    isLoadingPodcast,
-    podcastError,
-    episodeList,
-    isLoadingEpisodes,
-    episodesError,
-  } = usePodcastDetailAndEpisodes({
-    podcastItunesId,
-    routeCountry,
-  })
+  const { podcast, isLoadingPodcast, podcastError, episodeList, isLoadingEpisodes, episodesError } =
+    usePodcastDetailAndEpisodes({
+      podcastItunesId,
+      routeCountry,
+    })
 
-  const listRows = useMemo(() => buildListRows(episodeList?.episodes ?? []), [episodeList?.episodes])
+  const listRows = useMemo(
+    () => buildListRows(episodeList?.episodes ?? []),
+    [episodeList?.episodes]
+  )
   const resolvedContent = podcast && episodeList ? { podcast, listRows } : null
   const isLoading = isLoadingPodcast || isLoadingEpisodes
   const resolutionError = podcastError ?? episodesError ?? null

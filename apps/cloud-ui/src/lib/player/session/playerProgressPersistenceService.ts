@@ -1,4 +1,4 @@
-import { PlaybackRepository } from '../repositories/PlaybackRepository'
+import { PlaybackRepository } from '../../repositories/PlaybackRepository'
 
 export const PERSIST_PLAYBACK_PROGRESS_REASON = {
   STORED: 'stored',

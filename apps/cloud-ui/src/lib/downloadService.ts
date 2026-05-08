@@ -10,38 +10,26 @@
  * - Idempotency (no duplicate blob/track rows)
  */
 
-import { type PodcastDownload } from './dexieDb'
+import type { PodcastDownload } from './dexieDb'
 import { persistDownloadedEpisodeBlob } from './downloadBlobPersistence'
 import { downloadBlobWithProgress } from './downloadBlobTransport'
 import {
   buildDownloadProgressStatusKey,
+  type DownloadJobOptions,
   normalizeDownloadJobOptions,
   resolveEpisodeDownloadStatusKey,
-  type DownloadJobOptions,
 } from './downloadJobOptions'
+import { emitDownloadChange } from './downloadLibraryEvents'
 import {
-  findDownloadedTrackByLookup,
-  normalizeCanonicalDownloadIdentity,
   type CanonicalEpisodeDownloadLookupInput,
   type EpisodeDownloadLookupInput,
+  findDownloadedTrackByLookup,
+  normalizeCanonicalDownloadIdentity,
 } from './downloadLookupResolver'
-import { emitDownloadChange } from './downloadLibraryEvents'
 import { DownloadsRepository } from './repositories/DownloadsRepository'
 import { deduplicatedFetch, isRequestInflight } from './requestManager'
 import { toast } from './toast'
 
-export { emitDownloadChange, subscribeToDownloads } from './downloadLibraryEvents'
-export {
-  buildDownloadJobOptionsFromCanonicalRemoteMetadata,
-  buildDownloadJobOptionsFromEpisodeProps,
-} from './downloadJobOptions'
-export { useDownloadProgressStore } from './downloadProgressTracking'
-export {
-  clearAllDownloads,
-  getAllDownloadedTracks,
-  removeDownloadedTrack,
-  sweepOrphanedBlobs,
-} from './downloadLibraryMaintenance'
 export type {
   DownloadJobOptions,
   DownloadProgress,
@@ -49,6 +37,18 @@ export type {
   EpisodePropsDownloadInput,
   RemoteMetadataDownloadInput,
 } from './downloadJobOptions'
+export {
+  buildDownloadJobOptionsFromCanonicalRemoteMetadata,
+  buildDownloadJobOptionsFromEpisodeProps,
+} from './downloadJobOptions'
+export { emitDownloadChange, subscribeToDownloads } from './downloadLibraryEvents'
+export {
+  clearAllDownloads,
+  getAllDownloadedTracks,
+  removeDownloadedTrack,
+  sweepOrphanedBlobs,
+} from './downloadLibraryMaintenance'
+export { useDownloadProgressStore } from './downloadProgressTracking'
 
 export const DOWNLOAD_STATUS = {
   IDLE: 'idle',

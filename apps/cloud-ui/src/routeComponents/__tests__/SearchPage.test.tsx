@@ -9,10 +9,7 @@ const playSearchEpisodeMock = vi.hoisted(() => vi.fn())
 const mockSearchState = vi.hoisted(() => ({ q: 'search-term' }))
 const makeSection = vi.hoisted(
   () =>
-    <T,>(
-      items: T[] = [],
-      status: 'idle' | 'loading' | 'ready' | 'unavailable' = 'ready'
-    ) => ({
+    <T,>(items: T[] = [], status: 'idle' | 'loading' | 'ready' | 'unavailable' = 'ready') => ({
       items,
       status,
     })

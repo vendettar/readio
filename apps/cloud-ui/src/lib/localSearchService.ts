@@ -30,7 +30,9 @@ export async function loadLocalSearchDbSnapshot(input: {
     FilesRepository.searchFileTracksByName(input.query, input.fileFetchLimit),
     DownloadsRepository.searchPodcastDownloadsByName(input.query, input.fileFetchLimit),
     input.favoriteCanonicalIdentities.length > 0
-      ? PlaybackRepository.searchExploreSessionsByCanonicalEpisodes(input.favoriteCanonicalIdentities)
+      ? PlaybackRepository.searchExploreSessionsByCanonicalEpisodes(
+          input.favoriteCanonicalIdentities
+        )
       : Promise.resolve([] as PlaybackSession[]),
   ])
 

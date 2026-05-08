@@ -22,7 +22,9 @@ export function resolveDuplicateSubtitleFilename(
   let candidate = normalizedBase
   let counter = 2
 
-  while (existingNames.some((existing) => existing.trim().toLowerCase() === candidate.toLowerCase())) {
+  while (
+    existingNames.some((existing) => existing.trim().toLowerCase() === candidate.toLowerCase())
+  ) {
     candidate = `${stem} (${counter})${extension}`
     counter += 1
   }

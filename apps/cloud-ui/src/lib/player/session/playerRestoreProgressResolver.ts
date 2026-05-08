@@ -1,4 +1,4 @@
-import type { PlaybackSession } from '../dexieDb'
+import type { PlaybackSession } from '../../dexieDb'
 
 export type RestoreAppliedEntry = {
   targetTime: number

@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { SelectionState } from '../../../lib/selection'
 import {
   completeSelectionSurfaceClose,
   shouldIgnoreSelectionSurfaceClose,
 } from '../selectionSurfaceRuntime'
-import type { SelectionState } from '../../../lib/selection'
 
 const { applyLookupHighlightForWordMock, setHighlightedWordMock } = vi.hoisted(() => ({
   applyLookupHighlightForWordMock: vi.fn(),
@@ -35,9 +35,7 @@ describe('selectionSurfaceRuntime', () => {
 
     expect(shouldIgnoreSelectionSurfaceClose(refs, { surfaceId: 5 })).toBe(true)
     expect(shouldIgnoreSelectionSurfaceClose(refs, { surface: 'contextMenu' })).toBe(true)
-    expect(shouldIgnoreSelectionSurfaceClose(refs, { surfaceId: 4, surface: 'lookup' })).toBe(
-      false
-    )
+    expect(shouldIgnoreSelectionSurfaceClose(refs, { surfaceId: 4, surface: 'lookup' })).toBe(false)
   })
 
   it('applies lookup highlight, clears UI state, and cancels interaction on close', () => {

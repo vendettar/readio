@@ -4,31 +4,33 @@ import { PlayerDownloadAction } from '../PlayerDownloadAction'
 
 const { buildDownloadJobOptionsFromCanonicalRemoteMetadataMock, downloadEpisodeMock, refreshMock } =
   vi.hoisted(() => ({
-  downloadEpisodeMock: vi.fn(() => Promise.resolve({ ok: true })),
-  buildDownloadJobOptionsFromCanonicalRemoteMetadataMock: vi.fn((input: Record<string, unknown>) => {
-    const metadata = (input.metadata as Record<string, unknown> | null | undefined) ?? {}
-    const rawCountry =
-      typeof metadata.countryAtSave === 'string' && /^(us|jp)$/i.test(metadata.countryAtSave)
-        ? metadata.countryAtSave.toLowerCase()
-        : null
+    downloadEpisodeMock: vi.fn(() => Promise.resolve({ ok: true })),
+    buildDownloadJobOptionsFromCanonicalRemoteMetadataMock: vi.fn(
+      (input: Record<string, unknown>) => {
+        const metadata = (input.metadata as Record<string, unknown> | null | undefined) ?? {}
+        const rawCountry =
+          typeof metadata.countryAtSave === 'string' && /^(us|jp)$/i.test(metadata.countryAtSave)
+            ? metadata.countryAtSave.toLowerCase()
+            : null
 
-    if (!rawCountry) {
-      return null
-    }
+        if (!rawCountry) {
+          return null
+        }
 
-    return {
-      audioUrl: input.audioUrl,
-      episodeTitle: input.episodeTitle,
-      episodeDescription: '',
-      showTitle: 'Podcast',
-      artworkUrl: 'https://example.com/art.jpg',
-      countryAtSave: rawCountry,
-      podcastItunesId: 'pod-1',
-      episodeGuid: 'episode-guid-1',
-      durationSeconds: metadata.durationSeconds,
-    }
-  }),
-  refreshMock: vi.fn(),
+        return {
+          audioUrl: input.audioUrl,
+          episodeTitle: input.episodeTitle,
+          episodeDescription: '',
+          showTitle: 'Podcast',
+          artworkUrl: 'https://example.com/art.jpg',
+          countryAtSave: rawCountry,
+          podcastItunesId: 'pod-1',
+          episodeGuid: 'episode-guid-1',
+          durationSeconds: metadata.durationSeconds,
+        }
+      }
+    ),
+    refreshMock: vi.fn(),
   }))
 let currentDurationSeconds: number | undefined
 let currentEpisodeMetadata: Record<string, unknown> | null

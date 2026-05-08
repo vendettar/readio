@@ -1,9 +1,6 @@
 import type { EpisodeMetadataInput } from '../store/playerStore'
 import { usePlayerStore } from '../store/playerStore'
-import {
-  TRANSCRIPT_INGESTION_STATUS,
-  useTranscriptStore,
-} from '../store/transcriptStore'
+import { type TRANSCRIPT_INGESTION_STATUS, useTranscriptStore } from '../store/transcriptStore'
 import type { ASRCue } from './asr/types'
 import { resolvePlaybackSourceAudioUrl } from './player/playbackMetadata'
 import { normalizeAsrAudioUrl } from './remoteTranscriptResource'

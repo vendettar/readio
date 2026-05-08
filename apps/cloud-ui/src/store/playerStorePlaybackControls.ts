@@ -36,9 +36,10 @@ export function resolveTogglePlayPauseState(
   return resolvePlayState(state)
 }
 
-export function resolvePlayerErrorState(
-  message?: string
-): { nextState: Partial<PlayerControlState>; kind: 'autoplay-blocked' | 'error' } {
+export function resolvePlayerErrorState(message?: string): {
+  nextState: Partial<PlayerControlState>
+  kind: 'autoplay-blocked' | 'error'
+} {
   if (message === 'NotAllowedError') {
     return {
       kind: 'autoplay-blocked',

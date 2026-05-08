@@ -3,10 +3,11 @@ import { useNetworkStatus } from '../../hooks/useNetworkStatus'
 import type { ASRCue } from '../../lib/asr/types'
 import type { FileSubtitle, PodcastDownload } from '../../lib/db/types'
 import { buildEpisodeCompactKey } from '../../lib/discovery/editorPicks'
+import { selectPlaybackSubtitle } from '../../lib/downloads/subtitleSelection'
 import { warn as logWarn } from '../../lib/logger'
 import {
-  createCanonicalRemoteEpisodeMetadata,
   type CanonicalRemoteEpisodeMetadata,
+  createCanonicalRemoteEpisodeMetadata,
   normalizeCountryAtSave,
 } from '../../lib/player/playbackMetadata'
 import { resolvePlaybackSource } from '../../lib/player/playbackSource'
@@ -16,7 +17,6 @@ import {
 } from '../../lib/player/remotePlayback'
 import { DownloadsRepository } from '../../lib/repositories/DownloadsRepository'
 import { buildPodcastEpisodeRoute } from '../../lib/routes/podcastRoutes'
-import { selectPlaybackSubtitle } from '../../lib/downloads/subtitleSelection'
 import type { SubtitleExportFormat } from '../../lib/subtitles'
 import { usePlayerStore } from '../../store/playerStore'
 import { usePlayerSurfaceStore } from '../../store/playerSurfaceStore'

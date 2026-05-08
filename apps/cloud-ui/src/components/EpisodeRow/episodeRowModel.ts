@@ -201,19 +201,18 @@ export function fromSearchEpisode({
     playIconSize: 20,
     route,
     playAriaLabel: t('ariaPlayEpisode'),
-    downloadArgs:
-      routeCountry
-        ? {
-            episodeTitle: canonicalEpisode.title,
-            showTitle: canonicalEpisode.showTitle,
-            audioUrl: canonicalEpisode.audioUrl,
-            artworkUrl: artwork,
-            countryAtSave: routeCountry,
-            podcastItunesId: identity.podcastItunesId,
-            episodeGuid: identity.episodeGuid,
-            durationSeconds,
-          }
-        : undefined,
+    downloadArgs: routeCountry
+      ? {
+          episodeTitle: canonicalEpisode.title,
+          showTitle: canonicalEpisode.showTitle,
+          audioUrl: canonicalEpisode.audioUrl,
+          artworkUrl: artwork,
+          countryAtSave: routeCountry,
+          podcastItunesId: identity.podcastItunesId,
+          episodeGuid: identity.episodeGuid,
+          durationSeconds,
+        }
+      : undefined,
   }
 }
 

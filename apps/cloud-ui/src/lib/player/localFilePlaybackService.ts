@@ -1,9 +1,9 @@
 import type { ASRCue } from '../asr/types'
 import type { FileSubtitle, FileTrack } from '../dexieDb'
-import { createLocalEpisodeMetadata } from './playbackMetadata'
-import { buildLocalTrackPlaybackSessionCreateInput } from './playbackSessionFactory'
 import { FilesRepository } from '../repositories/FilesRepository'
 import { PlaybackRepository } from '../repositories/PlaybackRepository'
+import { createLocalEpisodeMetadata } from './playbackMetadata'
+import { buildLocalTrackPlaybackSessionCreateInput } from './session/playbackSessionFactory'
 
 export const LOCAL_FILE_PLAYBACK_PREPARE_REASON = {
   AUDIO_NOT_FOUND: 'audio_not_found',
@@ -33,14 +33,18 @@ function selectTrackSubtitle(input: {
   availableSubtitles: FileSubtitle[]
   subtitle?: FileSubtitle
 }): FileSubtitle | undefined {
-  const trackSubtitles = input.availableSubtitles.filter((entry) => entry.trackId === input.track.id)
+  const trackSubtitles = input.availableSubtitles.filter(
+    (entry) => entry.trackId === input.track.id
+  )
   if (input.subtitle) {
     return input.subtitle
   }
   if (trackSubtitles.length === 0) {
     return undefined
   }
-  return trackSubtitles.find((entry) => entry.id === input.track.activeSubtitleId) ?? trackSubtitles[0]
+  return (
+    trackSubtitles.find((entry) => entry.id === input.track.activeSubtitleId) ?? trackSubtitles[0]
+  )
 }
 
 export async function prepareLocalFilePlayback(input: {

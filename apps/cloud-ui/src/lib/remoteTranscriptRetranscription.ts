@@ -65,11 +65,7 @@ interface RetranscriptionTaskOptions<TReason extends string> {
   trackNotFoundReason: TReason
   enqueueWarnLabel: string
   warnLabel: string
-  buildSubtitleTarget: (result: {
-    cues: ASRCue[]
-    model: string
-    provider: string
-  }) => {
+  buildSubtitleTarget: (result: { cues: ASRCue[]; model: string; provider: string }) => {
     subtitleFilename: string
     subtitleName: string
   }
@@ -99,11 +95,7 @@ interface RetranscriptionRuntimeDeps {
         reasonCode?: string
       }
   >
-  formatAsrSubtitleName: (input: {
-    episodeTitle: string
-    provider: string
-    model: string
-  }) => {
+  formatAsrSubtitleName: (input: { episodeTitle: string; provider: string; model: string }) => {
     subtitleFilename: string
     subtitleName: string
   }
@@ -164,7 +156,11 @@ async function runQueuedRetranscriptionTask<TReason extends string>(
         }
 
         const controller = new AbortController()
-        const audioBlob = await deps.fetchTrackAudioBlob(expectedAudioUrl, trackId, controller.signal)
+        const audioBlob = await deps.fetchTrackAudioBlob(
+          expectedAudioUrl,
+          trackId,
+          controller.signal
+        )
         const fingerprint = await deps.computeAsrFingerprint({
           localTrackId: trackId,
           audioBlob,

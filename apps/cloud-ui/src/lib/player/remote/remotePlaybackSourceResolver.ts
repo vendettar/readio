@@ -1,19 +1,19 @@
-import { TRANSCRIPT_INGESTION_STATUS, useTranscriptStore } from '../../store/transcriptStore'
-import { getAsrCredentialKey, getCredential } from '../db/credentialsRepository'
+import { TRANSCRIPT_INGESTION_STATUS, useTranscriptStore } from '../../../store/transcriptStore'
+import { getAsrCredentialKey, getCredential } from '../../db/credentialsRepository'
 import {
   buildDownloadJobOptionsFromCanonicalRemoteMetadata,
   downloadEpisode,
   removeDownloadedTrack,
-} from '../downloadService'
-import { log, logError } from '../logger'
-import { getAsrSettingsSnapshot } from '../remoteTranscript'
+} from '../../downloadService'
+import { log, logError } from '../../logger'
+import { getAsrSettingsSnapshot } from '../../remoteTranscript'
 import {
-  isCanonicalRemoteEpisodeMetadata,
   type CanonicalRemoteEpisodeMetadata,
   type EpisodeMetadata,
-} from './playbackMetadata'
-import { PLAYBACK_REQUEST_MODE, type PlaybackRequestMode } from './playbackMode'
-import { resolvePlaybackSource } from './playbackSource'
+  isCanonicalRemoteEpisodeMetadata,
+} from '../playbackMetadata'
+import { PLAYBACK_REQUEST_MODE, type PlaybackRequestMode } from '../playbackMode'
+import { resolvePlaybackSource } from '../playbackSource'
 
 type RemoteStreamTargetCandidates = {
   sourceUrlNormalized?: string | null
@@ -25,10 +25,7 @@ export type ResolvedPlaybackSource = {
   trackId?: string
 }
 
-export type PlaybackSourceFailureReason =
-  | 'stale'
-  | 'no_playable_source'
-  | 'download_failed'
+export type PlaybackSourceFailureReason = 'stale' | 'no_playable_source' | 'download_failed'
 
 export type PlaybackSourceResolution =
   | {
@@ -92,7 +89,12 @@ async function needsAsrDownloadBlocking(
 async function resolveSourceForPlaybackMode(
   input: Pick<
     ResolvePlayableSourceInput,
-    'currentEpoch' | 'mode' | 'audioUrl' | 'streamTarget' | 'resolveRemoteStreamTargetUrl' | 'isEpochStale'
+    | 'currentEpoch'
+    | 'mode'
+    | 'audioUrl'
+    | 'streamTarget'
+    | 'resolveRemoteStreamTargetUrl'
+    | 'isEpochStale'
   >
 ): Promise<PlaybackSourceResolution> {
   const resolved = await resolvePlaybackSource(input.audioUrl)
@@ -108,7 +110,9 @@ async function resolveSourceForPlaybackMode(
     return { ok: true, source: resolved }
   }
 
-  const remoteTarget = input.resolveRemoteStreamTargetUrl(input.streamTarget ?? { audioUrl: input.audioUrl })
+  const remoteTarget = input.resolveRemoteStreamTargetUrl(
+    input.streamTarget ?? { audioUrl: input.audioUrl }
+  )
   if (!remoteTarget) {
     return { ok: false, reason: 'no_playable_source' }
   }
@@ -163,9 +167,7 @@ export async function resolveDownloadedPlaybackSource(
   return newSource
 }
 
-export async function resolvePlayableSourceForPlayback(
-  input: ResolvePlayableSourceInput
-): Promise<
+export async function resolvePlayableSourceForPlayback(input: ResolvePlayableSourceInput): Promise<
   | {
       ok: true
       source: ResolvedPlaybackSource

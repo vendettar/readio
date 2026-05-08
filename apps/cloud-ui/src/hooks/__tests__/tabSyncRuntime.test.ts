@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  isValidTabSyncMessage,
-  shouldIgnoreTabSyncMessage,
-} from '../tabSyncRuntime'
+import { isValidTabSyncMessage, shouldIgnoreTabSyncMessage } from '../tabSyncRuntime'
 
 describe('tabSyncRuntime', () => {
   it('validates the tab sync message contract', () => {

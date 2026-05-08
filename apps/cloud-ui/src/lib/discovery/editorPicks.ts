@@ -33,7 +33,9 @@ export function getEditorPickRouteState(state: unknown): EditorPickRouteState | 
 
   let editorPickSnapshot: EditorPickPodcast | undefined
   if (snapshot && typeof snapshot === 'object') {
-    const podcastItunesId = normalizeRawString((snapshot as { podcastItunesId?: unknown }).podcastItunesId)
+    const podcastItunesId = normalizeRawString(
+      (snapshot as { podcastItunesId?: unknown }).podcastItunesId
+    )
     if (podcastItunesId) {
       try {
         editorPickSnapshot = EditorPickPodcastSchema.parse(snapshot)

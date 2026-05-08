@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DB } from '../dexieDb'
-import { PlaybackRepository } from '../repositories/PlaybackRepository'
 import {
   __resetRemoteTranscriptStateForTests,
   deriveRemoteTranscriptCacheId,
@@ -8,6 +7,7 @@ import {
   normalizeTranscriptUrl,
   readRemoteTranscriptCache,
 } from '../remoteTranscript'
+import { PlaybackRepository } from '../repositories/PlaybackRepository'
 import { parseSubtitles } from '../subtitles'
 
 const { fetchTextWithFallbackMock } = vi.hoisted(() => ({

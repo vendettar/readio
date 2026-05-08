@@ -1,10 +1,10 @@
 import { useEffect } from 'react'
 import {
   bindMediaSessionActionHandlers,
-  syncMediaSessionMetadata,
-  syncMediaSessionPlaybackState,
   type MediaSessionActions,
   type MediaSessionTrack,
+  syncMediaSessionMetadata,
+  syncMediaSessionPlaybackState,
 } from './mediaSessionRuntime'
 
 export function useMediaSession(

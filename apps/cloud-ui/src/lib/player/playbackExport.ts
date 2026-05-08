@@ -1,23 +1,18 @@
+import { blobToZipBytes, buildSimpleZip } from '../archive/simpleZip'
 import { downloadBlob } from '../download'
 import { warn } from '../logger'
 import type { SubtitleExportFormat } from '../subtitles'
-import { blobToZipBytes, buildSimpleZip } from '../archive/simpleZip'
 
 export type { SubtitleExportFormat } from '../subtitles'
 export {
-  resolveCurrentPlaybackExportContext,
   type PlaybackExportContext,
-} from './playbackExportContext'
+  resolveCurrentPlaybackExportContext,
+} from './export/playbackExportContext'
 export type { TranscriptImportResult } from './playbackTranscriptImport'
 
-import {
-  resolvePlaybackExportBaseName,
-} from './playbackIdentity'
-import {
-  resolveAudioExportAsset,
-  resolveTranscriptExportAsset,
-} from './playbackExportAssets'
-import { resolveCurrentPlaybackExportContext } from './playbackExportContext'
+import { resolveAudioExportAsset, resolveTranscriptExportAsset } from './export/playbackExportAssets'
+import { resolveCurrentPlaybackExportContext } from './export/playbackExportContext'
+import { resolvePlaybackExportBaseName } from './playbackIdentity'
 import {
   importTranscriptForPlaybackContext,
   type TranscriptImportResult,
@@ -97,7 +92,10 @@ export async function exportCurrentAudioForPlayback(): Promise<ExportActionResul
   const context = await resolveCurrentPlaybackExportContext()
   if (!context) return { ok: false, reason: 'no_playback_identity' }
   if (!context.canExportAudio) {
-    return { ok: false, reason: context.hasMissingLocalTrackBinding ? 'track_not_found' : 'no_audio' }
+    return {
+      ok: false,
+      reason: context.hasMissingLocalTrackBinding ? 'track_not_found' : 'no_audio',
+    }
   }
 
   const asset = await resolveAudioExportAsset(context)
@@ -132,7 +130,10 @@ export async function exportCurrentTranscriptAndAudioBundle(): Promise<ExportAct
   if (!context) return { ok: false, reason: 'no_playback_identity' }
   if (!context.canExportTranscript) return { ok: false, reason: 'no_transcript' }
   if (!context.canExportAudio) {
-    return { ok: false, reason: context.hasMissingLocalTrackBinding ? 'track_not_found' : 'no_audio' }
+    return {
+      ok: false,
+      reason: context.hasMissingLocalTrackBinding ? 'track_not_found' : 'no_audio',
+    }
   }
 
   const [transcriptAsset, audioAsset] = await Promise.all([
@@ -150,13 +151,16 @@ export async function exportCurrentTranscriptAndAudioBundle(): Promise<ExportAct
   }
 
   const baseName = resolvePlaybackExportBaseName(context.identity)
-  const zipBlob = buildSimpleZip([
-    {
-      name: transcriptAsset.filename,
-      bytes: await blobToZipBytes(transcriptAsset.blob),
-    },
-    { name: audioAsset.filename, bytes: await blobToZipBytes(audioAsset.blob) },
-  ], { useCurrentTimestamp: true })
+  const zipBlob = buildSimpleZip(
+    [
+      {
+        name: transcriptAsset.filename,
+        bytes: await blobToZipBytes(transcriptAsset.blob),
+      },
+      { name: audioAsset.filename, bytes: await blobToZipBytes(audioAsset.blob) },
+    ],
+    { useCurrentTimestamp: true }
+  )
 
   try {
     downloadBlob(zipBlob, `${baseName}.transcript-and-audio.zip`)

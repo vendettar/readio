@@ -1,4 +1,13 @@
 import type {
+  ExplorePlaybackSession,
+  Favorite,
+  LocalPlaybackSession,
+  PlaybackSession,
+} from '../dexieDb'
+import type { Episode, Podcast, SearchEpisode } from '../discovery'
+import { toCanonicalSearchEpisodeRecord } from '../discovery/searchEpisodeContract'
+import { getDiscoveryArtworkUrl } from '../imageUtils'
+import type {
   CanonicalEpisodeMetadata,
   CanonicalRemoteEpisodeMetadata,
   EpisodeMetadata,
@@ -10,15 +19,6 @@ import {
   createLocalEpisodeMetadata,
   normalizeCountryAtSave,
 } from './playbackMetadata'
-import type {
-  ExplorePlaybackSession,
-  Favorite,
-  LocalPlaybackSession,
-  PlaybackSession,
-} from '../dexieDb'
-import type { Episode, Podcast, SearchEpisode } from '../discovery'
-import { toCanonicalSearchEpisodeRecord } from '../discovery/searchEpisodeContract'
-import { getDiscoveryArtworkUrl } from '../imageUtils'
 
 export interface PlaybackPayload<TMetadata> {
   audioUrl: string
@@ -177,7 +177,9 @@ export function mapPlaybackSessionToEpisodeMetadata(
 export function mapSessionToPlaybackPayload(
   session: ExplorePlaybackSession
 ): CanonicalRemotePlaybackPayload | null
-export function mapSessionToPlaybackPayload(session: LocalPlaybackSession): LocalPlaybackPayload | null
+export function mapSessionToPlaybackPayload(
+  session: LocalPlaybackSession
+): LocalPlaybackPayload | null
 export function mapSessionToPlaybackPayload(session: PlaybackSession): SessionPlaybackPayload | null
 export function mapSessionToPlaybackPayload(
   session: PlaybackSession

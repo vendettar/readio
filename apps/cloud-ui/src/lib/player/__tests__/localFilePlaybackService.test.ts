@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FileSubtitle, FileTrack } from '../../dexieDb'
 import { TRACK_SOURCE } from '../../db/types'
+import type { FileSubtitle, FileTrack } from '../../dexieDb'
+import { FilesRepository } from '../../repositories/FilesRepository'
+import { PlaybackRepository } from '../../repositories/PlaybackRepository'
 import {
   LOCAL_FILE_PLAYBACK_PREPARE_REASON,
   persistLocalFilePlaybackSession,
   prepareLocalFilePlayback,
 } from '../localFilePlaybackService'
-import { FilesRepository } from '../../repositories/FilesRepository'
-import { PlaybackRepository } from '../../repositories/PlaybackRepository'
 
 vi.mock('../../repositories/FilesRepository', () => ({
   FilesRepository: {

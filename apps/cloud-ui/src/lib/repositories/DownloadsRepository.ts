@@ -32,11 +32,6 @@ import {
   type UpsertBuiltInSubtitleResult,
 } from './downloadSubtitleRepository'
 
-export {
-  IMPORT_SUBTITLE_REASON,
-  UPSERT_ASR_SUBTITLE_REASON,
-} from './downloadSubtitleRepository'
-
 export type {
   ImportSubtitleReason,
   ImportSubtitleResult,
@@ -45,6 +40,10 @@ export type {
   UpsertAsrSubtitleReason,
   UpsertAsrSubtitleResult,
   UpsertBuiltInSubtitleResult,
+} from './downloadSubtitleRepository'
+export {
+  IMPORT_SUBTITLE_REASON,
+  UPSERT_ASR_SUBTITLE_REASON,
 } from './downloadSubtitleRepository'
 
 type DownloadSubtitleListener = (trackId: string) => void
@@ -133,7 +132,11 @@ export const DownloadsRepository = {
     subtitleId: string,
     isManual: boolean
   ): Promise<boolean> {
-    const updated = await DownloadSubtitleRepository.setActiveSubtitle(trackId, subtitleId, isManual)
+    const updated = await DownloadSubtitleRepository.setActiveSubtitle(
+      trackId,
+      subtitleId,
+      isManual
+    )
     if (updated) {
       emitDownloadSubtitleChange(trackId)
     }
@@ -300,9 +303,7 @@ export const DownloadsRepository = {
    * 1. The activeSubtitleId (if set and ready)
    * 2. Other ready versions (newest first)
    */
-  async getReadySubtitlesByTrackId(
-    trackId: string
-  ): Promise<ReadySubtitleCandidate[]> {
+  async getReadySubtitlesByTrackId(trackId: string): Promise<ReadySubtitleCandidate[]> {
     return DownloadSubtitleRepository.getReadySubtitlesByTrackId(trackId)
   },
 

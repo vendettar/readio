@@ -14,7 +14,10 @@ export function resolveNextFolderName(inputName: string, folders: FileFolder[]):
   return finalName
 }
 
-export async function createManagedFolder(inputName: string, folders: FileFolder[]): Promise<string> {
+export async function createManagedFolder(
+  inputName: string,
+  folders: FileFolder[]
+): Promise<string> {
   const finalName = resolveNextFolderName(inputName, folders)
   return FilesRepository.addFolder(finalName)
 }

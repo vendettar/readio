@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { PlaybackRepository } from '../../repositories/PlaybackRepository'
-import { loadSessionSubtitleCues } from '../localSessionRestore'
+import { loadSessionSubtitleCues } from '../session/playerSessionSubtitleLoader'
 
 vi.mock('../../repositories/PlaybackRepository', () => ({
   PlaybackRepository: {
@@ -8,7 +8,7 @@ vi.mock('../../repositories/PlaybackRepository', () => ({
   },
 }))
 
-describe('localSessionRestore', () => {
+describe('playerSessionSubtitleLoader', () => {
   beforeEach(() => {
     vi.clearAllMocks()
   })

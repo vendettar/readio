@@ -1,17 +1,17 @@
 import { isAbortLikeError } from '../lib/fetchUtils'
 import { warn } from '../lib/logger'
 import type { EpisodeMetadata } from '../lib/player/playbackMetadata'
+import { revokePlaybackBlobUrls } from '../lib/player/playerBlobUrls'
 import {
   MANUAL_PLAYBACK_AUDIO_PERSIST_REASON,
   persistManualPlaybackAudio,
   persistManualPlaybackSubtitles,
-} from '../lib/player/playerPersistenceService'
-import { revokePlaybackBlobUrls } from '../lib/player/playerBlobUrls'
-import { parseSubtitles, type ASRCue } from '../lib/subtitles'
+} from '../lib/player/session/playerPersistenceService'
+import { type ASRCue, parseSubtitles } from '../lib/subtitles'
 import { toast } from '../lib/toast'
 import {
-  resolvePlayerStoreBlobLoadTransition,
   type PlayerStoreAudioTransitionState,
+  resolvePlayerStoreBlobLoadTransition,
 } from './playerStoreAudioTransition'
 import { useTranscriptStore } from './transcriptStore'
 

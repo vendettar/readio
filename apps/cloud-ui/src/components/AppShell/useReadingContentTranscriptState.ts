@@ -29,9 +29,7 @@ interface UseReadingContentTranscriptStateInput {
   withDefaultPlaybackRequestMode: (metadata: EpisodeMetadataInput) => EpisodeMetadata | null
 }
 
-export function useReadingContentTranscriptState(
-  input: UseReadingContentTranscriptStateInput
-): {
+export function useReadingContentTranscriptState(input: UseReadingContentTranscriptStateInput): {
   asrGenerationReady: boolean | null
   beginTranscriptLoadAttempt: () => void
   hasDeclaredTranscriptSource: boolean

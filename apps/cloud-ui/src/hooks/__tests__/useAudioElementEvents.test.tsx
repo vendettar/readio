@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { PlaybackRepository } from '../../lib/repositories/PlaybackRepository'
 import { usePlayerStore } from '../../store/playerStore'
 import { useSleepTimerStore } from '../../store/sleepTimerStore'
-import type { AudioFallbackRecoveryState } from '../audioFallbackRecovery'
+import type { AudioFallbackRecoveryState } from '../audioProxyFallbackRuntime'
 import { useAudioElementEvents } from '../useAudioElementEvents'
 
 vi.mock('../../lib/logger', () => ({

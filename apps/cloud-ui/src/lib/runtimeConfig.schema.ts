@@ -87,10 +87,7 @@ function isEnableAllProvidersToken(value: string): boolean {
 }
 
 export const AppConfigSchema = z.object({
-  API_BASE_URL: z
-    .string()
-    .default('')
-    .catch(catchWithLog('API_BASE_URL', '')),
+  API_BASE_URL: z.string().default('').catch(catchWithLog('API_BASE_URL', '')),
   APP_NAME: z
 
     .string()

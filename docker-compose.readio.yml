@@ -1,27 +1,16 @@
-version: '3.8'
-
 services:
-  # Production API Service
-
-  readio-api-prod:
-    build:
-      context: ./apps/cloud-api
-      dockerfile: Dockerfile
-
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/readio-cloud-api:latest
-
-
-    container_name: readio-api-prod
+  readio-api:
+    image: ghcr.io/${REPO_OWNER}/readio-cloud-api:${IMAGE_TAG}
+    container_name: ${CONTAINER_NAME}
     restart: always
     ports:
-      - "8080:8080"
+      - "${HOST_PORT}:${APP_PORT}"
     volumes:
-      - ./data/prod:/app/data
+      - ${DATA_DIR}:/app/data
     env_file:
-      - ./readio.env
-
+      - ${ENV_FILE_PATH}
     environment:
-      - PORT=8080
+      - PORT=${APP_PORT}
       - READIO_CLOUD_DB_PATH=/app/data/readio.db
     healthcheck:
       test: ["CMD", "./cloud-api", "-check-health"]
@@ -29,44 +18,6 @@ services:
       timeout: 5s
       retries: 3
       start_period: 5s
-
-
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  # Pre-production API Service
-
-  readio-api-pre:
-    build:
-      context: ./apps/cloud-api
-      dockerfile: Dockerfile
-
-    image: ghcr.io/${GITHUB_REPOSITORY_OWNER}/readio-cloud-api:pre
-
-
-    container_name: readio-api-pre
-    restart: always
-    ports:
-      - "8079:8079"
-    volumes:
-      - ./data/pre:/app/data
-    env_file:
-      - ./readio-pre.env
-
-    environment:
-      - PORT=8079
-      - READIO_CLOUD_DB_PATH=/app/data/readio-pre.db
-    healthcheck:
-      test: ["CMD", "./cloud-api", "-check-health"]
-      interval: 60s
-      timeout: 5s
-      retries: 3
-      start_period: 5s
-
-
     logging:
       driver: "json-file"
       options:

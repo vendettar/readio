@@ -8,9 +8,7 @@ export async function deletePlaybackSessionForMaintenance(id: string): Promise<v
   await PlaybackRepository.deletePlaybackSession(id)
 }
 
-export async function clearPlaybackSessionAudioCacheForMaintenance(
-  id: string
-): Promise<boolean> {
+export async function clearPlaybackSessionAudioCacheForMaintenance(id: string): Promise<boolean> {
   return StorageRepository.clearPlaybackSessionAudioCache(id)
 }
 

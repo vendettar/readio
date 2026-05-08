@@ -1,6 +1,6 @@
 import { persistBuiltInTranscriptForTrack } from './downloadBuiltInTranscriptPersistence'
 import { checkDownloadCapacity } from './downloadCapacity'
-import { normalizeDownloadJobOptions, type DownloadJobOptions } from './downloadJobOptions'
+import { type DownloadJobOptions, normalizeDownloadJobOptions } from './downloadJobOptions'
 import { isAbortLikeError } from './fetchUtils'
 import { warn } from './logger'
 import { DownloadsRepository } from './repositories/DownloadsRepository'
@@ -9,7 +9,12 @@ import { toast } from './toast'
 export interface DownloadBlobPersistenceResult {
   ok: boolean
   trackId?: string
-  reason?: 'already_downloaded' | 'capacity_blocked' | 'network_error' | 'quota_error' | 'invalid_country'
+  reason?:
+    | 'already_downloaded'
+    | 'capacity_blocked'
+    | 'network_error'
+    | 'quota_error'
+    | 'invalid_country'
 }
 
 export async function persistDownloadedEpisodeBlob(
@@ -26,14 +31,8 @@ export async function persistDownloadedEpisodeBlob(
   if (!normalized.ok) {
     return { ok: false, reason: normalized.reason }
   }
-  const {
-    episodeTitle,
-    showTitle,
-    artworkUrl,
-    countryAtSave,
-    podcastItunesId,
-    episodeGuid,
-  } = normalized.options
+  const { episodeTitle, showTitle, artworkUrl, countryAtSave, podcastItunesId, episodeGuid } =
+    normalized.options
   const normalizedUrl = normalized.normalizedAudioUrl
 
   const existing = await findExistingTrack({

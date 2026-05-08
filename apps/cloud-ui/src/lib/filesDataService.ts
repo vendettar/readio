@@ -17,7 +17,9 @@ export async function loadFilesDataSnapshot(
 
   const [subtitlesByTrack, currentFolder, folderCounts] = await Promise.all([
     Promise.all(tracks.map((track) => FilesRepository.getFileSubtitlesForTrack(track.id))),
-    currentFolderId !== null ? FilesRepository.getFolder(currentFolderId) : Promise.resolve(undefined),
+    currentFolderId !== null
+      ? FilesRepository.getFolder(currentFolderId)
+      : Promise.resolve(undefined),
     currentFolderId === null && folders.length > 0
       ? Promise.all(
           folders.map(async (folder) => [

@@ -80,38 +80,41 @@ vi.mock('../../dexieDb', () => ({
 
 const { getJsonMock, downloadEpisodeMock, buildDownloadJobOptionsFromCanonicalRemoteMetadataMock } =
   vi.hoisted(() => ({
-  getJsonMock: vi.fn().mockReturnValue(null),
-  downloadEpisodeMock: vi.fn().mockResolvedValue({ ok: true }),
-  buildDownloadJobOptionsFromCanonicalRemoteMetadataMock: vi.fn((input: Record<string, unknown>) => {
-    const metadata = (input.metadata as Record<string, unknown> | null | undefined) ?? null
+    getJsonMock: vi.fn().mockReturnValue(null),
+    downloadEpisodeMock: vi.fn().mockResolvedValue({ ok: true }),
+    buildDownloadJobOptionsFromCanonicalRemoteMetadataMock: vi.fn(
+      (input: Record<string, unknown>) => {
+        const metadata = (input.metadata as Record<string, unknown> | null | undefined) ?? null
 
-    if (
-      typeof input.audioUrl !== 'string' ||
-      typeof input.episodeTitle !== 'string' ||
-      typeof metadata?.showTitle !== 'string' ||
-      typeof metadata.artworkUrl !== 'string' ||
-      typeof metadata.countryAtSave !== 'string' ||
-      typeof metadata.podcastItunesId !== 'string' ||
-      typeof metadata.episodeGuid !== 'string'
-    ) {
-      return null
-    }
+        if (
+          typeof input.audioUrl !== 'string' ||
+          typeof input.episodeTitle !== 'string' ||
+          typeof metadata?.showTitle !== 'string' ||
+          typeof metadata.artworkUrl !== 'string' ||
+          typeof metadata.countryAtSave !== 'string' ||
+          typeof metadata.podcastItunesId !== 'string' ||
+          typeof metadata.episodeGuid !== 'string'
+        ) {
+          return null
+        }
 
-    return {
-      audioUrl: input.audioUrl,
-      episodeTitle: input.episodeTitle,
-      episodeDescription: metadata.description ?? '',
-      showTitle: metadata.showTitle,
-      artworkUrl: metadata.artworkUrl,
-      countryAtSave: metadata.countryAtSave,
-      podcastItunesId: metadata.podcastItunesId,
-      episodeGuid: metadata.episodeGuid,
-      durationSeconds:
-        typeof metadata.durationSeconds === 'number' ? metadata.durationSeconds : undefined,
-      transcriptUrl: typeof metadata.transcriptUrl === 'string' ? metadata.transcriptUrl : undefined,
-      signal: input.signal,
-    }
-  }),
+        return {
+          audioUrl: input.audioUrl,
+          episodeTitle: input.episodeTitle,
+          episodeDescription: metadata.description ?? '',
+          showTitle: metadata.showTitle,
+          artworkUrl: metadata.artworkUrl,
+          countryAtSave: metadata.countryAtSave,
+          podcastItunesId: metadata.podcastItunesId,
+          episodeGuid: metadata.episodeGuid,
+          durationSeconds:
+            typeof metadata.durationSeconds === 'number' ? metadata.durationSeconds : undefined,
+          transcriptUrl:
+            typeof metadata.transcriptUrl === 'string' ? metadata.transcriptUrl : undefined,
+          signal: input.signal,
+        }
+      }
+    ),
   }))
 
 vi.mock('../../storage', () => ({

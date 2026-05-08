@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatDuration } from '../lib/dateUtils'
-import {
-  type Favorite,
-  type FileTrack,
-  type PlaybackSession,
-  type PodcastDownload,
-  type Subscription,
+import type {
+  Favorite,
+  FileTrack,
+  PlaybackSession,
+  PodcastDownload,
+  Subscription,
 } from '../lib/dexieDb'
 import { formatFileSize } from '../lib/formatters'
 import { loadLocalSearchDbSnapshot } from '../lib/localSearchService'
@@ -203,20 +203,21 @@ export function useLocalSearch(
 
         if (isCancelled) return
 
-        const historyResults: LocalSearchResult[] = sliceWithLimit(snapshot.sessions, historyLimit).map(
-          (session) => ({
-            type: 'history',
-            id: `history-${session.id}`,
-            title: session.title || t('unknownTitle'),
-            subtitle:
-              session.showTitle ||
-              (session.source === 'local' ? t('historySourceLocal') : t('historySourcePodcast')),
-            artworkUrl: session.artworkUrl,
-            extraSubtitle: t('historyTitle'),
-            badges: ['history'] as LocalSearchBadge[],
-            data: session,
-          })
-        )
+        const historyResults: LocalSearchResult[] = sliceWithLimit(
+          snapshot.sessions,
+          historyLimit
+        ).map((session) => ({
+          type: 'history',
+          id: `history-${session.id}`,
+          title: session.title || t('unknownTitle'),
+          subtitle:
+            session.showTitle ||
+            (session.source === 'local' ? t('historySourceLocal') : t('historySourcePodcast')),
+          artworkUrl: session.artworkUrl,
+          extraSubtitle: t('historyTitle'),
+          badges: ['history'] as LocalSearchBadge[],
+          data: session,
+        }))
 
         const fileResults: LocalSearchResult[] = await Promise.all(
           sliceWithLimit(snapshot.tracks, fileLimit).map(async ({ track, artworkBlob }) => {

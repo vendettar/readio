@@ -7,7 +7,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { AudioFallbackRecoveryState } from '../../hooks/audioFallbackRecovery'
+import type { AudioFallbackRecoveryState } from '../../hooks/audioProxyFallbackRuntime'
 import { useAudioElementEvents } from '../../hooks/useAudioElementEvents'
 import { useAudioElementSync } from '../../hooks/useAudioElementSync'
 import { useAudioProxyFallback } from '../../hooks/useAudioProxyFallback'
@@ -18,12 +18,12 @@ import { useMediaSession } from '../../hooks/useMediaSession'
 import { usePageVisibility } from '../../hooks/usePageVisibility'
 import { usePlayerController } from '../../hooks/usePlayerController'
 import { useSession } from '../../hooks/useSession'
+import { useTabSync } from '../../hooks/useTabSync'
 import {
   finalizePendingSeek,
   pausePlayerRuntime,
   playPlayerRuntime,
 } from '../../lib/player/playerRuntimeActions'
-import { useTabSync } from '../../hooks/useTabSync'
 import { usePlayerStore } from '../../store/playerStore'
 
 export function GlobalAudioController() {

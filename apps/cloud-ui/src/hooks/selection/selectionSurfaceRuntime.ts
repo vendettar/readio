@@ -1,6 +1,6 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
-import { applyLookupHighlightForWord } from '../../lib/selection/dictCache'
 import type { SelectionState } from '../../lib/selection'
+import { applyLookupHighlightForWord } from '../../lib/selection/dictCache'
 import { useTranscriptStore } from '../../store/transcriptStore'
 import type { SelectionInteractionCancelOptions } from './selectionInteractionRuntime'
 
@@ -16,9 +16,7 @@ export interface SelectionSurfaceRuntimeRefs {
   pendingLookupHighlightWordRef: MutableRefObject<string | null>
 }
 
-function resetSelectionSurfaceState(
-  setState: Dispatch<SetStateAction<SelectionState>>
-): void {
+function resetSelectionSurfaceState(setState: Dispatch<SetStateAction<SelectionState>>): void {
   setState({
     surface: { type: 'none' },
     lookupLoading: false,
@@ -40,7 +38,11 @@ export function shouldIgnoreSelectionSurfaceClose(
     return true
   }
 
-  if (!options?.surfaceId && options?.surface && refs.activeSurfaceTypeRef.current !== options.surface) {
+  if (
+    !options?.surfaceId &&
+    options?.surface &&
+    refs.activeSurfaceTypeRef.current !== options.surface
+  ) {
     return true
   }
 

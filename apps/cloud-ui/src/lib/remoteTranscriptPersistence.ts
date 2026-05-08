@@ -1,12 +1,9 @@
 import { ASRClientError } from './asr'
 import type { ASRCue } from './asr/types'
 import { isPodcastDownloadTrack, isUserUploadTrack } from './db/types'
+import { normalizeAsrAudioUrl, persistRemoteTranscriptRecord } from './remoteTranscriptResource'
 import { DownloadsRepository } from './repositories/DownloadsRepository'
 import { FilesRepository } from './repositories/FilesRepository'
-import {
-  normalizeAsrAudioUrl,
-  persistRemoteTranscriptRecord,
-} from './remoteTranscriptResource'
 
 const ASR_LOCAL_SUBTITLE_PREFIX = 'ASR'
 
@@ -118,7 +115,11 @@ export async function persistAsrResult(options: {
       }
 
       if (await DownloadsRepository.shouldAutoSetActive(localTrackId, taskStartedAt)) {
-        await DownloadsRepository.setActiveSubtitle(localTrackId, persistResult.fileSubtitleId, false)
+        await DownloadsRepository.setActiveSubtitle(
+          localTrackId,
+          persistResult.fileSubtitleId,
+          false
+        )
       }
       return
     }

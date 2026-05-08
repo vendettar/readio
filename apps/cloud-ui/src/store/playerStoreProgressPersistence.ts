@@ -4,7 +4,7 @@ import {
   PERSIST_PLAYBACK_PROGRESS_REASON,
   persistEndedPlaybackProgress,
   persistPlaybackProgressSnapshot,
-} from '../lib/player/playerProgressPersistenceService'
+} from '../lib/player/session/playerProgressPersistenceService'
 
 let lastProgressSaveTime = 0
 

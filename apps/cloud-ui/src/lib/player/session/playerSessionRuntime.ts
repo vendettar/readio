@@ -1,8 +1,8 @@
-import type { PlaybackSession } from '../dexieDb'
-import { log } from '../logger'
-import { PlaybackRepository } from '../repositories/PlaybackRepository'
-import { usePlayerStore } from '../../store/playerStore'
-import { resolvePlaybackStateIdentityKey } from './playbackIdentity'
+import { usePlayerStore } from '../../../store/playerStore'
+import type { PlaybackSession } from '../../dexieDb'
+import { log } from '../../logger'
+import { PlaybackRepository } from '../../repositories/PlaybackRepository'
+import { resolvePlaybackStateIdentityKey } from '../playbackIdentity'
 import {
   applyPlaybackSessionRestore,
   type RestoreAppliedEntry,
@@ -31,7 +31,10 @@ export function applyExistingManagedPlaybackSession(
 }
 
 export function resolveCurrentPlaybackRestoreTarget(
-  state: Pick<ReturnType<typeof usePlayerStore.getState>, 'sessionId' | 'localTrackId' | 'audioUrl' | 'episodeMetadata'> = usePlayerStore.getState()
+  state: Pick<
+    ReturnType<typeof usePlayerStore.getState>,
+    'sessionId' | 'localTrackId' | 'audioUrl' | 'episodeMetadata'
+  > = usePlayerStore.getState()
 ): PlaybackRestoreTarget | null {
   if (!state.sessionId) {
     return null

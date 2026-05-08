@@ -1,16 +1,16 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Faro } from '@grafana/faro-web-sdk'
-import { DEFAULTS } from '../runtimeConfig.defaults'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { reportError } from '../errorReporter'
 import {
   initializeFaro,
   reportSchemaValidationError,
   resetFaroForTests,
   sanitizeValue,
 } from '../faro'
-import { reportError } from '../errorReporter'
 import type { AppConfig } from '../runtimeConfig'
+import { DEFAULTS } from '../runtimeConfig.defaults'
 
 const baseConfig: Pick<
   AppConfig,

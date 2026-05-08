@@ -1,9 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { getAsrReadinessUpdatedEventName, isAsrReadyForGeneration } from '../../lib/asr/readiness'
 
-export function useAsrGenerationReadiness(
-  shouldEvaluateAsrReadiness: boolean
-): boolean | null {
+export function useAsrGenerationReadiness(shouldEvaluateAsrReadiness: boolean): boolean | null {
   const [asrGenerationReady, setAsrGenerationReady] = useState<boolean | null>(null)
   const [asrReadinessVersion, setAsrReadinessVersion] = useState(0)
   const asrReadinessVersionRef = useRef(0)

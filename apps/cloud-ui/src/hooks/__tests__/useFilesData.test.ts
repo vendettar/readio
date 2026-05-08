@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useFilesData } from '../useFilesData'
 import { loadFilesDataSnapshot } from '../../lib/filesDataService'
+import { useFilesData } from '../useFilesData'
 
 vi.mock('../../lib/filesDataService', () => ({
   loadFilesDataSnapshot: vi.fn(),
@@ -65,14 +65,34 @@ describe('useFilesData', () => {
       const second = result.current.loadData()
       resolverB?.({
         folders: [],
-        tracks: [{ id: 'track-b', folderId: 'folder-2', name: 'B', audioId: 'audio-b', sizeBytes: 1, createdAt: 1, sourceType: 'user_upload' } as never],
+        tracks: [
+          {
+            id: 'track-b',
+            folderId: 'folder-2',
+            name: 'B',
+            audioId: 'audio-b',
+            sizeBytes: 1,
+            createdAt: 1,
+            sourceType: 'user_upload',
+          } as never,
+        ],
         subtitles: [],
         currentFolder: { id: 'folder-2', name: 'Folder 2', createdAt: 1 } as never,
         folderCounts: {},
       })
       resolverA?.({
         folders: [],
-        tracks: [{ id: 'track-a', folderId: null, name: 'A', audioId: 'audio-a', sizeBytes: 1, createdAt: 1, sourceType: 'user_upload' } as never],
+        tracks: [
+          {
+            id: 'track-a',
+            folderId: null,
+            name: 'A',
+            audioId: 'audio-a',
+            sizeBytes: 1,
+            createdAt: 1,
+            sourceType: 'user_upload',
+          } as never,
+        ],
         subtitles: [],
         currentFolder: undefined,
         folderCounts: {},

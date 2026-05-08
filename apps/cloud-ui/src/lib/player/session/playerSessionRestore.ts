@@ -1,6 +1,6 @@
-import type { EpisodeMetadata } from './playbackMetadata'
-import { createCanonicalRemoteEpisodeMetadata, normalizeCountryAtSave } from './playbackMetadata'
-import type { ExplorePlaybackSession, PlaybackSession } from '../dexieDb'
+import type { ExplorePlaybackSession, PlaybackSession } from '../../dexieDb'
+import type { EpisodeMetadata } from '../playbackMetadata'
+import { createCanonicalRemoteEpisodeMetadata, normalizeCountryAtSave } from '../playbackMetadata'
 
 export interface RestoredPlaybackState {
   sessionId: string

@@ -7,8 +7,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useEpisodeStatus } from '@/hooks/useEpisodeStatus'
 import {
   buildDownloadJobOptionsFromEpisodeProps,
-  type EpisodeDownloadProps,
   downloadEpisode,
+  type EpisodeDownloadProps,
   removeDownloadedTrack,
 } from '@/lib/downloadService'
 import { logError } from '@/lib/logger'

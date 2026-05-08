@@ -1,10 +1,10 @@
+import type { ASRCue } from './asr/types'
 import { CLOUD_BACKEND_FALLBACK_CLASSES, fetchTextWithFallback } from './fetchUtils'
 import { log } from './logger'
 import { normalizePodcastAudioUrl } from './networking/urlUtils'
 import { PlaybackRepository } from './repositories/PlaybackRepository'
 import { abortRequestsWithPrefix, deduplicatedFetch, isRequestInflight } from './requestManager'
 import { parseSubtitles } from './subtitles'
-import type { ASRCue } from './asr/types'
 
 export const REMOTE_TRANSCRIPT_READ_STATUS = {
   FRESH: 'fresh',

@@ -80,9 +80,7 @@ describe('useFileProcessing', () => {
     const file = new File(['audio'], 'episode.mp3', { type: 'audio/mpeg' })
     const { event, ref: inputRef } = createInputRefWithFiles([file])
 
-    const { result } = renderHook(() =>
-      useFileProcessing({ currentFolderId: null, onComplete })
-    )
+    const { result } = renderHook(() => useFileProcessing({ currentFolderId: null, onComplete }))
 
     await act(async () => {
       await result.current.handleAudioInputChange(event, inputRef)
@@ -99,9 +97,7 @@ describe('useFileProcessing', () => {
     const clearTargetTrackId = vi.fn()
     const { event, ref: inputRef } = createInputRefWithFiles([new File(['sub'], 'episode.srt')])
 
-    const { result } = renderHook(() =>
-      useFileProcessing({ currentFolderId: null, onComplete })
-    )
+    const { result } = renderHook(() => useFileProcessing({ currentFolderId: null, onComplete }))
 
     await act(async () => {
       await result.current.handleSubtitleInputChange(event, 'track-1', inputRef, clearTargetTrackId)

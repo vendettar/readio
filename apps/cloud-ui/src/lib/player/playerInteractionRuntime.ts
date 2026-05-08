@@ -1,5 +1,5 @@
-import { toast } from '../toast'
 import { usePlayerStore } from '../../store/playerStore'
+import { toast } from '../toast'
 
 export function isPlayerCurrentlyPlaying(): boolean {
   return usePlayerStore.getState().isPlaying
@@ -23,10 +23,7 @@ export function resumePlayerIfNeeded(shouldResume: boolean): void {
   usePlayerStore.getState().play()
 }
 
-export function shouldContinueAutoplayRetry(
-  expectedAudioUrl: string,
-  cancelled: boolean
-): boolean {
+export function shouldContinueAutoplayRetry(expectedAudioUrl: string, cancelled: boolean): boolean {
   if (cancelled) {
     return false
   }

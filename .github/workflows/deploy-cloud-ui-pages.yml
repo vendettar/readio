@@ -1,0 +1,56 @@
+name: Deploy Cloud UI (Cloudflare Pages)
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'apps/cloud-ui/**'
+      - '.github/workflows/deploy-cloud-ui-pages.yml'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cloud-ui-pages-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: cloud-ui-production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build Cloud UI
+        env:
+          VITE_API_BASE_URL: ${{ vars.CLOUD_UI_VITE_API_BASE_URL }}
+        run: pnpm -C apps/cloud-ui build
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          command: >-
+            pages deploy apps/cloud-ui/dist
+            --project-name=${{ vars.CLOUDFLARE_PAGES_PROJECT_NAME }}
+            --branch=main

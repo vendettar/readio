@@ -8,9 +8,7 @@ import {
   matchesEditorPickRouteID,
   upsertEditorPickInCache,
 } from '@/lib/discovery/editorPicks'
-import {
-  findEpisodeInPodcastEpisodesCache,
-} from '@/lib/discovery/episodeCache'
+import { findEpisodeInPodcastEpisodesCache } from '@/lib/discovery/episodeCache'
 import { compactKeyToEpisodeIdentity } from '@/lib/routes/compactKey'
 import { normalizeCountryParam } from '@/lib/routes/podcastRoutes'
 import { usePodcastDetailAndEpisodes } from './usePodcastDetailAndEpisodes'
@@ -110,13 +108,7 @@ export function useEpisodeResolution(
     episodesError: !episode ? episodesError : null,
   })
   const notFound =
-    isLoading || resolutionError
-      ? null
-      : !podcast
-        ? 'podcast'
-        : !episode
-          ? 'episode'
-          : null
+    isLoading || resolutionError ? null : !podcast ? 'podcast' : !episode ? 'episode' : null
 
   return {
     resolvedContent,

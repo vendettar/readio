@@ -1,6 +1,5 @@
 import { useMemo } from 'react'
 import type { SearchEpisode, SearchPodcast } from '../lib/discovery'
-import { useDiscoverySearch } from './useDiscoverySearch'
 import {
   buildSearchSection,
   type GlobalSearchOverallState,
@@ -8,6 +7,7 @@ import {
   resolveGlobalSearchPresentation,
   type SearchSection,
 } from './searchSection'
+import { useDiscoverySearch } from './useDiscoverySearch'
 import {
   type GlobalSearchLimits,
   type LocalSearchBadge,

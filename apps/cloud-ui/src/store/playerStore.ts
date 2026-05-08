@@ -1,11 +1,12 @@
 import { create } from 'zustand'
 import { logError, warn } from '../lib/logger'
-import {
-  normalizeEpisodeMetadata,
-  type EpisodeMetadataInput,
-} from '../lib/player/playbackMetadata'
+import { type EpisodeMetadataInput, normalizeEpisodeMetadata } from '../lib/player/playbackMetadata'
 import { collectPlaybackBlobUrls, revokePlaybackBlobUrls } from '../lib/player/playerBlobUrls'
 import { getAppConfig } from '../lib/runtimeConfig'
+import {
+  type PlayerStoreAudioTransitionState,
+  resolvePlayerStoreAudioTransition,
+} from './playerStoreAudioTransition'
 import {
   applyLoadedSubtitles,
   createPlayerStoreBlobLoadState,
@@ -15,31 +16,28 @@ import {
   resetTranscriptAfterMediaLoad,
 } from './playerStoreMediaLoading'
 import {
-  persistPlayerEndedProgress,
-  persistPlayerProgressOnUnmount,
-  persistPlayerProgressUpdate,
-} from './playerStoreProgressPersistence'
-import {
   resolvePauseState,
-  resolvePlayState,
   resolvePlayerErrorState,
+  resolvePlayState,
   resolveTogglePlayPauseState,
 } from './playerStorePlaybackControls'
-import {
-  resolvePlayerStoreAudioTransition,
-  type PlayerStoreAudioTransitionState,
-} from './playerStoreAudioTransition'
-import {
-  restorePlayerStoreSession,
-  type PlayerStoreSessionRestoreState,
-} from './playerStoreSessionRestore'
 import {
   persistPlayerPlaybackRate,
   persistPlayerVolume,
   readInitialPlayerPlaybackRate,
   readInitialPlayerVolume,
 } from './playerStorePreferences'
+import {
+  persistPlayerEndedProgress,
+  persistPlayerProgressOnUnmount,
+  persistPlayerProgressUpdate,
+} from './playerStoreProgressPersistence'
+import {
+  type PlayerStoreSessionRestoreState,
+  restorePlayerStoreSession,
+} from './playerStoreSessionRestore'
 import { useTranscriptStore } from './transcriptStore'
+
 export type {
   CanonicalEpisodeMetadata,
   CanonicalRemoteEpisodeMetadata,
@@ -198,17 +196,14 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     const normalizedMetadata = normalizeEpisodeMetadata(metadata)
     const nextDurationSeconds = resolveMetadataDurationSeconds(normalizedMetadata)
 
-    const transition = resolvePlayerStoreAudioTransition(
-      state as PlayerStoreAudioTransitionState,
-      {
-        url: normalizedUrl,
-        title,
-        coverArt,
-        metadata: normalizedMetadata,
-        isPlayingOverride,
-        nextDurationSeconds,
-      }
-    )
+    const transition = resolvePlayerStoreAudioTransition(state as PlayerStoreAudioTransitionState, {
+      url: normalizedUrl,
+      title,
+      coverArt,
+      metadata: normalizedMetadata,
+      isPlayingOverride,
+      nextDurationSeconds,
+    })
 
     if (transition.kind === 'same-track') {
       set(transition.nextStatePatch)

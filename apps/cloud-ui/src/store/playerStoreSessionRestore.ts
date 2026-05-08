@@ -1,6 +1,6 @@
 import { warn } from '../lib/logger'
 import { revokePlaybackBlobUrls } from '../lib/player/playerBlobUrls'
-import { loadPlayerSessionRestore } from '../lib/player/playerSessionRestoreService'
+import { loadPlayerSessionRestore } from '../lib/player/session/playerSessionRestoreService'
 import { usePlayerSurfaceStore } from './playerSurfaceStore'
 import { useTranscriptStore } from './transcriptStore'
 

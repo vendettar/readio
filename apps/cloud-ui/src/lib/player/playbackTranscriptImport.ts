@@ -4,9 +4,9 @@ import { persistImportedTranscriptForPlaybackIdentity } from '../remoteTranscrip
 import { DownloadsRepository } from '../repositories/DownloadsRepository'
 import { FilesRepository } from '../repositories/FilesRepository'
 import { parseSubtitles } from '../subtitles'
+import type { PlaybackExportContext } from './export/playbackExportContext'
 import { resolvePlaybackSourceAudioUrl, withPlaybackRequestMode } from './playbackMetadata'
 import { PLAYBACK_REQUEST_MODE } from './playbackMode'
-import type { PlaybackExportContext } from './playbackExportContext'
 
 export interface TranscriptImportResult {
   ok: boolean
@@ -155,10 +155,7 @@ export async function importTranscriptForPlaybackContext(
   useTranscriptStore.getState().setSubtitles(cues)
   const episodeMetadata = context.identity.episodeMetadata
   if (episodeMetadata) {
-    const playbackMetadata = withPlaybackRequestMode(
-      episodeMetadata,
-      PLAYBACK_REQUEST_MODE.DEFAULT
-    )
+    const playbackMetadata = withPlaybackRequestMode(episodeMetadata, PLAYBACK_REQUEST_MODE.DEFAULT)
     if (playbackMetadata) {
       usePlayerStore.getState().setEpisodeMetadata(playbackMetadata)
     }

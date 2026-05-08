@@ -6,13 +6,13 @@ import {
   handleAudioPlaying,
   handleAudioWaiting,
 } from '../lib/player/playerRuntimeActions'
-import type { AudioFallbackRecoveryState } from './audioFallbackRecovery'
 import {
   processAudioEndedEvent,
   processAudioErrorEvent,
   processAudioTimeUpdate,
   shouldIgnoreAudioPauseEvent,
 } from './audioElementEventRuntime'
+import type { AudioFallbackRecoveryState } from './audioProxyFallbackRuntime'
 import { useEventListener } from './useEventListener'
 
 interface UseAudioElementEventsParams {

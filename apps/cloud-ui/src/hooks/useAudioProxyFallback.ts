@@ -6,9 +6,9 @@ import {
   beginProxyAudioRecovery,
   shouldResumeAfterProxyAudioRecovery,
 } from '../lib/player/playerRuntimeActions'
-import type { AudioFallbackRecoveryState } from './audioFallbackRecovery'
 import {
   AUDIO_DIRECT_FAILOVER_TIMEOUT_MS,
+  type AudioFallbackRecoveryState,
   beginAudioProxyRecovery,
   clearAudioProxyRecoveryState,
   finalizeAudioProxyRecovery,
@@ -85,13 +85,10 @@ export function useAudioProxyFallback({
       }
 
       try {
-        warn(
-          getAudioProxyFailoverLogMessage(reason),
-          {
-            original: audioUrl,
-            proxied: plan.proxiedUrl,
-          }
-        )
+        warn(getAudioProxyFailoverLogMessage(reason), {
+          original: audioUrl,
+          proxied: plan.proxiedUrl,
+        })
 
         beginAudioProxyRecovery({
           audio,

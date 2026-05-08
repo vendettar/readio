@@ -65,9 +65,7 @@ function getMimeTypeFromUrl(url: string): string | undefined {
   }
 }
 
-export function buildMediaSessionMetadataInit(
-  currentTrack: MediaSessionTrack
-): MediaMetadataInit {
+export function buildMediaSessionMetadataInit(currentTrack: MediaSessionTrack): MediaMetadataInit {
   const artwork = currentTrack.artworkUrl
     ? [
         {

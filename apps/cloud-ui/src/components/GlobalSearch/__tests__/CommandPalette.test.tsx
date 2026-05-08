@@ -1,8 +1,8 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { buildEpisodeCompactKey } from '../../../lib/discovery/editorPicks'
 import { makeSearchPodcast } from '../../../lib/discovery/__tests__/fixtures'
+import { buildEpisodeCompactKey } from '../../../lib/discovery/editorPicks'
 import { useSearchStore } from '../../../store/searchStore'
 import { CommandPalette } from '../CommandPalette'
 

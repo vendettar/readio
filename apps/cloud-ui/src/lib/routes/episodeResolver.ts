@@ -17,8 +17,8 @@
 
 import type { QueryClient } from '@tanstack/react-query'
 import type { Episode, Podcast, SearchEpisode } from '@/lib/discovery'
-import { getCanonicalSearchEpisodeIdentity } from '@/lib/discovery/searchEpisodeContract'
 import { ensurePodcastDetail, ensurePodcastEpisodes } from '@/lib/discovery/queryCache'
+import { getCanonicalSearchEpisodeIdentity } from '@/lib/discovery/searchEpisodeContract'
 import { episodeIdentityToCompactKey } from '@/lib/routes/compactKey'
 import { normalizeEpisodeTitle } from '@/lib/routes/episodeTitleNormalization'
 import {

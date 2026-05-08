@@ -1,15 +1,15 @@
-import type { ASRCue } from '../asr/types'
-import type { ExplorePlaybackSession, PlaybackSession } from '../dexieDb'
-import { isNavigableExplorePlaybackSession } from '../dexieDb'
-import { log, warn } from '../logger'
+import type { ASRCue } from '../../asr/types'
+import type { ExplorePlaybackSession, PlaybackSession } from '../../dexieDb'
+import { isNavigableExplorePlaybackSession } from '../../dexieDb'
+import { log, warn } from '../../logger'
+import { DownloadsRepository } from '../../repositories/DownloadsRepository'
+import { FilesRepository } from '../../repositories/FilesRepository'
+import { PlaybackRepository } from '../../repositories/PlaybackRepository'
 import {
   buildRestoredLocalBlobState,
   buildRestoredRemoteSessionState,
   type RestoredPlaybackState,
 } from './playerSessionRestore'
-import { DownloadsRepository } from '../repositories/DownloadsRepository'
-import { FilesRepository } from '../repositories/FilesRepository'
-import { PlaybackRepository } from '../repositories/PlaybackRepository'
 
 export interface PlayerSessionRestoreResult {
   hasResumableSession: boolean
@@ -18,7 +18,9 @@ export interface PlayerSessionRestoreResult {
   subtitleCues: ASRCue[] | null
 }
 
-async function resolveTrackArtwork(trackId: string | null | undefined): Promise<string | Blob | null> {
+async function resolveTrackArtwork(
+  trackId: string | null | undefined
+): Promise<string | Blob | null> {
   if (!trackId) return null
 
   try {

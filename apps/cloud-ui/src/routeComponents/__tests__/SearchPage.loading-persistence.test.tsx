@@ -3,9 +3,9 @@ import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as EpisodeRow from '../../components/EpisodeRow'
 import { type GlobalSearchResults, useGlobalSearch } from '../../hooks/useGlobalSearch'
-import { makeSearchPodcast } from '../../lib/discovery/__tests__/fixtures'
 import type { LocalSearchResult } from '../../hooks/useLocalSearch'
 import type { PodcastDownload } from '../../lib/db/types'
+import { makeSearchPodcast } from '../../lib/discovery/__tests__/fixtures'
 import SearchPage from '../SearchPage'
 
 const skeletonSpy = vi.spyOn(EpisodeRow, 'EpisodeListSkeleton')
@@ -14,9 +14,7 @@ const makeSection = <T,>(items: T[] = [], status: 'idle' | 'loading' | 'ready' =
   status,
 })
 
-function buildGlobalSearchResults(
-  overrides: Partial<GlobalSearchResults>
-): GlobalSearchResults {
+function buildGlobalSearchResults(overrides: Partial<GlobalSearchResults>): GlobalSearchResults {
   const podcastSection = overrides.podcastSection ?? makeSection([])
   const episodeSection = overrides.episodeSection ?? makeSection([])
   const localSection = overrides.localSection ?? makeSection([])
@@ -147,11 +145,11 @@ describe('SearchPage Loading Persistence', () => {
   it('keeps prior results visible while loading refreshed results', () => {
     vi.mocked(useGlobalSearch).mockReturnValue(
       buildGlobalSearchResults({
-      podcastSection: makeSection([]),
-      episodeSection: makeSection([]),
-      localSection: makeSection([priorLocalResult], 'loading'),
-      isLoading: true,
-      isEmpty: false,
+        podcastSection: makeSection([]),
+        episodeSection: makeSection([]),
+        localSection: makeSection([priorLocalResult], 'loading'),
+        isLoading: true,
+        isEmpty: false,
       })
     )
 
@@ -166,11 +164,11 @@ describe('SearchPage Loading Persistence', () => {
   it('shows skeleton and disables nested announcement when loading without results', () => {
     vi.mocked(useGlobalSearch).mockReturnValue(
       buildGlobalSearchResults({
-      podcastSection: makeSection([], 'loading'),
-      episodeSection: makeSection([], 'loading'),
-      localSection: makeSection([], 'loading'),
-      isLoading: true,
-      isEmpty: true,
+        podcastSection: makeSection([], 'loading'),
+        episodeSection: makeSection([], 'loading'),
+        localSection: makeSection([], 'loading'),
+        isLoading: true,
+        isEmpty: true,
       })
     )
 
@@ -198,21 +196,21 @@ describe('SearchPage Loading Persistence', () => {
   it('keeps ready sections visible while another section is still loading', () => {
     vi.mocked(useGlobalSearch).mockReturnValue(
       buildGlobalSearchResults({
-      podcastSection: makeSection(
-        [
-          makeSearchPodcast({
-            podcastItunesId: 'pod-1',
-            title: 'Podcast Result',
-            author: 'Host',
-            artwork: 'https://example.com/show.jpg',
-          }),
-        ],
-        'ready'
-      ),
-      episodeSection: makeSection([], 'loading'),
-      localSection: makeSection([]),
-      isLoading: true,
-      isEmpty: false,
+        podcastSection: makeSection(
+          [
+            makeSearchPodcast({
+              podcastItunesId: 'pod-1',
+              title: 'Podcast Result',
+              author: 'Host',
+              artwork: 'https://example.com/show.jpg',
+            }),
+          ],
+          'ready'
+        ),
+        episodeSection: makeSection([], 'loading'),
+        localSection: makeSection([]),
+        isLoading: true,
+        isEmpty: false,
       })
     )
 
@@ -229,32 +227,32 @@ describe('SearchPage Loading Persistence', () => {
     vi.mocked(useGlobalSearch)
       .mockReturnValueOnce(
         buildGlobalSearchResults({
-        podcastSection: makeSection([
-          makeSearchPodcast({
-            podcastItunesId: 'pod-1',
-            title: 'Apple Podcast',
-            author: 'Host',
-          }),
-        ]),
-        episodeSection: makeSection([]),
-        localSection: makeSection([priorLocalResult]),
-        isLoading: false,
-        isEmpty: false,
+          podcastSection: makeSection([
+            makeSearchPodcast({
+              podcastItunesId: 'pod-1',
+              title: 'Apple Podcast',
+              author: 'Host',
+            }),
+          ]),
+          episodeSection: makeSection([]),
+          localSection: makeSection([priorLocalResult]),
+          isLoading: false,
+          isEmpty: false,
         })
       )
       .mockReturnValue(
         buildGlobalSearchResults({
-        podcastSection: makeSection([
-          makeSearchPodcast({
-            podcastItunesId: 'pod-1',
-            title: 'Apple Podcast',
-            author: 'Host',
-          }),
-        ]),
-        episodeSection: makeSection([], 'loading'),
-        localSection: makeSection([priorLocalResult]),
-        isLoading: true,
-        isEmpty: false,
+          podcastSection: makeSection([
+            makeSearchPodcast({
+              podcastItunesId: 'pod-1',
+              title: 'Apple Podcast',
+              author: 'Host',
+            }),
+          ]),
+          episodeSection: makeSection([], 'loading'),
+          localSection: makeSection([priorLocalResult]),
+          isLoading: true,
+          isEmpty: false,
         })
       )
 
@@ -279,35 +277,35 @@ describe('SearchPage Loading Persistence', () => {
     vi.mocked(useGlobalSearch)
       .mockReturnValueOnce(
         buildGlobalSearchResults({
-        podcastSection: makeSection([
-          makeSearchPodcast({
-            podcastItunesId: 'pod-1',
-            title: 'Apple Podcast',
-            author: 'Host',
-          }),
-        ]),
-        episodeSection: makeSection([]),
-        localSection: makeSection([priorLocalResult]),
-        isLoading: false,
-        isEmpty: false,
+          podcastSection: makeSection([
+            makeSearchPodcast({
+              podcastItunesId: 'pod-1',
+              title: 'Apple Podcast',
+              author: 'Host',
+            }),
+          ]),
+          episodeSection: makeSection([]),
+          localSection: makeSection([priorLocalResult]),
+          isLoading: false,
+          isEmpty: false,
         })
       )
       .mockReturnValueOnce(
         buildGlobalSearchResults({
-        podcastSection: makeSection([], 'loading'),
-        episodeSection: makeSection([], 'loading'),
-        localSection: makeSection([], 'loading'),
-        isLoading: true,
-        isEmpty: false,
+          podcastSection: makeSection([], 'loading'),
+          episodeSection: makeSection([], 'loading'),
+          localSection: makeSection([], 'loading'),
+          isLoading: true,
+          isEmpty: false,
         })
       )
       .mockReturnValue(
         buildGlobalSearchResults({
-        podcastSection: makeSection([]),
-        episodeSection: makeSection([]),
-        localSection: makeSection([]),
-        isLoading: false,
-        isEmpty: true,
+          podcastSection: makeSection([]),
+          episodeSection: makeSection([]),
+          localSection: makeSection([]),
+          isLoading: false,
+          isEmpty: true,
         })
       )
 
@@ -332,20 +330,20 @@ describe('SearchPage Loading Persistence', () => {
     vi.mocked(useGlobalSearch)
       .mockReturnValueOnce(
         buildGlobalSearchResults({
-        podcastSection: makeSection([]),
-        episodeSection: makeSection([]),
-        localSection: makeSection([priorLocalResult]),
-        isLoading: false,
-        isEmpty: false,
+          podcastSection: makeSection([]),
+          episodeSection: makeSection([]),
+          localSection: makeSection([priorLocalResult]),
+          isLoading: false,
+          isEmpty: false,
         })
       )
       .mockReturnValue(
         buildGlobalSearchResults({
-        podcastSection: makeSection([]),
-        episodeSection: makeSection([]),
-        localSection: makeSection([priorLocalResult], 'loading'),
-        isLoading: true,
-        isEmpty: false,
+          podcastSection: makeSection([]),
+          episodeSection: makeSection([]),
+          localSection: makeSection([priorLocalResult], 'loading'),
+          isLoading: true,
+          isEmpty: false,
         })
       )
 

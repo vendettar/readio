@@ -12,13 +12,13 @@ import { Button } from '../components/ui/button'
 import { EmptyState } from '../components/ui/empty-state'
 import { LoadingSpinner } from '../components/ui/loading-spinner'
 import { Skeleton } from '../components/ui/skeleton'
-import { useEpisodePlayback } from '../hooks/useEpisodePlayback'
-import { type LocalSearchResult, useGlobalSearch } from '../hooks/useGlobalSearch'
 import {
   hasSearchText,
   resolveGlobalSearchPresentation,
   trimSearchQuery,
 } from '../hooks/searchSection'
+import { useEpisodePlayback } from '../hooks/useEpisodePlayback'
+import { type LocalSearchResult, useGlobalSearch } from '../hooks/useGlobalSearch'
 import { executeLocalSearchAction } from '../lib/localSearchActions'
 import { PLAYBACK_REQUEST_MODE } from '../lib/player/playbackMode'
 import { buildPodcastShowRoute } from '../lib/routes/podcastRoutes'

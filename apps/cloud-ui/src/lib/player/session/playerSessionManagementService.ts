@@ -1,15 +1,15 @@
-import type { PlaybackSession } from '../dexieDb'
+import type { PlaybackSession } from '../../dexieDb'
+import { PlaybackRepository } from '../../repositories/PlaybackRepository'
+import { generateSessionId } from '../../session'
+import type { EpisodeMetadata } from '../playbackMetadata'
+import {
+  isCanonicalRemoteEpisodeMetadata,
+  PLAYBACK_METADATA_KIND,
+} from '../playbackMetadata'
 import {
   buildManagedPlaybackSessionCreateInput,
   resolveSessionAudioSnapshot,
 } from './playbackSessionFactory'
-import type { EpisodeMetadata } from './playbackMetadata'
-import {
-  isCanonicalRemoteEpisodeMetadata,
-  PLAYBACK_METADATA_KIND,
-} from './playbackMetadata'
-import { PlaybackRepository } from '../repositories/PlaybackRepository'
-import { generateSessionId } from '../session'
 
 export const CREATE_MANAGED_PLAYBACK_SESSION_REASON = {
   INVALID_REMOTE_METADATA: 'invalid_remote_metadata',
@@ -22,8 +22,7 @@ export type CreateManagedPlaybackSessionResult =
     }
   | {
       ok: false
-      reason:
-        (typeof CREATE_MANAGED_PLAYBACK_SESSION_REASON)[keyof typeof CREATE_MANAGED_PLAYBACK_SESSION_REASON]
+      reason: (typeof CREATE_MANAGED_PLAYBACK_SESSION_REASON)[keyof typeof CREATE_MANAGED_PLAYBACK_SESSION_REASON]
     }
 
 export async function findManagedPlaybackSessionCandidate(input: {

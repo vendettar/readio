@@ -45,11 +45,11 @@ const CommandPalette = lazy(async () => {
 
 function CommandPaletteFallback() {
   return (
-    <div role="search" className="relative w-full px-4 pb-2">
+    <search className="relative w-full px-4 pb-2">
       <div className="flex h-10 w-full items-center rounded-md border border-input bg-background px-3 text-sm text-muted-foreground">
         Search
       </div>
-    </div>
+    </search>
   )
 }
 

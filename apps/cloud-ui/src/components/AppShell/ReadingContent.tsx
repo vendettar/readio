@@ -11,9 +11,7 @@ import {
   withPlaybackRequestMode,
 } from '../../lib/player/playbackMetadata'
 import { PLAYBACK_REQUEST_MODE } from '../../lib/player/playbackMode'
-import {
-  startOnlineASRForCurrentTrack,
-} from '../../lib/remoteTranscript'
+import { startOnlineASRForCurrentTrack } from '../../lib/remoteTranscript'
 import { findSubtitleIndex } from '../../lib/subtitles'
 import { cn } from '../../lib/utils'
 import { usePlayerStore } from '../../store/playerStore'
@@ -24,10 +22,7 @@ import { Button } from '../ui/button'
 import { CircularProgress } from '../ui/circular-progress'
 import { ZoomControl } from '../ZoomControl'
 import styles from './FullPlayer.module.css'
-import {
-  deriveReadingContentCtaState,
-  READING_CONTENT_CTA_STATE,
-} from './readingContentCta'
+import { deriveReadingContentCtaState, READING_CONTENT_CTA_STATE } from './readingContentCta'
 import { useReadingContentTranscriptState } from './useReadingContentTranscriptState'
 
 interface ReadingContentProps {

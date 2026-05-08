@@ -69,10 +69,10 @@ export function useAppInitialization() {
           logError('[Init] Retention module failed to load', err)
         })
 
-      void import('../lib/remoteTranscriptMaintenance')
-        .then(({ runRemoteTranscriptMaintenanceTask }) => {
+      void import('../lib/remoteTranscript')
+        .then(({ runRemoteTranscriptCacheMaintenance }) => {
           void Promise.resolve()
-            .then(() => runRemoteTranscriptMaintenanceTask())
+            .then(() => runRemoteTranscriptCacheMaintenance())
             .catch((err) => {
               logError('[Init] Remote transcript cache maintenance failed', err)
             })

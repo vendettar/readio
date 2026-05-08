@@ -1,5 +1,5 @@
-import type { TFunction } from 'i18next'
 import { act } from '@testing-library/react'
+import type { TFunction } from 'i18next'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { usePlayerStore } from '../../store/playerStore'
 import { useSleepTimerStore } from '../../store/sleepTimerStore'

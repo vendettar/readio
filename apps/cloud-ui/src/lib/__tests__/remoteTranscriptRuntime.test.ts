@@ -40,7 +40,10 @@ describe('remoteTranscriptRuntime', () => {
   })
 
   it('clears ASR state only for the current track', () => {
-    const setAbortAsrControllerSpy = vi.spyOn(useTranscriptStore.getState(), 'setAbortAsrController')
+    const setAbortAsrControllerSpy = vi.spyOn(
+      useTranscriptStore.getState(),
+      'setAbortAsrController'
+    )
     const setAsrActiveTrackKeySpy = vi.spyOn(useTranscriptStore.getState(), 'setAsrActiveTrackKey')
     const setTranscriptIngestionErrorSpy = vi.spyOn(
       useTranscriptStore.getState(),

@@ -1,5 +1,5 @@
-import type { ASRCue } from '../asr/types'
-import { PlaybackRepository } from '../repositories/PlaybackRepository'
+import type { ASRCue } from '../../asr/types'
+import { PlaybackRepository } from '../../repositories/PlaybackRepository'
 
 export async function loadSessionSubtitleCues(session: {
   subtitleId?: string | null

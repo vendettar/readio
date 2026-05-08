@@ -1,11 +1,5 @@
-import {
-  type EpisodeMetadataInput,
-  usePlayerStore,
-} from '../store/playerStore'
-import {
-  TRANSCRIPT_INGESTION_STATUS,
-  useTranscriptStore,
-} from '../store/transcriptStore'
+import { type EpisodeMetadataInput, usePlayerStore } from '../store/playerStore'
+import { TRANSCRIPT_INGESTION_STATUS, useTranscriptStore } from '../store/transcriptStore'
 import { ASRClientError, type ASRProvider, transcribeAudioWithRetry } from './asr'
 import { backgroundAsrQueue } from './asr/queue'
 import type { ASRCue } from './asr/types'
@@ -31,7 +25,9 @@ interface OnlineAsrFlowDeps {
   asrProviderCooldowns: Map<ASRProvider, number>
   buildAsrTrackKey: (expectedAudioUrl: string, localTrackId: string | null) => string
   isTrackStillCurrent: (expectedAudioUrl: string, requestId: number) => boolean
-  resolveAsrApiKeyAndSettings: () => Promise<ResolveAsrConfigResultOk | ResolveAsrConfigResultFailed>
+  resolveAsrApiKeyAndSettings: () => Promise<
+    ResolveAsrConfigResultOk | ResolveAsrConfigResultFailed
+  >
   clearAsrStateForTrack: (
     expectedAudioUrl: string,
     requestId: number,
@@ -140,7 +136,9 @@ export function createRemoteTranscriptOnlineAsrHandlers(deps: OnlineAsrFlowDeps)
 
         try {
           const transcriptState = useTranscriptStore.getState()
-          if (transcriptState.transcriptIngestionStatus === TRANSCRIPT_INGESTION_STATUS.TRANSCRIBING) {
+          if (
+            transcriptState.transcriptIngestionStatus === TRANSCRIPT_INGESTION_STATUS.TRANSCRIBING
+          ) {
             if (transcriptState.asrActiveTrackKey === trackKey) return
             transcriptState.abortAsrController?.abort()
           }
@@ -180,7 +178,11 @@ export function createRemoteTranscriptOnlineAsrHandlers(deps: OnlineAsrFlowDeps)
 
           if (await deps.tryApplyFingerprintCache(fingerprint, expectedAudioUrl, requestId)) {
             log('[asr] fingerprint cache hit', { trackKey, fingerprint })
-            deps.clearAsrStateForTrack(expectedAudioUrl, requestId, TRANSCRIPT_INGESTION_STATUS.IDLE)
+            deps.clearAsrStateForTrack(
+              expectedAudioUrl,
+              requestId,
+              TRANSCRIPT_INGESTION_STATUS.IDLE
+            )
             return
           }
 

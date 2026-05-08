@@ -24,7 +24,12 @@ function buildPodcastCountryToken(country: string | undefined) {
 }
 
 export function buildPodcastDetailQueryKey(podcastId: string, country?: string) {
-  return ['podcast', 'podcast-detail', podcastId.trim(), ...buildPodcastCountryToken(country)] as const
+  return [
+    'podcast',
+    'podcast-detail',
+    podcastId.trim(),
+    ...buildPodcastCountryToken(country),
+  ] as const
 }
 
 export function buildPodcastEpisodesQueryKey(

@@ -1,15 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { clearAllCredentials } from '../db/credentialsRepository'
+import { PlaybackRepository } from '../repositories/PlaybackRepository'
+import { StorageRepository } from '../repositories/StorageRepository'
+import { SETTINGS_STORAGE_KEY } from '../schemas/settings'
+import { clearDictCacheMemory } from '../selection/dictCache'
 import {
   clearPlaybackSessionAudioCacheForMaintenance,
   deletePlaybackSessionForMaintenance,
   wipeAllPersistentStorage,
   wipeStoredAudioCache,
 } from '../storageMaintenanceService'
-import { clearAllCredentials } from '../db/credentialsRepository'
-import { PlaybackRepository } from '../repositories/PlaybackRepository'
-import { StorageRepository } from '../repositories/StorageRepository'
-import { SETTINGS_STORAGE_KEY } from '../schemas/settings'
-import { clearDictCacheMemory } from '../selection/dictCache'
 
 vi.mock('../db/credentialsRepository', () => ({
   clearAllCredentials: vi.fn(async () => {}),

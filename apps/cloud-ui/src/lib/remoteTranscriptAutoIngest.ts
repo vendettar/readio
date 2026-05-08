@@ -4,8 +4,8 @@ import {
   useTranscriptStore,
 } from '../store/transcriptStore'
 import type { ASRCue } from './asr/types'
-import type { EpisodeMetadataInput } from './player/playbackMetadata'
 import { log } from './logger'
+import type { EpisodeMetadataInput } from './player/playbackMetadata'
 
 interface PlaybackSnapshot {
   audioUrl: string | null
@@ -134,8 +134,12 @@ export function createRemoteTranscriptAutoIngestHandler(deps: AutoIngestDeps) {
         }
 
         if (useTranscriptStore.getState().subtitlesLoaded) {
-          useTranscriptStore.getState().setTranscriptIngestionStatus(TRANSCRIPT_INGESTION_STATUS.IDLE)
-          log('[remoteTranscript] Skip apply because subtitles already loaded', { expectedAudioUrl })
+          useTranscriptStore
+            .getState()
+            .setTranscriptIngestionStatus(TRANSCRIPT_INGESTION_STATUS.IDLE)
+          log('[remoteTranscript] Skip apply because subtitles already loaded', {
+            expectedAudioUrl,
+          })
           return
         }
 

@@ -16,7 +16,6 @@ import { isNavigableExplorePlaybackSession, type PlaybackSession } from '../lib/
 import { formatDateShort } from '../lib/formatters'
 import { logError } from '../lib/logger'
 import { mapPlaybackSessionToEpisodeMetadata } from '../lib/player/episodeMetadata'
-import { loadSessionSubtitleCues } from '../lib/player/localSessionRestore'
 import { PLAYBACK_REQUEST_MODE, type PlaybackRequestMode } from '../lib/player/playbackMode'
 import {
   bumpPlaybackEpoch,
@@ -24,6 +23,7 @@ import {
   getPlaybackEpoch,
   playHistorySessionWithDeps,
 } from '../lib/player/remotePlayback'
+import { loadSessionSubtitleCues } from '../lib/player/session/playerSessionSubtitleLoader'
 import {
   applySurfacePolicy,
   deriveSurfacePolicyFromHistorySession,

@@ -126,8 +126,8 @@ describe('remoteTranscript integration (tryApplyCachedAsrTranscript)', () => {
       fetchedAt: Date.now(),
     })
 
-    await expect(hasStoredTranscriptSource('https://example.com/audio.mp3', 'track-1')).resolves.toBe(
-      true
-    )
+    await expect(
+      hasStoredTranscriptSource('https://example.com/audio.mp3', 'track-1')
+    ).resolves.toBe(true)
   })
 })

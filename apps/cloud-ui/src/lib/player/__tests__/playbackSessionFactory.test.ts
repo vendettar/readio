@@ -8,9 +8,9 @@ import {
   buildLocalTrackPlaybackSessionCreateInput,
   buildManagedPlaybackSessionCreateInput,
   resolveSessionAudioSnapshot,
-} from '../playbackSessionFactory'
+} from '../session/playbackSessionFactory'
 
-describe('playbackSessionFactory', () => {
+describe('player/session/playbackSessionFactory', () => {
   it('builds managed explore session input with canonical country snapshot', () => {
     const input = buildManagedPlaybackSessionCreateInput({
       id: 'session-1',

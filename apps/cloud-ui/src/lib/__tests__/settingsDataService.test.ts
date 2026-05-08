@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { loadSettingsDataSnapshot } from '../settingsDataService'
 import { PlaybackRepository } from '../repositories/PlaybackRepository'
 import { StorageRepository } from '../repositories/StorageRepository'
+import { loadSettingsDataSnapshot } from '../settingsDataService'
 
 vi.mock('../repositories/PlaybackRepository', () => ({
   PlaybackRepository: {

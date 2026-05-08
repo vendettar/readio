@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LocalSearchResult } from '../../hooks/useGlobalSearch'
-import { buildEpisodeCompactKey } from '../discovery/editorPicks'
 import type { PlaybackSession } from '../dexieDb'
+import { buildEpisodeCompactKey } from '../discovery/editorPicks'
 import { executeLocalSearchAction, type LocalSearchActionDeps } from '../localSearchActions'
 import { PlaybackRepository } from '../repositories/PlaybackRepository'
 
@@ -486,9 +486,7 @@ describe('executeLocalSearchAction', () => {
 
   it('handles local blob restore errors deterministically without side effects', async () => {
     const deps = createDeps()
-    vi.mocked(PlaybackRepository.getAudioBlob).mockRejectedValueOnce(
-      new Error('blob read failed')
-    )
+    vi.mocked(PlaybackRepository.getAudioBlob).mockRejectedValueOnce(new Error('blob read failed'))
 
     const result = {
       type: 'history',

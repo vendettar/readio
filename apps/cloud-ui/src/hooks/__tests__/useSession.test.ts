@@ -610,7 +610,9 @@ describe('useSession', () => {
       progress: 45.5,
       durationSeconds: 100,
     }
-    vi.mocked(DB.findLastSessionByUrl).mockResolvedValue(makeLocalPlaybackSession(mockExistingSession))
+    vi.mocked(DB.findLastSessionByUrl).mockResolvedValue(
+      makeLocalPlaybackSession(mockExistingSession)
+    )
 
     const seekToSpy = vi.spyOn(usePlayerStore.getState(), 'seekTo')
 

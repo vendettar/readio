@@ -5,7 +5,7 @@ const EXPORT_TRANSCRIPT_DISABLED_BY_DEFAULT = true
 
 export function useMiniPlayerTranscriptExportAvailability(
   hasActiveTrack: boolean,
-  playbackContextKey: string
+  _playbackContextKey: string
 ): boolean {
   const [exportTranscriptDisabled, setExportTranscriptDisabled] = useState(
     EXPORT_TRANSCRIPT_DISABLED_BY_DEFAULT
@@ -33,7 +33,7 @@ export function useMiniPlayerTranscriptExportAvailability(
     return () => {
       cancelled = true
     }
-  }, [hasActiveTrack, playbackContextKey])
+  }, [hasActiveTrack])
 
   return !hasActiveTrack || exportTranscriptDisabled
 }

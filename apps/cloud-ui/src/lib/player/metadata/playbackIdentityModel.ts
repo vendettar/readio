@@ -1,12 +1,12 @@
-import { normalizePodcastAudioUrl } from '../networking/urlUtils'
+import { normalizePodcastAudioUrl } from '../../networking/urlUtils'
 import {
-  isCanonicalRemoteEpisodeMetadata,
-  normalizePlaybackAudioUrl,
-  resolveCanonicalEpisodeIdentity,
   type CanonicalEpisodeIdentity,
   type CanonicalRemotePlaybackSource,
   type EpisodeMetadataInput,
+  isCanonicalRemoteEpisodeMetadata,
+  normalizePlaybackAudioUrl,
   type ResolvedPlaybackStateIdentity,
+  resolveCanonicalEpisodeIdentity,
 } from './playbackMetadataModel'
 
 type PlaybackSourceMetadata = {
@@ -144,8 +144,9 @@ export function resolvePlaybackContentIdentityKey(input: {
     return buildCanonicalPlaybackIdentityKey(canonicalIdentity)
   }
 
-  const normalizedAudioUrl =
-    normalizePlaybackAudioUrl(resolvePlaybackSourceAudioUrl(input.audioUrl, input.metadata))
+  const normalizedAudioUrl = normalizePlaybackAudioUrl(
+    resolvePlaybackSourceAudioUrl(input.audioUrl, input.metadata)
+  )
   if (!normalizedAudioUrl) {
     return null
   }

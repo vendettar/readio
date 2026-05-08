@@ -5,9 +5,9 @@ import {
   PERSIST_PLAYBACK_PROGRESS_REASON,
   persistEndedPlaybackProgress,
   persistPlaybackProgressSnapshot,
-} from '../playerProgressPersistenceService'
+} from '../session/playerProgressPersistenceService'
 
-describe('playerProgressPersistenceService', () => {
+describe('player/session/playerProgressPersistenceService', () => {
   beforeEach(async () => {
     await DB.clearAllData()
   })

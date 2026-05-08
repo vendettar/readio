@@ -1,10 +1,10 @@
 import { ASRClientError } from './asr'
+import { findDownloadedTrack } from './downloadService'
 import { CLOUD_BACKEND_FALLBACK_CLASSES, FetchError, fetchWithFallback } from './fetchUtils'
 import { unwrapPodcastTrackingUrl } from './networking/urlUtils'
 import { normalizeAsrAudioUrl } from './remoteTranscriptResource'
 import { FilesRepository } from './repositories/FilesRepository'
 import { PlaybackRepository } from './repositories/PlaybackRepository'
-import { findDownloadedTrack } from './downloadService'
 
 export class AudioDownloadError extends Error {
   code = 'audio_download_error' as const

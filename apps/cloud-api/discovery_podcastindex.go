@@ -135,7 +135,7 @@ type podcastIndexPodcastResponse struct {
 }
 
 type podcastIndexBatchFeed struct {
-	PodcastGUID string `json:"podcastGuid,omitempty"`
+	PodcastGUID string `json:"podcastGuid"`
 	podcastIndexPodcastFeed
 }
 
@@ -154,13 +154,10 @@ type podcastIndexEpisodeItem struct {
 	EnclosureLength *int64  `json:"enclosureLength"`
 	Explicit        int     `json:"explicit"`
 	Image           string  `json:"image"`
-	FeedImage       string  `json:"feedImage"`
 	Duration        *int64  `json:"duration"`
 	Episode         *int64  `json:"episode"`
 	EpisodeType     *string `json:"episodeType"`
 	Season          *int64  `json:"season"`
-	FeedItunesID    *int64  `json:"feedItunesId"`
-	ChaptersURL     *string `json:"chaptersUrl"`
 	TranscriptURL   *string `json:"transcriptUrl"`
 }
 
@@ -579,7 +576,7 @@ func (s *discoveryService) handlePodcastIndexPodcastEpisodesByItunesID(w http.Re
 		episodes := make([]piEpisodeResponse, 0, len(items))
 		seenEpisodeGUIDs := make(map[string]struct{}, len(items))
 		for _, item := range items {
-			mapped, err := mapPodcastIndexEpisodeToPIEpisode(item, podcastItunesID)
+			mapped, err := mapPodcastIndexEpisodeToPIEpisode(item)
 			if err != nil {
 				if errors.Is(err, errSkipPodcastIndexEpisode) {
 					continue
@@ -698,16 +695,11 @@ func mapPodcastIndexPodcastToPIPodcast(feed podcastIndexPodcastFeed, podcastItun
 
 var errSkipPodcastIndexEpisode = errors.New("skip podcastindex episode")
 
-func mapPodcastIndexEpisodeToPIEpisode(item podcastIndexEpisodeItem, requestedPodcastItunesID string) (piEpisodeResponse, error) {
+func mapPodcastIndexEpisodeToPIEpisode(item podcastIndexEpisodeItem) (piEpisodeResponse, error) {
 	title := strings.TrimSpace(item.Title)
 	description := strings.TrimSpace(item.Description)
 	guid := strings.TrimSpace(item.GUID)
 	image := strings.TrimSpace(item.Image)
-	feedImage := strings.TrimSpace(item.FeedImage)
-
-	if item.FeedItunesID != nil && strconv.FormatInt(*item.FeedItunesID, 10) != requestedPodcastItunesID {
-		return piEpisodeResponse{}, errSkipPodcastIndexEpisode
-	}
 	if title == "" || guid == "" || item.DatePublished <= 0 || item.Duration == nil || item.EnclosureLength == nil {
 		return piEpisodeResponse{}, errSkipPodcastIndexEpisode
 	}
@@ -725,10 +717,7 @@ func mapPodcastIndexEpisodeToPIEpisode(item podcastIndexEpisodeItem, requestedPo
 	}
 	artworkURL, ok := normalizeRequiredHTTPURL(image)
 	if !ok {
-		artworkURL, ok = normalizeRequiredHTTPURL(feedImage)
-		if !ok {
-			return piEpisodeResponse{}, errSkipPodcastIndexEpisode
-		}
+		return piEpisodeResponse{}, errSkipPodcastIndexEpisode
 	}
 
 	pubDate := time.Unix(item.DatePublished, 0).UTC().Format(time.RFC3339)

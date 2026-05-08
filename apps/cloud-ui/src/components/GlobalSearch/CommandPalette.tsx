@@ -3,13 +3,13 @@ import { Clock, Download, Folder, LayoutGrid, Search, Star } from 'lucide-react'
 import type React from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { type LocalSearchResult, useGlobalSearch } from '../../hooks/useGlobalSearch'
-import { useNetworkStatus } from '../../hooks/useNetworkStatus'
 import {
   hasActiveSearchQuery,
   resolveGlobalSearchPresentation,
   trimSearchQuery,
 } from '../../hooks/searchSection'
+import { type LocalSearchResult, useGlobalSearch } from '../../hooks/useGlobalSearch'
+import { useNetworkStatus } from '../../hooks/useNetworkStatus'
 import type { SearchPodcast as PodcastType, SearchEpisode } from '../../lib/discovery'
 import { executeLocalSearchAction } from '../../lib/localSearchActions'
 import { buildSearchEpisodeRoute } from '../../lib/routes/episodeResolver'
@@ -255,7 +255,7 @@ export function CommandPalette() {
   }
 
   return (
-    <div role="search" className="relative w-full px-4 pb-2">
+    <search className="relative w-full px-4 pb-2">
       <Popover
         open={isOverlayOpen}
         onOpenChange={(open) => {
@@ -536,6 +536,6 @@ export function CommandPalette() {
           </PopoverContent>
         </Command>
       </Popover>
-    </div>
+    </search>
   )
 }

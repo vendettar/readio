@@ -124,8 +124,8 @@ vi.mock('../repositories/PlaybackRepository', () => ({
 }))
 
 import {
-  buildDownloadJobOptionsFromEpisodeProps,
   buildDownloadJobOptionsFromCanonicalRemoteMetadata,
+  buildDownloadJobOptionsFromEpisodeProps,
   downloadEpisode,
   findDownloadedTrackForEpisode,
   getStoredDownloadStatusForEpisode,
@@ -342,7 +342,6 @@ describe('downloadService regressions', () => {
         transcriptUrl: 'https://example.com/transcript.vtt',
       })
     )
-
   })
 
   it('persists a built-in transcript version after saving a download with transcriptUrl', async () => {

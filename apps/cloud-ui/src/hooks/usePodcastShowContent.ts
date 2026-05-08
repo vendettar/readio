@@ -47,18 +47,12 @@ export function usePodcastShowContent(
       ? getCachedEditorPickByItunesID(queryClient, normalizedRouteCountry, podcastItunesId)
       : undefined)
   const initialPodcast = snapshot ? mapEditorPickToPodcast(snapshot) : undefined
-  const {
-    podcast,
-    isLoadingPodcast,
-    podcastError,
-    episodeList,
-    isLoadingEpisodes,
-    episodesError,
-  } = usePodcastDetailAndEpisodes({
-    podcastItunesId,
-    routeCountry,
-    initialPodcast,
-  })
+  const { podcast, isLoadingPodcast, podcastError, episodeList, isLoadingEpisodes, episodesError } =
+    usePodcastDetailAndEpisodes({
+      podcastItunesId,
+      routeCountry,
+      initialPodcast,
+    })
 
   const resolvedHeroContent = podcast
     ? {

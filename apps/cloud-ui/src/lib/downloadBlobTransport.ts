@@ -1,10 +1,6 @@
 import { checkDownloadCapacity } from './downloadCapacity'
 import { createDownloadProgressTracker } from './downloadProgressTracking'
-import {
-  CLOUD_BACKEND_FALLBACK_CLASSES,
-  fetchWithFallback,
-  isAbortLikeError,
-} from './fetchUtils'
+import { CLOUD_BACKEND_FALLBACK_CLASSES, fetchWithFallback, isAbortLikeError } from './fetchUtils'
 import { warn } from './logger'
 import { unwrapPodcastTrackingUrl } from './networking/urlUtils'
 import { toast } from './toast'

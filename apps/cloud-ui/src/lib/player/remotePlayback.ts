@@ -1,9 +1,9 @@
 import { getValidTranscriptUrl } from '../remoteTranscript'
 import type { SupportedCountry } from '../routes/podcastRoutes'
 import {
-  createCanonicalRemoteEpisodeMetadata,
   type CanonicalEpisodeMetadata,
   type CanonicalRemoteEpisodeMetadata,
+  createCanonicalRemoteEpisodeMetadata,
   type EpisodeMetadata,
   type LocalEpisodeMetadata,
 } from './playbackMetadata'
@@ -13,16 +13,16 @@ import {
   type PlaybackStartResult,
   type RemotePlaybackDeps,
   type RemoteStreamTargetCandidates,
-} from './remotePlaybackEntryPoints'
-import {
-  resolveDownloadedPlaybackSource,
-  resolvePlayableSourceForPlayback,
-} from './remotePlaybackSourceResolver'
+} from './remote/remotePlaybackEntryPoints'
 import {
   applyPlaybackLoadingState,
   completePlaybackReadyState,
   handlePlaybackResolutionFailure,
-} from './remotePlaybackFlowState'
+} from './remote/remotePlaybackFlowState'
+import {
+  resolveDownloadedPlaybackSource,
+  resolvePlayableSourceForPlayback,
+} from './remote/remotePlaybackSourceResolver'
 
 type ManagedPlaybackPayload<TMetadata extends EpisodeMetadata = EpisodeMetadata> = {
   audioUrl: string

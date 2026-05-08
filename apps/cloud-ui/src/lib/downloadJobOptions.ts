@@ -1,8 +1,8 @@
 import {
   buildCanonicalDownloadRequestKey,
-  resolveDownloadLookup,
   type CanonicalEpisodeDownloadLookupInput,
   type EpisodeDownloadLookupInput,
+  resolveDownloadLookup,
 } from './downloadLookupResolver'
 import { normalizePodcastAudioUrl } from './networking/urlUtils'
 import type { CanonicalRemoteEpisodeMetadata } from './player/playbackMetadata'

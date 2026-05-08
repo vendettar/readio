@@ -1,2 +1,2 @@
-export * from './playbackMetadataModel'
-export * from './playbackIdentityModel'
+export * from './metadata/playbackIdentityModel'
+export * from './metadata/playbackMetadataModel'

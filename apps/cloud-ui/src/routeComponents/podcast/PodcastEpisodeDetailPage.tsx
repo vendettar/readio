@@ -16,10 +16,7 @@ import { useEpisodeResolution } from '@/hooks/useEpisodeResolution'
 import { formatDuration, formatRelativeTime } from '@/lib/dateUtils'
 import { buildFavoriteKey } from '@/lib/db/favoriteIdentity'
 import { mapCanonicalEpisodeToFavoriteInputs } from '@/lib/db/favoriteMappers'
-import {
-  buildEpisodeCompactKey,
-  getEditorPickRouteState,
-} from '@/lib/discovery/editorPicks'
+import { buildEpisodeCompactKey, getEditorPickRouteState } from '@/lib/discovery/editorPicks'
 import { logError } from '@/lib/logger'
 import { openExternal } from '@/lib/openExternal'
 import {

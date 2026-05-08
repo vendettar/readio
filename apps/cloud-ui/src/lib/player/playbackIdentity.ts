@@ -1,6 +1,6 @@
-import type { EpisodeMetadataInput } from './playbackMetadata'
 import { usePlayerStore } from '../../store/playerStore'
-import { resolvePlaybackStateIdentity } from './playbackIdentityModel'
+import { resolvePlaybackStateIdentity } from './metadata/playbackIdentityModel'
+import type { EpisodeMetadataInput } from './playbackMetadata'
 
 export interface PlaybackIdentitySnapshot {
   localTrackId: string | null
@@ -50,7 +50,7 @@ export function resolveCurrentPlaybackIdentity(
   }
 }
 
-export { buildPlaybackIdentityKey } from './playbackIdentityModel'
+export { buildPlaybackIdentityKey } from './metadata/playbackIdentityModel'
 
 export function resolvePlaybackExportBaseName(
   identity: PlaybackIdentitySnapshot | null,

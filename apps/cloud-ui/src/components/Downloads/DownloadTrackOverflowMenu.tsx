@@ -161,7 +161,9 @@ export function DownloadTrackOverflowMenu({
                 }}
                 className="cursor-pointer whitespace-nowrap justify-between"
               >
-                <span>{hasSubtitles ? t('asrRegenerateTranscript') : t('asrGenerateTranscript')}</span>
+                <span>
+                  {hasSubtitles ? t('asrRegenerateTranscript') : t('asrGenerateTranscript')}
+                </span>
                 <RefreshCcw size={14} />
               </DropdownMenuItem>
             )}

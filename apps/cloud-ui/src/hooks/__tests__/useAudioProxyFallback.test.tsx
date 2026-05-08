@@ -2,7 +2,7 @@ import { act, fireEvent, render } from '@testing-library/react'
 import { useRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { usePlayerStore } from '../../store/playerStore'
-import type { AudioFallbackRecoveryState } from '../audioFallbackRecovery'
+import type { AudioFallbackRecoveryState } from '../audioProxyFallbackRuntime'
 import { AUDIO_DIRECT_FAILOVER_TIMEOUT_MS, useAudioProxyFallback } from '../useAudioProxyFallback'
 
 const { buildProxyUrlMock, getNetworkProxyConfigMock, warnMock } = vi.hoisted(() => ({

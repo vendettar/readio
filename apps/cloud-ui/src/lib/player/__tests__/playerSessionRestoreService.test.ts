@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DB } from '../../dexieDb'
-import { loadPlayerSessionRestore } from '../playerSessionRestoreService'
+import { loadPlayerSessionRestore } from '../session/playerSessionRestoreService'
 
 vi.mock('../../logger', () => ({
   log: vi.fn(),
@@ -50,10 +50,7 @@ describe('loadPlayerSessionRestore', () => {
 
   it('restores a local session from its stored audio blob and subtitles', async () => {
     const audioBlob = new Blob(['local audio'], { type: 'audio/mp3' })
-    const subtitleId = await DB.addSubtitle(
-      [{ start: 0, end: 1, text: 'hello' }],
-      'local.vtt'
-    )
+    const subtitleId = await DB.addSubtitle([{ start: 0, end: 1, text: 'hello' }], 'local.vtt')
     const audioId = await DB.addAudioBlob(audioBlob, 'local-file.mp3')
 
     await DB.createPlaybackSession({
@@ -82,9 +79,7 @@ describe('loadPlayerSessionRestore', () => {
         progress: 120,
       })
     )
-    expect(restored.subtitleCues).toEqual([
-      { start: 0, end: 1, text: 'hello' },
-    ])
+    expect(restored.subtitleCues).toEqual([{ start: 0, end: 1, text: 'hello' }])
   })
 
   it('prefers the canonical local download when restoring an explore session', async () => {

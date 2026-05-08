@@ -159,7 +159,6 @@ export function getAppConfig(): AppConfig {
     cachedFromRuntimeEnv = runtimeReady
     return config
   } catch (error: unknown) {
-
     logError('[runtimeConfig] Unexpected schema parse failure:', error)
 
     const zodIssues =
@@ -220,4 +219,3 @@ export async function fetchRuntimeConfig(): Promise<void> {
     }
   }
 }
-

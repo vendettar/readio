@@ -5,11 +5,7 @@ import {
   type CloudBackendFallbackClass,
   fetchCloudBackendWithFallback,
 } from './networking/cloudBackendFallback'
-import {
-  FetchError,
-  isAbortLikeError,
-  NetworkError,
-} from './networking/fetchErrors'
+import { FetchError, isAbortLikeError, NetworkError } from './networking/fetchErrors'
 import { buildProxyAuthHeaders, type ProxyAuthConfig } from './networking/proxyAuth'
 import { buildProxyUrl, getNetworkProxyConfig } from './networking/proxyUrl'
 import { fetchStandardWithFallback } from './networking/standardFetchFallback'

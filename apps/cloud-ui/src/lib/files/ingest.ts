@@ -5,8 +5,8 @@ import type { ParseResult } from '../../workers/metadata.worker'
 import MetadataWorker from '../../workers/metadata.worker?worker'
 import { log } from '../logger'
 import {
-  FilesRepository,
   type FileIngestPersistenceResult,
+  FilesRepository,
   type PreparedFileIngestInput,
   type PreparedSubtitleAttachmentInput,
 } from '../repositories/FilesRepository'
@@ -217,8 +217,10 @@ export async function ingestFiles(params: IngestParams): Promise<IngestResult> {
     matchingSubtitles: item.matchingSubs,
   }))
 
-  const result: FileIngestPersistenceResult =
-    await FilesRepository.persistPreparedFileImports(preparedTracks, folderId)
+  const result: FileIngestPersistenceResult = await FilesRepository.persistPreparedFileImports(
+    preparedTracks,
+    folderId
+  )
   for (const trackId of result.createdTrackIds) {
     log('[Files] Added track (Transaction):', trackId)
   }

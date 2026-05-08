@@ -1,12 +1,15 @@
-import { useTranscriptStore } from '../../store/transcriptStore'
-import type { Track } from '../db/types'
-import { isPodcastDownloadTrack, isUserUploadTrack } from '../db/types'
-import { getValidTranscriptUrl, hasStoredTranscriptSource } from '../remoteTranscript'
-import { DownloadsRepository } from '../repositories/DownloadsRepository'
-import { FilesRepository } from '../repositories/FilesRepository'
-import type { PlaybackIdentitySnapshot } from './playbackIdentity'
-import { resolveCurrentPlaybackIdentity } from './playbackIdentity'
-import { resolveCanonicalRemotePlaybackSource, resolvePlaybackSourceAudioUrl } from './playbackMetadata'
+import { useTranscriptStore } from '../../../store/transcriptStore'
+import type { Track } from '../../db/types'
+import { isPodcastDownloadTrack, isUserUploadTrack } from '../../db/types'
+import { getValidTranscriptUrl, hasStoredTranscriptSource } from '../../remoteTranscript'
+import { DownloadsRepository } from '../../repositories/DownloadsRepository'
+import { FilesRepository } from '../../repositories/FilesRepository'
+import type { PlaybackIdentitySnapshot } from '../playbackIdentity'
+import { resolveCurrentPlaybackIdentity } from '../playbackIdentity'
+import {
+  resolveCanonicalRemotePlaybackSource,
+  resolvePlaybackSourceAudioUrl,
+} from '../playbackMetadata'
 
 export interface PlaybackExportContext {
   identity: PlaybackIdentitySnapshot
@@ -62,13 +65,12 @@ export async function resolveCurrentPlaybackExportContext(): Promise<PlaybackExp
   if (!identity) return null
 
   const transcriptUrl = getValidTranscriptUrl(identity.episodeMetadata?.transcriptUrl)
-  const resolvedAudioUrl = resolvePlaybackSourceAudioUrl(identity.audioUrl, identity.episodeMetadata)
-  const {
-    track,
-    resolvedLocalTrackId,
-    trackKind,
-    hasMissingLocalTrackBinding,
-  } = await resolvePlaybackTrackBinding(identity.localTrackId)
+  const resolvedAudioUrl = resolvePlaybackSourceAudioUrl(
+    identity.audioUrl,
+    identity.episodeMetadata
+  )
+  const { track, resolvedLocalTrackId, trackKind, hasMissingLocalTrackBinding } =
+    await resolvePlaybackTrackBinding(identity.localTrackId)
   const canonicalRemoteSource = resolveCanonicalRemotePlaybackSource({
     audioUrl: identity.audioUrl,
     metadata: identity.episodeMetadata,

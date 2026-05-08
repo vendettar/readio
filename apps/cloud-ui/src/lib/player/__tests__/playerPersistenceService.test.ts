@@ -1,11 +1,11 @@
 import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DB } from '../../dexieDb'
+import { checkDownloadCapacity } from '../../downloadCapacity'
 import {
   persistManualPlaybackAudio,
   persistManualPlaybackSubtitles,
-} from '../playerPersistenceService'
-import { checkDownloadCapacity } from '../../downloadCapacity'
+} from '../session/playerPersistenceService'
 
 vi.mock('../../logger', () => ({
   log: vi.fn(),
@@ -20,7 +20,7 @@ vi.mock('../../downloadCapacity', () => ({
   checkDownloadCapacity: vi.fn(),
 }))
 
-describe('playerPersistenceService', () => {
+describe('player/session/playerPersistenceService', () => {
   beforeEach(async () => {
     await DB.clearAllData()
     vi.clearAllMocks()

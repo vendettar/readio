@@ -66,10 +66,7 @@ export const DownloadArtifactExportRepository = {
     return { ok: true, filename: exportData.filename, blob }
   },
 
-  async exportAudioFile(
-    trackId: string,
-    fallbackTrackName: string
-  ): Promise<DownloadExportResult> {
+  async exportAudioFile(trackId: string, fallbackTrackName: string): Promise<DownloadExportResult> {
     const download = await db.tracks.get(trackId)
     if (!isPodcastDownloadTrack(download)) {
       return { ok: false }
@@ -129,10 +126,7 @@ export const DownloadArtifactExportRepository = {
     return { ok: true, filename, blob: zipBlob, failedItems }
   },
 
-  async exportTrackBundle(
-    trackId: string,
-    episodeTitle: string
-  ): Promise<DownloadExportResult> {
+  async exportTrackBundle(trackId: string, episodeTitle: string): Promise<DownloadExportResult> {
     const download = await db.tracks.get(trackId)
     if (!isPodcastDownloadTrack(download)) {
       return { ok: false }

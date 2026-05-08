@@ -1,6 +1,4 @@
-import {
-  useTranscriptStore,
-} from '../store/transcriptStore'
+import { useTranscriptStore } from '../store/transcriptStore'
 import { ASRClientError, type ASRProvider } from './asr'
 import {
   type AsrConfigErrorCode,
@@ -13,33 +11,26 @@ import {
   persistAudioBlobAsDownload,
 } from './downloadService'
 import { log, warn } from './logger'
+import { resolveCanonicalRemotePlaybackSource } from './player/playbackMetadata'
+import { AudioDownloadError, fetchTrackAudioBlob } from './remoteTranscriptAudioSource'
+import { createRemoteTranscriptAutoIngestHandler } from './remoteTranscriptAutoIngest'
 import {
   computeAsrFingerprint,
   findStoredTranscriptCues,
   findTranscriptCuesByFingerprint,
 } from './remoteTranscriptCache'
-import {
-  formatAsrSubtitleName,
-  persistAsrResult,
-} from './remoteTranscriptPersistence'
+import { createRemoteTranscriptOnlineAsrHandlers } from './remoteTranscriptOnlineAsr'
+import { formatAsrSubtitleName, persistAsrResult } from './remoteTranscriptPersistence'
 import {
   __resetRemoteTranscriptResourceStateForTests,
   getValidTranscriptUrl,
   loadRemoteTranscriptWithCache,
 } from './remoteTranscriptResource'
-import { createRemoteTranscriptAutoIngestHandler } from './remoteTranscriptAutoIngest'
 import {
   createRemoteTranscriptRetranscriptionHandlers,
   RETRANSCRIBE_DOWNLOAD_REASON,
   RETRANSCRIBE_FILE_REASON,
 } from './remoteTranscriptRetranscription'
-import { AudioDownloadError, fetchTrackAudioBlob } from './remoteTranscriptAudioSource'
-import { createRemoteTranscriptOnlineAsrHandlers } from './remoteTranscriptOnlineAsr'
-import { getSettingsSnapshot } from './schemas/settings'
-import { toast } from './toast'
-import {
-  resolveCanonicalRemotePlaybackSource,
-} from './player/playbackMetadata'
 import {
   applyRetranscribedCuesToCurrentTrack,
   buildAsrTrackKey,
@@ -48,19 +39,8 @@ import {
   isTrackStillCurrent,
   resolveAsrIdentityUrl,
 } from './remoteTranscriptRuntime'
-
-export {
-  deriveRemoteTranscriptCacheId,
-  REMOTE_TRANSCRIPT_FORMAT,
-  REMOTE_TRANSCRIPT_READ_STATUS,
-  getValidTranscriptUrl,
-  loadRemoteTranscriptWithCache,
-  normalizeAsrAudioUrl,
-  normalizeTranscriptUrl,
-  parseRemoteTranscriptContent,
-  readRemoteTranscriptCache,
-  runRemoteTranscriptCacheMaintenance,
-} from './remoteTranscriptResource'
+import { getSettingsSnapshot } from './schemas/settings'
+import { toast } from './toast'
 
 export type {
   RemoteTranscriptFormat,
@@ -70,6 +50,18 @@ export type {
   RemoteTranscriptParseSuccess,
   RemoteTranscriptReadStatus,
 } from './remoteTranscriptResource'
+export {
+  deriveRemoteTranscriptCacheId,
+  getValidTranscriptUrl,
+  loadRemoteTranscriptWithCache,
+  normalizeAsrAudioUrl,
+  normalizeTranscriptUrl,
+  parseRemoteTranscriptContent,
+  REMOTE_TRANSCRIPT_FORMAT,
+  REMOTE_TRANSCRIPT_READ_STATUS,
+  readRemoteTranscriptCache,
+  runRemoteTranscriptCacheMaintenance,
+} from './remoteTranscriptResource'
 
 interface AsrSettingsSnapshot {
   asrProvider: ASRProvider | ''
@@ -78,14 +70,14 @@ interface AsrSettingsSnapshot {
 
 type OnlineAsrTrigger = 'auto' | 'manual'
 export { RETRANSCRIBE_DOWNLOAD_REASON, RETRANSCRIBE_FILE_REASON }
+export { hasStoredTranscriptSource } from './remoteTranscriptCache'
+export { persistImportedTranscriptForPlaybackIdentity } from './remoteTranscriptPersistence'
 export type {
   RetranscribeDownloadReason,
   RetranscribeDownloadResult,
   RetranscribeFileReason,
   RetranscribeFileResult,
 } from './remoteTranscriptRetranscription'
-export { hasStoredTranscriptSource } from './remoteTranscriptCache'
-export { persistImportedTranscriptForPlaybackIdentity } from './remoteTranscriptPersistence'
 
 export function getAsrSettingsSnapshot(): AsrSettingsSnapshot {
   const snapshot = getSettingsSnapshot()
@@ -275,20 +267,18 @@ export function startOnlineASRForCurrentTrack(trigger: OnlineAsrTrigger = 'manua
     trigger,
   })
 }
-const {
-  retranscribeDownloadedTrackWithCurrentSettings,
-  retranscribeFileTrackWithCurrentSettings,
-} = createRemoteTranscriptRetranscriptionHandlers({
-  inFlightAsrTasks,
-  asrProviderCooldowns,
-  buildAsrTrackKey,
-  resolveAsrApiKeyAndSettings,
-  formatAsrSubtitleName,
-  fetchTrackAudioBlob,
-  computeAsrFingerprint,
-  handleAsrFailure,
-  applyRetranscribedCuesToCurrentTrack,
-})
+const { retranscribeDownloadedTrackWithCurrentSettings, retranscribeFileTrackWithCurrentSettings } =
+  createRemoteTranscriptRetranscriptionHandlers({
+    inFlightAsrTasks,
+    asrProviderCooldowns,
+    buildAsrTrackKey,
+    resolveAsrApiKeyAndSettings,
+    formatAsrSubtitleName,
+    fetchTrackAudioBlob,
+    computeAsrFingerprint,
+    handleAsrFailure,
+    applyRetranscribedCuesToCurrentTrack,
+  })
 
 export { retranscribeDownloadedTrackWithCurrentSettings, retranscribeFileTrackWithCurrentSettings }
 export const autoIngestEpisodeTranscript = createRemoteTranscriptAutoIngestHandler({

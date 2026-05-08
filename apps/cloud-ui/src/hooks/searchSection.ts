@@ -66,9 +66,7 @@ export function hasSearchSectionItems<T>(section: SearchSection<T>): boolean {
   return section.items.length > 0
 }
 
-export function getSearchSectionsItemCount(
-  ...sections: Array<SearchSection<unknown>>
-): number {
+export function getSearchSectionsItemCount(...sections: Array<SearchSection<unknown>>): number {
   return sections.reduce((count, section) => count + section.items.length, 0)
 }
 
@@ -82,11 +80,7 @@ export function deriveGlobalSearchOverallState(args: {
   const { query, enabled, podcastSection, episodeSection, localSection } = args
   const hasQueryText = hasSearchText(query)
   const hasActiveQuery = enabled && hasActiveSearchQuery(query)
-  const totalResultsCount = getSearchSectionsItemCount(
-    podcastSection,
-    episodeSection,
-    localSection
-  )
+  const totalResultsCount = getSearchSectionsItemCount(podcastSection, episodeSection, localSection)
   const isLoading =
     isSearchSectionLoading(podcastSection) ||
     isSearchSectionLoading(episodeSection) ||

@@ -2,13 +2,13 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { log, error as logError } from '../lib/logger'
 import { resolvePlaybackStateIdentityKey } from '../lib/player/playbackIdentity'
+import { resolveManagedPlaybackSession } from '../lib/player/session/playerManagedSessionResolver'
+import type { RestoreAppliedEntry } from '../lib/player/session/playerRestoreProgressResolver'
 import {
   applyExistingManagedPlaybackSession,
   resolveCurrentPlaybackRestoreTarget,
   restorePlaybackProgressForTarget,
-} from '../lib/player/playerSessionRuntime'
-import { type RestoreAppliedEntry } from '../lib/player/playerRestoreProgressResolver'
-import { resolveManagedPlaybackSession } from '../lib/player/playerManagedSessionResolver'
+} from '../lib/player/session/playerSessionRuntime'
 import { usePlayerStore } from '../store/playerStore'
 import { useTranscriptStore } from '../store/transcriptStore'
 

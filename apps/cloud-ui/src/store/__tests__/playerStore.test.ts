@@ -3,11 +3,11 @@ import 'fake-indexeddb/auto'
 import { createElement } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { GlobalAudioController } from '../../components/AppShell/GlobalAudioController'
-import { checkDownloadCapacity } from '../../lib/downloadCapacity'
 import { DB } from '../../lib/dexieDb'
+import { checkDownloadCapacity } from '../../lib/downloadCapacity'
 import { createCanonicalRemoteEpisodeMetadata } from '../../lib/player/playbackMetadata'
-import { FilesRepository } from '../../lib/repositories/FilesRepository'
 import { DownloadsRepository } from '../../lib/repositories/DownloadsRepository'
+import { FilesRepository } from '../../lib/repositories/FilesRepository'
 import { toast } from '../../lib/toast'
 import { isCanonicalRemoteEpisodeMetadata, usePlayerStore } from '../playerStore'
 import { usePlayerSurfaceStore } from '../playerSurfaceStore'
@@ -178,7 +178,9 @@ describe('playerStore - Session Restoration', () => {
         id: 'download-track-1',
         audioId: downloadedAudioId,
       } as Awaited<ReturnType<typeof DownloadsRepository.findTrackByPodcastAndEpisode>>)
-    const findByUrlSpy = vi.spyOn(DownloadsRepository, 'findTrackByUrl').mockResolvedValue(undefined)
+    const findByUrlSpy = vi
+      .spyOn(DownloadsRepository, 'findTrackByUrl')
+      .mockResolvedValue(undefined)
     const artworkSpy = vi.spyOn(FilesRepository, 'resolveTrackArtwork').mockResolvedValue(null)
 
     await DB.createPlaybackSession({
@@ -683,9 +685,7 @@ describe('playerStore - Status & Control Logic', () => {
       { type: 'text/vtt' }
     )
     Object.defineProperty(subtitleFile, 'text', {
-      value: vi.fn().mockResolvedValue(
-        'WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nHello world\n'
-      ),
+      value: vi.fn().mockResolvedValue('WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nHello world\n'),
     })
 
     await act(async () => {

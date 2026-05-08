@@ -49,8 +49,6 @@ func TestDiscoveryServicePodcastEpisodesByItunesID(t *testing.T) {
 								"episodeType":"full",
 								"season":3,
 								"image":"https://example.com/episode-1.jpg",
-								"feedItunesId":123,
-								"feedImage":"https://example.com/feed.jpg",
 								"feedId":75075,
 								"feedLanguage":"en-us",
 								"feedDead":0,
@@ -136,9 +134,7 @@ func TestDiscoveryServicePodcastEpisodesByItunesID(t *testing.T) {
 								"enclosureUrl":"https://example.com/audio-1.mp3",
 								"duration":54,
 								"explicit":0,
-								"image":"https://example.com/episode-1.jpg",
-								"feedItunesId":123,
-								"feedImage":"https://example.com/feed.jpg"
+								"image":"https://example.com/episode-1.jpg"
 							}
 						]
 					}`), nil
@@ -209,12 +205,7 @@ func TestDiscoveryServicePodcastEpisodesByItunesID(t *testing.T) {
 								"enclosureLength":26385472,
 								"duration":54,
 								"explicit":1,
-								"image":"https://example.com/episode-1.jpg",
-								"feedImage":"https://example.com/feed.jpg",
-								"feedId":75075,
-								"feedLanguage":"en-us",
-								"feedDead":0,
-								"feedItunesId":123
+								"image":"https://example.com/episode-1.jpg"
 							},
 							{
 								"id":2,
@@ -230,12 +221,7 @@ func TestDiscoveryServicePodcastEpisodesByItunesID(t *testing.T) {
 								"enclosureLength":123,
 								"duration":55,
 								"explicit":0,
-								"image":"https://example.com/episode-2.jpg",
-								"feedImage":"https://example.com/feed.jpg",
-								"feedId":75075,
-								"feedLanguage":"en-us",
-								"feedDead":0,
-								"feedItunesId":123
+								"image":"https://example.com/episode-2.jpg"
 							}
 						]
 					}`), nil
@@ -269,7 +255,7 @@ func TestDiscoveryServicePodcastEpisodesByItunesID(t *testing.T) {
 		}
 	})
 
-	t.Run("drops rows when no valid artwork url can be produced", func(t *testing.T) {
+	t.Run("drops rows when episode artwork url is invalid or missing", func(t *testing.T) {
 		t.Setenv(podcastIndexAPIKeyEnv, "test-key")
 		t.Setenv(podcastIndexAPISecretEnv, "test-secret")
 		t.Setenv(podcastIndexUserAgentEnv, "readio-test")
@@ -293,12 +279,7 @@ func TestDiscoveryServicePodcastEpisodesByItunesID(t *testing.T) {
 								"enclosureLength":111,
 								"duration":54,
 								"explicit":1,
-								"image":"javascript:alert(1)",
-								"feedImage":"not-a-url",
-								"feedId":75075,
-								"feedLanguage":"en-us",
-								"feedDead":0,
-								"feedItunesId":123
+								"image":"javascript:alert(1)"
 							},
 							{
 								"id":2,
@@ -312,30 +293,7 @@ func TestDiscoveryServicePodcastEpisodesByItunesID(t *testing.T) {
 								"enclosureType":"audio/mp3",
 								"enclosureLength":222,
 								"duration":55,
-								"explicit":0,
-								"feedId":75075,
-								"feedLanguage":"en-us",
-								"feedDead":0,
-								"feedItunesId":123
-							},
-							{
-								"id":3,
-								"title":"Fallback Feed Artwork",
-								"link":"https://example.com/episodes/3",
-								"description":"desc",
-								"guid":"fallback-artwork-guid",
-								"datePublished":1546399815,
-								"dateCrawled":1598369049,
-								"enclosureUrl":"https://example.com/audio-3.mp3",
-								"enclosureType":"audio/mp3",
-								"enclosureLength":333,
-								"duration":56,
-								"explicit":0,
-								"feedImage":"https://example.com/feed.jpg",
-								"feedId":75075,
-								"feedLanguage":"en-us",
-								"feedDead":0,
-								"feedItunesId":123
+								"explicit":0
 							}
 						]
 					}`), nil
@@ -358,18 +316,12 @@ func TestDiscoveryServicePodcastEpisodesByItunesID(t *testing.T) {
 
 		var payload piPodcastEpisodesResponse
 		decodeResponseJSON(t, rr.Body, &payload)
-		if len(payload.Episodes) != 1 {
-			t.Fatalf("episodes length = %d, want 1", len(payload.Episodes))
-		}
-		if payload.Episodes[0].GUID != "fallback-artwork-guid" {
-			t.Fatalf("guid = %q, want fallback-artwork-guid", payload.Episodes[0].GUID)
-		}
-		if payload.Episodes[0].ArtworkURL != "https://example.com/feed.jpg" {
-			t.Fatalf("artworkUrl = %q, want https://example.com/feed.jpg", payload.Episodes[0].ArtworkURL)
+		if len(payload.Episodes) != 0 {
+			t.Fatalf("episodes length = %d, want 0", len(payload.Episodes))
 		}
 	})
 
-	t.Run("skips mismatched feedItunesId and strips invalid transcript urls", func(t *testing.T) {
+	t.Run("strips invalid transcript urls", func(t *testing.T) {
 		t.Setenv(podcastIndexAPIKeyEnv, "test-key")
 		t.Setenv(podcastIndexAPISecretEnv, "test-secret")
 		t.Setenv(podcastIndexUserAgentEnv, "readio-test")
@@ -382,27 +334,6 @@ func TestDiscoveryServicePodcastEpisodesByItunesID(t *testing.T) {
 						"items":[
 							{
 								"id":1,
-								"title":"Wrong Show",
-								"link":"https://example.com/episodes/wrong",
-								"description":"desc",
-								"guid":"wrong-show-guid",
-								"datePublished":1546399813,
-								"datePublishedPretty":"January 01, 2019 9:30pm",
-								"dateCrawled":1598369047,
-								"enclosureUrl":"https://example.com/audio-1.mp3",
-								"enclosureType":"audio/mp3",
-								"enclosureLength":26385472,
-								"duration":54,
-								"explicit":1,
-								"image":"https://example.com/episode-1.jpg",
-								"feedImage":"https://example.com/feed.jpg",
-								"feedId":75075,
-								"feedLanguage":"en-us",
-								"feedDead":0,
-								"feedItunesId":999
-							},
-							{
-								"id":2,
 								"title":"Allowed Episode",
 								"link":"https://example.com/episodes/allowed",
 								"description":"desc-2",
@@ -416,11 +347,6 @@ func TestDiscoveryServicePodcastEpisodesByItunesID(t *testing.T) {
 								"duration":55,
 								"explicit":0,
 								"image":"https://example.com/episode-2.jpg",
-								"feedImage":"https://example.com/feed.jpg",
-								"feedId":75075,
-								"feedLanguage":"en-us",
-								"feedDead":0,
-								"feedItunesId":123,
 								"transcriptUrl":"javascript:alert(1)"
 							}
 						]
@@ -478,9 +404,7 @@ func TestDiscoveryServicePodcastEpisodesByItunesID(t *testing.T) {
 								"enclosureLength":111,
 								"duration":54,
 								"explicit":1,
-								"image":"https://example.com/episode-1.jpg",
-								"feedImage":"https://example.com/feed.jpg",
-								"feedItunesId":123
+								"image":"https://example.com/episode-1.jpg"
 							},
 							{
 								"id":2,
@@ -494,9 +418,7 @@ func TestDiscoveryServicePodcastEpisodesByItunesID(t *testing.T) {
 								"enclosureLength":222,
 								"duration":55,
 								"explicit":0,
-								"image":"https://example.com/episode-2.jpg",
-								"feedImage":"https://example.com/feed.jpg",
-								"feedItunesId":123
+								"image":"https://example.com/episode-2.jpg"
 							}
 						]
 					}`), nil
@@ -552,12 +474,7 @@ func TestDiscoveryServicePodcastEpisodesByItunesID(t *testing.T) {
 								"enclosureLength":26385472,
 								"duration":54,
 								"explicit":1,
-								"image":"https://example.com/episode-1.jpg",
-								"feedImage":"https://example.com/feed.jpg",
-								"feedId":75075,
-								"feedLanguage":"en-us",
-								"feedDead":0,
-								"feedItunesId":123
+								"image":"https://example.com/episode-1.jpg"
 							}
 						]
 					}`), nil

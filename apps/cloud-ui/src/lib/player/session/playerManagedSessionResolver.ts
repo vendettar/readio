@@ -1,11 +1,11 @@
-import type { PlaybackSession } from '../dexieDb'
-import { resolvePlaybackStateIdentityKey } from './playbackIdentity'
+import type { PlaybackSession } from '../../dexieDb'
+import { resolvePlaybackStateIdentityKey } from '../playbackIdentity'
+import { type EpisodeMetadataInput, normalizeEpisodeMetadata } from '../playbackMetadata'
 import {
   CREATE_MANAGED_PLAYBACK_SESSION_REASON,
   createManagedPlaybackSession,
   findManagedPlaybackSessionCandidate,
 } from './playerSessionManagementService'
-import { normalizeEpisodeMetadata, type EpisodeMetadataInput } from './playbackMetadata'
 
 type LivePlaybackState = {
   audioTitle: string

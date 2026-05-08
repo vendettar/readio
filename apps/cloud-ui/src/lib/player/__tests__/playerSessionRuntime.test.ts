@@ -5,7 +5,7 @@ import {
   applyExistingManagedPlaybackSession,
   resolveCurrentPlaybackRestoreTarget,
   restorePlaybackProgressForTarget,
-} from '../playerSessionRuntime'
+} from '../session/playerSessionRuntime'
 
 vi.mock('../../logger', () => ({
   log: vi.fn(),
@@ -23,7 +23,7 @@ vi.mock('../../repositories/PlaybackRepository', () => ({
   },
 }))
 
-describe('playerSessionRuntime', () => {
+describe('player/session/playerSessionRuntime', () => {
   beforeEach(() => {
     usePlayerStore.getState().reset()
     vi.clearAllMocks()

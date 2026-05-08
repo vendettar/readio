@@ -203,18 +203,20 @@ export default function PodcastShowPage() {
 
             {/* Primary Interactions - Aligned to bottom */}
             <div className="flex items-end gap-3 pt-6 pe-4">
-              {normalizedRouteCountry && episodesSection.status === 'ready' && episodesSection.episodes[0] && (
-                <Button
-                  onClick={() => {
-                    const ep = episodesSection.episodes[0]
-                    playEpisode(ep, podcast, normalizedRouteCountry)
-                  }}
-                  className="rounded-md bg-primary hover:opacity-90 text-primary-foreground px-5 h-8 font-bold text-xs flex items-center gap-1.5 shadow-none transition-all active:scale-95"
-                >
-                  <Play className="w-3.5 h-3.5 fill-current" />
-                  {t('latestEpisode')}
-                </Button>
-              )}
+              {normalizedRouteCountry &&
+                episodesSection.status === 'ready' &&
+                episodesSection.episodes[0] && (
+                  <Button
+                    onClick={() => {
+                      const ep = episodesSection.episodes[0]
+                      playEpisode(ep, podcast, normalizedRouteCountry)
+                    }}
+                    className="rounded-md bg-primary hover:opacity-90 text-primary-foreground px-5 h-8 font-bold text-xs flex items-center gap-1.5 shadow-none transition-all active:scale-95"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                    {t('latestEpisode')}
+                  </Button>
+                )}
 
               <ActionToggle
                 active={isSubscribed}

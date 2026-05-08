@@ -1,13 +1,12 @@
-import { normalizeCountryParam, type SupportedCountry } from '../routes/podcastRoutes'
-import type { PlaybackRequestMode } from './playbackMode'
+import { normalizeCountryParam, type SupportedCountry } from '../../routes/podcastRoutes'
+import type { PlaybackRequestMode } from '../playbackMode'
 
 export const PLAYBACK_METADATA_KIND = {
   LOCAL: 'local',
   REMOTE_EPISODE: 'remote-episode',
 } as const
 
-type PlaybackMetadataKind =
-  (typeof PLAYBACK_METADATA_KIND)[keyof typeof PLAYBACK_METADATA_KIND]
+type PlaybackMetadataKind = (typeof PLAYBACK_METADATA_KIND)[keyof typeof PLAYBACK_METADATA_KIND]
 
 interface SharedEpisodeMetadataInput {
   kind?: PlaybackMetadataKind

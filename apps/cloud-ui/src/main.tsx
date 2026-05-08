@@ -8,13 +8,12 @@ import { TooltipProvider } from './components/ui/tooltip'
 import './index.css'
 import { NetworkError } from './lib/fetchUtils'
 import './lib/i18n'
-import { getAppConfig, fetchRuntimeConfig } from './lib/runtimeConfig'
+import { fetchRuntimeConfig, getAppConfig } from './lib/runtimeConfig'
 import { router } from './router'
 
 // Initial configuration bootstrap
 // For decoupled deployments (CF Pages), this fetches runtime config from the VPS.
 await fetchRuntimeConfig()
-
 
 // Polyfill Buffer for browser compatibility (required by music-metadata)
 // Must happen before modules that depend on it are loaded if they are dynamic,

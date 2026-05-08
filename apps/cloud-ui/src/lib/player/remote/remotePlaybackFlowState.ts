@@ -1,6 +1,6 @@
-import { TRANSCRIPT_INGESTION_STATUS, useTranscriptStore } from '../../store/transcriptStore'
-import { autoIngestEpisodeTranscript } from '../remoteTranscript'
-import type { EpisodeMetadata } from './playbackMetadata'
+import { TRANSCRIPT_INGESTION_STATUS, useTranscriptStore } from '../../../store/transcriptStore'
+import { autoIngestEpisodeTranscript } from '../../remoteTranscript'
+import type { EpisodeMetadata } from '../playbackMetadata'
 
 export interface RemotePlaybackFlowDeps {
   setAudioUrl: (
@@ -59,13 +59,7 @@ export async function completePlaybackReadyState<TMetadata extends EpisodeMetada
     useTranscriptStore.getState().resetTranscript()
   }
 
-  input.deps.setAudioUrl(
-    input.source.url,
-    input.playableTitle,
-    input.artwork,
-    input.metadata,
-    true
-  )
+  input.deps.setAudioUrl(input.source.url, input.playableTitle, input.artwork, input.metadata, true)
   await input.onReadyToPlay?.({
     source: input.source,
     isStreamWithoutTranscript: input.isStreamWithoutTranscript,
