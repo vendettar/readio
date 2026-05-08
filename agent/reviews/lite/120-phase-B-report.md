@@ -9,7 +9,7 @@ APPROVE
 | apps/lite/src/lib/discovery/providers/apple.ts | major | Reviewed | Discovery mapping/cache/read-through reviewed. |
 | apps/lite/src/lib/discovery/podcastQueryContract.ts | major | Reviewed | Query key/cache contract reviewed. |
 | apps/lite/src/hooks/useEpisodeResolution.ts | major | Reviewed | Resolver fallback + signal propagation reviewed. |
-| apps/lite/src/lib/discovery/feedUrl.ts | major | Reviewed | Feed normalization boundary reviewed. |
+| historical feed-normalization module | major | Reviewed | Historical legacy-feed normalization boundary reviewed. |
 | apps/lite/src/lib/discovery/libraryRouteSearch.ts | minor | Reviewed | Route-search tolerance contract reviewed. |
 | packages/core/src/schemas/discovery.ts | minor | Reviewed | Upstream schema integrity cross-check. |
 | apps/lite/src/lib/discovery/__tests__/appleCacheBehavior.test.ts | minor | Reviewed | Cache behavior evidence check. |

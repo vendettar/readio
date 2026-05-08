@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
 import { DB, db } from '../dexieDb'
 
 describe('Dexie database operations', () => {
@@ -95,6 +94,58 @@ describe('Dexie database operations', () => {
     const latest = await DB.findLastSessionByTrackId('track-1')
 
     expect(latest?.id).toBe('track-session-new')
+  })
+
+  it('finds the latest explore playback session by canonical episode identity', async () => {
+    await DB.createPlaybackSession({
+      id: 'explore-session-old',
+      source: 'explore',
+      title: 'Older Explore Session',
+      audioUrl: 'https://old-cdn.example.com/audio.mp3',
+      artworkUrl: 'https://example.com/art.jpg',
+      showTitle: 'Podcast',
+      episodeGuid: 'episode-guid-1',
+      podcastItunesId: 'podcast-1',
+      countryAtSave: 'us',
+      lastPlayedAt: 1000,
+    })
+    await DB.createPlaybackSession({
+      id: 'explore-session-new',
+      source: 'explore',
+      title: 'Newer Explore Session',
+      audioUrl: 'https://new-cdn.example.com/audio.mp3',
+      artworkUrl: 'https://example.com/art.jpg',
+      showTitle: 'Podcast',
+      episodeGuid: 'episode-guid-1',
+      podcastItunesId: 'podcast-1',
+      countryAtSave: 'us',
+      lastPlayedAt: 2000,
+    })
+
+    const latest = await DB.findLastExploreSessionByCanonicalIdentity('podcast-1', 'episode-guid-1')
+
+    expect(latest?.id).toBe('explore-session-new')
+  })
+
+  it('strips canonical explore identity fields from local playback sessions', async () => {
+    await DB.createPlaybackSession({
+      id: 'local-session-no-canonical-identity',
+      source: 'local',
+      title: 'Local Session',
+      audioUrl: 'https://example.com/local.mp3',
+      artworkUrl: 'https://example.com/local.jpg',
+      showTitle: 'Local Podcast',
+      episodeGuid: 'should-be-stripped',
+      podcastItunesId: 'should-be-stripped',
+      countryAtSave: 'us',
+    } as unknown as Parameters<typeof DB.createPlaybackSession>[0])
+
+    const session = await DB.getPlaybackSession('local-session-no-canonical-identity')
+
+    expect(session?.source).toBe('local')
+    expect(session?.episodeGuid).toBeUndefined()
+    expect(session?.podcastItunesId).toBeUndefined()
+    expect(session?.countryAtSave).toBeUndefined()
   })
 
   it('supports remote transcript cache CRUD operations', async () => {
@@ -263,9 +314,14 @@ describe('Dexie database operations', () => {
       id: 'session-explore-audio-ref',
       source: 'explore',
       title: 'Remote reference',
+      audioUrl: 'https://cdn.example.com/remote-reference.mp3',
       audioId,
+      artworkUrl: 'https://example.com/art.jpg',
       hasAudioBlob: true,
       localTrackId: null,
+      showTitle: 'Podcast',
+      episodeGuid: 'episode-guid-audio-ref',
+      podcastItunesId: 'podcast-audio-ref',
       countryAtSave: 'us',
     })
 
@@ -465,14 +521,57 @@ describe('Dexie database operations', () => {
     await expect(
       DB.addFavorite({
         key: 'k-1',
-        feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
         audioUrl: 'https://example.com/audio.mp3',
         episodeTitle: 'Episode',
         podcastTitle: 'Podcast',
-        artworkUrl: '',
+        artworkUrl: 'https://example.com/podcast-art.jpg',
+        episodeArtworkUrl: '',
+        description: '',
+        pubDate: '2025-02-01',
+        durationSeconds: 180,
         addedAt: Date.now(),
+        podcastItunesId: 'pod-1',
+        episodeGuid: 'episode-guid-1',
       } as unknown as Parameters<typeof DB.addFavorite>[0])
     ).rejects.toThrow(/country/i)
+  })
+
+  it('allows favorite persistence when description and episodeArtworkUrl are empty strings', async () => {
+    await DB.addFavorite({
+      key: 'pod-1::episode-guid-1',
+      audioUrl: 'https://example.com/audio.mp3',
+      episodeTitle: 'Episode',
+      podcastTitle: 'Podcast',
+      artworkUrl: 'https://example.com/podcast-art.jpg',
+      episodeArtworkUrl: '',
+      description: '',
+      pubDate: '2025-02-01',
+      durationSeconds: 180,
+      addedAt: Date.now(),
+      podcastItunesId: 'pod-1',
+      episodeGuid: 'episode-guid-1',
+      countryAtSave: 'us',
+    })
+
+    const favorites = await DB.getAllFavorites()
+    expect(favorites).toHaveLength(1)
+    expect(favorites[0]).toMatchObject({
+      description: '',
+      episodeArtworkUrl: '',
+    })
+  })
+
+  it('rejects subscription persistence when canonical fields are missing', async () => {
+    await expect(
+      DB.addSubscription({
+        podcastItunesId: 'pod-1',
+        title: '   ',
+        author: 'Host',
+        artworkUrl: 'https://example.com/art.jpg',
+        addedAt: Date.now(),
+        countryAtSave: 'us',
+      } as unknown as Parameters<typeof DB.addSubscription>[0])
+    ).rejects.toThrow(/title/i)
   })
 
   it('rejects explore playback session persistence when countryAtSave is missing', async () => {
@@ -481,8 +580,23 @@ describe('Dexie database operations', () => {
         id: 'session-explore-missing-country',
         source: 'explore',
         title: 'Explore episode',
+        audioUrl: 'https://cdn.example.com/episode.mp3',
+        artworkUrl: 'https://example.com/art.jpg',
+        showTitle: 'Podcast',
         episodeGuid: 'episode-guid-1',
+        podcastItunesId: 'podcast-1',
       } as unknown as Parameters<typeof DB.createPlaybackSession>[0])
     ).rejects.toThrow(/country/i)
+  })
+
+  it('rejects explore playback session persistence when canonical remote metadata is missing', async () => {
+    await expect(
+      DB.createPlaybackSession({
+        id: 'session-explore-missing-identity',
+        source: 'explore',
+        title: 'Explore episode',
+        countryAtSave: 'us',
+      } as unknown as Parameters<typeof DB.createPlaybackSession>[0])
+    ).rejects.toThrow(/episodeGuid|podcastItunesId|audioUrl|showTitle|artworkUrl/i)
   })
 })

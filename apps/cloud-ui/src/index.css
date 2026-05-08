@@ -233,8 +233,8 @@
   font-family: var(--font-serif, ui-serif, Georgia, Cambria, "Times New Roman", Times, serif);
 }
 
-/* 
- * CSS Isolation for external RSS content
+/*
+ * CSS Isolation for external long-form HTML content
  * Resets all inherited properties to browser defaults and re-applies app tokens.
  */
 .prose-isolate {

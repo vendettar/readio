@@ -24,23 +24,31 @@ title: Discovery & Explore
 ## 3. Second-Hop Ownership
 
 - Show metadata: PodcastIndex `podcasts/byitunesid`
-- Exact episode fallback order:
-  1. match cached RSS episodes by stable episode identity when feed data is already present
-  2. resolve canonical podcast metadata through PodcastIndex `podcasts/byitunesid`
-  3. fetch RSS by `feedUrl` through the same-origin Cloud feed route as the fallback source of truth
+- Page-rendering PI episode list relay: Cloud relay `GET /api/v1/discovery/podcasts/:itunesId/episodes`
+- Upstream page-rendering source of truth: PodcastIndex `episodes/byitunesid?max=1000`
+- PI page-rendering episode relay emits `guid` and requires a valid `artworkUrl`; rows without valid episode/feed artwork are dropped at the backend boundary
+- Upstream PI may still contain a feed URL, but repo-owned Cloud runtime contracts do not expose or depend on it.
+- Page rendering must not use RSS feed XML for:
+  - show page episode list
+  - episodes page episode list
+  - episode detail hydration
 
 ## 4. Cache Model
 
 - Frontend: TanStack Query memory cache
 - Backend:
   - top / lookup routes: in-memory relay cache with graceful degradation
-  - feed route: separate small in-memory parsed-feed cache with short TTL, fresh-only semantics, and no stale fallback
-  - feed cache key: normalized `feedUrl` only
-  - omitted `limit` uses the backend default response window (`20`)
-  - optional explicit `limit` only slices the response to `min(limit, len(episodes))`; it does not change the cache key or the cached full parsed feed
-- Frontend feed-window contract:
-  - `PodcastShowPage` uses the feed route without an explicit `limit`, so it receives the backend default window
-  - `PodcastEpisodesPage` also omits `limit` today because the page still has "see all" semantics and no pagination / load-more path
-  - episode-route RSS fallback also omits `limit` so older deep links are still resolvable from the full feed
-  - TanStack Query feed keys must distinguish the requested window whenever explicit larger windows are introduced, so backend default and larger windows do not collide in frontend cache
+  - PI episode list relay route: lookup cache with bounded admission; oversized `max=1000` episode lists are returned but not cached
+  - no active Cloud feed route or parsed-feed cache remains; `/api/v1/discovery/feed` is retired
+  - PI episode list relay cache key: canonical `podcastItunesId` plus authoritative freshness markers
+  - page-rendering ownership is a single frontend PI episode-list key family:
+    - query-key prefix: `['podcast', 'episodes', podcastItunesId, 'pi-list', 'max-1000']`
+    - authority tokens append `lastUpdateTime` / `episodeCount` when available
+  - warm bootstrap and detail lookup may scan that same-podcast key family, pick the freshest candidate, and reuse it only as temporary `initialData`
+  - if authority markers drift, the stale candidate may still bootstrap the page, but it is non-authoritative and must not be trusted for exact episode resolution
+  - after a successful refresh, superseded same-podcast authority variants are deleted so steady state is one surviving full-copy PI episode-list entry per podcast
+  - duplicate `guid` entries are collapsed deterministically by keeping the first PI episode-list occurrence
+- Legacy feed-field note:
+  - upstream feeds may still publish feed transport metadata, but repo-owned Cloud runtime contracts do not expose, persist, or key on it
+  - legacy feed transport metadata must not be documented as an active discovery fetch key, route authority, or backend cache key
 - No long-lived frontend discovery persistence in Cloud

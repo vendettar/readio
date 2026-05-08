@@ -1,4 +1,4 @@
-# Instruction 014a — Cloud Admin Backend: Ring Buffer, Endpoints, Auth, Metrics
+# Instruction 014a — Cloud Admin Backend: Ring Buffer, Endpoints, Auth, Metrics [COMPLETED]
 
 Execute as part of 014 (Cloud Lightweight Admin Observability).
 
@@ -135,3 +135,13 @@ Both server-owned. NOT in `browserEnvAllowlist`.
 4. sensitive redaction keys
 5. tests added
 6. verification results
+
+## Completion
+
+- **Completed by**: Worker
+- **Commands**:
+  - `go test ./...` (apps/cloud-api)
+  - `go vet ./...` (apps/cloud-api)
+  - `go build ./...` (apps/cloud-api)
+- **Date**: 2026-04-02
+- **Reviewed by**: Security, Refactor, Reviewer (recorded in 014 phase summary)

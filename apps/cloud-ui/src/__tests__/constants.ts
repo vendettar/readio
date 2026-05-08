@@ -5,9 +5,10 @@ export const DISCOVERY_TEST_ROUTE = {
   topEpisodes: '/api/v1/discovery/top-episodes',
   searchPodcasts: '/api/v1/discovery/search/podcasts',
   searchEpisodes: '/api/v1/discovery/search/episodes',
-  feed: '/api/v1/discovery/feed',
   podcastsBatch: '/api/v1/discovery/podcasts/batch',
   podcastByItunesId: (id: string) => `/api/v1/discovery/podcasts/${encodeURIComponent(id)}`,
+  podcastEpisodesByItunesId: (id: string) =>
+    `/api/v1/discovery/podcasts/${encodeURIComponent(id)}/episodes`,
 } as const
 
 export function discoveryUrl(pathname: string): string {

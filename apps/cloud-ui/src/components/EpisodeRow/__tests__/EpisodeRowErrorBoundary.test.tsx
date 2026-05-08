@@ -1,9 +1,8 @@
 import { render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
 import { createQueryClientWrapper } from '../../../__tests__/queryClient'
-import type { FeedEpisode, Podcast } from '../../../lib/discovery'
+import type { Episode, Podcast } from '../../../lib/discovery'
 import { EpisodeRow } from '../EpisodeRow'
 
 const playEpisodeMock = vi.fn()
@@ -85,19 +84,22 @@ vi.mock('../../interactive/InteractiveTitle', () => {
 })
 
 // Build minimal props
-const buildEpisode = (title: string, id: string): FeedEpisode => ({
-  episodeGuid: id,
-  title,
-  description: 'Test Desc',
-  duration: 60,
-  pubDate: new Date().toISOString(),
-  audioUrl: `http://test.com/${id}.mp3`,
-})
+const buildEpisode = (title: string, id: string): Episode =>
+  ({
+    guid: id,
+    title,
+    description: 'Test Desc',
+    duration: 60,
+    explicit: false,
+    pubDate: new Date().toISOString(),
+    audioUrl: `http://test.com/${id}.mp3`,
+    link: `http://test.com/${id}`,
+    artworkUrl: `http://test.com/${id}.jpg`,
+  }) as Episode
 
 const mockPodcast: Podcast = {
   podcastItunesId: '101',
   title: 'Test Podcast',
-  feedUrl: normalizeFeedUrl('http://test.com/feed.xml'),
   author: 'Test Artist',
   artwork: 'http://test.com/art.jpg',
   description: 'Test description',

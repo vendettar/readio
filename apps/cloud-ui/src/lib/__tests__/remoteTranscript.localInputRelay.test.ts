@@ -115,8 +115,12 @@ describe('remoteTranscript local media input relay paths', () => {
       sourceUrlNormalized: originalAudioUrl,
       downloadedAt: Date.now(),
       countryAtSave: 'us',
+      sourcePodcastItunesId: 'podcast-1',
+      sourceEpisodeGuid: 'episode-guid-1',
       sourcePodcastTitle: 'Podcast',
       sourceEpisodeTitle: 'Episode',
+      sourceDescription: 'Episode description',
+      sourceArtworkUrl: 'https://example.com/cover.jpg',
     })
 
     transcribeAudioWithRetryMock.mockResolvedValue({

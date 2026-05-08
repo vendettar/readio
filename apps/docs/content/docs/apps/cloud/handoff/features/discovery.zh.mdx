@@ -24,21 +24,31 @@ title: 播客发现 (Explore)
 ## 3. 二跳所有权
 
 - 节目元数据：PodcastIndex `podcasts/byitunesid`
-- 单集匹配：优先按稳定单集身份命中已缓存 RSS
-- RSS 兜底：通过同源 Cloud feed route 按 `feedUrl` 获取，并作为后续单集解析的事实来源
+- 页面渲染用 PI 单集列表 relay：Cloud relay `GET /api/v1/discovery/podcasts/:itunesId/episodes`
+- 页面渲染的上游事实来源：PodcastIndex `episodes/byitunesid?max=1000`
+- PI 页面渲染单集 relay 对外暴露 `guid`，并要求 `artworkUrl` 必须有效；如果后端无法从 episode/feed 产出合法 artwork URL，该行会被直接丢弃
+- 上游 PI 仍可能包含 feed URL，但 repo-owned 的 Cloud 运行时契约已经不再暴露或依赖它。
+- 页面渲染不得再使用 RSS feed XML，包括：
+  - 节目页单集列表
+  - 全部单集页单集列表
+  - 单集详情 hydration
 
 ## 4. 缓存模型
 
 - 前端：TanStack Query 内存缓存
 - 后端：
   - top / lookup 路由：带优雅降级的 relay 内存缓存
-  - feed 路由：独立的小型进程内 parsed-feed 缓存，短 TTL、fresh-only，不提供 stale fallback
-  - feed cache key：仅使用归一化后的 `feedUrl`
-  - 省略 `limit` 时，后端使用默认响应窗口（`20`）
-  - 显式 `limit` 只负责把响应裁成 `min(limit, len(episodes))`；它不会进入 cache key，也不会改变缓存里的完整 parsed feed
-- 前端 feed window 契约：
-  - `PodcastShowPage` 不显式传 `limit`，因此使用后端默认窗口
-  - `PodcastEpisodesPage` 当前也不显式传 `limit`，因为这个页面仍然承载 “see all” 语义，且还没有分页 / load-more
-  - episode route 的 RSS fallback 也不显式传 `limit`，以保证较旧的 deep link 仍然可以从完整 feed 中解析出来
-  - 当未来引入显式大窗口时，TanStack Query 的 feed key 必须区分请求窗口，避免后端默认窗口和更大窗口在前端 cache 中发生碰撞
+  - PI 单集列表 relay 路由：lookup cache 只允许有界写入；超大的 `max=1000` 单集列表会返回给调用方，但不会进入缓存
+  - 已不存在活跃的 Cloud feed 路由或 parsed-feed cache；`/api/v1/discovery/feed` 已退役
+  - PI 单集列表 relay cache key：canonical `podcastItunesId` 加权威 freshness markers
+  - 页面渲染所有权收敛为一组前端 PI 单集列表 key family：
+    - query-key prefix：`['podcast', 'episodes', podcastItunesId, 'pi-list', 'max-1000']`
+    - 在可用时再追加 `lastUpdateTime` / `episodeCount` authority tokens
+  - warm bootstrap 和单集详情查找都可以扫描同一播客下的 key family，选出最新的一条，只把它当作临时 `initialData`
+  - 如果 authority markers 漂移，旧列表仍可短暂参与首屏 bootstrap，但它属于 non-authoritative 数据，不能被信任为 exact episode resolution 的依据
+  - 成功刷新后，旧的同播客 authority 变体必须被删除；稳态下每个播客只保留一份完整 PI 单集列表
+  - 重复的 `guid` 会按确定性规则折叠，只保留 PI 单集列表中的第一条
+- 旧 feed 字段说明：
+  - 上游 feed 仍可能发布 feed transport metadata，但 repo-owned 的 Cloud 运行时契约不会暴露、持久化或以它作为 key
+  - 文档不得再把旧的 feed transport metadata 描述成活跃 discovery fetch key、route authority 或后端 cache key
 - Cloud 不再使用长期持久化的前端 discovery 缓存

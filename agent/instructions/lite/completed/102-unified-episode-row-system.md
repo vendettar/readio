@@ -30,7 +30,7 @@ Unify duplicated episode-row mapping and interaction logic across Podcast, Searc
 - Logging:
   - Keep existing error logging points for favorite failures.
 - Network:
-  - Keep existing `SearchEpisodeItem` fallback fetch behavior for missing `feedUrl`.
+  - Keep existing `SearchEpisodeItem` fallback fetch behavior for missing legacy feed-owned hints.
 - Storage:
   - No localStorage/IndexedDB key changes.
 - UI state:
@@ -75,9 +75,9 @@ Unify duplicated episode-row mapping and interaction logic across Podcast, Searc
      - `favorited`
      - `isSaving`
    - Required behavior:
-     - preserve existing search favorite add flow (`feedUrl` path first, lookup fallback second).
+     - preserve existing search favorite add flow (legacy feed-hint path first, lookup fallback second).
      - preserve toast + error logging behavior when add/remove fails.
-     - keep key construction compatibility (`feedUrl::audioUrl`) with existing favorites store.
+     - keep key construction compatibility (`legacyFeedHint::audioUrl`) with existing favorites store.
 
 3. **Create unified row container component**
    - Add:
@@ -123,7 +123,7 @@ Unify duplicated episode-row mapping and interaction logic across Podcast, Searc
 ## Acceptance Criteria
 - Podcast show/episodes, Search results, Favorites, and History still render with current visual behavior.
 - Favorite add/remove behavior remains unchanged across all four surfaces.
-- Search favorite add still works when `feedUrl` is missing.
+- Search favorite add still works when legacy feed-owned hints are missing.
 - Row formatting logic is no longer duplicated across these files.
 - `BaseEpisodeRow` remains the only presentational row primitive.
 

@@ -35,22 +35,21 @@ All error responses use `Content-Type: application/json; charset=utf-8`.
 
 ## Discovery (`/api/v1/discovery/*`)
 
+Active discovery routes are search / top / Editor's Picks batch lookup / podcast lookup / episode-list lookup. The legacy `/api/v1/discovery/feed` route is retired, so feed-lookup-only error codes are no longer part of the active contract.
+
 | Code | HTTP Status | Trigger | Troubleshooting |
 |------|-------------|---------|-----------------|
 | `METHOD_NOT_ALLOWED` | 405 | Non-GET request | Use GET for discovery endpoints |
 | `NOT_FOUND` | 404 | Unknown discovery endpoint | Check the URL path against available routes |
 | `INVALID_COUNTRY` | 400 | Country code not 2-letter lowercase | Use ISO 3166-1 alpha-2 code (e.g., `us`, `gb`) |
 | `INVALID_TERM` | 400 | Search term is empty | Provide a non-empty search query |
-| `MISSING_URL` | 400 | URL parameter required for feed lookup | Include `url` query parameter |
-| `INVALID_URL` | 400 | Invalid or disallowed feed URL | Ensure URL is valid http/https and not a private/reserved host |
 | `MISSING_ID` | 400 | Required `id` parameter missing | Include the `id` query parameter |
 | `INVALID_ID` | 400 | `id` is not a positive integer | ID must be a positive integer |
 | `INVALID_IDS` | 400 | `ids` list contains non-integer values | IDs must be a comma-separated list of positive integers |
 | `INVALID_LIMIT` | 400 | `limit` is out of allowed range | Limit must be between 1 and the maximum for the endpoint |
-| `UPSTREAM_TIMEOUT` | 504 | iTunes/RSS upstream request timed out | Retry after a delay; check upstream availability |
-| `UPSTREAM_TOO_LARGE` | 502 | Upstream response exceeded size limit | Feed may be too large; contact upstream |
+| `UPSTREAM_TIMEOUT` | 504 | Apple / PodcastIndex upstream request timed out | Retry after a delay; check upstream availability |
+| `UPSTREAM_TOO_LARGE` | 502 | Upstream response exceeded size limit | Upstream payload may exceed relay bounds; inspect upstream response volume |
 | `INVALID_UPSTREAM_PAYLOAD` | 502 | Upstream response not valid JSON | Upstream API may be returning HTML error page |
-| `INVALID_UPSTREAM_XML` | 502 | Upstream response not valid XML | RSS feed may be malformed |
 | `UPSTREAM_INVALID_RESPONSE` | 502 | Upstream returned non-success status | Check upstream API health |
 | `UPSTREAM_REQUEST_FAILED` | 502 | Upstream request failed (network error) | Check network connectivity to upstream |
 

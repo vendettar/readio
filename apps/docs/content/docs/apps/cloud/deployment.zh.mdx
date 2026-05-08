@@ -89,20 +89,68 @@ SSH 安全规则：
 - 保持 `StrictHostKeyChecking=yes`。
 - 不要把 `StrictHostKeyChecking=no` 作为可接受的文档化路径。
 
-## 2a. 远端前置条件
+## 2a. 远端前置条件 (Stage C: 手动运维)
 
-在工作流能够成功执行之前，目标 VPS 必须已经具备：
+在工作流能够成功执行之前，目标 VPS 必须已经具备基础环境。除了使用下方的自动化脚本外，你还需要手动完成以下操作：
 
-- 与 `CLOUD_SSH_USER` 一致的 Linux 用户
-- 该用户可通过上传的私钥进行 SSH 登录
-- VPS 上已安装 `rsync`
-- VPS 上已安装 `curl`，用于健康检查
-- `systemd` 中同时存在：
-  - 一个名称与 `CLOUD_SERVICE_NAME` 一致的 production service
-  - 一个名为 `readio-cloud-pre` 的 pre-production service
-- SSH 用户具备重启并检查该服务状态的权限
-  - 要么服务直接由该 SSH 用户管理
-  - 要么该 SSH 用户可非交互式执行所需的 `systemctl` 命令
+1. **系统基础工具**：
+   - `sudo apt update && sudo apt install rsync curl sqlite3 nginx certbot python3-certbot-nginx`
+2. **用户与权限**：
+   - 创建与 `CLOUD_SSH_USER` 一致的 Linux 用户，并配置好 SSH 公钥登录。
+3. **外部基础设施 (Stage C)**：
+   - **Nginx 反向代理**：参考 `scripts/nginx-readio-cloud.conf` 配置反向代理，将域名转发至 `8080` (Prod) 或 `8079` (Pre)。
+   - **SSL 证书**：运行 `sudo certbot --nginx` 为域名申请证书。
+   - **防火墙**：建议使用 `ufw` 仅开放 `80`, `443` 和 `SSH` 端口。
+
+## 2b. GitHub 配置清单 (Checklist)
+
+你需要在 GitHub 的 **Settings -> Secrets and variables -> Actions** 中进行以下录入。
+
+### 1. Secrets (敏感信息 - 存放在 GitHub Secrets)
+
+| 密钥名称 | 说明 | 示例/获取方式 |
+| :--- | :--- | :--- |
+| **基础 SSH (必填)** | | |
+| `CLOUD_SSH_HOST` | 服务器 IP | `1.2.3.4` |
+| `CLOUD_SSH_PORT` | SSH 端口 | `22` |
+| `CLOUD_SSH_USER` | 登录用户名 | `readio` |
+| `CLOUD_SSH_KEY` | SSH 私钥 | `-----BEGIN OPENSSH PRIVATE KEY-----...` |
+| **应用 Secrets (可选/根据功能)** | | |
+| `READIO_ADMIN_TOKEN` | 管理端 Token | `openssl rand -base64 48` |
+| `READIO_ASR_RELAY_PUBLIC_TOKEN` | ASR 公共验证 Token | 用于 ASR 滥用控制 |
+| `READIO_ASR_WORKER_SHARED_SECRET` | ASR Worker 密钥 | 与 Cloudflare Worker 匹配 |
+| `READIO_CF_ACCOUNT_ID` | Cloudflare ID | 用于内置 ASR |
+| `READIO_CF_API_TOKEN` | Cloudflare Token | 用于内置 ASR |
+| `PODCAST_INDEX_API_KEY` | PodcastIndex Key | 播客数据源 |
+| `PODCAST_INDEX_API_SECRET` | PodcastIndex Secret | 播客数据源 |
+| `GRAFANA_OTLP_INSTANCE_ID` | Grafana 实例 ID | Grafana Cloud -> Metrics -> Instance ID |
+| `GRAFANA_OTLP_TOKEN` | Grafana API Token | Grafana Cloud -> Access Policies -> Token |
+| `VITE_GRAFANA_FARO_URL` | Faro 收集器 URL | Grafana Cloud -> Front-end Monitoring |
+
+### 2. Variables (非敏感配置 - 存放在 GitHub Variables)
+
+| 变量名称 | 推荐值 | 说明 |
+| :--- | :--- | :--- |
+| `READIO_ASR_ALLOWED_ORIGINS` | `https://readio.top` | ASR 允许的跨域来源 |
+| `READIO_ASR_WORKER_BASE_URL` | `https://asr.xxx.workers.dev` | 外部 Worker 地址 |
+| `READIO_ASR_BUILTIN_ALLOWED` | `true` | 是否启用内置 ASR |
+| `PODCAST_INDEX_USER_AGENT` | `Readio/1.0` | 访问数据源的 UserAgent |
+| `GRAFANA_OTLP_ENDPOINT` | `https://otlp-...` | OTLP 推送端点 |
+| `VITE_GRAFANA_FARO_APP_NAME` | `readio-cloud` | 前端监控应用名 |
+| `VITE_GRAFANA_FARO_ENV` | `production` | 监控环境标识 |
+| `VITE_GRAFANA_FARO_SAMPLE_RATE` | `1.0` | 采样率 (0.0 - 1.0) |
+
+
+在工作流能够成功执行之前，目标 VPS 必须已经具备基础环境。除了使用下方的自动化脚本外，你还需要手动完成以下操作：
+
+1. **系统基础工具**：
+   - `sudo apt update && sudo apt install rsync curl sqlite3 nginx certbot python3-certbot-nginx`
+2. **用户与权限**：
+   - 创建与 `CLOUD_SSH_USER` 一致的 Linux 用户，并配置好 SSH 公钥登录。
+3. **外部基础设施 (Stage C)**：
+   - **Nginx 反向代理**：参考 `scripts/nginx-readio-cloud.conf` 配置反向代理，将域名转发至 `8080` (Prod) 或 `8079` (Pre)。
+   - **SSL 证书**：运行 `sudo certbot --nginx` 为域名申请证书。
+   - **防火墙**：建议使用 `ufw` 仅开放 `80`, `443` 和 `SSH` 端口。
 
 本部署指南假设这些前置条件已经存在。如果其中任意一项缺失，工作流即使构建成功，也仍可能在发布或烟测阶段失败。
 
@@ -133,8 +181,9 @@ SSH 安全规则：
 
 数据库启动契约：
 
+- 必须显式把 `READIO_CLOUD_DB_PATH` 设置为绝对路径；`apps/cloud-api` 不会回退到 release-local 的默认数据库路径
 - deployer 必须预先创建 `READIO_CLOUD_DB_PATH` 的父目录
-- `apps/cloud-api` 会在启动时、开始提供请求之前自动执行 goose migrations
+- `apps/cloud-api` 会在启动时先打开 SQLite、验证连通性、建立 `journal_mode=WAL`，再通过 SQLite DSN 应用其余 runtime pragmas，随后自动执行 goose migrations，然后才开始提供请求
 - 如果必需的 migration 失败，启动应 fail closed，服务保持不可用，直到 migration 问题被修复
 
 ## 3a. 新主机 VPS 启动
@@ -167,91 +216,20 @@ PodcastIndex Phase 1 也使用同一套 env-file 契约：
 - 前端 `.env` 文件
 - `apps/cloud-ui`
 
-示例启动脚本：
+1. **运行初始化脚本**：建议使用项目根目录下的脚本进行一键配置：
+   ```bash
+   # 生产环境
+   ./scripts/cloud-setup-vps.sh production
+   ```
+2. **脚本功能**：
+   - 创建目录布局 (`/opt/readio`, `/etc/readio` 等)。
+   - 生成 `systemd` 服务单元 (`readio-cloud.service`)。
+   - 生成基础环境变量文件 (`/etc/readio/readio-cloud.env`)。
+   - 设置 `sudoers` 权限，允许 CD 工作流重启服务。
+3. **关键变量配置**：
+   - 脚本执行后，请确保在 GitHub Actions Secrets 中配置好所有敏感 Token。
+   - 首次部署时，CI/CD 会自动同步这些 Secrets 到服务器。
 
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-
-DEPLOY_USER="${SUDO_USER:-$(id -un)}"
-DEPLOY_GROUP="$(id -gn "$DEPLOY_USER")"
-SYSTEMCTL_BIN="$(command -v systemctl)"
-SERVICE_NAME="readio-cloud"
-REMOTE_ROOT="/opt/readio"
-RELEASES_DIR="$REMOTE_ROOT/releases"
-SHARED_DATA_DIR="$REMOTE_ROOT/shared/data"
-PODCASR_TRANSCRIPTS_DIR="$SHARED_DATA_DIR/podcast/transcripts"
-CURRENT_DIR="$REMOTE_ROOT/current"
-DB_PATH="$SHARED_DATA_DIR/readio.db"
-ENV_FILE="/etc/readio/readio-cloud.env"
-SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
-SUDOERS_FILE="/etc/sudoers.d/readio-cloud-cd"
-
-sudo mkdir -p "$RELEASES_DIR"
-sudo mkdir -p "$SHARED_DATA_DIR"
-sudo mkdir -p "$PODCASR_TRANSCRIPTS_DIR"
-sudo mkdir -p /etc/readio
-sudo chown -R "$DEPLOY_USER:$DEPLOY_GROUP" "$REMOTE_ROOT"
-
-sudo tee "$ENV_FILE" >/dev/null <<'EOF'
-READIO_ASR_ALLOWED_ORIGINS=https://readio.top,https://www.readio.top
-READIO_TRUSTED_PROXY_CIDRS=replace-with-your-trusted-proxy-cidrs
-READIO_ADMIN_TOKEN=replace-with-a-long-random-admin-token
-READIO_ASR_RELAY_PUBLIC_TOKEN=replace-with-a-long-random-token
-READIO_ASR_RATE_LIMIT_BURST=60
-READIO_ASR_RATE_LIMIT_WINDOW_MS=60000
-READIO_PROXY_RATE_LIMIT_BURST=5
-READIO_PROXY_RATE_LIMIT_WINDOW_MS=60000
-# Discovery feed cache（小型进程内 TTL 缓存）
-READIO_DISCOVERY_FEED_CACHE_TTL_MS=300000
-READIO_DISCOVERY_FEED_CACHE_MAX_ENTRIES=12
-READIO_DISCOVERY_FEED_CACHE_MAX_EPISODES=300
-READIO_DISCOVERY_FEED_CACHE_MAX_BYTES=1048576
-# ASR Proxy Worker 配置 (可选)
-READIO_ASR_WORKER_BASE_URL=https://asr-proxy.example.workers.dev
-READIO_ASR_WORKER_SHARED_SECRET=your-high-entropy-secret-string
-# 内置 Cloudflare ASR 配置 (使用“系统提供”模式时必填)
-READIO_CF_ACCOUNT_ID=your-cloudflare-account-id
-READIO_CF_API_TOKEN=your-cloudflare-api-token
-READIO_ASR_BUILTIN_ALLOWED=true
-# 可选的 built-in model override；不写时使用后端默认值。
-# READIO_ASR_BUILTIN_MODEL=@cf/openai/whisper-large-v3-turbo
-# PodcastIndex 补充历史 episode 配置 (切换到 PodcastIndex supplementary hydration 时必填)
-PODCAST_INDEX_API_KEY=your-podcastindex-api-key
-PODCAST_INDEX_API_SECRET=your-podcastindex-api-secret
-PODCAST_INDEX_USER_AGENT=Readio/1.0 (+https://www.readio.top)
-EOF
-sudo chmod 600 "$ENV_FILE"
-
-sudo tee "$SERVICE_FILE" >/dev/null <<EOF
-[Unit]
-Description=Readio Cloud Backend
-After=network.target
-
-[Service]
-Type=simple
-User=$DEPLOY_USER
-WorkingDirectory=$CURRENT_DIR
-ExecStart=$CURRENT_DIR/readio-cloud
-Restart=always
-EnvironmentFile=$ENV_FILE
-
-Environment=PORT=8080
-Environment=READIO_CLOUD_UI_DIST_DIR=$CURRENT_DIR/dist
-Environment=READIO_CLOUD_DB_PATH=$DB_PATH
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-sudo tee "$SUDOERS_FILE" >/dev/null <<EOF
-$DEPLOY_USER ALL=(root) NOPASSWD: $SYSTEMCTL_BIN restart $SERVICE_NAME, $SYSTEMCTL_BIN is-active --quiet $SERVICE_NAME, $SYSTEMCTL_BIN status $SERVICE_NAME --no-pager -l, /usr/bin/journalctl -u $SERVICE_NAME -n 100 --no-pager
-EOF
-sudo chmod 440 "$SUDOERS_FILE"
-
-sudo "$SYSTEMCTL_BIN" daemon-reload
-sudo "$SYSTEMCTL_BIN" enable "$SERVICE_NAME"
-```
 
 重要细节：
 
@@ -263,22 +241,17 @@ sudo "$SYSTEMCTL_BIN" enable "$SERVICE_NAME"
 - `READIO_CLOUD_DB_PATH` 的父目录由 deployer 预先创建；服务可以假设该目录已经存在。
 - `/etc/readio/readio-cloud.env` 是推荐的 Cloud 可变运行时配置位置。
 - PodcastIndex supplementary hydration 的凭证和 user agent 也应写在 `/etc/readio/readio-cloud.env`。
-- 如果缺少 `PODCAST_INDEX_API_KEY` 或 `PODCAST_INDEX_API_SECRET`，`/api/v1/discovery/podcast-index/episodes` 会返回 `503 DISCOVERY_PROVIDER_NOT_CONFIGURED`。
+- 如果缺少 `PODCAST_INDEX_API_KEY` 或 `PODCAST_INDEX_API_SECRET`，`/api/v1/discovery/podcasts/:itunesId/episodes` 会返回 `503 DISCOVERY_PROVIDER_NOT_CONFIGURED`。
 - Cloud ASR relay 的防滥用边界依赖 `READIO_ASR_ALLOWED_ORIGINS`、`READIO_ASR_RELAY_PUBLIC_TOKEN`、`READIO_ASR_RATE_LIMIT_BURST`、`READIO_ASR_RATE_LIMIT_WINDOW_MS`。
 - Built-in Cloudflare ASR 能力由 `READIO_CF_ACCOUNT_ID`、`READIO_CF_API_TOKEN` 和 `READIO_ASR_BUILTIN_ALLOWED` 共同决定。
 - Built-in ASR 的 quota policy 不会在首次启动时自动启用。部署完成后，需要进入 `/ops` -> `ASR Usage` 显式写入运行时 policy row。
 - Cloud `/api/proxy` 的应用级速率限制由 `READIO_PROXY_RATE_LIMIT_BURST` 和 `READIO_PROXY_RATE_LIMIT_WINDOW_MS` 控制。
-- Discovery feed cache 由以下配置控制：
-  - `READIO_DISCOVERY_FEED_CACHE_TTL_MS`（默认 `300000`；设为 `0` 或负数时禁用 feed cache）
-  - `READIO_DISCOVERY_FEED_CACHE_MAX_ENTRIES`（默认 `12`；设为 `0` 或负数时禁用 feed cache）
-  - `READIO_DISCOVERY_FEED_CACHE_MAX_EPISODES`（默认 `300`）
-  - `READIO_DISCOVERY_FEED_CACHE_MAX_BYTES`（默认 `1048576`）
-- Discovery feed cache 是进程内、fresh-only、短 TTL 的性能层。它只在内存中保存已解析的 feed payload，不保存原始 XML，也不写磁盘缓存；条目过期后会重新抓取，而不是继续返回 stale feed。
-- 在 cache miss、显式禁用或准入拒绝时，请求仍然会正常抓取上游；这个 cache 只改变短时间内的复用行为，不改变正确性。
+- 现在已经没有活跃的 `READIO_DISCOVERY_FEED_*` 运行时环境变量。退役 `/api/v1/discovery/feed` 时，应从 Cloud env file 中移除遗留值；当前 discovery surface 只依赖其余 Apple / PodcastIndex relay 配置。
 - `READIO_ASR_RELAY_PUBLIC_TOKEN` 只需要在后端运行时环境中配置一次。生产 Cloud 会由 `apps/cloud-api` 动态生成 `/env.js`，把同一个浏览器可见值下发给前端，因此不再需要额外维护一份前端运行时 token。它只是轻量级防滥用值，不是强 secret 边界。
-- Cloud ASR relay 是 browser-facing 的 same-origin endpoint。请求必须带合法 `Origin`；缺失或不被允许的 `Origin` 会被直接拒绝。
+- Cloud ASR relay 是 browser-facing 的 same-origin endpoint。请求必须带合法 `Origin`；缺失或不被允许 of `Origin` 会被直接拒绝。
 - `READIO_ASR_ALLOWED_ORIGINS` 是运维显式编写的 allowlist。请写完整 origin，例如 `https://www.readio.top` 或 `https://example.com:8443`；不要依赖 allowlist 内部对默认端口做隐式归一化。
 - Built-in ASR readiness 通过 `GET /api/v1/asr/builtin/status` 暴露。它刻意只返回 availability 与窄 reason code；精确 quota 仍然只在 `/ops` 中对运维可见。
+- 指标监控采用 OTLP Push 模式，不再使用 Prometheus Pull，因此不需要配置 `READIO_METRICS_TOKEN`。
 - 工作流已经使用 `sudo -n`，因此部署用户必须能够无密码执行 `systemctl restart` 和 `systemctl is-active`。
 - 工作流会在重启服务前把 `/opt/readio/current` 指向新发布目录，所以新主机第一次重启前必须已经存在对应发布目录。
 
@@ -308,111 +281,17 @@ pre-production 还应保持这些边界：
 
 应用 pre-production 这套变体时，应执行 `systemd` reload 并重启 `readio-cloud-pre.service`，不是 `readio-cloud.service`。
 
-可直接执行的 pre-production bootstrap 脚本：
+1. **运行初始化脚本**：
+   ```bash
+   # 预发布环境
+   ./scripts/cloud-setup-vps.sh preproduction
+   ```
+2. **独立性保证**：
+   - 使用独立的 `systemd` unit (`readio-cloud-pre.service`)。
+   - 使用独立的 env file (`/etc/readio/readio-cloud-pre.env`)。
+   - 使用 `/opt/readio-pre/shared/data/` 下独立的 SQLite 数据。
+   - 监听端口为 `8079`。
 
-```bash
-#!/usr/bin/env bash
-set -euo pipefail
-
-DEPLOY_USER="${SUDO_USER:-$(id -un)}"
-DEPLOY_GROUP="$(id -gn "$DEPLOY_USER")"
-SYSTEMCTL_BIN="$(command -v systemctl)"
-
-SERVICE_NAME="readio-cloud-pre"
-REMOTE_ROOT="/opt/readio-pre"
-RELEASES_DIR="$REMOTE_ROOT/releases"
-SHARED_DATA_DIR="$REMOTE_ROOT/shared/data"
-PODCASR_TRANSCRIPTS_DIR="$SHARED_DATA_DIR/podcast/transcripts"
-CURRENT_DIR="$REMOTE_ROOT/current"
-DB_PATH="$SHARED_DATA_DIR/readio.db"
-ENV_FILE="/etc/readio/readio-cloud-pre.env"
-SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
-SUDOERS_FILE="/etc/sudoers.d/readio-cloud-pre-cd"
-
-sudo mkdir -p "$RELEASES_DIR"
-sudo mkdir -p "$SHARED_DATA_DIR"
-sudo mkdir -p "$PODCASR_TRANSCRIPTS_DIR"
-sudo mkdir -p /etc/readio
-sudo chown -R "$DEPLOY_USER:$DEPLOY_GROUP" "$REMOTE_ROOT"
-
-sudo tee "$ENV_FILE" >/dev/null <<'EOF'
-READIO_ASR_ALLOWED_ORIGINS=https://pre.readio.top
-READIO_TRUSTED_PROXY_CIDRS=replace-with-your-trusted-proxy-cidrs
-READIO_ADMIN_TOKEN=replace-with-a-long-random-admin-token
-READIO_ASR_RELAY_PUBLIC_TOKEN=replace-with-a-long-random-token
-READIO_ASR_RATE_LIMIT_BURST=20
-READIO_ASR_RATE_LIMIT_WINDOW_MS=60000
-READIO_PROXY_RATE_LIMIT_BURST=3
-READIO_PROXY_RATE_LIMIT_WINDOW_MS=60000
-
-READIO_DISCOVERY_FEED_CACHE_TTL_MS=300000
-READIO_DISCOVERY_FEED_CACHE_MAX_ENTRIES=12
-READIO_DISCOVERY_FEED_CACHE_MAX_EPISODES=300
-READIO_DISCOVERY_FEED_CACHE_MAX_BYTES=1048576
-
-READIO_ASR_WORKER_BASE_URL=https://asr-proxy.example.workers.dev
-READIO_ASR_WORKER_SHARED_SECRET=your-high-entropy-secret-string
-
-READIO_CF_ACCOUNT_ID=your-cloudflare-account-id
-READIO_CF_API_TOKEN=your-cloudflare-api-token
-READIO_ASR_BUILTIN_ALLOWED=true
-# READIO_ASR_BUILTIN_MODEL=@cf/openai/whisper-large-v3-turbo
-
-PODCAST_INDEX_API_KEY=your-podcastindex-api-key
-PODCAST_INDEX_API_SECRET=your-podcastindex-api-secret
-PODCAST_INDEX_USER_AGENT=Readio-Preprod/1.0 (+https://pre.readio.top)
-EOF
-sudo chmod 600 "$ENV_FILE"
-
-sudo tee "$SERVICE_FILE" >/dev/null <<EOF
-[Unit]
-Description=Readio Cloud Pre-Production
-After=network.target
-
-[Service]
-Type=simple
-User=$DEPLOY_USER
-WorkingDirectory=$CURRENT_DIR
-ExecStart=$CURRENT_DIR/readio-cloud
-Restart=always
-EnvironmentFile=$ENV_FILE
-
-Environment=PORT=8079
-Environment=READIO_CLOUD_UI_DIST_DIR=$CURRENT_DIR/dist
-Environment=READIO_CLOUD_DB_PATH=$DB_PATH
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-sudo tee "$SUDOERS_FILE" >/dev/null <<EOF
-$DEPLOY_USER ALL=(root) NOPASSWD: $SYSTEMCTL_BIN restart $SERVICE_NAME, $SYSTEMCTL_BIN is-active --quiet $SERVICE_NAME, $SYSTEMCTL_BIN status $SERVICE_NAME --no-pager -l, /usr/bin/journalctl -u $SERVICE_NAME -n 100 --no-pager
-EOF
-sudo chmod 440 "$SUDOERS_FILE"
-
-sudo "$SYSTEMCTL_BIN" daemon-reload
-sudo "$SYSTEMCTL_BIN" enable "$SERVICE_NAME"
-
-echo "Pre-production bootstrap complete."
-echo "Edit $ENV_FILE with real values before first start."
-echo "Service file: $SERVICE_FILE"
-echo "Data root: $REMOTE_ROOT"
-echo "DB path: $DB_PATH"
-echo "Transcript dir: $PODCASR_TRANSCRIPTS_DIR"
-echo
-echo "Next:"
-echo "  sudo systemctl start $SERVICE_NAME"
-echo "  sudo systemctl status $SERVICE_NAME --no-pager -l"
-```
-
-首次启动前，把 `/etc/readio/readio-cloud-pre.env` 里的占位值替换成真实 token 和凭证。
-
-如果修改了 unit 或 env file，记得执行：
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl restart readio-cloud-pre
-```
 
 如果一次发布后服务在启动阶段立刻失败，先看 service logs。Cloud 启动链路现在包含自动 goose migrations，因此 migration error 本来就应该阻止服务继续启动，而不是带着不匹配的 schema 提供请求。
 
@@ -674,9 +553,86 @@ READIO_ADMIN_TOKEN=replace-with-a-long-random-token
 READIO_ADMIN_LOG_BUFFER=2000
 ```
 
-## 11. 运维总结与边界
+## 11. 观测性 (OpenTelemetry / OTLP)
+
+`apps/cloud-api` 现在通过 OTLP HTTP 协议直接向 Grafana Cloud 推送指标。这种方式比传统的 Prometheus Pull 模式更节省资源，非常适合 1C1G 等小内存服务器。
+
+运行时契约：
+- 指标推送是可选的。如果缺失 `GRAFANA_OTLP_*` 环境变量，监控逻辑会自动降级为无操作（No-op），不会影响服务运行。
+- 默认推送间隔为 30 秒，可通过 `READIO_OTLP_PUSH_INTERVAL_SECONDS` 调整。
+- **无需在本机安装 Grafana Alloy 或 Prometheus**。
+
+应用指标名称：
+| Metric | 类型 | Labels |
+| --- | --- | --- |
+| `readio_cloud_http_request_duration_seconds` | histogram | `route`, `status_class`, `error_class` |
+| `readio_cloud_upstream_request_duration_seconds` | histogram | `provider`, `route`, `status_class`, `error_class`, `cache_status` |
+| `readio_cloud_upstream_errors_total` | counter | `provider`, `route`, `error_class` |
+| `readio_cloud_asr_relay_requests_total` | counter | `provider`, `mode`, `status_class`, `error_class` |
+
+## 12. 日志 (Loki)
+
+当前版本中，`readio-cloud` 继续将结构化日志输出到 stdout。为了将日志对接到 Grafana Cloud Loki，推荐使用 systemd-journald 配合 Grafana Cloud 的自动抓取功能。
+
+目前推荐的轻量级方案：
+1. 保证服务运行在 systemd 中，日志进入 journal。
+2. 开发者可以通过 `journalctl -u readio-cloud -f` 实时查看日志。
+3. 如果需要集中化存储，可按需配置单机版 `promtail` 或 `alloy` 仅负责日志转发。
+
+## 13. Grafana Faro 浏览器 RUM
+
+`apps/cloud-ui` 可以通过 `/env.js` 下发的浏览器公开运行时配置初始化 Grafana Faro。Faro 默认禁用。
+
+浏览器公开配置：
+| 变量 | 默认值 | 说明 |
+| --- | --- | --- |
+| `VITE_GRAFANA_FARO_URL` | 空 | 公开的 Faro collector URL。为空时禁用 Faro。 |
+| `VITE_GRAFANA_FARO_APP_NAME` | 空 | 可选的公开 app name 覆盖值。 |
+| `VITE_GRAFANA_FARO_ENV` | 空 | 可选的环境名，例如 `production`。 |
+| `VITE_GRAFANA_FARO_SAMPLE_RATE` | `0` | 采样率，范围 `0` 到 `1`。 |
+
+隐私与安全：
+- **绝对禁止**将 `GRAFANA_OTLP_TOKEN` 或任何管理 Token 暴露给浏览器。
+- Faro 数据传输直接从用户浏览器发往 Grafana Cloud，不经过后端中转。
+
+## 14. 运维总结与回滚
+
+- **指标回滚**：删除或清空 `GRAFANA_OTLP_TOKEN` 并重启服务即可。
+- **RUM 回滚**：清空 `VITE_GRAFANA_FARO_URL` 即可通过 `/env.js` 在所有客户端禁用监控。
+- **本地诊断**：始终保留 `/ops` 和 `/admin/*` 作为 direct-URL 的轻量诊断手段，它们不依赖 Grafana Cloud 的可用性。
+
+## 15. 运维总结与边界
 
 - 该工作流假设 VPS 已经存在并完成基础系统初始化。
 - 运维人员负责管理 Cloudflare Workers 的生命周期及其 Secrets 同步。
 - 它不负责配置 nginx TLS 证书自动续期。
 - 浏览器本地数据（IndexedDB）的持久化安全性由浏览器同源策略保证，不属于后端部署边界。
+
+## 11. 分离部署 (Cloudflare Pages + VPS)
+
+推荐将前端 SPA 部署在 Cloudflare Pages 以获得更好的全球加速效果，后端 API 继续保留在 VPS 上。
+
+### 11.1 前端配置 (Cloudflare Pages)
+
+1.  **构建命令**：`pnpm -C apps/cloud-ui build`
+2.  **输出目录**：`apps/cloud-ui/dist`
+3.  **环境变量**：在 CF Pages 控制面板中设置：
+    *   生产环境：`VITE_API_BASE_URL = https://api.readio.top`
+    *   预览环境：`VITE_API_BASE_URL = https://api-pre.readio.top`
+4.  **路由兼容**：在 `apps/cloud-ui/public/` 下确保有 `_redirects` 文件，内容为：
+    ```text
+    /* /index.html 200
+    ```
+
+### 11.2 后端配置 (VPS)
+
+1.  **域名设置**：为后端分配独立域名，如 `api.readio.top`。
+2.  **CORS 允许列表**：在 GitHub Variables 中设置 `READIO_PROXY_ALLOWED_ORIGINS`，支持通配符：
+    *   `READIO_PROXY_ALLOWED_ORIGINS = https://readio.top,https://*.readio.top`
+3.  **ASR 允许列表**：同理设置 `READIO_ASR_ALLOWED_ORIGINS`。
+
+### 11.3 运行逻辑
+
+*   前端启动时会检查 `VITE_API_BASE_URL`。
+*   如果存在且当前环境没有配置信息，它会自动请求 `GET ${API_BASE_URL}/api/v1/config` 获取运行时参数（如 ASR Token、Grafana 配置等）。
+*   后端已针对 `*.readio.top` 开启跨域支持。

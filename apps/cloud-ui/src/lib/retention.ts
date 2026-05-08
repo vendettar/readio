@@ -1,8 +1,8 @@
 import { isUserUploadTrack } from './db/types'
-import { DB, DB_TABLE_NAMES } from './dexieDb'
 import { isSubtitleOrphaned, isTrackFolderOrphaned } from './integrity'
 import { log, error as logError } from './logger'
 import { FilesRepository } from './repositories/FilesRepository'
+import { MaintenanceRepository } from './repositories/MaintenanceRepository'
 import { PlaybackRepository } from './repositories/PlaybackRepository'
 
 /**
@@ -154,18 +154,19 @@ async function applyTrackRepairsInBatches(
   const entries = Array.from(plans.entries())
   for (let i = 0; i < entries.length; i += INTEGRITY_WRITE_BATCH_SIZE) {
     const batch = entries.slice(i, i + INTEGRITY_WRITE_BATCH_SIZE)
-
-    // Execute batch update within a single transaction
-    await DB.transaction('rw', [DB_TABLE_NAMES.TRACKS], async () => {
-      for (const [trackId, patch] of batch) {
-        // Use unified track patch API to handle cross-sourceType repairs
-        const success = await DB.updateTrackPatch(trackId, patch)
-        if (!success) continue
-
-        if (patch.isCorrupted) stats.missingAudioBlob++
-        if (patch.folderId === null) stats.danglingFolderRef++
-      }
-    })
+    const repairedTrackIds = new Set(
+      await MaintenanceRepository.applyTrackRepairs(
+        batch.map(([trackId, patch]) => ({ trackId, patch }))
+      )
+    )
+    if (repairedTrackIds.size === 0) {
+      continue
+    }
+    for (const [trackId, patch] of batch) {
+      if (!repairedTrackIds.has(trackId)) continue
+      if (patch.isCorrupted) stats.missingAudioBlob++
+      if (patch.folderId === null) stats.danglingFolderRef++
+    }
   }
 }
 

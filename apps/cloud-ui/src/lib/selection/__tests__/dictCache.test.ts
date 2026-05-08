@@ -18,11 +18,11 @@ const {
   initLookupHighlightMock: vi.fn(() => true),
 }))
 
-vi.mock('../../dexieDb', () => ({
-  DB: {
-    getRuntimeCacheEntry: getRuntimeCacheEntryMock,
-    setRuntimeCacheEntry: setRuntimeCacheEntryMock,
-    deleteRuntimeCacheEntry: deleteRuntimeCacheEntryMock,
+vi.mock('../../repositories/RuntimeCacheRepository', () => ({
+  RuntimeCacheRepository: {
+    getEntry: getRuntimeCacheEntryMock,
+    setEntry: setRuntimeCacheEntryMock,
+    deleteEntry: deleteRuntimeCacheEntryMock,
   },
 }))
 

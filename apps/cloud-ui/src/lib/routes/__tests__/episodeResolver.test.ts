@@ -1,8 +1,8 @@
 import type { QueryClient } from '@tanstack/react-query'
 import { describe, expect, it, vi } from 'vitest'
-import type { FeedEpisode, Podcast } from '@/lib/discovery'
-import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
+import type { Episode, Podcast, PodcastEpisodes } from '@/lib/discovery'
 import {
+  buildSearchEpisodeRoute,
   resolveEpisodeByTitle,
   tryDirectEpisodeRoute,
   trySearchEpisodeDirectRoute,
@@ -20,7 +20,6 @@ function createMockPodcast(overrides: Partial<Podcast> = {}): Podcast {
     author: 'Test Author',
     artwork: 'https://example.com/artwork.jpg',
     description: 'A test podcast',
-    feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
     lastUpdateTime: 1700000000,
     podcastItunesId: '123456789',
     episodeCount: 100,
@@ -30,14 +29,23 @@ function createMockPodcast(overrides: Partial<Podcast> = {}): Podcast {
   }
 }
 
-function createMockFeedEpisode(overrides: Partial<FeedEpisode> = {}): FeedEpisode {
+function createMockEpisode(overrides: Partial<Episode> & { guid?: string } = {}): Episode {
   return {
     title: 'Episode 1: The Beginning',
     description: 'Description',
     audioUrl: 'https://example.com/ep1.mp3',
     pubDate: new Date().toISOString(),
-    episodeGuid: MOCK_GUID,
+    guid: MOCK_GUID,
+    duration: 60,
+    explicit: false,
+    link: 'https://example.com/episodes/1',
     ...overrides,
+  } as Episode
+}
+
+function createMockPodcastEpisodes(episodes: Episode[]): PodcastEpisodes {
+  return {
+    episodes,
   }
 }
 
@@ -49,9 +57,9 @@ function createMockQueryClient(): MockQueryClient {
 }
 
 describe('tryDirectEpisodeRoute', () => {
-  it('returns episode route when episode has episodeGuid', () => {
-    const episode = createMockFeedEpisode({
-      episodeGuid: MOCK_GUID,
+  it('returns episode route when episode has canonical guid', () => {
+    const episode = createMockEpisode({
+      guid: MOCK_GUID,
     })
 
     const result = tryDirectEpisodeRoute(episode, 'us', '123456789')
@@ -63,10 +71,10 @@ describe('tryDirectEpisodeRoute', () => {
     }
   })
 
-  it('returns null when episode has no episodeGuid', () => {
-    const episode = createMockFeedEpisode({
-      episodeGuid: undefined,
-    })
+  it('returns null when episode has no guid', () => {
+    const episode = createMockEpisode({
+      guid: undefined,
+    }) as unknown as Episode
 
     const result = tryDirectEpisodeRoute(episode, 'us', '123456789')
 
@@ -74,18 +82,18 @@ describe('tryDirectEpisodeRoute', () => {
   })
 
   it('returns null when country is invalid', () => {
-    const episode = createMockFeedEpisode({
-      episodeGuid: MOCK_GUID,
+    const episode = createMockEpisode({
+      guid: MOCK_GUID,
     })
 
-    const result = tryDirectEpisodeRoute(episode, null, '123456789')
+    const result = tryDirectEpisodeRoute(episode, 'invalid-country', '123456789')
 
     expect(result).toBeNull()
   })
 
   it('returns null when podcastItunesId is empty', () => {
-    const episode = createMockFeedEpisode({
-      episodeGuid: MOCK_GUID,
+    const episode = createMockEpisode({
+      guid: MOCK_GUID,
     })
 
     const result = tryDirectEpisodeRoute(episode, 'us', '')
@@ -98,24 +106,19 @@ describe('resolveEpisodeByTitle - unique match', () => {
   it('resolves to episode route when exactly one title matches', async () => {
     const queryClient = createMockQueryClient()
     const mockPodcast = createMockPodcast()
-    const mockFeed = {
-      title: 'Test Podcast',
-      description: 'Description',
-      episodes: [
-        createMockFeedEpisode({ title: 'Episode 1: The Beginning' }),
-        createMockFeedEpisode({ title: 'Episode 2: The Middle' }),
-        createMockFeedEpisode({ title: 'Episode 3: The End' }),
-      ],
-      pageInfo: { hasMore: false },
-    }
+    const mockEpisodes = createMockPodcastEpisodes([
+      createMockEpisode({ title: 'Episode 1: The Beginning' }),
+      createMockEpisode({ title: 'Episode 2: The Middle' }),
+      createMockEpisode({ title: 'Episode 3: The End' }),
+    ])
 
     vi.mocked(queryClient.fetchQuery).mockImplementation(
       async (options: { queryKey: readonly unknown[]; queryFn: () => Promise<unknown> }) => {
         if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'podcast-detail') {
           return mockPodcast
         }
-        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'feed') {
-          return mockFeed
+        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'episodes') {
+          return mockEpisodes
         }
         throw new Error('Unexpected query')
       }
@@ -138,23 +141,18 @@ describe('resolveEpisodeByTitle - unique match', () => {
   it('resolves to show route when no titles match', async () => {
     const queryClient = createMockQueryClient()
     const mockPodcast = createMockPodcast()
-    const mockFeed = {
-      title: 'Test Podcast',
-      description: 'Description',
-      episodes: [
-        createMockFeedEpisode({ title: 'Episode 1: The Beginning' }),
-        createMockFeedEpisode({ title: 'Episode 2: The Middle' }),
-      ],
-      pageInfo: { hasMore: false },
-    }
+    const mockEpisodes = createMockPodcastEpisodes([
+      createMockEpisode({ title: 'Episode 1: The Beginning' }),
+      createMockEpisode({ title: 'Episode 2: The Middle' }),
+    ])
 
     vi.mocked(queryClient.fetchQuery).mockImplementation(
       async (options: { queryKey: readonly unknown[]; queryFn: () => Promise<unknown> }) => {
         if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'podcast-detail') {
           return mockPodcast
         }
-        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'feed') {
-          return mockFeed
+        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'episodes') {
+          return mockEpisodes
         }
         throw new Error('Unexpected query')
       }
@@ -173,23 +171,18 @@ describe('resolveEpisodeByTitle - unique match', () => {
   it('resolves to show route when multiple titles match (ambiguous)', async () => {
     const queryClient = createMockQueryClient()
     const mockPodcast = createMockPodcast()
-    const mockFeed = {
-      title: 'Test Podcast',
-      description: 'Description',
-      episodes: [
-        createMockFeedEpisode({ title: 'Episode: The Beginning' }),
-        createMockFeedEpisode({ title: 'Episode: The Beginning' }), // Duplicate
-      ],
-      pageInfo: { hasMore: false },
-    }
+    const mockEpisodes = createMockPodcastEpisodes([
+      createMockEpisode({ title: 'Episode: The Beginning' }),
+      createMockEpisode({ title: 'Episode: The Beginning' }), // Duplicate
+    ])
 
     vi.mocked(queryClient.fetchQuery).mockImplementation(
       async (options: { queryKey: readonly unknown[]; queryFn: () => Promise<unknown> }) => {
         if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'podcast-detail') {
           return mockPodcast
         }
-        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'feed') {
-          return mockFeed
+        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'episodes') {
+          return mockEpisodes
         }
         throw new Error('Unexpected query')
       }
@@ -207,40 +200,35 @@ describe('resolveEpisodeByTitle - unique match', () => {
 })
 
 describe('resolveEpisodeByTitle - date cutoff', () => {
-  it('stops scanning when feed items become older than 30 days', async () => {
+  it('stops scanning when PI episode list items become older than 30 days', async () => {
     const queryClient = createMockQueryClient()
     const mockPodcast = createMockPodcast()
 
     const now = new Date()
     const thirtyOneDaysAgo = new Date(now.getTime() - 31 * 24 * 60 * 60 * 1000)
 
-    const mockFeed = {
-      title: 'Test Podcast',
-      description: 'Description',
-      episodes: [
-        createMockFeedEpisode({
-          title: 'Match',
-          pubDate: now.toISOString(),
-        }),
-        createMockFeedEpisode({
-          title: 'Match', // Duplicate within cutoff (but the first one matches first)
-          pubDate: new Date(now.getTime() - 25 * 24 * 60 * 60 * 1000).toISOString(),
-        }),
-        createMockFeedEpisode({
-          title: 'Match', // Third duplicate - should trigger ambiguity
-          pubDate: thirtyOneDaysAgo.toISOString(),
-        }),
-      ],
-      pageInfo: { hasMore: false },
-    }
+    const mockEpisodes = createMockPodcastEpisodes([
+      createMockEpisode({
+        title: 'Match',
+        pubDate: now.toISOString(),
+      }),
+      createMockEpisode({
+        title: 'Match', // Duplicate within cutoff (but the first one matches first)
+        pubDate: new Date(now.getTime() - 25 * 24 * 60 * 60 * 1000).toISOString(),
+      }),
+      createMockEpisode({
+        title: 'Match', // Third duplicate - should trigger ambiguity
+        pubDate: thirtyOneDaysAgo.toISOString(),
+      }),
+    ])
 
     vi.mocked(queryClient.fetchQuery).mockImplementation(
       async (options: { queryKey: readonly unknown[]; queryFn: () => Promise<unknown> }) => {
         if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'podcast-detail') {
           return mockPodcast
         }
-        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'feed') {
-          return mockFeed
+        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'episodes') {
+          return mockEpisodes
         }
         throw new Error('Unexpected query')
       }
@@ -260,25 +248,20 @@ describe('resolveEpisodeByTitle - date cutoff', () => {
   it('continues scanning when pubDate cannot be parsed', async () => {
     const queryClient = createMockQueryClient()
     const mockPodcast = createMockPodcast()
-    const mockFeed = {
-      title: 'Test Podcast',
-      description: 'Description',
-      episodes: [
-        createMockFeedEpisode({
-          title: 'Match',
-          pubDate: 'invalid-date',
-        }),
-      ],
-      pageInfo: { hasMore: false },
-    }
+    const mockEpisodes = createMockPodcastEpisodes([
+      createMockEpisode({
+        title: 'Match',
+        pubDate: 'invalid-date',
+      }),
+    ])
 
     vi.mocked(queryClient.fetchQuery).mockImplementation(
       async (options: { queryKey: readonly unknown[]; queryFn: () => Promise<unknown> }) => {
         if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'podcast-detail') {
           return mockPodcast
         }
-        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'feed') {
-          return mockFeed
+        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'episodes') {
+          return mockEpisodes
         }
         throw new Error('Unexpected query')
       }
@@ -296,29 +279,21 @@ describe('resolveEpisodeByTitle - date cutoff', () => {
 })
 
 describe('resolveEpisodeByTitle - 60 episode cap', () => {
-  it('returns immediately when first page contains a unique match even if later pages exist', async () => {
+  it('returns immediately when the PI episode list starts with a unique match', async () => {
     const queryClient = createMockQueryClient()
     const mockPodcast = createMockPodcast()
+    const mockEpisodes = createMockPodcastEpisodes([
+      createMockEpisode({ title: 'Match', pubDate: new Date().toISOString() }),
+      createMockEpisode({ title: 'Different', pubDate: new Date().toISOString() }),
+    ])
 
     vi.mocked(queryClient.fetchQuery).mockImplementation(
       async (options: { queryKey: readonly unknown[]; queryFn: () => Promise<unknown> }) => {
         if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'podcast-detail') {
           return mockPodcast
         }
-        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'feed') {
-          const offset = options.queryKey[5] as number
-          if (offset === 0) {
-            return {
-              title: 'Test',
-              description: 'D',
-              episodes: [
-                createMockFeedEpisode({ title: 'Match', pubDate: new Date().toISOString() }),
-                createMockFeedEpisode({ title: 'Different', pubDate: new Date().toISOString() }),
-              ],
-              pageInfo: { hasMore: true },
-            }
-          }
-          throw new Error(`Unexpected second page fetch at offset ${offset}`)
+        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'episodes') {
+          return mockEpisodes
         }
         throw new Error('Unexpected query')
       }
@@ -339,57 +314,37 @@ describe('resolveEpisodeByTitle - 60 episode cap', () => {
     const queryClient = createMockQueryClient()
     const mockPodcast = createMockPodcast()
 
-    const page1Episodes = Array.from({ length: 20 }, (_, i) =>
-      createMockFeedEpisode({
+    const firstTwentyEpisodes = Array.from({ length: 20 }, (_, i) =>
+      createMockEpisode({
         title: `Non-match-${i}`,
         pubDate: new Date().toISOString(),
       })
     )
-    const page2Episodes = Array.from({ length: 20 }, (_, i) =>
-      createMockFeedEpisode({
+    const secondTwentyEpisodes = Array.from({ length: 20 }, (_, i) =>
+      createMockEpisode({
         title: `Non-match-2-${i}`,
         pubDate: new Date().toISOString(),
       })
     )
-    const page3Episodes = Array.from({ length: 20 }, (_, i) =>
-      createMockFeedEpisode({
+    const thirdTwentyEpisodes = Array.from({ length: 20 }, (_, i) =>
+      createMockEpisode({
         title: i === 19 ? 'Match' : `Non-match-3-${i}`,
         pubDate: new Date().toISOString(),
       })
     )
+    const mockEpisodes = createMockPodcastEpisodes([
+      ...firstTwentyEpisodes,
+      ...secondTwentyEpisodes,
+      ...thirdTwentyEpisodes,
+    ])
 
     vi.mocked(queryClient.fetchQuery).mockImplementation(
       async (options: { queryKey: readonly unknown[]; queryFn: () => Promise<unknown> }) => {
         if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'podcast-detail') {
           return mockPodcast
         }
-        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'feed') {
-          const offset = options.queryKey[5] as number
-          if (offset === 0) {
-            return {
-              title: 'Test',
-              description: 'D',
-              episodes: page1Episodes,
-              pageInfo: { hasMore: true },
-            }
-          }
-          if (offset === 20) {
-            return {
-              title: 'Test',
-              description: 'D',
-              episodes: page2Episodes,
-              pageInfo: { hasMore: true },
-            }
-          }
-          if (offset === 40) {
-            return {
-              title: 'Test',
-              description: 'D',
-              episodes: page3Episodes,
-              pageInfo: { hasMore: false },
-            }
-          }
-          return { title: 'Test', description: 'D', episodes: [], pageInfo: { hasMore: false } }
+        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'episodes') {
+          return mockEpisodes
         }
         throw new Error('Unexpected query')
       }
@@ -403,64 +358,44 @@ describe('resolveEpisodeByTitle - 60 episode cap', () => {
     })
 
     expect(result.type).toBe('episode')
-    expect(queryClient.fetchQuery).toHaveBeenCalledTimes(4)
+    expect(queryClient.fetchQuery).toHaveBeenCalledTimes(2)
   })
 
   it('falls back to show after scanning 60 episodes without a match', async () => {
     const queryClient = createMockQueryClient()
     const mockPodcast = createMockPodcast()
 
-    const page1Episodes = Array.from({ length: 20 }, (_, i) =>
-      createMockFeedEpisode({
+    const firstTwentyEpisodes = Array.from({ length: 20 }, (_, i) =>
+      createMockEpisode({
         title: `Non-match-${i}`,
         pubDate: new Date().toISOString(),
       })
     )
-    const page2Episodes = Array.from({ length: 20 }, (_, i) =>
-      createMockFeedEpisode({
+    const secondTwentyEpisodes = Array.from({ length: 20 }, (_, i) =>
+      createMockEpisode({
         title: `Non-match-2-${i}`,
         pubDate: new Date().toISOString(),
       })
     )
-    const page3Episodes = Array.from({ length: 20 }, (_, i) =>
-      createMockFeedEpisode({
+    const thirdTwentyEpisodes = Array.from({ length: 20 }, (_, i) =>
+      createMockEpisode({
         title: `Non-match-3-${i}`,
         pubDate: new Date().toISOString(),
       })
     )
+    const mockEpisodes = createMockPodcastEpisodes([
+      ...firstTwentyEpisodes,
+      ...secondTwentyEpisodes,
+      ...thirdTwentyEpisodes,
+    ])
 
     vi.mocked(queryClient.fetchQuery).mockImplementation(
       async (options: { queryKey: readonly unknown[]; queryFn: () => Promise<unknown> }) => {
         if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'podcast-detail') {
           return mockPodcast
         }
-        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'feed') {
-          const offset = options.queryKey[5] as number
-          if (offset === 0) {
-            return {
-              title: 'Test',
-              description: 'D',
-              episodes: page1Episodes,
-              pageInfo: { hasMore: true },
-            }
-          }
-          if (offset === 20) {
-            return {
-              title: 'Test',
-              description: 'D',
-              episodes: page2Episodes,
-              pageInfo: { hasMore: true },
-            }
-          }
-          if (offset === 40) {
-            return {
-              title: 'Test',
-              description: 'D',
-              episodes: page3Episodes,
-              pageInfo: { hasMore: true },
-            }
-          }
-          throw new Error(`Unexpected page fetch at offset ${offset}`)
+        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'episodes') {
+          return mockEpisodes
         }
         throw new Error('Unexpected query')
       }
@@ -474,32 +409,24 @@ describe('resolveEpisodeByTitle - 60 episode cap', () => {
     })
 
     expect(result.type).toBe('show')
-    expect(queryClient.fetchQuery).toHaveBeenCalledTimes(4)
+    expect(queryClient.fetchQuery).toHaveBeenCalledTimes(2)
   })
 
-  it('falls back to show when duplicate title appears on the same scanned page', async () => {
+  it('falls back to show when duplicate title appears in the scanned PI episode list', async () => {
     const queryClient = createMockQueryClient()
     const mockPodcast = createMockPodcast()
+    const mockEpisodes = createMockPodcastEpisodes([
+      createMockEpisode({ title: 'Match', pubDate: new Date().toISOString() }),
+      createMockEpisode({ title: 'Match', pubDate: new Date().toISOString() }),
+    ])
 
     vi.mocked(queryClient.fetchQuery).mockImplementation(
       async (options: { queryKey: readonly unknown[]; queryFn: () => Promise<unknown> }) => {
         if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'podcast-detail') {
           return mockPodcast
         }
-        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'feed') {
-          const offset = options.queryKey[5] as number
-          if (offset === 0) {
-            return {
-              title: 'Test',
-              description: 'D',
-              episodes: [
-                createMockFeedEpisode({ title: 'Match', pubDate: new Date().toISOString() }),
-                createMockFeedEpisode({ title: 'Match', pubDate: new Date().toISOString() }),
-              ],
-              pageInfo: { hasMore: false },
-            }
-          }
-          return { title: 'Test', description: 'D', episodes: [], pageInfo: { hasMore: false } }
+        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'episodes') {
+          return mockEpisodes
         }
         throw new Error('Unexpected query')
       }
@@ -533,7 +460,7 @@ describe('resolveEpisodeByTitle - error handling', () => {
     expect(result.type).toBe('show')
   })
 
-  it('falls back to show route when feed fetch fails', async () => {
+  it('falls back to show route when PI episode list fetch fails', async () => {
     const queryClient = createMockQueryClient()
     const mockPodcast = createMockPodcast()
 
@@ -542,7 +469,7 @@ describe('resolveEpisodeByTitle - error handling', () => {
         if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'podcast-detail') {
           return mockPodcast
         }
-        throw new Error('Feed error')
+        throw new Error('Archive error')
       }
     )
 
@@ -556,11 +483,22 @@ describe('resolveEpisodeByTitle - error handling', () => {
     expect(result.type).toBe('show')
   })
 
-  it('falls back to show route when podcast has no feedUrl', async () => {
+  it('does not require podcast feedUrl to resolve against the PI episode list', async () => {
     const queryClient = createMockQueryClient()
-    const mockPodcast = createMockPodcast({ feedUrl: undefined })
+    const mockPodcast = createMockPodcast()
+    const mockEpisodes = createMockPodcastEpisodes([createMockEpisode({ title: 'Episode Title' })])
 
-    vi.mocked(queryClient.fetchQuery).mockResolvedValue(mockPodcast)
+    vi.mocked(queryClient.fetchQuery).mockImplementation(
+      async (options: { queryKey: readonly unknown[]; queryFn: () => Promise<unknown> }) => {
+        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'podcast-detail') {
+          return mockPodcast
+        }
+        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'episodes') {
+          return mockEpisodes
+        }
+        throw new Error('Unexpected query')
+      }
+    )
 
     const result = await resolveEpisodeByTitle({
       queryClient,
@@ -569,7 +507,7 @@ describe('resolveEpisodeByTitle - error handling', () => {
       targetTitle: 'Episode Title',
     })
 
-    expect(result.type).toBe('show')
+    expect(result.type).toBe('episode')
   })
 
   it('falls back to show route when title is null or empty', async () => {
@@ -604,20 +542,17 @@ describe('resolveEpisodeByTitle - title normalization', () => {
   it('matches normalized-equivalent titles', async () => {
     const queryClient = createMockQueryClient()
     const mockPodcast = createMockPodcast()
-    const mockFeed = {
-      title: 'Test Podcast',
-      description: 'Description',
-      episodes: [createMockFeedEpisode({ title: 'Episode: "The Beginning"' })],
-      pageInfo: { hasMore: false },
-    }
+    const mockEpisodes = createMockPodcastEpisodes([
+      createMockEpisode({ title: 'Episode: "The Beginning"' }),
+    ])
 
     vi.mocked(queryClient.fetchQuery).mockImplementation(
       async (options: { queryKey: readonly unknown[]; queryFn: () => Promise<unknown> }) => {
         if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'podcast-detail') {
           return mockPodcast
         }
-        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'feed') {
-          return mockFeed
+        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'episodes') {
+          return mockEpisodes
         }
         throw new Error('Unexpected query')
       }
@@ -637,20 +572,15 @@ describe('resolveEpisodeByTitle - title normalization', () => {
   it('matches case-insensitive titles', async () => {
     const queryClient = createMockQueryClient()
     const mockPodcast = createMockPodcast()
-    const mockFeed = {
-      title: 'Test Podcast',
-      description: 'Description',
-      episodes: [createMockFeedEpisode({ title: 'THE DAILY' })],
-      pageInfo: { hasMore: false },
-    }
+    const mockEpisodes = createMockPodcastEpisodes([createMockEpisode({ title: 'THE DAILY' })])
 
     vi.mocked(queryClient.fetchQuery).mockImplementation(
       async (options: { queryKey: readonly unknown[]; queryFn: () => Promise<unknown> }) => {
         if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'podcast-detail') {
           return mockPodcast
         }
-        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'feed') {
-          return mockFeed
+        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'episodes') {
+          return mockEpisodes
         }
         throw new Error('Unexpected query')
       }
@@ -671,20 +601,15 @@ describe('contract/hygiene', () => {
   it('does not introduce route query hints', async () => {
     const queryClient = createMockQueryClient()
     const mockPodcast = createMockPodcast()
-    const mockFeed = {
-      title: 'Test Podcast',
-      description: 'Description',
-      episodes: [createMockFeedEpisode({ title: 'Episode' })],
-      pageInfo: { hasMore: false },
-    }
+    const mockEpisodes = createMockPodcastEpisodes([createMockEpisode({ title: 'Episode' })])
 
     vi.mocked(queryClient.fetchQuery).mockImplementation(
       async (options: { queryKey: readonly unknown[]; queryFn: () => Promise<unknown> }) => {
         if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'podcast-detail') {
           return mockPodcast
         }
-        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'feed') {
-          return mockFeed
+        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'episodes') {
+          return mockEpisodes
         }
         throw new Error('Unexpected query')
       }
@@ -706,20 +631,15 @@ describe('contract/hygiene', () => {
   it('returns route objects compatible with react-router navigate', async () => {
     const queryClient = createMockQueryClient()
     const mockPodcast = createMockPodcast()
-    const mockFeed = {
-      title: 'Test Podcast',
-      description: 'Description',
-      episodes: [createMockFeedEpisode({ title: 'Episode' })],
-      pageInfo: { hasMore: false },
-    }
+    const mockEpisodes = createMockPodcastEpisodes([createMockEpisode({ title: 'Episode' })])
 
     vi.mocked(queryClient.fetchQuery).mockImplementation(
       async (options: { queryKey: readonly unknown[]; queryFn: () => Promise<unknown> }) => {
         if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'podcast-detail') {
           return mockPodcast
         }
-        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'feed') {
-          return mockFeed
+        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'episodes') {
+          return mockEpisodes
         }
         throw new Error('Unexpected query')
       }
@@ -754,20 +674,8 @@ describe('trySearchEpisodeDirectRoute', () => {
     }
   })
 
-  it('returns null when podcastItunesId is missing', () => {
-    const result = trySearchEpisodeDirectRoute(null, MOCK_GUID, 'us')
-
-    expect(result).toBeNull()
-  })
-
-  it('returns null when episodeGuid is missing', () => {
-    const result = trySearchEpisodeDirectRoute('123456789', null, 'us')
-
-    expect(result).toBeNull()
-  })
-
   it('returns null when country is invalid', () => {
-    const result = trySearchEpisodeDirectRoute('123456789', MOCK_GUID, null)
+    const result = trySearchEpisodeDirectRoute('123456789', MOCK_GUID, 'invalid-country')
 
     expect(result).toBeNull()
   })
@@ -795,5 +703,19 @@ describe('trySearchEpisodeDirectRoute', () => {
     if (result?.type === 'episode') {
       expect(result.route).not.toHaveProperty('search')
     }
+  })
+})
+
+describe('buildSearchEpisodeRoute', () => {
+  it('returns null when canonical podcast identity is missing', () => {
+    expect(buildSearchEpisodeRoute('', MOCK_GUID, 'us')).toBeNull()
+  })
+
+  it('falls back to show route when canonical episode identity is missing', () => {
+    const result = buildSearchEpisodeRoute('123456789', '', 'us')
+
+    expect(result).not.toBeNull()
+    expect(result?.params.id).toBe('123456789')
+    expect(result?.params.country).toBe('us')
   })
 })

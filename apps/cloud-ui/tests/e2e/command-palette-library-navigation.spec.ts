@@ -11,12 +11,15 @@ async function seedLibraryRecords(page: Page) {
     if (!db) throw new Error('Test harness DB not found')
 
     await db.addFavorite({
-      key: 'https://example.com/feed.xml::https://example.com/favorite.mp3',
-      feedUrl: 'https://example.com/feed.xml',
+      key: '9001::fav-episode-guid-9001',
       audioUrl: 'https://example.com/favorite.mp3',
       episodeTitle: 'E2E Favorite Canonical Episode',
       podcastTitle: 'E2E Favorite Podcast',
       artworkUrl: 'https://example.com/favorite.jpg',
+      episodeArtworkUrl: '',
+      description: 'test',
+      pubDate: '2025-02-01',
+      durationSeconds: 0,
       addedAt: Date.now(),
       countryAtSave: 'us',
       podcastItunesId: '9001',
@@ -37,6 +40,8 @@ async function seedLibraryRecords(page: Page) {
       audioFilename: '',
       subtitleFilename: '',
       audioUrl: 'https://example.com/history.mp3',
+      artworkUrl: 'https://example.com/history.jpg',
+      showTitle: 'E2E History Podcast',
       countryAtSave: 'jp',
       podcastItunesId: '9002',
       episodeGuid: 'hist-episode-guid-9002',

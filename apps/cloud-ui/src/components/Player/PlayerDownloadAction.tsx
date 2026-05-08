@@ -2,9 +2,15 @@ import { CircleArrowDown, Download } from 'lucide-react'
 import { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useEpisodeStatus } from '../../hooks/useEpisodeStatus'
-import { downloadEpisode, removeDownloadedTrack } from '../../lib/downloadService'
-import { normalizeCountryParam } from '../../lib/routes/podcastRoutes'
-import { getAppConfig } from '../../lib/runtimeConfig'
+import {
+  buildDownloadJobOptionsFromCanonicalRemoteMetadata,
+  downloadEpisode,
+  removeDownloadedTrack,
+} from '../../lib/downloadService'
+import {
+  resolveCanonicalRemotePlaybackSource,
+  resolvePlaybackSourceAudioUrl,
+} from '../../lib/player/playbackMetadata'
 import { cn } from '../../lib/utils'
 import { usePlayerStore } from '../../store/playerStore'
 import { Button } from '../ui/button'
@@ -12,21 +18,28 @@ import { CircularProgress } from '../ui/circular-progress'
 
 export function PlayerDownloadAction({ className }: { className?: string }) {
   const { t } = useTranslation()
-  const defaultCountry = getAppConfig().DEFAULT_COUNTRY
   const audioUrl = usePlayerStore((s) => s.audioUrl)
   const audioTitle = usePlayerStore((s) => s.audioTitle)
   const episodeMetadata = usePlayerStore((s) => s.episodeMetadata)
-  const sourceIdentityUrl = episodeMetadata?.originalAudioUrl || audioUrl || ''
-  const isDownloadable =
-    !!episodeMetadata?.originalAudioUrl || (!!audioUrl && !audioUrl.startsWith('blob:'))
+  const sourceIdentityUrl = resolvePlaybackSourceAudioUrl(audioUrl, episodeMetadata)
+  const canonicalRemoteSource = resolveCanonicalRemotePlaybackSource({
+    audioUrl,
+    metadata: episodeMetadata,
+  })
+  const isDownloadable = Boolean(sourceIdentityUrl) && !sourceIdentityUrl.startsWith('blob:')
 
-  const status = useEpisodeStatus(sourceIdentityUrl)
+  const status = useEpisodeStatus(
+    canonicalRemoteSource
+      ? {
+          audioUrl: canonicalRemoteSource.audioUrl,
+          podcastItunesId: canonicalRemoteSource.metadata.podcastItunesId,
+          episodeGuid: canonicalRemoteSource.metadata.episodeGuid,
+        }
+      : sourceIdentityUrl
+  )
 
   const handleAction = useCallback(() => {
     if (!sourceIdentityUrl || !audioTitle) return
-
-    const normalizedCountryAtSave =
-      normalizeCountryParam(episodeMetadata?.countryAtSave) ?? defaultCountry
 
     if (status.downloadStatus === 'downloading') return
 
@@ -42,21 +55,19 @@ export function PlayerDownloadAction({ className }: { className?: string }) {
       return
     }
 
-    void downloadEpisode({
-      audioUrl: sourceIdentityUrl,
+    if (!canonicalRemoteSource) return
+
+    const downloadOptions = buildDownloadJobOptionsFromCanonicalRemoteMetadata({
+      audioUrl: canonicalRemoteSource.audioUrl,
       episodeTitle: audioTitle,
-      episodeDescription: episodeMetadata?.description,
-      showTitle: episodeMetadata?.showTitle || '',
-      feedUrl: episodeMetadata?.podcastFeedUrl,
-      artworkUrl: episodeMetadata?.artworkUrl,
-      transcriptUrl: episodeMetadata?.transcriptUrl,
-      countryAtSave: normalizedCountryAtSave,
-      podcastItunesId: episodeMetadata?.podcastItunesId,
-      durationSeconds: episodeMetadata?.durationSeconds,
-    }).then(() => {
+      metadata: canonicalRemoteSource.metadata,
+    })
+    if (!downloadOptions) return
+
+    void downloadEpisode(downloadOptions).then(() => {
       status.refresh()
     })
-  }, [sourceIdentityUrl, audioTitle, episodeMetadata, status, defaultCountry])
+  }, [audioTitle, canonicalRemoteSource, sourceIdentityUrl, status])
 
   if (!sourceIdentityUrl || !isDownloadable) return null
 
@@ -115,9 +126,21 @@ export function DownloadedBadge({
 }) {
   const { t } = useTranslation()
   const episodeMetadata = usePlayerStore((s) => s.episodeMetadata)
-  const sourceIdentityUrl = episodeMetadata?.originalAudioUrl || audioUrl || ''
+  const sourceIdentityUrl = resolvePlaybackSourceAudioUrl(audioUrl, episodeMetadata)
+  const canonicalRemoteSource = resolveCanonicalRemotePlaybackSource({
+    audioUrl,
+    metadata: episodeMetadata,
+  })
 
-  const status = useEpisodeStatus(sourceIdentityUrl)
+  const status = useEpisodeStatus(
+    canonicalRemoteSource
+      ? {
+          audioUrl: canonicalRemoteSource.audioUrl,
+          podcastItunesId: canonicalRemoteSource.metadata.podcastItunesId,
+          episodeGuid: canonicalRemoteSource.metadata.episodeGuid,
+        }
+      : sourceIdentityUrl
+  )
   if (status.downloadStatus !== 'downloaded') return null
 
   return (

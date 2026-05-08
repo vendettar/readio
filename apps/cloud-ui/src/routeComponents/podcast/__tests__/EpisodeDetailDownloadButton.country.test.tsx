@@ -19,10 +19,14 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: vi.fn() },
 }))
 
-vi.mock('../../../lib/downloadService', () => ({
-  downloadEpisode: downloadEpisodeMock,
-  removeDownloadedTrack: vi.fn(() => Promise.resolve(true)),
-}))
+vi.mock('../../../lib/downloadService', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../lib/downloadService')>()
+  return {
+    ...actual,
+    downloadEpisode: downloadEpisodeMock,
+    removeDownloadedTrack: vi.fn(() => Promise.resolve(true)),
+  }
+})
 
 vi.mock('../../../hooks/useEpisodeStatus', () => ({
   useEpisodeStatus: () => ({
@@ -39,10 +43,6 @@ vi.mock('../../../hooks/useEpisodeStatus', () => ({
   }),
 }))
 
-vi.mock('../../../lib/runtimeConfig', () => ({
-  getAppConfig: () => ({ DEFAULT_COUNTRY: 'us' }),
-}))
-
 describe('EpisodeDetailDownloadButton country normalization', () => {
   beforeEach(() => {
     downloadEpisodeMock.mockClear()
@@ -50,16 +50,37 @@ describe('EpisodeDetailDownloadButton country normalization', () => {
   })
 
   it.each([
-    { name: 'falls back when countryAtSave is missing', input: undefined, expected: 'us' },
-    { name: 'falls back when countryAtSave is invalid', input: 'zz', expected: 'us' },
-    { name: 'normalizes uppercase countryAtSave', input: 'US', expected: 'us' },
-  ])('$name', ({ input, expected }) => {
+    { name: 'fails closed when countryAtSave is blank', input: '   ' },
+    { name: 'fails closed when countryAtSave is invalid', input: 'zz' },
+  ])('$name', ({ input }) => {
     render(
       <EpisodeDetailDownloadButton
         episodeTitle="Episode"
         showTitle="Podcast"
         audioUrl="https://example.com/audio.mp3"
+        artworkUrl="https://example.com/art.jpg"
+        podcastItunesId="pod-1"
+        episodeGuid="episode-guid-1"
         countryAtSave={input}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'downloadEpisode' }))
+
+    expect(downloadEpisodeMock).not.toHaveBeenCalled()
+    expect(refreshMock).not.toHaveBeenCalled()
+  })
+
+  it('normalizes uppercase countryAtSave', () => {
+    render(
+      <EpisodeDetailDownloadButton
+        episodeTitle="Episode"
+        showTitle="Podcast"
+        audioUrl="https://example.com/audio.mp3"
+        artworkUrl="https://example.com/art.jpg"
+        countryAtSave="US"
+        podcastItunesId="pod-1"
+        episodeGuid="episode-guid-1"
       />
     )
 
@@ -67,7 +88,38 @@ describe('EpisodeDetailDownloadButton country normalization', () => {
 
     expect(downloadEpisodeMock).toHaveBeenCalledTimes(1)
     expect(downloadEpisodeMock).toHaveBeenCalledWith(
-      expect.objectContaining({ countryAtSave: expected })
+      expect.objectContaining({ countryAtSave: 'us' })
     )
+  })
+
+  it.each([
+    {
+      name: 'fails closed when podcastItunesId is missing',
+      props: { podcastItunesId: '   ', episodeGuid: 'episode-guid-1' },
+    },
+    {
+      name: 'fails closed when episodeGuid is missing',
+      props: { podcastItunesId: 'pod-1', episodeGuid: '   ' },
+    },
+    {
+      name: 'fails closed when artworkUrl is missing',
+      props: { podcastItunesId: 'pod-1', episodeGuid: 'episode-guid-1', artworkUrl: '   ' },
+    },
+  ])('$name', ({ props }) => {
+    render(
+      <EpisodeDetailDownloadButton
+        episodeTitle="Episode"
+        showTitle="Podcast"
+        audioUrl="https://example.com/audio.mp3"
+        countryAtSave="us"
+        artworkUrl="https://example.com/art.jpg"
+        {...props}
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'downloadEpisode' }))
+
+    expect(downloadEpisodeMock).not.toHaveBeenCalled()
+    expect(refreshMock).not.toHaveBeenCalled()
   })
 })

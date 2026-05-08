@@ -1,11 +1,10 @@
 // src/routes/podcast/$country/$id/index.tsx
 // Premium-style podcast show page with episode list
 
-import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useLocation, useParams } from '@tanstack/react-router'
 import { motion } from 'framer-motion'
 import { Check, ChevronRight, Play, Plus } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { EpisodeRow } from '../../components/EpisodeRow/EpisodeRow'
 import { EpisodeRowSkeleton } from '../../components/EpisodeRow/EpisodeRowSkeleton'
@@ -14,34 +13,15 @@ import { Button } from '../../components/ui/button'
 import { ExpandableDescription } from '../../components/ui/expandable-description'
 import { Skeleton } from '../../components/ui/skeleton'
 import { useEpisodePlayback } from '../../hooks/useEpisodePlayback'
-import discovery, { type FeedEpisode } from '../../lib/discovery'
-import {
-  getCachedEditorPickByItunesID,
-  getCanonicalEditorPickPodcastID,
-  getEditorPickRouteState,
-  mapEditorPickToPodcast,
-} from '../../lib/discovery/editorPicks'
-import { getPodcastFeedBootstrapSnapshot } from '../../lib/discovery/feedCache'
-import {
-  buildPodcastDetailQueryKey,
-  buildPodcastFeedQueryKey,
-  PODCAST_DEFAULT_FEED_QUERY_LIMIT,
-  PODCAST_QUERY_CACHE_POLICY,
-} from '../../lib/discovery/podcastQueryContract'
-import { fetchAndCachePodcastFeedPage } from '../../lib/discovery/queryCache'
+import { usePodcastShowContent } from '../../hooks/usePodcastShowContent'
 import { formatCompactNumber } from '../../lib/formatters'
-import { getDiscoveryArtworkUrl } from '../../lib/imageUtils'
 
-function getEpisodeRowKey(episode: FeedEpisode): string {
-  return episode.episodeGuid
+function getEpisodeRowKey(episode: { guid: string }): string {
+  return episode.guid
 }
 
 import { logError } from '../../lib/logger'
-import {
-  buildPodcastEpisodesRoute,
-  buildPodcastShowRoute,
-  normalizeCountryParam,
-} from '../../lib/routes/podcastRoutes'
+import { normalizeCountryParam } from '../../lib/routes/podcastRoutes'
 import { toast } from '../../lib/toast'
 import { useExploreStore } from '../../store/exploreStore'
 
@@ -65,83 +45,34 @@ export default function PodcastShowPage() {
   const location = useLocation()
   const fromLayoutPrefix = resolveLayoutPrefixFromState(location.state)
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false)
-  const queryClient = useQueryClient()
-
-  // Optimization: If navigating from Editor's Picks, use the snapshot from state or cache
-  // to bootstrap initial data while still performing authoritative PI byitunesid enrichment.
-  const snapshot =
-    getEditorPickRouteState(location.state)?.editorPickSnapshot ||
-    getCachedEditorPickByItunesID(queryClient, normalizedRouteCountry, id)
-  const initialPodcast = snapshot ? mapEditorPickToPodcast(snapshot) : undefined
-
-  // Fetch podcast metadata via the active discovery path.
-  // NOTE: PI byitunesid lookup ALWAYS runs when canonical iTunes ID exists - snapshot is only a bootstrap hint,
-  // not a replacement for authoritative enrichment.
-  const {
-    data: queryData,
-    isLoading: isLoadingPodcast,
-    error: podcastError,
-  } = useQuery({
-    queryKey: buildPodcastDetailQueryKey(id, normalizedRouteCountry),
-    queryFn: ({ signal }) => discovery.getPodcastIndexPodcastByItunesId(id, signal),
-    initialData: initialPodcast,
-    // Always fetch when we have a route ID - snapshot bootstraps but doesn't replace authoritative lookup
-    enabled: Boolean(normalizedRouteCountry && id),
-    staleTime: PODCAST_QUERY_CACHE_POLICY.podcastDetail.staleTime,
-    gcTime: PODCAST_QUERY_CACHE_POLICY.podcastDetail.gcTime,
-  })
-
-  const podcast = useMemo(() => queryData || initialPodcast, [initialPodcast, queryData])
-
-  const feedUrl = podcast?.feedUrl
-  const firstPageOptions = {
-    limit: PODCAST_DEFAULT_FEED_QUERY_LIMIT,
-    offset: 0,
-  } as const
-  const feedBootstrap = getPodcastFeedBootstrapSnapshot(queryClient, feedUrl, firstPageOptions)
-
-  const {
-    data: feed,
-    isLoading: isLoadingFeed,
-    error: feedError,
-  } = useQuery({
-    queryKey: buildPodcastFeedQueryKey(feedUrl, firstPageOptions),
-    initialData: feedBootstrap?.data,
-    initialDataUpdatedAt: feedBootstrap?.updatedAt,
-    queryFn: ({ signal }) =>
-      fetchAndCachePodcastFeedPage(queryClient, feedUrl ?? '', signal, firstPageOptions),
-    enabled: Boolean(podcast?.feedUrl && normalizedRouteCountry),
-    staleTime: PODCAST_QUERY_CACHE_POLICY.feed.staleTime,
-    gcTime: PODCAST_QUERY_CACHE_POLICY.feed.gcTime,
-  })
-
-  const episodes = feed?.episodes ?? []
+  const { resolvedHeroContent, isLoadingHero, heroError, notFound, episodesSection } =
+    usePodcastShowContent(id, routeCountry, location.state)
 
   // Subscription state
   const subscriptions = useExploreStore((state) => state.subscriptions)
   const subscribe = useExploreStore((state) => state.subscribe)
   const unsubscribe = useExploreStore((state) => state.unsubscribe)
-  const globalCountry = normalizeCountryParam(useExploreStore((state) => state.country))
-  const isSubscribed = podcast ? subscriptions.some((s) => s.feedUrl === podcast.feedUrl) : false
+  const isSubscribed = resolvedHeroContent
+    ? subscriptions.some((s) => s.podcastItunesId === resolvedHeroContent.podcast.podcastItunesId)
+    : false
 
   // Player actions
   const { playEpisode } = useEpisodePlayback()
 
   const handleSubscribe = async () => {
+    const podcast = resolvedHeroContent?.podcast
     if (!podcast) return
     const action = isSubscribed ? 'unsubscribe' : 'subscribe'
     try {
       if (isSubscribed) {
-        if (podcast.feedUrl) {
-          await unsubscribe(podcast.feedUrl)
-        }
+        await unsubscribe(podcast.podcastItunesId)
       } else {
+        if (!normalizedRouteCountry) return
         await subscribe(podcast, undefined, normalizedRouteCountry)
       }
     } catch (err) {
       logError(`[PodcastShowPage] Failed to ${action}`, {
         podcastId: podcast.podcastItunesId,
-        feedUrl: podcast.feedUrl,
         error: err,
       })
       toast.errorKey(isSubscribed ? 'toastUnsubscribeFailed' : 'toastSubscribeFailed')
@@ -149,7 +80,7 @@ export default function PodcastShowPage() {
   }
 
   // Loading state
-  if (isLoadingPodcast) {
+  if (isLoadingHero) {
     return (
       <div className="h-full overflow-y-auto bg-background text-foreground">
         <div className="w-full max-w-content mx-auto px-page pt-page pb-32">
@@ -195,10 +126,10 @@ export default function PodcastShowPage() {
   }
 
   // Error state
-  if (podcastError || feedError || !podcast) {
+  if (heroError || notFound === 'podcast' || !resolvedHeroContent) {
     if (import.meta.env.DEV) {
       logError('[PodcastShowPage] route_error_state', {
-        reason: podcastError ? 'lookup_failed' : feedError ? 'feed_failed' : 'not_found',
+        reason: heroError ? 'lookup_failed' : 'not_found',
         podcastId: id,
         country: normalizedRouteCountry,
       })
@@ -214,52 +145,7 @@ export default function PodcastShowPage() {
     )
   }
 
-  // Get artwork URL
-  const artworkUrl = getDiscoveryArtworkUrl(podcast.artwork, 600)
-  const canonicalPodcastId = getCanonicalEditorPickPodcastID(podcast) || id
-
-  const rawDescription = feed?.description || ''
-  const episodesRoute = buildPodcastEpisodesRoute({
-    country: routeCountry,
-    podcastId: canonicalPodcastId,
-  })
-  const regionRecoveryRoute = buildPodcastShowRoute({
-    country: globalCountry,
-    podcastId: canonicalPodcastId,
-  })
-  const isRegionUnavailable =
-    !feedError &&
-    Boolean(feed) &&
-    !isLoadingFeed &&
-    Boolean(normalizedRouteCountry && globalCountry && normalizedRouteCountry !== globalCountry) &&
-    !(episodes.length > 0)
-
-  if (isRegionUnavailable) {
-    if (import.meta.env.DEV) {
-      logError('[PodcastShowPage] route_region_unavailable', {
-        reason: 'route_country_content_unavailable',
-        podcastId: id,
-        routeCountry: normalizedRouteCountry,
-        globalCountry,
-      })
-    }
-    return (
-      <div className="h-full overflow-y-auto bg-background text-foreground">
-        <div className="px-6 sm:px-12 py-10 sm:py-14 max-w-screen-2xl mx-auto">
-          <div className="text-center py-20 space-y-4">
-            <p className="text-lg text-muted-foreground">{t('regionUnavailableMessage')}</p>
-            {regionRecoveryRoute && (
-              <Button asChild>
-                <Link to={regionRecoveryRoute.to} params={regionRecoveryRoute.params}>
-                  {t('regionUnavailableCta')}
-                </Link>
-              </Button>
-            )}
-          </div>
-        </div>
-      </div>
-    )
-  }
+  const { podcast, snapshot, artworkUrl, rawDescription, episodesRoute } = resolvedHeroContent
 
   return (
     <div className="h-full overflow-y-auto bg-background text-foreground custom-scrollbar">
@@ -317,11 +203,11 @@ export default function PodcastShowPage() {
 
             {/* Primary Interactions - Aligned to bottom */}
             <div className="flex items-end gap-3 pt-6 pe-4">
-              {episodes[0] && (
+              {normalizedRouteCountry && episodesSection.status === 'ready' && episodesSection.episodes[0] && (
                 <Button
                   onClick={() => {
-                    const ep = episodes[0]
-                    playEpisode(ep, podcast, normalizedRouteCountry ?? undefined)
+                    const ep = episodesSection.episodes[0]
+                    playEpisode(ep, podcast, normalizedRouteCountry)
                   }}
                   className="rounded-md bg-primary hover:opacity-90 text-primary-foreground px-5 h-8 font-bold text-xs flex items-center gap-1.5 shadow-none transition-all active:scale-95"
                 >
@@ -347,7 +233,7 @@ export default function PodcastShowPage() {
         {/* Episodes Section */}
         <section>
           <div className="flex items-center justify-between mb-4">
-            {episodes.length > 8 ? (
+            {episodesSection.status === 'ready' && episodesSection.episodes.length > 8 ? (
               <Button asChild variant="ghost" className="p-0 h-auto hover:bg-transparent">
                 {episodesRoute ? (
                   <Link
@@ -370,30 +256,30 @@ export default function PodcastShowPage() {
             )}
           </div>
 
-          {isLoadingFeed ? (
+          {episodesSection.status === 'loading' ? (
             <div className="space-y-0">
               {['feed-ep-1', 'feed-ep-2', 'feed-ep-3', 'feed-ep-4', 'feed-ep-5'].map((key) => (
                 <EpisodeRowSkeleton key={key} />
               ))}
             </div>
-          ) : feedError ? (
-            <p className="text-muted-foreground py-8 text-center">{t('errorFeedLoadFailed')}</p>
-          ) : episodes.length > 0 ? (
+          ) : episodesSection.status === 'error' ? (
+            <p className="text-muted-foreground py-8 text-center">{t('errorPodcastUnavailable')}</p>
+          ) : episodesSection.status === 'ready' ? (
             <div className="flex flex-col">
-              {episodes.slice(0, 8).map((episode, index) => (
+              {episodesSection.episodes.slice(0, 8).map((episode, index) => (
                 <EpisodeRow
                   key={getEpisodeRowKey(episode)}
                   episode={episode}
                   podcast={podcast}
                   editorPickSnapshot={snapshot}
                   podcastId={id}
-                  country={normalizedRouteCountry ?? undefined}
+                  country={normalizedRouteCountry}
                   isLast={index === 7} // Slice is 8, so index 7 is last visual item
                 />
               ))}
 
               {/* See All Button - Only show if there are more than 8 episodes */}
-              {episodes.length > 8 && (
+              {episodesSection.episodes.length > 8 && (
                 <div className="pt-2">
                   <Button
                     asChild
@@ -404,7 +290,7 @@ export default function PodcastShowPage() {
                       <Link to={episodesRoute.to} params={episodesRoute.params}>
                         {t('seeAll', {
                           total: formatCompactNumber(
-                            podcast.episodeCount || episodes.length,
+                            podcast.episodeCount || episodesSection.episodes.length,
                             language
                           ),
                         })}
@@ -413,7 +299,7 @@ export default function PodcastShowPage() {
                       <span>
                         {t('seeAll', {
                           total: formatCompactNumber(
-                            podcast.episodeCount || episodes.length,
+                            podcast.episodeCount || episodesSection.episodes.length,
                             language
                           ),
                         })}

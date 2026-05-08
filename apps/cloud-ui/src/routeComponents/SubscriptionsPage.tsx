@@ -7,7 +7,7 @@ import { Button } from '../components/ui/button'
 import { EmptyState } from '../components/ui/empty-state'
 import { LoadingPage } from '../components/ui/loading-spinner'
 import type { Subscription } from '../lib/db/types'
-import { buildPodcastShowRoute, normalizeCountryParam } from '../lib/routes/podcastRoutes'
+import { buildPodcastShowRoute } from '../lib/routes/podcastRoutes'
 import { useExploreStore } from '../store/exploreStore'
 
 export default function SubscriptionsPage() {
@@ -22,12 +22,9 @@ export default function SubscriptionsPage() {
   const isInitialLoading = !subscriptionsLoaded
 
   const handlePodcastClick = (subscription: Subscription) => {
-    const persistedCountry = normalizeCountryParam(subscription.countryAtSave)
-    if (!persistedCountry) return
-
     const route = buildPodcastShowRoute({
-      country: persistedCountry,
-      podcastId: subscription.podcastItunesId ?? '',
+      country: subscription.countryAtSave,
+      podcastId: subscription.podcastItunesId,
     })
 
     // Navigate only when persisted route context exists.
@@ -69,16 +66,15 @@ export default function SubscriptionsPage() {
         {!isInitialLoading && subscriptions.length > 0 && (
           <PodcastGrid>
             {subscriptions.map((subscription) => {
-              const persistedCountry = normalizeCountryParam(subscription.countryAtSave)
               const showRoute = buildPodcastShowRoute({
-                country: persistedCountry,
-                podcastId: subscription.podcastItunesId ?? '',
+                country: subscription.countryAtSave,
+                podcastId: subscription.podcastItunesId,
               })
 
               return (
                 <PodcastCard
-                  key={subscription.feedUrl}
-                  id={subscription.feedUrl}
+                  key={subscription.podcastItunesId}
+                  id={subscription.podcastItunesId}
                   title={subscription.title}
                   subtitle={subscription.author}
                   artworkUrl={subscription.artworkUrl}

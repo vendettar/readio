@@ -10,7 +10,6 @@ import { EmptyState } from '../components/ui/empty-state'
 import { OverflowMenu } from '../components/ui/overflow-menu'
 import { useEpisodePlayback } from '../hooks/useEpisodePlayback'
 import { useNetworkStatus } from '../hooks/useNetworkStatus'
-import { useSubscriptionMap } from '../hooks/useSubscriptionMap'
 import { formatRelativeTime } from '../lib/dateUtils'
 import type { Favorite } from '../lib/db/types'
 import { PLAYBACK_REQUEST_MODE } from '../lib/player/playbackMode'
@@ -31,8 +30,6 @@ export default function FavoritesPage() {
   // favoritesLoaded is monotonic (false→true, never reverts) — no extra state needed
   const isInitialLoading = !favoritesLoaded
 
-  const subscriptionMap = useSubscriptionMap()
-
   const handleRemoveFavorite = useCallback(
     async (key: string) => {
       await removeFavorite(key)
@@ -43,7 +40,7 @@ export default function FavoritesPage() {
   const favoriteRows = useMemo(
     () =>
       favorites.map((favorite: Favorite, index: number) => {
-        const model = fromFavorite({ favorite, subscriptionMap, language, t })
+        const model = fromFavorite({ favorite, language, t })
         const isLast = index === favorites.length - 1
 
         return {
@@ -93,7 +90,7 @@ export default function FavoritesPage() {
           ),
         }
       }),
-    [favorites, handleRemoveFavorite, isOnline, language, playFavorite, subscriptionMap, t]
+    [favorites, handleRemoveFavorite, isOnline, language, playFavorite, t]
   )
 
   return (

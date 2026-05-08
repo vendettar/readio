@@ -26,7 +26,7 @@ Complete URL-contract unification by removing correctness-critical query hints f
 
 ## Required Patterns
 - Content route correctness authority: `/$country/$id/$episodeId` path params only.
-- Canonical deep links to episode detail must not include `source/feedUrl/audioUrl/providerEpisodeId/sessionId`.
+- Canonical deep links to episode detail must not include `source/legacyFeedHint/audioUrl/providerEpisodeId/sessionId`.
 - Keep route builders as the only route-construction entry (`buildPodcastShowRoute`, `buildPodcastEpisodeRoute`, `buildPodcastEpisodesRoute`).
 - `normalizeCountryParam(country)` stays strict (`SupportedCountry | null`) with no global fallback.
 - First-release policy applies: no compatibility handling for legacy query-hint URLs.
@@ -98,7 +98,7 @@ Complete URL-contract unification by removing correctness-critical query hints f
    - Explicitly state: transition context (`fromLayoutPrefix`) is location state metadata, not URL contract.
 
 ## Acceptance Criteria
-- Search, GlobalSearch, and Explore episode clicks all navigate without `source/feedUrl/audioUrl/providerEpisodeId/sessionId`.
+- Search, GlobalSearch, and Explore episode clicks all navigate without `source/legacyFeedHint/audioUrl/providerEpisodeId/sessionId`.
 - Explore -> Podcast Show URL does not contain `fromLayoutPrefix`.
 - Shared-element transition continues to work when state exists.
 - Refresh/direct-open of show page stays stable when state is missing.

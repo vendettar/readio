@@ -6,15 +6,14 @@ import { DISCOVERY_TEST_ROUTE, discoveryUrl } from '../../../__tests__/constants
 import { createQueryClientWrapper } from '../../../__tests__/queryClient'
 import { server } from '../../../__tests__/setup'
 import {
-  makeFeedEpisode,
-  makeParsedFeed,
+  makeEpisode,
   makePodcast,
+  makePodcastEpisodes,
 } from '../../../lib/discovery/__tests__/fixtures'
-import { normalizeFeedUrl } from '../../../lib/discovery/feedUrl'
 import PodcastShowPage from '../PodcastShowPage'
 
 let appleLookupHits = 0
-let directFeedHits = 0
+let directLegacyFeedHits = 0
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -49,44 +48,39 @@ vi.mock('../../../store/exploreStore', () => ({
     }),
 }))
 
-describe('PodcastShowPage 005c same-origin feed cutover', () => {
+describe('PodcastShowPage 005c same-origin PI episodes cutover', () => {
   beforeEach(() => {
     appleLookupHits = 0
-    directFeedHits = 0
+    directLegacyFeedHits = 0
     server.use(
       http.get('https://itunes.apple.com/lookup', () => {
         appleLookupHits += 1
         return HttpResponse.json({ resultCount: 0, results: [] })
       }),
       http.get('https://example.com/feed.xml', () => {
-        directFeedHits += 1
-        return new HttpResponse('unexpected direct feed call', { status: 500 })
+        directLegacyFeedHits += 1
+        return new HttpResponse('unexpected legacy feed call', { status: 500 })
       }),
       http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.podcastByItunesId('123')), () => {
         return HttpResponse.json(
           makePodcast({
             podcastItunesId: '123',
-            title: 'Cloud Feed Podcast',
-            feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
-            description: 'Cloud feed show',
+            title: 'Cloud Episode Podcast',
+            description: 'Cloud PI show description',
             episodeCount: 2,
           })
         )
       }),
-      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.feed), ({ request }) => {
-        const url = new URL(request.url)
-        expect(url.searchParams.get('url')).toBe('https://example.com/feed.xml')
-        expect(url.searchParams.get('limit')).toBe('20')
-        expect(url.searchParams.get('offset')).toBe('0')
-
+      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.podcastEpisodesByItunesId('123')), () => {
         return HttpResponse.json(
-          makeParsedFeed({
+          makePodcastEpisodes({
             episodes: [
-              makeFeedEpisode({
-                episodeGuid: 'ep-1',
+              makeEpisode({
+                guid: 'ep-1',
                 title: 'Episode 1',
                 description: 'Episode description',
                 audioUrl: 'https://example.com/audio-1.mp3',
+                artworkUrl: 'https://example.com/ep-1.jpg',
               }),
             ],
           })
@@ -95,12 +89,13 @@ describe('PodcastShowPage 005c same-origin feed cutover', () => {
     )
   })
 
-  it('renders through same-origin lookup and feed endpoints without direct Apple or RSS calls', async () => {
+  it('renders through same-origin lookup and PI episode endpoints without direct Apple or legacy feed calls', async () => {
     render(<PodcastShowPage />, { wrapper: createQueryClientWrapper() })
 
-    expect(await screen.findByText('Cloud Feed Podcast')).not.toBeNull()
+    expect(await screen.findByText('Cloud Episode Podcast')).not.toBeNull()
     expect(await screen.findByText('Episode 1')).not.toBeNull()
+    expect(await screen.findByText('Cloud PI show description')).not.toBeNull()
     expect(appleLookupHits).toBe(0)
-    expect(directFeedHits).toBe(0)
+    expect(directLegacyFeedHits).toBe(0)
   })
 })

@@ -21,14 +21,10 @@ interface EditorPickShowCardProps {
 export const EditorPickShowCard = React.memo(
   ({ podcast, index, transitionState }: EditorPickShowCardProps) => {
     const globalCountry = normalizeCountryParam(useExploreStore((s) => s.country))
-    const canonicalPodcastId = getCanonicalEditorPickPodcastID(podcast)
-
-    const showRoute = canonicalPodcastId
-      ? buildPodcastShowRoute({
-          country: globalCountry,
-          podcastId: canonicalPodcastId,
-        })
-      : null
+    const showRoute = buildPodcastShowRoute({
+      country: globalCountry,
+      podcastId: getCanonicalEditorPickPodcastID(podcast),
+    })
 
     // Editor picks carry a GUID and a snapshot for instant transition
     const routeState = {
@@ -41,7 +37,7 @@ export const EditorPickShowCard = React.memo(
         id={podcast.podcastItunesId}
         title={podcast.title}
         subtitle={podcast.author}
-        artworkUrl={podcast.artwork || ''}
+        artworkUrl={podcast.artwork}
         rank={index + 1}
         className="flex-shrink-0 w-[var(--item-width)] snap-start"
         to={showRoute?.to}

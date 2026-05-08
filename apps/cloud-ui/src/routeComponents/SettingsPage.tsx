@@ -109,14 +109,6 @@ export default function SettingsPage() {
               onCountryChange={setCountry}
             />
 
-            {/* TODO(settings): restore the Migration block when its product requirements are defined again. */}
-            {/* <MigrationSettingsSection
-              fileInputRef={fileInputRef}
-              onFileChange={onFileChange}
-              onImport={handleImportOpml}
-              onExport={handleExportOpml}
-            /> */}
-
             {/* TODO(settings): restore the Personal Vault block when its product requirements are defined again. */}
             {/* <VaultSettingsSection
               fileInputRef={vaultInputRef}

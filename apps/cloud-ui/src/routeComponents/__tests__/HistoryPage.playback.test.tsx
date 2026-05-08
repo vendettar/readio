@@ -125,10 +125,6 @@ vi.mock('../../components/ui/overflow-menu', () => ({
   OverflowMenu: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }))
 
-vi.mock('../../hooks/useSubscriptionMap', () => ({
-  useSubscriptionMap: () => new Map<string, string>(),
-}))
-
 vi.mock('../../lib/dateUtils', () => ({
   formatDateStandard: () => 'date',
   formatDuration: () => 'duration',
@@ -245,8 +241,10 @@ function makeSession(overrides: Partial<PlaybackSession> = {}): PlaybackSession 
     audioFilename: 'episode.mp3',
     subtitleFilename: '',
     audioUrl: 'https://example.com/episode.mp3',
-    podcastFeedUrl: 'https://example.com/feed.xml',
-    podcastTitle: 'Podcast',
+    artworkUrl: 'https://example.com/episode.jpg',
+    showTitle: 'Podcast',
+    episodeGuid: 'episode-guid-1',
+    podcastItunesId: 'podcast-1',
     localTrackId: 'track-1', // Note: with source='explore', this will NOT trigger setPlaybackTrackId
     ...overrides,
   }
@@ -254,12 +252,19 @@ function makeSession(overrides: Partial<PlaybackSession> = {}): PlaybackSession 
     return {
       ...base,
       source: 'local',
+      episodeGuid: undefined,
+      podcastItunesId: undefined,
       countryAtSave: undefined,
     }
   }
   return {
     ...base,
     source: 'explore',
+    audioUrl: base.audioUrl ?? 'https://example.com/episode.mp3',
+    artworkUrl: base.artworkUrl ?? 'https://example.com/episode.jpg',
+    showTitle: base.showTitle ?? 'Podcast',
+    episodeGuid: base.episodeGuid ?? 'episode-guid-1',
+    podcastItunesId: base.podcastItunesId ?? 'podcast-1',
     countryAtSave: 'us',
   }
 }

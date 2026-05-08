@@ -37,7 +37,7 @@ Make library-origin deep links (especially Favorites) follow the same canonical 
 ## Implementation Steps
 1. Remove Favorites deep-link query hints:
    - Update `apps/lite/src/routeComponents/FavoritesPage.tsx`.
-   - Build episode route with `{ country, podcastId, episodeSlug }` only (no `source/feedUrl/audioUrl/providerEpisodeId/sessionId`).
+   - Build episode route with `{ country, podcastId, episodeSlug }` only (no `source/legacyFeedHint/audioUrl/providerEpisodeId/sessionId`).
 
 2. Stop query-hint propagation across podcast route components:
    - Update:
@@ -74,7 +74,7 @@ Make library-origin deep links (especially Favorites) follow the same canonical 
 - No new stale-overwrite behavior introduced during country changes in content routes.
 
 ## Required Tests
-- Favorites navigation URL test: no `source/feedUrl/audioUrl/providerEpisodeId/sessionId` in URL.
+- Favorites navigation URL test: no `source/legacyFeedHint/audioUrl/providerEpisodeId/sessionId` in URL.
 - Library route parity tests: History and Favorites generate the same route contract shape.
 - Episode detail refresh test from library-origin canonical URL (without query hints).
 - Guardrail script test/fixture to prove allowlist does not block test files.

@@ -1,29 +1,27 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  makeFeedEpisode,
-  makeParsedFeed,
+  makeEpisode,
   makePodcast,
+  makePodcastEpisodes,
 } from '../../../lib/discovery/__tests__/fixtures'
-import { normalizeFeedUrl } from '../../../lib/discovery/feedUrl'
 import PodcastShowPage from '../PodcastShowPage'
 
 const subscribeMock = vi.fn()
 const unsubscribeMock = vi.fn()
 const playEpisodeMock = vi.fn()
+let routeCountry = 'us'
 
 const podcast = makePodcast({
   podcastItunesId: 'pod-1',
-  feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
   title: 'Podcast Show',
   genres: ['News'],
 })
 
-const feed = makeParsedFeed({
-  description: 'desc',
+const episodeList = makePodcastEpisodes({
   episodes: [
-    makeFeedEpisode({
-      episodeGuid: 'ep-1',
+    makeEpisode({
+      guid: 'ep-1',
       title: 'Episode 1',
       audioUrl: 'https://example.com/ep-1.mp3',
       pubDate: '2024-01-01T00:00:00.000Z',
@@ -42,7 +40,7 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-  useParams: () => ({ country: 'us', id: 'pod-1' }),
+  useParams: () => ({ country: routeCountry, id: 'pod-1' }),
   useLocation: () => ({ state: null }),
 }))
 
@@ -53,7 +51,7 @@ vi.mock('@tanstack/react-query', () => ({
     if (queryCall === 1) {
       return { data: podcast, isLoading: false, error: null }
     }
-    return { data: feed, isLoading: false, error: null }
+    return { data: episodeList, isLoading: false, error: null }
   },
   useQueryClient: () => ({
     invalidateQueries: vi.fn(),
@@ -84,7 +82,7 @@ vi.mock('../../../lib/discovery', async (importOriginal) => {
     ...actual,
     default: {
       getPodcastIndexPodcastByItunesId: vi.fn(),
-      fetchPodcastFeed: vi.fn(),
+      fetchPodcastEpisodes: vi.fn(),
     },
   }
 })
@@ -92,6 +90,7 @@ vi.mock('../../../lib/discovery', async (importOriginal) => {
 describe('PodcastShowPage action wiring', () => {
   beforeEach(() => {
     queryCall = 0
+    routeCountry = 'us'
     subscribeMock.mockReset()
     unsubscribeMock.mockReset()
     playEpisodeMock.mockReset()
@@ -106,5 +105,13 @@ describe('PodcastShowPage action wiring', () => {
 
     expect(subscribeMock).toHaveBeenCalledTimes(1)
     expect(unsubscribeMock).not.toHaveBeenCalled()
+  })
+
+  it('does not render latest-episode play action when route country is invalid', async () => {
+    routeCountry = 'invalid'
+    render(<PodcastShowPage />)
+
+    expect(screen.queryByText('latestEpisode')).toBeNull()
+    expect(playEpisodeMock).not.toHaveBeenCalled()
   })
 })

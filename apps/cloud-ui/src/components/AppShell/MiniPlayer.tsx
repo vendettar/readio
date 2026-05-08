@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next'
 import { useImageObjectUrl } from '../../hooks/useImageObjectUrl'
 import { usePlayerController } from '../../hooks/usePlayerController'
 import { getDiscoveryArtworkUrl } from '../../lib/imageUtils'
+import { resolvePlaybackContentIdentityKey } from '../../lib/player/playbackMetadata'
 import { formatTimeLabel } from '../../lib/subtitles'
 import { cn } from '../../lib/utils'
 import { usePlayerStore } from '../../store/playerStore'
@@ -105,7 +106,8 @@ export function MiniPlayer() {
     (typeof coverArtUrl === 'string' ? coverArtUrl : blobUrl) || undefined
 
   // Determine unique ID for the active item to use in layoutId
-  const activeEpisodeId = episodeMetadata?.episodeGuid || audioUrl || 'active'
+  const activeEpisodeId =
+    resolvePlaybackContentIdentityKey({ audioUrl, metadata: episodeMetadata }) ?? 'active'
 
   // Hover state for capsule
   const [isHovering, setIsHovering] = useState(false)

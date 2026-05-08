@@ -1,6 +1,5 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
 import { useEpisodeRowFavoriteAction } from '../useEpisodeRowFavoriteAction'
 
 const logError = vi.fn()
@@ -31,7 +30,7 @@ describe('useEpisodeRowFavoriteAction', () => {
     const { result } = renderHook(() =>
       useEpisodeRowFavoriteAction({
         favorited: true,
-        favoriteKey: 'feed::audio',
+        favoriteKey: 'pod-1::episode-guid-1',
         addFavorite,
         removeFavorite,
         buildAddPayload,
@@ -43,7 +42,7 @@ describe('useEpisodeRowFavoriteAction', () => {
       await result.current.toggleFavorite()
     })
 
-    expect(removeFavorite).toHaveBeenCalledWith('feed::audio')
+    expect(removeFavorite).toHaveBeenCalledWith('pod-1::episode-guid-1')
     expect(addFavorite).not.toHaveBeenCalled()
     expect(buildAddPayload).not.toHaveBeenCalled()
   })
@@ -56,7 +55,7 @@ describe('useEpisodeRowFavoriteAction', () => {
     const { result } = renderHook(() =>
       useEpisodeRowFavoriteAction({
         favorited: true,
-        favoriteKey: 'feed::audio',
+        favoriteKey: 'pod-1::episode-guid-1',
         addFavorite,
         removeFavorite,
         buildAddPayload,
@@ -68,7 +67,7 @@ describe('useEpisodeRowFavoriteAction', () => {
       await result.current.toggleFavorite()
     })
 
-    expect(removeFavorite).toHaveBeenCalledWith('feed::audio')
+    expect(removeFavorite).toHaveBeenCalledWith('pod-1::episode-guid-1')
     expect(logError).toHaveBeenCalledWith('[TestRow] Failed to remove favorite:', expect.any(Error))
     expect(toast.errorKey).toHaveBeenCalledWith('toastRemoveFavoriteFailed')
   })
@@ -81,7 +80,7 @@ describe('useEpisodeRowFavoriteAction', () => {
     const { result } = renderHook(() =>
       useEpisodeRowFavoriteAction({
         favorited: true,
-        favoriteKey: 'feed::audio',
+        favoriteKey: 'pod-1::episode-guid-1',
         addFavorite,
         removeFavorite,
         buildAddPayload,
@@ -104,7 +103,7 @@ describe('useEpisodeRowFavoriteAction', () => {
     const { result } = renderHook(() =>
       useEpisodeRowFavoriteAction({
         favorited: true,
-        favoriteKey: 'feed::audio',
+        favoriteKey: 'pod-1::episode-guid-1',
         addFavorite,
         removeFavorite,
         buildAddPayload,
@@ -127,14 +126,15 @@ describe('useEpisodeRowFavoriteAction', () => {
         podcastItunesId: '1',
         title: 'Show',
         artwork: 'https://example.com/show.jpg',
-        feedUrl: normalizeFeedUrl('feed'),
       },
       episode: {
-        id: 'ep-1',
         title: 'Episode',
         audioUrl: 'audio',
         description: '',
         pubDate: '',
+        artworkUrl: 'https://example.com/episode.jpg',
+        duration: 0,
+        episodeGuid: 'ep-1',
       },
       country: 'us',
     })
@@ -168,14 +168,15 @@ describe('useEpisodeRowFavoriteAction', () => {
         podcastItunesId: '1',
         title: 'Show',
         artwork: 'https://example.com/show.jpg',
-        feedUrl: normalizeFeedUrl('feed'),
       },
       episode: {
-        id: 'ep-1',
         title: 'Episode',
         audioUrl: 'audio',
         description: '',
         pubDate: '',
+        artworkUrl: 'https://example.com/episode.jpg',
+        duration: 0,
+        episodeGuid: 'ep-1',
       },
     })
 
@@ -210,14 +211,15 @@ describe('useEpisodeRowFavoriteAction', () => {
         podcastItunesId: '1',
         title: 'Show',
         artwork: 'https://example.com/show.jpg',
-        feedUrl: normalizeFeedUrl('feed'),
       },
       episode: {
-        id: 'ep-1',
         title: 'Episode',
         audioUrl: 'audio',
         description: '',
         pubDate: '',
+        artworkUrl: 'https://example.com/episode.jpg',
+        duration: 0,
+        episodeGuid: 'ep-1',
       },
     })
 
@@ -246,15 +248,16 @@ describe('useEpisodeRowFavoriteAction', () => {
       podcast: {
         podcastItunesId: '1',
         title: 'Show',
-        artwork: '',
-        feedUrl: normalizeFeedUrl('feed'),
+        artwork: 'https://example.com/show.jpg',
       },
       episode: {
-        id: 'ep-1',
         title: 'Episode',
         audioUrl: 'audio',
         description: '',
         pubDate: '',
+        artworkUrl: 'https://example.com/episode.jpg',
+        duration: 0,
+        episodeGuid: 'ep-1',
       },
     })
 

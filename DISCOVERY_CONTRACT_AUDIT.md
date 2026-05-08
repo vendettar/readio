@@ -2,20 +2,20 @@
 
 ## Goal
 
-This document is an execution instruction for a new worker.
+This document is an execution instruction for future discovery cleanup.
 
 Its purpose is:
 
-1. align any remaining discovery-related cleanup with the current codebase
-2. avoid resurrecting deleted compatibility paths
-3. keep future discovery work grounded in the actual current contract
+1. align future discovery work with the current codebase
+2. avoid resurrecting deleted RSS/feed architecture
+3. keep discovery ownership grounded in the current PI-first contract
 
-This is not a historical audit report.
-Do not re-apply old findings mechanically.
+This is not a historical report.
+Do not mechanically re-apply old findings.
 
 ## Current State
 
-The current discovery flow is already narrower than earlier audit snapshots.
+The current discovery flow is narrower than earlier audit snapshots.
 
 ### Active first-hop APIs
 
@@ -28,36 +28,35 @@ The current discovery flow is already narrower than earlier audit snapshots.
 ### Active second-hop / later resolution
 
 - Podcast Index `GET /podcasts/byitunesid`
-- RSS feed fetch/parse by canonical `feedUrl`
+- Podcast Index `GET /episodes/byitunesid?max=1000`
 
 ### Deleted paths that must not be restored
 
+- RSS feed fetch/parse for page rendering
+- any Cloud route that fetches or parses feed XML for show / episodes / detail pages
 - Podcast Index `GET /episodes/byguid`
-- Podcast Index `GET /episodes/byitunesid`
-- frontend `getPodcastIndexEpisodes(...)`
-- frontend/runtime `PIEpisode`
-- PI-specific playback path such as `playPIEpisode(...)`
+- frontend/runtime feed-owned episode DTOs
+- feed-keyed page caches
 
 ### Important current contract facts
 
-- Episode-detail resolution is now single-path:
+- Episode-detail resolution is now PI-owned:
   1. decode compact route key into stable episode identity
-  2. match cached RSS episodes by `episodeGuid`
-  3. fetch canonical podcast metadata through `podcasts/byitunesid`
-  4. fetch RSS by canonical `feedUrl`
-  5. match by `episodeGuid`
-- `SearchEpisode` no longer carries `feedUrl`.
-- All actual feed fetches must come from Podcast Index `podcasts/byitunesid` canonical `feedUrl`.
+  2. fetch canonical podcast metadata through `podcasts/byitunesid`
+  3. fetch the PI episode list through `episodes/byitunesid?max=1000`
+  4. match by stable `episodeGuid`
+- Show page, episodes page, and cold-open detail page all use the same PI episode-list ownership model.
+- Repo-owned Cloud runtime contracts no longer expose or depend on the legacy feed transport field.
+- `SearchEpisode` no longer carries feed-owned routing state.
 - Compact keys are no longer UUID-only.
 - Legacy UUID compact keys still work.
-- Non-UUID stable episode identities now also compact into route keys.
-- Canonical feed episodes no longer carry a `source: 'feed'` discriminator in the runtime contract.
+- Non-UUID stable episode identities also compact into route keys.
 
 ## Non-Negotiable Rules
 
-1. Do not restore route B in any form.
-2. Do not reintroduce `PIEpisode` or any PI-episode runtime union.
-3. Do not add fallback compatibility branches “just in case”.
+1. Do not restore any RSS/feed fallback for page rendering.
+2. Do not reintroduce feed-keyed page caches or route identity.
+3. Do not add compatibility branches “just in case”.
 4. Do not widen schemas to preserve stale fixtures.
 5. Do not keep dead tests that preserve deleted architecture.
 6. Do not document deleted routes as active.
@@ -85,17 +84,16 @@ Decision table:
 
 These are already done. Do not open a new task to “fix” them again unless a fresh regression appears.
 
-- route B (`episodes/byitunesid`) removed from cloud-api
-- route B removed from cloud-ui API layer
-- `PIEpisode` removed from frontend runtime/schema flow
-- PI playback wrapper removed
-- show/detail/episodes pages unified on RSS episode flow
-- handoff docs updated to remove route B
+- page rendering is no longer RSS-owned
+- Cloud discovery feed route is retired
+- frontend/runtime feed normalization helper is deleted
+- Cloud show / episodes / detail pages are unified on PI episode-list ownership
+- repo-owned runtime contracts no longer expose the legacy feed transport field
 - compact key generalized to support non-UUID stable identities
 
 ## Remaining Audit Targets
 
-The next worker should audit only the remaining realistic areas below.
+The next worker should audit only realistic remaining areas below.
 
 ### Target A: Discovery Docs Consistency
 
@@ -114,17 +112,17 @@ Focus files:
 
 Audit questions:
 
-- Do docs still claim episode compact keys are always 22-char UUID-derived tokens only?
-- Do docs still imply `episodeGuid` must be canonical UUID?
-- Do docs still imply search episode first-hop can directly provide feed resolution without `podcasts/byitunesid`?
-- Do docs still mention deleted PI episode routes?
+- Do docs still imply page rendering depends on RSS/feed XML?
+- Do docs still imply compact keys are UUID-only?
+- Do docs still imply direct routing relies on legacy feed-owned hints?
+- Do docs still mention deleted routes as active?
 
 Current truth that docs must match:
 
 - route identity is a compact key derived from stable episode identity
 - stable episode identity may be UUID or non-UUID
-- canonical feed fetch authority is Podcast Index `podcasts/byitunesid`
-- normalized RSS episode rows are keyed by `episodeGuid`, not by a `source` discriminator
+- canonical page-rendering ownership is PI podcast lookup + PI episode list
+- normalized episode rows are keyed by `episodeGuid`
 
 ### Target B: Search Episode Contract Follow-Through
 
@@ -141,9 +139,9 @@ Focus files:
 
 Audit questions:
 
-- Do all search-episode entry points now behave consistently for non-UUID `episodeGuid`?
+- Do all search-episode entry points behave consistently for non-UUID `episodeGuid`?
 - Is any flow still assuming UUID-only identity?
-- Are playback/download/favorite metadata paths still aligned with “canonical feedUrl comes from `podcasts/byitunesid`”?
+- Are playback/download/favorite metadata paths aligned with PI-owned page rendering rather than feed-owned routing?
 
 ### Target C: Compact Key Contract Propagation
 
@@ -163,31 +161,13 @@ Audit questions:
 - Do any docs/tests still incorrectly assert fixed 22-char keys for all cases?
 - Are any helper names or comments now misleading?
 
-### Target D: Test/Fixture Contract Honesty
-
-Audit changed-zone tests for stale or fabricated assumptions.
-
-Search for:
-
-```bash
-rg -n "22-character|UUID-only|episodeGuid.*uuid|episodes/byitunesid|getPodcastIndexEpisodes|PIEpisode|playPIEpisode"
-```
-
-Rules:
-
-- tests must not preserve deleted route B
-- tests must not preserve deleted `PIEpisode`
-- tests must not assume every `episodeGuid` is UUID-shaped
-- tests must not fabricate stale contract fields solely to keep old expectations green
-
 ## Explicitly Out Of Scope
 
 Do not spend time on these unless a fresh concrete bug is found:
 
 - deleting official third-party API reference docs under `apps/docs/content/docs/general/api`
-- reopening the old `PIEpisodeSchema` field audit
-- reintroducing `source: 'apple'` on search DTOs
-- undoing the current strict “canonical feedUrl comes from PI podcast lookup” direction
+- historical completed instructions and archived review notes
+- reintroducing source discriminators or feed-owned runtime unions
 
 ## Required Workflow
 
@@ -197,44 +177,11 @@ Do not spend time on these unless a fresh concrete bug is found:
 4. If the slice would touch more than 10 files, split it.
 5. Update docs/tests in the same pass when contract language changes.
 
-## Required Output
-
-For each execution pass, return:
-
-### Findings
-
-| Item | Current mismatch | Decision | Files to change |
-|---|---|---|---|
-
-### Validation
-
-List the exact commands run.
-
-### Residual Risks
-
-Only list real unresolved items, not already-deleted historical issues.
-
-## Quick Validation Searches
-
-These searches are expected to be useful before any new discovery cleanup:
-
-```bash
-rg -n "episodes/byitunesid|getPodcastIndexEpisodes|PIEpisode|playPIEpisode" apps/cloud-api apps/cloud-ui apps/docs
-```
-
-```bash
-rg -n "22-character|UUID-only|uuid-only|compact key derived from `episodeGuid`" apps/docs apps/cloud-ui/src
-```
-
-```bash
-rg -n "episodeGuid" apps/cloud-ui/src/components/GlobalSearch apps/cloud-ui/src/hooks apps/cloud-ui/src/lib/player apps/cloud-ui/src/routeComponents/podcast
-```
-
 ## Success Condition
 
 This instruction is complete when:
 
 1. no deleted discovery route is described as active
-2. no deleted runtime type/path is preserved by tests or code
-3. compact key docs/tests match the new non-UUID-capable contract
-4. search-episode flows are consistent with the canonical PI-podcast-lookup-then-RSS model
+2. no deleted feed-owned runtime path is preserved by live code
+3. compact key docs/tests match the non-UUID-capable contract
+4. search-episode flows are consistent with the PI podcast lookup + PI episode-list model

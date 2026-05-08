@@ -1,10 +1,10 @@
-import { DB } from '../dexieDb'
 import {
   highlightWordInSubtitles,
   initLookupHighlight,
   rebuildHighlights,
 } from '../highlightManager'
 import { error as logError } from '../logger'
+import { RuntimeCacheRepository } from '../repositories/RuntimeCacheRepository'
 import { getAppConfig } from '../runtimeConfig'
 import type { DictEntry } from './types'
 
@@ -18,7 +18,7 @@ let persistEpoch = 0
 async function hydrateDictCacheFromIndexedDb(): Promise<void> {
   const config = getAppConfig()
   try {
-    const persisted = await DB.getRuntimeCacheEntry<Record<string, DictEntry>>(
+    const persisted = await RuntimeCacheRepository.getEntry<Record<string, DictEntry>>(
       config.DICT_CACHE_KEY
     )
     if (persisted?.data) {
@@ -59,7 +59,7 @@ export async function clearDictCacheMemory(): Promise<void> {
   highlightInitialized = false
   loadPromise = null
   try {
-    await DB.deleteRuntimeCacheEntry(config.DICT_CACHE_KEY)
+    await RuntimeCacheRepository.deleteEntry(config.DICT_CACHE_KEY)
   } catch (err) {
     logError('[DictCache] Failed to delete persisted cache:', err)
   }
@@ -87,7 +87,7 @@ function queuePersistSnapshot(dictCacheKey: string): void {
       if (enqueueEpoch !== persistEpoch) {
         return
       }
-      await DB.setRuntimeCacheEntry({
+      await RuntimeCacheRepository.setEntry({
         key: dictCacheKey,
         namespace: DICT_CACHE_NAMESPACE,
         data: snapshot,

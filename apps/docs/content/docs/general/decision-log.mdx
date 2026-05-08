@@ -6,7 +6,7 @@ description: Architecture decisions and rationale.
 # Architecture Decision Log
 
 ## D001 — UUID Primary Keys (All Tables)
-- **Decision**: All tables use UUID primary keys; natural keys (e.g., `feedUrl`, `key`) are unique indexes only.
+- **Decision**: All tables use UUID primary keys; natural keys (e.g., legacy feed identity fields, `key`) are unique indexes only.
 - **Rationale**: Global uniqueness, sync readiness, stable identity.
 - **Implication**: Schema changes require DB reset (first‑release policy).
 
@@ -52,7 +52,7 @@ description: Architecture decisions and rationale.
 
 ## D012 — Import Integrity Checks [Implemented]
 - **Decision**: Validate imports for ID collisions and broken references before writing to DB (Instruction 049).
-- **Rationale**: Prevent silent corruption during Vault/OPML import.
+- **Rationale**: Prevent silent corruption during structured library import.
 
 ## D013 — Bundle Size Budget [Implemented]
 - **Decision**: Enforce bundle size budgets in CI (Instruction 050).
@@ -217,6 +217,38 @@ description: Architecture decisions and rationale.
 ## D047 — UI Pattern Change Gate
 - **Decision**: Every modification to `ui-patterns/*.mdx` that introduces a new standardized interaction (e.g., standard forms, file drop zones) MUST be logged in the Decision Log.
 - **Rationale**: Ensure architecture consistency and maintain a source of truth for UI standardization across the project (Instructions 012-015).
+
+## D123 — Cloud PI Episode-List Single-Layer Cache [Implemented]
+- **Decision**: Cloud page-rendering episode data uses one authority-aware frontend PI episode-list key family per `podcastItunesId`; the separate duplicated canonical full-copy cache entry is removed.
+- **Rationale**: The upstream rendering contract is already one PI `episodes/byitunesid?max=1000` list, so frontend ownership should not keep two full 1000-item copies.
+- **Implementation**:
+  - key-family prefix is `['podcast', 'episodes', podcastItunesId, 'pi-list', 'max-1000']`
+  - warm bootstrap may scan the same-podcast key family and choose the freshest candidate
+  - authority drift may reuse stale data only as `initialData`; it must still force an authoritative refetch
+  - successful refresh removes superseded same-podcast variants so steady state is one surviving full-copy PI episode-list entry per podcast
+  - implemented by Instruction 023 in `apps/cloud-ui/src/lib/discovery/episodeCache.ts`, `podcastQueryContract.ts`, `queryCache.ts`, and their route consumers
+
+## D124 — Cloud Discovery Feed Route Retirement
+- **Decision**:
+  - `/api/v1/discovery/feed` is retired and must not be documented as an active Cloud route.
+  - Repo-owned Cloud runtime contracts no longer expose or depend on the legacy feed transport field.
+  - The earlier feed-cache / feed-SQLite discovery direction is retired and must not be presented as the active deployment or persistence contract.
+- **Rationale**:
+  - Cloud page rendering already moved to the PodcastIndex `episodes/byitunesid?max=1000` relay chain, so keeping a feed-route contract in tests and docs creates stale ownership signals.
+  - Repo-owned frontend and backend runtime callers no longer depend on RSS-by-feed transport identity, so continuing to publish route/env/error/persistence guidance for it creates avoidable drift.
+- **Implementation**:
+  - Removed the dead frontend discovery test constant for `/api/v1/discovery/feed`.
+  - Synchronized Cloud discovery handoff, deployment, error-code, database, and roadmap docs to describe the route as retired and the legacy feed transport field as outside the active repo-owned contract.
+  - Instruction 024 owns the route-retirement contract and the doc sync for this slice.
+
+## D054 — Cloud Discovery PI Episode List Cutover [Implemented]
+- **Decision**: Cloud podcast content routes now render episodes only from the PodcastIndex `episodes/byitunesid?max=1000` relay chain keyed by `podcastItunesId`.
+- **Rationale**: Remove RSS feed XML as the page-rendering owner, keep route identity coherent around `podcastItunesId` + `episodeGuid`, and make the 1000-item PI episode list the explicit product contract for show / episodes / detail pages.
+- **Implementation**:
+  - Added Cloud relay `GET /api/v1/discovery/podcasts/:itunesId/episodes`.
+  - Frontend page rendering now uses podcast-keyed `episodeCache` instead of feed-keyed page ownership.
+  - Repo-owned runtime contracts no longer require or expose the legacy feed transport field for subscribe / favorites / downloads / playback flows.
+  - Missing target GUID in a successful PI episode list resolves to `episodeNotFound`; no RSS fallback remains in page rendering. (Instruction 008)
 
 ## D048 — Standardized File Drop Zone
 - **Decision**: All file upload surfaces MUST use the `FileDropZone` component based on `react-dropzone` with Zod-based validation.
@@ -414,7 +446,7 @@ description: Architecture decisions and rationale.
 ## D080 — Content URL Contract Finalization + Transition Metadata Relocation [Implemented]
 - **Decision**:
   - All in-app content entry points (Explore/Search/Global Search/Library) must emit canonical path-only podcast routes with no correctness query hints.
-  - `/$country/podcast/*` route search contracts no longer define legacy library hints (`source/feedUrl/audioUrl/providerEpisodeId/sessionId`) and no longer define `fromLayoutPrefix`.
+  - `/$country/podcast/*` route search contracts no longer define legacy library hints (`source/legacyFeedHint/audioUrl/providerEpisodeId/sessionId`) and no longer define `fromLayoutPrefix`.
   - Legacy query hints are tolerated and stripped during search validation (non-strict handling), rather than hard-rejected.
   - `fromLayoutPrefix` is retained only as optional shared-transition metadata in typed `location.state`, not URL `search`.
   - `useEpisodeResolution` no longer accepts context-based query hints; resolution correctness is route-param + slug-token driven.
@@ -463,8 +495,8 @@ description: Architecture decisions and rationale.
   - `location.state` is not durable across refresh/direct-open/share links.
   - Moving normalization out of hot paths prevents repeated URL parsing overhead and keeps feed cache keys stable.
 - **Implementation**:
-  - Added route guard rules to block business fields under `location.state` and to block hot-path `normalizeFeedUrl` / `new URL()` regressions.
-  - Added feed normalization boundary utility (`src/lib/discovery/feedUrl.ts`) and applied it to provider mapping plus persistence write paths.
+  - Added route guard rules to block business fields under `location.state` and to block hot-path legacy feed normalization / `new URL()` regressions.
+  - Added a feed normalization boundary utility at the time and applied it to provider mapping plus persistence write paths. That utility has since been retired with the PI-first cutover.
   - Added ReadingContent transition perf budget guard (`120ms`) for `docked <-> full` mode switches.
 
 ## D085 — Route Guard AST Upgrade + Session Country Allowlist + Search Open-Detail Semantics [Implemented]
@@ -978,7 +1010,7 @@ description: Architecture decisions and rationale.
   - For Cloud discovery/content routes, the show route SSOT is the numeric `itunesId`.
   - [Superseded] Canonical episode routes used `slugified-title--encodeURIComponent(episodeGuid)`.
   - [Superseded] Route topology was `/:country/podcast/*`.
-  - Episode detail resolution removes the Apple supplemental episode path and resolves through cached RSS by stable episode identity when available, then PodcastIndex `podcasts/byitunesid`, then RSS-by-canonical-`feedUrl` as the remaining fallback.
+  - [Superseded] Episode detail resolution once removed the Apple supplemental episode path and resolved through cached RSS by stable episode identity when available, then PodcastIndex `podcasts/byitunesid`, then RSS-by-canonical feed transport metadata as the remaining fallback.
 - **Rationale**:
   - `itunesId` is the cross-source join key shared by Apple charts and PodcastIndex detail APIs.
   - RSS GUIDs are the most durable episode identifiers and allow cold-open recovery without transient route hints.
@@ -1053,3 +1085,17 @@ description: Architecture decisions and rationale.
 - **Implementation**: 
   - Frontend: `apps/cloud-ui/src/lib/discovery/discoveryCache.ts` refactored to maintenance-only.
   - Backend: `apps/cloud-api/discovery_apple.go` uses `getWithGracefulDegradation`.
+
+## D125 — Grafana Cloud Metrics via Alloy Scrape [Implemented]
+- **Decision**:
+  - `apps/cloud-api` exposes a protected Prometheus-compatible `/metrics` endpoint for host-side Grafana Alloy scraping.
+  - Grafana Cloud metrics ingestion is owned by Alloy, not by app-side Prometheus remote write.
+  - `/metrics` is backend-only operational surface area, protected by `READIO_METRICS_TOKEN`, and must not be emitted through `/env.js`.
+- **Rationale**:
+  - Keeping scrape and Grafana credentials in Alloy avoids coupling `apps/cloud-api` startup and request handling to Grafana Cloud availability.
+  - A local or internal scrape path keeps the application focused on exposing safe process/runtime metrics while the host agent owns transport, retry, and remote credentials.
+  - This preserves `/ops` and `/admin/*` as the lightweight same-origin operator surface without changing their contracts.
+- **Implementation**:
+  - Metrics foundation and tests: `apps/cloud-api/metrics.go`, `apps/cloud-api/metrics_test.go`, `apps/cloud-api/main.go`.
+  - Runtime contract: `apps/docs/content/docs/apps/cloud/deployment.mdx`.
+  - Instruction 014c.

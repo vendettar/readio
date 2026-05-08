@@ -5,24 +5,16 @@ import { Button } from '@/components/ui/button'
 import { CircularProgress } from '@/components/ui/circular-progress'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useEpisodeStatus } from '@/hooks/useEpisodeStatus'
-import { downloadEpisode, removeDownloadedTrack } from '@/lib/downloadService'
+import {
+  buildDownloadJobOptionsFromEpisodeProps,
+  type EpisodeDownloadProps,
+  downloadEpisode,
+  removeDownloadedTrack,
+} from '@/lib/downloadService'
 import { logError } from '@/lib/logger'
-import { normalizeCountryParam } from '@/lib/routes/podcastRoutes'
-import { getAppConfig } from '@/lib/runtimeConfig'
 import { cn } from '@/lib/utils'
 
-interface EpisodeDetailDownloadButtonProps {
-  episodeTitle: string
-  episodeDescription?: string
-  showTitle: string
-  feedUrl?: string
-  audioUrl: string
-  transcriptUrl?: string
-  artworkUrl?: string
-  countryAtSave?: string
-  podcastItunesId?: string
-  episodeGuid?: string
-  durationSeconds?: number
+interface EpisodeDetailDownloadButtonProps extends EpisodeDownloadProps {
   className?: string
 }
 
@@ -30,7 +22,6 @@ export function EpisodeDetailDownloadButton({
   episodeTitle,
   episodeDescription,
   showTitle,
-  feedUrl,
   audioUrl,
   transcriptUrl,
   artworkUrl,
@@ -41,30 +32,32 @@ export function EpisodeDetailDownloadButton({
   className,
 }: EpisodeDetailDownloadButtonProps) {
   const { t } = useTranslation()
-  const status = useEpisodeStatus(audioUrl)
-  const defaultCountry = getAppConfig().DEFAULT_COUNTRY
+  const status = useEpisodeStatus({
+    audioUrl,
+    podcastItunesId,
+    episodeGuid,
+  })
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [isRemoving, setIsRemoving] = useState(false)
 
   const handleDownload = useCallback(() => {
     if (status.downloadStatus === 'downloading') return
 
-    const normalizedCountryAtSave = normalizeCountryParam(countryAtSave) ?? defaultCountry
-
-    // Initiate download
-    void downloadEpisode({
+    const downloadOptions = buildDownloadJobOptionsFromEpisodeProps({
       audioUrl,
       episodeTitle,
       episodeDescription,
       showTitle,
-      feedUrl,
       artworkUrl,
       transcriptUrl,
-      countryAtSave: normalizedCountryAtSave,
+      countryAtSave,
       podcastItunesId,
       episodeGuid,
       durationSeconds,
-    }).then(() => {
+    })
+    if (!downloadOptions) return
+
+    void downloadEpisode(downloadOptions).then(() => {
       status.refresh()
     })
   }, [
@@ -72,14 +65,12 @@ export function EpisodeDetailDownloadButton({
     episodeTitle,
     episodeDescription,
     showTitle,
-    feedUrl,
     artworkUrl,
     transcriptUrl,
     countryAtSave,
     podcastItunesId,
     episodeGuid,
     durationSeconds,
-    defaultCountry,
     status.downloadStatus,
     status.refresh,
   ])

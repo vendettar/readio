@@ -1,0 +1,50 @@
+---
+title: Grafana Cloud Integration
+description: Guide for obtaining credentials for Readio Cloud observability.
+---
+
+# Grafana Cloud Integration
+
+Readio Cloud uses a Zero-Agent OTLP push architecture for metrics and logs, and Grafana Faro for frontend RUM.
+
+## 1. Backend Metrics (OTLP Push)
+
+The backend service pushes metrics directly to Grafana Cloud via OTLP HTTP. **No local Alloy/Agent installation is required.**
+
+### Steps to obtain credentials:
+1. Log in to your [Grafana Cloud](https://grafana.com/products/cloud/) account.
+2. Navigate to **Connections** -> **Add new connection** in the left sidebar.
+3. Search for and select **OpenTelemetry**.
+4. In the configuration page, locate the following:
+   - **Endpoint**: e.g., `https://otlp-gateway-prod-xxx.grafana.net/otlp`
+   - **Username / Instance ID**: A numeric ID.
+   - **Password / API Token**: Click "Generate now" to create a token (requires `MetricsPublisher` permission).
+
+### Required GitHub Secrets:
+- `READIO_GRAFANA_OTLP_ENDPOINT`
+- `READIO_GRAFANA_OTLP_INSTANCE_ID`
+- `READIO_GRAFANA_OTLP_TOKEN`
+
+
+---
+
+## 2. Frontend RUM (Grafana Faro)
+
+The frontend monitoring reports data directly from the user's browser to the Grafana Faro Collector.
+
+### Steps to obtain credentials:
+1. Navigate to **Frontend** (or search for Faro) in the left sidebar.
+2. Click **Create new app**.
+3. Set App Name to `readio-cloud`.
+4. After creation, go to the "Instrumentation" tab to find the **URL** (Collector URL).
+
+### Required GitHub Secrets:
+- `VITE_GRAFANA_FARO_URL`: e.g., `https://faro-collector-prod-xxx.grafana.net/collect/xxx`
+- `VITE_GRAFANA_FARO_APP_NAME`: `readio-cloud`
+- `VITE_GRAFANA_FARO_ENV`: `production` or `preproduction`
+
+---
+
+## 3. Verifying Data
+- **Metrics**: Search for `readio_cloud_http_request_duration_seconds` in Grafana Explore.
+- **RUM**: View user session data in the Grafana Frontend dashboard.

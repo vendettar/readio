@@ -6,17 +6,16 @@ import { DISCOVERY_TEST_ROUTE, discoveryUrl } from '../../../__tests__/constants
 import { createQueryClientHarness, createQueryClientWrapper } from '../../../__tests__/queryClient'
 import { server } from '../../../__tests__/setup'
 import {
-  makeFeedEpisode,
-  makeParsedFeed,
+  makeEpisode,
   makePodcast,
+  makePodcastEpisodes,
 } from '../../../lib/discovery/__tests__/fixtures'
-import { getCanonicalPodcastFeedCacheEntry } from '../../../lib/discovery/feedCache'
-import { normalizeFeedUrl } from '../../../lib/discovery/feedUrl'
+import { getPodcastEpisodesCacheEntries } from '../../../lib/discovery/episodeCache'
+import PodcastEpisodesPage from '../PodcastEpisodesPage'
 import PodcastShowPage from '../PodcastShowPage'
 
-let appleLookupHits = 0
-let feedHits = 0
-let piItunesLookupHits = 0
+let podcastLookupHits = 0
+let episodeListHits = 0
 let routePodcastId = '12345'
 let routeState: unknown = null
 
@@ -43,6 +42,18 @@ vi.mock('../../../hooks/useEpisodePlayback', () => ({
   }),
 }))
 
+vi.mock('react-virtuoso', () => ({
+  // biome-ignore lint/suspicious/noExplicitAny: test mock
+  Virtuoso: ({ data, itemContent }: any) => (
+    <div data-testid="mock-virtuoso">
+      {/* biome-ignore lint/suspicious/noExplicitAny: test mock */}
+      {data.map((item: any, index: number) => (
+        <div key={item.key || index}>{itemContent(index, item)}</div>
+      ))}
+    </div>
+  ),
+}))
+
 vi.mock('../../../store/exploreStore', () => ({
   useExploreStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
@@ -58,49 +69,36 @@ vi.mock('../../../store/exploreStore', () => ({
 
 describe('PodcastShowPage editor pick path', () => {
   beforeEach(() => {
-    appleLookupHits = 0
-    feedHits = 0
-    piItunesLookupHits = 0
+    podcastLookupHits = 0
+    episodeListHits = 0
     routePodcastId = '12345'
     routeState = null
 
     server.use(
-      http.get('https://itunes.apple.com/lookup', () => {
-        appleLookupHits += 1
-        return HttpResponse.json({ resultCount: 0, results: [] })
-      }),
       http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.podcastByItunesId('12345')), () => {
-        piItunesLookupHits += 1
-
+        podcastLookupHits += 1
         return HttpResponse.json(
           makePodcast({
             podcastItunesId: '12345',
             title: 'Editor Pick Podcast',
             artwork: 'https://example.com/show-600.jpg',
             description: 'Editor pick description',
-            feedUrl: normalizeFeedUrl('https://example.com/show-feed.xml'),
             lastUpdateTime: 1711497600,
             episodeCount: 2,
           })
         )
       }),
-      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.feed), ({ request }) => {
-        feedHits += 1
-        const url = new URL(request.url)
-        expect(url.searchParams.get('url')).toBe('https://example.com/show-feed.xml')
-
+      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.podcastEpisodesByItunesId('12345')), () => {
+        episodeListHits += 1
         return HttpResponse.json(
-          makeParsedFeed({
-            title: 'Editor Pick Podcast',
-            description: 'Feed description',
-            artworkUrl: 'https://example.com/show-600.jpg',
+          makePodcastEpisodes({
             episodes: [
-              makeFeedEpisode({
-                episodeGuid: 'feed-ep-1',
-                title: 'Feed Episode 1',
-                description: 'Feed description',
+              makeEpisode({
+                guid: 'pi-ep-1',
+                title: 'PI Episode 1',
+                description: 'PI description',
                 audioUrl: 'https://example.com/audio-1.mp3',
-                pubDate: '2026-03-27T00:00:00.000Z',
+                pubDate: '2026-03-27T00:00:00Z',
                 artworkUrl: 'https://example.com/ep-1.jpg',
                 duration: 123,
               }),
@@ -111,45 +109,56 @@ describe('PodcastShowPage editor pick path', () => {
     )
   })
 
-  it('loads editor pick show routes through podcast lookup then RSS', async () => {
+  it('loads editor pick show routes through PI podcast lookup and PI episode list ownership', async () => {
     render(<PodcastShowPage />, { wrapper: createQueryClientWrapper() })
 
     expect(await screen.findByText('Editor Pick Podcast')).not.toBeNull()
-    expect(await screen.findByText('Feed Episode 1')).not.toBeNull()
-    expect(appleLookupHits).toBe(0)
-    expect(piItunesLookupHits).toBe(1)
-    expect(feedHits).toBe(1)
+    expect(await screen.findByText('PI Episode 1')).not.toBeNull()
+    expect(podcastLookupHits).toBe(1)
+    expect(episodeListHits).toBe(1)
   })
 
-  it('seeds the canonical feed cache from the first-page show fetch', async () => {
+  it('seeds the single PI episode-list cache family from the show-page fetch', async () => {
     const harness = createQueryClientHarness()
 
     render(<PodcastShowPage />, { wrapper: harness.wrapper })
 
-    expect(await screen.findByText('Feed Episode 1')).not.toBeNull()
-    expect(
-      getCanonicalPodcastFeedCacheEntry(harness.queryClient, 'https://example.com/show-feed.xml')
-    ).toMatchObject({
-      feedUrl: 'https://example.com/show-feed.xml',
-      coveredRanges: [{ start: 0, end: 1 }],
-    })
+    expect(await screen.findByText('PI Episode 1')).not.toBeNull()
+    expect(getPodcastEpisodesCacheEntries(harness.queryClient, '12345')).toEqual([
+      expect.objectContaining({
+        authority: { lastUpdateTime: 1711497600, episodeCount: 2 },
+        data: expect.objectContaining({
+          episodes: [expect.objectContaining({ guid: 'pi-ep-1' })],
+        }),
+      }),
+    ])
   })
 
-  it('still performs podcast lookup when snapshot exists (not snapshot-only short-circuit)', async () => {
-    // This is the critical test: verify the code change in PodcastShowPage.tsx
-    // The OLD behavior was: enabled: Boolean(normalizedRouteCountry && !initialPodcast)
-    // which would skip the query when snapshot existed.
-    // The NEW behavior is: enabled: Boolean(normalizedRouteCountry && id)
-    // which always runs when there's an ID, regardless of snapshot.
+  it('reuses one surviving PI episode-list entry when navigating from show page to see-all', async () => {
+    const harness = createQueryClientHarness()
 
-    // Snapshot seeds initialData but query should still run
+    const showRender = render(<PodcastShowPage />, { wrapper: harness.wrapper })
+
+    expect(await screen.findByText('PI Episode 1')).not.toBeNull()
+    expect(episodeListHits).toBe(1)
+    expect(getPodcastEpisodesCacheEntries(harness.queryClient, '12345')).toHaveLength(1)
+
+    showRender.unmount()
+
+    render(<PodcastEpisodesPage />, { wrapper: harness.wrapper })
+
+    expect(await screen.findByText('PI Episode 1')).not.toBeNull()
+    expect(episodeListHits).toBe(1)
+    expect(getPodcastEpisodesCacheEntries(harness.queryClient, '12345')).toHaveLength(1)
+  })
+
+  it('still performs authoritative PI lookup when an editor-pick snapshot exists', async () => {
     routeState = {
       editorPickSnapshot: {
         title: 'Snapshot Podcast',
         author: 'Host',
         artwork: 'https://example.com/show-600.jpg',
         description: 'Snapshot description',
-        feedUrl: normalizeFeedUrl('https://example.com/show-feed.xml'),
         lastUpdateTime: 1711497600,
         podcastItunesId: '12345',
         genres: ['Technology'],
@@ -161,39 +170,25 @@ describe('PodcastShowPage editor pick path', () => {
     render(<PodcastShowPage />, { wrapper: createQueryClientWrapper() })
 
     expect(await screen.findByText('Snapshot Podcast')).not.toBeNull()
-    // The key assertion: With the new code, query is enabled when id exists (not skipped due to initialPodcast)
-    // This test documents the expected behavior - actual fetch count depends on MSW/test setup
-    expect(feedHits).toBeGreaterThanOrEqual(1)
+    expect(await screen.findByText('PI Episode 1')).not.toBeNull()
+    expect(podcastLookupHits).toBe(1)
+    expect(episodeListHits).toBe(1)
   })
 
-  it('fails closed when the RSS fetch fails instead of pivoting to Apple/provider episodes', async () => {
-    routeState = {
-      editorPickSnapshot: {
-        title: 'Editor Pick Podcast',
-        author: 'Host',
-        artwork: 'https://example.com/show-600.jpg',
-        description: 'Editor pick description',
-        feedUrl: normalizeFeedUrl('https://example.com/show-feed.xml'),
-        lastUpdateTime: 1711497600,
-        podcastItunesId: '12345',
-        genres: ['Technology'],
-        episodeCount: 2,
-        language: 'en',
-      },
-    }
-
+  it('degrades only the episodes section when the PI episode list fetch fails', async () => {
     server.use(
-      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.feed), () => {
-        feedHits += 1
+      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.podcastEpisodesByItunesId('12345')), () => {
+        episodeListHits += 1
         return HttpResponse.error()
       })
     )
 
     render(<PodcastShowPage />, { wrapper: createQueryClientWrapper() })
 
+    expect(await screen.findByText('Editor Pick Podcast')).not.toBeNull()
     expect(await screen.findByText('errorPodcastUnavailable')).not.toBeNull()
-    expect(appleLookupHits).toBe(0)
-    expect(piItunesLookupHits).toBe(0)
-    expect(feedHits).toBe(1)
+    expect(screen.queryByText('Editor pick description')).not.toBeNull()
+    expect(podcastLookupHits).toBe(1)
+    expect(episodeListHits).toBe(1)
   })
 })

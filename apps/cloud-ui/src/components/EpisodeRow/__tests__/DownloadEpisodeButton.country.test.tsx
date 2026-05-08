@@ -1,6 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
 import { ensurePodcastDetail } from '../../../lib/discovery/queryCache'
 import { DownloadEpisodeButton } from '../DownloadEpisodeButton'
 
@@ -21,9 +20,13 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: vi.fn() },
 }))
 
-vi.mock('../../../lib/downloadService', () => ({
-  downloadEpisode: downloadEpisodeMock,
-}))
+vi.mock('../../../lib/downloadService', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../lib/downloadService')>()
+  return {
+    ...actual,
+    downloadEpisode: downloadEpisodeMock,
+  }
+})
 
 vi.mock('../../../lib/discovery/queryCache', () => ({
   ensurePodcastDetail: vi.fn(),
@@ -44,11 +47,17 @@ vi.mock('../../../hooks/useEpisodeStatus', () => ({
   }),
 }))
 
-vi.mock('../../../lib/runtimeConfig', () => ({
-  getAppConfig: () => ({ DEFAULT_COUNTRY: 'us' }),
-}))
+const requiredRemoteProps = {
+  episodeTitle: 'Episode',
+  showTitle: 'Podcast',
+  audioUrl: 'https://example.com/audio.mp3',
+  artworkUrl: 'https://example.com/art.jpg',
+  countryAtSave: 'us',
+  podcastItunesId: '123',
+  episodeGuid: 'episode-guid-1',
+} as const
 
-describe('DownloadEpisodeButton country normalization', () => {
+describe('DownloadEpisodeButton remote contract', () => {
   beforeEach(() => {
     downloadEpisodeMock.mockClear()
     refreshMock.mockClear()
@@ -56,18 +65,19 @@ describe('DownloadEpisodeButton country normalization', () => {
   })
 
   it.each([
-    { name: 'falls back when countryAtSave is missing', input: undefined, expected: 'us' },
-    { name: 'falls back when countryAtSave is invalid', input: 'zz', expected: 'us' },
-    { name: 'normalizes uppercase countryAtSave', input: 'US', expected: 'us' },
-  ])('$name', async ({ input, expected }) => {
-    render(
-      <DownloadEpisodeButton
-        episodeTitle="Episode"
-        showTitle="Podcast"
-        audioUrl="https://example.com/audio.mp3"
-        countryAtSave={input}
-      />
-    )
+    { name: 'fails closed when countryAtSave is blank', input: '   ' },
+    { name: 'fails closed when countryAtSave is invalid', input: 'zz' },
+  ])('$name', ({ input }) => {
+    render(<DownloadEpisodeButton {...requiredRemoteProps} countryAtSave={input} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'downloadEpisode' }))
+
+    expect(downloadEpisodeMock).not.toHaveBeenCalled()
+    expect(refreshMock).not.toHaveBeenCalled()
+  })
+
+  it('normalizes uppercase countryAtSave', async () => {
+    render(<DownloadEpisodeButton {...requiredRemoteProps} countryAtSave="US" />)
 
     fireEvent.click(screen.getByRole('button', { name: 'downloadEpisode' }))
 
@@ -75,57 +85,48 @@ describe('DownloadEpisodeButton country normalization', () => {
       expect(downloadEpisodeMock).toHaveBeenCalledTimes(1)
     })
     expect(downloadEpisodeMock).toHaveBeenCalledWith(
-      expect.objectContaining({ countryAtSave: expected })
-    )
-  })
-
-  it('resolves canonical feedUrl from PI when direct feedUrl is absent', async () => {
-    vi.mocked(ensurePodcastDetail).mockResolvedValue({
-      podcastItunesId: '123',
-      title: 'Podcast',
-      author: 'Host',
-      artwork: 'https://example.com/art.jpg',
-      description: 'desc',
-      feedUrl: normalizeFeedUrl('https://example.com/canonical-feed.xml'),
-      lastUpdateTime: 1,
-      episodeCount: 10,
-      language: 'en',
-      genres: ['Technology'],
-    })
-
-    render(
-      <DownloadEpisodeButton
-        episodeTitle="Episode"
-        showTitle="Podcast"
-        audioUrl="https://example.com/audio.mp3"
-        countryAtSave="us"
-        podcastItunesId="123"
-      />
-    )
-
-    fireEvent.click(screen.getByRole('button', { name: 'downloadEpisode' }))
-
-    await waitFor(() => {
-      expect(ensurePodcastDetail).toHaveBeenCalledWith(expect.anything(), '123', 'us')
-    })
-    expect(downloadEpisodeMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        feedUrl: normalizeFeedUrl('https://example.com/canonical-feed.xml'),
+        countryAtSave: 'us',
+        artworkUrl: requiredRemoteProps.artworkUrl,
+        podcastItunesId: requiredRemoteProps.podcastItunesId,
+        episodeGuid: requiredRemoteProps.episodeGuid,
+        showTitle: requiredRemoteProps.showTitle,
       })
     )
   })
 
-  it('skips PI lookup when feedUrl is already provided', async () => {
-    render(
-      <DownloadEpisodeButton
-        episodeTitle="Episode"
-        showTitle="Podcast"
-        audioUrl="https://example.com/audio.mp3"
-        countryAtSave="us"
-        podcastItunesId="123"
-        feedUrl="https://example.com/already-known.xml"
-      />
-    )
+  it.each([
+    {
+      name: 'fails closed when showTitle is missing',
+      props: { showTitle: '   ' },
+    },
+    {
+      name: 'fails closed when artworkUrl is missing',
+      props: { artworkUrl: '   ' },
+    },
+    {
+      name: 'fails closed when podcastItunesId is missing',
+      props: { podcastItunesId: '   ' },
+    },
+    {
+      name: 'fails closed when episodeGuid is missing',
+      props: { episodeGuid: '   ' },
+    },
+    {
+      name: 'fails closed when audioUrl is missing',
+      props: { audioUrl: '   ' },
+    },
+  ])('$name', ({ props }) => {
+    render(<DownloadEpisodeButton {...requiredRemoteProps} {...props} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'downloadEpisode' }))
+
+    expect(downloadEpisodeMock).not.toHaveBeenCalled()
+    expect(refreshMock).not.toHaveBeenCalled()
+  })
+
+  it('does not perform PI lookup before downloading when podcast identity is present', async () => {
+    render(<DownloadEpisodeButton {...requiredRemoteProps} />)
 
     fireEvent.click(screen.getByRole('button', { name: 'downloadEpisode' }))
 
@@ -134,9 +135,21 @@ describe('DownloadEpisodeButton country normalization', () => {
     })
     expect(ensurePodcastDetail).not.toHaveBeenCalled()
     expect(downloadEpisodeMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        feedUrl: normalizeFeedUrl('https://example.com/already-known.xml'),
-      })
+      expect.not.objectContaining({ feedUrl: expect.anything() })
+    )
+  })
+
+  it('does not perform PI lookup before downloading', async () => {
+    render(<DownloadEpisodeButton {...requiredRemoteProps} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'downloadEpisode' }))
+
+    await waitFor(() => {
+      expect(downloadEpisodeMock).toHaveBeenCalledTimes(1)
+    })
+    expect(ensurePodcastDetail).not.toHaveBeenCalled()
+    expect(downloadEpisodeMock).toHaveBeenCalledWith(
+      expect.not.objectContaining({ feedUrl: expect.anything() })
     )
   })
 })

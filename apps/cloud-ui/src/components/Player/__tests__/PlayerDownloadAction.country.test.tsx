@@ -2,12 +2,36 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { PlayerDownloadAction } from '../PlayerDownloadAction'
 
-const { downloadEpisodeMock, refreshMock } = vi.hoisted(() => ({
+const { buildDownloadJobOptionsFromCanonicalRemoteMetadataMock, downloadEpisodeMock, refreshMock } =
+  vi.hoisted(() => ({
   downloadEpisodeMock: vi.fn(() => Promise.resolve({ ok: true })),
+  buildDownloadJobOptionsFromCanonicalRemoteMetadataMock: vi.fn((input: Record<string, unknown>) => {
+    const metadata = (input.metadata as Record<string, unknown> | null | undefined) ?? {}
+    const rawCountry =
+      typeof metadata.countryAtSave === 'string' && /^(us|jp)$/i.test(metadata.countryAtSave)
+        ? metadata.countryAtSave.toLowerCase()
+        : null
+
+    if (!rawCountry) {
+      return null
+    }
+
+    return {
+      audioUrl: input.audioUrl,
+      episodeTitle: input.episodeTitle,
+      episodeDescription: '',
+      showTitle: 'Podcast',
+      artworkUrl: 'https://example.com/art.jpg',
+      countryAtSave: rawCountry,
+      podcastItunesId: 'pod-1',
+      episodeGuid: 'episode-guid-1',
+      durationSeconds: metadata.durationSeconds,
+    }
+  }),
   refreshMock: vi.fn(),
-}))
-let currentCountryAtSave: string | undefined
+  }))
 let currentDurationSeconds: number | undefined
+let currentEpisodeMetadata: Record<string, unknown> | null
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -18,6 +42,8 @@ vi.mock('react-i18next', () => ({
 }))
 
 vi.mock('../../../lib/downloadService', () => ({
+  buildDownloadJobOptionsFromCanonicalRemoteMetadata:
+    buildDownloadJobOptionsFromCanonicalRemoteMetadataMock,
   downloadEpisode: downloadEpisodeMock,
   removeDownloadedTrack: vi.fn(() => Promise.resolve(true)),
 }))
@@ -42,32 +68,73 @@ vi.mock('../../../store/playerStore', () => ({
     selector({
       audioUrl: 'https://example.com/fallback.mp3',
       audioTitle: 'Episode',
-      episodeMetadata: {
-        originalAudioUrl: 'https://example.com/source.mp3',
-        countryAtSave: currentCountryAtSave,
-        durationSeconds: currentDurationSeconds,
-        showTitle: 'Podcast',
-      },
+      episodeMetadata: currentEpisodeMetadata,
     }),
-}))
-
-vi.mock('../../../lib/runtimeConfig', () => ({
-  getAppConfig: () => ({ DEFAULT_COUNTRY: 'us' }),
 }))
 
 describe('PlayerDownloadAction country normalization', () => {
   beforeEach(() => {
     downloadEpisodeMock.mockClear()
+    buildDownloadJobOptionsFromCanonicalRemoteMetadataMock.mockClear()
     refreshMock.mockClear()
     currentDurationSeconds = 245
+    currentEpisodeMetadata = {
+      originalAudioUrl: 'https://example.com/source.mp3',
+      countryAtSave: 'us',
+      durationSeconds: currentDurationSeconds,
+      showTitle: 'Podcast',
+      artworkUrl: 'https://example.com/art.jpg',
+      podcastItunesId: 'pod-1',
+      episodeGuid: 'episode-guid-1',
+    }
   })
 
   it.each([
-    { name: 'falls back when countryAtSave is missing', input: undefined, expected: 'us' },
-    { name: 'falls back when countryAtSave is invalid', input: 'zz', expected: 'us' },
-    { name: 'normalizes uppercase countryAtSave', input: 'US', expected: 'us' },
-  ])('$name', ({ input, expected }) => {
-    currentCountryAtSave = input
+    {
+      name: 'fails closed when countryAtSave is missing',
+      metadata: {
+        originalAudioUrl: 'https://example.com/source.mp3',
+        durationSeconds: 245,
+        showTitle: 'Podcast',
+        artworkUrl: 'https://example.com/art.jpg',
+        podcastItunesId: 'pod-1',
+        episodeGuid: 'episode-guid-1',
+      },
+    },
+    {
+      name: 'fails closed when countryAtSave is invalid',
+      metadata: {
+        originalAudioUrl: 'https://example.com/source.mp3',
+        countryAtSave: 'zz',
+        durationSeconds: 245,
+        showTitle: 'Podcast',
+        artworkUrl: 'https://example.com/art.jpg',
+        podcastItunesId: 'pod-1',
+        episodeGuid: 'episode-guid-1',
+      },
+    },
+  ])('$name', ({ metadata }) => {
+    currentEpisodeMetadata = metadata
+
+    render(<PlayerDownloadAction />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'downloadEpisode' }))
+
+    expect(buildDownloadJobOptionsFromCanonicalRemoteMetadataMock).not.toHaveBeenCalled()
+    expect(downloadEpisodeMock).not.toHaveBeenCalled()
+    expect(refreshMock).not.toHaveBeenCalled()
+  })
+
+  it('normalizes uppercase countryAtSave', () => {
+    currentEpisodeMetadata = {
+      originalAudioUrl: 'https://example.com/source.mp3',
+      countryAtSave: 'US',
+      durationSeconds: currentDurationSeconds,
+      showTitle: 'Podcast',
+      artworkUrl: 'https://example.com/art.jpg',
+      podcastItunesId: 'pod-1',
+      episodeGuid: 'episode-guid-1',
+    }
 
     render(<PlayerDownloadAction />)
 
@@ -75,7 +142,7 @@ describe('PlayerDownloadAction country normalization', () => {
 
     expect(downloadEpisodeMock).toHaveBeenCalledTimes(1)
     expect(downloadEpisodeMock).toHaveBeenCalledWith(
-      expect.objectContaining({ countryAtSave: expected, durationSeconds: 245 })
+      expect.objectContaining({ countryAtSave: 'us', durationSeconds: 245 })
     )
   })
 })

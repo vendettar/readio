@@ -239,7 +239,7 @@ describe('DockedPlayer Controls (via PlayerSurfaceFrame)', () => {
     expect(screen.queryByLabelText('ariaOpenQueue')).toBeNull()
   })
 
-  it('shows no transcript placeholder in docked mode when subtitles are absent', () => {
+  it('shows no transcript placeholder in docked mode when subtitles are absent', async () => {
     usePlayerSurfaceStore.setState({ mode: 'docked' })
     usePlayerStore.setState({
       episodeMetadata: null,
@@ -253,9 +253,9 @@ describe('DockedPlayer Controls (via PlayerSurfaceFrame)', () => {
 
     render(<PlayerSurfaceFrame mode="docked" />)
 
-    expect(screen.getByTestId('no-transcript-artwork')).toBeTruthy()
-    expect(screen.getByText('noTranscript')).toBeTruthy()
-    return waitFor(() => {
+    expect(await screen.findByTestId('no-transcript-artwork')).toBeTruthy()
+    expect(await screen.findByText('noTranscript')).toBeTruthy()
+    await waitFor(() => {
       expect(screen.getByRole('button', { name: 'asrGenerateTranscript' })).toBeTruthy()
     })
   })

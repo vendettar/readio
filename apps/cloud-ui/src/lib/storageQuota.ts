@@ -3,8 +3,8 @@ import {
   STORAGE_KEY_STORAGE_QUOTA_WARNED,
 } from '../constants/storage'
 import { BYTES_PER_GB } from '../constants/storageQuota'
-import { DB } from './dexieDb'
 import { logError } from './logger'
+import { StorageRepository } from './repositories/StorageRepository'
 import { getAppConfig } from './runtimeConfig'
 import { isValidAudioFile } from './schemas/files'
 import { getJson, setJson } from './storage'
@@ -55,7 +55,7 @@ export async function checkStorageQuota({
 
   quotaCheckInFlight = (async () => {
     try {
-      const info = await DB.getStorageInfo()
+      const info = await StorageRepository.getStorageInfo()
       const browserInfo = info.browser
       if (!browserInfo || browserInfo.quota <= 0) {
         return
@@ -91,7 +91,7 @@ export async function evaluateUploadGuardrails(files: File[]): Promise<{ blocked
   const { MAX_AUDIO_CACHE_GB } = getAppConfig()
   const audioCacheCapBytes = Math.max(0, MAX_AUDIO_CACHE_GB) * BYTES_PER_GB
 
-  const info = await DB.getStorageInfo()
+  const info = await StorageRepository.getStorageInfo()
   const browserInfo = info.browser
   const incomingSize = files.reduce((sum, file) => sum + file.size, 0)
   const incomingAudioSize = files

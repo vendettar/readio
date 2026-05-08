@@ -41,13 +41,13 @@ title: Discovery API 实际使用链路
   - `showTitle`
   - `artwork`
   - `episodeUrl`
-  - `episodeGuid`
+  - `guid`
   - `releaseDate`
   - `trackTimeMillis`
   - `shortDescription`
 - 下一步：
   - 当需要 canonical podcast metadata 时，继续走 Podcast Index `podcasts/byitunesid`
-  - 当需要 feed 原生单集数据时，继续走按 Podcast Index `podcasts/byitunesid` 返回的 canonical `feedUrl` 的 RSS 解析
+  - 当需要页面渲染用单集数据时，继续走 Cloud 的 PI 单集列表 relay，它的上游是 PodcastIndex `episodes/byitunesid?max=1000`
 
 ### 1.3 Apple Top Podcasts
 
@@ -98,7 +98,7 @@ title: Discovery API 实际使用链路
   - editor-pick surface 使用的收窄节目 DTO
 - 下一步：
   - 当用户打开某个 picked show 时，继续走节目页 lookup，也就是 Podcast Index `podcasts/byitunesid`
-  - 当该节目页后续需要单集数据时，继续走按 Podcast Index `podcasts/byitunesid` 返回的 canonical `feedUrl` 的 RSS 解析
+  - 当该节目页后续需要单集数据时，继续走 Cloud 的 PI 单集列表 relay，它的上游是 PodcastIndex `episodes/byitunesid?max=1000`
 
 ## 2. 第二跳与后续解析
 
@@ -112,7 +112,6 @@ title: Discovery API 实际使用链路
   - 获取 canonical podcast metadata
   - 节目页 lookup
   - 富化 Apple 第一跳结果
-  - 获取 canonical `feedUrl`
 - 上一跳：
   - Apple Search Podcasts
   - Apple Search Episodes
@@ -123,49 +122,60 @@ title: Discovery API 实际使用链路
   - `podcastItunesId`
 - 向下游产出：
   - canonical podcast contract
-  - 后续 RSS 解析所需的 `feedUrl`
 
-### 2.2 RSS Feed Parsing By Feed URL
+### 2.2 Podcast Index Episodes By iTunes ID（经 Cloud relay）
 
 - 上游：
-  - 按 `feedUrl` 拉取并解析 RSS
+  - Podcast Index `episodes/byitunesid?max=1000`
 - 用途：
-  - 节目页 feed episode list
-  - 最后的 episode resolution fallback
-  - feed 原生字段，例如 transcript、chapters、season/episode number、HTML description
+  - 节目页单集列表
+  - 全部单集页单集列表
+  - 直接进入的单集详情 hydration
+  - 页面渲染需要的 canonical 字段，例如 transcript、chapters、season/episode number、纯文本 description
 - 上一跳：
   - Podcast Index `podcasts/byitunesid`
-  - 已缓存的 canonical podcast 数据
-  - 已缓存的 feed 数据
 - 依赖上一跳提供：
-  - `feedUrl`
+  - `podcastItunesId`
 - 向下游产出：
-  - 以稳定单集身份为键的 normalized RSS episode rows
+  - 以稳定单集身份为键的 normalized PI-owned episode rows
+  - relay 对外暴露 `guid` 和必填 `artworkUrl`；后端无法归一化出合法 artwork URL 的行会被丢弃
 
-### 2.3 单集解析顺序
+### 2.3 已退役的 Discovery Feed Route
+
+- 状态：
+  - `GET /api/v1/discovery/feed` 已退役，不得再被描述为活跃的 Cloud API
+- 当前契约：
+  - repo-owned 的 Cloud 运行时契约已不再暴露或依赖旧的 feed transport 字段
+  - 活跃的 Cloud 页面渲染与 discovery routing 不会再按旧的 feed transport identity 拉取 RSS
+- 影响：
+  - Cloud 当前不存在用于节目页 / 单集列表 / 单集详情渲染的 RSS feed XML 二跳 API
+
+### 2.4 单集解析顺序
 
 - 第一步：
   - 从 route 或 compact key 解析出目标稳定单集身份
 - 第二步：
-  - 如果 feed 数据已存在，先在 cached RSS episodes 里按稳定单集身份匹配
-- 第三步：
   - 通过 Podcast Index `podcasts/byitunesid` 获取 canonical podcast metadata
+- 第三步：
+  - 若前端共享 PI 单集列表 key family 已有可用条目，则先读它；否则请求 Cloud 的 PI 单集列表 relay，它的上游是 `episodes/byitunesid?max=1000`
+  - 再按稳定单集身份匹配
 - 第四步：
-  - 按 canonical `feedUrl` 拉 RSS，再按稳定单集身份匹配
+  - 如果目标 `guid` 不在成功返回的 PI 单集列表里，直接进入确定性的 `episodeNotFound`
 
 ## 3. 页面总览
 
 | 页面/入口 | 第一跳 | 第二跳 | 后续解析 |
 |---|---|---|---|
-| 搜索节目 | Apple Search Podcasts | 需要时走 Podcast Index `podcasts/byitunesid` | 只有在后续详情流需要时才会走 RSS |
-| 搜索单集 | Apple Search Episodes | 需要时走 Podcast Index `podcasts/byitunesid` | 用 canonical `feedUrl` 做单集解析 |
-| Explore Top Shows | Apple Top Podcasts | 用户进入节目页后走 Podcast Index `podcasts/byitunesid` | 在节目/单集详情流中按 `feedUrl` 走 RSS |
-| Explore Top Episodes | Apple Top Episodes | 用户点击后，从 Podcast Index `podcasts/byitunesid` 的 show context 继续 | 在后续详情/解析链路里按 `feedUrl` 走 RSS |
-| Explore Editor's Picks | Podcast Index `podcasts/batch/byguid` | 用户进入节目页后走 Podcast Index `podcasts/byitunesid` | 在节目/单集详情流中按 `feedUrl` 走 RSS |
-| 节目页 | 无 | Podcast Index `podcasts/byitunesid` | RSS `feedUrl` |
-| 单集详情页 | 无 | Podcast Index `podcasts/byitunesid` | 用 canonical `feedUrl` 走 RSS |
+| 搜索节目 | Apple Search Podcasts | 需要时走 Podcast Index `podcasts/byitunesid` | 用户进入内容页后走 PI 单集列表 relay |
+| 搜索单集 | Apple Search Episodes | 需要时走 Podcast Index `podcasts/byitunesid` | 单集解析走 PI 单集列表 relay |
+| Explore Top Shows | Apple Top Podcasts | 用户进入节目页后走 Podcast Index `podcasts/byitunesid` | 在节目/单集详情流中走 PI 单集列表 relay |
+| Explore Top Episodes | Apple Top Episodes | 用户点击后，从 Podcast Index `podcasts/byitunesid` 的 show context 继续 | 在后续详情/解析链路里走 PI 单集列表 relay |
+| Explore Editor's Picks | Podcast Index `podcasts/batch/byguid` | 用户进入节目页后走 Podcast Index `podcasts/byitunesid` | 在节目/单集详情流中走 PI 单集列表 relay |
+| 节目页 | 无 | Podcast Index `podcasts/byitunesid` | PI 单集列表 relay |
+| 单集详情页 | 无 | Podcast Index `podcasts/byitunesid` | PI 单集列表 relay |
 
 ## 4. 明确不使用
 
 - Readio 当前 active discovery flow 不使用 Podcast Index `episodes/byguid`
 - Readio 当前仍然使用 Podcast Index `podcasts/batch/byguid` 作为 Editor's Picks 的第一跳
+- Readio 不再把 `/api/v1/discovery/feed` 视为活跃 discovery route，而且 repo-owned 的 Cloud 运行时契约也不再暴露旧的 feed transport 字段

@@ -50,6 +50,13 @@ const UriSchema = z.string().refine(
   { message: 'Invalid URL or relative path' }
 )
 
+const FaroSampleRateSchema = z.coerce
+  .number()
+  .min(0)
+  .max(1)
+  .default(DEFAULTS.GRAFANA_FARO_SAMPLE_RATE)
+  .catch(catchWithLog('GRAFANA_FARO_SAMPLE_RATE', DEFAULTS.GRAFANA_FARO_SAMPLE_RATE))
+
 const SupportedLanguageSchema = z.preprocess(
   (val) => {
     if (typeof val !== 'string') return val
@@ -80,7 +87,12 @@ function isEnableAllProvidersToken(value: string): boolean {
 }
 
 export const AppConfigSchema = z.object({
+  API_BASE_URL: z
+    .string()
+    .default('')
+    .catch(catchWithLog('API_BASE_URL', '')),
   APP_NAME: z
+
     .string()
     .default(DEFAULTS.APP_NAME)
     .catch(catchWithLog('APP_NAME', DEFAULTS.APP_NAME)),
@@ -112,6 +124,19 @@ export const AppConfigSchema = z.object({
     .string()
     .default(DEFAULTS.NETWORK_PROXY_AUTH_VALUE)
     .catch(catchWithLog('NETWORK_PROXY_AUTH_VALUE', DEFAULTS.NETWORK_PROXY_AUTH_VALUE)),
+  GRAFANA_FARO_URL: z
+    .union([z.literal(''), UrlSchema])
+    .default(DEFAULTS.GRAFANA_FARO_URL)
+    .catch(catchWithLog('GRAFANA_FARO_URL', DEFAULTS.GRAFANA_FARO_URL)),
+  GRAFANA_FARO_APP_NAME: z
+    .string()
+    .default(DEFAULTS.GRAFANA_FARO_APP_NAME)
+    .catch(catchWithLog('GRAFANA_FARO_APP_NAME', DEFAULTS.GRAFANA_FARO_APP_NAME)),
+  GRAFANA_FARO_ENV: z
+    .string()
+    .default(DEFAULTS.GRAFANA_FARO_ENV)
+    .catch(catchWithLog('GRAFANA_FARO_ENV', DEFAULTS.GRAFANA_FARO_ENV)),
+  GRAFANA_FARO_SAMPLE_RATE: FaroSampleRateSchema,
   // Browser runtime-config only: known upstream secret formats are fail-closed
   // in runtimeConfig.ts (e.g., sk-, sk-proj-, gsk_, gsk-).
   ASR_API_KEY: z.string().optional(),
@@ -260,11 +285,17 @@ export const AppConfigSchema = z.object({
 export type AppConfig = z.infer<typeof AppConfigSchema>
 
 export const ENV_MAP: Record<keyof AppConfig, string> = {
+  API_BASE_URL: 'VITE_API_BASE_URL',
   APP_NAME: 'READIO_APP_NAME',
+
   APP_VERSION: 'READIO_APP_VERSION',
   NETWORK_PROXY_URL: 'READIO_NETWORK_PROXY_URL',
   NETWORK_PROXY_AUTH_HEADER: 'READIO_NETWORK_PROXY_AUTH_HEADER',
   NETWORK_PROXY_AUTH_VALUE: 'READIO_NETWORK_PROXY_AUTH_VALUE',
+  GRAFANA_FARO_URL: 'VITE_GRAFANA_FARO_URL',
+  GRAFANA_FARO_APP_NAME: 'VITE_GRAFANA_FARO_APP_NAME',
+  GRAFANA_FARO_ENV: 'VITE_GRAFANA_FARO_ENV',
+  GRAFANA_FARO_SAMPLE_RATE: 'VITE_GRAFANA_FARO_SAMPLE_RATE',
   ASR_API_KEY: 'READIO_ASR_API_KEY',
   ASR_RELAY_PUBLIC_TOKEN: 'READIO_ASR_RELAY_PUBLIC_TOKEN',
   OPENAI_API_KEY: 'READIO_OPENAI_API_KEY',

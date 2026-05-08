@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -29,42 +28,6 @@ func (timeoutErr) Error() string   { return "i/o timeout" }
 func (timeoutErr) Timeout() bool   { return true }
 func (timeoutErr) Temporary() bool { return true }
 
-func newDiscoveryFeedFixtureService(
-	t *testing.T,
-	host string,
-	resolvedIP string,
-	timeout time.Duration,
-	handler http.HandlerFunc,
-) (*discoveryService, *string) {
-	t.Helper()
-
-	upstream := httptest.NewServer(handler)
-	t.Cleanup(upstream.Close)
-
-	targetAddr := upstream.Listener.Addr().String()
-	dialedAddress := ""
-
-	service := &discoveryService{
-		timeout:   timeout,
-		userAgent: discoveryUserAgent,
-		bodyLimit: discoveryBodyLimit,
-		cache:     newDiscoveryCache(discoveryCacheMaxKeys),
-		lookupIP: func(_ context.Context, lookupHost string) ([]net.IPAddr, error) {
-			if lookupHost != host {
-				t.Fatalf("lookup host = %q, want %q", lookupHost, host)
-			}
-			return []net.IPAddr{{IP: net.ParseIP(resolvedIP)}}, nil
-		},
-		dialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
-			dialedAddress = address
-			var d net.Dialer
-			return d.DialContext(ctx, network, targetAddr)
-		},
-	}
-
-	return service, &dialedAddress
-}
-
 func assertDiscoveryErrorPayload(t *testing.T, body interface{ String() string }, wantCode string) {
 	t.Helper()
 
@@ -86,7 +49,7 @@ func TestDiscoveryServiceTopPodcastsNormalizesPayload(t *testing.T) {
 	service := &discoveryService{
 		client: &http.Client{
 			Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
-				if req.URL.String() != discoveryRSSBaseURL+"/us/podcasts/top/25/podcasts.json" {
+				if req.URL.String() != discoveryAppleChartsBaseURL+"/us/podcasts/top/25/podcasts.json" {
 					t.Fatalf("upstream url = %q", req.URL.String())
 				}
 				if got := req.Header.Get("Accept"); got != "application/json" {
@@ -109,8 +72,8 @@ func TestDiscoveryServiceTopPodcastsNormalizesPayload(t *testing.T) {
 				}`), nil
 			}),
 		},
-		timeout:    time.Second,
-		rssBaseURL: discoveryRSSBaseURL,
+		timeout:            time.Second,
+		appleChartsBaseURL: discoveryAppleChartsBaseURL,
 
 		userAgent: discoveryUserAgent,
 		bodyLimit: discoveryBodyLimit,
@@ -144,13 +107,13 @@ func TestDiscoveryServiceTopPodcastsNormalizesPayload(t *testing.T) {
 
 func TestDiscoveryServiceTopPodcastsRateLimited(t *testing.T) {
 	service := &discoveryService{
-		timeout:        time.Second,
-		rssBaseURL:     discoveryRSSBaseURL,
-		userAgent:      discoveryUserAgent,
-		bodyLimit:      discoveryBodyLimit,
-		topLimiter:     newRateLimiter(1, time.Minute, func() time.Time { return time.Now() }),
-		trustedProxies: trustedProxySet{},
-		cache:          newDiscoveryCache(discoveryCacheMaxKeys),
+		timeout:            time.Second,
+		appleChartsBaseURL: discoveryAppleChartsBaseURL,
+		userAgent:          discoveryUserAgent,
+		bodyLimit:          discoveryBodyLimit,
+		topLimiter:         newRateLimiter(1, time.Minute, func() time.Time { return time.Now() }),
+		trustedProxies:     trustedProxySet{},
+		cache:              newDiscoveryCache(discoveryCacheMaxKeys),
 	}
 
 	req := httptest.NewRequest(http.MethodGet, discoveryTopPodcastsRoute+"?country=us", nil)
@@ -167,13 +130,13 @@ func TestDiscoveryServiceTopPodcastsRateLimited(t *testing.T) {
 
 func TestDiscoveryServiceTopEpisodesRateLimited(t *testing.T) {
 	service := &discoveryService{
-		timeout:        time.Second,
-		rssBaseURL:     discoveryRSSBaseURL,
-		userAgent:      discoveryUserAgent,
-		bodyLimit:      discoveryBodyLimit,
-		topLimiter:     newRateLimiter(1, time.Minute, func() time.Time { return time.Now() }),
-		trustedProxies: trustedProxySet{},
-		cache:          newDiscoveryCache(discoveryCacheMaxKeys),
+		timeout:            time.Second,
+		appleChartsBaseURL: discoveryAppleChartsBaseURL,
+		userAgent:          discoveryUserAgent,
+		bodyLimit:          discoveryBodyLimit,
+		topLimiter:         newRateLimiter(1, time.Minute, func() time.Time { return time.Now() }),
+		trustedProxies:     trustedProxySet{},
+		cache:              newDiscoveryCache(discoveryCacheMaxKeys),
 	}
 
 	req := httptest.NewRequest(http.MethodGet, discoveryTopEpisodesRoute+"?country=us", nil)
@@ -181,31 +144,6 @@ func TestDiscoveryServiceTopEpisodesRateLimited(t *testing.T) {
 
 	rr := httptest.NewRecorder()
 	service.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, discoveryTopEpisodesRoute+"?country=us", nil))
-	if rr.Code != http.StatusTooManyRequests {
-		t.Fatalf("status = %d, want %d", rr.Code, http.StatusTooManyRequests)
-	}
-
-	assertDiscoveryErrorPayload(t, rr.Body, "RATE_LIMITED")
-}
-
-func TestDiscoveryServiceFeedRateLimited(t *testing.T) {
-	service, _ := newDiscoveryFeedFixtureService(
-		t,
-		"feeds.example.com",
-		"203.0.113.10",
-		time.Second,
-		func(w http.ResponseWriter, _ *http.Request) {
-			w.Header().Set("Content-Type", "application/rss+xml")
-			_, _ = io.WriteString(w, `<rss><channel><title>Show</title><description>Desc</description></channel></rss>`)
-		},
-	)
-	service.feedLimiter = newRateLimiter(1, time.Minute, func() time.Time { return time.Now() })
-
-	req := httptest.NewRequest(http.MethodGet, discoveryFeedRoute+"?url="+url.QueryEscape("https://feeds.example.com/feed.xml"), nil)
-	service.ServeHTTP(httptest.NewRecorder(), req)
-
-	rr := httptest.NewRecorder()
-	service.ServeHTTP(rr, httptest.NewRequest(http.MethodGet, discoveryFeedRoute+"?url="+url.QueryEscape("https://feeds.example.com/feed.xml"), nil))
 	if rr.Code != http.StatusTooManyRequests {
 		t.Fatalf("status = %d, want %d", rr.Code, http.StatusTooManyRequests)
 	}
@@ -310,11 +248,11 @@ func TestDiscoveryServiceTopPodcastsDropsRowsWithoutArtwork100(t *testing.T) {
 				}`), nil
 			}),
 		},
-		timeout:    time.Second,
-		rssBaseURL: discoveryRSSBaseURL,
-		userAgent:  discoveryUserAgent,
-		bodyLimit:  discoveryBodyLimit,
-		cache:      newDiscoveryCache(discoveryCacheMaxKeys),
+		timeout:            time.Second,
+		appleChartsBaseURL: discoveryAppleChartsBaseURL,
+		userAgent:          discoveryUserAgent,
+		bodyLimit:          discoveryBodyLimit,
+		cache:              newDiscoveryCache(discoveryCacheMaxKeys),
 	}
 
 	rr := httptest.NewRecorder()
@@ -346,11 +284,11 @@ func TestDiscoveryServiceTopPodcastsDropsRowsWithoutArtistName(t *testing.T) {
 				}`), nil
 			}),
 		},
-		timeout:    time.Second,
-		rssBaseURL: discoveryRSSBaseURL,
-		userAgent:  discoveryUserAgent,
-		bodyLimit:  discoveryBodyLimit,
-		cache:      newDiscoveryCache(discoveryCacheMaxKeys),
+		timeout:            time.Second,
+		appleChartsBaseURL: discoveryAppleChartsBaseURL,
+		userAgent:          discoveryUserAgent,
+		bodyLimit:          discoveryBodyLimit,
+		cache:              newDiscoveryCache(discoveryCacheMaxKeys),
 	}
 
 	rr := httptest.NewRecorder()
@@ -381,11 +319,11 @@ func TestDiscoveryServiceTopPodcastsAllowsEmptyGenres(t *testing.T) {
 				}`), nil
 			}),
 		},
-		timeout:    time.Second,
-		rssBaseURL: discoveryRSSBaseURL,
-		userAgent:  discoveryUserAgent,
-		bodyLimit:  discoveryBodyLimit,
-		cache:      newDiscoveryCache(discoveryCacheMaxKeys),
+		timeout:            time.Second,
+		appleChartsBaseURL: discoveryAppleChartsBaseURL,
+		userAgent:          discoveryUserAgent,
+		bodyLimit:          discoveryBodyLimit,
+		cache:              newDiscoveryCache(discoveryCacheMaxKeys),
 	}
 
 	rr := httptest.NewRecorder()
@@ -431,11 +369,11 @@ func TestDiscoveryServiceTopPodcastsDoesNotDependOnRemovedRawFields(t *testing.T
 				}`), nil
 			}),
 		},
-		timeout:    time.Second,
-		rssBaseURL: discoveryRSSBaseURL,
-		userAgent:  discoveryUserAgent,
-		bodyLimit:  discoveryBodyLimit,
-		cache:      newDiscoveryCache(discoveryCacheMaxKeys),
+		timeout:            time.Second,
+		appleChartsBaseURL: discoveryAppleChartsBaseURL,
+		userAgent:          discoveryUserAgent,
+		bodyLimit:          discoveryBodyLimit,
+		cache:              newDiscoveryCache(discoveryCacheMaxKeys),
 	}
 
 	rr := httptest.NewRecorder()
@@ -461,7 +399,7 @@ func TestDiscoveryServiceTopEpisodesNormalizesPayload(t *testing.T) {
 	service := &discoveryService{
 		client: &http.Client{
 			Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
-				if req.URL.String() != discoveryRSSBaseURL+"/jp/podcasts/top/10/podcast-episodes.json" {
+				if req.URL.String() != discoveryAppleChartsBaseURL+"/jp/podcasts/top/10/podcast-episodes.json" {
 					t.Fatalf("upstream url = %q", req.URL.String())
 				}
 				return jsonResponse(http.StatusOK, `{
@@ -479,8 +417,8 @@ func TestDiscoveryServiceTopEpisodesNormalizesPayload(t *testing.T) {
 				}`), nil
 			}),
 		},
-		timeout:    time.Second,
-		rssBaseURL: discoveryRSSBaseURL,
+		timeout:            time.Second,
+		appleChartsBaseURL: discoveryAppleChartsBaseURL,
 
 		userAgent: discoveryUserAgent,
 		bodyLimit: discoveryBodyLimit,
@@ -533,11 +471,46 @@ func TestDiscoveryServiceTopEpisodesDropsRowsWithoutArtwork100(t *testing.T) {
 				}`), nil
 			}),
 		},
-		timeout:    time.Second,
-		rssBaseURL: discoveryRSSBaseURL,
-		userAgent:  discoveryUserAgent,
-		bodyLimit:  discoveryBodyLimit,
-		cache:      newDiscoveryCache(discoveryCacheMaxKeys),
+		timeout:            time.Second,
+		appleChartsBaseURL: discoveryAppleChartsBaseURL,
+		userAgent:          discoveryUserAgent,
+		bodyLimit:          discoveryBodyLimit,
+		cache:              newDiscoveryCache(discoveryCacheMaxKeys),
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, discoveryTopEpisodesRoute+"?country=jp&limit=10", nil)
+	service.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadGateway {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusBadGateway)
+	}
+}
+
+func TestDiscoveryServiceTopEpisodesDropsRowsWithInvalidArtwork100URL(t *testing.T) {
+	service := &discoveryService{
+		client: &http.Client{
+			Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+				return jsonResponse(http.StatusOK, `{
+					"feed": {
+						"results": [
+							{
+								"name": "Top Episode",
+								"artistName": "JP Host",
+								"artworkUrl100": "ftp://example.com/episode-100.jpg",
+								"url": "https://podcasts.apple.com/jp/podcast/top-episode/id333?i=1000762374046",
+								"genres": [{"name": "Technology"}]
+							}
+						]
+					}
+				}`), nil
+			}),
+		},
+		timeout:            time.Second,
+		appleChartsBaseURL: discoveryAppleChartsBaseURL,
+		userAgent:          discoveryUserAgent,
+		bodyLimit:          discoveryBodyLimit,
+		cache:              newDiscoveryCache(discoveryCacheMaxKeys),
 	}
 
 	rr := httptest.NewRecorder()
@@ -567,11 +540,11 @@ func TestDiscoveryServiceTopEpisodesDropsRowsWithoutArtistName(t *testing.T) {
 				}`), nil
 			}),
 		},
-		timeout:    time.Second,
-		rssBaseURL: discoveryRSSBaseURL,
-		userAgent:  discoveryUserAgent,
-		bodyLimit:  discoveryBodyLimit,
-		cache:      newDiscoveryCache(discoveryCacheMaxKeys),
+		timeout:            time.Second,
+		appleChartsBaseURL: discoveryAppleChartsBaseURL,
+		userAgent:          discoveryUserAgent,
+		bodyLimit:          discoveryBodyLimit,
+		cache:              newDiscoveryCache(discoveryCacheMaxKeys),
 	}
 
 	rr := httptest.NewRecorder()
@@ -602,11 +575,11 @@ func TestDiscoveryServiceTopEpisodesAllowsEmptyGenres(t *testing.T) {
 				}`), nil
 			}),
 		},
-		timeout:    time.Second,
-		rssBaseURL: discoveryRSSBaseURL,
-		userAgent:  discoveryUserAgent,
-		bodyLimit:  discoveryBodyLimit,
-		cache:      newDiscoveryCache(discoveryCacheMaxKeys),
+		timeout:            time.Second,
+		appleChartsBaseURL: discoveryAppleChartsBaseURL,
+		userAgent:          discoveryUserAgent,
+		bodyLimit:          discoveryBodyLimit,
+		cache:              newDiscoveryCache(discoveryCacheMaxKeys),
 	}
 
 	rr := httptest.NewRecorder()
@@ -650,11 +623,11 @@ func TestDiscoveryServiceTopEpisodesDropsRowsWhenURLDoesNotContainPodcastID(t *t
 				}`), nil
 			}),
 		},
-		timeout:    time.Second,
-		rssBaseURL: discoveryRSSBaseURL,
-		userAgent:  discoveryUserAgent,
-		bodyLimit:  discoveryBodyLimit,
-		cache:      newDiscoveryCache(discoveryCacheMaxKeys),
+		timeout:            time.Second,
+		appleChartsBaseURL: discoveryAppleChartsBaseURL,
+		userAgent:          discoveryUserAgent,
+		bodyLimit:          discoveryBodyLimit,
+		cache:              newDiscoveryCache(discoveryCacheMaxKeys),
 	}
 
 	rr := httptest.NewRecorder()
@@ -732,168 +705,6 @@ func TestDiscoveryServiceLookupPodcastNormalizesPayloadAndNullMiss(t *testing.T)
 			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
 		}
 	})
-}
-
-func TestDiscoveryServiceFeedUsesValidatedDialTargets(t *testing.T) {
-	rawBody := strings.TrimSpace(`
-		<?xml version="1.0" encoding="UTF-8"?>
-		<rss version="2.0">
-			<channel>
-				<title>Validated Feed</title>
-				<description>validated client path</description>
-				<item>
-					<title>Episode One</title>
-					<description>ok</description>
-					<guid>episode-1</guid>
-					<pubDate>Fri, 30 Jan 2026 12:00:00 GMT</pubDate>
-					<enclosure url="http://feeds.example.com/audio.mp3" length="123456" />
-				</item>
-			</channel>
-		</rss>
-	`)
-	service, dialedAddress := newDiscoveryFeedFixtureService(
-		t,
-		"feeds.example.com",
-		"203.0.113.10",
-		100*time.Millisecond,
-		func(w http.ResponseWriter, r *http.Request) {
-			if got := r.Header.Get("Accept"); !strings.Contains(got, "application/rss+xml") {
-				t.Fatalf("accept = %q", got)
-			}
-			if r.URL.Path != "/feed.xml" {
-				t.Fatalf("path = %q, want %q", r.URL.Path, "/feed.xml")
-			}
-			w.Header().Set("Content-Type", "application/xml")
-			_, _ = io.WriteString(w, rawBody)
-		},
-	)
-
-	unrestrictedClientUsed := false
-	service.client = &http.Client{
-		Transport: discoveryRoundTripper(func(_ *http.Request) (*http.Response, error) {
-			unrestrictedClientUsed = true
-			return textResponse(http.StatusOK, `<rss><channel><title>wrong</title></channel></rss>`, "application/xml"), nil
-		}),
-	}
-
-	payload, err := service.fetchFeed(context.Background(), "http://feeds.example.com/feed.xml")
-	if err != nil {
-		t.Fatalf("fetchFeed error = %v", err)
-	}
-
-	if unrestrictedClientUsed {
-		t.Fatalf("expected validated-address client, but unrestricted client transport was used")
-	}
-	if *dialedAddress != "203.0.113.10:80" {
-		t.Fatalf("dialed address = %q, want %q", *dialedAddress, "203.0.113.10:80")
-	}
-	if payload.Title != "Validated Feed" {
-		t.Fatalf("title = %q, want %q", payload.Title, "Validated Feed")
-	}
-	if len(payload.Episodes) != 1 || payload.Episodes[0].Title != "Episode One" {
-		t.Fatalf("unexpected episodes payload: %+v", payload.Episodes)
-	}
-}
-
-func TestDiscoveryServiceFeedNormalizesParsedPayload(t *testing.T) {
-	service, dialedAddress := newDiscoveryFeedFixtureService(
-		t,
-		"example.com",
-		"93.184.216.34",
-		time.Second,
-		func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.String() != "/feed.xml" {
-				t.Fatalf("unexpected feed url = %q", r.URL.String())
-			}
-			if got := r.Header.Get("Accept"); !strings.Contains(got, "application/rss+xml") {
-				t.Fatalf("accept = %q", got)
-			}
-			w.Header().Set("Content-Type", "application/xml")
-			_, _ = io.WriteString(w, strings.TrimSpace(`
-					<?xml version="1.0" encoding="UTF-8"?>
-					<rss version="2.0"
-						xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"
-						xmlns:content="http://purl.org/rss/1.0/modules/content/"
-						xmlns:podcast="https://podcastindex.org/namespace/1.0">
-						<channel>
-							<title>Cloud Feed</title>
-							<description>Feed description</description>
-							<itunes:image href="https://example.com/artwork_600.jpg?cache=1"/>
-							<item>
-								<title>Episode One</title>
-								<description><![CDATA[<p>Episode body</p>]]></description>
-								<content:encoded><![CDATA[<p>Encoded body</p>]]></content:encoded>
-								<guid>episode-1</guid>
-								<pubDate>Fri, 30 Jan 2026 12:00:00 GMT</pubDate>
-								<link>https://example.com/episodes/1</link>
-								<enclosure url="https://example.com/audio-1.mp3" length="123456" type="audio/mpeg"/>
-								<itunes:duration>01:02:03</itunes:duration>
-								<itunes:season>2</itunes:season>
-								<itunes:episode>7</itunes:episode>
-								<itunes:episodeType>bonus</itunes:episodeType>
-								<itunes:explicit>yes</itunes:explicit>
-								<itunes:image href="https://example.com/episode-art.jpg"/>
-								<podcast:transcript url="https://example.com/transcript.vtt"/>
-								<podcast:chapters url="https://example.com/chapters.json"/>
-							</item>
-						</channel>
-					</rss>
-				`))
-		},
-	)
-	service.client = &http.Client{
-		Transport: discoveryRoundTripper(func(_ *http.Request) (*http.Response, error) {
-			return nil, errors.New("unexpected unrestricted client usage")
-		}),
-	}
-
-	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, discoveryFeedRoute+"?url=http://example.com/feed.xml", nil)
-	service.ServeHTTP(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
-	}
-	if *dialedAddress != "93.184.216.34:80" {
-		t.Fatalf("dialed address = %q, want %q", *dialedAddress, "93.184.216.34:80")
-	}
-
-	var payload parsedFeedResponse
-	decodeResponseJSON(t, rr.Body, &payload)
-
-	if payload.Title != "Cloud Feed" || payload.Description != "Feed description" {
-		t.Fatalf("unexpected feed payload: %+v", payload)
-	}
-	if payload.ArtworkURL != "https://example.com/artwork_600.jpg?cache=1" {
-		t.Fatalf("artworkUrl = %q", payload.ArtworkURL)
-	}
-	if len(payload.Episodes) != 1 {
-		t.Fatalf("episode length = %d, want 1", len(payload.Episodes))
-	}
-	if payload.Episodes[0].Description != "<p>Encoded body</p>" {
-		t.Fatalf("unexpected description = %q", payload.Episodes[0].Description)
-	}
-	if payload.Episodes[0].DescriptionHTML != "<p>Encoded body</p>" {
-		t.Fatalf("unexpected descriptionHtml = %q", payload.Episodes[0].DescriptionHTML)
-	}
-	if payload.Episodes[0].Duration == nil || *payload.Episodes[0].Duration != 3723 {
-		t.Fatalf("duration = %+v, want 3723", payload.Episodes[0].Duration)
-	}
-	if payload.Episodes[0].SeasonNumber == nil || *payload.Episodes[0].SeasonNumber != 2 {
-		t.Fatalf("seasonNumber = %+v, want 2", payload.Episodes[0].SeasonNumber)
-	}
-	if payload.Episodes[0].EpisodeNumber == nil || *payload.Episodes[0].EpisodeNumber != 7 {
-		t.Fatalf("episodeNumber = %+v, want 7", payload.Episodes[0].EpisodeNumber)
-	}
-	if payload.Episodes[0].EpisodeType != "bonus" {
-		t.Fatalf("episodeType = %q, want bonus", payload.Episodes[0].EpisodeType)
-	}
-	if payload.Episodes[0].Explicit == nil || !*payload.Episodes[0].Explicit {
-		t.Fatalf("explicit = %+v, want true", payload.Episodes[0].Explicit)
-	}
-	if payload.Episodes[0].TranscriptURL != "https://example.com/transcript.vtt" {
-		t.Fatalf("transcriptUrl = %q", payload.Episodes[0].TranscriptURL)
-	}
 }
 
 func TestDiscoveryServiceSearchPodcastsNormalizesPayload(t *testing.T) {
@@ -997,8 +808,8 @@ func TestDiscoveryServiceSearchPodcastsFiltersIrrelevantFallbackResults(t *testi
 				}`), nil
 			}),
 		},
-		timeout:    time.Second,
-		rssBaseURL: discoveryRSSBaseURL,
+		timeout:            time.Second,
+		appleChartsBaseURL: discoveryAppleChartsBaseURL,
 
 		searchBaseURL: discoverySearchBaseURL,
 		userAgent:     discoveryUserAgent,
@@ -1072,7 +883,7 @@ func TestDiscoveryServiceSearchPodcastsDropsRowsWithoutCollectionName(t *testing
 	}
 }
 
-func TestDiscoveryServiceSearchPodcastsOmitsReleaseDateWhenMissing(t *testing.T) {
+func TestDiscoveryServiceSearchPodcastsDropsRowsWithoutReleaseDate(t *testing.T) {
 	service := &discoveryService{
 		client: &http.Client{
 			Transport: discoveryRoundTripper(func(_ *http.Request) (*http.Response, error) {
@@ -1109,11 +920,50 @@ func TestDiscoveryServiceSearchPodcastsOmitsReleaseDateWhenMissing(t *testing.T)
 	var payload []map[string]any
 	decodeResponseJSON(t, rr.Body, &payload)
 
-	if len(payload) != 1 {
-		t.Fatalf("payload length = %d, want 1", len(payload))
+	if len(payload) != 0 {
+		t.Fatalf("payload length = %d, want 0", len(payload))
 	}
-	if _, ok := payload[0]["releaseDate"]; ok {
-		t.Fatalf("releaseDate should be absent, payload = %+v", payload[0])
+}
+
+func TestDiscoveryServiceSearchPodcastsDropsRowsWithInvalidArtwork600URL(t *testing.T) {
+	service := &discoveryService{
+		client: &http.Client{
+			Transport: discoveryRoundTripper(func(_ *http.Request) (*http.Response, error) {
+				return jsonResponse(http.StatusOK, `{
+					"results": [
+						{
+							"collectionId": 123,
+							"collectionName": "Tech Show",
+							"artistName": "Host",
+							"artworkUrl600": "javascript:alert(1)",
+							"trackCount": 42,
+							"genres": []
+						}
+					]
+				}`), nil
+			}),
+		},
+		timeout:       time.Second,
+		searchBaseURL: discoverySearchBaseURL,
+		userAgent:     discoveryUserAgent,
+		bodyLimit:     discoveryBodyLimit,
+		searchLimiter: newRateLimiter(100, time.Minute, func() time.Time { return time.Now() }),
+		cache:         newDiscoveryCache(discoveryCacheMaxKeys),
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, discoverySearchPodcastsRoute+"?term=tech&country=us&limit=20", nil)
+	service.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	var payload []map[string]any
+	decodeResponseJSON(t, rr.Body, &payload)
+
+	if len(payload) != 0 {
+		t.Fatalf("payload length = %d, want 0", len(payload))
 	}
 }
 
@@ -1187,8 +1037,20 @@ func TestDiscoveryServiceSearchEpisodesNormalizesPayload(t *testing.T) {
 	if payload[0]["artwork"] != "https://example.com/history-600.jpg" {
 		t.Fatalf("artwork = %q, want https://example.com/history-600.jpg", payload[0]["artwork"])
 	}
+	if payload[0]["audioUrl"] != "https://example.com/history.mp3" {
+		t.Fatalf("audioUrl = %q, want https://example.com/history.mp3", payload[0]["audioUrl"])
+	}
 	if payload[0]["podcastItunesId"] != "123" {
 		t.Fatalf("podcastItunesId = %q, want 123", payload[0]["podcastItunesId"])
+	}
+	if payload[0]["guid"] != "abc123-def456" {
+		t.Fatalf("guid = %q, want abc123-def456", payload[0]["guid"])
+	}
+	if _, ok := payload[0]["episodeUrl"]; ok {
+		t.Fatalf("episodeUrl should be absent, payload = %+v", payload[0])
+	}
+	if _, ok := payload[0]["episodeGuid"]; ok {
+		t.Fatalf("episodeGuid should be absent, payload = %+v", payload[0])
 	}
 	if _, ok := payload[0]["feedUrl"]; ok {
 		t.Fatalf("feedUrl should be absent, payload = %+v", payload[0])
@@ -1242,7 +1104,56 @@ func TestDiscoveryServiceSearchEpisodesDropsRowsWithoutTrackName(t *testing.T) {
 	}
 }
 
-func TestDiscoveryServiceSearchEpisodesAllowsMissingReleaseDateDescriptionAndDuration(t *testing.T) {
+func TestDiscoveryServiceSearchEpisodesDropsRowsWithoutShortDescription(t *testing.T) {
+	service := &discoveryService{
+		client: &http.Client{
+			Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+				if !strings.Contains(req.URL.String(), "term=history") || !strings.Contains(req.URL.String(), "entity=podcastEpisode") {
+					t.Fatalf("unexpected search url = %q", req.URL.String())
+				}
+				return jsonResponse(http.StatusOK, `{
+						"results": [
+							{
+								"trackId": 999,
+								"trackName": "History Episode",
+								"collectionName": "History Show",
+								"collectionId": 123,
+								"artworkUrl600": "https://example.com/history-600.jpg",
+								"episodeUrl": "https://example.com/history.mp3",
+								"episodeGuid": "abc123-def456",
+								"releaseDate": "2026-03-27T00:00:00Z",
+								"trackTimeMillis": 1800000,
+								"shortDescription": "   "
+							}
+						]
+					}`), nil
+			}),
+		},
+		timeout:       time.Second,
+		searchBaseURL: discoverySearchBaseURL,
+		userAgent:     discoveryUserAgent,
+		bodyLimit:     discoveryBodyLimit,
+		searchLimiter: newRateLimiter(100, time.Minute, func() time.Time { return time.Now() }),
+		cache:         newDiscoveryCache(discoveryCacheMaxKeys),
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, discoverySearchEpisodesRoute+"?term=history%20episode&country=us&limit=50", nil)
+	service.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	var payload []map[string]any
+	decodeResponseJSON(t, rr.Body, &payload)
+
+	if len(payload) != 0 {
+		t.Fatalf("payload length = %d, want 0", len(payload))
+	}
+}
+
+func TestDiscoveryServiceSearchEpisodesDropsRowsWithoutReleaseDate(t *testing.T) {
 	service := &discoveryService{
 		client: &http.Client{
 			Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
@@ -1283,17 +1194,8 @@ func TestDiscoveryServiceSearchEpisodesAllowsMissingReleaseDateDescriptionAndDur
 	var payload []map[string]any
 	decodeResponseJSON(t, rr.Body, &payload)
 
-	if len(payload) != 1 {
-		t.Fatalf("payload length = %d, want 1", len(payload))
-	}
-	if _, ok := payload[0]["releaseDate"]; ok {
-		t.Fatalf("releaseDate should be absent, payload = %+v", payload[0])
-	}
-	if _, ok := payload[0]["shortDescription"]; ok {
-		t.Fatalf("shortDescription should be absent, payload = %+v", payload[0])
-	}
-	if _, ok := payload[0]["trackTimeMillis"]; ok {
-		t.Fatalf("trackTimeMillis should be absent, payload = %+v", payload[0])
+	if len(payload) != 0 {
+		t.Fatalf("payload length = %d, want 0", len(payload))
 	}
 }
 
@@ -1341,6 +1243,96 @@ func TestDiscoveryServiceSearchEpisodesDropsRowsWithoutArtwork600(t *testing.T) 
 	}
 }
 
+func TestDiscoveryServiceSearchEpisodesDropsRowsWithoutValidAudioURL(t *testing.T) {
+	service := &discoveryService{
+		client: &http.Client{
+			Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+				if !strings.Contains(req.URL.String(), "term=history") || !strings.Contains(req.URL.String(), "entity=podcastEpisode") {
+					t.Fatalf("unexpected search url = %q", req.URL.String())
+				}
+				return jsonResponse(http.StatusOK, `{
+					"results": [
+						{
+							"trackName": "History Episode",
+							"collectionName": "History Show",
+							"collectionId": 123,
+							"artworkUrl600": "https://example.com/history-600.jpg",
+							"episodeUrl": "ftp://example.com/history.mp3",
+							"episodeGuid": "abc123-def456"
+						}
+					]
+				}`), nil
+			}),
+		},
+		timeout:       time.Second,
+		searchBaseURL: discoverySearchBaseURL,
+		userAgent:     discoveryUserAgent,
+		bodyLimit:     discoveryBodyLimit,
+		searchLimiter: newRateLimiter(100, time.Minute, func() time.Time { return time.Now() }),
+		cache:         newDiscoveryCache(discoveryCacheMaxKeys),
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, discoverySearchEpisodesRoute+"?term=history&country=us&limit=50", nil)
+	service.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	var payload []map[string]any
+	decodeResponseJSON(t, rr.Body, &payload)
+
+	if len(payload) != 0 {
+		t.Fatalf("payload length = %d, want 0", len(payload))
+	}
+}
+
+func TestDiscoveryServiceSearchEpisodesDropsRowsWithInvalidArtwork600URL(t *testing.T) {
+	service := &discoveryService{
+		client: &http.Client{
+			Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
+				if !strings.Contains(req.URL.String(), "term=history") || !strings.Contains(req.URL.String(), "entity=podcastEpisode") {
+					t.Fatalf("unexpected search url = %q", req.URL.String())
+				}
+				return jsonResponse(http.StatusOK, `{
+					"results": [
+						{
+							"trackName": "History Episode",
+							"collectionName": "History Show",
+							"collectionId": 123,
+							"artworkUrl600": "javascript:alert(1)",
+							"episodeUrl": "https://example.com/history.mp3",
+							"episodeGuid": "abc123-def456"
+						}
+					]
+				}`), nil
+			}),
+		},
+		timeout:       time.Second,
+		searchBaseURL: discoverySearchBaseURL,
+		userAgent:     discoveryUserAgent,
+		bodyLimit:     discoveryBodyLimit,
+		searchLimiter: newRateLimiter(100, time.Minute, func() time.Time { return time.Now() }),
+		cache:         newDiscoveryCache(discoveryCacheMaxKeys),
+	}
+
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, discoverySearchEpisodesRoute+"?term=history&country=us&limit=50", nil)
+	service.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+	}
+
+	var payload []map[string]any
+	decodeResponseJSON(t, rr.Body, &payload)
+
+	if len(payload) != 0 {
+		t.Fatalf("payload length = %d, want 0", len(payload))
+	}
+}
+
 func TestDiscoveryServiceSearchEpisodesDoesNotDependOnRemovedRawFields(t *testing.T) {
 	service := &discoveryService{
 		client: &http.Client{
@@ -1356,6 +1348,8 @@ func TestDiscoveryServiceSearchEpisodesDoesNotDependOnRemovedRawFields(t *testin
 							"collectionId": 123,
 							"artworkUrl600": "https://example.com/history-600.jpg",
 							"episodeUrl": "https://example.com/history.mp3",
+							"releaseDate": "2026-03-27T00:00:00Z",
+							"shortDescription": "A history episode",
 							"episodeGuid": "abc123-def456"
 						}
 					]
@@ -1390,10 +1384,22 @@ func TestDiscoveryServiceSearchEpisodesDoesNotDependOnRemovedRawFields(t *testin
 	if payload[0]["showTitle"] != "History Show" {
 		t.Fatalf("showTitle = %q, want History Show", payload[0]["showTitle"])
 	}
+	if payload[0]["audioUrl"] != "https://example.com/history.mp3" {
+		t.Fatalf("audioUrl = %q, want https://example.com/history.mp3", payload[0]["audioUrl"])
+	}
+	if payload[0]["guid"] != "abc123-def456" {
+		t.Fatalf("guid = %q, want abc123-def456", payload[0]["guid"])
+	}
+	if _, ok := payload[0]["episodeUrl"]; ok {
+		t.Fatalf("episodeUrl should be absent, payload = %+v", payload[0])
+	}
+	if _, ok := payload[0]["episodeGuid"]; ok {
+		t.Fatalf("episodeGuid should be absent, payload = %+v", payload[0])
+	}
 }
 
 func TestPodcastIndexPayloadValidation(t *testing.T) {
-	t.Run("podcast byitunesid ignores upstream status field and trusts feed payload", func(t *testing.T) {
+	t.Run("podcast byitunesid rejects upstream status=false as failed upstream", func(t *testing.T) {
 		t.Setenv(podcastIndexAPIKeyEnv, "test-key")
 		t.Setenv(podcastIndexAPISecretEnv, "test-secret")
 		t.Setenv(podcastIndexUserAgentEnv, "readio-test")
@@ -1430,17 +1436,14 @@ func TestPodcastIndexPayloadValidation(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, discoveryPodcastsRoute+"/123", nil)
 		service.ServeHTTP(rr, req)
 
-		if rr.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+		if rr.Code != http.StatusBadGateway {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusBadGateway)
 		}
 
 		var payload map[string]any
 		decodeResponseJSON(t, rr.Body, &payload)
-		if payload["podcastItunesId"] != "123" || payload["title"] != "Test" {
-			t.Fatalf("unexpected payload: %+v", payload)
-		}
-		if _, ok := payload["dead"]; ok {
-			t.Fatalf("dead should be omitted, payload = %+v", payload)
+		if payload["code"] != "UPSTREAM_REQUEST_FAILED" {
+			t.Fatalf("code = %q, want UPSTREAM_REQUEST_FAILED", payload["code"])
 		}
 	})
 
@@ -1520,7 +1523,7 @@ func TestPodcastIndexPayloadValidation(t *testing.T) {
 		}
 	})
 
-	t.Run("batch byguid ignores upstream status field and trusts feeds payload", func(t *testing.T) {
+	t.Run("batch byguid rejects upstream status=false as failed upstream", func(t *testing.T) {
 		t.Setenv(podcastIndexAPIKeyEnv, "test-key")
 		t.Setenv(podcastIndexAPISecretEnv, "test-secret")
 		t.Setenv(podcastIndexUserAgentEnv, "readio-test")
@@ -1542,14 +1545,14 @@ func TestPodcastIndexPayloadValidation(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, discoveryPodcastsBatchRoute, strings.NewReader(`["guid1"]`))
 		service.ServeHTTP(rr, req)
 
-		if rr.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+		if rr.Code != http.StatusBadGateway {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusBadGateway)
 		}
 
-		var resp []piPodcastResponse
-		decodeResponseJSON(t, rr.Body, &resp)
-		if len(resp) != 0 {
-			t.Fatalf("response length = %d, want 0", len(resp))
+		var payload map[string]any
+		decodeResponseJSON(t, rr.Body, &payload)
+		if payload["code"] != "UPSTREAM_REQUEST_FAILED" {
+			t.Fatalf("code = %q, want UPSTREAM_REQUEST_FAILED", payload["code"])
 		}
 	})
 
@@ -1562,8 +1565,8 @@ func TestPodcastIndexPayloadValidation(t *testing.T) {
 			client: &http.Client{
 				Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
 					return jsonResponse(http.StatusOK, `{"feeds":[
-						{"podcastGuid":"guid1","itunesId":123,"title":"Dead Show","author":"Author","description":"Description","url":"https://example.com/dead.xml","artwork":"https://example.com/dead.jpg","dead":1,"categories":{"1":"Technology"}},
-						{"podcastGuid":"guid2","itunesId":456,"title":"Live Show","author":"Author","description":"Description","url":"https://example.com/live.xml","artwork":"https://example.com/live.jpg","dead":0,"categories":{"1":"Technology"}}
+						{"podcastGuid":"guid1","itunesId":123,"title":"Dead Show","author":"Author","description":"Description","url":"https://example.com/dead.xml","artwork":"https://example.com/dead.jpg","lastUpdateTime":1700000000,"episodeCount":12,"dead":1,"categories":{"1":"Technology"}},
+						{"podcastGuid":"guid2","itunesId":456,"title":"Live Show","author":"Author","description":"Description","url":"https://example.com/live.xml","artwork":"https://example.com/live.jpg","lastUpdateTime":1700000001,"episodeCount":34,"dead":0,"categories":{"1":"Technology"}}
 					]}`), nil
 				}),
 			},
@@ -1754,7 +1757,7 @@ func TestPodcastIndexBatchLimits(t *testing.T) {
 }
 
 func TestPodcastIndexOptionalNumericFields(t *testing.T) {
-	t.Run("podcast byitunesid does not emit zero for episodeCount", func(t *testing.T) {
+	t.Run("podcast byitunesid preserves zero episodeCount when PI provides it", func(t *testing.T) {
 		t.Setenv(podcastIndexAPIKeyEnv, "test-key")
 		t.Setenv(podcastIndexAPISecretEnv, "test-secret")
 		t.Setenv(podcastIndexUserAgentEnv, "readio-test")
@@ -1763,7 +1766,18 @@ func TestPodcastIndexOptionalNumericFields(t *testing.T) {
 			client: &http.Client{
 				Transport: discoveryRoundTripper(func(req *http.Request) (*http.Response, error) {
 					return jsonResponse(http.StatusOK, `{
-						"feed":{"title":"Test","url":"https://example.com/feed.xml","episodeCount":0}
+						"feed":{
+							"title":"Test",
+							"url":"https://example.com/feed.xml",
+							"author":"Author",
+							"artwork":"https://example.com/artwork.jpg",
+							"description":"Description",
+							"itunesId":123,
+							"lastUpdateTime":1710000000,
+							"episodeCount":0,
+							"dead":0,
+							"categories":{}
+						}
 					}`), nil
 				}),
 			},
@@ -1785,12 +1799,12 @@ func TestPodcastIndexOptionalNumericFields(t *testing.T) {
 		var resp piPodcastResponse
 		decodeResponseJSON(t, rr.Body, &resp)
 
-		if resp.EpisodeCount != nil && *resp.EpisodeCount == 0 {
-			t.Fatalf("episodeCount should be nil when zero, got: %v", resp.EpisodeCount)
+		if resp.EpisodeCount != 0 {
+			t.Fatalf("episodeCount = %d, want 0", resp.EpisodeCount)
 		}
 	})
 
-	t.Run("podcast byitunesid accepts missing optional metadata", func(t *testing.T) {
+	t.Run("podcast byitunesid drops rows when required PI numerics are missing", func(t *testing.T) {
 		t.Setenv(podcastIndexAPIKeyEnv, "test-key")
 		t.Setenv(podcastIndexAPISecretEnv, "test-secret")
 		t.Setenv(podcastIndexUserAgentEnv, "readio-test")
@@ -1829,20 +1843,8 @@ func TestPodcastIndexOptionalNumericFields(t *testing.T) {
 
 		var resp map[string]any
 		decodeResponseJSON(t, rr.Body, &resp)
-		if resp["podcastItunesId"] != "123" {
-			t.Fatalf("podcastItunesId = %v, want 123", resp["podcastItunesId"])
-		}
-		if _, ok := resp["lastUpdateTime"]; ok {
-			t.Fatalf("lastUpdateTime should be omitted, payload = %+v", resp)
-		}
-		if _, ok := resp["episodeCount"]; ok {
-			t.Fatalf("episodeCount should be omitted, payload = %+v", resp)
-		}
-		if _, ok := resp["language"]; ok {
-			t.Fatalf("language should be omitted, payload = %+v", resp)
-		}
-		if genres, ok := resp["genres"].([]any); !ok || len(genres) != 0 {
-			t.Fatalf("genres = %v, want empty array", resp["genres"])
+		if len(resp) != 0 {
+			t.Fatalf("response = %+v, want null payload", resp)
 		}
 	})
 
@@ -1861,6 +1863,8 @@ func TestPodcastIndexOptionalNumericFields(t *testing.T) {
 							"author":"Author",
 							"artwork":"https://example.com/artwork.jpg",
 							"description":"Description",
+							"lastUpdateTime":1700000000,
+							"episodeCount":10,
 							"dead":0,
 							"categories":{}
 						}
@@ -1918,8 +1922,8 @@ func TestDiscoveryServiceRejectsInvalidParamsAndMapsUpstreamErrors(t *testing.T)
 					return nil, req.Context().Err()
 				}),
 			},
-			timeout:    20 * time.Millisecond,
-			rssBaseURL: discoveryRSSBaseURL,
+			timeout:            20 * time.Millisecond,
+			appleChartsBaseURL: discoveryAppleChartsBaseURL,
 
 			userAgent:     discoveryUserAgent,
 			bodyLimit:     discoveryBodyLimit,
@@ -1960,121 +1964,6 @@ func TestDiscoveryServiceRejectsInvalidParamsAndMapsUpstreamErrors(t *testing.T)
 		}
 	})
 
-	t.Run("rejects invalid feed url", func(t *testing.T) {
-		service := newDiscoveryService()
-
-		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, discoveryFeedRoute+"?url=notaurl", nil)
-		service.ServeHTTP(rr, req)
-
-		if rr.Code != http.StatusBadRequest {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusBadRequest)
-		}
-
-		var payload map[string]string
-		decodeResponseJSON(t, rr.Body, &payload)
-		if payload["code"] != "INVALID_URL" {
-			t.Fatalf("code = %q, want INVALID_URL", payload["code"])
-		}
-	})
-
-	t.Run("maps feed timeout to gateway timeout json", func(t *testing.T) {
-		service := &discoveryService{
-			timeout:   20 * time.Millisecond,
-			userAgent: discoveryUserAgent,
-			bodyLimit: discoveryBodyLimit,
-			cache:     newDiscoveryCache(discoveryCacheMaxKeys),
-			lookupIP: func(context.Context, string) ([]net.IPAddr, error) {
-				return []net.IPAddr{{IP: net.ParseIP("93.184.216.34")}}, nil
-			},
-			dialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
-				<-ctx.Done()
-				return nil, ctx.Err()
-			},
-		}
-
-		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, discoveryFeedRoute+"?url=http://example.com/feed.xml", nil)
-		service.ServeHTTP(rr, req)
-
-		if rr.Code != http.StatusGatewayTimeout {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusGatewayTimeout)
-		}
-
-		var payload map[string]string
-		decodeResponseJSON(t, rr.Body, &payload)
-		if payload["code"] != "UPSTREAM_TIMEOUT" {
-			t.Fatalf("code = %q, want UPSTREAM_TIMEOUT", payload["code"])
-		}
-	})
-
-	t.Run("maps feed upstream failure to bad gateway json", func(t *testing.T) {
-		service, dialedAddress := newDiscoveryFeedFixtureService(
-			t,
-			"example.com",
-			"93.184.216.34",
-			time.Second,
-			func(w http.ResponseWriter, _ *http.Request) {
-				w.Header().Set("Content-Type", "text/plain")
-				w.WriteHeader(http.StatusBadGateway)
-				_, _ = io.WriteString(w, "boom")
-			},
-		)
-
-		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, discoveryFeedRoute+"?url=http://example.com/feed.xml", nil)
-		service.ServeHTTP(rr, req)
-
-		if rr.Code != http.StatusBadGateway {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusBadGateway)
-		}
-		if *dialedAddress != "93.184.216.34:80" {
-			t.Fatalf("dialed address = %q, want %q", *dialedAddress, "93.184.216.34:80")
-		}
-
-		var payload map[string]string
-		decodeResponseJSON(t, rr.Body, &payload)
-		if payload["code"] != "UPSTREAM_INVALID_RESPONSE" {
-			t.Fatalf("code = %q, want UPSTREAM_INVALID_RESPONSE", payload["code"])
-		}
-	})
-
-	t.Run("maps malformed feed xml to xml-specific bad gateway json", func(t *testing.T) {
-		service, dialedAddress := newDiscoveryFeedFixtureService(
-			t,
-			"example.com",
-			"93.184.216.34",
-			time.Second,
-			func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path != "/feed.xml" {
-					t.Fatalf("path = %q, want /feed.xml", r.URL.Path)
-				}
-				w.Header().Set("Content-Type", "application/xml")
-				w.WriteHeader(http.StatusOK)
-				_, _ = io.WriteString(w, `<rss><channel><title>Broken`)
-			},
-		)
-
-		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, discoveryFeedRoute+"?url=http://example.com/feed.xml", nil)
-		service.ServeHTTP(rr, req)
-
-		if rr.Code != http.StatusBadGateway {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusBadGateway)
-		}
-		if *dialedAddress != "93.184.216.34:80" {
-			t.Fatalf("dialed address = %q, want %q", *dialedAddress, "93.184.216.34:80")
-		}
-
-		var payload map[string]string
-		decodeResponseJSON(t, rr.Body, &payload)
-		if payload["code"] != "INVALID_UPSTREAM_XML" {
-			t.Fatalf("code = %q, want INVALID_UPSTREAM_XML", payload["code"])
-		}
-		if payload["message"] != "discovery upstream response was not valid XML" {
-			t.Fatalf("message = %q, want discovery upstream response was not valid XML", payload["message"])
-		}
-	})
 }
 
 func TestDiscoveryServiceUsesJSONErrorForUnknownEndpoints(t *testing.T) {
@@ -2129,237 +2018,6 @@ func TestDecodeDiscoveryJSONRejectsOversizedBodies(t *testing.T) {
 	}
 }
 
-func TestDecodeDiscoveryFeedSanitizesXML(t *testing.T) {
-	t.Run("bare ampersand in content", func(t *testing.T) {
-		body := strings.NewReader(`<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0">
-  <channel>
-    <title>Smith & Jones Show</title>
-    <description>Fun times</description>
-    <item>
-      <title>Ep 1: Smith & Jones intro</title>
-      <description>Smith &amp; Jones talk about things</description>
-      <guid>ep-1</guid>
-      <pubDate>Fri, 30 Jan 2026 12:00:00 GMT</pubDate>
-      <enclosure url="http://example.com/audio.mp3" length="1000" />
-    </item>
-  </channel>
-</rss>`)
-		result, err := decodeDiscoveryFeedXML(body, discoveryBodyLimit)
-		if err != nil {
-			t.Fatalf("decodeDiscoveryFeedXML error = %v", err)
-		}
-		if !strings.Contains(result.Title, "Smith") {
-			t.Fatalf("title = %q, want to contain Smith", result.Title)
-		}
-		if len(result.Episodes) != 1 {
-			t.Fatalf("episodes length = %d, want 1", len(result.Episodes))
-		}
-	})
-
-	t.Run("bare ampersand in URL attribute", func(t *testing.T) {
-		body := strings.NewReader(`<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0">
-  <channel>
-    <title>Ampersand Feed</title>
-    <description>test</description>
-    <item>
-      <title>Ep 1</title>
-      <description>ok</description>
-      <guid>ep-1</guid>
-      <pubDate>Fri, 30 Jan 2026 12:00:00 GMT</pubDate>
-      <enclosure url="http://example.com/audio.mp3?id=1&format=mp3" length="1000" />
-    </item>
-  </channel>
-</rss>`)
-		result, err := decodeDiscoveryFeedXML(body, discoveryBodyLimit)
-		if err != nil {
-			t.Fatalf("decodeDiscoveryFeedXML error = %v", err)
-		}
-		if len(result.Episodes) != 1 {
-			t.Fatalf("episodes length = %d, want 1", len(result.Episodes))
-		}
-		if !strings.Contains(result.Episodes[0].AudioURL, "format=mp3") {
-			t.Fatalf("audioUrl = %q, want to contain format=mp3", result.Episodes[0].AudioURL)
-		}
-	})
-
-	t.Run("control characters in text", func(t *testing.T) {
-		body := strings.NewReader(`<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0">
-  <channel>
-    <title>Clean` + "\x01\x0B\x7F" + `Feed</title>
-    <description>desc</description>
-    <item>
-      <title>Ep` + "\x01" + ` 1</title>
-      <description>ok</description>
-      <guid>ep-1</guid>
-      <pubDate>Fri, 30 Jan 2026 12:00:00 GMT</pubDate>
-      <enclosure url="http://example.com/audio.mp3" length="1000" />
-    </item>
-  </channel>
-</rss>`)
-		result, err := decodeDiscoveryFeedXML(body, discoveryBodyLimit)
-		if err != nil {
-			t.Fatalf("decodeDiscoveryFeedXML error = %v", err)
-		}
-		if result.Title == "" {
-			t.Fatalf("title is empty after sanitization")
-		}
-		if len(result.Episodes) != 1 {
-			t.Fatalf("episodes length = %d, want 1", len(result.Episodes))
-		}
-	})
-
-	t.Run("CDATA with ampersands", func(t *testing.T) {
-		body := strings.NewReader(`<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0">
-  <channel>
-    <title>CDATA Feed</title>
-    <description>test</description>
-    <item>
-      <title>Ep 1</title>
-      <description><![CDATA[<p>Tom & Jerry are friends</p>]]></description>
-      <guid>ep-1</guid>
-      <pubDate>Fri, 30 Jan 2026 12:00:00 GMT</pubDate>
-      <enclosure url="http://example.com/audio.mp3" length="1000" />
-    </item>
-  </channel>
-</rss>`)
-		result, err := decodeDiscoveryFeedXML(body, discoveryBodyLimit)
-		if err != nil {
-			t.Fatalf("decodeDiscoveryFeedXML error = %v", err)
-		}
-		if len(result.Episodes) != 1 {
-			t.Fatalf("episodes length = %d, want 1", len(result.Episodes))
-		}
-	})
-
-	t.Run("empty feed no items", func(t *testing.T) {
-		body := strings.NewReader(`<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0">
-  <channel>
-    <title>Empty Feed</title>
-    <description>no items</description>
-  </channel>
-</rss>`)
-		result, err := decodeDiscoveryFeedXML(body, discoveryBodyLimit)
-		if err != nil {
-			t.Fatalf("decodeDiscoveryFeedXML error = %v", err)
-		}
-		if result.Title != "Empty Feed" {
-			t.Fatalf("title = %q, want Empty Feed", result.Title)
-		}
-		if len(result.Episodes) != 0 {
-			t.Fatalf("episodes length = %d, want 0", len(result.Episodes))
-		}
-	})
-
-	t.Run("enclosure missing URL", func(t *testing.T) {
-		body := strings.NewReader(`<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0">
-  <channel>
-    <title>Missing URL Feed</title>
-    <description>test</description>
-    <item>
-      <title>No Audio Episode</title>
-      <description>has no enclosure url</description>
-      <guid>ep-1</guid>
-      <pubDate>Fri, 30 Jan 2026 12:00:00 GMT</pubDate>
-      <enclosure length="0" />
-    </item>
-  </channel>
-</rss>`)
-		_, err := decodeDiscoveryFeedXML(body, discoveryBodyLimit)
-		if err == nil {
-			t.Fatalf("decodeDiscoveryFeedXML should reject feed when every item is invalid")
-		}
-		if !errors.Is(err, errDiscoveryXMLDecode) {
-			t.Fatalf("error = %v, want errDiscoveryXMLDecode", err)
-		}
-	})
-
-	t.Run("item missing guid rejects feed when no valid episodes remain", func(t *testing.T) {
-		body := strings.NewReader(`<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0">
-  <channel>
-    <title>Missing GUID Feed</title>
-    <description>test</description>
-    <item>
-      <title>No GUID Episode</title>
-      <description>has audio but no guid</description>
-      <pubDate>Fri, 30 Jan 2026 12:00:00 GMT</pubDate>
-      <enclosure url="http://example.com/audio.mp3" length="1000" />
-    </item>
-  </channel>
-</rss>`)
-		_, err := decodeDiscoveryFeedXML(body, discoveryBodyLimit)
-		if err == nil {
-			t.Fatalf("decodeDiscoveryFeedXML should reject feed when every item is invalid")
-		}
-		if !errors.Is(err, errDiscoveryXMLDecode) {
-			t.Fatalf("error = %v, want errDiscoveryXMLDecode", err)
-		}
-	})
-
-	t.Run("keeps valid items when invalid items are mixed in", func(t *testing.T) {
-		body := strings.NewReader(`<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0">
-  <channel>
-    <title>Mixed Feed</title>
-    <description>test</description>
-    <item>
-      <title>Invalid Episode</title>
-      <description>missing guid</description>
-      <pubDate>Fri, 30 Jan 2026 12:00:00 GMT</pubDate>
-      <enclosure url="http://example.com/invalid.mp3" length="1000" />
-    </item>
-    <item>
-      <title>Valid Episode</title>
-      <description>kept</description>
-      <guid>ep-valid</guid>
-      <pubDate>Sat, 31 Jan 2026 12:00:00 GMT</pubDate>
-      <enclosure url="http://example.com/valid.mp3" length="2000" />
-    </item>
-  </channel>
-</rss>`)
-		result, err := decodeDiscoveryFeedXML(body, discoveryBodyLimit)
-		if err != nil {
-			t.Fatalf("decodeDiscoveryFeedXML error = %v", err)
-		}
-		if len(result.Episodes) != 1 {
-			t.Fatalf("episodes length = %d, want 1", len(result.Episodes))
-		}
-		if result.Episodes[0].EpisodeGUID != "ep-valid" {
-			t.Fatalf("episodeGuid = %q, want ep-valid", result.Episodes[0].EpisodeGUID)
-		}
-		if result.Episodes[0].AudioURL != "http://example.com/valid.mp3" {
-			t.Fatalf("audioUrl = %q, want valid episode audio", result.Episodes[0].AudioURL)
-		}
-	})
-
-	t.Run("whitespace-only title", func(t *testing.T) {
-		body := strings.NewReader(`<?xml version="1.0" encoding="UTF-8"?>
-<rss version="2.0">
-  <channel>
-    <title>   </title>
-    <description>no real title</description>
-    <item>
-      <title>Ep 1</title>
-      <description>ok</description>
-      <guid>ep-1</guid>
-      <pubDate>Fri, 30 Jan 2026 12:00:00 GMT</pubDate>
-      <enclosure url="http://example.com/audio.mp3" length="1000" />
-    </item>
-  </channel>
-</rss>`)
-		_, err := decodeDiscoveryFeedXML(body, discoveryBodyLimit)
-		if err == nil {
-			t.Fatalf("decodeDiscoveryFeedXML should return error for whitespace-only title")
-		}
-	})
-}
-
 func TestDiscoveryFetchJSONMapsNonSuccessStatus(t *testing.T) {
 	service := &discoveryService{
 		client: &http.Client{
@@ -2367,8 +2025,8 @@ func TestDiscoveryFetchJSONMapsNonSuccessStatus(t *testing.T) {
 				return jsonResponse(http.StatusBadGateway, `{"error":"bad"}`), nil
 			}),
 		},
-		timeout:    time.Second,
-		rssBaseURL: discoveryRSSBaseURL,
+		timeout:            time.Second,
+		appleChartsBaseURL: discoveryAppleChartsBaseURL,
 
 		userAgent: discoveryUserAgent,
 		bodyLimit: discoveryBodyLimit,
@@ -2389,11 +2047,11 @@ func TestDiscoveryFetchJSONMapsTransportTimeoutToDiscoveryTimeout(t *testing.T) 
 				return nil, &url.Error{Op: "Get", URL: "https://example.com", Err: timeoutErr{}}
 			}),
 		},
-		timeout:    time.Second,
-		rssBaseURL: discoveryRSSBaseURL,
-		userAgent:  discoveryUserAgent,
-		bodyLimit:  discoveryBodyLimit,
-		cache:      newDiscoveryCache(discoveryCacheMaxKeys),
+		timeout:            time.Second,
+		appleChartsBaseURL: discoveryAppleChartsBaseURL,
+		userAgent:          discoveryUserAgent,
+		bodyLimit:          discoveryBodyLimit,
+		cache:              newDiscoveryCache(discoveryCacheMaxKeys),
 	}
 
 	err := service.fetchJSON(context.Background(), "https://example.com", &map[string]any{})
@@ -2424,8 +2082,8 @@ func TestDiscoveryCacheBehavior(t *testing.T) {
 					}`), nil
 				}),
 			},
-			timeout:    time.Second,
-			rssBaseURL: discoveryRSSBaseURL,
+			timeout:            time.Second,
+			appleChartsBaseURL: discoveryAppleChartsBaseURL,
 
 			userAgent:     discoveryUserAgent,
 			bodyLimit:     discoveryBodyLimit,
@@ -2475,8 +2133,8 @@ func TestDiscoveryCacheBehavior(t *testing.T) {
 					}`), nil
 				}),
 			},
-			timeout:    time.Second,
-			rssBaseURL: discoveryRSSBaseURL,
+			timeout:            time.Second,
+			appleChartsBaseURL: discoveryAppleChartsBaseURL,
 
 			userAgent:     discoveryUserAgent,
 			bodyLimit:     discoveryBodyLimit,
@@ -2509,8 +2167,8 @@ func TestDiscoveryCacheBehavior(t *testing.T) {
 					return jsonResponse(http.StatusBadGateway, `{"error":"bad"}`), nil
 				}),
 			},
-			timeout:    time.Second,
-			rssBaseURL: discoveryRSSBaseURL,
+			timeout:            time.Second,
+			appleChartsBaseURL: discoveryAppleChartsBaseURL,
 
 			userAgent:     discoveryUserAgent,
 			bodyLimit:     discoveryBodyLimit,
@@ -2558,8 +2216,8 @@ func TestDiscoveryCacheBehavior(t *testing.T) {
 					}`, name)), nil
 				}),
 			},
-			timeout:    time.Second,
-			rssBaseURL: discoveryRSSBaseURL,
+			timeout:            time.Second,
+			appleChartsBaseURL: discoveryAppleChartsBaseURL,
 
 			userAgent:     discoveryUserAgent,
 			bodyLimit:     discoveryBodyLimit,
@@ -2623,8 +2281,8 @@ func TestDiscoveryCacheBehavior(t *testing.T) {
 					}`), nil
 				}),
 			},
-			timeout:    time.Second,
-			rssBaseURL: discoveryRSSBaseURL,
+			timeout:            time.Second,
+			appleChartsBaseURL: discoveryAppleChartsBaseURL,
 
 			userAgent:     discoveryUserAgent,
 			bodyLimit:     discoveryBodyLimit,
@@ -2671,8 +2329,8 @@ func TestDiscoveryCacheGracefulDegradation(t *testing.T) {
 					}`), nil
 				}),
 			},
-			timeout:    time.Second,
-			rssBaseURL: discoveryRSSBaseURL,
+			timeout:            time.Second,
+			appleChartsBaseURL: discoveryAppleChartsBaseURL,
 
 			userAgent:     discoveryUserAgent,
 			bodyLimit:     discoveryBodyLimit,
@@ -2718,8 +2376,8 @@ func TestDiscoveryCacheGracefulDegradation(t *testing.T) {
 					return nil, errors.New("upstream failed")
 				}),
 			},
-			timeout:    time.Second,
-			rssBaseURL: discoveryRSSBaseURL,
+			timeout:            time.Second,
+			appleChartsBaseURL: discoveryAppleChartsBaseURL,
 
 			userAgent:     discoveryUserAgent,
 			bodyLimit:     discoveryBodyLimit,
@@ -2779,8 +2437,8 @@ func TestDiscoveryCacheGracefulDegradation(t *testing.T) {
 					}`, name)), nil
 				}),
 			},
-			timeout:    time.Second,
-			rssBaseURL: discoveryRSSBaseURL,
+			timeout:            time.Second,
+			appleChartsBaseURL: discoveryAppleChartsBaseURL,
 
 			userAgent:     discoveryUserAgent,
 			bodyLimit:     discoveryBodyLimit,
@@ -2827,12 +2485,12 @@ func TestDiscoveryCacheGracefulDegradation(t *testing.T) {
 
 	t.Run("lookup podcast stale cache is not served when provider is not configured", func(t *testing.T) {
 		service := &discoveryService{
-			timeout:       time.Second,
-			rssBaseURL:    discoveryRSSBaseURL,
-			userAgent:     discoveryUserAgent,
-			bodyLimit:     discoveryBodyLimit,
-			cache:         newDiscoveryCache(256),
-			searchLimiter: newRateLimiter(10, time.Second, time.Now),
+			timeout:            time.Second,
+			appleChartsBaseURL: discoveryAppleChartsBaseURL,
+			userAgent:          discoveryUserAgent,
+			bodyLimit:          discoveryBodyLimit,
+			cache:              newDiscoveryCache(256),
+			searchLimiter:      newRateLimiter(10, time.Second, time.Now),
 			podcastIndexConfig: podcastIndexConfig{
 				userAgent: "test-agent",
 			},
@@ -2847,7 +2505,6 @@ func TestDiscoveryCacheGracefulDegradation(t *testing.T) {
 			Author:          "Host",
 			Artwork:         "https://example.com/art.jpg",
 			Description:     "desc",
-			FeedURL:         "https://example.com/feed.xml",
 			PodcastItunesID: "42",
 			Genres:          []string{"Tech"},
 		}, 10*time.Millisecond)
@@ -2890,6 +2547,8 @@ func TestDiscoveryCacheGracefulDegradation(t *testing.T) {
 								"author":"Host",
 								"artwork":"https://example.com/art.jpg",
 								"itunesId":42,
+								"lastUpdateTime":1700000000,
+								"episodeCount":10,
 								"categories":{"1":"Tech"}
 							}
 						}`), nil
@@ -2897,12 +2556,12 @@ func TestDiscoveryCacheGracefulDegradation(t *testing.T) {
 					return nil, errors.New("podcastindex upstream failed")
 				}),
 			},
-			timeout:       time.Second,
-			rssBaseURL:    discoveryRSSBaseURL,
-			userAgent:     discoveryUserAgent,
-			bodyLimit:     discoveryBodyLimit,
-			cache:         newDiscoveryCache(256),
-			searchLimiter: newRateLimiter(10, time.Second, time.Now),
+			timeout:            time.Second,
+			appleChartsBaseURL: discoveryAppleChartsBaseURL,
+			userAgent:          discoveryUserAgent,
+			bodyLimit:          discoveryBodyLimit,
+			cache:              newDiscoveryCache(256),
+			searchLimiter:      newRateLimiter(10, time.Second, time.Now),
 			podcastIndexConfig: podcastIndexConfig{
 				apiKey:    "test-key",
 				apiSecret: "test-secret",
@@ -2956,8 +2615,8 @@ func TestDiscoveryCacheGracefulDegradation(t *testing.T) {
 					}`), nil
 				}),
 			},
-			timeout:    time.Second,
-			rssBaseURL: discoveryRSSBaseURL,
+			timeout:            time.Second,
+			appleChartsBaseURL: discoveryAppleChartsBaseURL,
 
 			userAgent:     discoveryUserAgent,
 			bodyLimit:     discoveryBodyLimit,
@@ -2998,8 +2657,8 @@ func TestDiscoveryCacheGracefulDegradation(t *testing.T) {
 					}`), nil
 				}),
 			},
-			timeout:    time.Second,
-			rssBaseURL: discoveryRSSBaseURL,
+			timeout:            time.Second,
+			appleChartsBaseURL: discoveryAppleChartsBaseURL,
 
 			userAgent:     discoveryUserAgent,
 			bodyLimit:     discoveryBodyLimit,
@@ -3054,6 +2713,7 @@ func TestDiscoveryServiceRegressionSearchPodcastsSpaceStrippedMatch(t *testing.T
 								"collectionName": "Bear Brook",
 								"artistName": "NHPR",
 								"artworkUrl600": "https://example.com/bear-600.jpg",
+								"releaseDate": "2026-03-27T00:00:00Z",
 								"trackCount": 10,
 								"genres": [{"name": "Crime"}]
 							}
@@ -3100,6 +2760,7 @@ func TestDiscoveryServiceRegressionSearchPodcastsDeduplication(t *testing.T) {
 								"collectionName": "Show A",
 								"artistName": "Artist A",
 								"artworkUrl600": "https://example.com/a.jpg",
+								"releaseDate": "2026-03-27T00:00:00Z",
 								"trackCount": 5,
 								"genres": []
 							},
@@ -3108,6 +2769,7 @@ func TestDiscoveryServiceRegressionSearchPodcastsDeduplication(t *testing.T) {
 								"collectionName": "Show A",
 								"artistName": "Artist A",
 								"artworkUrl600": "https://example.com/a.jpg",
+								"releaseDate": "2026-03-27T00:00:00Z",
 								"trackCount": 5,
 								"genres": []
 							}
@@ -3151,6 +2813,8 @@ func TestDiscoveryServiceRegressionSearchEpisodesDeduplication(t *testing.T) {
 								"trackName": "Episode 1",
 								"artworkUrl600": "https://example.com/art.jpg",
 								"episodeUrl": "https://example.com/audio.mp3",
+								"releaseDate": "2026-03-27T00:00:00Z",
+								"shortDescription": "Episode summary",
 								"episodeGuid": "guid-1"
 							},
 							{
@@ -3158,7 +2822,9 @@ func TestDiscoveryServiceRegressionSearchEpisodesDeduplication(t *testing.T) {
 								"collectionName": "Show A",
 								"trackName": "Episode 1",
 								"artworkUrl600": "https://example.com/art.jpg",
-								"episodeUrl": "https://example.com/audio.mp3",
+								"episodeUrl": "https://example.com/audio-duplicate.mp3",
+								"releaseDate": "2026-03-27T00:00:00Z",
+								"shortDescription": "Episode summary",
 								"episodeGuid": "guid-1"
 							}
 						]
@@ -3187,18 +2853,7 @@ func TestDiscoveryServiceRegressionSearchEpisodesDeduplication(t *testing.T) {
 	if len(payload) != 1 {
 		t.Fatalf("expected 1 deduplicated episode, got %d", len(payload))
 	}
-}
-
-func TestDeriveParsedFeedDescriptionSummaryHTML(t *testing.T) {
-	item := feedItem{
-		Description: "Plain text description",
-		Summary:     "<p>Rich summary with HTML</p>",
-	}
-	desc, descHTML := deriveParsedFeedDescription(item)
-	if desc != item.Summary {
-		t.Errorf("desc = %q, want summary", desc)
-	}
-	if descHTML != item.Summary {
-		t.Errorf("descHTML = %q, want summary", descHTML)
+	if payload[0].AudioURL != "https://example.com/audio.mp3" {
+		t.Fatalf("audioUrl = %q, want https://example.com/audio.mp3", payload[0].AudioURL)
 	}
 }

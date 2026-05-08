@@ -44,7 +44,15 @@ function EpisodeListItemImpl({
   const showFavorite = !!favorite?.enabled
   const hasArtwork = !!(model.artworkBlob || model.artworkSrc)
 
-  const status = useEpisodeStatus(model.downloadArgs?.audioUrl)
+  const status = useEpisodeStatus(
+    model.downloadArgs
+      ? {
+          audioUrl: model.downloadArgs.audioUrl,
+          podcastItunesId: model.downloadArgs.podcastItunesId,
+          episodeGuid: model.downloadArgs.episodeGuid,
+        }
+      : undefined
+  )
 
   const handlePlay = useCallback(() => {
     if (!status.playable) {
@@ -127,8 +135,7 @@ function EpisodeListItemImpl({
             <DownloadEpisodeButton
               episodeTitle={model.downloadArgs.episodeTitle}
               episodeDescription={model.description}
-              showTitle={model.downloadArgs.podcastTitle}
-              feedUrl={model.downloadArgs.feedUrl}
+              showTitle={model.downloadArgs.showTitle}
               audioUrl={model.downloadArgs.audioUrl}
               transcriptUrl={model.downloadArgs.transcriptUrl}
               artworkUrl={model.downloadArgs.artworkUrl}

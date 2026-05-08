@@ -139,10 +139,6 @@ vi.mock('../../components/ui/overflow-menu', () => ({
   OverflowMenu: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }))
 
-vi.mock('../../hooks/useSubscriptionMap', () => ({
-  useSubscriptionMap: () => new Map<string, string>(),
-}))
-
 vi.mock('../../lib/dateUtils', () => ({
   formatDateStandard: () => 'date',
   formatDuration: () => 'duration',
@@ -184,6 +180,14 @@ vi.mock('../../store/playerStore', () => ({
       setPlaybackTrackId: setPlaybackTrackIdMock,
       pause: pauseMock,
     }),
+  isCanonicalRemoteEpisodeMetadata: (
+    metadata: Record<string, unknown> | null | undefined
+  ): boolean =>
+    typeof metadata?.countryAtSave === 'string' &&
+    typeof metadata?.podcastItunesId === 'string' &&
+    typeof metadata?.episodeGuid === 'string' &&
+    typeof metadata?.showTitle === 'string' &&
+    typeof metadata?.artworkUrl === 'string',
 }))
 
 vi.mock('../../store/playerSurfaceStore', () => ({
@@ -233,10 +237,11 @@ function makeSession(overrides: Partial<ExplorePlaybackSession> = {}): PlaybackS
     audioFilename: 'episode.mp3',
     subtitleFilename: '',
     audioUrl: 'https://example.com/episode.mp3',
-    podcastFeedUrl: 'https://example.com/feed.xml',
+    artworkUrl: 'https://example.com/episode.jpg',
     podcastItunesId: '123456789',
     episodeGuid: 'episode-guid-1',
-    podcastTitle: 'Podcast',
+    showTitle: 'Podcast',
+    publishedAt: new Date('2025-02-01T00:00:00Z').getTime(),
     transcriptUrl: 'https://example.com/episode.srt',
     countryAtSave: 'us',
     ...overrides,
@@ -274,15 +279,16 @@ describe('HistoryPage transcript behavior', () => {
     fireEvent.click(screen.getByLabelText('btnPlayOnly'))
 
     await waitFor(() =>
-      expect(setAudioUrlMock).toHaveBeenCalledWith(
-        'https://example.com/episode.mp3',
-        'Episode',
-        '',
-        expect.objectContaining({
-          transcriptUrl: 'https://example.com/episode.srt',
-        }),
-        true
-      )
+      expect(
+        setAudioUrlMock.mock.calls.some(
+          (call) =>
+            call[0] === 'https://example.com/episode.mp3' &&
+            call[1] === 'Episode' &&
+            call[2] === 'https://example.com/episode.jpg' &&
+            call[3]?.transcriptUrl === 'https://example.com/episode.srt' &&
+            call[4] === true
+        )
+      ).toBe(true)
     )
     expect(setPlayableContextMock).toHaveBeenCalledWith(true)
     expect(toDockedMock).toHaveBeenCalled()

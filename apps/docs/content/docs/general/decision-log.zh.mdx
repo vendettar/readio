@@ -6,7 +6,7 @@ description: 架构决策与其背后的理由。
 # 架构决策记录
 
 ## D001 — 全表使用 UUID 主键
-- **决策**: 所有表使用 UUID 作为主键；自然键（如 `feedUrl`, `key`）仅作为唯一索引。
+- **决策**: 所有表使用 UUID 作为主键；自然键（如旧的 feed identity 字段、`key`）仅作为唯一索引。
 - **理由**: 全局唯一性，同步就绪，稳定的身份标识。
 - **影响**: 架构更改需要重置数据库（首发版策略）。
 
@@ -52,7 +52,7 @@ description: 架构决策与其背后的理由。
 
 ## D012 — 导入完整性检查 [已实施]
 - **决策**: 在写入 DB 之前验证导入的 ID 冲突和损坏的引用（指令 049）。
-- **理由**: 防止 Vault/OPML 导入期间的静默损坏。
+- **理由**: 防止结构化资料库导入期间的静默损坏。
 
 ## D013 — 包大小预算 [已实施]
 - **决策**: 在 CI 中强制执行包大小预算（指令 050）。
@@ -217,6 +217,15 @@ description: 架构决策与其背后的理由。
 ## D047 — UI 模式变更门禁
 - **决策**: 凡是对 `ui-patterns/*.mdx` 进行修改并引入新的标准化交互（例如标准表单、文件拖放区），必须记录在决策日志中。
 - **理由**: 确保架构一致性并在整个项目中维护 UI 标准化的单一来源（指令 012-015）。
+
+## D054 — Cloud Discovery PI 单集列表切换 [已实施]
+- **决策**: Cloud 的播客内容路由现在只允许通过按 `podcastItunesId` 键控的 PodcastIndex `episodes/byitunesid?max=1000` relay chain 渲染单集。
+- **理由**: 移除 RSS feed XML 对页面渲染的所有权，让路由身份始终围绕 `podcastItunesId` + `episodeGuid` 保持一致，并把 1000 条 PI 单集列表明确成节目页 / 全部单集页 / 单集详情页的产品契约。
+- **实施**:
+  - 新增 Cloud relay `GET /api/v1/discovery/podcasts/:itunesId/episodes`。
+  - 前端页面渲染改用按播客键控的 `episodeCache`，不再让 feed-keyed page ownership 持续存在。
+  - repo-owned 契约不再暴露旧的 feed transport 字段；页面渲染也不再允许它继续泄漏到活跃运行时。
+  - 当成功返回的 PI 单集列表里缺少目标 GUID 时，页面直接进入 `episodeNotFound`；页面渲染链路不再保留 RSS fallback。（指令 008）
 
 ## D048 — 标准化文件拖放区
 - **决策**: 所有文件上传界面必须使用基于 `react-dropzone` 的 `FileDropZone` 组件，并进行基于 Zod 的验证。
@@ -414,7 +423,7 @@ description: 架构决策与其背后的理由。
 ## D080 — 内容 URL 契约收口 + 转场元数据迁移 [已实施]
 - **决策**：
   - 所有应用内内容入口（Explore/Search/全局搜索/Library）统一输出规范化纯路径播客路由，不再附带正确性查询提示。
-  - `/$country/podcast/*` 路由的 search 契约不再定义旧的 library 提示字段（`source/feedUrl/audioUrl/providerEpisodeId/sessionId`），也不再定义 `fromLayoutPrefix`。
+  - `/$country/podcast/*` 路由的 search 契约不再定义旧的 library 提示字段（`source/legacyFeedHint/audioUrl/providerEpisodeId/sessionId`），也不再定义 `fromLayoutPrefix`。
   - 旧查询提示在 search 校验阶段采用“容忍并剥离”（非严格拒绝）策略。
   - `fromLayoutPrefix` 仅作为共享转场的可选元数据，通过类型化 `location.state` 传递，不进入 URL `search`。
   - `useEpisodeResolution` 不再接收 context 查询提示，解析正确性仅依赖路由参数与 slug token。
@@ -463,8 +472,8 @@ description: 架构决策与其背后的理由。
   - `location.state` 在刷新、直开、分享链接场景不具备持久性。
   - 将规范化移出热路径可避免重复 URL 解析开销，并保持 feed 缓存键稳定。
 - **实施**:
-  - 扩展 route guard，阻断 `location.state` 业务字段误用和热路径 `normalizeFeedUrl` / `new URL()` 回归。
-  - 新增 feed 规范化边界工具（`src/lib/discovery/feedUrl.ts`），并应用到 provider 映射与持久化写入路径。
+  - 扩展 route guard，阻断 `location.state` 业务字段误用和热路径 legacy feed normalization / `new URL()` 回归。
+  - 当时新增过 feed 规范化边界工具，并应用到 provider 映射与持久化写入路径；该工具随后已在 PI-first cutover 后退役。
   - 为 `docked <-> full` 切换增加 ReadingContent 性能预算守卫（`120ms`）。
 
 ## D085 — Route Guard AST 升级 + Session Country Allowlist + Search 打开详情语义 [已实施]
@@ -840,12 +849,12 @@ description: 架构决策与其背后的理由。
   - 如果字段被发出到 `/env.js`，假设每个浏览器用户都能读取它；设计时需考虑这一点。
   - allowlist 在 Go handler（`apps/cloud-api/main.go`）的 map 字面量构造中是隐式的，只发出浏览器安全的字段。
 
-## D119 — Cloud Discovery 持久标识契约统一为 `itunesId` + `episodeGuid` [已实施]
+## D119 — Cloud Discovery 持久标识契约统一为 `itunesId` + `episodeGuid` [被 D120 覆盖]
 - **决策**：
   - 对于 Cloud discovery/content 路由，节目路由的 SSOT 是数值型 `itunesId`。
   - 所有 canonical 单集路由统一为 `slugified-title--encodeURIComponent(episodeGuid)`，覆盖节目页、下载页、Command Palette、本地搜索以及 Top Episodes 导航。
   - Editor's Picks 在构造节目路由时必须优先使用 `itunesId`，而不是 `feedId`。
-  - 单集详情解析移除 Apple supplemental episode 路径，统一改为先解析 compact key 到 `episodeGuid`，再按 `episodeGuid` 匹配缓存 RSS，然后使用 PodcastIndex `podcasts/byitunesid` 获取 canonical `feedUrl`，最后按该 `feedUrl` 获取 RSS 兜底并按 `episodeGuid` 匹配。
+  - [已被后续决策覆盖] 单集详情解析曾移除 Apple supplemental episode 路径，并改为先解析 compact key 到 `episodeGuid`，再按 `episodeGuid` 匹配缓存 RSS，然后使用 PodcastIndex `podcasts/byitunesid` 获取 canonical feed transport metadata，最后按该字段获取 RSS 兜底并按 `episodeGuid` 匹配。
 - **理由**：
   - `itunesId` 是 Apple 榜单首跳与 PodcastIndex 详情 API 之间共享的跨源 join key。
   - RSS GUID 是最稳定的单集标识，能在不依赖瞬时路由提示的前提下支持 cold open 恢复。
@@ -920,3 +929,30 @@ description: 架构决策与其背后的理由。
 - **实施**：
   - 前端：`apps/cloud-ui/src/lib/discovery/discoveryCache.ts` 重构为仅维护模式。
   - 后端：`apps/cloud-api/discovery_apple.go` 使用 `getWithGracefulDegradation`。
+
+## D124 — Cloud Discovery Feed Route 退役
+- **决策**：
+  - `/api/v1/discovery/feed` 已退役，不得再被文档描述为活跃的 Cloud route。
+  - repo-owned 的 Cloud 运行时契约不再暴露或依赖旧的 feed transport 字段。
+  - 旧的 feed-cache / feed-SQLite discovery 方向已退役，不能再作为当前部署或持久化契约对外描述。
+- **理由**：
+  - Cloud 页面渲染早已切换到 PodcastIndex `episodes/byitunesid?max=1000` relay chain，继续在测试与文档中保留 feed-route 契约只会制造过时 ownership 信号。
+  - repo-owned 前后端运行时都已不再依赖按 feed transport identity 获取 RSS，继续发布该 route 的 env / error / persistence 指引只会放大文档漂移。
+- **实施**：
+  - 删除前端中 `/api/v1/discovery/feed` 的死测试常量。
+  - 同步 Cloud discovery handoff、deployment、error-code、database 与 roadmap 文档，明确 route 已退役，并把旧的 feed transport 字段移出当前 repo-owned 契约。
+  - 该切片由指令 024 的 route-retirement 合同与文档同步负责。
+
+## D125 — 通过 Alloy Scrape 接入 Grafana Cloud Metrics [已实施]
+- **决策**：
+  - `apps/cloud-api` 暴露受保护的 Prometheus-compatible `/metrics` endpoint，供主机侧 Grafana Alloy 抓取。
+  - Grafana Cloud metrics ingestion 由 Alloy 拥有，不在应用内实现 Prometheus remote write。
+  - `/metrics` 属于后端运维 surface，由 `READIO_METRICS_TOKEN` 保护，不得通过 `/env.js` 下发。
+- **理由**：
+  - 将 scrape 与 Grafana credentials 留在 Alloy 中，可以避免 `apps/cloud-api` 的启动与请求处理耦合到 Grafana Cloud 可用性。
+  - 本机或 internal scrape path 让应用只负责暴露安全的 process/runtime metrics，由主机 agent 负责传输、重试与远端凭证。
+  - 该方案保留 `/ops` 与 `/admin/*` 作为轻量 same-origin 运维入口，不改变它们的契约。
+- **实施**：
+  - Metrics foundation 与测试：`apps/cloud-api/metrics.go`、`apps/cloud-api/metrics_test.go`、`apps/cloud-api/main.go`。
+  - 运行时契约：`apps/docs/content/docs/apps/cloud/deployment.zh.mdx`。
+  - 指令 014c。

@@ -18,6 +18,11 @@ import { useMediaSession } from '../../hooks/useMediaSession'
 import { usePageVisibility } from '../../hooks/usePageVisibility'
 import { usePlayerController } from '../../hooks/usePlayerController'
 import { useSession } from '../../hooks/useSession'
+import {
+  finalizePendingSeek,
+  pausePlayerRuntime,
+  playPlayerRuntime,
+} from '../../lib/player/playerRuntimeActions'
 import { useTabSync } from '../../hooks/useTabSync'
 import { usePlayerStore } from '../../store/playerStore'
 
@@ -69,11 +74,11 @@ export function GlobalAudioController() {
   }, [audioTitle, artworkUrl, audioUrl, episodeMetadata?.showTitle, coverArtUrl])
 
   const handlePlay = useCallback(() => {
-    usePlayerStore.getState().play()
+    playPlayerRuntime()
   }, [])
 
   const handlePause = useCallback(() => {
-    usePlayerStore.getState().pause()
+    pausePlayerRuntime()
   }, [])
 
   const handleMetadataReady = useCallback(() => {
@@ -131,13 +136,7 @@ export function GlobalAudioController() {
     if (audio.readyState < 1 && !mediaReadySrc) return
 
     audio.currentTime = pendingSeek
-    const state = usePlayerStore.getState()
-    state.clearPendingSeek()
-
-    if (state.autoplayAfterPendingSeek) {
-      state.clearAutoplayAfterPendingSeek()
-      state.play()
-    }
+    finalizePendingSeek()
   }, [pendingSeek, mediaReadySrc])
 
   // AUTHORITATIVE RESTORE: Single entry point for both event-based and state-based triggers.

@@ -1,12 +1,12 @@
 import { FilePlus, FileType } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   exportCurrentTranscriptForPlayback,
   importTranscriptForCurrentPlayback,
-  resolveCurrentPlaybackExportContext,
   type SubtitleExportFormat,
 } from '../../lib/player/playbackExport'
+import { resolvePlaybackSourceAudioUrl } from '../../lib/player/playbackMetadata'
 import { SUPPORTED_SUBTITLE_EXPORT_FORMATS } from '../../lib/subtitles'
 import { cn } from '../../lib/utils'
 import { usePlayerStore } from '../../store/playerStore'
@@ -14,6 +14,7 @@ import { useTranscriptStore } from '../../store/transcriptStore'
 import { DropdownMenuItem, DropdownMenuSeparator } from '../ui/dropdown-menu'
 import { OverflowMenu } from '../ui/overflow-menu'
 import { useNestedOverflowMenu } from '../ui/useNestedOverflowMenu'
+import { useMiniPlayerTranscriptExportAvailability } from './useMiniPlayerTranscriptExportAvailability'
 
 const TRANSCRIPT_IMPORT_ACCEPT = '.json,.srt,.vtt,application/json,text/plain,text/vtt'
 
@@ -37,59 +38,26 @@ export interface MiniPlayerMoreMenuController {
 
 type MiniPlayerMoreMenuStep = 'menu' | 'export'
 
-type ExportAvailabilityState = {
-  exportTranscriptDisabled: boolean
-}
-
-const DEFAULT_EXPORT_AVAILABILITY: ExportAvailabilityState = {
-  exportTranscriptDisabled: true,
-}
-
 export function useMiniPlayerMoreMenuController(): MiniPlayerMoreMenuController {
   const audioTitle = usePlayerStore((s) => s.audioTitle)
   const audioUrl = usePlayerStore((s) => s.audioUrl)
-  const episodeTranscriptUrl = usePlayerStore((s) => s.episodeMetadata?.transcriptUrl ?? null)
+  const episodeMetadata = usePlayerStore((s) => s.episodeMetadata)
   const localTrackId = usePlayerStore((s) => s.localTrackId)
-  const originalAudioUrl = usePlayerStore((s) => s.episodeMetadata?.originalAudioUrl ?? null)
   const loadRequestId = usePlayerStore((s) => s.loadRequestId)
   const subtitleCount = useTranscriptStore((s) => s.subtitles.length)
   const hasActiveTrack = Boolean(audioTitle || audioUrl)
-  const [availability, setAvailability] = useState(DEFAULT_EXPORT_AVAILABILITY)
+  const playbackSourceAudioUrl = resolvePlaybackSourceAudioUrl(audioUrl, episodeMetadata)
   const playbackContextKey = [
     localTrackId ?? '',
-    originalAudioUrl ?? audioUrl ?? '',
-    episodeTranscriptUrl ?? '',
+    playbackSourceAudioUrl,
+    episodeMetadata?.transcriptUrl ?? '',
     String(loadRequestId),
     String(subtitleCount),
   ].join('|')
-
-  useEffect(() => {
-    if (!hasActiveTrack) {
-      setAvailability(DEFAULT_EXPORT_AVAILABILITY)
-      return
-    }
-
-    let cancelled = false
-    const requestKey = playbackContextKey
-
-    void resolveCurrentPlaybackExportContext()
-      .then((context) => {
-        if (cancelled || requestKey !== playbackContextKey) return
-
-        setAvailability({
-          exportTranscriptDisabled: !context?.canExportTranscript,
-        })
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setAvailability(DEFAULT_EXPORT_AVAILABILITY)
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [hasActiveTrack, playbackContextKey])
+  const exportTranscriptDisabled = useMiniPlayerTranscriptExportAvailability(
+    hasActiveTrack,
+    playbackContextKey
+  )
 
   return {
     triggerDisabled: !hasActiveTrack,
@@ -98,14 +66,14 @@ export function useMiniPlayerMoreMenuController(): MiniPlayerMoreMenuController 
       disabled: !hasActiveTrack,
       onFileSelected: (file) => void importTranscriptForCurrentPlayback(file),
     },
-    exportTranscriptDisabled: !hasActiveTrack || availability.exportTranscriptDisabled,
+    exportTranscriptDisabled,
     exportTranscript: {
       srt: {
-        disabled: !hasActiveTrack || availability.exportTranscriptDisabled,
+        disabled: exportTranscriptDisabled,
         onSelect: () => void exportCurrentTranscriptForPlayback('srt'),
       },
       vtt: {
-        disabled: !hasActiveTrack || availability.exportTranscriptDisabled,
+        disabled: exportTranscriptDisabled,
         onSelect: () => void exportCurrentTranscriptForPlayback('vtt'),
       },
     },

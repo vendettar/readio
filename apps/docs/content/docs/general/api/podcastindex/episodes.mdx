@@ -46,23 +46,233 @@ Retrieve the complete episode list for a show. This is the primary way to pull s
 
 ## `/byfeedurl`
 Retrieve episode list via the show's RSS URL.
-- **URL**: `/api/1.0/episodes/byfeedurl?url={url}`
-
-## `/byitunesid`
-Retrieve episode list by iTunes podcast ID.
-- **URL**: `/api/1.0/episodes/byitunesid?id=1441923632`
-
-## `/byguid`
-Lookup a specific episode by its persistent RSS `<guid>`.
-- **URL**: `/api/1.0/episodes/byguid?guid=incomparable:batmanuniversity:41`
+- **URL**: `/api/1.0/episodes/byfeedurl?url=https://feeds.theincomparable.com/batmanuniversity&pretty`
 - **Example Response**:
 ```json
 {
   "status": "true",
+  "items": [
+    {
+      "id": 16795088,
+      "title": "Batman University",
+      "link": "https://www.theincomparable.com/batmanuniversity/",
+      "description": "Batman University is back in session! James Thomson and Nathan Alderman join Tony for a discussion of Fox’s “Gotham.” Tune in to hear our thoughts on how a half-baked comic book show was reborn into an unmissable train wreck.",
+      "guid": "incomparable/batman/19",
+      "datePublished": 1546399813,
+      "datePublishedPretty": "January 01, 2019 9:30pm",
+      "dateCrawled": 1598369047,
+      "enclosureUrl": "https://www.theincomparable.com/podcast/batmanuniversity302.mp3",
+      "enclosureType": "audio/mp3",
+      "enclosureLength": 26385472,
+      "duration": 54,
+      "explicit": 0,
+      "episode": 19,
+      "episodeType": "full",
+      "season": 3,
+      "image": "https://www.theincomparable.com/imgs/logos/logo-batmanuniversity-3x.jpg?cache-buster=2019-06-11",
+      "feedItunesId": 1441923632,
+      "feedUrl": "https://feeds.theincomparable.com/batmanuniversity",
+      "feedImage": "https://www.theincomparable.com/imgs/logos/logo-batmanuniversity-3x.jpg?cache-buster=2019-06-11",
+      "feedId": 75075,
+      "podcastGuid": "9b024349-ccf0-5f69-a609-6b82873eab3c",
+      "feedLanguage": "en-us",
+      "feedDead": 0,
+      "feedDuplicateOf": 75075,
+      "chaptersUrl": "https://studio.hypercatcher.com/chapters/podcast/http:feed.nashownotes.comrss.xml/episode/http:1322.noagendanotes.com",
+      "transcriptUrl": "https://mp3s.nashownotes.com/NA-1322-Captions.srt",
+      "transcripts": [
+        {
+          "url": "https://mp3s.nashownotes.com/NA-1385-Captions.srt",
+          "type": "application/srt"
+        }
+      ],
+      "soundbite": {
+        "startTime": 1123,
+        "duration": 40,
+        "title": "Why the Podcast Namespace Matters"
+      },
+      "soundbites": [
+        {
+          "startTime": 1123,
+          "duration": 40,
+          "title": "Why the Podcast Namespace Matters"
+        }
+      ],
+      "persons": [
+        {
+          "id": 411960,
+          "name": "Dave Jones",
+          "role": "Host",
+          "group": "Cast",
+          "href": "https://engineered.network/img/people/dave-jones.jp",
+          "img": "https://engineered.network/img/people/dave-jones.jp"
+        }
+      ],
+      "socialInteract": [
+        {
+          "url": "https://podcastindex.social/@dave/109762601417741559",
+          "protocol": "activitypub",
+          "accountId": "@dave",
+          "accountUrl": "https://podcastindex.social/users/dave",
+          "priority": 0
+        }
+      ],
+      "value": {
+        "model": {
+          "type": "lightning",
+          "method": "keysend",
+          "suggested": "0.00000020000"
+        },
+        "destinations": [
+          {
+            "name": "podcaster",
+            "address": "03ae9f91a0cb8ff43840e3c322c4c61f019d8c1c3cea15a25cfc425ac605e61a4a",
+            "type": "node",
+            "split": 99,
+            "fee": true,
+            "customKey": "112111100",
+            "customValue": "wal_ZmqFg13NB31oek"
+          }
+        ]
+      }
+    }
+  ],
+  "count": 1,
+  "query": {
+    "url": "https://feeds.theincomparable.com/batmanuniversity"
+  },
+  "description": "Found matching feed"
+}
+```
+
+## `/bypodcastguid`
+Retrieve episode list by the show's [Podcast GUID](https://github.com/Podcastindex-org/podcast-namespace/blob/main/docs/1.0.md#guid).
+- **URL**: `/api/1.0/episodes/bypodcastguid?guid=856cd618-7f34-57ea-9b84-3600f1f65e7f&pretty`
+- **Example Response**:
+```json
+{
+  "status": "true",
+  "items": [
+    {
+      "id": 16795088,
+      "title": "Gotham",
+      "podcastGuid": "856cd618-7f34-57ea-9b84-3600f1f65e7f"
+    }
+  ],
+  "count": 1
+}
+```
+
+## `/byitunesid`
+Retrieve episode list by iTunes podcast ID.
+- **URL**: `/api/1.0/episodes/byitunesid?id=1441923632&pretty`
+- **Example Response**:
+```json
+{
+  "status": "true",
+  "items": [
+    {
+      "id": 16795088,
+      "title": "Batman University",
+      "link": "https://www.theincomparable.com/batmanuniversity/",
+      "description": "Batman University is back in session! James Thomson and Nathan Alderman join Tony for a discussion of Fox’s “Gotham.” Tune in to hear our thoughts on how a half-baked comic book show was reborn into an unmissable train wreck.",
+      "guid": "incomparable/batman/19",
+      "datePublished": 1546399813,
+      "datePublishedPretty": "January 01, 2019 9:30pm",
+      "dateCrawled": 1598369047,
+      "enclosureUrl": "https://www.theincomparable.com/podcast/batmanuniversity302.mp3",
+      "enclosureType": "audio/mp3",
+      "enclosureLength": 26385472,
+      "duration": 54,
+      "explicit": 0,
+      "episode": 19,
+      "episodeType": "full",
+      "season": 3,
+      "image": "https://www.theincomparable.com/imgs/logos/logo-batmanuniversity-3x.jpg?cache-buster=2019-06-11",
+      "feedItunesId": 1441923632,
+      "feedImage": "https://www.theincomparable.com/imgs/logos/logo-batmanuniversity-3x.jpg?cache-buster=2019-06-11",
+      "feedId": 75075,
+      "feedLanguage": "en-us",
+      "feedDead": 0,
+      "feedDuplicateOf": 75075,
+      "chaptersUrl": "https://studio.hypercatcher.com/chapters/podcast/http:feed.nashownotes.comrss.xml/episode/http:1322.noagendanotes.com",
+      "transcriptUrl": "https://mp3s.nashownotes.com/NA-1322-Captions.srt",
+      "transcripts": [
+        {
+          "url": "https://mp3s.nashownotes.com/NA-1385-Captions.srt",
+          "type": "application/srt"
+        }
+      ],
+      "soundbite": {
+        "startTime": 1123,
+        "duration": 40,
+        "title": "Why the Podcast Namespace Matters"
+      },
+      "soundbites": [
+        {
+          "startTime": 1123,
+          "duration": 40,
+          "title": "Why the Podcast Namespace Matters"
+        }
+      ],
+      "persons": [
+        {
+          "id": 411960,
+          "name": "Dave Jones",
+          "role": "Host",
+          "group": "Cast",
+          "href": "https://engineered.network/img/people/dave-jones.jp",
+          "img": "https://engineered.network/img/people/dave-jones.jp"
+        }
+      ],
+      "socialInteract": [
+        {
+          "url": "https://podcastindex.social/@dave/109762601417741559",
+          "protocol": "activitypub",
+          "accountId": "@dave",
+          "accountUrl": "https://podcastindex.social/users/dave",
+          "priority": 0
+        }
+      ],
+      "value": {
+        "model": {
+          "type": "lightning",
+          "method": "keysend",
+          "suggested": "0.00000020000"
+        },
+        "destinations": [
+          {
+            "name": "podcaster",
+            "address": "03ae9f91a0cb8ff43840e3c322c4c61f019d8c1c3cea15a25cfc425ac605e61a4a",
+            "type": "node",
+            "split": 99,
+            "fee": true,
+            "customKey": "112111100",
+            "customValue": "wal_ZmqFg13NB31oek"
+          }
+        ]
+      }
+    }
+  ],
+  "count": 1,
+  "query": "920666",
+  "description": "Found matching feed"
+}
+```
+
+## `/byguid`
+Lookup a specific episode by its persistent RSS `<guid>`.
+- **URL**: `/api/1.0/episodes/byguid?guid=incomparable:batmanuniversity:41&feedid=75075&pretty`
+- **Example Response**:
+```json
+{
+  "status": "true",
+  "id": "75075",
+  "url": "https://feeds.theincomparable.com/batmanuniversity",
+  "guid": "incomparable:batmanuniversity:41",
   "episode": {
     "id": 16795088,
     "title": "Gotham",
-    "description": "...",
     "enclosureUrl": "https://www.theincomparable.com/podcast/batmanuniversity302.mp3",
     "feedId": 75075
   }
@@ -71,15 +281,24 @@ Lookup a specific episode by its persistent RSS `<guid>`.
 
 ## `/byid`
 Lookup a specific episode by its internal Index ID.
-- **URL**: `/api/1.0/episodes/byid?id=16795090`
+- **URL**: `/api/1.0/episodes/byid?id=16795090&pretty`
+- **Example Response**:
+```json
+{
+  "status": "true",
+  "id": 16795090,
+  "episode": {
+    "id": 16795090,
+    "title": "A Different Kind of Hero",
+    "feedId": 75075
+  }
+}
+```
 
-## `/bysoundbiteid`
-Lookup episode by soundbite ID.
-- **URL**: `/api/1.0/episodes/bysoundbiteid?id={id}`
 
 ## `/random`
 Returns random episodes. Use the `max` and `lang` parameters for better results.
-- **URL**: `/api/1.0/episodes/random?max=5`
+- **URL**: `/api/1.0/episodes/random?max=2&pretty`
 - **Example Response**:
 ```json
 {
@@ -90,14 +309,26 @@ Returns random episodes. Use the `max` and `lang` parameters for better results.
       "title": "Gotham",
       "feedTitle": "Batman University"
     }
-  ]
+  ],
+  "count": 1,
+  "max": "2"
 }
 ```
 
 ## `/live`
 Retrieve active `<podcast:liveItem>` streams for shows currently broadcasting.
-- **URL**: `/api/1.0/episodes/live`
+- **URL**: `/api/1.0/episodes/live?pretty`
 - **Example Response**:
 ```json
-{ "status": "true", "items": [{ "id": 10001, "title": "Batman Live", "status": "live", "feedId": 75075 }] }
+{
+  "status": "true",
+  "items": [
+    {
+      "id": 16795088,
+      "title": "Live Stream Name",
+      "status": "live"
+    }
+  ],
+  "count": 1
+}
 ```

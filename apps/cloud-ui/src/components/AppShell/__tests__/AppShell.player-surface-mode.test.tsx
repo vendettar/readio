@@ -25,36 +25,38 @@ describe('AppShell - Player Surface Mode', () => {
     usePlayerSurfaceStore.getState().reset()
   })
 
-  it('renders MiniPlayer by default', () => {
+  it('renders MiniPlayer by default', async () => {
     render(<AppShell>Child</AppShell>)
-    expect(screen.getByTestId('mini-player')).toBeTruthy()
+    expect(await screen.findByTestId('mini-player')).toBeTruthy()
     expect(screen.queryByTestId('player-surface-frame')).toBeNull()
   })
 
-  it('renders PlayerSurfaceFrame in docked mode', () => {
+  it('renders PlayerSurfaceFrame in docked mode', async () => {
     usePlayerSurfaceStore.setState({ mode: 'docked' })
     render(<AppShell>Child</AppShell>)
 
-    expect(screen.getByTestId('mini-player')).toBeTruthy()
-    const frame = screen.getByTestId('player-surface-frame')
+    expect(await screen.findByTestId('mini-player')).toBeTruthy()
+    const frame = await screen.findByTestId('player-surface-frame')
     expect(frame).toBeTruthy()
     expect(frame.getAttribute('data-mode')).toBe('docked')
   })
 
-  it('renders PlayerSurfaceFrame in full mode', () => {
+  it('renders PlayerSurfaceFrame in full mode', async () => {
     usePlayerSurfaceStore.setState({ mode: 'full' })
     render(<AppShell>Child</AppShell>)
 
-    expect(screen.getByTestId('mini-player')).toBeTruthy()
-    const frame = screen.getByTestId('player-surface-frame')
+    expect(await screen.findByTestId('mini-player')).toBeTruthy()
+    const frame = await screen.findByTestId('player-surface-frame')
     expect(frame).toBeTruthy()
     expect(frame.getAttribute('data-mode')).toBe('full')
   })
 
-  it('collapses docked surface on browser history navigation (popstate)', () => {
+  it('collapses docked surface on browser history navigation (popstate)', async () => {
     usePlayerSurfaceStore.setState({ mode: 'docked' })
     render(<AppShell>Child</AppShell>)
-    expect(screen.getByTestId('player-surface-frame').getAttribute('data-mode')).toBe('docked')
+    expect((await screen.findByTestId('player-surface-frame')).getAttribute('data-mode')).toBe(
+      'docked'
+    )
 
     act(() => {
       window.dispatchEvent(new PopStateEvent('popstate'))

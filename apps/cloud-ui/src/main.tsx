@@ -8,13 +8,34 @@ import { TooltipProvider } from './components/ui/tooltip'
 import './index.css'
 import { NetworkError } from './lib/fetchUtils'
 import './lib/i18n'
+import { getAppConfig, fetchRuntimeConfig } from './lib/runtimeConfig'
 import { router } from './router'
+
+// Initial configuration bootstrap
+// For decoupled deployments (CF Pages), this fetches runtime config from the VPS.
+await fetchRuntimeConfig()
+
 
 // Polyfill Buffer for browser compatibility (required by music-metadata)
 // Must happen before modules that depend on it are loaded if they are dynamic,
 // but generally better at top.
 if (typeof window !== 'undefined') {
   window.Buffer = window.Buffer || Buffer
+}
+
+function shouldLoadFaro() {
+  const config = getAppConfig()
+  return config.GRAFANA_FARO_URL.trim().length > 0 && config.GRAFANA_FARO_SAMPLE_RATE > 0
+}
+
+if (shouldLoadFaro()) {
+  void import('./lib/faro')
+    .then(({ initializeFaro }) => {
+      initializeFaro(getAppConfig())
+    })
+    .catch((error) => {
+      console.error('[Readio] Failed to initialize Faro', error)
+    })
 }
 
 // TanStack Query client configuration

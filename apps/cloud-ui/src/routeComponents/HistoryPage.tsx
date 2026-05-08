@@ -9,10 +9,10 @@ import { DropdownMenuItem } from '../components/ui/dropdown-menu'
 import { EmptyState } from '../components/ui/empty-state'
 import { OverflowMenu } from '../components/ui/overflow-menu'
 import { useNetworkStatus } from '../hooks/useNetworkStatus'
-import { useSubscriptionMap } from '../hooks/useSubscriptionMap'
 import { formatTimeSmart } from '../lib/dateUtils'
+import { buildFavoriteKey, buildFavoriteKeyFromFavorite } from '../lib/db/favoriteIdentity'
+import { mapPlaybackSessionToFavoriteInputs } from '../lib/db/favoriteMappers'
 import { isNavigableExplorePlaybackSession, type PlaybackSession } from '../lib/db/types'
-import { mapSessionToDiscovery } from '../lib/discovery/mappers'
 import { formatDateShort } from '../lib/formatters'
 import { logError } from '../lib/logger'
 import { mapPlaybackSessionToEpisodeMetadata } from '../lib/player/episodeMetadata'
@@ -49,8 +49,6 @@ export default function HistoryPage() {
   const pausePlayback = usePlayerStore((s) => s.pause)
   const { isOnline } = useNetworkStatus()
 
-  const subscriptionMap = useSubscriptionMap()
-
   // Favorites integration
   const favorites = useExploreStore((s) => s.favorites)
   const addFavorite = useExploreStore((s) => s.addFavorite)
@@ -58,7 +56,7 @@ export default function HistoryPage() {
 
   // Optimize favorite lookups with a Set of composite keys
   const favoriteKeysSet = React.useMemo(() => {
-    return new Set(favorites.map((f) => `${f.feedUrl}::${f.audioUrl}`))
+    return new Set(favorites.map((favorite) => buildFavoriteKeyFromFavorite(favorite)))
   }, [favorites])
 
   // History store
@@ -111,8 +109,8 @@ export default function HistoryPage() {
 
   const handlePlaySession = useCallback(
     async (session: PlaybackSession, mode: PlaybackRequestMode = PLAYBACK_REQUEST_MODE.DEFAULT) => {
-      // For explore/podcast sessions with audioUrl
-      if (session.audioUrl) {
+      // For explore/podcast sessions with audioUrl, delegate to the shared remote playback flow.
+      if (session.source === 'explore' && session.audioUrl) {
         const policy = deriveSurfacePolicyFromHistorySession(session)
         applySurfacePolicy({ setPlayableContext, toDocked, toMini }, policy)
 
@@ -130,7 +128,7 @@ export default function HistoryPage() {
         return
       }
 
-      // For local sessions, load from IDB via store action
+      // For local sessions, restore directly from IDB blobs.
       if (session.source === 'local' && session.audioId) {
         const currentEpoch = bumpPlaybackEpoch()
         const audioBlob = await getAudioBlobForSession(session.audioId)
@@ -213,21 +211,28 @@ export default function HistoryPage() {
     async (session: PlaybackSession, favorited: boolean) => {
       if (
         !isNavigableExplorePlaybackSession(session) ||
-        !session.podcastFeedUrl ||
-        !session.audioUrl
+        !session.podcastItunesId ||
+        !session.episodeGuid
       )
         return
 
-      const key = `${session.podcastFeedUrl}::${session.audioUrl}`
+      const key = buildFavoriteKey(session.podcastItunesId, session.episodeGuid)
+      if (!key) return
 
       if (favorited) {
         await removeFavorite(key)
         return
       }
 
-      const { podcast, episode } = mapSessionToDiscovery(session)
+      const favoriteInputs = mapPlaybackSessionToFavoriteInputs(session)
+      if (!favoriteInputs) return
 
-      await addFavorite(podcast, episode, undefined, session.countryAtSave)
+      await addFavorite(
+        favoriteInputs.podcast,
+        favoriteInputs.episode,
+        undefined,
+        session.countryAtSave
+      )
     },
     [addFavorite, removeFavorite]
   )
@@ -239,21 +244,14 @@ export default function HistoryPage() {
 
   const historyRows = React.useMemo(() => {
     return sessions.map((session, index) => {
-      const favorited = !!(
-        isNavigableExplorePlaybackSession(session) &&
-        session.podcastFeedUrl &&
-        session.audioUrl &&
-        favoriteKeysSet.has(`${session.podcastFeedUrl}::${session.audioUrl}`)
-      )
-      const canFavorite = !!(
-        isNavigableExplorePlaybackSession(session) &&
-        session.podcastFeedUrl &&
-        session.audioUrl
-      )
+      const sessionFavoriteKey = isNavigableExplorePlaybackSession(session)
+        ? buildFavoriteKey(session.podcastItunesId, session.episodeGuid)
+        : null
+      const favorited = !!sessionFavoriteKey && favoriteKeysSet.has(sessionFavoriteKey)
+      const canFavorite = !!sessionFavoriteKey
       const localBlob = artworkBlobs[session.id] || null
       const model = fromPlaybackSession({
         session,
-        subscriptionMap,
         artworkBlob: localBlob,
         language,
         t,
@@ -302,7 +300,6 @@ export default function HistoryPage() {
     sessions,
     favoriteKeysSet,
     artworkBlobs,
-    subscriptionMap,
     language,
     t,
     handlePlaySession,

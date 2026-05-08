@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion'
 import { ChevronDown, Minimize2, Settings2 } from 'lucide-react'
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useImageObjectUrl } from '../../hooks/useImageObjectUrl'
 import { useMediaQuery } from '../../hooks/useMediaQuery'
@@ -17,6 +17,7 @@ import {
   type TranscriptImportedEventDetail,
 } from '../../lib/player/playbackExport'
 import { resolveCurrentPlaybackIdentity } from '../../lib/player/playbackIdentity'
+import { resolvePlaybackContentIdentityKey } from '../../lib/player/playbackMetadata'
 import { formatTimeLabel } from '../../lib/subtitles'
 import { cn } from '../../lib/utils'
 import { usePlayerStore } from '../../store/playerStore'
@@ -36,7 +37,15 @@ import { Button } from '../ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { Slider } from '../ui/slider'
 import styles from './FullPlayer.module.css'
-import { ReadingContent } from './ReadingContent'
+
+const ReadingContent = lazy(async () => {
+  const module = await import('./ReadingContent')
+  return { default: module.ReadingContent }
+})
+
+function ReadingContentFallback() {
+  return <div className="flex-1 min-h-0" data-testid="reading-content-fallback" />
+}
 
 /** Shared layout identity for surface morph animation */
 export const PLAYER_SURFACE_LAYOUT_ID = 'player-surface-frame'
@@ -132,7 +141,8 @@ export function PlayerSurfaceFrame({ mode }: { mode: Exclude<SurfaceMode, 'mini'
   const blobUrl = useImageObjectUrl(coverArtUrl instanceof Blob ? coverArtUrl : null)
   const effectiveCoverArtUrl = typeof coverArtUrl === 'string' ? coverArtUrl : blobUrl
 
-  const activeEpisodeId = episodeMetadata?.episodeGuid || audioUrl || 'active'
+  const activeEpisodeId =
+    resolvePlaybackContentIdentityKey({ audioUrl, metadata: episodeMetadata }) ?? 'active'
 
   // Shared state: transcript auto-scrolling (replaces the old isFollowing in ReadingContent)
   // Moving it up allows FollowButton (rendered in PlayerSurfaceFrame) to react to it.
@@ -573,11 +583,13 @@ export function PlayerSurfaceFrame({ mode }: { mode: Exclude<SurfaceMode, 'mini'
               )}
 
               {/* PERSISTENT ReadingContent Instance */}
-              <ReadingContent
-                variant={mode}
-                isAutoScrolling={isAutoScrolling}
-                setIsAutoScrolling={setIsAutoScrolling}
-              />
+              <Suspense fallback={<ReadingContentFallback />}>
+                <ReadingContent
+                  variant={mode}
+                  isAutoScrolling={isAutoScrolling}
+                  setIsAutoScrolling={setIsAutoScrolling}
+                />
+              </Suspense>
 
               {/* Follow Button (Full mode only) */}
               {isFull && (

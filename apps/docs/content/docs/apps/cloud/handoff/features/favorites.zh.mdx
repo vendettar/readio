@@ -9,9 +9,12 @@ title: 收藏夹
 
 ## 2. 关键模型
 
-Favorites 仍然是 browser-local 记录，保存的节目元数据包括：
+Favorites 仍然是 browser-local 记录，使用 canonical 单集身份做键：
 
-- `feedUrl`
+- 主键模型：`podcastItunesId::episodeGuid`
+
+保存的节目元数据可以包括：
+
 - `podcastTitle`
 - `artworkUrl`
 - `podcastItunesId`

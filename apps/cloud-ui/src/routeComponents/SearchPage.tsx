@@ -14,9 +14,14 @@ import { LoadingSpinner } from '../components/ui/loading-spinner'
 import { Skeleton } from '../components/ui/skeleton'
 import { useEpisodePlayback } from '../hooks/useEpisodePlayback'
 import { type LocalSearchResult, useGlobalSearch } from '../hooks/useGlobalSearch'
+import {
+  hasSearchText,
+  resolveGlobalSearchPresentation,
+  trimSearchQuery,
+} from '../hooks/searchSection'
 import { executeLocalSearchAction } from '../lib/localSearchActions'
 import { PLAYBACK_REQUEST_MODE } from '../lib/player/playbackMode'
-import { buildPodcastShowRoute, normalizeCountryParam } from '../lib/routes/podcastRoutes'
+import { buildPodcastShowRoute } from '../lib/routes/podcastRoutes'
 import { useExploreStore } from '../store/exploreStore'
 import { usePlayerStore } from '../store/playerStore'
 import { useTranscriptStore } from '../store/transcriptStore'
@@ -32,15 +37,31 @@ export default function SearchPage() {
   const setSubtitles = useTranscriptStore((s) => s.setSubtitles)
   const setSessionId = usePlayerStore((s) => s.setSessionId)
   const setPlaybackTrackId = usePlayerStore((s) => s.setPlaybackTrackId)
-  const globalCountry = normalizeCountryParam(useExploreStore((s) => s.country))
+  const globalCountry = useExploreStore((s) => s.country)
   const { playSearchEpisode } = useEpisodePlayback()
-
-  const { podcasts, episodes, local, isLoading } = useGlobalSearch(query, true, {
+  const trimmedQuery = trimSearchQuery(query)
+  const hasQueryText = hasSearchText(query)
+  const searchResults = useGlobalSearch(query, true, {
     subscriptionLimit: Infinity,
     favoriteLimit: Infinity,
     historyLimit: Infinity,
     fileLimit: Infinity,
   })
+  const { podcastSection, episodeSection, localSection } = searchResults
+  const podcasts = podcastSection.items
+  const episodes = episodeSection.items
+  const local = localSection.items
+  const { totalResultsCount, overallState, isLoading, isEmpty, hasVisibleResults } =
+    resolveGlobalSearchPresentation({
+      query,
+      enabled: true,
+      podcastSection,
+      episodeSection,
+      localSection,
+      totalResultsCount: searchResults.totalResultsCount,
+      overallState: searchResults.overallState,
+    })
+  const isUnavailable = overallState === 'unavailable'
 
   const handleSelectLocalResult = (result: LocalSearchResult) => {
     void executeLocalSearchAction(result, {
@@ -58,18 +79,18 @@ export default function SearchPage() {
   return (
     <PageShell contentClassName="pb-8">
       <PageHeader
-        title={query ? `"${query}"` : t('searchPlaceholderGlobal')}
+        title={hasQueryText ? `"${trimmedQuery}"` : t('searchPlaceholderGlobal')}
         meta={
-          query ? (
+          hasQueryText ? (
             <p className="text-xl text-muted-foreground font-medium">
-              {t('searchResultsCount', { count: podcasts.length + episodes.length + local.length })}
+              {t('searchResultsCount', { count: totalResultsCount })}
             </p>
           ) : undefined
         }
       />
 
       {/* Idle Prompt state */}
-      {!query && (
+      {!hasQueryText && (
         <EmptyState
           icon={Search}
           title={t('searchEmptyTitle')}
@@ -81,7 +102,7 @@ export default function SearchPage() {
       )}
 
       {/* Loading state - Preserves shell & header */}
-      {isLoading && !podcasts.length && !episodes.length && !local.length && (
+      {overallState === 'loading' && totalResultsCount === 0 && (
         <output
           data-testid="initial-loading"
           aria-busy="true"
@@ -105,7 +126,7 @@ export default function SearchPage() {
       )}
 
       {/* Empty state (No results for query) */}
-      {query && !isLoading && !podcasts.length && !episodes.length && !local.length && (
+      {isEmpty && (
         <EmptyState
           icon={Search}
           title={t('searchNoResults')}
@@ -116,13 +137,24 @@ export default function SearchPage() {
         />
       )}
 
+      {isUnavailable && (
+        <EmptyState
+          icon={Search}
+          title={t('offline.badge')}
+          description={t('offline.explanation')}
+          action={
+            <Button onClick={() => void navigate({ to: '/explore' })}>{t('navExplore')}</Button>
+          }
+        />
+      )}
+
       {/* Results - Keep visible even during revalidation (isLoading) */}
-      {query && (podcasts.length > 0 || episodes.length > 0 || local.length > 0) && (
+      {hasQueryText && hasVisibleResults && (
         <div
           className={cn('space-y-12 transition-opacity duration-300', isLoading && 'opacity-60')}
         >
           {/* Revalidation Indicator */}
-          {isLoading && (
+          {overallState === 'refreshing' && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground animate-pulse mb-6">
               <LoadingSpinner size="sm" />
               <span>{t('loading')}</span>
@@ -164,15 +196,15 @@ export default function SearchPage() {
                 {podcasts.map((podcast) => {
                   const showRoute = buildPodcastShowRoute({
                     country: globalCountry,
-                    podcastId: String(podcast.podcastItunesId),
+                    podcastId: podcast.podcastItunesId,
                   })
                   return (
                     <PodcastCard
                       key={podcast.podcastItunesId}
-                      id={String(podcast.podcastItunesId)}
-                      title={podcast.title || ''}
-                      subtitle={podcast.author || ''}
-                      artworkUrl={podcast.artwork || ''}
+                      id={podcast.podcastItunesId}
+                      title={podcast.title}
+                      subtitle={podcast.author}
+                      artworkUrl={podcast.artwork}
                       onClick={() => {
                         if (showRoute) {
                           void navigate(showRoute)
@@ -195,11 +227,11 @@ export default function SearchPage() {
               <div className="space-y-0">
                 {episodes.map((episode) => (
                   <SearchEpisodeItem
-                    key={episode.episodeUrl}
+                    key={`${episode.podcastItunesId}:${episode.guid}`}
                     episode={episode}
-                    onPlay={() => playSearchEpisode(episode, globalCountry ?? undefined)}
+                    onPlay={() => playSearchEpisode(episode, globalCountry)}
                     onPlayWithoutTranscript={() =>
-                      playSearchEpisode(episode, globalCountry ?? undefined, {
+                      playSearchEpisode(episode, globalCountry, {
                         mode: PLAYBACK_REQUEST_MODE.STREAM_WITHOUT_TRANSCRIPT,
                       })
                     }

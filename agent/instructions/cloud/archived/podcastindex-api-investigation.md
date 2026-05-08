@@ -21,16 +21,16 @@ Practical implication:
 - `episodes/byitunesid` is the only PI episode-history endpoint Readio can use immediately without an additional identity-resolution phase.
 
 ### 2. What Readio must not do
-Readio must **not** use the current RSS `feedUrl` as the PodcastIndex history lookup key for truncated-feed repair.
+Readio must **not** use the current RSS feed transport field as the PodcastIndex history lookup key for truncated-feed repair.
 
 This is not a theoretical concern. Real feeds have already shown:
-- the current RSS `feedUrl` can itself be the truncated identity
+- the current RSS feed transport field can itself be the truncated identity
 - `episodes/byfeedurl` can therefore return empty or incomplete history
 - PodcastIndex may still contain the complete catalog under another canonical feed record
 
 Practical implication:
 - for truncated-feed repair, `episodes/byfeedurl` is the wrong phase-1 strategy
-- current RSS `feedUrl` should not be treated as the authoritative PI history key
+- current RSS feed transport field should not be treated as the authoritative PI history key
 
 ### 3. Recommended Phase 1 decision for Readio
 For the supplementary hydration path introduced by the Cloud discovery cutover work:
@@ -45,7 +45,7 @@ In UI consumers, the current practical rule is:
 - fall back to route/show `id` when that route is known to already be the Apple/iTunes podcast id
 
 ### 4. Deferred Phase 2 follow-up
-If `episodes/byitunesid` still proves insufficient for some catalogs, the next step is not to fall back to truncated `feedUrl`.
+If `episodes/byitunesid` still proves insufficient for some catalogs, the next step is not to fall back to truncated feed transport metadata.
 
 The correct follow-up is:
 1. resolve the canonical PI podcast/feed record from a trusted stable identity
@@ -66,11 +66,11 @@ However, the current repository implementation may not yet fully match that reco
 
 Recommended investigation conclusion:
 - for truncated-feed repair, phase 1 should prefer PodcastIndex `episodes/byitunesid`
-- Readio should avoid using the current RSS `feedUrl` as the primary PodcastIndex history key for this repair path
+- Readio should avoid using the current RSS feed transport field as the primary PodcastIndex history key for this repair path
 
 Current repository reality:
 - the active cutover work may still use a narrower `byfeedurl`-style hydration route in the current staged implementation
-- that implementation choice should be treated as a pragmatic intermediate state, not proof that `feedUrl` is the preferred long-term PI history identity
+- that implementation choice should be treated as a pragmatic intermediate state, not proof that feed transport metadata is the preferred long-term PI history identity
 
 Interpretation rule for future workers/reviewers:
 - this document is an investigation and architecture recommendation record
@@ -78,10 +78,10 @@ Interpretation rule for future workers/reviewers:
 - always compare the active implementation/instruction (`Instruction 025` and its staged code) against this document before assuming the recommended identity strategy is already in production
 
 Practical implication:
-- if current code uses `feedUrl` for PodcastIndex supplementary hydration, treat that as an implementation drift or interim compromise unless a newer decision record explicitly supersedes this investigation
+- if current code uses feed transport metadata for PodcastIndex supplementary hydration, treat that as an implementation drift or interim compromise unless a newer decision record explicitly supersedes this investigation
 - the stronger identity recommendation remains:
   1. prefer stable Apple/iTunes podcast identity for phase 1 lookup
-  2. avoid treating the current RSS `feedUrl` as the authoritative PI history key for truncated-feed repair
+  2. avoid treating the current RSS feed transport field as the authoritative PI history key for truncated-feed repair
   3. follow up with canonical PI identity capture (`feedId`, `podcastguid`) before deeper PI migration
 
 ---

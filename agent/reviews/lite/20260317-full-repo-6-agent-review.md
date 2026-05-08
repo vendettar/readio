@@ -116,11 +116,11 @@ Files:
 
 Why it matters:
 
-When a `SearchEpisode` lacks `feedUrl`, the code falls back to `discovery.getPodcast(String(providerPodcastId))` without passing the active country. On non-US catalogs, that can resolve the wrong podcast metadata or fail to resolve a valid result.
+When a `SearchEpisode` lacks legacy feed-owned hints, the code falls back to `discovery.getPodcast(String(providerPodcastId))` without passing the active country. On non-US catalogs, that can resolve the wrong podcast metadata or fail to resolve a valid result.
 
 Missing coverage:
 
-- Regression test for a non-US search result without `feedUrl`
+- Regression test for a non-US search result without legacy feed-owned hints
 
 #### 7. Local session restore drops `localTrackId`
 

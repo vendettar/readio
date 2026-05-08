@@ -93,7 +93,7 @@ It must use:
 ### Forbidden
 
 - do not manually concatenate `/podcast/$country/$id/$episodeKey`
-- do not add query params like `feedUrl`, `audioUrl`, `title`, `source`, `sessionId`, `podcastTitle`, or similar route hints
+- do not add query params like legacy feed-owned hints, `audioUrl`, `title`, `source`, `sessionId`, `podcastTitle`, or similar route hints
 - do not weaken `lint:route-guards`
 - do not use first-hop display-only fields to invent route params
 
@@ -203,8 +203,8 @@ The title resolver must follow this exact flow:
 
 1. validate inputs
 2. fetch canonical podcast detail using existing query helpers
-3. read canonical `feedUrl`
-4. if `feedUrl` is missing, fall back to show page
+3. read canonical podcast metadata only
+4. if canonical metadata is insufficient, fall back to show page
 5. fetch feed pages page-by-page using the existing shared feed query/cache helpers
 6. scan episodes in feed order
 7. collect normalized exact-title matches within the current scanned page
@@ -442,7 +442,7 @@ At minimum, add or update coverage for the following.
 - blank or whitespace-only title falls back without feed fetch
 - podcast detail lookup failure falls back safely
 - feed fetch failure falls back safely
-- missing `feedUrl` falls back safely
+- missing canonical metadata falls back safely
 - invalid/missing `pubDate` does not trigger date cutoff by itself
 - normalized-equivalent titles match
 - duplicate title on a later page may be ignored by design

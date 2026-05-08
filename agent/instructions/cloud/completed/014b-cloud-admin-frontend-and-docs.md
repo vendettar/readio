@@ -1,4 +1,4 @@
-# Instruction 014b — Cloud Admin Frontend + Deployment Docs
+# Instruction 014b — Cloud Admin Frontend + Deployment Docs [COMPLETED]
 
 Execute after 014a is complete and reviewed.
 
@@ -90,3 +90,12 @@ Update zh counterpart.
 4. admin page features
 5. deployment docs updated
 6. verification results
+
+## Completion
+
+- **Completed by**: Worker
+- **Commands**:
+  - `pnpm -C apps/cloud-ui build`
+  - focused frontend checks for token/401/filter behavior
+- **Date**: 2026-04-02
+- **Reviewed by**: Security, Refactor, Reviewer (recorded in 014 phase summary)

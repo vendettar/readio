@@ -370,9 +370,10 @@ func TestASRRelayRouteOwnershipAndContracts(t *testing.T) {
 
 	t.Run("rejects requests from disallowed origin", func(t *testing.T) {
 		relay := newASRRelayService()
-		relay.allowedOrigins = map[string]struct{}{
-			"https://www.readio.top": {},
+		relay.allowedOrigins = []string{
+			"https://www.readio.top",
 		}
+
 
 		rr := httptest.NewRecorder()
 		req := newMultipartASRRelayRequest(t, multipartASRRelayRequestPayload{
@@ -393,9 +394,10 @@ func TestASRRelayRouteOwnershipAndContracts(t *testing.T) {
 
 	t.Run("rejects requests with missing origin", func(t *testing.T) {
 		relay := newASRRelayService()
-		relay.allowedOrigins = map[string]struct{}{
-			"https://www.readio.top": {},
+		relay.allowedOrigins = []string{
+			"https://www.readio.top",
 		}
+
 
 		rr := httptest.NewRecorder()
 		req := newMultipartASRRelayRequest(t, multipartASRRelayRequestPayload{
@@ -416,9 +418,10 @@ func TestASRRelayRouteOwnershipAndContracts(t *testing.T) {
 
 	t.Run("rejects requests with missing relay token when configured", func(t *testing.T) {
 		relay := newASRRelayService()
-		relay.allowedOrigins = map[string]struct{}{
-			"https://www.readio.top": {},
+		relay.allowedOrigins = []string{
+			"https://www.readio.top",
 		}
+
 		relay.relayPublicToken = "relay-secret"
 
 		rr := httptest.NewRecorder()
@@ -440,9 +443,10 @@ func TestASRRelayRouteOwnershipAndContracts(t *testing.T) {
 
 	t.Run("rate limits repeated relay requests from same ip", func(t *testing.T) {
 		relay := newASRRelayService()
-		relay.allowedOrigins = map[string]struct{}{
-			"https://www.readio.top": {},
+		relay.allowedOrigins = []string{
+			"https://www.readio.top",
 		}
+
 		relay.limiter = newRateLimiter(1, time.Minute, func() time.Time { return time.Unix(0, 0) })
 
 		backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -1379,9 +1383,10 @@ func TestASRRelaySameOriginFallback(t *testing.T) {
 
 	t.Run("explicit allowlist still works unchanged", func(t *testing.T) {
 		relay := newASRRelayService()
-		relay.allowedOrigins = map[string]struct{}{
-			"https://www.readio.top": {},
+		relay.allowedOrigins = []string{
+			"https://www.readio.top",
 		}
+
 
 		rr := httptest.NewRecorder()
 		req := newMultipartASRRelayRequest(t, multipartASRRelayRequestPayload{

@@ -89,10 +89,6 @@ vi.mock('../../components/ui/overflow-menu', () => ({
   OverflowMenu: ({ children }: { children: ReactNode }) => <div>{children}</div>,
 }))
 
-vi.mock('../../hooks/useSubscriptionMap', () => ({
-  useSubscriptionMap: () => new Map<string, string>(),
-}))
-
 vi.mock('../../hooks/useEpisodeStatus', () => ({
   useEpisodeStatus: () => ({ playable: true, disabledReason: null }),
 }))
@@ -124,6 +120,17 @@ vi.mock('../../store/playerStore', () => ({
       setPlaybackTrackId: setPlaybackTrackIdMock,
       pause: pauseMock,
     }),
+  isCanonicalRemoteEpisodeMetadata: (metadata: {
+    countryAtSave?: string
+    episodeGuid?: string
+    podcastItunesId?: string
+  }) =>
+    typeof metadata?.countryAtSave === 'string' &&
+    metadata.countryAtSave.trim().length > 0 &&
+    typeof metadata?.episodeGuid === 'string' &&
+    metadata.episodeGuid.trim().length > 0 &&
+    typeof metadata?.podcastItunesId === 'string' &&
+    metadata.podcastItunesId.trim().length > 0,
 }))
 
 vi.mock('../../store/playerSurfaceStore', () => ({
@@ -146,7 +153,7 @@ vi.mock('../../store/historyStore', () => ({
           createdAt: 1,
           lastPlayedAt: 1,
           sizeBytes: 0,
-          duration: 100,
+          durationSeconds: 100,
           audioId: null,
           subtitleId: null,
           hasAudioBlob: false,
@@ -154,9 +161,11 @@ vi.mock('../../store/historyStore', () => ({
           audioFilename: 'audio.mp3',
           subtitleFilename: '',
           audioUrl: 'https://example.com/audio.mp3',
+          artworkUrl: 'https://example.com/art.jpg',
           localTrackId: 'track-1',
-          podcastFeedUrl: 'feed',
-          podcastItunesId: 123,
+          showTitle: 'Podcast',
+          publishedAt: 1700000000000,
+          podcastItunesId: '123',
           countryAtSave: 'us',
           episodeGuid: 'guid-1',
         },

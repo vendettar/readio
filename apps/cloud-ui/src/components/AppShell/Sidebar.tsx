@@ -13,13 +13,12 @@ import {
   X,
 } from 'lucide-react'
 import type { ElementType } from 'react'
-import { useEffect, useRef } from 'react'
+import { lazy, Suspense, useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNetworkStatus } from '../../hooks/useNetworkStatus'
 import { cn } from '../../lib/utils'
 import { usePlayerSurfaceStore } from '../../store/playerSurfaceStore'
 import { useThemeStore } from '../../store/themeStore'
-import { CommandPalette } from '../GlobalSearch'
 import { Button } from '../ui/button'
 import { ComponentErrorBoundary } from '../ui/error-boundary'
 import { Logo } from '../ui/Logo'
@@ -37,6 +36,21 @@ interface SidebarItemProps {
   icon: ElementType
   label: string
   isActive: boolean
+}
+
+const CommandPalette = lazy(async () => {
+  const module = await import('../GlobalSearch')
+  return { default: module.CommandPalette }
+})
+
+function CommandPaletteFallback() {
+  return (
+    <div role="search" className="relative w-full px-4 pb-2">
+      <div className="flex h-10 w-full items-center rounded-md border border-input bg-background px-3 text-sm text-muted-foreground">
+        Search
+      </div>
+    </div>
+  )
 }
 
 function SidebarItem({
@@ -152,7 +166,9 @@ function SidebarInner({ className = '', open = true, onClose, onNavigate }: Side
       </div>
 
       {/* Global Search */}
-      <CommandPalette />
+      <Suspense fallback={<CommandPaletteFallback />}>
+        <CommandPalette />
+      </Suspense>
 
       <nav
         className="flex-1 px-4 pt-4 space-y-8 overflow-y-auto custom-scrollbar"

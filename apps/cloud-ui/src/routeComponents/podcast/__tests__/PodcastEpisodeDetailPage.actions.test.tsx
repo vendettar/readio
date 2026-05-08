@@ -1,9 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ExpandableDescriptionProps } from '../../../components/ui/expandable-description'
-import type { FeedEpisode } from '../../../lib/discovery'
-import { makeFeedEpisode, makePodcast } from '../../../lib/discovery/__tests__/fixtures'
-import { normalizeFeedUrl } from '../../../lib/discovery/feedUrl'
+import type { Episode } from '../../../lib/discovery'
+import { makeEpisode, makePodcast } from '../../../lib/discovery/__tests__/fixtures'
 import PodcastEpisodeDetailPage from '../PodcastEpisodeDetailPage'
 
 const addFavoriteMock = vi.fn()
@@ -13,20 +12,18 @@ const episodeDetailDownloadButtonPropsSpy = vi.fn()
 const expandableDescriptionPropsSpy = vi.fn()
 
 let favorited = false
-let resolvedEpisode: FeedEpisode = makeFeedEpisode({
-  episodeGuid: 'ep-1',
+let resolvedEpisode: Episode = makeEpisode({
+  guid: 'ep-1',
   title: 'Episode One',
   audioUrl: 'https://example.com/ep-1.mp3',
-  pubDate: '2024-01-01T00:00:00.000Z',
+  pubDate: '2024-01-01T00:00:00Z',
   duration: 1200,
   description: 'Episode description',
-  descriptionHtml: '<p>Episode description</p>',
 })
 
 const podcast = makePodcast({
   podcastItunesId: 'pod-1',
   title: 'Podcast Show',
-  feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
 })
 
 vi.mock('react-i18next', () => ({
@@ -99,14 +96,13 @@ vi.mock('../../../store/exploreStore', () => ({
 describe('PodcastEpisodeDetailPage action wiring', () => {
   beforeEach(() => {
     favorited = false
-    resolvedEpisode = makeFeedEpisode({
-      episodeGuid: 'ep-1',
+    resolvedEpisode = makeEpisode({
+      guid: 'ep-1',
       title: 'Episode One',
       audioUrl: 'https://example.com/ep-1.mp3',
-      pubDate: '2024-01-01T00:00:00.000Z',
+      pubDate: '2024-01-01T00:00:00Z',
       duration: 1200,
       description: 'Episode description',
-      descriptionHtml: '<p>Episode description</p>',
     })
     addFavoriteMock.mockReset()
     removeFavoriteMock.mockReset()
@@ -123,6 +119,25 @@ describe('PodcastEpisodeDetailPage action wiring', () => {
     fireEvent.click(favoriteButton)
 
     expect(addFavoriteMock).toHaveBeenCalledTimes(1)
+    expect(addFavoriteMock).toHaveBeenCalledWith(
+      {
+        podcastItunesId: 'pod-1',
+        title: 'Podcast Show',
+        artwork: podcast.artwork,
+      },
+      {
+        episodeGuid: 'ep-1',
+        title: 'Episode One',
+        audioUrl: 'https://example.com/ep-1.mp3',
+        description: 'Episode description',
+        artworkUrl: resolvedEpisode.artworkUrl,
+        duration: 1200,
+        pubDate: '2024-01-01T00:00:00Z',
+        transcriptUrl: undefined,
+      },
+      undefined,
+      'us'
+    )
     expect(removeFavoriteMock).not.toHaveBeenCalled()
   })
 
@@ -147,13 +162,12 @@ describe('PodcastEpisodeDetailPage action wiring', () => {
   })
 
   it('renders plain-text episode descriptions in plain mode', () => {
-    resolvedEpisode = makeFeedEpisode({
-      episodeGuid: 'ep-plain',
+    resolvedEpisode = makeEpisode({
+      guid: 'ep-plain',
       title: 'Plain Episode',
       audioUrl: 'https://example.com/plain.mp3',
-      pubDate: '2024-01-02T00:00:00.000Z',
+      pubDate: '2024-01-02T00:00:00Z',
       description: 'Line one\nLine two',
-      descriptionHtml: undefined,
     })
 
     render(<PodcastEpisodeDetailPage />)
@@ -166,23 +180,35 @@ describe('PodcastEpisodeDetailPage action wiring', () => {
     )
   })
 
-  it('renders HTML episode descriptions in html mode when descriptionHtml exists', () => {
-    resolvedEpisode = makeFeedEpisode({
-      episodeGuid: 'ep-html',
-      title: 'HTML Episode',
-      audioUrl: 'https://example.com/html.mp3',
-      pubDate: '2024-01-03T00:00:00.000Z',
-      description: 'Plain fallback',
-      descriptionHtml: '<p><strong>Rich</strong> description</p>',
+  it('hides external actions when PI links resolve to local/private hosts', () => {
+    resolvedEpisode = makeEpisode({
+      guid: 'ep-private',
+      title: 'Private Episode',
+      audioUrl: 'https://example.com/private.mp3',
+      pubDate: '2024-01-02T00:00:00Z',
+      description: 'Private links',
+      transcriptUrl: 'https://localhost:3000/transcript.vtt',
+      link: 'http://127.0.0.1:8080/admin',
     })
 
     render(<PodcastEpisodeDetailPage />)
 
-    expect(expandableDescriptionPropsSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        content: '<p><strong>Rich</strong> description</p>',
-        mode: 'html',
-      })
-    )
+    expect(screen.queryByRole('button', { name: 'viewTranscript' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'episodeWebpage' })).toBeNull()
+  })
+
+  it('renders zero-valued season and episode ordinals when the canonical payload includes them', () => {
+    resolvedEpisode = makeEpisode({
+      guid: 'ep-zero-ordinal',
+      title: 'Zero Ordinal Episode',
+      audioUrl: 'https://example.com/zero.mp3',
+      pubDate: '2024-01-03T00:00:00Z',
+      seasonNumber: 0,
+      episodeNumber: 0,
+    })
+
+    render(<PodcastEpisodeDetailPage />)
+
+    expect(screen.getByText('S0 E0')).toBeTruthy()
   })
 })

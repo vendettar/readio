@@ -14,11 +14,11 @@ import { ExpandableDescription } from '@/components/ui/expandable-description'
 import { useEpisodePlayback } from '@/hooks/useEpisodePlayback'
 import { useEpisodeResolution } from '@/hooks/useEpisodeResolution'
 import { formatDuration, formatRelativeTime } from '@/lib/dateUtils'
+import { buildFavoriteKey } from '@/lib/db/favoriteIdentity'
+import { mapCanonicalEpisodeToFavoriteInputs } from '@/lib/db/favoriteMappers'
 import {
   buildEpisodeCompactKey,
-  getCanonicalEditorPickPodcastID,
   getEditorPickRouteState,
-  getEpisodeGuid,
 } from '@/lib/discovery/editorPicks'
 import { logError } from '@/lib/logger'
 import { openExternal } from '@/lib/openExternal'
@@ -27,9 +27,29 @@ import {
   buildPodcastShowRoute,
   normalizeCountryParam,
 } from '@/lib/routes/podcastRoutes'
+import { getValidExternalHttpUrl } from '@/lib/urlSafety'
 import { cn } from '@/lib/utils'
 import { useExploreStore } from '@/store/exploreStore'
 import { EpisodeDetailDownloadButton } from './EpisodeDetailDownloadButton'
+
+function formatEpisodeOrdinalLabel(
+  seasonNumber: number | undefined,
+  episodeNumber: number | undefined
+): string {
+  const hasSeasonNumber = seasonNumber !== undefined
+  const hasEpisodeNumber = episodeNumber !== undefined
+
+  if (hasSeasonNumber && hasEpisodeNumber) {
+    return `S${seasonNumber} · E${episodeNumber}`
+  }
+  if (hasEpisodeNumber) {
+    return `E${episodeNumber}`
+  }
+  if (hasSeasonNumber) {
+    return `S${seasonNumber}`
+  }
+  return ''
+}
 
 export default function PodcastEpisodeDetailPage() {
   const { t, i18n } = useTranslation()
@@ -40,32 +60,28 @@ export default function PodcastEpisodeDetailPage() {
   const episodeKey = String((params as { episodeKey?: string }).episodeKey ?? '')
   const location = useLocation()
   const navigate = useNavigate()
-  const globalCountry = normalizeCountryParam(useExploreStore((s) => s.country))
   const normalizedRouteCountry = normalizeCountryParam(routeCountry)
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false)
 
   // Resolve podcast and episode metadata using centralized logic
-  const { podcast, episode, isLoading, podcastError, resolutionError } = useEpisodeResolution(
+  const { resolvedContent, isLoading, resolutionError, notFound } = useEpisodeResolution(
     id,
     episodeKey,
-    routeCountry ?? '',
+    routeCountry,
     location.state
   )
   const editorPickState = getEditorPickRouteState(location.state)
   // Rule: content route requires iTunes ID - never fallback to GUID
-  const canonicalPodcastId = (
-    getCanonicalEditorPickPodcastID(podcast) ||
-    podcast?.podcastItunesId ||
-    (podcast?.podcastItunesId ? String(podcast.podcastItunesId) : '') ||
-    editorPickState?.editorPickSnapshot?.podcastItunesId ||
-    id
-  ).trim()
+  const canonicalPodcastId =
+    resolvedContent?.podcast.podcastItunesId ??
+    editorPickState?.editorPickSnapshot?.podcastItunesId ??
+    id.trim()
 
   // Canonical key enforcement: redirect to canonical URL if key or podcast ID doesn't match
   useEffect(() => {
-    if (!episode || isLoading) return
-    const episodeGuid = getEpisodeGuid(episode)
-    if (!episodeGuid) return
+    if (!resolvedContent || isLoading) return
+    const { episode } = resolvedContent
+    const episodeGuid = episode.guid
 
     const canonicalKey = buildEpisodeCompactKey(episodeGuid)
     if (!canonicalKey) return
@@ -83,28 +99,39 @@ export default function PodcastEpisodeDetailPage() {
         })
       }
     }
-  }, [canonicalPodcastId, episode, episodeKey, routeCountry, id, isLoading, navigate])
+  }, [canonicalPodcastId, resolvedContent, episodeKey, routeCountry, id, isLoading, navigate])
 
   // Favorite state - use atomic selectors
   const addFavorite = useExploreStore((s) => s.addFavorite)
   const removeFavorite = useExploreStore((s) => s.removeFavorite)
   const favorited = useExploreStore((s) =>
-    podcast && episode ? s.isFavorited(podcast.feedUrl || '', episode.audioUrl || '') : false
+    resolvedContent
+      ? s.isFavorited(resolvedContent.podcast.podcastItunesId, resolvedContent.episode.guid)
+      : false
   )
 
   const { playEpisode } = useEpisodePlayback()
 
   const handlePlayEpisode = () => {
-    if (!podcast || !episode) return
-    playEpisode(episode, podcast, normalizedRouteCountry || undefined)
+    const podcast = resolvedContent?.podcast
+    const episode = resolvedContent?.episode
+    if (!podcast || !episode || !normalizedRouteCountry) return
+    playEpisode(episode, podcast, normalizedRouteCountry)
   }
 
   const handleToggleFavorite = () => {
+    const podcast = resolvedContent?.podcast
+    const episode = resolvedContent?.episode
     if (!podcast || !episode) return
+    const episodeGuid = episode.guid
+    const favoriteKey = buildFavoriteKey(podcast.podcastItunesId, episodeGuid)
     if (favorited) {
-      removeFavorite(`${podcast.feedUrl}::${episode.audioUrl}`)
+      if (!favoriteKey) return
+      removeFavorite(favoriteKey)
     } else {
-      addFavorite(podcast, episode, undefined, normalizedRouteCountry || undefined)
+      const favoriteInputs = mapCanonicalEpisodeToFavoriteInputs(podcast, episode)
+      if (!normalizedRouteCountry) return
+      addFavorite(favoriteInputs.podcast, favoriteInputs.episode, undefined, normalizedRouteCountry)
     }
   }
 
@@ -138,10 +165,10 @@ export default function PodcastEpisodeDetailPage() {
   }
 
   // Error state - podcast not found or critical resolution failure
-  if ((resolutionError || podcastError || !podcast) && !episode) {
+  if (resolutionError || notFound === 'podcast') {
     if (import.meta.env.DEV) {
       logError('[PodcastEpisodeDetailPage] route_error_state', {
-        reason: resolutionError || podcastError ? 'lookup_feed_or_provider_failed' : 'not_found',
+        reason: resolutionError ? 'lookup_pi_episode_list_or_provider_failed' : 'not_found',
         podcastId: id,
         routeCountry: normalizedRouteCountry,
       })
@@ -157,49 +184,8 @@ export default function PodcastEpisodeDetailPage() {
     )
   }
 
-  const recoveryRoute = buildPodcastEpisodeRoute({
-    country: globalCountry,
-    podcastId: canonicalPodcastId,
-    episodeKey: episodeKey,
-  })
-  const isRegionUnavailable =
-    !episode &&
-    !resolutionError &&
-    !podcastError &&
-    Boolean(normalizedRouteCountry && globalCountry && normalizedRouteCountry !== globalCountry)
-
-  if (isRegionUnavailable) {
-    if (import.meta.env.DEV) {
-      logError('[PodcastEpisodeDetailPage] route_region_unavailable', {
-        reason: 'route_country_content_unavailable',
-        podcastId: id,
-        episodeKey,
-        routeCountry: normalizedRouteCountry,
-        globalCountry,
-      })
-    }
-    return (
-      <div className="h-full overflow-y-auto bg-background text-foreground">
-        <div className="px-6 sm:px-12 py-10 sm:py-14 max-w-screen-2xl mx-auto">
-          <div className="text-center py-20 space-y-4">
-            <p className="text-lg text-muted-foreground">{t('regionUnavailableMessage')}</p>
-            {recoveryRoute && (
-              <Button
-                onClick={() => {
-                  void navigate(recoveryRoute)
-                }}
-              >
-                {t('regionUnavailableCta')}
-              </Button>
-            )}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   // Error state - episode not found
-  if (!episode) {
+  if (notFound === 'episode' || !resolvedContent) {
     return (
       <div className="h-full overflow-y-auto bg-background text-foreground">
         <div className="px-6 sm:px-12 py-10 sm:py-14 max-w-screen-2xl mx-auto">
@@ -211,26 +197,20 @@ export default function PodcastEpisodeDetailPage() {
     )
   }
 
-  // Artwork selection (handled by InteractiveArtwork, but we prep URLs here)
-  const primaryArtwork = episode.artworkUrl || podcast?.artwork
-  const fallbackArtwork = podcast?.artwork
+  const { podcast, episode } = resolvedContent
 
-  // Description handling - preserve plain-text formatting when HTML is unavailable
-  const contentSource = episode.descriptionHtml || episode.description || ''
-  const contentMode = episode.descriptionHtml ? 'html' : 'plain'
+  // Artwork selection (handled by InteractiveArtwork, but we prep URLs here)
+  const primaryArtwork = episode.artworkUrl
+  const fallbackArtwork = podcast.artwork
+
+  const contentSource = episode.description
+  const transcriptExternalUrl = getValidExternalHttpUrl(episode.transcriptUrl)
+  const episodeExternalUrl = getValidExternalHttpUrl(episode.link)
 
   // Format metadata
   const relativeTime = formatRelativeTime(episode.pubDate, language)
   const duration = formatDuration(episode.duration, t)
-
-  let episodeLabel = ''
-  if (episode.seasonNumber && episode.episodeNumber) {
-    episodeLabel = `S${episode.seasonNumber} · E${episode.episodeNumber}`
-  } else if (episode.episodeNumber) {
-    episodeLabel = `E${episode.episodeNumber}`
-  } else if (episode.seasonNumber) {
-    episodeLabel = `S${episode.seasonNumber}`
-  }
+  const episodeLabel = formatEpisodeOrdinalLabel(episode.seasonNumber, episode.episodeNumber)
   const showRoute = buildPodcastShowRoute({
     country: routeCountry,
     podcastId: canonicalPodcastId,
@@ -254,7 +234,7 @@ export default function PodcastEpisodeDetailPage() {
               fallbackSrc={fallbackArtwork}
               size="original"
               className="w-full aspect-square rounded-2xl shadow-lg"
-              layoutId={`artwork-episode-${episode.episodeGuid}`}
+              layoutId={`artwork-episode-${episode.guid}`}
             />
           </div>
 
@@ -323,7 +303,7 @@ export default function PodcastEpisodeDetailPage() {
               {/* Line 3: Podcast Show Name */}
               <div className="flex items-center gap-2">
                 <InteractiveTitle
-                  title={podcast?.title || ''}
+                  title={podcast.title}
                   to={showRoute?.to}
                   params={showRoute?.params}
                   className="text-base font-bold text-primary"
@@ -342,20 +322,17 @@ export default function PodcastEpisodeDetailPage() {
                 {t('btnPlayOnly')}
               </Button>
 
-              {episode.audioUrl ? (
+              {episode.audioUrl && normalizedRouteCountry ? (
                 <EpisodeDetailDownloadButton
                   episodeTitle={episode.title}
                   episodeDescription={episode.description}
-                  showTitle={podcast?.title || ''}
-                  feedUrl={podcast?.feedUrl}
+                  showTitle={podcast.title}
                   audioUrl={episode.audioUrl}
                   transcriptUrl={episode.transcriptUrl}
                   artworkUrl={primaryArtwork}
-                  countryAtSave={normalizedRouteCountry || undefined}
-                  podcastItunesId={
-                    podcast?.podcastItunesId ? String(podcast.podcastItunesId) : undefined
-                  }
-                  episodeGuid={episode.episodeGuid}
+                  countryAtSave={normalizedRouteCountry}
+                  podcastItunesId={podcast.podcastItunesId}
+                  episodeGuid={episode.guid}
                   durationSeconds={episode.duration}
                   className="rounded-full flex-shrink-0"
                 />
@@ -376,21 +353,19 @@ export default function PodcastEpisodeDetailPage() {
         </div>
 
         {/* Podcasting 2.0 Features */}
-        {episode.transcriptUrl && (
+        {transcriptExternalUrl && (
           <div className="flex flex-wrap gap-3 mb-8">
-            {episode.transcriptUrl && (
-              <Button
-                variant="secondary"
-                size="sm"
-                className="rounded-md h-9 px-4 text-sm"
-                onClick={() => {
-                  if (episode.transcriptUrl) openExternal(episode.transcriptUrl)
-                }}
-              >
-                <FileText size={14} className="me-1.5" />
-                {t('viewTranscript')}
-              </Button>
-            )}
+            <Button
+              variant="secondary"
+              size="sm"
+              className="rounded-md h-9 px-4 text-sm"
+              onClick={() => {
+                openExternal(transcriptExternalUrl)
+              }}
+            >
+              <FileText size={14} className="me-1.5" />
+              {t('viewTranscript')}
+            </Button>
           </div>
         )}
 
@@ -401,7 +376,7 @@ export default function PodcastEpisodeDetailPage() {
             <div className="max-w-xl">
               <ExpandableDescription
                 content={contentSource}
-                mode={contentMode}
+                mode="plain"
                 isExpandable={false}
                 collapsedLines={4}
                 expanded={isDescriptionExpanded}
@@ -414,7 +389,7 @@ export default function PodcastEpisodeDetailPage() {
         )}
 
         {/* Episode Webpage Link Section */}
-        {episode.link && (
+        {episodeExternalUrl && (
           <section className="w-full mt-8">
             <div className="h-px bg-border mb-6 me-4" />
             <div className="max-w-xl group/link">
@@ -422,8 +397,7 @@ export default function PodcastEpisodeDetailPage() {
                 variant="link"
                 className="text-primary p-0 h-auto font-bold flex items-center gap-2 hover:no-underline"
                 onClick={() => {
-                  const episodeLink = episode.link
-                  if (episodeLink) openExternal(episodeLink)
+                  openExternal(episodeExternalUrl)
                 }}
               >
                 <span className="text-sm group-hover/link:underline">{t('episodeWebpage')}</span>

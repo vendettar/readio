@@ -25,6 +25,11 @@ const baseSession: PlaybackSession = {
   progress: 10,
   audioFilename: 'episode.mp3',
   subtitleFilename: '',
+  audioUrl: 'https://example.com/episode-one.mp3',
+  artworkUrl: 'https://example.com/episode-one.jpg',
+  showTitle: 'Podcast One',
+  episodeGuid: 'episode-guid-1',
+  podcastItunesId: 'podcast-1',
   countryAtSave: 'us',
 }
 

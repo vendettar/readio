@@ -12,7 +12,7 @@ Harden the Vault/OPML import process by performing business-level validation aft
   - **Dangling References**: Ensure `local_subtitles` correctly point to existing `local_tracks`.
   - **UUID Uniqueness**: Ensure no duplicate IDs exist in the incoming dataset.
   - **Timestamp Sanity**: Ensure `addedAt` and `lastPlayedAt` are valid numbers/dates and not in the future.
-  - **De-duplication**: Ensure no duplicate `feedUrl` or `key` entries remain after import.
+  - **De-duplication**: Ensure no duplicate legacy feed field values or `key` entries remain after import.
   - **Cross-Table**: Ensure `playback_sessions.localTrackId`, `audioId`, and `subtitleId` references exist.
 
 ## 2. Import Workflow Integration

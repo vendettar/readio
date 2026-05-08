@@ -7,10 +7,20 @@ const navigateMock = vi.hoisted(() => vi.fn())
 const executeLocalSearchActionMock = vi.hoisted(() => vi.fn())
 const playSearchEpisodeMock = vi.hoisted(() => vi.fn())
 const mockSearchState = vi.hoisted(() => ({ q: 'search-term' }))
+const makeSection = vi.hoisted(
+  () =>
+    <T,>(
+      items: T[] = [],
+      status: 'idle' | 'loading' | 'ready' | 'unavailable' = 'ready'
+    ) => ({
+      items,
+      status,
+    })
+)
 const mockGlobalSearchState = vi.hoisted(() => ({
-  podcasts: [] as Record<string, unknown>[],
-  episodes: [] as Record<string, unknown>[],
-  local: [] as Record<string, unknown>[],
+  podcastSection: makeSection([] as Record<string, unknown>[]),
+  episodeSection: makeSection([] as Record<string, unknown>[]),
+  localSection: makeSection([] as Record<string, unknown>[]),
   isLoading: false,
   isEmpty: false,
 }))
@@ -116,9 +126,9 @@ describe('SearchPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockSearchState.q = 'search-term'
-    mockGlobalSearchState.podcasts = []
-    mockGlobalSearchState.episodes = []
-    mockGlobalSearchState.local = []
+    mockGlobalSearchState.podcastSection = makeSection([])
+    mockGlobalSearchState.episodeSection = makeSection([])
+    mockGlobalSearchState.localSection = makeSection([])
     mockGlobalSearchState.isLoading = false
     mockGlobalSearchState.isEmpty = false
   })
@@ -127,9 +137,11 @@ describe('SearchPage', () => {
     const episode = {
       podcastItunesId: '7',
       title: 'Episode Name',
-      episodeUrl: 'https://example.com/episode-url',
+      audioUrl: 'https://example.com/episode-url',
     }
-    mockGlobalSearchState.episodes = [episode as (typeof mockGlobalSearchState.episodes)[number]]
+    mockGlobalSearchState.episodeSection = makeSection([
+      episode as (typeof mockGlobalSearchState.episodeSection.items)[number],
+    ])
 
     render(<SearchPage />)
 
@@ -138,5 +150,14 @@ describe('SearchPage', () => {
     expect(playSearchEpisodeMock).toHaveBeenCalledWith(episode, 'us')
     expect(navigateMock).not.toHaveBeenCalled()
     expect(executeLocalSearchActionMock).not.toHaveBeenCalled()
+  })
+
+  it('shows offline unavailable state for active query when remote search is unavailable', () => {
+    mockGlobalSearchState.podcastSection = makeSection([], 'unavailable')
+    mockGlobalSearchState.episodeSection = makeSection([], 'unavailable')
+
+    render(<SearchPage />)
+
+    expect(screen.getByText('offline.badge')).toBeDefined()
   })
 })

@@ -1,14 +1,20 @@
 import type { TFunction } from 'i18next'
 import { formatDateStandard, formatDuration, formatRelativeTime } from '@/lib/dateUtils'
-import type { Favorite, PlaybackSession } from '@/lib/db/types'
-import type { EditorPickPodcast, FeedEpisode, Podcast, SearchEpisode } from '@/lib/discovery'
+import {
+  type Favorite,
+  isNavigableExplorePlaybackSession,
+  type PlaybackSession,
+} from '@/lib/db/types'
+import type { EditorPickPodcast, Episode, Podcast, SearchEpisode } from '@/lib/discovery'
 import {
   buildEpisodeCompactKey,
-  buildSearchEpisodeRouteState,
   type EditorPickRouteState,
   getCanonicalEditorPickPodcastID,
-  getEpisodeGuid,
 } from '@/lib/discovery/editorPicks'
+import {
+  getCanonicalSearchEpisodeIdentity,
+  toCanonicalSearchEpisodeRecord,
+} from '@/lib/discovery/searchEpisodeContract'
 import { stripHtml } from '@/lib/htmlUtils'
 import { buildSearchEpisodeRoute } from '@/lib/routes/episodeResolver'
 import {
@@ -37,39 +43,37 @@ export interface EpisodeRowModel {
   playAriaLabel: string
   downloadArgs?: {
     episodeTitle: string
-    podcastTitle: string
-    feedUrl?: string
+    episodeDescription?: string
+    showTitle: string
     audioUrl: string
     transcriptUrl?: string
-    artworkUrl?: string
-    countryAtSave?: string
-    podcastItunesId?: string
-    episodeGuid?: string
+    artworkUrl: string
+    countryAtSave: string
+    podcastItunesId: string
+    episodeGuid: string
     durationSeconds?: number
   }
 }
 
 interface EpisodeModelArgs extends ModelContext {
-  episode: FeedEpisode
+  episode: Episode
   podcast: Podcast
   editorPickSnapshot?: EditorPickPodcast
-  routeCountry: string | null | undefined
+  routeCountry?: string
   podcastId?: string
 }
 
 interface SearchEpisodeModelArgs extends ModelContext {
   episode: SearchEpisode
-  routeCountry: string | null | undefined
+  routeCountry?: string
 }
 
 interface FavoriteModelArgs extends ModelContext {
   favorite: Favorite
-  subscriptionMap: Map<string, string>
 }
 
 interface PlaybackSessionModelArgs extends ModelContext {
   session: PlaybackSession
-  subscriptionMap: Map<string, string>
   artworkBlob?: Blob | null
 }
 
@@ -90,18 +94,20 @@ function joinSubtitle(primary?: string, secondary?: string): string | undefined 
 }
 
 function buildEpisodeRoute(
-  country: string | null | undefined,
-  podcastId: string | null | undefined,
-  episodeGuid: string | null | undefined,
+  country: string | undefined,
+  podcastId: string,
+  episodeGuid: string,
   state?: EditorPickRouteState
 ): EpisodeRowModelRoute | null {
-  if (!podcastId || !episodeGuid) return null
-  const episodeKey = buildEpisodeCompactKey(episodeGuid)
+  const normalizedPodcastId = podcastId.trim()
+  const normalizedEpisodeGuid = episodeGuid.trim()
+  if (!normalizedPodcastId || !normalizedEpisodeGuid) return null
+  const episodeKey = buildEpisodeCompactKey(normalizedEpisodeGuid)
   if (!episodeKey) return null
 
   const route = buildPodcastEpisodeRoute({
-    country: country ?? undefined,
-    podcastId,
+    country,
+    podcastId: normalizedPodcastId,
     episodeKey,
   })
   if (!route) return null
@@ -121,22 +127,18 @@ export function fromEpisode({
   t,
   podcastId,
 }: EpisodeModelArgs): EpisodeRowModel {
-  const episodeGuid = getEpisodeGuid(episode)
   // Rule: content routes require podcast iTunes ID - fail closed if unavailable, never fallback to GUID
-  const canonicalEditorPickPodcastId = getCanonicalEditorPickPodcastID(podcast)
-
   // Determine podcast ID for route: prefer explicit podcastId, fall back to canonical
-  const routePodcastId =
-    podcastId || (canonicalEditorPickPodcastId ? canonicalEditorPickPodcastId : undefined)
+  const routePodcastId = podcastId ?? getCanonicalEditorPickPodcastID(podcast)
 
   // Fail closed: only build route if we have both episode ID and podcast ID
   // When editorPickSnapshot exists, pass it in route state
   const route =
-    episodeGuid && routePodcastId
+    episode.guid && routePodcastId
       ? buildEpisodeRoute(
           routeCountry,
           routePodcastId,
-          episodeGuid,
+          episode.guid,
           editorPickSnapshot ? { editorPickSnapshot } : undefined
         )
       : null
@@ -147,7 +149,7 @@ export function fromEpisode({
   return {
     title: episode.title,
     subtitle: formatRelativeTime(episode.pubDate, language),
-    description: stripHtml(episode.description || ''),
+    description: stripHtml(episode.description),
     meta: formatDuration(episode.duration, t),
     artworkSrc: artworkUrl,
     artworkFallbackSrc: podcast.artwork,
@@ -155,18 +157,19 @@ export function fromEpisode({
     playIconSize: 16,
     route,
     playAriaLabel: t('ariaPlayEpisode'),
-    downloadArgs: {
-      episodeTitle: episode.title,
-      podcastTitle: podcast.title || '',
-      feedUrl: podcast.feedUrl,
-      audioUrl: episode.audioUrl,
-      transcriptUrl,
-      artworkUrl: artworkUrl || podcast.artwork,
-      countryAtSave: routeCountry || undefined,
-      podcastItunesId: podcast.podcastItunesId?.toString(),
-      episodeGuid: getEpisodeGuid(episode),
-      durationSeconds: episode.duration,
-    },
+    downloadArgs: routeCountry
+      ? {
+          episodeTitle: episode.title,
+          showTitle: podcast.title,
+          audioUrl: episode.audioUrl,
+          transcriptUrl,
+          artworkUrl,
+          countryAtSave: routeCountry,
+          podcastItunesId: podcast.podcastItunesId,
+          episodeGuid: episode.guid,
+          durationSeconds: episode.duration,
+        }
+      : undefined,
   }
 }
 
@@ -176,55 +179,51 @@ export function fromSearchEpisode({
   language,
   t,
 }: SearchEpisodeModelArgs): EpisodeRowModel {
-  const podcastId = episode.podcastItunesId?.toString()
-  const episodeGuid = episode.episodeGuid
-  const routeObject = buildSearchEpisodeRoute(podcastId, episodeGuid, routeCountry)
-  const route: EpisodeRowModelRoute | null = routeObject
-    ? {
-        ...routeObject,
-        state: buildSearchEpisodeRouteState(episode),
-      }
-    : null
-  const artwork = episode.artwork
+  const canonicalEpisode = toCanonicalSearchEpisodeRecord(episode)
+  const identity = getCanonicalSearchEpisodeIdentity(episode)
+  const routeObject = buildSearchEpisodeRoute(episode, routeCountry)
+  const route: EpisodeRowModelRoute | null = routeObject ? { ...routeObject } : null
+  const artwork = canonicalEpisode.artworkUrl
+  const subtitle = joinSubtitle(
+    formatRelativeTime(canonicalEpisode.pubDate, language),
+    canonicalEpisode.showTitle
+  )
+  const durationSeconds = canonicalEpisode.durationSeconds
 
   return {
-    title: episode.title || '',
-    subtitle: joinSubtitle(
-      formatRelativeTime(episode.releaseDate || '', language),
-      episode.showTitle || ''
-    ),
-    description: stripHtml(episode.shortDescription || ''),
-    meta: formatDuration((episode.trackTimeMillis || 0) / 1000, t),
+    title: canonicalEpisode.title,
+    subtitle,
+    description: stripHtml(canonicalEpisode.description),
+    meta: durationSeconds !== undefined ? formatDuration(durationSeconds, t) : undefined,
     artworkSrc: artwork,
     artworkFallbackSrc: artwork,
     artworkSize: 'xl',
     playIconSize: 20,
-    route: route ?? null,
+    route,
     playAriaLabel: t('ariaPlayEpisode'),
-    downloadArgs: episode.episodeUrl
-      ? {
-          episodeTitle: episode.title || '',
-          podcastTitle: episode.showTitle || '',
-          audioUrl: episode.episodeUrl,
-          artworkUrl: artwork,
-          countryAtSave: routeCountry || undefined,
-          podcastItunesId: podcastId,
-          episodeGuid: episode.episodeGuid,
-          durationSeconds: (episode.trackTimeMillis || 0) / 1000,
-        }
-      : undefined,
+    downloadArgs:
+      routeCountry
+        ? {
+            episodeTitle: canonicalEpisode.title,
+            showTitle: canonicalEpisode.showTitle,
+            audioUrl: canonicalEpisode.audioUrl,
+            artworkUrl: artwork,
+            countryAtSave: routeCountry,
+            podcastItunesId: identity.podcastItunesId,
+            episodeGuid: identity.episodeGuid,
+            durationSeconds,
+          }
+        : undefined,
   }
 }
 
-export function fromFavorite({
-  favorite,
-  subscriptionMap,
-  language,
-  t,
-}: FavoriteModelArgs): EpisodeRowModel {
-  const podcastId = favorite.podcastItunesId || subscriptionMap.get(favorite.feedUrl)
-  const route = buildEpisodeRoute(favorite.countryAtSave, podcastId, favorite.episodeGuid)
-  const artworkSrc = favorite.episodeArtworkUrl || favorite.artworkUrl
+export function fromFavorite({ favorite, language, t }: FavoriteModelArgs): EpisodeRowModel {
+  const route = buildEpisodeRoute(
+    favorite.countryAtSave,
+    favorite.podcastItunesId,
+    favorite.episodeGuid
+  )
+  const artworkSrc = favorite.episodeArtworkUrl
 
   return {
     title: favorite.episodeTitle,
@@ -232,7 +231,7 @@ export function fromFavorite({
       favorite.podcastTitle,
       favorite.pubDate ? formatDateStandard(favorite.pubDate, language) : ''
     ),
-    description: stripHtml(favorite.description || ''),
+    description: stripHtml(favorite.description),
     meta: favorite.durationSeconds ? formatDuration(favorite.durationSeconds, t) : undefined,
     artworkSrc,
     artworkFallbackSrc: favorite.artworkUrl,
@@ -243,12 +242,11 @@ export function fromFavorite({
     downloadArgs: favorite.audioUrl
       ? {
           episodeTitle: favorite.episodeTitle,
-          podcastTitle: favorite.podcastTitle || '',
-          feedUrl: favorite.feedUrl,
+          showTitle: favorite.podcastTitle,
           audioUrl: favorite.audioUrl,
           transcriptUrl: favorite.transcriptUrl,
-          artworkUrl: artworkSrc || favorite.artworkUrl,
-          countryAtSave: favorite.countryAtSave || undefined,
+          artworkUrl: artworkSrc,
+          countryAtSave: favorite.countryAtSave,
           podcastItunesId: favorite.podcastItunesId,
           episodeGuid: favorite.episodeGuid,
           durationSeconds: favorite.durationSeconds, // Populated duration
@@ -259,24 +257,19 @@ export function fromFavorite({
 
 export function fromPlaybackSession({
   session,
-  subscriptionMap,
   artworkBlob,
   language,
   t,
 }: PlaybackSessionModelArgs): EpisodeRowModel {
-  const podcastId =
-    session.source === 'explore'
-      ? session.podcastItunesId || subscriptionMap.get(session.podcastFeedUrl || '')
-      : undefined
-  const route =
-    session.source === 'explore' && session.countryAtSave && podcastId && session.episodeGuid
-      ? buildEpisodeRoute(session.countryAtSave, podcastId, session.episodeGuid)
-      : null
+  const isCanonicalExploreSession = isNavigableExplorePlaybackSession(session)
+  const route = isCanonicalExploreSession
+    ? buildEpisodeRoute(session.countryAtSave, session.podcastItunesId, session.episodeGuid)
+    : null
 
   return {
     title: session.title,
     subtitle: joinSubtitle(
-      session.podcastTitle,
+      session.showTitle,
       session.publishedAt ? formatDateStandard(session.publishedAt, language) : ''
     ),
     description: stripHtml(session.description || ''),
@@ -288,20 +281,20 @@ export function fromPlaybackSession({
     playIconSize: 14,
     route,
     playAriaLabel: t('btnPlayOnly'),
-    downloadArgs: session.audioUrl
-      ? {
-          episodeTitle: session.title,
-          podcastTitle: session.podcastTitle || '',
-          feedUrl: session.source === 'explore' ? session.podcastFeedUrl : undefined,
-          audioUrl: session.audioUrl,
-          transcriptUrl: session.transcriptUrl,
-          artworkUrl: session.artworkUrl,
-          countryAtSave: session.source === 'explore' ? session.countryAtSave : undefined,
-          podcastItunesId: session.source === 'explore' ? session.podcastItunesId : undefined,
-          episodeGuid: session.source === 'explore' ? session.episodeGuid : undefined,
-          durationSeconds: session.durationSeconds, // Populated duration
-        }
-      : undefined,
+    downloadArgs:
+      !session.audioUrl || !isCanonicalExploreSession
+        ? undefined
+        : {
+            episodeTitle: session.title,
+            showTitle: session.showTitle,
+            audioUrl: session.audioUrl,
+            transcriptUrl: session.transcriptUrl,
+            artworkUrl: session.artworkUrl,
+            countryAtSave: session.countryAtSave,
+            podcastItunesId: session.podcastItunesId,
+            episodeGuid: session.episodeGuid,
+            durationSeconds: session.durationSeconds, // Populated duration
+          },
   }
 }
 
@@ -325,11 +318,14 @@ export function fromPodcastDownload({
   language,
   t,
 }: PodcastDownloadModelArgs): EpisodeRowModel {
-  const route = buildEpisodeRoute(
-    download.countryAtSave,
-    download.sourcePodcastItunesId,
-    download.sourceEpisodeGuid
-  )
+  const route =
+    download.sourcePodcastItunesId && download.sourceEpisodeGuid
+      ? buildEpisodeRoute(
+          download.countryAtSave,
+          download.sourcePodcastItunesId,
+          download.sourceEpisodeGuid
+        )
+      : null
 
   return {
     title: download.sourceEpisodeTitle || download.name,

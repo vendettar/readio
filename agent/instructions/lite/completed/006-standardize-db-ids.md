@@ -11,7 +11,7 @@ Convert all auto-incrementing integer IDs and natural string IDs to UUID strings
   - `folders`: `++id` -> `id` (UUID string)
   - `local_tracks`: `++id` -> `id` (UUID string)
   - `local_subtitles`: `++id` -> `id` (UUID string)
-  - `subscriptions`: `feedUrl` -> `id` (UUID string, with `&feedUrl` as a unique index for de-duplication).
+  - `subscriptions`: legacy feed field -> `id` (UUID string, with a unique legacy-feed index for de-duplication).
   - `favorites`: `key` -> `id` (UUID string, with `&key` as unique index).
 - **Interfaces**: All `id` fields are now `string`.
 
@@ -21,7 +21,7 @@ Convert all auto-incrementing integer IDs and natural string IDs to UUID strings
 | `folders` | `id` (UUID) | `createdAt` | Identity = `id` |
 | `local_tracks` | `id` (UUID) | `folderId`, `createdAt` | Identity = `id` |
 | `local_subtitles` | `id` (UUID) | `trackId` | Identity = `id` |
-| `subscriptions` | `id` (UUID) | `&feedUrl` | Identity = `id`, Dedupe = `feedUrl` |
+| `subscriptions` | `id` (UUID) | legacy feed unique index | Identity = `id`, Dedupe = legacy feed field |
 | `favorites` | `id` (UUID) | `&key` | Identity = `id`, Dedupe = `key` |
 
 ## 2. Refactor Store Logic

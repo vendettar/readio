@@ -41,7 +41,7 @@ Close the remaining correctness and robustness gaps after Instruction 116 by:
 ## Forbidden Dependencies
 - No hidden fallback to global/default country in content resolution.
 - No branch that shows region-unavailable when upstream fetch has failed.
-- No mixed feed key variants (`raw feedUrl` + `normalized feedUrl`) in parallel.
+- No mixed feed key variants (`raw legacy feed field` + normalized legacy feed field) in parallel.
 - No reintroduction of correctness-critical URL search hints.
 
 ## Implementation Steps

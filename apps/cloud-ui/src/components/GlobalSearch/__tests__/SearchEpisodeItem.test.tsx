@@ -1,9 +1,8 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
 import { createQueryClientWrapper } from '../../../__tests__/queryClient'
-import type { Podcast, SearchEpisode } from '../../../lib/discovery'
+import type { Podcast } from '../../../lib/discovery'
 import { makePodcast, makeSearchEpisode } from '../../../lib/discovery/__tests__/fixtures'
 import { ensurePodcastDetail } from '../../../lib/discovery/queryCache'
 import { useEpisodeRowFavoriteAction } from '../../EpisodeRow/useEpisodeRowFavoriteAction'
@@ -36,7 +35,7 @@ vi.mock('../../EpisodeRow/useEpisodeRowFavoriteAction', () => ({
 vi.mock('../../../store/exploreStore', () => ({
   useExploreStore: (selector: (state: unknown) => unknown) =>
     selector({
-      favorites: [],
+      isFavorited: vi.fn(() => false),
       addFavorite: vi.fn(),
       removeFavorite: vi.fn(),
       country: mockCountry,
@@ -77,15 +76,14 @@ describe('SearchEpisodeItem favorite enrichment', () => {
       podcastItunesId: '999',
       title: 'Search Show',
       artwork: 'https://example.com/episode-600.jpg',
-      feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
     })
     vi.mocked(ensurePodcastDetail).mockResolvedValue(lookupPodcast)
 
     const episode = makeSearchEpisode({
       title: 'JP Episode',
       showTitle: 'Search Show',
-      episodeUrl: 'https://example.com/audio.mp3',
-      episodeGuid: 'guid-jp-episode',
+      audioUrl: 'https://example.com/audio.mp3',
+      guid: 'guid-jp-episode',
       podcastItunesId: '999',
       artwork: 'https://example.com/episode-600.jpg',
     })
@@ -97,10 +95,9 @@ describe('SearchEpisodeItem favorite enrichment', () => {
     const buildAddPayload = vi.mocked(useEpisodeRowFavoriteAction).mock.calls[0][0].buildAddPayload
     const payload = await buildAddPayload()
 
-    expect(ensurePodcastDetail).toHaveBeenCalledWith(expect.anything(), '999', 'us')
+    expect(ensurePodcastDetail).toHaveBeenCalledWith(expect.anything(), '999', undefined, 'us')
     expect(payload.podcast).toMatchObject({
       title: 'Search Show',
-      feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
       podcastItunesId: '999',
       artwork: 'https://example.com/episode-600.jpg',
     })
@@ -117,15 +114,14 @@ describe('SearchEpisodeItem favorite enrichment', () => {
       podcastItunesId: '999',
       title: 'Show',
       artwork: 'https://example.com/art-600.jpg',
-      feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
     })
     vi.mocked(ensurePodcastDetail).mockResolvedValue(lookupPodcast)
 
     const episode = makeSearchEpisode({
       title: 'JP Episode',
       showTitle: 'Search Show',
-      episodeUrl: 'https://example.com/audio.mp3',
-      episodeGuid: 'guid-minimal',
+      audioUrl: 'https://example.com/audio.mp3',
+      guid: 'guid-minimal',
       podcastItunesId: '999',
       artwork: 'https://example.com/episode-600.jpg',
     })
@@ -137,20 +133,21 @@ describe('SearchEpisodeItem favorite enrichment', () => {
     const buildAddPayload = vi.mocked(useEpisodeRowFavoriteAction).mock.calls[0][0].buildAddPayload
     const payload = await buildAddPayload()
 
-    expect(ensurePodcastDetail).toHaveBeenCalledWith(expect.anything(), '999', 'jp')
-    expect(payload.podcast.feedUrl).toBe('https://example.com/feed.xml')
+    expect(ensurePodcastDetail).toHaveBeenCalledWith(expect.anything(), '999', undefined, 'jp')
+    expect(payload.podcast.podcastItunesId).toBe('999')
     expect(payload.episode.episodeGuid).toBe('guid-minimal')
     expect(payload.episode.audioUrl).toBe('https://example.com/audio.mp3')
   })
 
-  it('throws error and does not call PI lookup if podcastItunesId is missing', async () => {
+  it('throws when PI metadata lookup returns no canonical podcast', async () => {
+    vi.mocked(ensurePodcastDetail).mockResolvedValue(null)
     const episode = makeSearchEpisode({
       title: 'Minimal',
-      episodeUrl: 'http://cdn/a.mp3',
-      episodeGuid: 'guid-missing-podcast',
+      audioUrl: 'http://cdn/a.mp3',
+      guid: 'guid-missing-pi-podcast',
       showTitle: 'Minimal Show',
       artwork: 'https://example.com/episode-600.jpg',
-      podcastItunesId: '' as SearchEpisode['podcastItunesId'],
+      podcastItunesId: '999',
     })
 
     render(<SearchEpisodeItem episode={episode} onPlay={() => {}} />, {
@@ -159,16 +156,16 @@ describe('SearchEpisodeItem favorite enrichment', () => {
 
     const buildAddPayload = vi.mocked(useEpisodeRowFavoriteAction).mock.calls[0][0].buildAddPayload
 
-    await expect(buildAddPayload()).rejects.toThrow('Missing podcastItunesId for metadata lookup')
-    expect(ensurePodcastDetail).not.toHaveBeenCalled()
+    await expect(buildAddPayload()).rejects.toThrow('Podcast not found')
+    expect(ensurePodcastDetail).toHaveBeenCalledWith(expect.anything(), '999', undefined, 'us')
   })
 
   it('renders play-without-transcript action and triggers callback', () => {
     const onPlayWithoutTranscript = vi.fn()
     const episode = makeSearchEpisode({
       title: 'Episode',
-      episodeUrl: 'https://example.com/audio.mp3',
-      episodeGuid: 'guid-play-without-transcript',
+      audioUrl: 'https://example.com/audio.mp3',
+      guid: 'guid-play-without-transcript',
       showTitle: 'Search Show',
       artwork: 'https://example.com/episode-600.jpg',
       podcastItunesId: '999',

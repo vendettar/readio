@@ -361,7 +361,7 @@ curl "https://itunes.apple.com/lookup?id=917918570&country=us&entity=podcast"
 ### 🎯 Lookup Episode (The "Podcast + Episode" Approach)
 **Note**: The iTunes Lookup API often fails to retrieve a specific episode by its single `trackId` directly. The most reliable method is to lookup the **Podcast ID** and include episodes.
 
-> ⚠️ **Critical Limitation (Tested 2026-01-09)**: The `limit` parameter is **ineffective** for most podcasts. Even with `limit=300`, the Provider API only returns ~25 episodes (matching what the podcast provider puts in their RSS feed). For example, "The Daily" has `trackCount: 2475` but the API only returns 23 episodes. **You cannot retrieve a podcast's full episode archive via this API.**
+> ⚠️ **Critical Limitation (Tested 2026-01-09)**: The `limit` parameter is **ineffective** for most podcasts. Even with `limit=300`, the Provider API only returns ~25 episodes (matching what the podcast provider puts in their RSS feed). For example, "The Daily" has `trackCount: 2475` but the API only returns 23 episodes. **You cannot retrieve a podcast's full episode catalog via this API.**
 
 - **URL Prefix**: `https://itunes.apple.com/lookup`
 - **Params**: `id={PODCAST_ID}`, `entity=podcastEpisode`, `limit=1`

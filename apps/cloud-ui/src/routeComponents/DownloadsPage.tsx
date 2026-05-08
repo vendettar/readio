@@ -2,7 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { Compass, Download } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { DownloadTrackCard } from '../components/Downloads/DownloadTrackCard'
+import { DownloadedTrackItem } from '../components/Downloads/DownloadedTrackItem'
 import { EpisodeListSkeleton } from '../components/EpisodeRow'
 import type { ViewDensity } from '../components/Files/types'
 import { ViewControlsBar } from '../components/Files/ViewControlsBar'
@@ -11,24 +11,16 @@ import { OfflineBanner } from '../components/OfflineBanner'
 import { Button } from '../components/ui/button'
 import { EmptyState } from '../components/ui/empty-state'
 import { HiddenFileInput } from '../components/ui/hidden-file-input'
-import { useNetworkStatus } from '../hooks/useNetworkStatus'
-import type { ASRCue } from '../lib/asr/types'
+import { buildFavoriteKey, buildFavoriteKeyFromFavorite } from '../lib/db/favoriteIdentity'
+import { mapPodcastDownloadToFavoriteInputs } from '../lib/db/favoriteMappers'
 import type { FileSubtitle, PodcastDownload } from '../lib/db/types'
-import { buildEpisodeCompactKey } from '../lib/discovery/editorPicks'
-import { mapTrackToDiscovery } from '../lib/discovery/mappers'
 import { downloadBlob } from '../lib/download'
 import {
   getAllDownloadedTracks,
   removeDownloadedTrack,
   subscribeToDownloads,
 } from '../lib/downloadService'
-import { selectPlaybackSubtitle } from '../lib/downloads/subtitleSelection'
 import { logError, warn as logWarn } from '../lib/logger'
-import { resolvePlaybackSource } from '../lib/player/playbackSource'
-import {
-  canPlayRemoteStreamWithoutTranscript,
-  playStreamWithoutTranscriptWithDeps,
-} from '../lib/player/remotePlayback'
 import {
   RETRANSCRIBE_DOWNLOAD_REASON,
   retranscribeDownloadedTrackWithCurrentSettings,
@@ -38,24 +30,18 @@ import {
   IMPORT_SUBTITLE_REASON,
   subscribeToDownloadSubtitles,
 } from '../lib/repositories/DownloadsRepository'
-import { buildPodcastEpisodeRoute } from '../lib/routes/podcastRoutes'
 import { createSubtitleFileSchema, SUBTITLE_EXTENSIONS } from '../lib/schemas/files'
 import type { SubtitleExportFormat } from '../lib/subtitles'
 import { toast } from '../lib/toast'
 import type { TranslationKey } from '../lib/translations'
 import { useExploreStore } from '../store/exploreStore'
 import { useFilesStore } from '../store/filesStore'
-import { usePlayerStore } from '../store/playerStore'
-import { usePlayerSurfaceStore } from '../store/playerSurfaceStore'
-import { useTranscriptStore } from '../store/transcriptStore'
 
 interface PodcastGroup {
   podcastTitle: string
   tracks: PodcastDownload[]
   totalBytes: number
 }
-
-const COMPLETED_RESTORE_THRESHOLD_SECONDS = 2
 
 function readFileAsText(file: File): Promise<string> {
   if (typeof file.text === 'function') {
@@ -74,7 +60,7 @@ function groupByPodcast(tracks: PodcastDownload[]): PodcastGroup[] {
   const groups = new Map<string, PodcastDownload[]>()
 
   for (const track of tracks) {
-    const key = track.sourcePodcastTitle || 'Unknown Podcast'
+    const key = track.sourcePodcastItunesId || track.sourcePodcastTitle || 'Unknown Podcast'
     const existing = groups.get(key)
     if (existing) {
       existing.push(track)
@@ -88,245 +74,6 @@ function groupByPodcast(tracks: PodcastDownload[]): PodcastGroup[] {
     tracks: groupTracks.sort((a, b) => (b.downloadedAt ?? 0) - (a.downloadedAt ?? 0)),
     totalBytes: groupTracks.reduce((sum, t) => sum + t.sizeBytes, 0),
   }))
-}
-
-function buildPlaybackMetadata(track: PodcastDownload) {
-  return {
-    podcastTitle: track.sourcePodcastTitle,
-    artworkUrl: track.sourceArtworkUrl,
-    originalAudioUrl: track.sourceUrlNormalized,
-    transcriptUrl: track.transcriptUrl,
-    durationSeconds: track.durationSeconds,
-    countryAtSave: track.countryAtSave,
-    podcastFeedUrl: track.sourceFeedUrl,
-    podcastItunesId: track.sourcePodcastItunesId,
-  }
-}
-
-function DownloadedTrackItem({
-  track,
-  onRemove,
-  onToggleFavorite,
-  favorited,
-  canFavorite,
-  artworkBlob,
-  subtitles,
-  onSetActiveSubtitle,
-  onDeleteSubtitle,
-  onExportSubtitle,
-  onExportAudio,
-  onImportSubtitle,
-  onRetranscribe,
-  density,
-}: {
-  track: PodcastDownload
-  onRemove: (id: string) => Promise<boolean>
-  onToggleFavorite: (track: PodcastDownload, favorited: boolean) => Promise<void>
-  favorited: boolean
-  canFavorite: boolean
-  artworkBlob: Blob | null
-  subtitles: FileSubtitle[]
-  onSetActiveSubtitle: (trackId: string, subtitleId: string) => Promise<void> | void
-  onDeleteSubtitle: (trackId: string, fileSubtitleId: string) => Promise<boolean> | boolean
-  onExportSubtitle: (
-    trackId: string,
-    fileSubtitleId: string,
-    format: SubtitleExportFormat
-  ) => Promise<void> | void
-  onExportAudio: (trackId: string) => Promise<void> | void
-  onImportSubtitle: (trackId: string) => void
-  onRetranscribe: (trackId: string) => Promise<void> | void
-  density?: ViewDensity
-}) {
-  const setAudioUrl = usePlayerStore((s) => s.setAudioUrl)
-  const setSubtitlesStore = useTranscriptStore((s) => s.setSubtitles)
-  const play = usePlayerStore((s) => s.play)
-  const pause = usePlayerStore((s) => s.pause)
-  const setSessionId = usePlayerStore((s) => s.setSessionId)
-  const seekTo = usePlayerStore((s) => s.seekTo)
-  const queueAutoplayAfterPendingSeek = usePlayerStore((s) => s.queueAutoplayAfterPendingSeek)
-  const setPlaybackTrackId = usePlayerStore((s) => s.setPlaybackTrackId)
-  const setPlayableContext = usePlayerSurfaceStore((s) => s.setPlayableContext)
-  const toDocked = usePlayerSurfaceStore((s) => s.toDocked)
-  const { isOnline } = useNetworkStatus()
-
-  const resolveSessionRestoreState = useCallback(async () => {
-    const session = await DownloadsRepository.getRestoreSessionByTrackId(track.id)
-    const sessionProgress = session?.progress ?? 0
-    const sessionDuration = session?.durationSeconds ?? 0
-    const isSessionComplete =
-      sessionDuration > 0 &&
-      sessionProgress >= Math.max(0, sessionDuration - COMPLETED_RESTORE_THRESHOLD_SECONDS)
-    const resumeAt =
-      sessionProgress > 0
-        ? isSessionComplete
-          ? 0
-          : Math.min(sessionProgress, sessionDuration || Infinity)
-        : 0
-
-    return { session, resumeAt }
-  }, [track.id])
-
-  const handlePlay = useCallback(
-    async (overrideSubtitleId?: string) => {
-      if (!track.sourceUrlNormalized) return
-      const { session, resumeAt } = await resolveSessionRestoreState()
-      const source = await resolvePlaybackSource(track.sourceUrlNormalized)
-
-      // Unify reading path through repository (Priority 1: active or override, Priority 2: newest ready)
-      const readySubs = await DownloadsRepository.getReadySubtitlesByTrackId(track.id)
-
-      let parsedSubtitles: ASRCue[] = []
-
-      // Card play follows repository priority (active-ready first, then newest-ready).
-      // Subtitle-row play can override with an explicit subtitle id.
-      const target = selectPlaybackSubtitle(readySubs, overrideSubtitleId)
-
-      if (target) {
-        parsedSubtitles = target.subtitle.cues
-      }
-
-      const metadata = buildPlaybackMetadata(track)
-      setAudioUrl(
-        source.url,
-        track.sourceEpisodeTitle || track.name,
-        track.sourceArtworkUrl || null,
-        metadata,
-        false
-      )
-
-      // Always call setSubtitlesStore to clear any stale state if current track has no selected subtitles
-      setSubtitlesStore(parsedSubtitles)
-
-      setSessionId(session?.id ?? null)
-      setPlaybackTrackId(source.trackId ?? track.id)
-      setPlayableContext(true)
-      toDocked()
-
-      if (resumeAt > 0) {
-        queueAutoplayAfterPendingSeek()
-        seekTo(resumeAt)
-      } else {
-        play()
-      }
-    },
-    [
-      track,
-      setAudioUrl,
-      play,
-      setSessionId,
-      queueAutoplayAfterPendingSeek,
-      seekTo,
-      setPlaybackTrackId,
-      setSubtitlesStore,
-      setPlayableContext,
-      toDocked,
-      resolveSessionRestoreState,
-    ]
-  )
-
-  const handlePlayWithoutTranscript = useCallback(async () => {
-    if (!track.sourceUrlNormalized) return
-    const { session, resumeAt } = await resolveSessionRestoreState()
-    const metadata = buildPlaybackMetadata(track)
-
-    const streamStart = await playStreamWithoutTranscriptWithDeps(
-      { setAudioUrl, play, pause, setPlaybackTrackId },
-      {
-        streamTarget: {
-          sourceUrlNormalized: track.sourceUrlNormalized,
-        },
-        title: track.sourceEpisodeTitle || track.name,
-        artwork: track.sourceArtworkUrl || '',
-        metadata,
-      }
-    )
-
-    // Intentionally not surfacing reason yet to keep current UX parity (no new toast/copy behavior).
-    if (!streamStart.started) return
-    setSessionId(session?.id ?? null)
-    setPlayableContext(true)
-    toDocked()
-    if (resumeAt > 0) {
-      queueAutoplayAfterPendingSeek()
-      seekTo(resumeAt)
-    }
-  }, [
-    pause,
-    play,
-    queueAutoplayAfterPendingSeek,
-    resolveSessionRestoreState,
-    setAudioUrl,
-    setPlayableContext,
-    setPlaybackTrackId,
-    setSessionId,
-    seekTo,
-    toDocked,
-    track,
-  ])
-
-  const canShowPlayWithoutTranscript = canPlayRemoteStreamWithoutTranscript(
-    {
-      sourceUrlNormalized: track.sourceUrlNormalized,
-    },
-    isOnline
-  )
-  const canPlayLocalWithoutTranscript = Boolean(track.audioId) && !track.isCorrupted
-  const showPlayWithoutTranscriptAction =
-    canPlayLocalWithoutTranscript || canShowPlayWithoutTranscript
-
-  const episodeRoute = useMemo(() => {
-    const guid = track.sourceEpisodeGuid
-    if (!track.sourcePodcastItunesId || !guid || !track.countryAtSave) return null
-    const episodeKey = buildEpisodeCompactKey(guid)
-    if (!episodeKey) return null
-    return buildPodcastEpisodeRoute({
-      country: track.countryAtSave,
-      podcastId: track.sourcePodcastItunesId,
-      episodeKey,
-    })
-  }, [track.sourcePodcastItunesId, track.countryAtSave, track.sourceEpisodeGuid])
-
-  const handleSetActiveWithPlay = useCallback(
-    async (trackId: string, subtitleId: string) => {
-      await onSetActiveSubtitle(trackId, subtitleId)
-      await handlePlay(subtitleId)
-    },
-    [onSetActiveSubtitle, handlePlay]
-  )
-
-  return (
-    <DownloadTrackCard
-      track={track}
-      artworkBlob={artworkBlob}
-      subtitles={subtitles}
-      density={density}
-      favorite={{
-        enabled: canFavorite,
-        favorited,
-        onToggle: () => void onToggleFavorite(track, favorited),
-      }}
-      onPlay={handlePlay}
-      onPlayWithoutTranscript={() => {
-        void handlePlayWithoutTranscript()
-      }}
-      showPlayWithoutTranscriptAction={showPlayWithoutTranscriptAction}
-      onRemove={() => onRemove(track.id)}
-      onSetActiveSubtitle={handleSetActiveWithPlay}
-      onDeleteSubtitle={onDeleteSubtitle}
-      onExportSubtitle={(trackId, fileSubtitleId, format) => {
-        void onExportSubtitle(trackId, fileSubtitleId, format)
-      }}
-      onExportAudio={() => {
-        void onExportAudio(track.id)
-      }}
-      onImportSubtitle={() => onImportSubtitle(track.id)}
-      onRetranscribe={() => {
-        void onRetranscribe(track.id)
-      }}
-      episodeRoute={episodeRoute}
-    />
-  )
 }
 
 export default function DownloadsPage() {
@@ -440,19 +187,26 @@ export default function DownloadsPage() {
   const removeFavorite = useExploreStore((s) => s.removeFavorite)
 
   const favoriteKeysSet = useMemo(() => {
-    return new Set(favorites.map((f) => `${f.feedUrl}::${f.audioUrl}`))
+    return new Set(favorites.map((favorite) => buildFavoriteKeyFromFavorite(favorite)))
   }, [favorites])
 
   const handleToggleFavorite = useCallback(
     async (track: PodcastDownload, favoritedCurrent: boolean) => {
-      if (!track.sourceFeedUrl || !track.sourceUrlNormalized) return
-      const key = `${track.sourceFeedUrl}::${track.sourceUrlNormalized}`
+      const key = buildFavoriteKey(track.sourcePodcastItunesId, track.sourceEpisodeGuid)
+      if (!key) return
 
       if (favoritedCurrent) {
         await removeFavorite(key)
       } else {
-        const { podcast, episode } = mapTrackToDiscovery(track)
-        await addFavorite(podcast, episode, undefined, track.countryAtSave)
+        const favoriteInputs = mapPodcastDownloadToFavoriteInputs(track)
+        if (!favoriteInputs) return
+
+        await addFavorite(
+          favoriteInputs.podcast,
+          favoriteInputs.episode,
+          undefined,
+          track.countryAtSave
+        )
       }
     },
     [addFavorite, removeFavorite]
@@ -683,12 +437,12 @@ export default function DownloadsPage() {
                 >
                   {group.tracks.map((track) => {
                     const favorited =
-                      track.sourceFeedUrl && track.sourceUrlNormalized
+                      track.sourcePodcastItunesId && track.sourceEpisodeGuid
                         ? favoriteKeysSet.has(
-                            `${track.sourceFeedUrl}::${track.sourceUrlNormalized}`
+                            buildFavoriteKey(track.sourcePodcastItunesId, track.sourceEpisodeGuid)
                           )
                         : false
-                    const canFavorite = !!(track.sourceFeedUrl && track.sourceUrlNormalized)
+                    const canFavorite = !!(track.sourcePodcastItunesId && track.sourceEpisodeGuid)
 
                     return (
                       <DownloadedTrackItem

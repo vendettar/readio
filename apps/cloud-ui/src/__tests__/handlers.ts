@@ -1,5 +1,4 @@
 import { HttpResponse, http } from 'msw'
-import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
 
 export const handlers = [
   // Mock iTunes Search
@@ -25,7 +24,6 @@ export const handlers = [
           artistName: 'Test Artist',
           artworkUrl100: 'https://example.com/art100.jpg',
           artworkUrl600: 'https://example.com/art600.jpg',
-          feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
           genres: ['Technology'],
           trackCount: 10,
           kind: 'podcast',
@@ -45,36 +43,10 @@ export const handlers = [
           artistName: 'Test Artist',
           artworkUrl100: 'https://example.com/art100.jpg',
           artworkUrl600: 'https://example.com/art600.jpg',
-          feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
           genres: ['Technology'],
           kind: 'podcast',
         },
       ],
-    })
-  }),
-
-  // Mock Generic RSS Feed
-  http.get('https://example.com/feed.xml', () => {
-    const rssXml = `
-      <?xml version="1.0" encoding="UTF-8"?>
-      <rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
-        <channel>
-          <title>Test Podcast</title>
-          <description>A test podcast description</description>
-          <itunes:image href="https://example.com/art.jpg"/>
-          <item>
-            <title>Test Episode 1</title>
-            <description>Episode description</description>
-            <enclosure url="https://example.com/episode1.mp3" length="123456" type="audio/mpeg"/>
-            <guid>episode-1</guid>
-            <pubDate>Fri, 30 Jan 2026 12:00:00 GMT</pubDate>
-            <itunes:duration>1200</itunes:duration>
-          </item>
-        </channel>
-      </rss>
-    `
-    return new HttpResponse(rssXml, {
-      headers: { 'Content-Type': 'application/xml' },
     })
   }),
 ]

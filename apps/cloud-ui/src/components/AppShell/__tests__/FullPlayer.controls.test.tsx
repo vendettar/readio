@@ -135,7 +135,7 @@ describe('FullPlayer Controls (via PlayerSurfaceFrame)', () => {
     })
   })
 
-  it('shows transcript loading hint when remote transcript is being ingested', () => {
+  it('shows transcript loading hint when remote transcript is being ingested', async () => {
     act(() => {
       usePlayerStore.setState({
         episodeMetadata: { transcriptUrl: 'https://example.com/t.srt' },
@@ -149,7 +149,7 @@ describe('FullPlayer Controls (via PlayerSurfaceFrame)', () => {
 
     render(<PlayerSurfaceFrame mode="full" />)
 
-    expect(screen.getByText('loadingTranscript')).toBeTruthy()
+    expect(await screen.findByText('loadingTranscript')).toBeTruthy()
     expect(screen.queryByTestId('transcript')).toBeNull()
     expect(screen.queryByTestId('no-transcript-artwork')).toBeNull()
     expect(screen.queryByRole('button', { name: 'asrSetupTranscriptGeneration' })).toBeNull()
@@ -177,6 +177,7 @@ describe('FullPlayer Controls (via PlayerSurfaceFrame)', () => {
 
       await act(async () => {
         render(<PlayerSurfaceFrame mode="full" />)
+        await Promise.resolve()
         await Promise.resolve()
       })
 
@@ -218,6 +219,7 @@ describe('FullPlayer Controls (via PlayerSurfaceFrame)', () => {
       await act(async () => {
         render(<PlayerSurfaceFrame mode="full" />)
         await Promise.resolve()
+        await Promise.resolve()
       })
 
       await act(async () => {
@@ -234,6 +236,7 @@ describe('FullPlayer Controls (via PlayerSurfaceFrame)', () => {
             transcriptUrl: 'https://example.com/b.vtt',
           },
         })
+        await Promise.resolve()
         await Promise.resolve()
       })
 
@@ -261,6 +264,7 @@ describe('FullPlayer Controls (via PlayerSurfaceFrame)', () => {
     await act(async () => {
       render(<PlayerSurfaceFrame mode="full" />)
       await Promise.resolve()
+      await Promise.resolve()
     })
 
     expect(screen.getByText('asrTranscribing')).toBeTruthy()
@@ -284,9 +288,13 @@ describe('FullPlayer Controls (via PlayerSurfaceFrame)', () => {
       })
     })
 
-    render(<PlayerSurfaceFrame mode="full" />)
+    await act(async () => {
+      render(<PlayerSurfaceFrame mode="full" />)
+      await Promise.resolve()
+      await Promise.resolve()
+    })
 
-    expect(await screen.findByTestId('no-transcript-artwork')).toBeTruthy()
+    expect(screen.getByTestId('no-transcript-artwork')).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'asrSetupTranscriptGeneration' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'asrGenerateTranscript' })).toBeNull()
   })

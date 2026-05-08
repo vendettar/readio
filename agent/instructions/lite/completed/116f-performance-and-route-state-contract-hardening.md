@@ -2,7 +2,7 @@
 
 ## Goal
 在不改变 116 系列已确立 URL/Country SSOT 的前提下，补齐三项后续强化：
-1. 将 `normalizeFeedUrl` 从高频渲染路径前移到 ingestion/写入路径，降低滚动场景 CPU 抖动风险。
+1. 将旧的 feed normalization helper 从高频渲染路径前移到 ingestion/写入路径，降低滚动场景 CPU 抖动风险。
 2. 对 `ReadingContent` 在低端设备（重点 Android）切换场景建立可验证性能基线与门槛。
 3. 在工程规范中明确：`location.state` 仅用于 UI transition 元数据，禁止作为业务正确性依据。
 
@@ -13,7 +13,7 @@
 
 ## Scope Scan (8 Scopes)
 - Config: 无新增环境变量。
-- Persistence: 可能涉及 feedUrl 归一化写入时机调整；不需要历史兼容迁移（首发策略）。
+- Persistence: 可能涉及旧 feed 字段的归一化写入时机调整；不需要历史兼容迁移（首发策略）。
 - Routing: 不改路由结构，仅强化契约与 guardrail。
 - Logging: 允许新增轻量 perf 日志或测量埋点（开发态/测试态可见）。
 - Network: 无新增 API；仅优化现有 lookup/feed 请求触发时机与复用效率说明。
@@ -34,7 +34,7 @@
   - feed 缓存键与 country-scoped lookup/episodes 必须保持分层，不得混用导致错配。
 
 ## Required Patterns
-- `normalizeFeedUrl` 的主执行点放在 ingestion/写入边界；render/query key 只消费已归一化值。
+- 旧的 feed normalization helper 的主执行点放在 ingestion/写入边界；render/query key 只消费已归一化值。
 - Feed cache key 统一：`['podcast','feed',normalizedFeedUrl]`。
 - Lookup/episodes key 继续 country-scoped，不跨层复用。
 - `location.state` 仅允许承载 UI transition 元数据（如 `fromLayoutPrefix`），不得参与内容路由正确性判定。
@@ -62,11 +62,11 @@ Option B: ingestion-time normalize + render-time no-op（建议）
 
 ## Ingestion-Time Normalize 主设计定义
 1. 写入时归一化（唯一主入口）
-- 所有 remote/library 记录写入持久层前，先执行 `normalizeFeedUrl(rawFeedUrl)`。
-- 写入字段使用归一化后的值（`normalizedFeedUrl` 或覆盖 `feedUrl`，项目内保持单一约定）。
+- 所有 remote/library 记录写入持久层前，先执行旧的 feed normalization helper。
+- 写入字段使用归一化后的旧 feed 字段值（项目内保持单一约定）。
 
 2. 读取时零归一化（热路径约束）
-- 列表渲染、详情页、query key 构建直接消费已归一化 feedUrl。
+- 列表渲染、详情页、query key 构建直接消费已归一化的旧 feed 字段。
 - 禁止在 render/useMemo/map 循环中再次做 URL 解析归一化。
 
 3. Cache key 契约
@@ -79,7 +79,7 @@ Option B: ingestion-time normalize + render-time no-op（建议）
 
 ## Implementation Steps
 1. Feed normalization 执行点前移
-- 梳理 feedUrl 的写入入口（History/Favorites/Subscriptions/Library item ingestion）。
+- 梳理旧 feed 字段的写入入口（History/Favorites/Subscriptions/Library item ingestion）。
 - 在写入入口统一 normalize，一次写入、多处复用。
 - 清理渲染路径/列表映射中的重复 normalize 调用（保留必要防御但不可位于热循环）。
 - 对 query contract 明确输入已 normalized 的约束（类型或 helper 命名体现）。
@@ -101,7 +101,7 @@ Option B: ingestion-time normalize + render-time no-op（建议）
 4. Guardrail / CI 防回归
 - 在 route/country guard 脚本扩展两类检查：
   - 内容页业务逻辑禁止读取 `location.state` 的业务字段（allowlist 仅保留 transition metadata）。
-  - 禁止在热路径模块中重新引入 render-time `normalizeFeedUrl`/`new URL()` 循环归一化模式。
+  - 禁止在热路径模块中重新引入 render-time legacy feed normalization / `new URL()` 循环归一化模式。
 - 保留 allowlist：`__tests__`、fixture、脚本样本。
 
 5. Docs & handoff sync (Atomic)
@@ -126,7 +126,7 @@ Option B: ingestion-time normalize + render-time no-op（建议）
 
 ## Required Tests
 - feed key 归一化测试：
-  - 不同等价 feedUrl 输入归并到同一 cache key。
+  - 不同等价旧 feed 输入归并到同一 cache key。
   - ingestion 写入后读取路径不重复 normalize。
 - 性能回归测试（可半自动+手测记录）：
   - Mini/Docked/Full 切换耗时与掉帧指标对比。
@@ -143,7 +143,7 @@ Option B: ingestion-time normalize + render-time no-op（建议）
 ## Impact Checklist
 - Affected modules (expected):
   - `apps/lite/src/lib/discovery/podcastQueryContract.ts`
-  - feedUrl ingestion/write-path modules（History/Favorites/Subscriptions 相关持久化入口）
+  - legacy feed ingestion/write-path modules（History/Favorites/Subscriptions 相关持久化入口）
   - `apps/lite/src/routeComponents/podcast/PodcastShowPage.tsx`（仅校验不回退业务依赖）
   - `apps/lite/scripts/check-route-country-guards.js`
   - docs/handoff/coding-standards EN+ZH

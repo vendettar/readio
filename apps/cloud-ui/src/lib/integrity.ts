@@ -1,5 +1,5 @@
+import { buildFavoriteKey } from './db/favoriteIdentity'
 import { isUserUploadTrack, ROOT_FOLDER_ID } from './db/types'
-import type { MinimalSubscription } from './opmlParser'
 import type { VaultData } from './vault'
 
 export interface IntegrityResult {
@@ -123,31 +123,67 @@ export function verifyVaultIntegrity(vault: VaultData): IntegrityResult {
   }
 
   // 5. De-duplication Check (within dataset)
-  // Vault is a full backup/restore; we enforce strict uniqueness for feeds and favorites.
-  const feedUrls = new Set<string>()
+  // Vault is a full backup/restore; we enforce strict uniqueness for subscriptions and favorites.
+  const podcastItunesIds = new Set<string>()
   for (const sub of data.subscriptions) {
-    if (feedUrls.has(sub.feedUrl)) {
-      return { isValid: false, error: `Duplicate subscription feedUrl: ${sub.feedUrl}` }
+    const normalizedPodcastItunesId = sub.podcastItunesId.trim()
+    if (!normalizedPodcastItunesId) {
+      return { isValid: false, error: 'Invalid subscription podcastItunesId' }
     }
-    feedUrls.add(sub.feedUrl)
+    if (podcastItunesIds.has(normalizedPodcastItunesId)) {
+      return {
+        isValid: false,
+        error: `Duplicate subscription podcastItunesId: ${normalizedPodcastItunesId}`,
+      }
+    }
+    podcastItunesIds.add(normalizedPodcastItunesId)
   }
 
   const favKeys = new Set<string>()
   for (const fav of data.favorites) {
-    if (favKeys.has(fav.key)) {
-      return { isValid: false, error: `Duplicate favorite key: ${fav.key}` }
+    const normalizedFavoriteKey = buildFavoriteKey(fav.podcastItunesId, fav.episodeGuid)
+    if (!normalizedFavoriteKey) {
+      return { isValid: false, error: 'Invalid favorite canonical identity' }
     }
-    favKeys.add(fav.key)
+    if (favKeys.has(normalizedFavoriteKey)) {
+      return { isValid: false, error: `Duplicate favorite key: ${normalizedFavoriteKey}` }
+    }
+    favKeys.add(normalizedFavoriteKey)
   }
 
-  return { isValid: true }
-}
+  // 6. Canonical Identity Check for Tracks (podcast downloads)
+  // Runtime now deduplicates downloads by canonical episode identity, so the
+  // vault must reject duplicate canonical download rows.
+  const downloadKeys = new Set<string>()
+  for (const track of data.tracks) {
+    if (track.sourceType === 'podcast_download') {
+      if (!track.sourcePodcastItunesId || !track.sourceEpisodeGuid) {
+        return { isValid: false, error: 'Podcast download missing canonical identity' }
+      }
+      const downloadKey = `${track.sourcePodcastItunesId}:${track.sourceEpisodeGuid}`
+      if (downloadKeys.has(downloadKey)) {
+        return { isValid: false, error: `Duplicate podcast download: ${downloadKey}` }
+      }
+      downloadKeys.add(downloadKey)
+    }
+  }
 
-/**
- * Performs business-level integrity checks on OPML import items.
- */
-export function verifyOpmlIntegrity(_items: MinimalSubscription[]): IntegrityResult {
-  // OPML integrity is now handled by merge+dedup semantics.
-  // We allow duplicates here; the parser will de-duplicate them.
+  // 7. Canonical Identity Check for Playback Sessions (explore/remote)
+  // Runtime now reuses remote sessions by canonical episode identity, so the
+  // vault must reject duplicate canonical remote sessions.
+  const sessionKeys = new Set<string>()
+  for (const session of data.playback_sessions) {
+    if (session.source === 'explore') {
+      if (!session.podcastItunesId || !session.episodeGuid) {
+        return { isValid: false, error: 'Remote session missing canonical identity' }
+      }
+      const sessionKey = `${session.podcastItunesId}:${session.episodeGuid}`
+      if (sessionKeys.has(sessionKey)) {
+        return { isValid: false, error: `Duplicate remote session: ${sessionKey}` }
+      }
+      sessionKeys.add(sessionKey)
+    }
+  }
+
   return { isValid: true }
 }

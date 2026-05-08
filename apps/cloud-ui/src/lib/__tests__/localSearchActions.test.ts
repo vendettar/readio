@@ -1,10 +1,9 @@
-import { waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
 import type { LocalSearchResult } from '../../hooks/useGlobalSearch'
-import { DB } from '../dexieDb'
 import { buildEpisodeCompactKey } from '../discovery/editorPicks'
+import type { PlaybackSession } from '../dexieDb'
 import { executeLocalSearchAction, type LocalSearchActionDeps } from '../localSearchActions'
+import { PlaybackRepository } from '../repositories/PlaybackRepository'
 
 const setPlayableContextMock = vi.fn()
 const toDockedMock = vi.fn()
@@ -35,19 +34,11 @@ vi.mock('../logger', () => ({
 }))
 
 vi.mock('../dexieDb', () => ({
-  DB: {
-    getAudioBlob: vi.fn(),
-    getSubtitle: vi.fn(),
-  },
-  isNavigableExplorePlaybackSession: (session: {
-    source?: string
-    countryAtSave?: string
-    podcastItunesId?: string
-    episodeGuid?: string
-  }) =>
+  isNavigableExplorePlaybackSession: (session: PlaybackSession) =>
     session.source === 'explore' &&
     !!session.countryAtSave &&
-    (!!session.podcastItunesId || !!session.episodeGuid),
+    !!session.podcastItunesId &&
+    !!session.episodeGuid,
   db: {
     tracks: {
       where: vi.fn().mockReturnThis(),
@@ -57,6 +48,13 @@ vi.mock('../dexieDb', () => ({
     audioBlobs: {
       get: vi.fn(),
     },
+  },
+}))
+
+vi.mock('../repositories/PlaybackRepository', () => ({
+  PlaybackRepository: {
+    getAudioBlob: vi.fn(),
+    getSubtitle: vi.fn(),
   },
 }))
 
@@ -87,12 +85,15 @@ describe('executeLocalSearchAction', () => {
       badges: ['favorite'],
       data: {
         id: 'fav-db-id',
-        key: 'feed::audio',
-        feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
+        key: '123::75f3241b-439d-4786-8968-07e05e548074',
         audioUrl: 'https://example.com/audio.mp3',
         episodeTitle: 'Episode Title',
         podcastTitle: 'Podcast',
         artworkUrl: 'https://example.com/art.jpg',
+        episodeArtworkUrl: '',
+        description: 'Test desc',
+        pubDate: '2025-02-01',
+        durationSeconds: 0,
         addedAt: Date.now(),
         countryAtSave: 'us',
         podcastItunesId: '123',
@@ -140,6 +141,8 @@ describe('executeLocalSearchAction', () => {
         podcastItunesId: '456',
         episodeGuid: '75f3241b-439d-4786-8968-07e05e548074',
         audioUrl: 'https://example.com/history.mp3',
+        artworkUrl: 'https://example.com/history.jpg',
+        showTitle: 'History Podcast',
       },
     } satisfies LocalSearchResult
 
@@ -156,7 +159,7 @@ describe('executeLocalSearchAction', () => {
     expect(deps.play).not.toHaveBeenCalled()
   })
 
-  it('falls back to direct play for favorite when canonical route metadata is incomplete', async () => {
+  it('applies fallback playback surface policy for favorite when canonical route metadata is incomplete', async () => {
     const deps = createDeps()
     const result = {
       type: 'favorite',
@@ -166,22 +169,25 @@ describe('executeLocalSearchAction', () => {
       badges: ['favorite'],
       data: {
         id: 'fav-db-id',
-        key: 'feed::audio',
-        feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
+        key: '::',
         audioUrl: 'https://example.com/audio.mp3',
         episodeTitle: 'Fallback Episode',
         podcastTitle: 'Podcast',
         artworkUrl: 'https://example.com/art.jpg',
+        episodeArtworkUrl: '',
+        description: 'Test',
+        pubDate: '2025-02-01',
+        durationSeconds: 0,
         addedAt: Date.now(),
         countryAtSave: 'us',
+        podcastItunesId: '',
+        episodeGuid: '',
       },
     } satisfies LocalSearchResult
 
     await executeLocalSearchAction(result, deps)
 
     expect(deps.navigate).not.toHaveBeenCalled()
-    await waitFor(() => expect(deps.setAudioUrl).toHaveBeenCalledTimes(1))
-    expect(deps.play).toHaveBeenCalledTimes(1)
     expect(setPlayableContextMock).toHaveBeenCalledWith(true)
     expect(toDockedMock).toHaveBeenCalledTimes(1)
     expect(toMiniMock).not.toHaveBeenCalled()
@@ -191,7 +197,7 @@ describe('executeLocalSearchAction', () => {
     const deps = createDeps()
     const audioBlob = new Blob(['audio'], { type: 'audio/mpeg' })
     const subtitleCues = [{ start: 0, end: 1, text: 'subtitle line' }]
-    vi.mocked(DB.getAudioBlob).mockResolvedValueOnce({
+    vi.mocked(PlaybackRepository.getAudioBlob).mockResolvedValueOnce({
       id: 'blob-1',
       blob: audioBlob,
       size: audioBlob.size,
@@ -199,7 +205,7 @@ describe('executeLocalSearchAction', () => {
       filename: 'local.mp3',
       storedAt: Date.now(),
     })
-    vi.mocked(DB.getSubtitle).mockResolvedValueOnce({
+    vi.mocked(PlaybackRepository.getSubtitle).mockResolvedValueOnce({
       id: 'subtitle-1',
       cues: subtitleCues,
       cueSchemaVersion: 1,
@@ -236,7 +242,7 @@ describe('executeLocalSearchAction', () => {
     await executeLocalSearchAction(result, deps)
 
     expect(deps.navigate).not.toHaveBeenCalled()
-    expect(DB.getAudioBlob).toHaveBeenCalledWith('blob-1')
+    expect(PlaybackRepository.getAudioBlob).toHaveBeenCalledWith('blob-1')
     expect(deps.loadAudioBlob).toHaveBeenCalledWith(
       audioBlob,
       'Local Session',
@@ -260,7 +266,7 @@ describe('executeLocalSearchAction', () => {
     const slowBlob = new Blob(['slow'], { type: 'audio/mpeg' })
     const fastBlob = new Blob(['fast'], { type: 'audio/mpeg' })
 
-    vi.mocked(DB.getAudioBlob).mockImplementation(async (id) => {
+    vi.mocked(PlaybackRepository.getAudioBlob).mockImplementation(async (id) => {
       if (id === 'audio-slow') {
         await new Promise((resolve) => setTimeout(resolve, 50))
         return {
@@ -281,7 +287,7 @@ describe('executeLocalSearchAction', () => {
         storedAt: Date.now(),
       }
     })
-    vi.mocked(DB.getSubtitle).mockResolvedValue(undefined)
+    vi.mocked(PlaybackRepository.getSubtitle).mockResolvedValue(undefined)
 
     const slowResult = {
       type: 'history',
@@ -356,7 +362,7 @@ describe('executeLocalSearchAction', () => {
     const deps = createDeps()
     const fastBlob = new Blob(['fast'], { type: 'audio/mpeg' })
 
-    vi.mocked(DB.getAudioBlob).mockImplementation(async (id) => {
+    vi.mocked(PlaybackRepository.getAudioBlob).mockImplementation(async (id) => {
       if (id === 'audio-slow-fail') {
         await new Promise((resolve) => setTimeout(resolve, 50))
         throw new Error('slow lookup failed')
@@ -370,7 +376,7 @@ describe('executeLocalSearchAction', () => {
         storedAt: Date.now(),
       }
     })
-    vi.mocked(DB.getSubtitle).mockResolvedValue(undefined)
+    vi.mocked(PlaybackRepository.getSubtitle).mockResolvedValue(undefined)
 
     const slowResult = {
       type: 'history',
@@ -433,7 +439,7 @@ describe('executeLocalSearchAction', () => {
   it('keeps local playback when subtitle restore fails', async () => {
     const deps = createDeps()
     const audioBlob = new Blob(['audio'], { type: 'audio/mpeg' })
-    vi.mocked(DB.getAudioBlob).mockResolvedValueOnce({
+    vi.mocked(PlaybackRepository.getAudioBlob).mockResolvedValueOnce({
       id: 'blob-subtitle-fail',
       blob: audioBlob,
       size: audioBlob.size,
@@ -441,7 +447,9 @@ describe('executeLocalSearchAction', () => {
       filename: 'local.mp3',
       storedAt: Date.now(),
     })
-    vi.mocked(DB.getSubtitle).mockRejectedValueOnce(new Error('subtitle lookup failed'))
+    vi.mocked(PlaybackRepository.getSubtitle).mockRejectedValueOnce(
+      new Error('subtitle lookup failed')
+    )
 
     const result = {
       type: 'history',
@@ -478,7 +486,9 @@ describe('executeLocalSearchAction', () => {
 
   it('handles local blob restore errors deterministically without side effects', async () => {
     const deps = createDeps()
-    vi.mocked(DB.getAudioBlob).mockRejectedValueOnce(new Error('blob read failed'))
+    vi.mocked(PlaybackRepository.getAudioBlob).mockRejectedValueOnce(
+      new Error('blob read failed')
+    )
 
     const result = {
       type: 'history',

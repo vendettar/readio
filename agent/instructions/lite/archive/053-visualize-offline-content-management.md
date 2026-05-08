@@ -9,7 +9,7 @@ Provide clarity on which content is stored locally and allow users to manage the
 ## 1. Offline Indicator
 - **Target**: `apps/lite/src/components/Explore/EpisodeRow.tsx` and `PodcastCard.tsx`.
 - **Action**: Add a small "Downloaded" or "Offline" icon (e.g., `CheckCircle` or `CloudDownload` from Lucide) if the track exists in `audioBlobs`.
- - **Rule**: Do NOT infer offline state from `feedUrl` alone; only show if a local blob exists.
+ - **Rule**: Do NOT infer offline state from legacy feed transport metadata alone; only show if a local blob exists.
 
 ## 2. Storage Cleanup Tool
 - **Target**: `apps/lite/src/routeComponents/SettingsPage.tsx` (or `FilesPage`).

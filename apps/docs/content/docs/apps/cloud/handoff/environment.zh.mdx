@@ -17,7 +17,7 @@ Cloud 前端的运行时配置通过后端 `/env.js` 发出。
 
 ## 3. Discovery / Media 契约
 
-- discovery / search / feed 请求统一通过 Cloud 后端同源路由承载
+- discovery 请求统一通过 Cloud 后端同源路由承载，包括 search / top / Editor's Picks batch lookup / podcast lookup / PI episode-list lookup
 - 当前 Cloud 契约允许的情况下，媒体仍是浏览器直连优先
 - backend fallback / proxy 的细节记录在 handoff 审计文档里
 
@@ -25,7 +25,55 @@ Cloud 前端的运行时配置通过后端 `/env.js` 发出。
 
 Cloud 当前默认保持 Workbox / PWA 关闭，除非后续指令明确恢复。
 
-## 5. 部署文档边界
+## 5. Prometheus Metrics 契约
+
+`apps/cloud-api` 暴露 `/metrics`，供主机侧 Prometheus scrape 使用。
+
+- `READIO_METRICS_TOKEN` 是仅后端的运行时配置；不得放入 `/env.js` 或浏览器 allowlist。
+- `READIO_METRICS_TOKEN` 为空或未设置时，`/metrics` 返回 `404`；配置后要求 `Authorization: Bearer <token>`。
+- 应用指标是 Go/process collectors 的增量补充：
+  - `readio_cloud_http_request_duration_seconds`
+  - `readio_cloud_upstream_request_duration_seconds`
+  - `readio_cloud_upstream_errors_total`
+  - `readio_cloud_asr_relay_requests_total`
+- Metric labels 使用封闭的低基数枚举：`route`、`provider`、`status_class`、`error_class`、`cache_status`、`mode`。
+- Metric labels 不得包含完整 URL、query string、route ID、搜索词、GUID、header 名称/值、原始错误、请求/响应 body、音频字节或 transcript 文本。
+
+## 6. Loki 日志投递契约
+
+Cloud API 日志继续由 Go `slog` 写入 stdout/systemd journal。
+
+- 主机侧 Grafana Alloy 读取 `readio-cloud.service` 的 journal，并将日志投递到 Grafana Cloud Loki。
+- 不要新增应用侧 Go Loki client。
+- Grafana Cloud Loki endpoint、user 和 token 是 Alloy/server-owned secrets；不得放入 `/env.js`、前端 `.env`、Vite config 或静态前端资产。
+- 推荐 Loki labels 只使用低基数字段：`job=readio-cloud`、`env=production|preproduction`、`service=readio-cloud-api`。
+- Loki labels 不得包含完整 URL、route params、用户输入、原始错误、request ID、headers、cookies、tokens、音频字节、transcript 文本或本地路径。
+
+## 7. Faro 浏览器 RUM 契约
+
+Cloud UI Faro telemetry 是可选能力，由浏览器公开配置驱动。
+
+- `VITE_GRAFANA_FARO_URL` 为空时禁用 Faro。
+- `VITE_GRAFANA_FARO_SAMPLE_RATE` 默认是 `0`；非法或越界值安全回退。
+- Faro collector URL、app name、env 和 sample rate 是公开元数据，不是凭证。
+- Faro 不得读取或导出 Grafana write credential、admin token、metrics token、relay secret、provider credential、Basic Auth value、本地媒体、transcript text 或 `/ops` session state。
+- Sanitized schema diagnostics 只能包含 schema name、provider enum、route class、issue path、issue code 和粗粒度 error class。
+- Faro 初始化必须 fail-open，不能阻塞 app 启动。
+
+## 8. Grafana Cloud 主机监控契约
+
+Grafana Cloud observability 是 `/ops` 的增量补充，并且不进入应用侧 remote write 路径。
+
+- 主机侧 Grafana Alloy 拥有三条 pipeline：systemd journal 到 Loki、本机 `/metrics` scrape 到 Grafana Cloud metrics，以及 host metrics 到 Grafana Cloud metrics。
+- `/metrics` 应只从 localhost 或 internal-only path 抓取，并继续由 `READIO_METRICS_TOKEN` 保护。
+- `/metrics`、`/admin/*` 与 `/ops` 不应在没有 Cloudflare、nginx、VPN 或 IP allowlist 等外围限制的情况下公开暴露。
+- 必需主机监控包括 CPU、memory、disk usage、`/opt/readio/shared/data` 下的 disk free、SQLite WAL growth，以及 `/opt/readio/shared/data/podcast/transcripts` 下的 transcript asset storage pressure。
+- 预期 dashboard 覆盖按 provider/route 的 upstream latency、按 provider/error class 的 upstream errors、ASR relay request/error rates、host disk pressure、discovery/proxy/ASR 的 Loki error discovery，以及 Faro crash/schema diagnostic rates。
+- 建议告警覆盖 shared-data disk free、持续 `5xx` 或非 `none` error-class rates、ASR relay failure spikes、PodcastIndex/Apple p95 latency spikes，以及 Faro crash spikes。
+- 成本控制要求明确 log retention、保守的 Faro sampling、低基数 labels，并且不把 raw log fields 提升为 labels。
+- 回滚时禁用 Alloy pipelines 并清空 Faro public config，同时保留 `/ops` 与 `/admin/*`。
+
+## 9. 部署文档边界
 
 这里保留高层部署/运行时行为；具体审计文档位于：
 

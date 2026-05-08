@@ -2,13 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { usePlayerStore } from '../../store/playerStore'
 import { useTranscriptStore } from '../../store/transcriptStore'
 import type { FileSubtitle, SubtitleText } from '../db/types'
-import { db } from '../dexieDb'
-import { tryApplyCachedAsrTranscript } from '../remoteTranscript'
+import { hasStoredTranscriptSource, tryApplyCachedAsrTranscript } from '../remoteTranscript'
 import { DownloadsRepository } from '../repositories/DownloadsRepository'
+import { PlaybackRepository } from '../repositories/PlaybackRepository'
 
 vi.mock('../repositories/DownloadsRepository', () => ({
   DownloadsRepository: {
     getReadySubtitlesByTrackId: vi.fn(),
+    getTrackSnapshot: vi.fn(),
   },
 }))
 
@@ -19,13 +20,10 @@ vi.mock('../repositories/FilesRepository', () => ({
   },
 }))
 
-vi.mock('../dexieDb', () => ({
-  db: {
-    tracks: {
-      get: vi.fn(),
-    },
+vi.mock('../repositories/PlaybackRepository', () => ({
+  PlaybackRepository: {
+    getRemoteTranscriptByUrl: vi.fn(),
   },
-  DB: {},
 }))
 
 vi.mock('../../store/playerStore', () => ({
@@ -58,7 +56,10 @@ describe('remoteTranscript integration (tryApplyCachedAsrTranscript)', () => {
   })
 
   it('falls back to secondary subtitle if active one is empty/malformed', async () => {
-    vi.mocked(db.tracks.get).mockResolvedValue(undefined) // Not a local file track
+    vi.mocked(DownloadsRepository.getTrackSnapshot).mockResolvedValue({
+      id: 'track-1',
+      sourceType: 'podcast_download',
+    } as never)
 
     vi.mocked(DownloadsRepository.getReadySubtitlesByTrackId).mockResolvedValue([
       {
@@ -82,7 +83,10 @@ describe('remoteTranscript integration (tryApplyCachedAsrTranscript)', () => {
   })
 
   it('returns false if all candidates are invalid', async () => {
-    vi.mocked(db.tracks.get).mockResolvedValue(undefined)
+    vi.mocked(DownloadsRepository.getTrackSnapshot).mockResolvedValue({
+      id: 'track-1',
+      sourceType: 'podcast_download',
+    } as never)
     vi.mocked(DownloadsRepository.getReadySubtitlesByTrackId).mockResolvedValue([
       {
         fileSub: { id: 'sub-1' } as unknown as FileSubtitle,
@@ -92,5 +96,38 @@ describe('remoteTranscript integration (tryApplyCachedAsrTranscript)', () => {
 
     const success = await tryApplyCachedAsrTranscript('https://example.com/audio.mp3', 'track-1', 1)
     expect(success).toBe(false)
+  })
+
+  it('falls back to cached remote transcript when localTrackId is stale', async () => {
+    vi.mocked(DownloadsRepository.getTrackSnapshot).mockResolvedValue(undefined as never)
+    vi.mocked(PlaybackRepository.getRemoteTranscriptByUrl).mockResolvedValue({
+      id: 'remote-1',
+      url: 'https://example.com/audio.mp3',
+      cues: [{ start: 0, end: 1, text: 'Remote cue' }],
+      cueSchemaVersion: 1,
+      fetchedAt: Date.now(),
+    })
+
+    const success = await tryApplyCachedAsrTranscript('https://example.com/audio.mp3', 'track-1', 1)
+
+    expect(success).toBe(true)
+    expect(useTranscriptStore.getState().setSubtitles).toHaveBeenCalledWith([
+      { start: 0, end: 1, text: 'Remote cue' },
+    ])
+  })
+
+  it('treats cached remote transcript as a stored source when localTrackId is stale', async () => {
+    vi.mocked(DownloadsRepository.getTrackSnapshot).mockResolvedValue(undefined as never)
+    vi.mocked(PlaybackRepository.getRemoteTranscriptByUrl).mockResolvedValue({
+      id: 'remote-1',
+      url: 'https://example.com/audio.mp3',
+      cues: [{ start: 0, end: 1, text: 'Remote cue' }],
+      cueSchemaVersion: 1,
+      fetchedAt: Date.now(),
+    })
+
+    await expect(hasStoredTranscriptSource('https://example.com/audio.mp3', 'track-1')).resolves.toBe(
+      true
+    )
   })
 })

@@ -54,6 +54,12 @@ function makeDownloadedTrack(
     createdAt: 1,
     downloadedAt: 1,
     countryAtSave: 'US',
+    sourcePodcastItunesId: 'podcast-1',
+    sourceEpisodeGuid: 'episode-guid-1',
+    sourcePodcastTitle: 'Podcast Title',
+    sourceEpisodeTitle: 'Episode Title',
+    sourceDescription: 'Episode description',
+    sourceArtworkUrl: 'https://example.com/cover.jpg',
     ...overrides,
   }
 }
@@ -521,6 +527,12 @@ describe('DownloadsPage Regression', () => {
       sourceUrlNormalized: 'https://example.com/audio.mp3',
       downloadedAt: 3,
       countryAtSave: 'US',
+      sourcePodcastItunesId: 'podcast-unconfigured',
+      sourceEpisodeGuid: 'episode-guid-unconfigured',
+      sourcePodcastTitle: 'Unconfigured Podcast',
+      sourceEpisodeTitle: 'Unconfigured Episode',
+      sourceDescription: 'Unconfigured episode description',
+      sourceArtworkUrl: 'https://example.com/unconfigured-cover.jpg',
     }
 
     const dispatchSpy = vi.spyOn(window, 'dispatchEvent')
@@ -732,10 +744,13 @@ describe('DownloadsPage Regression', () => {
     await waitFor(() => {
       expect(setAudioUrlMock).toHaveBeenCalledWith(
         'blob:audio',
-        'Duration Metadata Track',
-        null,
+        'Episode Title',
+        'https://example.com/cover.jpg',
         expect.objectContaining({
           durationSeconds: 1800,
+          showTitle: 'Podcast Title',
+          episodeGuid: 'episode-guid-1',
+          podcastItunesId: 'podcast-1',
         }),
         false
       )
@@ -953,7 +968,10 @@ describe('DownloadsPage Regression', () => {
       sourceUrlNormalized: 'https://example.com/route-country-missing.mp3',
       sourcePodcastItunesId: '12345',
       sourceEpisodeGuid: 'episode-abc',
+      sourcePodcastTitle: 'Route Country Podcast',
       sourceEpisodeTitle: 'Episode Country Missing',
+      sourceDescription: 'Episode country missing description',
+      sourceArtworkUrl: 'https://example.com/route-country-cover.jpg',
       downloadedAt: 4,
       countryAtSave: '', // simulate missing even though type requires it
     }

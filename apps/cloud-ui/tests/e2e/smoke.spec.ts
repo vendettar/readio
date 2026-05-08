@@ -24,7 +24,7 @@ async function seedSubscriptions(page: Page) {
     if (!db) throw new Error('Test harness DB not found')
 
     await db.addSubscription({
-      feedUrl: 'https://example.com/rss',
+      podcastItunesId: 'e2e-podcast-1',
       title: 'E2E Test Podcast',
       author: 'Playwright',
       artworkUrl: '',

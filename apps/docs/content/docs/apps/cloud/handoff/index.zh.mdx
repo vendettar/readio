@@ -26,7 +26,8 @@ Cloud handoff 树现在是应用级前后端契约的当前 SSOT：
 - 由 `apps/cloud-api` 直接提供 `apps/cloud-ui/dist` 的构建产物。
 - 让已迁移的 discovery、search、feed 流量通过 `apps/cloud-api` 以同源后端方式承载。
 - 在浏览器直连可用时优先使用浏览器直连；仅对已批准的媒体失败类由 `apps/cloud-api` 提供内建 fallback 代理。
-- 让浏览器本地的下载、转录和其他本地媒体产物继续留在浏览器本地；清除站点数据后仍会被移除。
+- 让浏览器本地的下载、本地 transcript 和其他 browser-owned 媒体产物继续留在浏览器本地；清除站点数据后仍会被移除。
+- 允许符合条件的 podcast episode 额外拥有 backend-owned、可共享复用的 transcript assets，并把它们保存在 deployment-owned 存储下。
 - 让 Cloud Settings 在当前契约中不再包含 `CORS Proxy` 区块。
 - 让 Cloud ASR provider 转写通过 `apps/cloud-api` 里的独立同源 relay 提交，同时在这一阶段保持 provider credential 由用户拥有并由浏览器按请求提供。
 - 让 Cloud ASR provider 的验证 / readiness 在后续指令明确修改之前继续保持 browser-direct。
@@ -55,8 +56,9 @@ Cloud handoff 树现在是应用级前后端契约的当前 SSOT：
 ## 4. SQLite 启动状态
 
 - SQLite 是 Cloud 当前的持久化启动目标。
-- 启动路径会创建父目录、打开数据库、执行初始化 PRAGMA，并在关闭时清理干净。
-- 这一阶段不定义 schema、迁移、同步或认证层。
+- 启动路径会打开数据库、应用平台级 pragma baseline、执行 goose migrations，并在关闭时清理干净。
+- shared podcast transcript asset metadata 现在保存在 backend SQLite 中，而 canonical transcript cue payload 以 backend-owned `json.gz` 文件形式保存在 `PODCASR_TRANSCRIPTS_DIR` 下。
+- browser-local transcript artifacts 仍然只属于浏览器；这层后端存储与它们分离，只适用于符合条件的 shared podcast transcript assets。
 
 ## 5. 边界
 
@@ -74,7 +76,8 @@ Cloud handoff 树现在是应用级前后端契约的当前 SSOT：
 - 不要声称所有音频都会一直走后端。
 - 不要声称 `/api/proxy` 负责 provider 转写。
 - 不要声称 Cloud 在这一阶段会服务端持久化用户的 ASR provider credential。
-- 不要声称存在服务端媒体缓存或持久化。
+- 不要声称存在通用的服务端媒体缓存，或已经把浏览器本地 library 迁到服务端。
+- 应明确说明 backend-owned shared podcast transcript assets 是一个面向符合条件 podcast episode 的窄范围持久化后端产物契约。
 - 未来 Cloud 演进应放在明确标记为 future direction 的文档里。
 
 ## 6. 媒体 fallback 审计

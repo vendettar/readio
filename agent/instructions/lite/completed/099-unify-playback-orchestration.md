@@ -56,7 +56,7 @@ Eliminate duplicated remote-playback metadata construction and action wiring by 
    - Required exports:
      - `resolvePlaybackArtwork(source, size?)`
      - `mapFeedEpisodeToPlaybackPayload(episode, podcast)`
-     - `mapSearchEpisodeToPlaybackPayload(episode, feedUrl?)`
+     - `mapSearchEpisodeToPlaybackPayload(episode, legacyFeedHint?)`
      - `mapFavoriteToPlaybackPayload(favorite)`
      - `mapSessionToPlaybackPayload(session)`
    - Required payload shape:

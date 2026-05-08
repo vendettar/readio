@@ -3,10 +3,12 @@ import { Play, Star } from 'lucide-react'
 import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNetworkStatus } from '../../hooks/useNetworkStatus'
-import type { FavoriteEpisodeInput, SearchEpisode } from '../../lib/discovery'
+import { buildFavoriteKey } from '../../lib/db/favoriteIdentity'
+import { mapSearchEpisodeToFavoriteInputs } from '../../lib/db/favoriteMappers'
+import type { SearchEpisode } from '../../lib/discovery'
+import { getCanonicalSearchEpisodeIdentity } from '../../lib/discovery/searchEpisodeContract'
 import { ensurePodcastDetail } from '../../lib/discovery/queryCache'
 import { canPlayRemoteStreamWithoutTranscript } from '../../lib/player/remotePlayback'
-import { normalizeCountryParam } from '../../lib/routes/podcastRoutes'
 import { cn } from '../../lib/utils'
 import { useExploreStore } from '../../store/exploreStore'
 import { EpisodeListItem } from '../EpisodeRow'
@@ -30,43 +32,42 @@ export function SearchEpisodeItem({
   const { t, i18n } = useTranslation()
   const language = i18n.resolvedLanguage ?? i18n.language
   const { isOnline } = useNetworkStatus()
-  // Use atomic selectors to avoid subscribing to entire store
-  const favorites = useExploreStore((s) => s.favorites)
   const addFavorite = useExploreStore((s) => s.addFavorite)
   const removeFavorite = useExploreStore((s) => s.removeFavorite)
-  const globalCountry = normalizeCountryParam(useExploreStore((s) => s.country))
+  const globalCountry = useExploreStore((s) => s.country)
 
   const [isMenuOpen, setIsMenuOpen] = React.useState(false)
+  const canonicalIdentity = getCanonicalSearchEpisodeIdentity(episode)
+  const favoriteKey = buildFavoriteKey(
+    canonicalIdentity.podcastItunesId,
+    canonicalIdentity.episodeGuid
+  )
   const canPlayWithoutTranscript =
     !!onPlayWithoutTranscript &&
-    canPlayRemoteStreamWithoutTranscript({ audioUrl: episode.episodeUrl }, isOnline)
+    canPlayRemoteStreamWithoutTranscript({ audioUrl: episode.audioUrl }, isOnline)
 
-  const favoritedItem = favorites.find((f) => f.audioUrl === episode.episodeUrl)
-  const favorited = !!favoritedItem
+  const favorited = useExploreStore((s) =>
+    s.isFavorited(canonicalIdentity.podcastItunesId, canonicalIdentity.episodeGuid)
+  )
 
   const favoriteAction = useEpisodeRowFavoriteAction({
     favorited,
-    favoriteKey: favoritedItem?.key ?? null,
+    favoriteKey,
     addFavorite,
     removeFavorite,
     buildAddPayload: async () => {
-      const podcastItunesId = episode.podcastItunesId
-      if (!podcastItunesId) {
-        throw new Error('Missing podcastItunesId for metadata lookup')
-      }
-      const podcast = await ensurePodcastDetail(queryClient, String(podcastItunesId), globalCountry)
+      const podcast = await ensurePodcastDetail(
+        queryClient,
+        episode.podcastItunesId,
+        undefined,
+        globalCountry
+      )
       if (!podcast) throw new Error('Podcast not found')
 
-      const episodeObj: FavoriteEpisodeInput = {
-        title: episode.title || '',
-        description: episode.shortDescription || '',
-        audioUrl: episode.episodeUrl,
-        pubDate: '',
-        artworkUrl: episode.artwork,
-        duration: (episode.trackTimeMillis || 0) / 1000,
-        episodeGuid: episode.episodeGuid,
+      return {
+        ...mapSearchEpisodeToFavoriteInputs(podcast, episode),
+        countryAtSave: globalCountry,
       }
-      return { podcast, episode: episodeObj }
     },
     errorLogScope: 'SearchEpisodeItem',
   })

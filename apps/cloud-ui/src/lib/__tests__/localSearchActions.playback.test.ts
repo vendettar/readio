@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
 import type { LocalSearchResult } from '../../hooks/useGlobalSearch'
+import type { PlaybackSession } from '../dexieDb'
 import { executeLocalSearchAction, type LocalSearchActionDeps } from '../localSearchActions'
 
 const setPlayableContextMock = vi.fn()
@@ -32,19 +32,18 @@ vi.mock('../logger', () => ({
 }))
 
 vi.mock('../dexieDb', () => ({
-  DB: {
+  isNavigableExplorePlaybackSession: (session: PlaybackSession) =>
+    session.source === 'explore' &&
+    !!session.countryAtSave &&
+    !!session.podcastItunesId &&
+    !!session.episodeGuid,
+}))
+
+vi.mock('../repositories/PlaybackRepository', () => ({
+  PlaybackRepository: {
     getAudioBlob: vi.fn(),
     getSubtitle: vi.fn(),
   },
-  isNavigableExplorePlaybackSession: (session: {
-    source?: string
-    countryAtSave?: string
-    podcastItunesId?: string
-    episodeGuid?: string
-  }) =>
-    session.source === 'explore' &&
-    !!session.countryAtSave &&
-    (!!session.podcastItunesId || !!session.episodeGuid),
 }))
 
 function createDeps(): LocalSearchActionDeps {
@@ -75,14 +74,19 @@ describe('localSearchActions remote playback delegation', () => {
       badges: ['favorite'],
       data: {
         id: 'fav-db-id',
-        key: 'feed::audio',
-        feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
+        key: '::',
         audioUrl: 'https://example.com/audio.mp3',
         episodeTitle: 'Fallback Episode',
         podcastTitle: 'Podcast',
         artworkUrl: 'https://example.com/art.jpg',
+        episodeArtworkUrl: '',
+        description: 'Test',
+        pubDate: '2025-02-01',
+        durationSeconds: 0,
         addedAt: Date.now(),
         countryAtSave: 'us',
+        podcastItunesId: '',
+        episodeGuid: '',
       },
     } satisfies LocalSearchResult
 
@@ -126,9 +130,13 @@ describe('localSearchActions remote playback delegation', () => {
         audioFilename: '',
         subtitleFilename: '',
         audioUrl: 'https://example.com/history.mp3',
+        artworkUrl: 'https://example.com/history.jpg',
+        showTitle: 'History Podcast',
+        podcastItunesId: '',
+        episodeGuid: '',
         countryAtSave: 'us',
       },
-    } satisfies LocalSearchResult
+    } as unknown as LocalSearchResult
 
     await executeLocalSearchAction(result, deps)
 

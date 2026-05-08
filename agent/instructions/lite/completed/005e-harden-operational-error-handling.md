@@ -35,12 +35,12 @@ Eliminate silent failures and align operational error handling with the debuggin
      - Logs a DEV-only warning via `warn` (include error + `audioUrl` when present).
      - Calls `usePlayerStore.getState().pause()` (or equivalent) to keep state aligned with the element.
 2. **Add contextual logging for subscribe/unsubscribe failures** (`apps/lite/src/routeComponents/podcast/PodcastShowPage.tsx`):
-   - In `handleSubscribe` catch block, log via `logError` with `podcast.id`, `podcast.feedUrl`, and the intended action (`subscribe`/`unsubscribe`).
+   - In `handleSubscribe` catch block, log via `logError` with `podcast.id`, the legacy feed field when still present, and the intended action (`subscribe`/`unsubscribe`).
    - Keep the existing toast behavior unchanged.
 3. **Reduce clipboard error noise** (`apps/lite/src/hooks/selection/useSelectionActions.ts`):
    - Replace `navigator.clipboard.writeText(...).catch(logError)` with a DEV-only `warn` (or a silent no-op) to avoid production error spam for expected permission failures.
 4. **Add low-noise diagnostics for feed validation** (`apps/lite/src/lib/recommended/validator.ts`):
-   - In the outer `catch`, add a DEV-only `warn` that includes `feedUrl` and `country`.
+   - In the outer `catch`, add a DEV-only `warn` that includes the legacy feed field when present and `country`.
    - Keep the return value unchanged (`false`) to preserve current behavior.
 
 ## Verification

@@ -264,11 +264,6 @@ const locale = {
   settingsAsrPricingLink: 'Groq-Preise',
   validationGroqKeyPrefix: 'Groq-API-Schlüssel muss mit gsk_ beginnen',
   validationQwenKeyPrefix: 'Qwen-API-Schlüssel muss mit sk- beginnen',
-  settingsMigration: 'Migration',
-  settingsMigrationDesc:
-    'Importieren oder exportieren Sie Abonnements im OPML-Format. Beim Import werden bestehende Abonnements zusammengeführt (Deduplizierung, keine Löschung).',
-  settingsImportOpml: 'OPML importieren',
-  settingsExportOpml: 'OPML exportieren',
   settingsVault: 'Persönlicher Tresor',
   settingsVaultDesc:
     'Sichern und wiederherstellen Sie alle Ihre Metadaten (Abonnements, Favoriten, Verlauf, Ordner). Audiodateien sind nicht enthalten.',
@@ -505,11 +500,6 @@ const locale = {
   toastVaultImportSuccess: 'Tresor erfolgreich importiert',
   toastVaultImportFailed: 'Import des Tresors fehlgeschlagen',
   toastVaultExportFailed: 'Export des Tresors fehlgeschlagen',
-  toastOpmlEmpty: 'Keine Abonnements in der OPML-Datei gefunden',
-  toastOpmlImportSuccess: 'OPML erfolgreich importiert',
-  toastOpmlImportFailed: 'Import der OPML-Datei fehlgeschlagen',
-  toastOpmlExportEmpty: 'Keine Abonnements zum Exportieren vorhanden',
-  toastOpmlExportFailed: 'Export der OPML fehlgeschlagen',
   badgeFavorited: 'Favorisiert',
   badgePlayed: 'Abgespielt',
   badgeSubscribed: 'Abonniert',

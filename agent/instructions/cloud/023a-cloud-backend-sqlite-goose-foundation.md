@@ -1,4 +1,4 @@
-# Instruction 023a: Cloud Backend SQLite + Goose Foundation
+# Instruction 023a: Cloud Backend SQLite + Goose Foundation [COMPLETED]
 
 Discuss and approve this document before implementation.
 
@@ -46,6 +46,8 @@ Reference deployment examples may place:
 Those are reference deployment shapes, not universal platform invariants.
 
 Shared data root rule:
+- `READIO_CLOUD_DB_PATH` is required; `023a` does not permit a release-local fallback database path
+- `READIO_CLOUD_DB_PATH` must be configured as an absolute path
 - the default shared data root is derived from the parent directory of `READIO_CLOUD_DB_PATH`
 - later work may introduce a dedicated override env for the shared data root or feature-specific artifact roots
 - unless and until such an override is explicitly introduced, features should treat the parent directory of `READIO_CLOUD_DB_PATH` as the authoritative shared data root
@@ -102,9 +104,10 @@ apps/cloud-api/
 
 Startup order must be:
 1. open SQLite
-2. apply required SQLite pragmas
-3. run pending goose migrations
-4. continue repository/bootstrap/server setup
+2. perform an initial connectivity ping
+3. apply required SQLite pragmas
+4. run pending goose migrations
+5. continue repository/bootstrap/server setup
 
 Request handlers must not start before migration completion.
 
@@ -172,6 +175,7 @@ Pragma enforcement model:
 - the implementation must choose one explicit model and apply it consistently:
   - either a single long-lived configured SQLite handle for runtime work
   - or a per-connection initialization path that guarantees required pragmas are set on every runtime connection before use
+- `023a` keeps a single runtime `*sql.DB` with one open SQLite connection, and also encodes `foreign_keys`, `busy_timeout`, and `synchronous` in the DSN so any later connection inherits the same baseline; `journal_mode=WAL` is established in the ordered startup path before migrations
 - verification must cover the actual runtime connection model, not only initial startup wiring
 
 ## 10. Cross-Feature Governance Rules
@@ -253,3 +257,30 @@ Implementation following this document should report:
 3. startup migration hook location
 4. shared data root assumptions
 5. verification results
+
+## Completion
+
+- Completed by: Codex
+- Goose integration points:
+  - embedded SQL migrations via `//go:embed migrations/*.sql`
+  - startup migration runner in `apps/cloud-api/main.go`
+- Migration directory path:
+  - `apps/cloud-api/migrations/`
+- Startup migration hook location:
+  - `runCloudServer -> cloudOpenSQLite -> runCloudSQLiteMigrations`
+- Shared data root assumptions:
+  - `READIO_CLOUD_DB_PATH` is required and absolute
+  - deployer pre-creates the parent directory
+  - later features derive their shared data root from the database file's parent directory unless a dedicated artifact root is introduced
+- Verification results:
+  - `resolveCloudDBPath` requires an explicit absolute path
+  - startup fails fast when the SQLite parent directory is missing
+  - `foreign_keys`, `busy_timeout`, and `synchronous` are asserted on opened SQLite connections
+  - `journal_mode=WAL` is established before migrations
+  - goose migrations create `goose_db_version`, rerun idempotently, and retry safely after a failed migration set on restart
+  - migration failure blocks request serving
+- Commands run:
+  - `gofmt -w main.go main_test.go`
+  - `go test ./...`
+  - `git diff --check -- apps/cloud-api/main.go apps/cloud-api/main_test.go apps/cloud-api/go.mod apps/cloud-api/go.sum apps/docs/content/docs/apps/cloud/handoff/backend-sqlite-governance.mdx apps/docs/content/docs/apps/cloud/handoff/backend-sqlite-governance.zh.mdx apps/docs/content/docs/apps/cloud/deployment.mdx apps/docs/content/docs/apps/cloud/deployment.zh.mdx agent/instructions/cloud/023a-cloud-backend-sqlite-goose-foundation.md`
+- Date: 2026-04-29

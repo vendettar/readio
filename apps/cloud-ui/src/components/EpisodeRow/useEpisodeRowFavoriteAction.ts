@@ -1,27 +1,22 @@
 import { useCallback, useState } from 'react'
-import type { FavoriteEpisodeInput } from '@/lib/discovery'
+import type { FavoriteEpisodeInput, FavoritePodcastInput } from '@/lib/db/types'
 import { logError } from '@/lib/logger'
 import { toast } from '@/lib/toast'
 
 interface AddFavoritePayload {
-  podcast: { feedUrl?: string; title?: string; artwork?: string; podcastItunesId?: string | number }
+  podcast: FavoritePodcastInput
   episode: FavoriteEpisodeInput
-  country?: string | null | undefined
+  countryAtSave: string
 }
 
 interface UseEpisodeRowFavoriteActionArgs {
   favorited: boolean
   favoriteKey: string | null
   addFavorite: (
-    podcast: {
-      feedUrl?: string
-      title?: string
-      artwork?: string
-      podcastItunesId?: string | number
-    },
+    podcast: FavoritePodcastInput,
     episode: FavoriteEpisodeInput,
-    signal?: AbortSignal,
-    country?: string | null | undefined
+    signal: AbortSignal | undefined,
+    countryAtSave: string
   ) => Promise<unknown> | unknown
   removeFavorite: (key: string) => Promise<unknown> | unknown
   buildAddPayload: () => Promise<AddFavoritePayload>
@@ -124,7 +119,7 @@ export function useEpisodeRowFavoriteAction({
     setIsSaving(true)
     try {
       const payload = await buildAddPayload()
-      await addFavorite(payload.podcast, payload.episode, undefined, payload.country)
+      await addFavorite(payload.podcast, payload.episode, undefined, payload.countryAtSave)
     } catch (err) {
       logError(`[${errorLogScope}] Failed to favorite:`, err)
       toast.errorKey(favoriteFailureToastKey(err))

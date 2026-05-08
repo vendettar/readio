@@ -27,71 +27,71 @@ describe('AppShell - Surface Morph Continuity (089c)', () => {
     })
   })
 
-  it('renders no surface frame in mini mode', () => {
+  it('renders no surface frame in mini mode', async () => {
     render(<AppShell>Child</AppShell>)
-    expect(screen.getByTestId('mini-player')).toBeTruthy()
+    expect(await screen.findByTestId('mini-player')).toBeTruthy()
     expect(screen.queryByTestId('player-surface-frame')).toBeNull()
   })
 
-  it('renders exactly one surface frame in docked mode', () => {
+  it('renders exactly one surface frame in docked mode', async () => {
     act(() => {
       usePlayerSurfaceStore.setState({ mode: 'docked' })
     })
     render(<AppShell>Child</AppShell>)
 
-    const frames = screen.getAllByTestId('player-surface-frame')
+    const frames = await screen.findAllByTestId('player-surface-frame')
     expect(frames).toHaveLength(1)
     expect(frames[0].getAttribute('data-mode')).toBe('docked')
   })
 
-  it('renders exactly one surface frame in full mode', () => {
+  it('renders exactly one surface frame in full mode', async () => {
     act(() => {
       usePlayerSurfaceStore.setState({ mode: 'full' })
     })
     render(<AppShell>Child</AppShell>)
 
-    const frames = screen.getAllByTestId('player-surface-frame')
+    const frames = await screen.findAllByTestId('player-surface-frame')
     expect(frames).toHaveLength(1)
     expect(frames[0].getAttribute('data-mode')).toBe('full')
   })
 
-  it('never renders two surface frames simultaneously', () => {
+  it('never renders two surface frames simultaneously', async () => {
     // Test docked
     act(() => {
       usePlayerSurfaceStore.setState({ mode: 'docked' })
     })
     const { rerender } = render(<AppShell>Child</AppShell>)
-    expect(screen.getAllByTestId('player-surface-frame')).toHaveLength(1)
+    expect(await screen.findAllByTestId('player-surface-frame')).toHaveLength(1)
 
     // Transition to full
     act(() => {
       usePlayerSurfaceStore.setState({ mode: 'full' })
     })
     rerender(<AppShell>Child</AppShell>)
-    expect(screen.getAllByTestId('player-surface-frame')).toHaveLength(1)
+    expect(await screen.findAllByTestId('player-surface-frame')).toHaveLength(1)
 
     // Transition back to docked
     act(() => {
       usePlayerSurfaceStore.setState({ mode: 'docked' })
     })
     rerender(<AppShell>Child</AppShell>)
-    expect(screen.getAllByTestId('player-surface-frame')).toHaveLength(1)
+    expect(await screen.findAllByTestId('player-surface-frame')).toHaveLength(1)
   })
 
-  it('mode toggles do not alter route (no navigation side effect)', () => {
+  it('mode toggles do not alter route (no navigation side effect)', async () => {
     const { rerender } = render(<AppShell>Child</AppShell>)
 
     act(() => {
       usePlayerSurfaceStore.setState({ mode: 'docked' })
     })
     rerender(<AppShell>Child</AppShell>)
-    expect(screen.getByTestId('player-surface-frame')).toBeTruthy()
+    expect(await screen.findByTestId('player-surface-frame')).toBeTruthy()
 
     act(() => {
       usePlayerSurfaceStore.setState({ mode: 'full' })
     })
     rerender(<AppShell>Child</AppShell>)
-    expect(screen.getByTestId('player-surface-frame')).toBeTruthy()
+    expect(await screen.findByTestId('player-surface-frame')).toBeTruthy()
 
     act(() => {
       usePlayerSurfaceStore.setState({ mode: 'mini' })
@@ -100,20 +100,20 @@ describe('AppShell - Surface Morph Continuity (089c)', () => {
     expect(screen.queryByTestId('player-surface-frame')).toBeNull()
   })
 
-  it('MiniPlayer is always present regardless of mode', () => {
+  it('MiniPlayer is always present regardless of mode', async () => {
     const { rerender } = render(<AppShell>Child</AppShell>)
-    expect(screen.getByTestId('mini-player')).toBeTruthy()
+    expect(await screen.findByTestId('mini-player')).toBeTruthy()
 
     act(() => {
       usePlayerSurfaceStore.setState({ mode: 'docked' })
     })
     rerender(<AppShell>Child</AppShell>)
-    expect(screen.getByTestId('mini-player')).toBeTruthy()
+    expect(await screen.findByTestId('mini-player')).toBeTruthy()
 
     act(() => {
       usePlayerSurfaceStore.setState({ mode: 'full' })
     })
     rerender(<AppShell>Child</AppShell>)
-    expect(screen.getByTestId('mini-player')).toBeTruthy()
+    expect(await screen.findByTestId('mini-player')).toBeTruthy()
   })
 })

@@ -30,17 +30,21 @@ Cloud backend now also owns server-side SQLite persistence for backend-governed 
 Current and planned backend-owned SQLite responsibilities include:
 
 - built-in ASR quota / reservation / idempotency state
-- parsed feed snapshot storage and bounded feed-episode retention
 - other backend-owned operational state that must survive process restarts
+
+Retired direction:
+
+- the old discovery feed snapshot / feed-episode retention plan is retired with `/api/v1/discovery/feed`
+- backend SQLite must not be documented as the active owner of discovery feed parsing or feed-route cache state
 
 This backend SQLite layer is not a generic replacement for browser-local user library data.
 
 ## 4. Runtime Cache Status
 
-Discovery/search/feed frontend persistence is no longer modeled as a long-lived IndexedDB cache in Cloud.
+Discovery/search frontend persistence is no longer modeled as a long-lived IndexedDB cache in Cloud.
 
 - frontend discovery relies on TanStack Query memory cache
-- backend discovery may rely on backend-managed memory cache and/or SQLite-backed cache layers depending on the feature path
+- active backend discovery routes rely on backend-managed in-memory cache where applicable; the retired feed route does not leave behind an active SQLite discovery-cache contract
 - `runtime_cache` still exists for remaining browser-local runtime caches that still have owners
 
 ## 5. Backend SQLite Governance Summary
@@ -80,3 +84,4 @@ Cloud docs must describe persistence ownership honestly:
 - no account sync for browser-local library state
 - no server-backed recovery for browser-local-only data
 - no claim that backend SQLite is a user archive unless a feature explicitly defines that contract
+- repo-owned Cloud runtime contracts do not persist or key library state by any legacy feed transport field

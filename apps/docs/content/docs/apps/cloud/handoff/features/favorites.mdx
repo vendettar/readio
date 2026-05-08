@@ -9,9 +9,12 @@ title: Favorites
 
 ## 2. Key Model
 
-Favorites are still browser-local records keyed by episode identity, with show metadata including:
+Favorites are still browser-local records keyed by canonical episode identity:
 
-- `feedUrl`
+- primary key model: `podcastItunesId::episodeGuid`
+
+Saved metadata may include:
+
 - `podcastTitle`
 - `artworkUrl`
 - `podcastItunesId`

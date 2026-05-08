@@ -5,11 +5,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { type LocalSearchResult, useGlobalSearch } from '../../hooks/useGlobalSearch'
 import { useNetworkStatus } from '../../hooks/useNetworkStatus'
+import {
+  hasActiveSearchQuery,
+  resolveGlobalSearchPresentation,
+  trimSearchQuery,
+} from '../../hooks/searchSection'
 import type { SearchPodcast as PodcastType, SearchEpisode } from '../../lib/discovery'
-import { buildSearchEpisodeRouteState } from '../../lib/discovery/editorPicks'
 import { executeLocalSearchAction } from '../../lib/localSearchActions'
 import { buildSearchEpisodeRoute } from '../../lib/routes/episodeResolver'
-import { buildPodcastShowRoute, normalizeCountryParam } from '../../lib/routes/podcastRoutes'
+import { buildPodcastShowRoute } from '../../lib/routes/podcastRoutes'
 import { getAppConfig } from '../../lib/runtimeConfig'
 import { cn } from '../../lib/utils'
 import { useExploreStore } from '../../store/exploreStore'
@@ -121,14 +125,16 @@ export function CommandPalette() {
   const setSessionId = usePlayerStore((s) => s.setSessionId)
   const setPlaybackTrackId = usePlayerStore((s) => s.setPlaybackTrackId)
   const toMini = usePlayerSurfaceStore((s) => s.toMini)
-  const globalCountry = normalizeCountryParam(useExploreStore((s) => s.country))
+  const globalCountry = useExploreStore((s) => s.country)
   const { isOnline } = useNetworkStatus()
   const config = getAppConfig()
   const inputRef = useRef<HTMLInputElement>(null)
   const anchorRef = useRef<HTMLDivElement>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
   const panelId = 'global-search-command-panel'
-  const defaultSearchActionValue = query.length >= 2 ? `search-global-dummy-${query}` : ''
+  const trimmedQuery = trimSearchQuery(query)
+  const hasActiveQuery = hasActiveSearchQuery(query)
+  const defaultSearchActionValue = hasActiveQuery ? `search-global-dummy-${trimmedQuery}` : ''
   const [selectedValue, setSelectedValue] = useState(defaultSearchActionValue)
   const clearHoverSelection = useCallback(() => {
     setSelectedValue((prev) =>
@@ -179,33 +185,39 @@ export function CommandPalette() {
     setSelectedValue(defaultSearchActionValue)
   }, [defaultSearchActionValue])
 
-  const { podcasts, episodes, local, isLoading, isEmpty } = useGlobalSearch(query, isOverlayOpen)
+  const searchResults = useGlobalSearch(query, isOverlayOpen)
+  const { podcastSection, episodeSection, localSection } = searchResults
+  const podcasts = podcastSection.items
+  const episodes = episodeSection.items
+  const local = localSection.items
+  const { totalResultsCount: totalResultCount, overallState } = resolveGlobalSearchPresentation({
+    query,
+    enabled: isOverlayOpen,
+    podcastSection,
+    episodeSection,
+    localSection,
+    totalResultsCount: searchResults.totalResultsCount,
+    overallState: searchResults.overallState,
+  })
   const suggestions = useMemo(() => {
-    const seen = new Set<string>()
-    return podcasts
-      .filter((p) => {
-        const lowerName = (p.title || '').toLowerCase().trim()
-        if (seen.has(lowerName)) return false
-        seen.add(lowerName)
-        return true
-      })
-      .slice(0, config.SEARCH_SUGGESTIONS_LIMIT)
+    return podcasts.slice(0, config.SEARCH_SUGGESTIONS_LIMIT)
   }, [podcasts, config.SEARCH_SUGGESTIONS_LIMIT])
 
   // Only show the floating panel if there's a query or content to display
   const hasContent =
-    query.length >= 2 &&
-    (isLoading || local.length > 0 || podcasts.length > 0 || episodes.length > 0)
+    hasActiveQuery &&
+    (overallState === 'loading' ||
+      overallState === 'refreshing' ||
+      overallState === 'unavailable' ||
+      totalResultCount > 0)
   const shouldShowPanel = isOverlayOpen && hasContent
 
   const handleSelectPodcast = (podcast: PodcastType) => {
     closeOverlay()
     toMini()
-    const podcastId = podcast.podcastItunesId
-    if (!podcastId) return
     const showRoute = buildPodcastShowRoute({
       country: globalCountry,
-      podcastId: String(podcastId),
+      podcastId: podcast.podcastItunesId,
     })
     if (showRoute) {
       void navigate(showRoute)
@@ -215,16 +227,9 @@ export function CommandPalette() {
   const handleSelectEpisode = async (episode: SearchEpisode) => {
     closeOverlay()
     toMini()
-    const routeObject = buildSearchEpisodeRoute(
-      episode.podcastItunesId?.toString(),
-      episode.episodeGuid,
-      globalCountry
-    )
+    const routeObject = buildSearchEpisodeRoute(episode, globalCountry)
     if (routeObject) {
-      void navigate({
-        ...routeObject,
-        state: buildSearchEpisodeRouteState(episode) as never,
-      })
+      void navigate(routeObject)
     }
   }
 
@@ -246,11 +251,11 @@ export function CommandPalette() {
   const handleViewAll = () => {
     closeOverlay()
     toMini()
-    void navigate({ to: '/search', search: { q: query } })
+    void navigate({ to: '/search', search: { q: trimmedQuery } })
   }
 
   return (
-    <search className="relative w-full px-4 pb-2">
+    <div role="search" className="relative w-full px-4 pb-2">
       <Popover
         open={isOverlayOpen}
         onOpenChange={(open) => {
@@ -371,7 +376,7 @@ export function CommandPalette() {
             )}
           >
             <CommandList id={panelId} className="scrollbar-none max-h-search-results p-1">
-              {isLoading && (
+              {(overallState === 'loading' || overallState === 'refreshing') && (
                 <div className="py-6 text-center text-sm text-muted-foreground animate-pulse">
                   {t('searchSearching')}
                 </div>
@@ -380,24 +385,32 @@ export function CommandPalette() {
               {/* Default "Search for..." action - auto-selected to support Enter -> Search Page */}
               {
                 /* Invisible Default Action - captures Enter key to trigger search page */
-                query.length >= 2 && (
+                hasActiveQuery && (
                   <CommandItem
-                    value={`search-global-dummy-${query}`}
+                    value={defaultSearchActionValue}
                     onSelect={handleViewAll}
                     className="h-0 p-0 overflow-hidden opacity-0 pointer-events-none data-[disabled=true]:h-0"
                   />
                 )
               }
 
-              {isEmpty && !isLoading && query.length >= 2 && (
+              {overallState === 'empty' && hasActiveQuery && (
                 <CommandEmpty className="py-10 text-center">
                   <Search className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
                   <p className="text-sm text-muted-foreground">{t('searchNoResults')}</p>
                 </CommandEmpty>
               )}
 
+              {overallState === 'unavailable' && hasActiveQuery && (
+                <CommandEmpty className="py-10 text-center">
+                  <Search className="h-8 w-8 text-muted-foreground/30 mx-auto mb-2" />
+                  <p className="text-sm text-foreground">{t('offline.badge')}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">{t('offline.explanation')}</p>
+                </CommandEmpty>
+              )}
+
               {/* Suggestions - Direct matches */}
-              {isOnline && suggestions.length > 0 && query.length >= 2 && (
+              {isOnline && suggestions.length > 0 && hasActiveQuery && (
                 <CommandGroup>
                   {suggestions.map((podcast: PodcastType) => (
                     <CommandItem
@@ -407,7 +420,7 @@ export function CommandPalette() {
                       className="flex items-center py-1 px-3 rounded-md hover:bg-primary hover:text-primary-foreground aria-selected:bg-primary aria-selected:text-primary-foreground data-[selected=true]:bg-primary data-[selected=true]:text-primary-foreground cursor-pointer"
                     >
                       <Search className="me-2 h-4 w-4 text-muted-foreground flex-shrink-0" />
-                      <HighlightedSuggestion text={podcast.title || ''} highlight={query} />
+                      <HighlightedSuggestion text={podcast.title} highlight={query} />
                     </CommandItem>
                   ))}
                 </CommandGroup>
@@ -488,7 +501,7 @@ export function CommandPalette() {
                   <CommandSeparator className="my-1" />
                   <CommandGroup heading={t('searchEpisodes')}>
                     {episodes.slice(0, config.SEARCH_EPISODES_LIMIT).map((episode, index, arr) => {
-                      const episodeKey = episode.episodeUrl
+                      const episodeKey = `${episode.podcastItunesId}::${episode.guid}`
                       return (
                         <CommandItem
                           key={`episode-${episodeKey}`}
@@ -523,6 +536,6 @@ export function CommandPalette() {
           </PopoverContent>
         </Command>
       </Popover>
-    </search>
+    </div>
   )
 }

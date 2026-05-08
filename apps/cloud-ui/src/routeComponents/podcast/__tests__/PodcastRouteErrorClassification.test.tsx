@@ -1,12 +1,16 @@
 import { render, screen } from '@testing-library/react'
+import type React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { makeParsedFeed, makePodcast } from '../../../lib/discovery/__tests__/fixtures'
+import {
+  makeEpisode,
+  makePodcast,
+  makePodcastEpisodes,
+} from '../../../lib/discovery/__tests__/fixtures'
 import PodcastEpisodeDetailPage from '../PodcastEpisodeDetailPage'
 import PodcastEpisodesPage from '../PodcastEpisodesPage'
 import PodcastShowPage from '../PodcastShowPage'
 
 const useQueryMock = vi.fn()
-const useInfiniteQueryMock = vi.fn()
 const useEpisodeResolutionMock = vi.fn()
 const queryClientMock = {
   getQueryData: vi.fn(),
@@ -18,13 +22,15 @@ const mockPodcast = makePodcast({
   podcastItunesId: '123',
   title: 'Test Podcast',
   author: 'Author',
+  lastUpdateTime: 1,
+  episodeCount: 10,
 })
 
 function setQueryState(input: {
   podcast?: typeof mockPodcast | null
   podcastError?: Error | null
-  feed?: ReturnType<typeof makeParsedFeed> | undefined
-  feedError?: Error | null
+  episodeList?: ReturnType<typeof makePodcastEpisodes> | undefined
+  episodesError?: Error | null
 }) {
   useQueryMock.mockImplementation(({ queryKey }: { queryKey: readonly unknown[] }) => {
     if (queryKey[1] === 'podcast-detail') {
@@ -35,11 +41,11 @@ function setQueryState(input: {
       }
     }
 
-    if (queryKey[1] === 'feed') {
+    if (queryKey[1] === 'episodes') {
       return {
-        data: input.feed,
+        data: input.episodeList,
         isLoading: false,
-        error: input.feedError ?? null,
+        error: input.episodesError ?? null,
       }
     }
 
@@ -47,28 +53,6 @@ function setQueryState(input: {
       data: undefined,
       isLoading: false,
       error: null,
-    }
-  })
-
-  useInfiniteQueryMock.mockImplementation(({ queryKey }: { queryKey: readonly unknown[] }) => {
-    if (queryKey[1] === 'feed') {
-      return {
-        data: input.feed ? { pages: [input.feed] } : undefined,
-        isLoading: false,
-        error: input.feedError ?? null,
-        isFetchingNextPage: false,
-        hasNextPage: false,
-        fetchNextPage: vi.fn(),
-      }
-    }
-
-    return {
-      data: undefined,
-      isLoading: false,
-      error: null,
-      isFetchingNextPage: false,
-      hasNextPage: false,
-      fetchNextPage: vi.fn(),
     }
   })
 }
@@ -83,7 +67,6 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('@tanstack/react-query', () => ({
   useQuery: (args: unknown) => useQueryMock(args),
-  useInfiniteQuery: (args: unknown) => useInfiniteQueryMock(args),
   useQueryClient: () => queryClientMock,
 }))
 
@@ -107,13 +90,6 @@ vi.mock('../../../hooks/useEpisodeResolution', () => ({
     country: string,
     routeState?: unknown
   ) => useEpisodeResolutionMock(podcastId, episodeKey, country, routeState),
-}))
-
-vi.mock('../../../lib/discovery', () => ({
-  default: {
-    getPodcastIndexPodcastByItunesId: vi.fn(),
-    fetchPodcastFeed: vi.fn(),
-  },
 }))
 
 vi.mock('../../../lib/logger', () => ({
@@ -144,18 +120,16 @@ vi.mock('../../../store/playerStore', () => ({
 describe('Podcast route error classification', () => {
   beforeEach(() => {
     useQueryMock.mockReset()
-    useInfiniteQueryMock.mockReset()
     useEpisodeResolutionMock.mockReset()
     queryClientMock.getQueryData.mockReset()
     queryClientMock.getQueryData.mockReturnValue(undefined)
     queryClientMock.setQueryData.mockReset()
   })
 
-  it('show page renders fetch error state when upstream feed/provider fails', () => {
+  it('show page renders fetch error state when podcast metadata lookup fails', () => {
     setQueryState({
-      podcast: mockPodcast,
-      feed: undefined,
-      feedError: new Error('feed failed'),
+      podcast: null,
+      podcastError: new Error('lookup failed'),
     })
 
     render(<PodcastShowPage />)
@@ -164,24 +138,38 @@ describe('Podcast route error classification', () => {
     expect(screen.queryByText('regionUnavailableMessage')).toBeNull()
   })
 
-  it('show page renders region-unavailable only for successful upstream unresolved content', () => {
+  it('show page keeps the shell and degrades only the episodes section when PI episode list lookup fails', () => {
     setQueryState({
       podcast: mockPodcast,
-      feed: makeParsedFeed({ episodes: [] }),
-      feedError: null,
+      episodeList: undefined,
+      episodesError: new Error('episode list failed'),
     })
 
     render(<PodcastShowPage />)
 
-    expect(screen.queryByText('regionUnavailableMessage')).not.toBeNull()
-    expect(screen.queryByText('regionUnavailableCta')).not.toBeNull()
+    expect(screen.queryByText('Test Podcast')).not.toBeNull()
+    expect(screen.queryByText('errorPodcastUnavailable')).not.toBeNull()
+    expect(screen.queryByText('regionUnavailableMessage')).toBeNull()
   })
 
-  it('episodes page renders fetch error state when upstream feed/provider fails', () => {
+  it('show page renders noEpisodes for a successful empty PI episode list', () => {
     setQueryState({
       podcast: mockPodcast,
-      feed: undefined,
-      feedError: new Error('feed failed'),
+      episodeList: makePodcastEpisodes({ episodes: [] }),
+      episodesError: null,
+    })
+
+    render(<PodcastShowPage />)
+
+    expect(screen.queryByText('noEpisodes')).not.toBeNull()
+    expect(screen.queryByText('regionUnavailableMessage')).toBeNull()
+  })
+
+  it('episodes page renders fetch error state when the PI episode list fails', () => {
+    setQueryState({
+      podcast: mockPodcast,
+      episodeList: undefined,
+      episodesError: new Error('episode list failed'),
     })
 
     render(<PodcastEpisodesPage />)
@@ -190,26 +178,25 @@ describe('Podcast route error classification', () => {
     expect(screen.queryByText('regionUnavailableMessage')).toBeNull()
   })
 
-  it('episodes page renders region-unavailable only for successful upstream unresolved content', () => {
+  it('episodes page renders noEpisodes for a successful empty PI episode list', () => {
     setQueryState({
       podcast: mockPodcast,
-      feed: makeParsedFeed({ episodes: [] }),
-      feedError: null,
+      episodeList: makePodcastEpisodes({ episodes: [] }),
+      episodesError: null,
     })
 
     render(<PodcastEpisodesPage />)
 
-    expect(screen.queryByText('regionUnavailableMessage')).not.toBeNull()
-    expect(screen.queryByText('regionUnavailableCta')).not.toBeNull()
+    expect(screen.queryByText('noEpisodes')).not.toBeNull()
+    expect(screen.queryByText('regionUnavailableMessage')).toBeNull()
   })
 
   it('detail page renders fetch error state when resolution fails', () => {
     useEpisodeResolutionMock.mockReturnValue({
-      podcast: mockPodcast,
-      episode: undefined,
+      resolvedContent: null,
       isLoading: false,
-      podcastError: null,
       resolutionError: new Error('lookup failed'),
+      notFound: null,
     })
 
     render(<PodcastEpisodeDetailPage />)
@@ -218,18 +205,33 @@ describe('Podcast route error classification', () => {
     expect(screen.queryByText('regionUnavailableMessage')).toBeNull()
   })
 
-  it('detail page renders region-unavailable only for successful upstream unresolved content', () => {
+  it('detail page renders episodeNotFound when the target guid is absent from a successful PI episode list', () => {
     useEpisodeResolutionMock.mockReturnValue({
-      podcast: mockPodcast,
-      episode: undefined,
+      resolvedContent: null,
       isLoading: false,
-      podcastError: null,
       resolutionError: null,
+      notFound: 'episode',
     })
 
     render(<PodcastEpisodeDetailPage />)
 
-    expect(screen.queryByText('regionUnavailableMessage')).not.toBeNull()
-    expect(screen.queryByText('regionUnavailableCta')).not.toBeNull()
+    expect(screen.queryByText('episodeNotFound')).not.toBeNull()
+    expect(screen.queryByText('regionUnavailableMessage')).toBeNull()
+  })
+
+  it('detail page renders the episode when resolution succeeds', () => {
+    useEpisodeResolutionMock.mockReturnValue({
+      resolvedContent: {
+        podcast: mockPodcast,
+        episode: makeEpisode({ guid: 'ep-1', title: 'Resolved Episode' }),
+      },
+      isLoading: false,
+      resolutionError: null,
+      notFound: null,
+    })
+
+    render(<PodcastEpisodeDetailPage />)
+
+    expect(screen.queryByText('Resolved Episode')).not.toBeNull()
   })
 })

@@ -2,7 +2,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
 import type { EditorPickPodcast, TopEpisode, TopPodcast } from '../../lib/discovery'
 import DownloadsPage from '../DownloadsPage'
 import ExplorePage from '../ExplorePage'
@@ -75,10 +74,6 @@ vi.mock('../../components/ui/loading-spinner', () => ({
 
 vi.mock('../../hooks/useNetworkStatus', () => ({
   useNetworkStatus: vi.fn(),
-}))
-
-vi.mock('../../hooks/useSubscriptionMap', () => ({
-  useSubscriptionMap: () => new Map(),
 }))
 
 // Mock Stores
@@ -430,7 +425,6 @@ describe('ExplorePage i18n Fix', () => {
         author: 'Host',
         artwork: 'https://example.com/pick.jpg',
         description: 'Description',
-        feedUrl: normalizeFeedUrl('https://example.com/pick'),
         lastUpdateTime: 1700000000000,
         podcastItunesId: '100',
         episodeCount: 10,

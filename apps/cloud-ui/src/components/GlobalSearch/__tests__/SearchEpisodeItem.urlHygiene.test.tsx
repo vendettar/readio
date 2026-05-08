@@ -54,7 +54,7 @@ vi.mock('../../ui/dropdown-menu', () => ({
 vi.mock('../../../store/exploreStore', () => ({
   useExploreStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
-      favorites: [],
+      isFavorited: vi.fn(() => false),
       addFavorite: vi.fn(),
       removeFavorite: vi.fn(),
       country: 'us',
@@ -92,8 +92,8 @@ describe('SearchEpisodeItem URL hygiene', () => {
           podcastItunesId: '7',
           title: 'Episode Name',
           showTitle: 'Show Name',
-          episodeUrl: 'https://example.com/audio.mp3',
-          episodeGuid: 'guid-1',
+          audioUrl: 'https://example.com/audio.mp3',
+          guid: 'guid-1',
           releaseDate: '2025-01-01T00:00:00Z',
           trackTimeMillis: 61000,
           shortDescription: 'desc',
@@ -120,8 +120,8 @@ describe('SearchEpisodeItem URL hygiene', () => {
           podcastItunesId: '7',
           title: 'Episode With Simple GUID',
           showTitle: 'Show Name',
-          episodeUrl: 'https://example.com/audio2.mp3',
-          episodeGuid: 'guid-2',
+          audioUrl: 'https://example.com/audio2.mp3',
+          guid: 'guid-2',
           releaseDate: '2025-01-02T00:00:00Z',
           trackTimeMillis: 62000,
           shortDescription: 'desc',
@@ -140,15 +140,15 @@ describe('SearchEpisodeItem URL hygiene', () => {
     expect(routeParamsText).toContain('"episodeKey":')
   })
 
-  it('falls back to show route when episodeGuid is missing', () => {
+  it('falls back to show route when guid is missing', () => {
     render(
       <SearchEpisodeItem
         episode={{
           podcastItunesId: '7',
           title: 'Episode Without GUID',
           showTitle: 'Show Name',
-          episodeUrl: 'https://example.com/audio3.mp3',
-          episodeGuid: '',
+          audioUrl: 'https://example.com/audio3.mp3',
+          guid: '',
           releaseDate: '2025-01-02T00:00:00Z',
           trackTimeMillis: 62000,
           shortDescription: 'desc',
@@ -175,8 +175,8 @@ describe('SearchEpisodeItem URL hygiene', () => {
           podcastItunesId: '7',
           title: 'Episode Without Artwork',
           showTitle: 'Show Name',
-          episodeUrl: 'https://example.com/audio-2.mp3',
-          episodeGuid: 'guid-3',
+          audioUrl: 'https://example.com/audio-2.mp3',
+          guid: 'guid-3',
           releaseDate: '2025-01-01T00:00:00Z',
           trackTimeMillis: 63000,
           shortDescription: 'desc',

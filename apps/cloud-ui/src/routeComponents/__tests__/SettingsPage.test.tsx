@@ -217,7 +217,6 @@ describe('SettingsPage', () => {
   it('does not render temporarily disabled settings blocks', () => {
     render(<SettingsPage />)
 
-    expect(screen.queryByRole('button', { name: 'settingsExportOpml' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'settingsExportVault' })).toBeNull()
     expect(screen.queryByText('settingsAiServices')).toBeNull()
     expect(screen.queryByText('settingsDictionary')).toBeNull()

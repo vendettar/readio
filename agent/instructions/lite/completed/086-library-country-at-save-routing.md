@@ -8,7 +8,7 @@ For items in `Subscriptions`, `Favorites`, and `History`, detail requests must p
 ## Product Decision (Fixed)
 - Discovery (`Explore/Search/Top`) uses global `useExploreStore.country`.
 - Library (`Subscriptions/Favorites/History`) uses `countryAtSave` for lookup metadata requests.
-- Identity routing remains identity-first (`feedUrl`, `providerPodcastId`, `episodeId`, `providerEpisodeId`, `audioUrl`), not country-first.
+- Identity routing remains identity-first (legacy feed hint, `providerPodcastId`, `episodeId`, `providerEpisodeId`, `audioUrl`), not country-first.
 - **No migration/backfill scripts** (first-release policy). Runtime fallback for missing `countryAtSave` is allowed.
 
 ## Scope Scan (Required)
@@ -52,8 +52,8 @@ For items in `Subscriptions`, `Favorites`, and `History`, detail requests must p
 3. **Read Path: Library Detail Country Source**
    - Apply deterministic priority for country source:
      - **Podcast detail opened from Subscriptions**: `subscription.countryAtSave` -> global/default.
-     - **Episode detail opened from Favorites**: `favorite.countryAtSave` -> matching subscription `countryAtSave` (by `feedUrl`) -> global/default.
-     - **Episode/detail opened from History**: `session.countryAtSave` -> matching favorite `countryAtSave` (by `episodeId` or `providerEpisodeId` then `audioUrl`) -> matching subscription `countryAtSave` (by `feedUrl`) -> global/default.
+     - **Episode detail opened from Favorites**: `favorite.countryAtSave` -> matching subscription `countryAtSave` (by legacy feed hint) -> global/default.
+     - **Episode/detail opened from History**: `session.countryAtSave` -> matching favorite `countryAtSave` (by `episodeId` or `providerEpisodeId` then `audioUrl`) -> matching subscription `countryAtSave` (by legacy feed hint) -> global/default.
    - Multi-match tie-breakers (must be deterministic):
      - Prefer exact `providerEpisodeId` match over `episodeId` match, and `episodeId` over `audioUrl`.
      - If multiple records still match at the same level, select the record with latest `addedAt`/`lastPlayedAt` timestamp.

@@ -1,11 +1,27 @@
 import { AnimatePresence } from 'framer-motion'
 import { Menu } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { usePlayerSurfaceStore } from '../../store/playerSurfaceStore'
-import { MiniPlayer } from './MiniPlayer'
-import { PlayerSurfaceFrame } from './PlayerSurfaceFrame'
 import { Sidebar } from './Sidebar'
+
+const MiniPlayer = lazy(async () => {
+  const module = await import('./MiniPlayer')
+  return { default: module.MiniPlayer }
+})
+
+const PlayerSurfaceFrame = lazy(async () => {
+  const module = await import('./PlayerSurfaceFrame')
+  return { default: module.PlayerSurfaceFrame }
+})
+
+function MiniPlayerFallback() {
+  return <div className="fixed bottom-0 end-0 h-mini-player w-full md:w-shell-content" />
+}
+
+function PlayerSurfaceFrameFallback() {
+  return <div className="fixed inset-x-0 bottom-0 z-mini-player" />
+}
 
 interface AppShellProps {
   children: ReactNode
@@ -142,7 +158,11 @@ export function AppShell({ children }: AppShellProps) {
     <div className="flex h-screen bg-background text-foreground font-sans">
       {/* Unified Player Surface Frame rendered at top level to ensure fixed positioning integrity */}
       <AnimatePresence mode="popLayout">
-        {isSurfaceVisible && <PlayerSurfaceFrame mode={mode} />}
+        {isSurfaceVisible && (
+          <Suspense fallback={<PlayerSurfaceFrameFallback />}>
+            <PlayerSurfaceFrame mode={mode} />
+          </Suspense>
+        )}
       </AnimatePresence>
 
       {sidebarOpen && (
@@ -179,7 +199,9 @@ export function AppShell({ children }: AppShellProps) {
       </main>
 
       {/* MiniPlayer always in tree for shared element transitions */}
-      <MiniPlayer />
+      <Suspense fallback={<MiniPlayerFallback />}>
+        <MiniPlayer />
+      </Suspense>
     </div>
   )
 }

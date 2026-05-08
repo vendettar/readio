@@ -24,7 +24,11 @@ describe('Vault Sessions Regression (localTrackId: null)', () => {
       audioFilename: 'file.mp3',
       subtitleFilename: 'sub.vtt',
       audioUrl: 'https://example.com/audio.mp3',
+      artworkUrl: 'https://example.com/art.jpg',
+      showTitle: 'History Show',
       localTrackId: null, // Critical: regression target
+      episodeGuid: 'episode-guid-1',
+      podcastItunesId: 'podcast-1',
       countryAtSave: 'us',
     })
 

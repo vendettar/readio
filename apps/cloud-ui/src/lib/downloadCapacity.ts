@@ -6,8 +6,8 @@
  */
 
 import { BYTES_PER_GB } from '../constants/storageQuota'
-import { db } from './dexieDb'
 import { logError } from './logger'
+import { PlaybackRepository } from './repositories/PlaybackRepository'
 import { getAppConfig } from './runtimeConfig'
 
 export interface CapacityCheckResult {
@@ -21,11 +21,7 @@ export interface CapacityCheckResult {
  * Get total bytes used by all audioBlobs rows (global audio cache).
  */
 export async function getAudioBlobsTotalBytes(): Promise<number> {
-  let total = 0
-  await db.audioBlobs.each((blob) => {
-    total += blob.size
-  })
-  return total
+  return PlaybackRepository.getTotalAudioBlobBytes()
 }
 
 /**

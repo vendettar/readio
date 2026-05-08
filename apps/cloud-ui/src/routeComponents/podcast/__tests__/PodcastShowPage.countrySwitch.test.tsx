@@ -2,12 +2,15 @@ import { render, screen, waitFor } from '@testing-library/react'
 import type React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createQueryClientWrapper } from '../../../__tests__/queryClient'
-import { makeFeedEpisode, makeMinimalPodcast } from '../../../lib/discovery/__tests__/fixtures'
-import { normalizeFeedUrl } from '../../../lib/discovery/feedUrl'
+import {
+  makeEpisode,
+  makeMinimalPodcast,
+  makePodcastEpisodes,
+} from '../../../lib/discovery/__tests__/fixtures'
 import PodcastShowPage from '../PodcastShowPage'
 
 const getPodcastMock = vi.fn()
-const fetchPodcastFeedMock = vi.fn()
+const fetchPodcastEpisodesMock = vi.fn()
 
 let routeCountry = 'us'
 
@@ -50,7 +53,7 @@ vi.mock('../../../lib/discovery', async (importOriginal) => {
     ...actual,
     default: {
       getPodcastIndexPodcastByItunesId: (...args: unknown[]) => getPodcastMock(...args),
-      fetchPodcastFeed: (...args: unknown[]) => fetchPodcastFeedMock(...args),
+      fetchPodcastEpisodes: (...args: unknown[]) => fetchPodcastEpisodesMock(...args),
     },
   }
 })
@@ -65,7 +68,7 @@ describe('PodcastShowPage country switch cancellation', () => {
   beforeEach(() => {
     routeCountry = 'us'
     getPodcastMock.mockReset()
-    fetchPodcastFeedMock.mockReset()
+    fetchPodcastEpisodesMock.mockReset()
   })
 
   it('aborts old-country lookup and keeps latest country content', async () => {
@@ -87,24 +90,22 @@ describe('PodcastShowPage country switch cancellation', () => {
       })
     })
 
-    fetchPodcastFeedMock.mockImplementation((feedUrl: string) => {
-      const country = feedUrl.includes('/jp/') ? 'jp' : 'us'
-      return Promise.resolve({
-        title: `Feed ${country}`,
-        description: '',
-        artworkUrl: '',
-        episodes: [
-          makeFeedEpisode({
-            episodeGuid: `${country}-ep-1`,
-            title: `${country.toUpperCase()} Episode`,
-            description: '',
-            audioUrl: `https://example.com/${country}/audio.mp3`,
-            pubDate: '2025-01-01T00:00:00.000Z',
-            artworkUrl: undefined,
-            duration: undefined,
-          }),
-        ],
-      })
+    fetchPodcastEpisodesMock.mockImplementation((_podcastId: string) => {
+      const country = routeCountry
+      return Promise.resolve(
+        makePodcastEpisodes({
+          episodes: [
+            makeEpisode({
+              guid: `${country}-ep-1`,
+              title: `${country.toUpperCase()} Episode`,
+              description: '',
+              audioUrl: `https://example.com/${country}/audio.mp3`,
+              pubDate: '2025-01-01T00:00:00.000Z',
+              artworkUrl: `https://example.com/${country}/episode.jpg`,
+            }),
+          ],
+        })
+      )
     })
     const wrapper = createQueryClientWrapper()
     const { rerender } = render(<PodcastShowPage />, { wrapper })
@@ -121,7 +122,6 @@ describe('PodcastShowPage country switch cancellation', () => {
         podcastItunesId: '123',
         title: 'JP Podcast',
         author: 'JP Author',
-        feedUrl: normalizeFeedUrl('https://example.com/jp/feed.xml'),
         artwork: 'https://example.com/jp/art-600.jpg',
         genres: ['Tech'],
       }),
@@ -137,7 +137,6 @@ describe('PodcastShowPage country switch cancellation', () => {
         podcastItunesId: '123',
         title: 'US Podcast',
         author: 'US Author',
-        feedUrl: normalizeFeedUrl('https://example.com/us/feed.xml'),
         artwork: 'https://example.com/us/art-600.jpg',
         genres: ['Tech'],
       }),

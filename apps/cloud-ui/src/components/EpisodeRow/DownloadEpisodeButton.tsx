@@ -1,28 +1,17 @@
-import { useQueryClient } from '@tanstack/react-query'
 import { CircleArrowDown, Download } from 'lucide-react'
 import { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ensurePodcastDetail } from '@/lib/discovery/queryCache'
-import { normalizeCountryParam } from '@/lib/routes/podcastRoutes'
-import { getAppConfig } from '@/lib/runtimeConfig'
 import { cn } from '@/lib/utils'
 import { type EpisodeStatus, useEpisodeStatus } from '../../hooks/useEpisodeStatus'
-import { downloadEpisode } from '../../lib/downloadService'
+import {
+  buildDownloadJobOptionsFromEpisodeProps,
+  type EpisodeDownloadProps,
+  downloadEpisode,
+} from '../../lib/downloadService'
 import { Button } from '../ui/button'
 import { CircularProgress } from '../ui/circular-progress'
 
-interface DownloadEpisodeButtonProps {
-  episodeTitle: string
-  episodeDescription?: string
-  showTitle: string
-  feedUrl?: string
-  audioUrl: string
-  transcriptUrl?: string
-  artworkUrl?: string
-  countryAtSave?: string
-  podcastItunesId?: string
-  episodeGuid?: string
-  durationSeconds?: number
+interface DownloadEpisodeButtonProps extends EpisodeDownloadProps {
   className?: string
   /** Pre-computed status from parent to avoid duplicate useEpisodeStatus calls */
   episodeStatus?: EpisodeStatus
@@ -32,7 +21,6 @@ export function DownloadEpisodeButton({
   episodeTitle,
   episodeDescription,
   showTitle,
-  feedUrl,
   audioUrl,
   transcriptUrl,
   artworkUrl,
@@ -43,47 +31,37 @@ export function DownloadEpisodeButton({
   className,
   episodeStatus,
 }: DownloadEpisodeButtonProps) {
-  const queryClient = useQueryClient()
   const { t } = useTranslation()
-  const defaultCountry = getAppConfig().DEFAULT_COUNTRY
-  const ownStatus = useEpisodeStatus(episodeStatus ? undefined : audioUrl)
+  const ownStatus = useEpisodeStatus(
+    episodeStatus
+      ? undefined
+      : {
+          audioUrl,
+          podcastItunesId,
+          episodeGuid,
+        }
+  )
   const status = episodeStatus ?? ownStatus
 
   const handleDownload = useCallback(() => {
     if (status.downloadStatus === 'downloaded' || status.downloadStatus === 'downloading') return
 
-    const normalizedCountryAtSave = normalizeCountryParam(countryAtSave) ?? defaultCountry
+    const downloadOptions = buildDownloadJobOptionsFromEpisodeProps({
+      audioUrl,
+      episodeTitle,
+      episodeDescription,
+      showTitle,
+      artworkUrl,
+      transcriptUrl,
+      countryAtSave,
+      podcastItunesId,
+      episodeGuid,
+      durationSeconds,
+    })
+    if (!downloadOptions) return
 
     void (async () => {
-      let resolvedFeedUrl = feedUrl
-      const normalizedPodcastItunesId = String(podcastItunesId ?? '').trim()
-
-      if (!resolvedFeedUrl && normalizedPodcastItunesId) {
-        try {
-          const podcast = await ensurePodcastDetail(
-            queryClient,
-            normalizedPodcastItunesId,
-            normalizedCountryAtSave
-          )
-          resolvedFeedUrl = podcast?.feedUrl
-        } catch {
-          resolvedFeedUrl = undefined
-        }
-      }
-
-      await downloadEpisode({
-        audioUrl,
-        episodeTitle,
-        episodeDescription,
-        showTitle,
-        feedUrl: resolvedFeedUrl,
-        artworkUrl,
-        transcriptUrl,
-        countryAtSave: normalizedCountryAtSave,
-        podcastItunesId,
-        episodeGuid,
-        durationSeconds,
-      })
+      await downloadEpisode(downloadOptions)
       status.refresh()
     })()
   }, [
@@ -91,12 +69,9 @@ export function DownloadEpisodeButton({
     episodeTitle,
     episodeDescription,
     showTitle,
-    feedUrl,
     artworkUrl,
     transcriptUrl,
     countryAtSave,
-    defaultCountry,
-    queryClient,
     podcastItunesId,
     episodeGuid,
     durationSeconds,

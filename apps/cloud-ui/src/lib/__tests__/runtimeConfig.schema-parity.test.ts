@@ -21,6 +21,10 @@ describe('runtimeConfig schema parity', () => {
       READIO_NETWORK_PROXY_URL: 'https://proxy.example.com',
       READIO_NETWORK_PROXY_AUTH_HEADER: 'x-proxy-token',
       READIO_NETWORK_PROXY_AUTH_VALUE: 'proxy-public-token',
+      VITE_GRAFANA_FARO_URL: 'https://faro.example.com/collect',
+      VITE_GRAFANA_FARO_APP_NAME: 'readio-cloud',
+      VITE_GRAFANA_FARO_ENV: 'production',
+      VITE_GRAFANA_FARO_SAMPLE_RATE: '0.25',
       READIO_ASR_RELAY_PUBLIC_TOKEN: 'relay-public-token',
       READIO_PROXY_TIMEOUT_MS: '1234',
       READIO_DEFAULT_LANGUAGE: 'ZH-CN',
@@ -37,6 +41,10 @@ describe('runtimeConfig schema parity', () => {
     expect(config.NETWORK_PROXY_URL).toBe('https://proxy.example.com')
     expect(config.NETWORK_PROXY_AUTH_HEADER).toBe('x-proxy-token')
     expect(config.NETWORK_PROXY_AUTH_VALUE).toBe('proxy-public-token')
+    expect(config.GRAFANA_FARO_URL).toBe('https://faro.example.com/collect')
+    expect(config.GRAFANA_FARO_APP_NAME).toBe('readio-cloud')
+    expect(config.GRAFANA_FARO_ENV).toBe('production')
+    expect(config.GRAFANA_FARO_SAMPLE_RATE).toBe(0.25)
     expect(config.ASR_RELAY_PUBLIC_TOKEN).toBe('relay-public-token')
     expect(config.PROXY_TIMEOUT_MS).toBe(1234)
     expect(config.DEFAULT_LANGUAGE).toBe('zh')
@@ -56,6 +64,31 @@ describe('runtimeConfig schema parity', () => {
     const config = getAppConfig()
 
     expect(config.NETWORK_PROXY_URL).toBe('/api/proxy')
+  })
+
+  it('keeps missing Faro URL valid and disabled by default', async () => {
+    window.__READIO_ENV__ = {}
+
+    const { getAppConfig, DEFAULTS } = await import('../runtimeConfig')
+    const config = getAppConfig()
+
+    expect(config.GRAFANA_FARO_URL).toBe(DEFAULTS.GRAFANA_FARO_URL)
+    expect(config.GRAFANA_FARO_SAMPLE_RATE).toBe(DEFAULTS.GRAFANA_FARO_SAMPLE_RATE)
+  })
+
+  it('falls back to disabled Faro sample rate for invalid or unbounded values', async () => {
+    for (const sampleRate of ['invalid', '-0.1', '1.1']) {
+      vi.resetModules()
+      window.__READIO_ENV__ = {
+        VITE_GRAFANA_FARO_URL: 'https://faro.example.com/collect',
+        VITE_GRAFANA_FARO_SAMPLE_RATE: sampleRate,
+      }
+
+      const { getAppConfig, DEFAULTS } = await import('../runtimeConfig')
+      const config = getAppConfig()
+
+      expect(config.GRAFANA_FARO_SAMPLE_RATE).toBe(DEFAULTS.GRAFANA_FARO_SAMPLE_RATE)
+    }
   })
 
   it('rejects known upstream secret key formats from browser runtime env', async () => {
@@ -179,6 +212,10 @@ describe('runtimeConfig schema parity', () => {
     'READIO_NETWORK_PROXY_URL',
     'READIO_NETWORK_PROXY_AUTH_HEADER',
     'READIO_NETWORK_PROXY_AUTH_VALUE',
+    'VITE_GRAFANA_FARO_URL',
+    'VITE_GRAFANA_FARO_APP_NAME',
+    'VITE_GRAFANA_FARO_ENV',
+    'VITE_GRAFANA_FARO_SAMPLE_RATE',
   ] as const
 
   it('verifies Go allowlist keys exist in frontend ENV_MAP', async () => {
@@ -187,6 +224,32 @@ describe('runtimeConfig schema parity', () => {
 
     for (const goKey of GO_BROWSER_ENV_ALLOWLIST) {
       expect(envMapValues).toContain(goKey)
+    }
+  })
+
+  it('keeps Faro browser allowlist public-only', () => {
+    const faroKeys = GO_BROWSER_ENV_ALLOWLIST.filter((key) => key.includes('GRAFANA_FARO'))
+    expect(faroKeys).toEqual([
+      'VITE_GRAFANA_FARO_URL',
+      'VITE_GRAFANA_FARO_APP_NAME',
+      'VITE_GRAFANA_FARO_ENV',
+      'VITE_GRAFANA_FARO_SAMPLE_RATE',
+    ])
+
+    const forbiddenPatterns = [
+      /GRAFANA.*(API|WRITE|TOKEN|KEY|PASSWORD|SECRET)/,
+      /LOKI.*(TOKEN|KEY|PASSWORD|SECRET|BASIC|AUTH)/,
+      /PROMETHEUS.*(TOKEN|KEY|PASSWORD|SECRET|BASIC|AUTH)/,
+      /^READIO_ADMIN_TOKEN$/,
+      /^READIO_METRICS_TOKEN$/,
+      /RELAY.*SECRET/,
+      /^READIO_ASR_RELAY_TOKEN$/,
+      /PROVIDER.*KEY$/,
+      /BASIC.*AUTH/,
+    ]
+
+    for (const key of GO_BROWSER_ENV_ALLOWLIST) {
+      expect(forbiddenPatterns.some((pattern) => pattern.test(key))).toBe(false)
     }
   })
 

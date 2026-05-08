@@ -9,6 +9,7 @@ import { getAppConfig } from './runtimeConfig'
 // Use new database name - fresh start per first-release policy
 const getDbName = () => getAppConfig().DB_NAME
 
+import { buildFavoriteKey } from './db/favoriteIdentity'
 import type {
   AudioBlob,
   CredentialEntry,
@@ -85,18 +86,18 @@ export const DB_TABLE_NAMES = {
 } as const
 
 const TRACKS_SCHEMA =
-  'id, name, folderId, createdAt, audioId, artworkId, sourceType, sourceUrlNormalized, sourceEpisodeGuid, &[sourceType+sourceUrlNormalized], [sourceType+createdAt], [sourceType+folderId], [sourceType+folderId+createdAt]'
+  'id, name, folderId, createdAt, audioId, artworkId, sourceType, sourceUrlNormalized, sourceEpisodeGuid, sourcePodcastItunesId, &[sourceType+sourceUrlNormalized], [sourceType+sourcePodcastItunesId+sourceEpisodeGuid], [sourceType+createdAt], [sourceType+folderId], [sourceType+folderId+createdAt]'
 
 function buildSchema(tracksSchema: string) {
   return {
     [DB_TABLE_NAMES.TRACKS]: tracksSchema,
     [DB_TABLE_NAMES.PLAYBACK_SESSIONS]:
-      'id, title, lastPlayedAt, audioUrl, localTrackId, audioId, episodeGuid, [audioUrl+lastPlayedAt], [localTrackId+lastPlayedAt]',
+      'id, title, lastPlayedAt, audioUrl, localTrackId, audioId, episodeGuid, podcastItunesId, [audioUrl+lastPlayedAt], [localTrackId+lastPlayedAt], [podcastItunesId+episodeGuid]',
     [DB_TABLE_NAMES.AUDIO_BLOBS]: 'id, storedAt',
     [DB_TABLE_NAMES.SUBTITLES]: 'id, storedAt, asrFingerprint',
     [DB_TABLE_NAMES.REMOTE_TRANSCRIPTS]: 'id, &url, fetchedAt, asrFingerprint',
-    [DB_TABLE_NAMES.SUBSCRIPTIONS]: 'id, &feedUrl, addedAt, podcastItunesId',
-    [DB_TABLE_NAMES.FAVORITES]: 'id, &key, addedAt, episodeGuid, audioUrl',
+    [DB_TABLE_NAMES.SUBSCRIPTIONS]: 'id, &podcastItunesId, addedAt',
+    [DB_TABLE_NAMES.FAVORITES]: 'id, &key, addedAt, episodeGuid, podcastItunesId, audioUrl',
     [DB_TABLE_NAMES.SETTINGS]: 'key',
     [DB_TABLE_NAMES.CREDENTIALS]: 'key',
     [DB_TABLE_NAMES.RUNTIME_CACHE]: '&key, namespace',
@@ -127,7 +128,7 @@ class ReadioDB extends Dexie {
   constructor() {
     super(getDbName())
 
-    this.version(9).stores(buildSchema(TRACKS_SCHEMA))
+    this.version(1).stores(buildSchema(TRACKS_SCHEMA))
   }
 }
 
@@ -174,7 +175,72 @@ function normalizeRequiredCountryAtSave(
   return normalized
 }
 
+function normalizeRequiredText(value: string | null | undefined, fieldName: string): string {
+  if (typeof value !== 'string') {
+    throw new Error(`[DB] ${fieldName} is required`)
+  }
+  const normalized = value.trim()
+  if (!normalized) {
+    throw new Error(`[DB] ${fieldName} is required`)
+  }
+  return normalized
+}
+
+export function buildSubscriptionRecord(data: Omit<Subscription, 'id'>): Subscription {
+  return normalizeSubscriptionRecord(
+    {
+      id: generateId(),
+      ...data,
+    },
+    'subscription'
+  )
+}
+
+export function normalizeSubscriptionRecord(
+  record: Subscription,
+  entityName: string
+): Subscription {
+  return {
+    ...record,
+    podcastItunesId: normalizeRequiredText(record.podcastItunesId, `${entityName} podcastItunesId`),
+    title: normalizeRequiredText(record.title, `${entityName} title`),
+    author: normalizeRequiredText(record.author, `${entityName} author`),
+    artworkUrl: normalizeRequiredText(record.artworkUrl, `${entityName} artworkUrl`),
+    countryAtSave: normalizeRequiredCountryAtSave(record.countryAtSave, entityName),
+  }
+}
+
+export function normalizeFavoriteRecord(record: Favorite, entityName: string): Favorite {
+  const key = buildFavoriteKey(record.podcastItunesId, record.episodeGuid)
+  if (!key) {
+    throw new Error(`[DB] ${entityName} requires canonical podcastItunesId + episodeGuid identity`)
+  }
+
+  const normalizedDescription =
+    typeof record.description === 'string' ? record.description.trim() : ''
+  const normalizedEpisodeArtworkUrl =
+    typeof record.episodeArtworkUrl === 'string' ? record.episodeArtworkUrl.trim() : ''
+
+  return {
+    ...record,
+    key,
+    audioUrl: normalizeRequiredText(record.audioUrl, `${entityName} audioUrl`),
+    episodeTitle: normalizeRequiredText(record.episodeTitle, `${entityName} episodeTitle`),
+    podcastTitle: normalizeRequiredText(record.podcastTitle, `${entityName} podcastTitle`),
+    artworkUrl: normalizeRequiredText(record.artworkUrl, `${entityName} artworkUrl`),
+    episodeGuid: normalizeRequiredText(record.episodeGuid, `${entityName} episodeGuid`),
+    podcastItunesId: normalizeRequiredText(record.podcastItunesId, `${entityName} podcastItunesId`),
+    countryAtSave: normalizeRequiredCountryAtSave(record.countryAtSave, entityName),
+    description: normalizedDescription,
+    pubDate: normalizeRequiredText(record.pubDate ?? '', `${entityName} pubDate`),
+    durationSeconds: record.durationSeconds ?? 0,
+    episodeArtworkUrl: normalizedEpisodeArtworkUrl,
+  }
+}
+
 function buildPlaybackSessionRecord(data: PlaybackSessionCreateInput): PlaybackSession {
+  const normalizedShowTitle =
+    typeof data.showTitle === 'string' && data.showTitle.trim() ? data.showTitle.trim() : undefined
   const base = {
     id: data.id ?? generateId(),
     title: data.title ?? 'Untitled',
@@ -192,8 +258,7 @@ function buildPlaybackSessionRecord(data: PlaybackSessionCreateInput): PlaybackS
     localTrackId: data.localTrackId,
     artworkUrl: data.artworkUrl,
     description: data.description,
-    podcastTitle: data.podcastTitle,
-    podcastFeedUrl: data.podcastFeedUrl,
+    showTitle: normalizedShowTitle,
     publishedAt: data.publishedAt,
     episodeGuid: data.episodeGuid,
     podcastItunesId: data.podcastItunesId,
@@ -204,6 +269,14 @@ function buildPlaybackSessionRecord(data: PlaybackSessionCreateInput): PlaybackS
     return {
       ...base,
       source: 'explore',
+      audioUrl: normalizeRequiredText(data.audioUrl, 'playback session audioUrl'),
+      artworkUrl: normalizeRequiredText(data.artworkUrl, 'playback session artworkUrl'),
+      showTitle: normalizeRequiredText(data.showTitle, 'playback session showTitle'),
+      episodeGuid: normalizeRequiredText(data.episodeGuid, 'playback session episodeGuid'),
+      podcastItunesId: normalizeRequiredText(
+        data.podcastItunesId,
+        'playback session podcastItunesId'
+      ),
       countryAtSave: normalizeRequiredCountryAtSave(data.countryAtSave, 'playback session'),
     }
   }
@@ -211,17 +284,33 @@ function buildPlaybackSessionRecord(data: PlaybackSessionCreateInput): PlaybackS
   return {
     ...base,
     source: 'local',
+    showTitle: normalizedShowTitle,
+    episodeGuid: undefined,
+    podcastItunesId: undefined,
+    countryAtSave: undefined,
   }
 }
 
-function normalizePlaybackSessionRecord(
+export function normalizePlaybackSessionRecord(
   record: PlaybackSession,
   entityName: string
 ): PlaybackSession {
+  const normalizedShowTitle =
+    typeof record.showTitle === 'string' && record.showTitle.trim()
+      ? record.showTitle.trim()
+      : undefined
   if (record.source === 'explore') {
     return {
       ...record,
       source: 'explore',
+      audioUrl: normalizeRequiredText(record.audioUrl, `${entityName} audioUrl`),
+      artworkUrl: normalizeRequiredText(record.artworkUrl, `${entityName} artworkUrl`),
+      showTitle: normalizeRequiredText(record.showTitle, `${entityName} showTitle`),
+      episodeGuid: normalizeRequiredText(record.episodeGuid, `${entityName} episodeGuid`),
+      podcastItunesId: normalizeRequiredText(
+        record.podcastItunesId,
+        `${entityName} podcastItunesId`
+      ),
       countryAtSave: normalizeRequiredCountryAtSave(record.countryAtSave, entityName),
     }
   }
@@ -229,6 +318,9 @@ function normalizePlaybackSessionRecord(
   return {
     ...record,
     source: 'local',
+    showTitle: normalizedShowTitle,
+    episodeGuid: undefined,
+    podcastItunesId: undefined,
     countryAtSave: undefined,
   }
 }
@@ -428,6 +520,23 @@ export const DB = {
       .where('[audioUrl+lastPlayedAt]')
       .between([audioUrl, Dexie.minKey], [audioUrl, Dexie.maxKey])
       .last()
+  },
+
+  async findLastExploreSessionByCanonicalIdentity(
+    podcastItunesId: string,
+    episodeGuid: string
+  ): Promise<PlaybackSession | undefined> {
+    if (!podcastItunesId || !episodeGuid) return undefined
+    const sessions = await db.playback_sessions
+      .where('[podcastItunesId+episodeGuid]')
+      .equals([podcastItunesId, episodeGuid])
+      .filter((session) => session.source === 'explore')
+      .toArray()
+    return sessions.reduce<PlaybackSession | undefined>(
+      (latest, session) =>
+        !latest || session.lastPlayedAt > latest.lastPlayedAt ? session : latest,
+      undefined
+    )
   },
 
   async findLastSessionByTrackId(trackId: string): Promise<PlaybackSession | undefined> {
@@ -803,25 +912,19 @@ export const DB = {
 
   // ========== Subscriptions CRUD ==========
   async addSubscription(sub: Omit<Subscription, 'id'>): Promise<string> {
-    const newSub: Subscription = {
-      id: generateId(),
-      ...sub,
-    }
+    const newSub = buildSubscriptionRecord(sub)
     await db.subscriptions.put(newSub)
     return newSub.id
   },
 
-  async getSubscriptionByFeedUrl(feedUrl: string): Promise<Subscription | undefined> {
-    return db.subscriptions.where('feedUrl').equals(feedUrl).first()
+  async getSubscriptionByPodcastItunesId(
+    podcastItunesId: string
+  ): Promise<Subscription | undefined> {
+    return db.subscriptions.where('podcastItunesId').equals(podcastItunesId).first()
   },
 
-  async getSubscriptionsByPodcastItunesId(podcastItunesId?: string): Promise<Subscription[]> {
-    if (!podcastItunesId) return []
-    return db.subscriptions.where('podcastItunesId').equals(podcastItunesId).toArray()
-  },
-
-  async removeSubscriptionByFeedUrl(feedUrl: string): Promise<void> {
-    const sub = await this.getSubscriptionByFeedUrl(feedUrl)
+  async removeSubscriptionByPodcastItunesId(podcastItunesId: string): Promise<void> {
+    const sub = await this.getSubscriptionByPodcastItunesId(podcastItunesId)
     if (sub) {
       await db.subscriptions.delete(sub.id)
     }
@@ -833,27 +936,19 @@ export const DB = {
 
   // ========== Favorites CRUD ==========
   async addFavorite(fav: Omit<Favorite, 'id'>): Promise<string> {
-    const newFav: Favorite = {
-      id: generateId(),
-      ...fav,
-      countryAtSave: normalizeRequiredCountryAtSave(fav.countryAtSave, 'favorite'),
-    }
+    const newFav = normalizeFavoriteRecord(
+      {
+        id: generateId(),
+        ...fav,
+      },
+      'favorite'
+    )
     await db.favorites.put(newFav)
     return newFav.id
   },
 
   async getFavoriteByKey(key: string): Promise<Favorite | undefined> {
     return db.favorites.where('key').equals(key).first()
-  },
-
-  async getFavoritesByEpisodeGuid(episodeGuid: string): Promise<Favorite[]> {
-    if (!episodeGuid) return []
-    return db.favorites.where('episodeGuid').equals(episodeGuid).toArray()
-  },
-
-  async getFavoritesByAudioUrl(audioUrl: string): Promise<Favorite[]> {
-    if (!audioUrl) return []
-    return db.favorites.where('audioUrl').equals(audioUrl).toArray()
   },
 
   async removeFavoriteByKey(key: string): Promise<void> {
@@ -1105,6 +1200,17 @@ export const DB = {
     return db.playback_sessions.where('audioUrl').anyOf(urls).toArray()
   },
 
+  async searchExploreSessionsByCanonicalEpisodes(
+    identities: Array<{ podcastItunesId: string; episodeGuid: string }>
+  ): Promise<PlaybackSession[]> {
+    if (!identities.length) return []
+    const keys = identities
+      .map(({ podcastItunesId, episodeGuid }) => [podcastItunesId, episodeGuid] as [string, string])
+      .filter(([podcastItunesId, episodeGuid]) => !!podcastItunesId && !!episodeGuid)
+    if (!keys.length) return []
+    return db.playback_sessions.where('[podcastItunesId+episodeGuid]').anyOf(keys).toArray()
+  },
+
   async getPlaybackSessionsByShortGuid(shortId: string): Promise<PlaybackSession[]> {
     // Use startsWithIgnoreCase to match GUID prefixes stored in episodeGuid
     return db.playback_sessions
@@ -1125,6 +1231,32 @@ export const DB = {
     const download: PodcastDownload = {
       id: generateId(),
       ...data,
+      sourceUrlNormalized: normalizeRequiredText(
+        data.sourceUrlNormalized,
+        'podcast download sourceUrlNormalized'
+      ),
+      countryAtSave: normalizeRequiredCountryAtSave(data.countryAtSave, 'podcast download'),
+      sourcePodcastItunesId: normalizeRequiredText(
+        data.sourcePodcastItunesId,
+        'podcast download sourcePodcastItunesId'
+      ),
+      sourceEpisodeGuid: normalizeRequiredText(
+        data.sourceEpisodeGuid,
+        'podcast download sourceEpisodeGuid'
+      ),
+      sourcePodcastTitle: normalizeRequiredText(
+        data.sourcePodcastTitle,
+        'podcast download sourcePodcastTitle'
+      ),
+      sourceEpisodeTitle: normalizeRequiredText(
+        data.sourceEpisodeTitle,
+        'podcast download sourceEpisodeTitle'
+      ),
+      sourceDescription: data.sourceDescription,
+      sourceArtworkUrl: normalizeRequiredText(
+        data.sourceArtworkUrl,
+        'podcast download sourceArtworkUrl'
+      ),
       sourceType: TRACK_SOURCE.PODCAST_DOWNLOAD,
       createdAt: Date.now(),
     }

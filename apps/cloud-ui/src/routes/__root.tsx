@@ -1,21 +1,35 @@
 import { createRootRoute, Outlet, useRouter } from '@tanstack/react-router'
 import { AnimatePresence } from 'framer-motion'
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef } from 'react'
+import {
+  createContext,
+  lazy,
+  Suspense,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+} from 'react'
 import { Toaster } from 'sonner'
-import { AppShell, BootLoader } from '../components/AppShell'
-import { GlobalAudioController } from '../components/AppShell/GlobalAudioController'
+import { AppShell } from '../components/AppShell/AppShell'
+import { BootLoader } from '../components/AppShell/BootLoader'
 import { HiddenFileInput } from '../components/ui/hidden-file-input'
 import { useAppInitialization } from '../hooks/useAppInitialization'
-import { useFileHandler } from '../hooks/useFileHandler'
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import { useNetworkStatus } from '../hooks/useNetworkStatus'
 import { useReportWebVitals } from '../hooks/usePerformance'
 import { usePwaUpdate } from '../hooks/usePwaUpdate'
 import { logError } from '../lib/logger'
 import { toast } from '../lib/toast'
+import { usePlayerStore } from '../store/playerStore'
 
 // FilePickerContext to avoid document.getElementById
 const FilePickerContext = createContext<{ triggerFilePicker: () => void } | null>(null)
+
+const GlobalAudioController = lazy(async () => {
+  const module = await import('../components/AppShell/GlobalAudioController')
+  return { default: module.GlobalAudioController }
+})
 
 export function useFilePicker() {
   const context = useContext(FilePickerContext)
@@ -25,10 +39,20 @@ export function useFilePicker() {
   return context
 }
 
+function GlobalAudioControllerHost() {
+  const hasPlaybackSource = usePlayerStore((s) => Boolean(s.audioUrl || s.playbackSourceUrl))
+  if (!hasPlaybackSource) return null
+
+  return (
+    <Suspense fallback={null}>
+      <GlobalAudioController />
+    </Suspense>
+  )
+}
+
 function RootLayout() {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const { handleFileChange } = useFileHandler()
 
   // Handle global navigation requests from non-component code
   useEffect(() => {
@@ -122,6 +146,29 @@ function RootLayout() {
     fileInputRef.current?.click()
   }, [])
 
+  const handleGlobalFileChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget
+    const files = input.files
+    if (!files) return
+
+    const { loadAudio, loadSubtitles } = usePlayerStore.getState()
+
+    void import('../lib/fileHandlerService')
+      .then(({ processSelectedFiles }) =>
+        processSelectedFiles(files, {
+          loadAudio,
+          loadSubtitles,
+        })
+      )
+      .catch((err) => {
+        logError('[RootLayout] Failed to process selected files', err)
+        toast.errorKey('toastUploadFailed')
+      })
+      .finally(() => {
+        input.value = ''
+      })
+  }, [])
+
   const filePickerContextValue = useMemo(() => ({ triggerFilePicker }), [triggerFilePicker])
 
   return (
@@ -131,13 +178,13 @@ function RootLayout() {
         id="fileInput"
         multiple
         accept="audio/*,.srt,.vtt"
-        onChange={handleFileChange}
+        onChange={handleGlobalFileChange}
       />
 
       <AnimatePresence>{!isReady && <BootLoader key="boot-loader" />}</AnimatePresence>
 
-      {/* GlobalAudioController is isolated to prevent root layout re-renders */}
-      <GlobalAudioController />
+      {/* Only mount audio controller once playback exists; keep root cold path lighter. */}
+      <GlobalAudioControllerHost />
 
       <AppShell>
         <Outlet />

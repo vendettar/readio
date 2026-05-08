@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { SUPPORTED_CONTENT_REGIONS } from '../constants/app'
+import { buildFavoriteKey } from './db/favoriteIdentity'
 import { TRACK_SOURCE } from './db/types'
 import type {
   Favorite,
@@ -11,9 +12,14 @@ import type {
   Setting,
   Subscription,
 } from './dexieDb'
-import { db } from './dexieDb'
+import {
+  normalizeFavoriteRecord,
+  normalizePlaybackSessionRecord,
+  normalizeSubscriptionRecord,
+} from './dexieDb'
 import { verifyVaultIntegrity } from './integrity'
 import { log, error as logError } from './logger'
+import { VaultRepository } from './repositories/VaultRepository'
 
 const VAULT_VERSION = 1
 const CREDENTIAL_EXPORT_KEY_PATTERN = /^provider_[a-z0-9_]+_key$/
@@ -49,9 +55,8 @@ const playbackSessionBaseSchema = z.object({
   audioUrl: z.string().optional(),
   localTrackId: z.string().nullable().optional(),
   artworkUrl: z.string().optional(),
+  showTitle: z.string().optional(),
   description: z.string().optional(),
-  podcastTitle: z.string().optional(),
-  podcastFeedUrl: z.string().optional(),
   publishedAt: z.number().optional(),
   episodeGuid: z.string().optional(),
   podcastItunesId: z.string().optional(),
@@ -61,6 +66,8 @@ const playbackSessionBaseSchema = z.object({
 const localPlaybackSessionSchema = playbackSessionBaseSchema
   .extend({
     source: z.literal('local'),
+    episodeGuid: z.undefined().optional(),
+    podcastItunesId: z.undefined().optional(),
     countryAtSave: z.undefined().optional(),
   })
   .strict()
@@ -68,6 +75,11 @@ const localPlaybackSessionSchema = playbackSessionBaseSchema
 const explorePlaybackSessionSchema = playbackSessionBaseSchema
   .extend({
     source: z.literal('explore'),
+    audioUrl: z.string(),
+    artworkUrl: z.string(),
+    showTitle: z.string(),
+    episodeGuid: z.string(),
+    podcastItunesId: z.string(),
     countryAtSave: z.preprocess(normalizeOptionalCountryAtSave, z.string()),
   })
   .strict()
@@ -81,11 +93,10 @@ const subscriptionSchema: z.ZodType<Subscription> = z
   .object({
     id: z.string(),
     title: z.string(),
-    feedUrl: z.string(),
     author: z.string(),
     artworkUrl: z.string(),
     addedAt: z.number(),
-    podcastItunesId: z.string().optional(),
+    podcastItunesId: z.string(),
     countryAtSave: z.preprocess(normalizeOptionalCountryAtSave, z.string()),
   })
   .strict()
@@ -94,21 +105,27 @@ const favoriteSchema: z.ZodType<Favorite> = z
   .object({
     id: z.string(),
     key: z.string(),
-    feedUrl: z.string(),
     audioUrl: z.string(),
     episodeTitle: z.string(),
     podcastTitle: z.string(),
     artworkUrl: z.string(),
     addedAt: z.number(),
-    description: z.string().optional(),
-    pubDate: z.string().optional(),
-    durationSeconds: z.number().optional(),
-    episodeArtworkUrl: z.string().optional(),
-    episodeGuid: z.string().optional(),
-    podcastItunesId: z.string().optional(),
+    description: z.string(),
+    pubDate: z.string(),
+    durationSeconds: z.number(),
+    episodeArtworkUrl: z.string(),
+    episodeGuid: z.string(),
+    podcastItunesId: z.string(),
     transcriptUrl: z.string().optional(),
     countryAtSave: z.preprocess(normalizeOptionalCountryAtSave, z.string()),
   })
+  .refine(
+    (favorite) => favorite.key === buildFavoriteKey(favorite.podcastItunesId, favorite.episodeGuid),
+    {
+      message: 'favorite.key must match canonical podcastItunesId::episodeGuid identity',
+      path: ['key'],
+    }
+  )
   .strict()
 
 const settingSchema: z.ZodType<Setting> = z
@@ -156,15 +173,14 @@ const podcastDownloadSchema: z.ZodType<PodcastDownload> = z
     createdAt: z.number(),
     artworkId: z.string().optional(),
     sourceUrlNormalized: z.string(),
-    sourceFeedUrl: z.string().optional(),
-    sourcePodcastTitle: z.string().optional(),
-    sourceEpisodeTitle: z.string().optional(),
-    sourceDescription: z.string().optional(),
-    sourceArtworkUrl: z.string().optional(),
+    sourcePodcastTitle: z.string(),
+    sourceEpisodeTitle: z.string(),
+    sourceDescription: z.string(),
+    sourceArtworkUrl: z.string(),
     downloadedAt: z.number(),
     countryAtSave: z.preprocess(normalizeOptionalCountryAtSave, z.string()),
-    sourcePodcastItunesId: z.string().optional(),
-    sourceEpisodeGuid: z.string().optional(),
+    sourcePodcastItunesId: z.string(),
+    sourceEpisodeGuid: z.string(),
     transcriptUrl: z.string().optional(),
     isCorrupted: z.boolean().optional(),
     sourceType: z.literal(TRACK_SOURCE.PODCAST_DOWNLOAD),
@@ -217,20 +233,16 @@ export type VaultData = z.infer<typeof vaultSchema>
  * Excludes blob content (audioBlobs, subtitles).
  */
 export async function exportVault(): Promise<VaultData> {
-  const settings = await db.settings.toArray()
-
-  const allTracks = await db.tracks.toArray()
-  const trackIds = new Set(allTracks.map((t) => t.id))
-  const allSubtitles = await db.local_subtitles.toArray()
+  const snapshot = await VaultRepository.getMetadataSnapshot()
 
   const data = {
-    folders: await db.folders.toArray(),
-    tracks: allTracks,
-    local_subtitles: allSubtitles.filter((sub) => trackIds.has(sub.trackId)),
-    subscriptions: await db.subscriptions.toArray(),
-    favorites: await db.favorites.toArray(),
-    playback_sessions: await db.playback_sessions.toArray(),
-    settings: settings.filter((entry) => !isCredentialLikeSettingKey(entry.key)),
+    folders: snapshot.folders,
+    tracks: snapshot.tracks,
+    local_subtitles: snapshot.localSubtitles,
+    subscriptions: snapshot.subscriptions,
+    favorites: snapshot.favorites,
+    playback_sessions: snapshot.playbackSessions,
+    settings: snapshot.settings.filter((entry) => !isCredentialLikeSettingKey(entry.key)),
   }
 
   return {
@@ -261,41 +273,25 @@ export async function importVault(json: unknown): Promise<void> {
     throw new Error(integrity.error || 'Data integrity check failed')
   }
 
-  await db.transaction(
-    'rw',
-    [
-      db.folders,
-      db.tracks,
-      db.local_subtitles,
-      db.subscriptions,
-      db.favorites,
-      db.playback_sessions,
-      db.settings,
-    ],
-    async () => {
-      // 1. Clear existing metadata
-      await db.folders.clear()
-      await db.tracks.clear()
-      await db.local_subtitles.clear()
-      await db.subscriptions.clear()
-      await db.favorites.clear()
-      await db.playback_sessions.clear()
-      await db.settings.clear()
-
-      // 2. Ingest new data
-      await db.folders.bulkAdd(vault.data.folders)
-      const tracks = vault.data.tracks || []
-      await db.tracks.bulkAdd(tracks)
-
-      await db.local_subtitles.bulkAdd(vault.data.local_subtitles)
-      await db.subscriptions.bulkAdd(vault.data.subscriptions)
-      await db.favorites.bulkAdd(vault.data.favorites)
-      await db.playback_sessions.bulkAdd(vault.data.playback_sessions)
-      await db.settings.bulkAdd(
-        vault.data.settings.filter((entry) => !isCredentialLikeSettingKey(entry.key))
-      )
-
-      log('[Vault] Import successful')
-    }
+  const normalizedSubscriptions = vault.data.subscriptions.map((subscription) =>
+    normalizeSubscriptionRecord(subscription, 'vault subscription')
   )
+  const normalizedFavorites = vault.data.favorites.map((favorite) =>
+    normalizeFavoriteRecord(favorite, 'vault favorite')
+  )
+  const normalizedPlaybackSessions = vault.data.playback_sessions.map((session) =>
+    normalizePlaybackSessionRecord(session, 'vault playback session')
+  )
+
+  await VaultRepository.replaceMetadata({
+    folders: vault.data.folders,
+    tracks: vault.data.tracks,
+    localSubtitles: vault.data.local_subtitles,
+    subscriptions: normalizedSubscriptions,
+    favorites: normalizedFavorites,
+    playbackSessions: normalizedPlaybackSessions,
+    settings: vault.data.settings.filter((entry) => !isCredentialLikeSettingKey(entry.key)),
+  })
+
+  log('[Vault] Import successful')
 }

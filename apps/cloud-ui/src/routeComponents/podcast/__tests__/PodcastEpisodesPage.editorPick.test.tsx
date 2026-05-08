@@ -1,23 +1,20 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import { HttpResponse, http } from 'msw'
-import type React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DISCOVERY_TEST_ROUTE, discoveryUrl } from '../../../__tests__/constants'
 import { createQueryClientHarness, createQueryClientWrapper } from '../../../__tests__/queryClient'
 import { server } from '../../../__tests__/setup'
 import {
-  makeFeedEpisode,
-  makeParsedFeed,
+  makeEpisode,
   makePodcast,
+  makePodcastEpisodes,
 } from '../../../lib/discovery/__tests__/fixtures'
-import { writePodcastFeedPageToCaches } from '../../../lib/discovery/feedCache'
-import { normalizeFeedUrl } from '../../../lib/discovery/feedUrl'
+import { writePodcastEpisodesToCache } from '../../../lib/discovery/episodeCache'
+import { buildPodcastDetailQueryKey } from '../../../lib/discovery/podcastQueryContract'
 import PodcastEpisodesPage from '../PodcastEpisodesPage'
 
-let appleLookupHits = 0
-let feedHits = 0
-let piItunesLookupHits = 0
-let routeState: unknown = null
+let podcastLookupHits = 0
+let episodeListHits = 0
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -28,17 +25,9 @@ vi.mock('react-i18next', () => ({
 }))
 
 vi.mock('@tanstack/react-router', () => ({
-  Link: ({ children }: { children: React.ReactNode }) => <a href="/">{children}</a>,
   useParams: () => ({
     country: 'us',
     id: '12345',
-  }),
-  useLocation: () => ({ state: routeState }),
-}))
-
-vi.mock('../../../hooks/useEpisodePlayback', () => ({
-  useEpisodePlayback: () => ({
-    playEpisode: vi.fn(),
   }),
 }))
 
@@ -46,9 +35,6 @@ vi.mock('../../../store/exploreStore', () => ({
   useExploreStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
       country: 'us',
-      subscriptions: [],
-      subscribe: vi.fn(),
-      unsubscribe: vi.fn(),
     }),
 }))
 
@@ -57,102 +43,55 @@ vi.mock('../../../components/EpisodeRow/EpisodeRow', () => ({
 }))
 
 vi.mock('react-virtuoso', () => ({
-  // biome-ignore lint/suspicious/noExplicitAny: necessary for mock
-  Virtuoso: ({ data, itemContent, components, customScrollParent, rangeChanged }: any) => (
+  // biome-ignore lint/suspicious/noExplicitAny: test mock
+  Virtuoso: ({ data, itemContent }: any) => (
     <div data-testid="mock-virtuoso">
-      {/* biome-ignore lint/suspicious/noExplicitAny: necessary for mock */}
+      {/* biome-ignore lint/suspicious/noExplicitAny: test mock */}
       {data.map((item: any, index: number) => (
-        <div key={item.key || index} data-testid={`virtuoso-item-${index}`}>
-          {itemContent(index, item)}
-        </div>
+        <div key={item.key || index}>{itemContent(index, item)}</div>
       ))}
-      {components?.Footer?.()}
-      <button
-        type="button"
-        data-testid="auto-range-end"
-        onClick={() => {
-          rangeChanged?.({ startIndex: 0, endIndex: data.length - 1 })
-        }}
-      >
-        auto range end
-      </button>
-      <button
-        type="button"
-        data-testid="load-more"
-        onClick={() => {
-          if (customScrollParent) {
-            Object.defineProperty(customScrollParent, 'scrollHeight', {
-              configurable: true,
-              value: 1000,
-            })
-            Object.defineProperty(customScrollParent, 'clientHeight', {
-              configurable: true,
-              value: 400,
-            })
-            Object.defineProperty(customScrollParent, 'scrollTop', {
-              configurable: true,
-              value: 620,
-              writable: true,
-            })
-            fireEvent.scroll(customScrollParent)
-          }
-          rangeChanged?.({ startIndex: Math.max(0, data.length - 5), endIndex: data.length - 1 })
-        }}
-      >
-        load more
-      </button>
     </div>
   ),
 }))
 
 describe('PodcastEpisodesPage editor pick path', () => {
   beforeEach(() => {
-    appleLookupHits = 0
-    feedHits = 0
-    piItunesLookupHits = 0
-    routeState = null
+    podcastLookupHits = 0
+    episodeListHits = 0
 
     server.use(
-      http.get('https://itunes.apple.com/lookup', () => {
-        appleLookupHits += 1
-        return HttpResponse.json({ resultCount: 0, results: [] })
-      }),
       http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.podcastByItunesId('12345')), () => {
-        piItunesLookupHits += 1
-
+        podcastLookupHits += 1
         return HttpResponse.json(
           makePodcast({
             podcastItunesId: '12345',
             title: 'Editor Pick Podcast',
             artwork: 'https://example.com/show-600.jpg',
             description: 'Editor pick description',
-            feedUrl: normalizeFeedUrl('https://example.com/show-feed.xml'),
             lastUpdateTime: 1711497600,
-            episodeCount: 2,
+            episodeCount: 3,
           })
         )
       }),
-      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.feed), ({ request }) => {
-        feedHits += 1
-        const url = new URL(request.url)
-        expect(url.searchParams.get('url')).toBe('https://example.com/show-feed.xml')
-        expect(url.searchParams.get('limit')).toBe('20')
-        expect(url.searchParams.get('offset')).toBe('0')
-
+      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.podcastEpisodesByItunesId('12345')), () => {
+        episodeListHits += 1
         return HttpResponse.json(
-          makeParsedFeed({
-            title: 'Editor Pick Podcast',
-            description: 'Feed description',
-            artworkUrl: 'https://example.com/show-600.jpg',
+          makePodcastEpisodes({
             episodes: [
-              makeFeedEpisode({
-                episodeGuid: 'feed-ep-1',
-                title: 'Feed Episode 1',
-                description: 'Feed description',
-                audioUrl: 'https://example.com/audio-1.mp3',
-                pubDate: '2026-03-27T00:00:00.000Z',
-                artworkUrl: 'https://example.com/ep-1.jpg',
-                duration: 123,
+              makeEpisode({
+                guid: 'pi-ep-1',
+                title: 'PI Episode 1',
+                pubDate: '2026-03-27T00:00:00Z',
+              }),
+              makeEpisode({
+                guid: 'pi-ep-2',
+                title: 'PI Episode 2',
+                pubDate: '2025-03-27T00:00:00Z',
+              }),
+              makeEpisode({
+                guid: 'pi-ep-3',
+                title: 'PI Episode 3',
+                pubDate: '2025-02-27T00:00:00Z',
               }),
             ],
           })
@@ -161,34 +100,20 @@ describe('PodcastEpisodesPage editor pick path', () => {
     )
   })
 
-  it('loads editor pick episode lists through podcast lookup then RSS', async () => {
+  it('loads editor pick episode lists through PI podcast lookup and PI episode list ownership', async () => {
     render(<PodcastEpisodesPage />, { wrapper: createQueryClientWrapper() })
 
-    expect(await screen.findByText('Feed Episode 1')).not.toBeNull()
-    expect(appleLookupHits).toBe(0)
-    expect(piItunesLookupHits).toBe(1)
-    expect(feedHits).toBe(1)
+    expect(await screen.findByText('PI Episode 1')).not.toBeNull()
+    expect(await screen.findByText('PI Episode 2')).not.toBeNull()
+    expect(await screen.findByText('PI Episode 3')).not.toBeNull()
+    expect(podcastLookupHits).toBe(1)
+    expect(episodeListHits).toBe(1)
   })
 
-  it('fails closed when the RSS fetch fails instead of pivoting to Apple/provider episodes', async () => {
-    routeState = {
-      editorPickSnapshot: {
-        title: 'Editor Pick Podcast',
-        author: 'Host',
-        artwork: 'https://example.com/show-600.jpg',
-        description: 'Editor pick description',
-        feedUrl: normalizeFeedUrl('https://example.com/show-feed.xml'),
-        lastUpdateTime: 1711497600,
-        podcastItunesId: '12345',
-        genres: ['Technology'],
-        episodeCount: 2,
-        language: 'en',
-      },
-    }
-
+  it('fails closed when the PI episode list fetch fails', async () => {
     server.use(
-      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.feed), () => {
-        feedHits += 1
+      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.podcastEpisodesByItunesId('12345')), () => {
+        episodeListHits += 1
         return HttpResponse.error()
       })
     )
@@ -196,145 +121,44 @@ describe('PodcastEpisodesPage editor pick path', () => {
     render(<PodcastEpisodesPage />, { wrapper: createQueryClientWrapper() })
 
     expect(await screen.findByText('errorPodcastUnavailable')).not.toBeNull()
-    expect(appleLookupHits).toBe(0)
-    expect(piItunesLookupHits).toBe(1)
-    expect(feedHits).toBe(1)
+    expect(podcastLookupHits).toBe(1)
+    expect(episodeListHits).toBe(1)
   })
 
-  it('keeps see all semantics by incrementally loading more pages', async () => {
-    server.use(
-      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.feed), async ({ request }) => {
-        feedHits += 1
-        const url = new URL(request.url)
-        expect(url.searchParams.get('url')).toBe('https://example.com/show-feed.xml')
-        const limit = Number(url.searchParams.get('limit') || '0')
-        const offset = Number(url.searchParams.get('offset') || '0')
-        const totalEpisodes = 40
-        const startIndex = Number.isFinite(offset) ? offset : 0
-        const pageSize = limit > 0 ? Math.min(limit, totalEpisodes - startIndex) : totalEpisodes
-
-        if (offset === 20) {
-          await new Promise((resolve) => setTimeout(resolve, 120))
-        }
-
-        return HttpResponse.json(
-          makeParsedFeed({
-            title: 'Editor Pick Podcast',
-            description: 'Feed description',
-            artworkUrl: 'https://example.com/show-600.jpg',
-            pageInfo:
-              limit > 0
-                ? {
-                    limit,
-                    offset,
-                    returned: Math.max(pageSize, 0),
-                    hasMore: startIndex + Math.max(pageSize, 0) < totalEpisodes,
-                  }
-                : undefined,
-            episodes: Array.from({ length: Math.max(pageSize, 0) }, (_, index) =>
-              makeFeedEpisode({
-                episodeGuid: `feed-ep-${startIndex + index + 1}`,
-                title: `Feed Episode ${startIndex + index + 1}`,
-                description: `Feed description ${startIndex + index + 1}`,
-                audioUrl: `https://example.com/audio-${startIndex + index + 1}.mp3`,
-                pubDate: '2026-03-27T00:00:00.000Z',
-                artworkUrl: `https://example.com/ep-${startIndex + index + 1}.jpg`,
-                duration: 123,
-              })
-            ),
-          })
-        )
-      })
-    )
-
-    render(<PodcastEpisodesPage />, { wrapper: createQueryClientWrapper() })
-
-    expect(await screen.findByText('Feed Episode 20')).not.toBeNull()
-    expect(screen.queryByText('Feed Episode 21')).toBeNull()
-
-    fireEvent.click(screen.getByTestId('load-more'))
-
-    await waitFor(() =>
-      expect(screen.queryByTestId('podcast-episodes-page-loading-more')).not.toBeNull()
-    )
-
-    await waitFor(() => expect(screen.queryByText('Feed Episode 21')).not.toBeNull())
-    expect(screen.queryByText('Feed Episode 40')).not.toBeNull()
-    expect(feedHits).toBe(2)
-
-    fireEvent.click(screen.getByTestId('load-more'))
-
-    await waitFor(() => expect(feedHits).toBe(2))
-  })
-
-  it('reuses the cached first page from show page before requesting later pages', async () => {
-    server.use(
-      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.feed), async ({ request }) => {
-        feedHits += 1
-        const url = new URL(request.url)
-        expect(url.searchParams.get('url')).toBe('https://example.com/show-feed.xml')
-        expect(url.searchParams.get('limit')).toBe('20')
-        expect(url.searchParams.get('offset')).toBe('20')
-
-        await new Promise((resolve) => setTimeout(resolve, 120))
-
-        return HttpResponse.json(
-          makeParsedFeed({
-            title: 'Editor Pick Podcast',
-            description: 'Feed description',
-            artworkUrl: 'https://example.com/show-600.jpg',
-            pageInfo: {
-              limit: 20,
-              offset: 20,
-              returned: 20,
-              hasMore: false,
-            },
-            episodes: Array.from({ length: 20 }, (_, index) =>
-              makeFeedEpisode({
-                episodeGuid: `feed-ep-${index + 21}`,
-                title: `Feed Episode ${index + 21}`,
-                description: `Feed description ${index + 21}`,
-                audioUrl: `https://example.com/audio-${index + 21}.mp3`,
-                pubDate: '2026-03-27T00:00:00.000Z',
-                artworkUrl: `https://example.com/ep-${index + 21}.jpg`,
-                duration: 123,
-              })
-            ),
-          })
-        )
-      })
-    )
-
+  it('reuses the PI episode-list cache family for warm see-all navigation', async () => {
+    const podcast = makePodcast({
+      podcastItunesId: '12345',
+      title: 'Cached Podcast',
+      author: 'Host',
+      lastUpdateTime: 1711497600,
+      episodeCount: 2,
+    })
     const harness = createQueryClientHarness({
       setup: (queryClient) => {
-        writePodcastFeedPageToCaches(
+        queryClient.setQueryData(buildPodcastDetailQueryKey('12345', 'us'), podcast)
+        writePodcastEpisodesToCache(
           queryClient,
-          normalizeFeedUrl('https://example.com/show-feed.xml'),
-          makeParsedFeed({
-            title: 'Editor Pick Podcast',
-            description: 'Feed description',
-            artworkUrl: 'https://example.com/show-600.jpg',
-            pageInfo: {
-              limit: 20,
-              offset: 0,
-              returned: 20,
-              hasMore: true,
-            },
-            episodes: Array.from({ length: 20 }, (_, index) =>
-              makeFeedEpisode({
-                episodeGuid: `feed-ep-${index + 1}`,
-                title: `Feed Episode ${index + 1}`,
-                description: `Feed description ${index + 1}`,
-                audioUrl: `https://example.com/audio-${index + 1}.mp3`,
-                pubDate: '2026-03-27T00:00:00.000Z',
-                artworkUrl: `https://example.com/ep-${index + 1}.jpg`,
-                duration: 123,
-              })
-            ),
+          '12345',
+          makePodcastEpisodes({
+            episodes: [
+              makeEpisode({
+                guid: 'cached-ep-1',
+                title: 'Cached Episode 1',
+                pubDate: '2026-03-27T00:00:00Z',
+              }),
+              makeEpisode({
+                guid: 'cached-ep-2',
+                title: 'Cached Episode 2',
+                pubDate: '2025-03-27T00:00:00Z',
+              }),
+            ],
           }),
           {
-            limit: 20,
-            offset: 0,
+            country: 'us',
+            authority: {
+              lastUpdateTime: podcast.lastUpdateTime,
+              episodeCount: podcast.episodeCount,
+            },
           }
         )
       },
@@ -342,101 +166,9 @@ describe('PodcastEpisodesPage editor pick path', () => {
 
     render(<PodcastEpisodesPage />, { wrapper: harness.wrapper })
 
-    expect(await screen.findByText('Feed Episode 20')).not.toBeNull()
-    expect(feedHits).toBe(0)
-
-    fireEvent.click(screen.getByTestId('load-more'))
-
-    await waitFor(() =>
-      expect(screen.queryByTestId('podcast-episodes-page-loading-more')).not.toBeNull()
-    )
-
-    await waitFor(() => expect(screen.queryByText('Feed Episode 21')).not.toBeNull())
-    expect(screen.queryByText('Feed Episode 40')).not.toBeNull()
-    expect(feedHits).toBe(1)
-  })
-
-  it('does not auto-fetch page 2 when Virtuoso reports the last row visible before user scrolls', async () => {
-    server.use(
-      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.feed), async ({ request }) => {
-        feedHits += 1
-        const url = new URL(request.url)
-        const offset = Number(url.searchParams.get('offset') || '0')
-
-        if (offset !== 0) {
-          throw new Error(`unexpected follow-up request for offset ${offset}`)
-        }
-
-        return HttpResponse.json(
-          makeParsedFeed({
-            title: 'Editor Pick Podcast',
-            description: 'Feed description',
-            artworkUrl: 'https://example.com/show-600.jpg',
-            pageInfo: {
-              limit: 20,
-              offset: 0,
-              returned: 20,
-              hasMore: true,
-            },
-            episodes: Array.from({ length: 20 }, (_, index) =>
-              makeFeedEpisode({
-                episodeGuid: `feed-ep-${index + 1}`,
-                title: `Feed Episode ${index + 1}`,
-                description: `Feed description ${index + 1}`,
-                audioUrl: `https://example.com/audio-${index + 1}.mp3`,
-                pubDate: '2026-03-27T00:00:00.000Z',
-                artworkUrl: `https://example.com/ep-${index + 1}.jpg`,
-                duration: 123,
-              })
-            ),
-          })
-        )
-      })
-    )
-
-    const harness = createQueryClientHarness({
-      setup: (queryClient) => {
-        writePodcastFeedPageToCaches(
-          queryClient,
-          normalizeFeedUrl('https://example.com/show-feed.xml'),
-          makeParsedFeed({
-            title: 'Editor Pick Podcast',
-            description: 'Feed description',
-            artworkUrl: 'https://example.com/show-600.jpg',
-            pageInfo: {
-              limit: 20,
-              offset: 0,
-              returned: 20,
-              hasMore: true,
-            },
-            episodes: Array.from({ length: 20 }, (_, index) =>
-              makeFeedEpisode({
-                episodeGuid: `feed-ep-${index + 1}`,
-                title: `Feed Episode ${index + 1}`,
-                description: `Feed description ${index + 1}`,
-                audioUrl: `https://example.com/audio-${index + 1}.mp3`,
-                pubDate: '2026-03-27T00:00:00.000Z',
-                artworkUrl: `https://example.com/ep-${index + 1}.jpg`,
-                duration: 123,
-              })
-            ),
-          }),
-          {
-            limit: 20,
-            offset: 0,
-          }
-        )
-      },
-    })
-
-    render(<PodcastEpisodesPage />, { wrapper: harness.wrapper })
-
-    expect(await screen.findByText('Feed Episode 20')).not.toBeNull()
-    expect(feedHits).toBe(0)
-
-    fireEvent.click(screen.getByTestId('auto-range-end'))
-
-    await waitFor(() => expect(feedHits).toBe(0))
-    expect(screen.queryByText('Feed Episode 21')).toBeNull()
+    expect(await screen.findByText('Cached Episode 1')).not.toBeNull()
+    expect(await screen.findByText('Cached Episode 2')).not.toBeNull()
+    expect(podcastLookupHits).toBe(0)
+    expect(episodeListHits).toBe(0)
   })
 })

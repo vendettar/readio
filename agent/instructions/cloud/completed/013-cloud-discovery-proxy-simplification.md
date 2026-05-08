@@ -379,7 +379,7 @@ This instruction does **not** do the following:
 - Added `TestDecodeDiscoveryFeedSanitizesXML` — 7 subtests (bare `&` content, URL attrs, control chars, CDATA, empty feed, missing enclosure URL, whitespace title)
 
 **013b — Modularization and observability:**
-- Extracted URL construction helpers: `buildAppleSearchURL`, `buildAppleLookupURL`, `buildAppleFeedURL`
+- Extracted URL construction helpers for Apple search, Apple lookup, and the legacy Apple feed route
 - Added `classifyDiscoveryError()` error classifier
 - Added `logDiscoveryRequest()` structured logging on all 8 discovery routes
 - Log fields: route, upstream_kind, upstream_host, elapsed_ms, error_class, upstream_status, timed_out

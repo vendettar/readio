@@ -8,16 +8,20 @@ import SearchPage from '../SearchPage'
 const navigateMock = vi.fn()
 const playSearchEpisodeMock = vi.fn()
 const mockSearchState = { q: 'search-term' }
+const makeSection = <T,>(items: T[] = [], status: 'idle' | 'loading' | 'ready' = 'ready') => ({
+  items,
+  status,
+})
 const mockGlobalSearchState: {
-  podcasts: Record<string, unknown>[]
-  episodes: Record<string, unknown>[]
-  local: Record<string, unknown>[]
+  podcastSection: ReturnType<typeof makeSection<Record<string, unknown>>>
+  episodeSection: ReturnType<typeof makeSection<Record<string, unknown>>>
+  localSection: ReturnType<typeof makeSection<Record<string, unknown>>>
   isLoading: boolean
   isEmpty: boolean
 } = {
-  podcasts: [],
-  episodes: [],
-  local: [],
+  podcastSection: makeSection([]),
+  episodeSection: makeSection([]),
+  localSection: makeSection([]),
   isLoading: false,
   isEmpty: false,
 }
@@ -151,6 +155,7 @@ vi.mock('../../store/exploreStore', () => ({
     selector({
       country: 'us',
       favorites: [],
+      isFavorited: vi.fn(() => false),
       addFavorite: vi.fn(),
       removeFavorite: vi.fn(),
     }),
@@ -164,22 +169,22 @@ describe('SearchPage episode play regression', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mockSearchState.q = 'search-term'
-    mockGlobalSearchState.podcasts = []
-    mockGlobalSearchState.local = []
+    mockGlobalSearchState.podcastSection = makeSection([])
+    mockGlobalSearchState.localSection = makeSection([])
     mockGlobalSearchState.isLoading = false
     mockGlobalSearchState.isEmpty = false
-    mockGlobalSearchState.episodes = [
+    mockGlobalSearchState.episodeSection = makeSection([
       makeSearchEpisode({
         podcastItunesId: '7',
         title: 'Episode Name',
         showTitle: 'Show Name',
-        episodeUrl: 'https://example.com/audio.mp3',
+        audioUrl: 'https://example.com/audio.mp3',
         releaseDate: '2026-01-01T00:00:00Z',
         shortDescription: 'desc',
         artwork: 'https://example.com/artwork-600.jpg',
         trackTimeMillis: 61000,
       }),
-    ]
+    ])
   })
 
   it('keeps artwork play button on direct playback path', () => {
@@ -190,7 +195,7 @@ describe('SearchPage episode play regression', () => {
     expect(playSearchEpisodeMock).toHaveBeenCalledWith(
       expect.objectContaining({
         title: 'Episode Name',
-        episodeUrl: 'https://example.com/audio.mp3',
+        audioUrl: 'https://example.com/audio.mp3',
       }),
       'us'
     )

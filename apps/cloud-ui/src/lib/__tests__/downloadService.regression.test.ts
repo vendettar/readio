@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PlaybackSession, Track } from '../db/types'
-import { DB } from '../dexieDb'
+import { createCanonicalRemoteEpisodeMetadata } from '../player/playbackMetadata'
 
 const {
   checkDownloadCapacityMock,
@@ -8,26 +8,28 @@ const {
   upsertBuiltInSubtitleVersionMock,
   toastErrorKeyMock,
   toastInfoKeyMock,
-  podcastFirstMock,
+  trackByUrlFirstMock,
+  trackByCanonicalFirstMock,
   toArrayBlobsMock,
   toArrayTracksMock,
   toArrayDownloadsMock,
   toArraySessionsMock,
   bulkDeleteMock,
-  transactionMock,
+  persistDownloadedEpisodeMock,
 } = vi.hoisted(() => ({
   checkDownloadCapacityMock: vi.fn(),
   loadRemoteTranscriptWithCacheMock: vi.fn(),
   upsertBuiltInSubtitleVersionMock: vi.fn(),
   toastErrorKeyMock: vi.fn(),
   toastInfoKeyMock: vi.fn(),
-  podcastFirstMock: vi.fn(),
+  trackByUrlFirstMock: vi.fn(),
+  trackByCanonicalFirstMock: vi.fn(),
   toArrayBlobsMock: vi.fn(),
   toArrayTracksMock: vi.fn(),
   toArrayDownloadsMock: vi.fn(),
   toArraySessionsMock: vi.fn(),
   bulkDeleteMock: vi.fn(),
-  transactionMock: vi.fn(),
+  persistDownloadedEpisodeMock: vi.fn(),
 }))
 
 vi.mock('../downloadCapacity', () => ({
@@ -64,15 +66,11 @@ vi.mock('../remoteTranscript', () => ({
 }))
 
 vi.mock('../dexieDb', () => ({
-  DB_TABLE_NAMES: {
-    AUDIO_BLOBS: 'audioBlobs',
-    TRACKS: 'tracks',
-  },
   db: {
     tracks: {
       where: vi.fn(() => ({
         equals: vi.fn(() => ({
-          first: (...args: unknown[]) => podcastFirstMock(...args),
+          first: (...args: unknown[]) => trackByUrlFirstMock(...args),
         })),
       })),
       toArray: (...args: unknown[]) => toArrayDownloadsMock(...args),
@@ -87,18 +85,14 @@ vi.mock('../dexieDb', () => ({
     playback_sessions: {
       toArray: (...args: unknown[]) => toArraySessionsMock(...args),
     },
-    transaction: (...args: unknown[]) => transactionMock(...args),
-  },
-  DB: {
-    addPodcastDownload: vi.fn(),
-    transaction: (...args: unknown[]) => transactionMock(...args),
-    addAudioBlob: vi.fn().mockResolvedValue('new-audio-id'),
   },
 }))
 
 vi.mock('../repositories/DownloadsRepository', () => ({
   DownloadsRepository: {
-    findTrackByUrl: (...args: unknown[]) => podcastFirstMock(...args),
+    findTrackByUrl: (...args: unknown[]) => trackByUrlFirstMock(...args),
+    findTrackByPodcastAndEpisode: (...args: unknown[]) => trackByCanonicalFirstMock(...args),
+    persistDownloadedEpisode: (...args: unknown[]) => persistDownloadedEpisodeMock(...args),
     getAllTracks: (...args: unknown[]) => toArrayDownloadsMock(...args),
     removeTrack: vi.fn().mockResolvedValue(true),
     upsertBuiltInSubtitleVersion: (...args: unknown[]) => upsertBuiltInSubtitleVersionMock(...args),
@@ -129,12 +123,21 @@ vi.mock('../repositories/PlaybackRepository', () => ({
   },
 }))
 
-import { downloadEpisode, persistAudioBlobAsDownload, sweepOrphanedBlobs } from '../downloadService'
+import {
+  buildDownloadJobOptionsFromEpisodeProps,
+  buildDownloadJobOptionsFromCanonicalRemoteMetadata,
+  downloadEpisode,
+  findDownloadedTrackForEpisode,
+  getStoredDownloadStatusForEpisode,
+  persistAudioBlobAsDownload,
+  sweepOrphanedBlobs,
+} from '../downloadService'
 
 describe('downloadService regressions', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    podcastFirstMock.mockResolvedValue(undefined)
+    trackByUrlFirstMock.mockResolvedValue(undefined)
+    trackByCanonicalFirstMock.mockResolvedValue(undefined)
     loadRemoteTranscriptWithCacheMock.mockResolvedValue({
       ok: true,
       cues: [{ start: 0, end: 1000, text: 'hello' }],
@@ -145,13 +148,12 @@ describe('downloadService regressions', () => {
       currentUsageBytes: 0,
       capBytes: 1024,
     })
-    vi.mocked(DB.addPodcastDownload).mockResolvedValue('track-built-in')
     toArrayBlobsMock.mockResolvedValue([])
     toArrayTracksMock.mockResolvedValue([])
     toArrayDownloadsMock.mockResolvedValue([])
     toArraySessionsMock.mockResolvedValue([])
     bulkDeleteMock.mockResolvedValue(undefined)
-    transactionMock.mockImplementation((_mode, _tables, cb) => cb())
+    persistDownloadedEpisodeMock.mockResolvedValue('track-built-in')
   })
 
   it('blocks blob persistence when capacity pre-check fails', async () => {
@@ -165,7 +167,12 @@ describe('downloadService regressions', () => {
     const result = await persistAudioBlobAsDownload(new Blob(['audio']), {
       audioUrl: 'https://example.com/audio.mp3',
       episodeTitle: 'Episode',
+      episodeDescription: '',
+      showTitle: 'Podcast',
+      artworkUrl: 'https://example.com/art.jpg',
       countryAtSave: 'us',
+      podcastItunesId: 'pod-1',
+      episodeGuid: 'episode-guid-1',
     })
 
     expect(result).toEqual({
@@ -173,18 +180,23 @@ describe('downloadService regressions', () => {
       reason: 'capacity_blocked',
     })
     expect(toastErrorKeyMock).toHaveBeenCalledWith('downloadStorageLimitApp')
-    expect(transactionMock).not.toHaveBeenCalled()
+    expect(persistDownloadedEpisodeMock).not.toHaveBeenCalled()
   })
 
   it('does not emit downloadAlreadyExists toast when silent download callers hit an existing track', async () => {
-    podcastFirstMock.mockResolvedValue({
+    trackByCanonicalFirstMock.mockResolvedValue({
       id: 'existing-track-1',
     })
 
     const result = await downloadEpisode({
       audioUrl: 'https://example.com/audio.mp3',
       episodeTitle: 'Episode',
+      episodeDescription: '',
+      showTitle: 'Podcast',
+      artworkUrl: 'https://example.com/art.jpg',
       countryAtSave: 'us',
+      podcastItunesId: 'pod-1',
+      episodeGuid: 'episode-guid-1',
       silent: true,
     })
 
@@ -196,12 +208,153 @@ describe('downloadService regressions', () => {
     expect(toastInfoKeyMock).not.toHaveBeenCalledWith('downloadAlreadyExists')
   })
 
+  it('deduplicates by canonical episode identity before URL when the source URL rotates', async () => {
+    trackByCanonicalFirstMock.mockResolvedValue({
+      id: 'existing-track-rotated',
+      sourceUrlNormalized: 'https://old-cdn.example.com/audio.mp3',
+    })
+
+    const result = await downloadEpisode({
+      audioUrl: 'https://new-cdn.example.com/audio.mp3',
+      episodeTitle: 'Episode',
+      episodeDescription: '',
+      showTitle: 'Podcast',
+      artworkUrl: 'https://example.com/art.jpg',
+      countryAtSave: 'us',
+      podcastItunesId: 'pod-1',
+      episodeGuid: 'episode-guid-1',
+      silent: true,
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      trackId: 'existing-track-rotated',
+      reason: 'already_downloaded',
+    })
+    expect(trackByCanonicalFirstMock).toHaveBeenCalledWith('pod-1', 'episode-guid-1')
+    expect(trackByUrlFirstMock).not.toHaveBeenCalled()
+  })
+
+  it('supports URL-only lookup paths without partial canonical fields', async () => {
+    trackByUrlFirstMock.mockResolvedValue({
+      id: 'existing-track-url-only',
+    })
+
+    const track = await findDownloadedTrackForEpisode({
+      audioUrl: 'https://example.com/audio.mp3',
+    })
+
+    expect(track).toEqual({
+      id: 'existing-track-url-only',
+    })
+    expect(trackByCanonicalFirstMock).not.toHaveBeenCalled()
+    expect(trackByUrlFirstMock).toHaveBeenCalledWith('https://example.com/audio.mp3')
+    expect(
+      getStoredDownloadStatusForEpisode({
+        audioUrl: 'https://example.com/audio.mp3',
+      })
+    ).toBe('idle')
+  })
+
+  it('fails closed when downloadEpisode receives whitespace-only canonical required fields', async () => {
+    const result = await downloadEpisode({
+      audioUrl: ' https://example.com/audio.mp3 ',
+      episodeTitle: 'Episode',
+      episodeDescription: '',
+      showTitle: 'Podcast',
+      artworkUrl: '   ',
+      countryAtSave: 'us',
+      podcastItunesId: 'pod-1',
+      episodeGuid: 'episode-guid-1',
+    } as unknown as import('../downloadService').DownloadJobOptions)
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'network_error',
+    })
+    expect(trackByCanonicalFirstMock).not.toHaveBeenCalled()
+    expect(trackByUrlFirstMock).not.toHaveBeenCalled()
+  })
+
+  it('normalizes canonical remote episode download options once and fails closed on invalid country', () => {
+    expect(
+      buildDownloadJobOptionsFromEpisodeProps({
+        audioUrl: ' https://example.com/audio.mp3 ',
+        episodeTitle: ' Episode ',
+        episodeDescription: '',
+        showTitle: ' Podcast ',
+        artworkUrl: ' https://example.com/art.jpg ',
+        countryAtSave: 'US',
+        podcastItunesId: ' pod-1 ',
+        episodeGuid: ' guid-1 ',
+      })
+    ).toEqual(
+      expect.objectContaining({
+        audioUrl: 'https://example.com/audio.mp3',
+        episodeTitle: 'Episode',
+        showTitle: 'Podcast',
+        artworkUrl: 'https://example.com/art.jpg',
+        countryAtSave: 'us',
+        podcastItunesId: 'pod-1',
+        episodeGuid: 'guid-1',
+      })
+    )
+
+    expect(
+      buildDownloadJobOptionsFromEpisodeProps({
+        audioUrl: 'https://example.com/audio.mp3',
+        episodeTitle: 'Episode',
+        episodeDescription: '',
+        showTitle: 'Podcast',
+        artworkUrl: 'https://example.com/art.jpg',
+        countryAtSave: 'zz',
+        podcastItunesId: 'pod-1',
+        episodeGuid: 'guid-1',
+      })
+    ).toBeNull()
+  })
+
+  it('normalizes remote metadata download options from canonical metadata and fails closed on invalid country', () => {
+    expect(
+      buildDownloadJobOptionsFromCanonicalRemoteMetadata({
+        audioUrl: ' https://example.com/audio.mp3 ',
+        episodeTitle: ' Episode ',
+        metadata: createCanonicalRemoteEpisodeMetadata({
+          showTitle: ' Podcast ',
+          artworkUrl: ' https://example.com/art.jpg ',
+          episodeGuid: ' guid-2 ',
+          podcastItunesId: ' pod-2 ',
+          countryAtSave: 'us',
+          description: ' Description ',
+          durationSeconds: 120,
+          transcriptUrl: ' https://example.com/transcript.vtt ',
+        })!,
+      })
+    ).toEqual(
+      expect.objectContaining({
+        audioUrl: 'https://example.com/audio.mp3',
+        episodeTitle: 'Episode',
+        showTitle: 'Podcast',
+        artworkUrl: 'https://example.com/art.jpg',
+        countryAtSave: 'us',
+        podcastItunesId: 'pod-2',
+        episodeGuid: 'guid-2',
+        transcriptUrl: 'https://example.com/transcript.vtt',
+      })
+    )
+
+  })
+
   it('persists a built-in transcript version after saving a download with transcriptUrl', async () => {
     const result = await persistAudioBlobAsDownload(new Blob(['audio']), {
       audioUrl: 'https://example.com/audio.mp3',
       episodeTitle: 'Episode',
+      episodeDescription: '',
       showTitle: 'Podcast',
+      artworkUrl: 'https://example.com/art.jpg',
       countryAtSave: 'us',
+      podcastItunesId: 'pod-1',
+      episodeGuid: 'episode-guid-1',
       transcriptUrl: 'https://example.com/transcript.vtt',
     })
 
@@ -209,7 +362,7 @@ describe('downloadService regressions', () => {
       ok: true,
       trackId: 'track-built-in',
     })
-    expect(DB.addPodcastDownload).toHaveBeenCalledWith(
+    expect(persistDownloadedEpisodeMock).toHaveBeenCalledWith(
       expect.objectContaining({
         transcriptUrl: 'https://example.com/transcript.vtt',
       })
@@ -231,30 +384,119 @@ describe('downloadService regressions', () => {
     await persistAudioBlobAsDownload(new Blob(['audio']), {
       audioUrl: 'https://example.com/audio.mp3',
       episodeTitle: 'Episode',
+      episodeDescription: '',
       showTitle: 'Podcast',
+      artworkUrl: 'https://example.com/art.jpg',
       countryAtSave: 'us',
+      podcastItunesId: 'pod-1',
       episodeGuid: '766f112e-abcd-1234-5678-07e05e548074',
     })
 
-    expect(DB.addPodcastDownload).toHaveBeenCalledWith(
+    expect(persistDownloadedEpisodeMock).toHaveBeenCalledWith(
       expect.objectContaining({
         sourceEpisodeGuid: '766f112e-abcd-1234-5678-07e05e548074',
       })
     )
   })
 
+  it('does not create a second download row when blob persistence sees a rotated URL for the same canonical episode', async () => {
+    trackByCanonicalFirstMock.mockResolvedValue({
+      id: 'existing-track-blob',
+      sourceUrlNormalized: 'https://old-cdn.example.com/audio.mp3',
+    })
+
+    const result = await persistAudioBlobAsDownload(new Blob(['audio']), {
+      audioUrl: 'https://new-cdn.example.com/audio.mp3',
+      episodeTitle: 'Episode',
+      episodeDescription: '',
+      showTitle: 'Podcast',
+      artworkUrl: 'https://example.com/art.jpg',
+      countryAtSave: 'us',
+      podcastItunesId: 'pod-1',
+      episodeGuid: 'episode-guid-1',
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      trackId: 'existing-track-blob',
+      reason: 'already_downloaded',
+    })
+    expect(persistDownloadedEpisodeMock).not.toHaveBeenCalled()
+  })
+
   it('rejects blob persistence when countryAtSave is missing', async () => {
     const result = await persistAudioBlobAsDownload(new Blob(['audio']), {
       audioUrl: 'https://example.com/audio.mp3',
       episodeTitle: 'Episode',
+      episodeDescription: '',
+      showTitle: 'Podcast',
+      artworkUrl: 'https://example.com/art.jpg',
+      podcastItunesId: 'pod-1',
+      episodeGuid: 'episode-guid-1',
     } as unknown as import('../downloadService').DownloadJobOptions)
 
     expect(result).toEqual({
       ok: false,
       reason: 'invalid_country',
     })
-    expect(DB.addAudioBlob).not.toHaveBeenCalled()
-    expect(DB.addPodcastDownload).not.toHaveBeenCalled()
+    expect(persistDownloadedEpisodeMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects blob persistence when countryAtSave is invalid', async () => {
+    const result = await persistAudioBlobAsDownload(new Blob(['audio']), {
+      audioUrl: 'https://example.com/audio.mp3',
+      episodeTitle: 'Episode',
+      episodeDescription: '',
+      showTitle: 'Podcast',
+      artworkUrl: 'https://example.com/art.jpg',
+      countryAtSave: 'zz',
+      podcastItunesId: 'pod-1',
+      episodeGuid: 'episode-guid-1',
+    } as unknown as import('../downloadService').DownloadJobOptions)
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'invalid_country',
+    })
+    expect(persistDownloadedEpisodeMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects blob persistence when canonical remote metadata is missing', async () => {
+    const result = await persistAudioBlobAsDownload(new Blob(['audio']), {
+      audioUrl: 'https://example.com/audio.mp3',
+      episodeTitle: 'Episode',
+      episodeDescription: '',
+      showTitle: '',
+      artworkUrl: 'https://example.com/art.jpg',
+      countryAtSave: 'us',
+      podcastItunesId: 'pod-1',
+      episodeGuid: 'episode-guid-1',
+    } as unknown as import('../downloadService').DownloadJobOptions)
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'network_error',
+    })
+    expect(persistDownloadedEpisodeMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects blob persistence when artworkUrl is empty after normalization', async () => {
+    const result = await persistAudioBlobAsDownload(new Blob(['audio']), {
+      audioUrl: 'https://example.com/audio.mp3',
+      episodeTitle: 'Episode',
+      episodeDescription: '',
+      showTitle: 'Podcast',
+      artworkUrl: '   ',
+      countryAtSave: 'us',
+      podcastItunesId: 'pod-1',
+      episodeGuid: 'episode-guid-1',
+    } as unknown as import('../downloadService').DownloadJobOptions)
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'network_error',
+    })
+    expect(persistDownloadedEpisodeMock).not.toHaveBeenCalled()
   })
 
   it('does not sweep blobs referenced by tracks', async () => {

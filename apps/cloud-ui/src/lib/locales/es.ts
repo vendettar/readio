@@ -261,11 +261,6 @@ const locale = {
     'Readio is a podcast player for personal, non-commercial use. You are solely responsible for the content you upload or access through this app.',
   termsNoWarranty:
     'The app is provided "as is" without warranties of any kind, either express or implied.',
-  settingsMigration: 'Migración',
-  settingsMigrationDesc:
-    'Importe o exporte suscripciones en formato OPML. Al importar se fusionan con las existentes (deduplicación, sin eliminaciones).',
-  settingsImportOpml: 'Importar OPML',
-  settingsExportOpml: 'Exportar OPML',
   settingsVault: 'Bóveda Personal',
   settingsVaultDesc:
     'Haga una copia de seguridad y restaure todos sus metadatos (Suscripciones, Favoritos, Historial, Carpetas). Los archivos de audio no están incluidos.',
@@ -498,11 +493,6 @@ const locale = {
   toastVaultImportSuccess: 'Bóveda importada con éxito',
   toastVaultImportFailed: 'Error al importar la bóveda',
   toastVaultExportFailed: 'Error al exportar la bóveda',
-  toastOpmlEmpty: 'No se encontraron suscripciones en el archivo OPML',
-  toastOpmlImportSuccess: 'OPML importado con éxito',
-  toastOpmlImportFailed: 'Error al importar el archivo OPML',
-  toastOpmlExportEmpty: 'No hay suscripciones para exportar',
-  toastOpmlExportFailed: 'Error al exportar OPML',
   badgeFavorited: 'Favorito',
   badgePlayed: 'Reproducido',
   badgeSubscribed: 'Suscrito',

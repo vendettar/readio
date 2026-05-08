@@ -1,4 +1,5 @@
 import { logError } from './logger'
+import { getValidExternalHttpUrl } from './urlSafety'
 
 /**
  * Open external URL in a new tab/window with security best practices
@@ -7,7 +8,13 @@ import { logError } from './logger'
  */
 export function openExternal(url: string, target: string = '_blank'): void {
   try {
-    window.open(url, target, 'noopener,noreferrer')
+    const safeUrl = getValidExternalHttpUrl(url)
+    if (!safeUrl) {
+      logError('[openExternal] Refused non-http URL:', url)
+      return
+    }
+
+    window.open(safeUrl, target, 'noopener,noreferrer')
   } catch (error) {
     logError('[openExternal] Failed to open URL:', url, error)
   }

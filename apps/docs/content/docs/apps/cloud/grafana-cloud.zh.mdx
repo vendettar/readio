@@ -1,0 +1,50 @@
+---
+title: Grafana Cloud 集成
+description: 获取 Readio Cloud 可观测性凭证的指南。
+---
+
+# Grafana Cloud 集成
+
+Readio Cloud 使用“零 Agent” OTLP 推送架构处理指标和日志，并使用 Grafana Faro 处理前端 RUM。
+
+## 1. 后端指标 (OTLP Push)
+
+后端服务通过 OTLP HTTP 协议直接向 Grafana Cloud 推送指标。**无需在本机安装 Alloy/Agent。**
+
+### 获取凭证步骤：
+1. 登录 [Grafana Cloud](https://grafana.com/products/cloud/) 控制台。
+2. 在左侧导航栏点击 **Connections** -> **Add new connection**。
+3. 搜索并选择 **OpenTelemetry**。
+4. 在配置页面中找到以下信息：
+   - **Endpoint**: 类似 `https://otlp-gateway-prod-xxx.grafana.net/otlp`。
+   - **Username / Instance ID**: 一个数字 ID。
+   - **Password / API Token**: 点击 "Generate now" 生成一个 Token（需要 `MetricsPublisher` 权限）。
+
+### 需要配置到 GitHub Secrets 的变量：
+- `READIO_GRAFANA_OTLP_ENDPOINT`
+- `READIO_GRAFANA_OTLP_INSTANCE_ID`
+- `READIO_GRAFANA_OTLP_TOKEN`
+
+
+---
+
+## 2. 前端 RUM (Grafana Faro)
+
+前端监控直接从用户浏览器向 Grafana Faro Collector 上报数据。
+
+### 获取凭证步骤：
+1. 在左侧导航栏点击 **Frontend** (或搜索 Faro)。
+2. 点击 **Create new app**。
+3. App Name 填 `readio-cloud`。
+4. 创建后，在 "Instrumentation" 标签页找到 **URL** (Collector URL)。
+
+### 需要配置到 GitHub Secrets 的变量：
+- `VITE_GRAFANA_FARO_URL`: 类似 `https://faro-collector-prod-xxx.grafana.net/collect/xxx`
+- `VITE_GRAFANA_FARO_APP_NAME`: `readio-cloud`
+- `VITE_GRAFANA_FARO_ENV`: `production` 或 `preproduction`
+
+---
+
+## 3. 验证数据流入
+- **指标**: 在 Grafana Explore 中搜索 `readio_cloud_http_request_duration_seconds`。
+- **RUM**: 在 Grafana Frontend 页面查看用户会话数据。

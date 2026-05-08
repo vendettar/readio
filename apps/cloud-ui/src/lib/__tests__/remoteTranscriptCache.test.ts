@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DB } from '../dexieDb'
+import { PlaybackRepository } from '../repositories/PlaybackRepository'
 import {
   __resetRemoteTranscriptStateForTests,
   deriveRemoteTranscriptCacheId,
@@ -86,7 +87,7 @@ describe('remoteTranscript cache behavior', () => {
     expect(first.ok).toBe(true)
     expect(first.source).toBe('network')
 
-    const dbGetSpy = vi.spyOn(DB, 'getRemoteTranscriptByUrl')
+    const dbGetSpy = vi.spyOn(PlaybackRepository, 'getRemoteTranscriptByUrl')
     fetchTextWithFallbackMock.mockReset()
 
     const second = await loadRemoteTranscriptWithCache(url)
@@ -103,7 +104,7 @@ describe('remoteTranscript cache behavior', () => {
     const url = 'https://example.com/db-then-memory.srt'
     await seedTranscript(url, makeSrt('DB cue'), Date.now())
 
-    const dbGetSpy = vi.spyOn(DB, 'getRemoteTranscriptByUrl')
+    const dbGetSpy = vi.spyOn(PlaybackRepository, 'getRemoteTranscriptByUrl')
 
     const first = await loadRemoteTranscriptWithCache(url)
     expect(first.ok).toBe(true)

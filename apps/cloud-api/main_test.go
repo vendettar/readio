@@ -1,8 +1,9 @@
 package main
 
 import (
-	"bufio"
+
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"io"
@@ -13,117 +14,14 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
+	"testing/fstest"
 	"time"
 )
 
-func TestAppHandlerServesStaticFilesAndSPA(t *testing.T) {
-	indexDir := t.TempDir()
-	distDir := filepath.Join(indexDir, "apps", "cloud-ui", "dist")
-	if err := os.MkdirAll(filepath.Join(distDir, "assets"), 0o755); err != nil {
-		t.Fatalf("mkdir dist: %v", err)
-	}
 
-	if err := os.WriteFile(filepath.Join(distDir, "index.html"), []byte("index"), 0o644); err != nil {
-		t.Fatalf("write index: %v", err)
-	}
-
-	if err := os.WriteFile(filepath.Join(distDir, "assets", "app.js"), []byte("console.log('ok')"), 0o644); err != nil {
-		t.Fatalf("write asset: %v", err)
-	}
-
-	if err := os.WriteFile(filepath.Join(distDir, "robots"), []byte("User-agent: *"), 0o644); err != nil {
-		t.Fatalf("write extensionless asset: %v", err)
-	}
-
-	handler, err := newAppHandler(distDir)
-	if err != nil {
-		t.Fatalf("new app handler: %v", err)
-	}
-
-	t.Run("serves index for root", func(t *testing.T) {
-		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/", nil)
-		handler.ServeHTTP(rr, req)
-
-		if rr.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
-		}
-		if rr.Body.String() != "index" {
-			t.Fatalf("body = %q, want %q", rr.Body.String(), "index")
-		}
-	})
-
-	t.Run("serves spa fallback for client routes", func(t *testing.T) {
-		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/settings/library", nil)
-		handler.ServeHTTP(rr, req)
-
-		if rr.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
-		}
-		if rr.Body.String() != "index" {
-			t.Fatalf("body = %q, want %q", rr.Body.String(), "index")
-		}
-	})
-
-	t.Run("serves static asset when present", func(t *testing.T) {
-		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/assets/app.js", nil)
-		handler.ServeHTTP(rr, req)
-
-		if rr.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
-		}
-		if rr.Body.String() != "console.log('ok')" {
-			t.Fatalf("body = %q, want %q", rr.Body.String(), "console.log('ok')")
-		}
-	})
-
-	t.Run("serves extensionless asset when present", func(t *testing.T) {
-		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/robots", nil)
-		handler.ServeHTTP(rr, req)
-
-		if rr.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
-		}
-		if rr.Body.String() != "User-agent: *" {
-			t.Fatalf("body = %q, want %q", rr.Body.String(), "User-agent: *")
-		}
-	})
-
-	t.Run("rejects api routes before spa fallback", func(t *testing.T) {
-		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/api/proxy", nil)
-		handler.ServeHTTP(rr, req)
-
-		if rr.Code != http.StatusNotFound {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusNotFound)
-		}
-	})
-
-	t.Run("rejects bare api route before spa fallback", func(t *testing.T) {
-		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/api", nil)
-		handler.ServeHTTP(rr, req)
-
-		if rr.Code != http.StatusNotFound {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusNotFound)
-		}
-	})
-
-	t.Run("returns 404 for missing asset path", func(t *testing.T) {
-		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodGet, "/assets/missing.js", nil)
-		handler.ServeHTTP(rr, req)
-
-		if rr.Code != http.StatusNotFound {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusNotFound)
-		}
-	})
-}
 
 func TestProxyRequestSummaryEmitsCanonicalUpstreamFields(t *testing.T) {
 	rb := newAdminRingBuffer(10)
@@ -230,24 +128,7 @@ func assertProxyErrorPayload(t *testing.T, body interface{ String() string }, wa
 	}
 }
 
-func TestCloudMuxServesDynamicEnvBeforeStaticFallback(t *testing.T) {
-	indexDir := t.TempDir()
-	distDir := filepath.Join(indexDir, "dist")
-	if err := os.MkdirAll(distDir, 0o755); err != nil {
-		t.Fatalf("mkdir dist: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(distDir, "index.html"), []byte("index"), 0o644); err != nil {
-		t.Fatalf("write index: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(distDir, "env.js"), []byte("static-env"), 0o644); err != nil {
-		t.Fatalf("write static env: %v", err)
-	}
-
-	app, err := newAppHandler(distDir)
-	if err != nil {
-		t.Fatalf("new app handler: %v", err)
-	}
-
+func TestCloudMuxServesDynamicJSONConfig(t *testing.T) {
 	t.Setenv("READIO_APP_NAME", "Readio Cloud")
 	t.Setenv("READIO_APP_VERSION", "2.0.0")
 	t.Setenv(asrRelayPublicTokenEnv, "relay-public-token")
@@ -258,42 +139,31 @@ func TestCloudMuxServesDynamicEnvBeforeStaticFallback(t *testing.T) {
 	t.Setenv("READIO_DEFAULT_LANGUAGE", "zh")
 	t.Setenv("READIO_NETWORK_PROXY_AUTH_HEADER", "x-proxy-token")
 	t.Setenv("READIO_NETWORK_PROXY_AUTH_VALUE", "browser-public-proxy-token")
+	t.Setenv("VITE_GRAFANA_FARO_URL", "https://faro.example.com/collect")
+	t.Setenv("VITE_GRAFANA_FARO_APP_NAME", "readio-cloud")
+	t.Setenv("VITE_GRAFANA_FARO_ENV", "production")
+	t.Setenv("VITE_GRAFANA_FARO_SAMPLE_RATE", "0.25")
 	t.Setenv(cloudDBEnv, "/srv/readio/data/readio.db")
-	t.Setenv(cloudUIDistEnv, "/srv/readio/current/dist")
 	t.Setenv(asrRelayAllowedOriginsEnv, "https://readio.example")
 	t.Setenv(asrRelayRateLimitBurstEnv, "9")
 	t.Setenv(asrRelayRateLimitWindowMsEnv, "1500")
 	t.Setenv("PORT", "8080")
 
-	mux := newCloudMux(app, http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler())
+	mux := newCloudMux(http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler())
 
-	req := httptest.NewRequest(http.MethodGet, browserEnvRoute, nil)
-	req.Host = "cloud.example"
-	req.Header.Set("X-Forwarded-Proto", "https")
+	req := httptest.NewRequest(http.MethodGet, browserConfigRoute, nil)
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, req)
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
 	}
-	if got := rr.Header().Get("Content-Type"); got != "application/javascript; charset=utf-8" {
-		t.Fatalf("content-type = %q, want %q", got, "application/javascript; charset=utf-8")
-	}
-	if got := rr.Header().Get("Cache-Control"); got != "no-store" {
-		t.Fatalf("cache-control = %q, want %q", got, "no-store")
-	}
-	if rr.Body.String() == "static-env" {
-		t.Fatalf("/env.js fell back to static file instead of dynamic handler")
-	}
-
-	body := strings.TrimSpace(rr.Body.String())
-	const prefix = "window.__READIO_ENV__ = "
-	if !strings.HasPrefix(body, prefix) || !strings.HasSuffix(body, ";") {
-		t.Fatalf("unexpected body = %q", body)
+	if got := rr.Header().Get("Content-Type"); got != "application/json; charset=utf-8" {
+		t.Fatalf("content-type = %q, want %q", got, "application/json; charset=utf-8")
 	}
 
 	var payload map[string]any
-	if err := json.Unmarshal([]byte(strings.TrimSuffix(strings.TrimPrefix(body, prefix), ";")), &payload); err != nil {
+	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("unmarshal env payload: %v", err)
 	}
 
@@ -303,32 +173,50 @@ func TestCloudMuxServesDynamicEnvBeforeStaticFallback(t *testing.T) {
 	if payload["READIO_ASR_RELAY_PUBLIC_TOKEN"] != "relay-public-token" {
 		t.Fatalf("READIO_ASR_RELAY_PUBLIC_TOKEN = %#v, want %#v", payload["READIO_ASR_RELAY_PUBLIC_TOKEN"], "relay-public-token")
 	}
-	if payload["READIO_NETWORK_PROXY_AUTH_HEADER"] != "x-proxy-token" {
-		t.Fatalf("READIO_NETWORK_PROXY_AUTH_HEADER = %#v, want %#v", payload["READIO_NETWORK_PROXY_AUTH_HEADER"], "x-proxy-token")
+}
+
+
+func TestBrowserEnvAllowlistFaroKeysArePublicOnly(t *testing.T) {
+	wantFaroKeys := []string{
+		"VITE_GRAFANA_FARO_URL",
+		"VITE_GRAFANA_FARO_APP_NAME",
+		"VITE_GRAFANA_FARO_ENV",
+		"VITE_GRAFANA_FARO_SAMPLE_RATE",
 	}
-	if payload["READIO_NETWORK_PROXY_AUTH_VALUE"] != "browser-public-proxy-token" {
-		t.Fatalf("READIO_NETWORK_PROXY_AUTH_VALUE = %#v, want %#v", payload["READIO_NETWORK_PROXY_AUTH_VALUE"], "browser-public-proxy-token")
-	}
+
+	var gotFaroKeys []string
 	for _, key := range browserEnvAllowlist {
-		if _, ok := payload[key]; !ok {
-			t.Fatalf("payload missing expected allowlist key %s", key)
+		if strings.Contains(key, "GRAFANA_FARO") {
+			gotFaroKeys = append(gotFaroKeys, key)
 		}
 	}
 
-	for _, forbidden := range []string{
-		"PORT",
-		"READIO_CLOUD_DB_PATH",
-		"READIO_CLOUD_UI_DIST_DIR",
-		"READIO_ASR_ALLOWED_ORIGINS",
-		"READIO_ASR_RATE_LIMIT_BURST",
-		"READIO_ASR_RATE_LIMIT_WINDOW_MS",
-		"READIO_PROXY_RATE_LIMIT_BURST",
-		"READIO_PROXY_RATE_LIMIT_WINDOW_MS",
-		"READIO_ASR_API_KEY",
-		"READIO_OPENAI_API_KEY",
-	} {
-		if _, ok := payload[forbidden]; ok {
-			t.Fatalf("payload unexpectedly exposed %s", forbidden)
+	if len(gotFaroKeys) != len(wantFaroKeys) {
+		t.Fatalf("Faro allowlist keys = %#v, want %#v", gotFaroKeys, wantFaroKeys)
+	}
+	for i := range wantFaroKeys {
+		if gotFaroKeys[i] != wantFaroKeys[i] {
+			t.Fatalf("Faro key[%d] = %q, want %q", i, gotFaroKeys[i], wantFaroKeys[i])
+		}
+	}
+
+	forbiddenPatterns := []*regexp.Regexp{
+		regexp.MustCompile(`GRAFANA.*(API|WRITE|TOKEN|KEY|PASSWORD|SECRET)`),
+		regexp.MustCompile(`LOKI.*(TOKEN|KEY|PASSWORD|SECRET|BASIC|AUTH)`),
+		regexp.MustCompile(`PROMETHEUS.*(TOKEN|KEY|PASSWORD|SECRET|BASIC|AUTH)`),
+		regexp.MustCompile(`^READIO_ADMIN_TOKEN$`),
+		regexp.MustCompile(`^READIO_METRICS_TOKEN$`),
+		regexp.MustCompile(`RELAY.*SECRET`),
+		regexp.MustCompile(`^READIO_ASR_RELAY_TOKEN$`),
+		regexp.MustCompile(`PROVIDER.*KEY$`),
+		regexp.MustCompile(`BASIC.*AUTH`),
+	}
+
+	for _, key := range browserEnvAllowlist {
+		for _, pattern := range forbiddenPatterns {
+			if pattern.MatchString(key) {
+				t.Fatalf("browser allowlist exposes forbidden key %q matching %q", key, pattern.String())
+			}
 		}
 	}
 }
@@ -355,116 +243,42 @@ func TestBrowserEnvAllowlistMatchesArtifact(t *testing.T) {
 	}
 }
 
-func TestResolveCloudUIDistDirFindsRepoRootFromWorkingDirectory(t *testing.T) {
-	root := t.TempDir()
-	distDir := filepath.Join(root, "apps", "cloud-ui", "dist")
-	if err := os.MkdirAll(distDir, 0o755); err != nil {
-		t.Fatalf("mkdir dist: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(distDir, "index.html"), []byte("index"), 0o644); err != nil {
-		t.Fatalf("write index: %v", err)
-	}
 
-	workDir := filepath.Join(root, "apps", "cloud-api")
-	if err := os.MkdirAll(workDir, 0o755); err != nil {
-		t.Fatalf("mkdir work dir: %v", err)
-	}
-
-	oldWd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	if err := os.Chdir(workDir); err != nil {
-		t.Fatalf("chdir: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = os.Chdir(oldWd)
-	})
-
-	resolved, err := resolveCloudUIDistDir()
-	if err != nil {
-		t.Fatalf("resolve cloud-ui dist: %v", err)
-	}
-
-	resolvedRealPath, err := filepath.EvalSymlinks(resolved)
-	if err != nil {
-		t.Fatalf("eval resolved path: %v", err)
-	}
-
-	distRealPath, err := filepath.EvalSymlinks(distDir)
-	if err != nil {
-		t.Fatalf("eval dist path: %v", err)
-	}
-
-	if resolvedRealPath != distRealPath {
-		t.Fatalf("resolved = %q (real %q), want %q (real %q)", resolved, resolvedRealPath, distDir, distRealPath)
-	}
-}
-
-func TestResolveCloudUIDistDirUsesEnvOverride(t *testing.T) {
-	distDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(distDir, "index.html"), []byte("index"), 0o644); err != nil {
-		t.Fatalf("write index: %v", err)
-	}
-
-	t.Setenv(cloudUIDistEnv, distDir)
-
-	resolved, err := resolveCloudUIDistDir()
-	if err != nil {
-		t.Fatalf("resolve cloud-ui dist: %v", err)
-	}
-
-	if resolved != distDir {
-		t.Fatalf("resolved = %q, want %q", resolved, distDir)
-	}
-}
-
-func TestResolveCloudUIDistDirUsesCoLocatedDist(t *testing.T) {
-	root := t.TempDir()
-	distDir := filepath.Join(root, "dist")
-	if err := os.MkdirAll(distDir, 0o755); err != nil {
-		t.Fatalf("mkdir dist: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(distDir, "index.html"), []byte("index"), 0o644); err != nil {
-		t.Fatalf("write index: %v", err)
-	}
-
-	oldWd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
-	}
-	if err := os.Chdir(root); err != nil {
-		t.Fatalf("chdir: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = os.Chdir(oldWd)
-	})
-
-	resolved, err := resolveCloudUIDistDir()
-	if err != nil {
-		t.Fatalf("resolve cloud-ui dist: %v", err)
-	}
-
-	resolvedRealPath, err := filepath.EvalSymlinks(resolved)
-	if err != nil {
-		t.Fatalf("eval resolved path: %v", err)
-	}
-
-	distRealPath, err := filepath.EvalSymlinks(distDir)
-	if err != nil {
-		t.Fatalf("eval dist path: %v", err)
-	}
-
-	if resolvedRealPath != distRealPath {
-		t.Fatalf("resolved = %q (real %q), want %q (real %q)", resolved, resolvedRealPath, distDir, distRealPath)
-	}
-}
 
 func TestResolveCloudDBPathUsesEnvOverride(t *testing.T) {
+	want := filepath.Join(t.TempDir(), "cloud.db")
+	t.Setenv(cloudDBEnv, want)
+
+	got, err := resolveCloudDBPath()
+	if err != nil {
+		t.Fatalf("resolve cloud db path: %v", err)
+	}
+	if got != want {
+		t.Fatalf("path = %q, want %q", got, want)
+	}
+}
+
+func TestResolveCloudDBPathRequiresExplicitEnv(t *testing.T) {
+	t.Setenv(cloudDBEnv, "")
+
+	_, err := resolveCloudDBPath()
+	if err == nil {
+		t.Fatal("resolve cloud db path unexpectedly succeeded without env")
+	}
+	if !strings.Contains(err.Error(), cloudDBEnv) {
+		t.Fatalf("resolve cloud db path error = %v, want mention of %s", err, cloudDBEnv)
+	}
+}
+
+func TestResolveCloudDBPathRejectsRelativePath(t *testing.T) {
 	t.Setenv(cloudDBEnv, filepath.Join("state", "cloud.db"))
 
-	if got := resolveCloudDBPath(); got != filepath.Join("state", "cloud.db") {
-		t.Fatalf("path = %q, want %q", got, filepath.Join("state", "cloud.db"))
+	_, err := resolveCloudDBPath()
+	if err == nil {
+		t.Fatal("resolve cloud db path unexpectedly succeeded with relative path")
+	}
+	if !strings.Contains(err.Error(), "absolute path") {
+		t.Fatalf("resolve cloud db path error = %v, want mention of absolute path", err)
 	}
 }
 
@@ -650,12 +464,57 @@ func TestProxyServiceUsesConfiguredRateLimitWindow(t *testing.T) {
 	}
 }
 
-func TestOpenCloudSQLiteInitializesPragmasAndCreatesParentDir(t *testing.T) {
+func TestOpenCloudSQLiteFailsWhenParentDirMissing(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "missing", "cloud.db")
+
+	db, err := openCloudSQLite(context.Background(), dbPath)
+	if err == nil {
+		if db != nil {
+			_ = db.Close()
+		}
+		t.Fatal("open sqlite unexpectedly succeeded with missing parent dir")
+	}
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("open sqlite error = %v, want os.ErrNotExist", err)
+	}
+}
+
+func TestCloudSQLiteDSNAppliesConnectionPragmasOnEveryConnection(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "cloud.db")
+	db, err := sql.Open("sqlite", buildCloudSQLiteDSN(dbPath))
+	if err != nil {
+		t.Fatalf("open sqlite with cloud dsn: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = db.Close()
+	})
+
+	db.SetMaxIdleConns(0)
+	db.SetMaxOpenConns(2)
+
+	ctx := context.Background()
+	conn1, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatalf("open first sqlite conn: %v", err)
+	}
+	defer func() { _ = conn1.Close() }()
+
+	conn2, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatalf("open second sqlite conn: %v", err)
+	}
+	defer func() { _ = conn2.Close() }()
+
+	assertCloudSQLiteConnectionPragmas(t, ctx, conn1)
+	assertCloudSQLiteConnectionPragmas(t, ctx, conn2)
+}
+
+func TestOpenCloudSQLiteInitializesPragmasAndRunsMigrations(t *testing.T) {
 	if testing.Short() {
 		t.Skip("sqlite bootstrap integration test")
 	}
 
-	dbPath := filepath.Join(t.TempDir(), "nested", "cloud.db")
+	dbPath := filepath.Join(t.TempDir(), "cloud.db")
 	db, err := openCloudSQLite(context.Background(), dbPath)
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
@@ -664,23 +523,67 @@ func TestOpenCloudSQLiteInitializesPragmasAndCreatesParentDir(t *testing.T) {
 		_ = db.Close()
 	})
 
-	if _, err := os.Stat(filepath.Dir(dbPath)); err != nil {
-		t.Fatalf("stat db dir: %v", err)
-	}
 	if _, err := os.Stat(dbPath); err != nil {
 		t.Fatalf("stat db file: %v", err)
 	}
 
+	assertCloudSQLitePragmas(t, context.Background(), db)
+
+	var gooseTableCount int
+	if err := db.QueryRowContext(
+		context.Background(),
+		"SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'goose_db_version';",
+	).Scan(&gooseTableCount); err != nil {
+		t.Fatalf("query goose table: %v", err)
+	}
+	if gooseTableCount != 1 {
+		t.Fatalf("goose table count = %d, want %d", gooseTableCount, 1)
+	}
+}
+
+func TestOpenCloudSQLiteRunsMigrationsAfterPragmas(t *testing.T) {
+	origRunMigrations := cloudRunSQLiteMigrations
+	t.Cleanup(func() {
+		cloudRunSQLiteMigrations = origRunMigrations
+	})
+
+	cloudRunSQLiteMigrations = func(ctx context.Context, db *sql.DB) error {
+		assertCloudSQLitePragmas(t, ctx, db)
+		return nil
+	}
+
+	db, err := openCloudSQLite(context.Background(), filepath.Join(t.TempDir(), "cloud.db"))
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = db.Close()
+	})
+}
+
+func assertCloudSQLitePragmas(t *testing.T, ctx context.Context, db *sql.DB) {
+	t.Helper()
+
 	var journalMode string
-	if err := db.QueryRowContext(context.Background(), "PRAGMA journal_mode;").Scan(&journalMode); err != nil {
+	if err := db.QueryRowContext(ctx, "PRAGMA journal_mode;").Scan(&journalMode); err != nil {
 		t.Fatalf("query journal_mode: %v", err)
 	}
 	if !strings.EqualFold(journalMode, "wal") {
 		t.Fatalf("journal_mode = %q, want %q", journalMode, "wal")
 	}
 
+	assertCloudSQLiteConnectionPragmas(t, ctx, db)
+}
+
+type pragmaQueryer interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func assertCloudSQLiteConnectionPragmas(t *testing.T, ctx context.Context, queryer pragmaQueryer) {
+	t.Helper()
+
 	var synchronous int
-	if err := db.QueryRowContext(context.Background(), "PRAGMA synchronous;").Scan(&synchronous); err != nil {
+	if err := queryer.QueryRowContext(ctx, "PRAGMA synchronous;").Scan(&synchronous); err != nil {
 		t.Fatalf("query synchronous: %v", err)
 	}
 	if synchronous != 1 {
@@ -688,22 +591,121 @@ func TestOpenCloudSQLiteInitializesPragmasAndCreatesParentDir(t *testing.T) {
 	}
 
 	var foreignKeys int
-	if err := db.QueryRowContext(context.Background(), "PRAGMA foreign_keys;").Scan(&foreignKeys); err != nil {
+	if err := queryer.QueryRowContext(ctx, "PRAGMA foreign_keys;").Scan(&foreignKeys); err != nil {
 		t.Fatalf("query foreign_keys: %v", err)
 	}
 	if foreignKeys != 1 {
 		t.Fatalf("foreign_keys = %d, want %d", foreignKeys, 1)
 	}
+
+	var busyTimeout int
+	if err := queryer.QueryRowContext(ctx, "PRAGMA busy_timeout;").Scan(&busyTimeout); err != nil {
+		t.Fatalf("query busy_timeout: %v", err)
+	}
+	if busyTimeout != 5000 {
+		t.Fatalf("busy_timeout = %d, want %d", busyTimeout, 5000)
+	}
+}
+
+func TestOpenCloudSQLiteMigrationsAreIdempotentAcrossRestarts(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "cloud.db")
+
+	db1, err := openCloudSQLite(context.Background(), dbPath)
+	if err != nil {
+		t.Fatalf("first open sqlite: %v", err)
+	}
+	if err := db1.Close(); err != nil {
+		t.Fatalf("close first db: %v", err)
+	}
+
+	db2, err := openCloudSQLite(context.Background(), dbPath)
+	if err != nil {
+		t.Fatalf("second open sqlite: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = db2.Close()
+	})
+
+	var version int64
+	if err := db2.QueryRowContext(context.Background(), "SELECT MAX(version_id) FROM goose_db_version;").Scan(&version); err != nil {
+		t.Fatalf("query goose version: %v", err)
+	}
+	if version < 1 {
+		t.Fatalf("goose version = %d, want >= 1", version)
+	}
+}
+
+func TestRunCloudSQLiteMigrationsRetriesAfterFailedAttempt(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "cloud.db")
+	db, err := openCloudSQLite(context.Background(), dbPath)
+	if err != nil {
+		t.Fatalf("open sqlite: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = db.Close()
+	})
+
+	badMigrations := fstest.MapFS{
+		"migrations/00003_create_retry_table.sql": &fstest.MapFile{
+			Data: []byte("-- +goose Up\nCREATE TABLE retry_table (id INTEGER PRIMARY KEY);\n\n-- +goose Down\nDROP TABLE retry_table;\n"),
+		},
+		"migrations/00004_fail.sql": &fstest.MapFile{
+			Data: []byte("-- +goose Up\nTHIS IS NOT VALID SQL;\n\n-- +goose Down\nSELECT 1;\n"),
+		},
+	}
+
+	err = runCloudSQLiteMigrationsFS(context.Background(), db, badMigrations, "migrations")
+	if err == nil {
+		t.Fatal("runCloudSQLiteMigrationsFS unexpectedly succeeded with failing migration")
+	}
+
+	var retryTableCount int
+	if err := db.QueryRowContext(
+		context.Background(),
+		"SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'retry_table';",
+	).Scan(&retryTableCount); err != nil {
+		t.Fatalf("query retry table after failed run: %v", err)
+	}
+	if retryTableCount != 1 {
+		t.Fatalf("retry table count after failed run = %d, want 1", retryTableCount)
+	}
+
+	fixedMigrations := fstest.MapFS{
+		"migrations/00003_create_retry_table.sql": &fstest.MapFile{
+			Data: []byte("-- +goose Up\nCREATE TABLE retry_table (id INTEGER PRIMARY KEY);\n\n-- +goose Down\nDROP TABLE retry_table;\n"),
+		},
+		"migrations/00004_create_retry_index.sql": &fstest.MapFile{
+			Data: []byte("-- +goose Up\nCREATE INDEX retry_table_id_idx ON retry_table (id);\n\n-- +goose Down\nDROP INDEX retry_table_id_idx;\n"),
+		},
+	}
+
+	if err := runCloudSQLiteMigrationsFS(context.Background(), db, fixedMigrations, "migrations"); err != nil {
+		t.Fatalf("runCloudSQLiteMigrationsFS retry: %v", err)
+	}
+
+	var retryIndexCount int
+	if err := db.QueryRowContext(
+		context.Background(),
+		"SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'retry_table_id_idx';",
+	).Scan(&retryIndexCount); err != nil {
+		t.Fatalf("query retry index after retry: %v", err)
+	}
+	if retryIndexCount != 1 {
+		t.Fatalf("retry index count after retry = %d, want 1", retryIndexCount)
+	}
+
+	var latestVersion int64
+	if err := db.QueryRowContext(context.Background(), "SELECT MAX(version_id) FROM goose_db_version;").Scan(&latestVersion); err != nil {
+		t.Fatalf("query goose version after retry: %v", err)
+	}
+	if latestVersion != 4 {
+		t.Fatalf("goose version after retry = %d, want 4", latestVersion)
+	}
 }
 
 func TestRunCloudServerInitializesSQLiteAndShutsDownOnCancellation(t *testing.T) {
-	distDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(distDir, "index.html"), []byte("index"), 0o644); err != nil {
-		t.Fatalf("write index: %v", err)
-	}
-
 	dbPath := filepath.Join(t.TempDir(), "nested", "cloud.db")
-	t.Setenv(cloudUIDistEnv, distDir)
+
 	t.Setenv(cloudDBEnv, dbPath)
 
 	origOpen := cloudOpenSQLite
@@ -793,12 +795,10 @@ func TestRunCloudServerInitializesSQLiteAndShutsDownOnCancellation(t *testing.T)
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/unknown", nil)
 	server.Handler.ServeHTTP(rr, req)
-	if rr.Code != http.StatusOK {
-		t.Fatalf("unknown status = %d, want %d", rr.Code, http.StatusOK)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("unknown status = %d, want %d", rr.Code, http.StatusNotFound)
 	}
-	if rr.Body.String() != "index" {
-		t.Fatalf("unknown body = %q, want %q", rr.Body.String(), "index")
-	}
+
 
 	rr = httptest.NewRecorder()
 	req = newProxyJSONRequest(t, http.MethodGet, "https://feeds.example.com/feed.xml", nil)
@@ -844,13 +844,65 @@ func TestRunCloudServerInitializesSQLiteAndShutsDownOnCancellation(t *testing.T)
 	}
 }
 
-func TestRunCloudServerReturnsListenErrorWithoutBlocking(t *testing.T) {
-	distDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(distDir, "index.html"), []byte("index"), 0o644); err != nil {
-		t.Fatalf("write index: %v", err)
+func TestRunCloudServerReturnsMigrationErrorBeforeListen(t *testing.T) {
+
+	t.Setenv(cloudDBEnv, filepath.Join(t.TempDir(), "cloud.db"))
+
+	origRunMigrations := cloudRunSQLiteMigrations
+	origListen := cloudListenAndServe
+	t.Cleanup(func() {
+		cloudRunSQLiteMigrations = origRunMigrations
+		cloudListenAndServe = origListen
+	})
+
+	migrationErr := errors.New("migration failed")
+	listenCalled := false
+
+	cloudRunSQLiteMigrations = func(context.Context, *sql.DB) error {
+		return migrationErr
+	}
+	cloudListenAndServe = func(_ context.Context, _ *http.Server) error {
+		listenCalled = true
+		return nil
 	}
 
-	t.Setenv(cloudUIDistEnv, distDir)
+	err := runCloudServer(context.Background())
+	if !errors.Is(err, migrationErr) {
+		t.Fatalf("runCloudServer error = %v, want %v", err, migrationErr)
+	}
+	if listenCalled {
+		t.Fatal("listen should not run when migrations fail")
+	}
+}
+
+func TestRunCloudServerRequiresExplicitDBPath(t *testing.T) {
+
+	t.Setenv(cloudDBEnv, "")
+
+	err := runCloudServer(context.Background())
+	if err == nil {
+		t.Fatal("runCloudServer unexpectedly succeeded without READIO_CLOUD_DB_PATH")
+	}
+	if !strings.Contains(err.Error(), cloudDBEnv) {
+		t.Fatalf("runCloudServer error = %v, want mention of %s", err, cloudDBEnv)
+	}
+}
+
+func TestRunCloudServerRejectsRelativeDBPath(t *testing.T) {
+
+	t.Setenv(cloudDBEnv, filepath.Join("state", "cloud.db"))
+
+	err := runCloudServer(context.Background())
+	if err == nil {
+		t.Fatal("runCloudServer unexpectedly succeeded with relative READIO_CLOUD_DB_PATH")
+	}
+	if !strings.Contains(err.Error(), "absolute path") {
+		t.Fatalf("runCloudServer error = %v, want mention of absolute path", err)
+	}
+}
+
+func TestRunCloudServerReturnsListenErrorWithoutBlocking(t *testing.T) {
+
 	t.Setenv(cloudDBEnv, filepath.Join(t.TempDir(), "cloud.db"))
 
 	origOpen := cloudOpenSQLite
@@ -934,484 +986,6 @@ func TestRateLimiterSweepsExpiredBuckets(t *testing.T) {
 		t.Fatal("active key should remain present")
 	}
 }
-
-func TestProxyRouteOwnershipAndContracts(t *testing.T) {
-	t.Run("proxy route wins over spa fallback", func(t *testing.T) {
-		distDir := t.TempDir()
-		if err := os.MkdirAll(distDir, 0o755); err != nil {
-			t.Fatalf("mkdir dist: %v", err)
-		}
-		if err := os.WriteFile(filepath.Join(distDir, "index.html"), []byte("index"), 0o644); err != nil {
-			t.Fatalf("write index: %v", err)
-		}
-
-		app, err := newAppHandler(distDir)
-		if err != nil {
-			t.Fatalf("new app handler: %v", err)
-		}
-
-		called := 0
-		proxy := &proxyService{
-			client: &http.Client{
-				Transport: &proxyRoundTripper{
-					statusCode: http.StatusOK,
-					body:       "<rss>ok</rss>",
-					headers: http.Header{
-						"Content-Type": []string{"application/xml"},
-					},
-					onRequest: func(_ *http.Request) {
-						called++
-					},
-				},
-			},
-			lookupIP:  testPublicLookupIP,
-			limiter:   newRateLimiter(5, time.Minute, func() time.Time { return time.Unix(0, 0) }),
-			timeout:   100 * time.Millisecond,
-			userAgent: proxyBrowserLikeUserAgent,
-			bodyLimit: proxyBodyLimit,
-		}
-
-		mux := http.NewServeMux()
-		mux.Handle(proxyRoute, proxy)
-		mux.Handle("/", app)
-
-		rr := httptest.NewRecorder()
-		req := newProxyJSONRequest(t, http.MethodGet, "https://feeds.example.com/feed.xml", nil)
-		req.RemoteAddr = "198.51.100.10:12345"
-		mux.ServeHTTP(rr, req)
-
-		if rr.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
-		}
-		if called != 1 {
-			t.Fatalf("upstream call count = %d, want %d", called, 1)
-		}
-		if rr.Header().Get("Access-Control-Allow-Origin") != "" {
-			t.Fatalf("acao = %q, want empty", rr.Header().Get("Access-Control-Allow-Origin"))
-		}
-		if rr.Body.String() != "<rss>ok</rss>" {
-			t.Fatalf("body = %q, want %q", rr.Body.String(), "<rss>ok</rss>")
-		}
-
-		rr = httptest.NewRecorder()
-		req = httptest.NewRequest(http.MethodGet, "/api/other", nil)
-		req.RemoteAddr = "198.51.100.10:12345"
-		mux.ServeHTTP(rr, req)
-
-		if rr.Code != http.StatusNotFound {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusNotFound)
-		}
-	})
-
-	t.Run("rejects invalid and blocked targets", func(t *testing.T) {
-		called := 0
-		proxy := &proxyService{
-			client: &http.Client{
-				Transport: &proxyRoundTripper{
-					onRequest: func(_ *http.Request) {
-						called++
-					},
-				},
-			},
-			lookupIP:  testPublicLookupIP,
-			limiter:   newRateLimiter(5, time.Minute, func() time.Time { return time.Unix(0, 0) }),
-			timeout:   100 * time.Millisecond,
-			userAgent: proxyBrowserLikeUserAgent,
-			bodyLimit: proxyBodyLimit,
-		}
-
-		tests := []struct {
-			name       string
-			target     string
-			wantStatus int
-		}{
-			{name: "missing", target: "", wantStatus: http.StatusBadRequest},
-			{name: "invalid scheme", target: "ftp://example.com/feed.xml", wantStatus: http.StatusBadRequest},
-			{name: "localhost", target: "http://localhost/feed.xml", wantStatus: http.StatusBadRequest},
-			{name: "loopback v4", target: "http://127.0.0.1/feed.xml", wantStatus: http.StatusBadRequest},
-			{name: "loopback v6", target: "http://[::1]/feed.xml", wantStatus: http.StatusBadRequest},
-			{name: "private", target: "http://10.0.0.1/feed.xml", wantStatus: http.StatusBadRequest},
-			{name: "metadata", target: "http://169.254.169.254/feed.xml", wantStatus: http.StatusBadRequest},
-		}
-
-		for _, tc := range tests {
-			t.Run(tc.name, func(t *testing.T) {
-				called = 0
-				rr := httptest.NewRecorder()
-				req := newProxyJSONRequest(t, http.MethodGet, tc.target, nil)
-				req.RemoteAddr = "198.51.100.10:12345"
-				proxy.ServeHTTP(rr, req)
-
-				if rr.Code != tc.wantStatus {
-					t.Fatalf("status = %d, want %d", rr.Code, tc.wantStatus)
-				}
-				if called != 0 {
-					t.Fatalf("upstream was called %d times, want %d", called, 0)
-				}
-			})
-		}
-	})
-
-	t.Run("rejects hostname that resolves to private address", func(t *testing.T) {
-		called := 0
-		proxy := &proxyService{
-			client: &http.Client{
-				Transport: &proxyRoundTripper{
-					onRequest: func(_ *http.Request) {
-						called++
-					},
-				},
-			},
-			lookupIP: func(_ context.Context, host string) ([]net.IPAddr, error) {
-				if host != "feeds.example.com" {
-					t.Fatalf("lookup host = %q, want %q", host, "feeds.example.com")
-				}
-
-				return []net.IPAddr{{IP: net.ParseIP("10.0.0.8")}}, nil
-			},
-			limiter:   newRateLimiter(5, time.Minute, func() time.Time { return time.Unix(0, 0) }),
-			timeout:   100 * time.Millisecond,
-			userAgent: proxyBrowserLikeUserAgent,
-			bodyLimit: proxyBodyLimit,
-		}
-
-		rr := httptest.NewRecorder()
-		req := newProxyJSONRequest(t, http.MethodGet, "https://feeds.example.com/feed.xml", nil)
-		req.RemoteAddr = "198.51.100.10:12345"
-		proxy.ServeHTTP(rr, req)
-
-		if rr.Code != http.StatusBadRequest {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusBadRequest)
-		}
-		if called != 0 {
-			t.Fatalf("upstream was called %d times, want %d", called, 0)
-		}
-		if rr.Body.String() == "" {
-			t.Fatalf("expected rejection body")
-		}
-	})
-
-	t.Run("pins validated address on actual dial path", func(t *testing.T) {
-		lookupCalls := 0
-		dialedAddress := ""
-		proxy := &proxyService{
-			lookupIP: func(_ context.Context, host string) ([]net.IPAddr, error) {
-				lookupCalls++
-				if host != "feeds.example.com" {
-					t.Fatalf("lookup host = %q, want %q", host, "feeds.example.com")
-				}
-
-				if lookupCalls == 1 {
-					return []net.IPAddr{{IP: net.ParseIP("203.0.113.10")}}, nil
-				}
-
-				return []net.IPAddr{{IP: net.ParseIP("10.0.0.8")}}, nil
-			},
-			dialContext: func(_ context.Context, _, address string) (net.Conn, error) {
-				dialedAddress = address
-				clientConn, serverConn := net.Pipe()
-				go func() {
-					defer func() { _ = serverConn.Close() }()
-					req, err := http.ReadRequest(bufio.NewReader(serverConn))
-					if err == nil {
-						_ = req.Body.Close()
-					}
-
-					_, _ = io.WriteString(serverConn, "HTTP/1.1 200 OK\r\nContent-Type: application/xml\r\nContent-Length: 13\r\n\r\n<rss>ok</rss>")
-				}()
-				return clientConn, nil
-			},
-			limiter:   newRateLimiter(5, time.Minute, func() time.Time { return time.Unix(0, 0) }),
-			timeout:   100 * time.Millisecond,
-			userAgent: proxyBrowserLikeUserAgent,
-			bodyLimit: proxyBodyLimit,
-		}
-
-		rr := httptest.NewRecorder()
-		req := newProxyJSONRequest(t, http.MethodGet, "http://feeds.example.com/feed.xml", nil)
-		req.RemoteAddr = "198.51.100.10:12345"
-		proxy.ServeHTTP(rr, req)
-
-		if rr.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
-		}
-		if lookupCalls != 1 {
-			t.Fatalf("lookup calls = %d, want %d", lookupCalls, 1)
-		}
-		if dialedAddress != "203.0.113.10:80" {
-			t.Fatalf("dialed address = %q, want %q", dialedAddress, "203.0.113.10:80")
-		}
-		if rr.Body.String() != "<rss>ok</rss>" {
-			t.Fatalf("body = %q, want %q", rr.Body.String(), "<rss>ok</rss>")
-		}
-	})
-
-	t.Run("does not follow redirects to private targets", func(t *testing.T) {
-		lookupCalls := 0
-		dialCalls := 0
-		proxy := &proxyService{
-			lookupIP: func(_ context.Context, host string) ([]net.IPAddr, error) {
-				lookupCalls++
-				if host != "feeds.example.com" {
-					t.Fatalf("lookup host = %q, want %q", host, "feeds.example.com")
-				}
-
-				return []net.IPAddr{{IP: net.ParseIP("203.0.113.10")}}, nil
-			},
-			dialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
-				dialCalls++
-				clientConn, serverConn := net.Pipe()
-				go func() {
-					defer func() { _ = serverConn.Close() }()
-					req, err := http.ReadRequest(bufio.NewReader(serverConn))
-					if err == nil {
-						_ = req.Body.Close()
-					}
-
-					_, _ = io.WriteString(serverConn, "HTTP/1.1 302 Found\r\nLocation: http://10.0.0.8/feed.xml\r\nContent-Length: 0\r\n\r\n")
-				}()
-				return clientConn, nil
-			},
-			limiter:   newRateLimiter(5, time.Minute, func() time.Time { return time.Unix(0, 0) }),
-			timeout:   100 * time.Millisecond,
-			userAgent: proxyBrowserLikeUserAgent,
-			bodyLimit: proxyBodyLimit,
-		}
-
-		rr := httptest.NewRecorder()
-		req := newProxyJSONRequest(t, http.MethodGet, "http://feeds.example.com/feed.xml", nil)
-		req.RemoteAddr = "198.51.100.10:12345"
-		proxy.ServeHTTP(rr, req)
-
-		if rr.Code != http.StatusBadRequest {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusBadRequest)
-		}
-		if lookupCalls != 1 {
-			t.Fatalf("lookup calls = %d, want %d", lookupCalls, 1)
-		}
-		if dialCalls != 1 {
-			t.Fatalf("dial calls = %d, want %d", dialCalls, 1)
-		}
-		if rr.Body.String() == "" {
-			t.Fatalf("expected redirect rejection body")
-		}
-	})
-
-	t.Run("returns timeout and custom ua on successful fetch", func(t *testing.T) {
-		var gotUserAgent string
-		proxy := &proxyService{
-			client: &http.Client{
-				Transport: &proxyRoundTripper{
-					statusCode: http.StatusOK,
-					body:       "<rss>feed</rss>",
-					headers: http.Header{
-						"Content-Type": []string{"application/rss+xml; charset=utf-8"},
-					},
-					onRequest: func(req *http.Request) {
-						gotUserAgent = req.Header.Get("User-Agent")
-					},
-				},
-			},
-			lookupIP:  testPublicLookupIP,
-			limiter:   newRateLimiter(5, time.Minute, func() time.Time { return time.Unix(0, 0) }),
-			timeout:   100 * time.Millisecond,
-			userAgent: proxyBrowserLikeUserAgent,
-			bodyLimit: proxyBodyLimit,
-		}
-
-		rr := httptest.NewRecorder()
-		req := newProxyJSONRequest(t, http.MethodGet, "https://feeds.example.com/feed.xml", nil)
-		req.RemoteAddr = "198.51.100.10:12345"
-		proxy.ServeHTTP(rr, req)
-
-		if rr.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
-		}
-		if gotUserAgent != proxyBrowserLikeUserAgent {
-			t.Fatalf("user-agent = %q, want %q", gotUserAgent, proxyBrowserLikeUserAgent)
-		}
-		if rr.Header().Get("Access-Control-Allow-Origin") != "" {
-			t.Fatalf("acao = %q, want empty", rr.Header().Get("Access-Control-Allow-Origin"))
-		}
-		if rr.Header().Get("Content-Type") != "application/rss+xml; charset=utf-8" {
-			t.Fatalf("content-type = %q, want %q", rr.Header().Get("Content-Type"), "application/rss+xml; charset=utf-8")
-		}
-		if rr.Body.String() != "<rss>feed</rss>" {
-			t.Fatalf("body = %q, want %q", rr.Body.String(), "<rss>feed</rss>")
-		}
-	})
-
-	t.Run("allows same-origin browser requests and reflects the origin", func(t *testing.T) {
-		proxy := &proxyService{
-			client: &http.Client{
-				Transport: &proxyRoundTripper{
-					statusCode: http.StatusOK,
-					body:       "<rss>same-origin</rss>",
-					headers: http.Header{
-						"Content-Type": []string{"application/rss+xml"},
-					},
-				},
-			},
-			lookupIP:  testPublicLookupIP,
-			limiter:   newRateLimiter(5, time.Minute, func() time.Time { return time.Unix(0, 0) }),
-			timeout:   100 * time.Millisecond,
-			userAgent: proxyBrowserLikeUserAgent,
-			bodyLimit: proxyBodyLimit,
-		}
-
-		req := newProxyJSONRequest(t, http.MethodGet, "https://feeds.example.com/feed.xml", nil)
-		req.RemoteAddr = "198.51.100.10:12345"
-		req.Header.Set("Origin", "http://example.com")
-		rr := httptest.NewRecorder()
-		proxy.ServeHTTP(rr, req)
-
-		if rr.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
-		}
-		if rr.Header().Get("Access-Control-Allow-Origin") != "http://example.com" {
-			t.Fatalf("acao = %q, want %q", rr.Header().Get("Access-Control-Allow-Origin"), "http://example.com")
-		}
-		if !strings.Contains(rr.Header().Get("Vary"), "Origin") {
-			t.Fatalf("vary = %q, want to contain Origin", rr.Header().Get("Vary"))
-		}
-	})
-
-	t.Run("rejects disallowed browser origin for proxy requests", func(t *testing.T) {
-		proxy := &proxyService{
-			lookupIP:  testPublicLookupIP,
-			limiter:   newRateLimiter(5, time.Minute, func() time.Time { return time.Unix(0, 0) }),
-			timeout:   100 * time.Millisecond,
-			userAgent: proxyBrowserLikeUserAgent,
-			bodyLimit: proxyBodyLimit,
-		}
-
-		req := newProxyJSONRequest(t, http.MethodGet, "https://feeds.example.com/feed.xml", nil)
-		req.RemoteAddr = "198.51.100.10:12345"
-		req.Header.Set("Origin", "https://evil.example")
-		rr := httptest.NewRecorder()
-		proxy.ServeHTTP(rr, req)
-
-		if rr.Code != http.StatusForbidden {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusForbidden)
-		}
-		assertProxyErrorPayload(t, rr.Body, "PROXY_ORIGIN_NOT_ALLOWED")
-		if rr.Header().Get("Access-Control-Allow-Origin") != "" {
-			t.Fatalf("acao = %q, want empty", rr.Header().Get("Access-Control-Allow-Origin"))
-		}
-	})
-
-	t.Run("returns timeout on slow upstream", func(t *testing.T) {
-		proxy := &proxyService{
-			client: &http.Client{
-				Transport: &proxyRoundTripper{
-					delay: 100 * time.Millisecond,
-					body:  "<rss>slow</rss>",
-					headers: http.Header{
-						"Content-Type": []string{"application/rss+xml"},
-					},
-				},
-			},
-			lookupIP:  testPublicLookupIP,
-			limiter:   newRateLimiter(5, time.Minute, func() time.Time { return time.Unix(0, 0) }),
-			timeout:   10 * time.Millisecond,
-			userAgent: proxyBrowserLikeUserAgent,
-			bodyLimit: proxyBodyLimit,
-		}
-
-		rr := httptest.NewRecorder()
-		req := newProxyJSONRequest(t, http.MethodGet, "https://feeds.example.com/feed.xml", nil)
-		req.RemoteAddr = "198.51.100.10:12345"
-		proxy.ServeHTTP(rr, req)
-
-		if rr.Code != http.StatusGatewayTimeout {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusGatewayTimeout)
-		}
-		if rr.Body.String() == "" {
-			t.Fatalf("expected timeout body")
-		}
-	})
-
-	t.Run("returns bad gateway on upstream error response", func(t *testing.T) {
-		calls := 0
-		proxy := &proxyService{
-			client: &http.Client{
-				Transport: &proxyRoundTripper{
-					statusCode: http.StatusInternalServerError,
-					body:       "boom",
-					headers: http.Header{
-						"Content-Type": []string{"text/plain"},
-					},
-					onRequest: func(_ *http.Request) {
-						calls++
-					},
-				},
-			},
-			lookupIP:  testPublicLookupIP,
-			limiter:   newRateLimiter(5, time.Minute, func() time.Time { return time.Unix(0, 0) }),
-			timeout:   100 * time.Millisecond,
-			userAgent: proxyBrowserLikeUserAgent,
-			bodyLimit: proxyBodyLimit,
-		}
-
-		rr := httptest.NewRecorder()
-		req := newProxyJSONRequest(t, http.MethodGet, "https://feeds.example.com/feed.xml", nil)
-		req.RemoteAddr = "198.51.100.10:12345"
-		proxy.ServeHTTP(rr, req)
-
-		if rr.Code != http.StatusInternalServerError {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusInternalServerError)
-		}
-		if calls != 1 {
-			t.Fatalf("upstream calls = %d, want %d", calls, 1)
-		}
-		if rr.Body.String() == "" {
-			t.Fatalf("expected error body")
-		}
-	})
-
-	t.Run("rate limits repeated requests from same ip", func(t *testing.T) {
-		calls := 0
-		proxy := &proxyService{
-			client: &http.Client{
-				Transport: &proxyRoundTripper{
-					statusCode: http.StatusOK,
-					body:       "<rss>ok</rss>",
-					headers: http.Header{
-						"Content-Type": []string{"application/xml"},
-					},
-					onRequest: func(_ *http.Request) {
-						calls++
-					},
-				},
-			},
-			lookupIP:  testPublicLookupIP,
-			limiter:   newRateLimiter(1, time.Minute, func() time.Time { return time.Unix(0, 0) }),
-			timeout:   100 * time.Millisecond,
-			userAgent: proxyBrowserLikeUserAgent,
-			bodyLimit: proxyBodyLimit,
-		}
-
-		first := httptest.NewRecorder()
-		req := newProxyJSONRequest(t, http.MethodGet, "https://feeds.example.com/feed.xml", nil)
-		req.RemoteAddr = "198.51.100.10:12345"
-		proxy.ServeHTTP(first, req)
-		if first.Code != http.StatusOK {
-			t.Fatalf("first status = %d, want %d", first.Code, http.StatusOK)
-		}
-
-		second := httptest.NewRecorder()
-		req = newProxyJSONRequest(t, http.MethodGet, "https://feeds.example.com/feed.xml", nil)
-		req.RemoteAddr = "198.51.100.10:12345"
-		proxy.ServeHTTP(second, req)
-		if second.Code != http.StatusTooManyRequests {
-			t.Fatalf("second status = %d, want %d", second.Code, http.StatusTooManyRequests)
-		}
-		if calls != 1 {
-			t.Fatalf("upstream calls = %d, want %d", calls, 1)
-		}
-	})
-}
-
 func TestProxyGetRangeForwarding(t *testing.T) {
 	t.Run("POST proxy GET payload with Range header forwards Range to upstream", func(t *testing.T) {
 		proxy, dialedAddress := newMediaProxyTestService(t, func(w http.ResponseWriter, r *http.Request) {

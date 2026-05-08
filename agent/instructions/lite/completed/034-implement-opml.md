@@ -28,7 +28,7 @@ Allow users to migrate their subscriptions from other apps.
     ```ts
     {
       id: createId(), // PK mandated by Instruction #006
-      feedUrl: item.xmlUrl,
+      legacyFeedField: item.xmlUrl,
       title: item.title,
       author: 'Imported',
       artworkUrl: '',
@@ -38,7 +38,7 @@ Allow users to migrate their subscriptions from other apps.
     ```
   - Use `db.subscriptions.bulkAdd(data)` or `bulkPut(data)`.
   - **Default**: Use `bulkPut(data)` to remain idempotent across repeated imports.
-  - **Dedupe**: Before insert, skip items where `feedUrl` already exists via the unique index.
+  - **Dedupe**: Before insert, skip items where the imported legacy feed field already exists via the unique index.
 
 ## 3. UI Integration (`apps/lite/src/routeComponents/SettingsPage.tsx`)
 - **Action**: Add "Import OPML" and "Export OPML" buttons.
@@ -46,7 +46,7 @@ Allow users to migrate their subscriptions from other apps.
  - **Export Format**: Export must include valid OPML with `<outline xmlUrl="...">` entries.
 
 ## 4. Verification
-- **Test**: Import a sample OPML. Check that each entry has a UUID `id` and the `feedUrl` is correctly stored.
+- **Test**: Import a sample OPML. Check that each entry has a UUID `id` and the imported legacy feed field is correctly stored.
 
 ### Quality Check
 - **Type Check**: Run `pnpm --filter @readio/lite typecheck`.

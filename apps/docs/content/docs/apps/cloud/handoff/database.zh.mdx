@@ -30,17 +30,21 @@ Cloud 后端现在也拥有服务端 SQLite 持久化，用于后端治理的状
 当前和规划中的后端 SQLite 职责包括：
 
 - built-in ASR 的 quota / reservation / idempotency 状态
-- feed parsed snapshot 存储，以及有界 episode 保留窗口
 - 其他需要跨进程重启保留的后端运营状态
+
+已退役方向：
+
+- 旧的 discovery feed snapshot / feed-episode retention 规划已随着 `/api/v1/discovery/feed` 一并退役
+- 文档不得再把 backend SQLite 描述成 discovery feed parsing 或 feed-route cache state 的当前 owner
 
 这层后端 SQLite 不是浏览器本地用户库数据的通用替代品。
 
 ## 4. Runtime Cache 现状
 
-Cloud 中 discovery / search / feed 前端已不再依赖长期持久化的 IndexedDB 缓存。
+Cloud 中 discovery / search 前端已不再依赖长期持久化的 IndexedDB 缓存。
 
 - 前端 discovery 主要依赖 TanStack Query 内存缓存
-- 后端 discovery 可按功能路径依赖后端内存缓存和/或 SQLite-backed cache
+- 当前活跃的后端 discovery 路由只在适用时使用后端内存缓存；已退役的 feed 路由不会留下活跃的 SQLite discovery-cache 契约
 - `runtime_cache` 仍存在，但只服务于当前仍有 owner 的浏览器运行时缓存
 
 ## 5. 后端 SQLite 治理摘要
@@ -78,3 +82,4 @@ Cloud 文档必须如实描述持久化 ownership：
 - 浏览器本地 library state 没有账号同步
 - 仅存在浏览器的数据没有服务端恢复能力
 - 除非具体功能明确声明，否则不能把 backend SQLite 描述成用户归档存储
+- repo-owned 的 Cloud 运行时契约不会按任何旧的 feed transport 字段持久化或建立 library state key

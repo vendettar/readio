@@ -42,7 +42,7 @@ Remove resolver-driven country inference from podcast content routes and harden 
    - Add explicit guard/comments to prevent future reuse in `/$country/podcast/*`.
 
 3. Feed cache key policy and migration safety:
-   - Add `normalizeFeedUrl` helper (conservative normalization):
+   - Add a legacy feed normalization helper (conservative normalization):
      - trim,
      - parse URL,
      - lowercase scheme/host,
@@ -79,7 +79,7 @@ Remove resolver-driven country inference from podcast content routes and harden 
 - `useEpisodeResolution` consumes route country only.
 - No resolver invocation from `/$country/podcast/*` path.
 - Mid-flight country change race test (stale response ignored).
-- `normalizeFeedUrl` table tests.
+- legacy feed normalization table tests.
 - Feed cache key tests confirm no country segment.
 - Slug generator/parser tests enforce exact `shortId8`.
 - Write-path tests for missing `countryAtSave` rejection (remote/library) and local-session exemption.

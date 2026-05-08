@@ -4,8 +4,9 @@ import React from 'react'
 import { useTranslation } from 'react-i18next'
 import { useEpisodePlayback } from '../../hooks/useEpisodePlayback'
 import { useNetworkStatus } from '../../hooks/useNetworkStatus'
-import type { EditorPickPodcast, FeedEpisode, Podcast } from '../../lib/discovery'
-import { getEpisodeGuid } from '../../lib/discovery/editorPicks'
+import { buildFavoriteKey } from '../../lib/db/favoriteIdentity'
+import { mapCanonicalEpisodeToFavoriteInputs } from '../../lib/db/favoriteMappers'
+import type { EditorPickPodcast, Episode, Podcast } from '../../lib/discovery'
 import { PLAYBACK_REQUEST_MODE, type PlaybackRequestMode } from '../../lib/player/playbackMode'
 import { canPlayRemoteStreamWithoutTranscript } from '../../lib/player/remotePlayback'
 import { normalizeCountryParam } from '../../lib/routes/podcastRoutes'
@@ -19,7 +20,7 @@ import { fromEpisode } from './episodeRowModel'
 import { useEpisodeRowFavoriteAction } from './useEpisodeRowFavoriteAction'
 
 export interface EpisodeRowProps {
-  episode: FeedEpisode
+  episode: Episode
   podcast: Podcast
   editorPickSnapshot?: EditorPickPodcast
   podcastId?: string
@@ -52,10 +53,9 @@ function EpisodeRowInner({
   const removeFavorite = useExploreStore((s) => s.removeFavorite)
   const globalCountry = useExploreStore((s) => s.country)
   const routeParams = useParams({ strict: false })
-  const favoriteIdentity = getEpisodeGuid(episode)
-  const favorited = useExploreStore((s) =>
-    s.isFavorited(podcast.feedUrl ?? '', episode.audioUrl ?? '', favoriteIdentity)
-  )
+  const favoriteIdentity = episode.guid
+  const favoriteIdentityKey = buildFavoriteKey(podcast.podcastItunesId, favoriteIdentity)
+  const favorited = useExploreStore((s) => s.isFavorited(podcast.podcastItunesId, favoriteIdentity))
   const { playEpisode } = useEpisodePlayback()
   const { isOnline } = useNetworkStatus()
   const [isMenuOpen, setIsMenuOpen] = React.useState(false)
@@ -64,12 +64,12 @@ function EpisodeRowInner({
   const routeCountry =
     normalizeCountryParam(manualCountry) ??
     normalizeCountryParam((routeParams as { country?: string }).country) ??
-    normalizeCountryParam(globalCountry)
+    globalCountry
 
   const handlePlay =
     customOnPlay ||
     ((options?: { mode?: PlaybackRequestMode }) => {
-      playEpisode(episode, podcast, routeCountry ?? undefined, options)
+      playEpisode(episode, podcast, routeCountry, options)
     })
   const canPlayWithoutTranscript = canPlayRemoteStreamWithoutTranscript(
     { audioUrl: episode.audioUrl },
@@ -77,13 +77,12 @@ function EpisodeRowInner({
   )
   const favoriteAction = useEpisodeRowFavoriteAction({
     favorited,
-    favoriteKey: `${podcast.feedUrl ?? ''}::${episode.audioUrl ?? ''}`,
+    favoriteKey: favoriteIdentityKey,
     addFavorite,
     removeFavorite,
     buildAddPayload: async () => ({
-      podcast,
-      episode,
-      country: routeCountry,
+      ...mapCanonicalEpisodeToFavoriteInputs(podcast, episode),
+      countryAtSave: routeCountry,
     }),
     errorLogScope: 'EpisodeRow',
   })

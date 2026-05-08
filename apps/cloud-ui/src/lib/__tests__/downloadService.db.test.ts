@@ -2,6 +2,24 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { DB, db } from '../dexieDb'
 import { removeDownloadedTrack } from '../downloadService'
 
+function makePodcastDownloadInput(overrides: Record<string, unknown> = {}) {
+  return {
+    name: 'Test Download',
+    audioId: 'dummy-audio-id',
+    sourceUrlNormalized: 'https://example.com/test.mp3',
+    downloadedAt: Date.now(),
+    sizeBytes: 1024,
+    countryAtSave: 'US',
+    sourcePodcastItunesId: 'podcast-1',
+    sourceEpisodeGuid: 'episode-guid-1',
+    sourcePodcastTitle: 'Podcast Title',
+    sourceEpisodeTitle: 'Episode Title',
+    sourceDescription: 'Episode description',
+    sourceArtworkUrl: 'https://example.com/cover.jpg',
+    ...overrides,
+  }
+}
+
 describe('downloadService DB integration', () => {
   beforeEach(async () => {
     await DB.clearAllData()
@@ -9,14 +27,7 @@ describe('downloadService DB integration', () => {
 
   it('cascades deletion of local_subtitles and subtitles when downloaded track is removed', async () => {
     // 1. Create a dummy podcast download
-    const trackId = await DB.addPodcastDownload({
-      name: 'Test Download',
-      audioId: 'dummy-audio-id',
-      sourceUrlNormalized: 'https://example.com/test.mp3',
-      downloadedAt: Date.now(),
-      sizeBytes: 1024,
-      countryAtSave: 'US',
-    })
+    const trackId = await DB.addPodcastDownload(makePodcastDownloadInput())
 
     // 2. Create a dummy subtitle
     const subtitleId = await DB.addSubtitle([{ start: 0, end: 1, text: 'Hello' }], 'test.srt')
@@ -47,22 +58,24 @@ describe('downloadService DB integration', () => {
 
   it('does NOT delete subtitles if they are still referenced by another track', async () => {
     // 1. Create TWO podcast downloads
-    const trackId1 = await DB.addPodcastDownload({
-      name: 'Test Download 1',
-      audioId: 'dummy-1',
-      sourceUrlNormalized: 'https://example.com/1.mp3',
-      downloadedAt: Date.now(),
-      sizeBytes: 1024,
-      countryAtSave: 'US',
-    })
-    const trackId2 = await DB.addPodcastDownload({
-      name: 'Test Download 2',
-      audioId: 'dummy-2',
-      sourceUrlNormalized: 'https://example.com/2.mp3',
-      downloadedAt: Date.now(),
-      sizeBytes: 1024,
-      countryAtSave: 'US',
-    })
+    const trackId1 = await DB.addPodcastDownload(
+      makePodcastDownloadInput({
+        name: 'Test Download 1',
+        audioId: 'dummy-1',
+        sourceUrlNormalized: 'https://example.com/1.mp3',
+        sourceEpisodeGuid: 'episode-guid-2',
+        sourceEpisodeTitle: 'Episode 2',
+      })
+    )
+    const trackId2 = await DB.addPodcastDownload(
+      makePodcastDownloadInput({
+        name: 'Test Download 2',
+        audioId: 'dummy-2',
+        sourceUrlNormalized: 'https://example.com/2.mp3',
+        sourceEpisodeGuid: 'episode-guid-3',
+        sourceEpisodeTitle: 'Episode 3',
+      })
+    )
 
     // 2. Create ONE shared subtitle
     const subtitleId = await DB.addSubtitle([{ start: 0, end: 1, text: 'Shared' }], 'shared.srt')
@@ -98,14 +111,13 @@ describe('downloadService DB integration', () => {
   })
 
   it('cascades deletion of subtitle versions with metadata (Instruction 125b)', async () => {
-    const trackId = await DB.addPodcastDownload({
-      name: 'Versioned Episode',
-      audioId: 'audio-v',
-      sourceUrlNormalized: 'https://example.com/versioned.mp3',
-      downloadedAt: Date.now(),
-      sizeBytes: 1024,
-      countryAtSave: 'US',
-    })
+    const trackId = await DB.addPodcastDownload(
+      makePodcastDownloadInput({
+        name: 'Versioned Episode',
+        audioId: 'audio-v',
+        sourceUrlNormalized: 'https://example.com/versioned.mp3',
+      })
+    )
 
     const sub1 = await DB.addSubtitle([{ start: 0, end: 1, text: 'content 1' }], 'v1.srt')
     const sub2 = await DB.addSubtitle([{ start: 1, end: 2, text: 'content 2' }], 'v2.srt')
@@ -152,14 +164,16 @@ describe('downloadService DB integration', () => {
     // 1. Create 12 tracks (should trigger 3 batches of 5, 5, 2)
     const trackIds: string[] = []
     for (let i = 0; i < 12; i++) {
-      const id = await DB.addPodcastDownload({
-        name: `Ep ${i}`,
-        audioId: `audio-${i}`,
-        sourceUrlNormalized: `https://example.com/${i}.mp3`,
-        downloadedAt: Date.now(),
-        sizeBytes: 100,
-        countryAtSave: 'US',
-      })
+      const id = await DB.addPodcastDownload(
+        makePodcastDownloadInput({
+          name: `Ep ${i}`,
+          audioId: `audio-${i}`,
+          sourceUrlNormalized: `https://example.com/${i}.mp3`,
+          sizeBytes: 100,
+          sourceEpisodeGuid: `episode-guid-${i}`,
+          sourceEpisodeTitle: `Episode ${i}`,
+        })
+      )
       trackIds.push(id)
     }
 
@@ -184,14 +198,16 @@ describe('downloadService DB integration', () => {
     // 2. Create 3 tracks sharing THESE SAME resources
     const tracks = []
     for (let i = 0; i < 3; i++) {
-      const trackId = await DB.addPodcastDownload({
-        name: `Shared ${i}`,
-        audioId: sharedAudioId,
-        sourceUrlNormalized: `https://example.com/shared-${i}.mp3`,
-        downloadedAt: Date.now(),
-        sizeBytes: 100,
-        countryAtSave: 'US',
-      })
+      const trackId = await DB.addPodcastDownload(
+        makePodcastDownloadInput({
+          name: `Shared ${i}`,
+          audioId: sharedAudioId,
+          sourceUrlNormalized: `https://example.com/shared-${i}.mp3`,
+          sizeBytes: 100,
+          sourceEpisodeGuid: `shared-episode-guid-${i}`,
+          sourceEpisodeTitle: `Shared Episode ${i}`,
+        })
+      )
       await db.local_subtitles.add({
         id: `link-${i}`,
         trackId,

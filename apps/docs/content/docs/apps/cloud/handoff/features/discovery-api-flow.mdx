@@ -41,13 +41,13 @@ These are the first external discovery APIs used directly by user-facing entry s
   - `showTitle`
   - `artwork`
   - `episodeUrl`
-  - `episodeGuid`
+  - `guid`
   - `releaseDate`
   - `trackTimeMillis`
   - `shortDescription`
 - Next step:
   - When canonical podcast metadata is needed, continue to Podcast Index `podcasts/byitunesid`
-  - When feed-native episode data is needed, continue to RSS feed parsing by the canonical `feedUrl` returned from Podcast Index `podcasts/byitunesid`
+  - When page-rendering episode data is needed, continue to the Cloud PI episode-list relay backed by Podcast Index `episodes/byitunesid?max=1000`
 
 ### 1.3 Apple Top Podcasts
 
@@ -98,7 +98,7 @@ These are the first external discovery APIs used directly by user-facing entry s
   - editor-pick podcast rows in the narrowed Readio contract
 - Next step:
   - When the user opens a picked show, continue to show-page lookup using Podcast Index `podcasts/byitunesid`
-  - When the opened show later needs episode data, continue to RSS feed parsing by the canonical `feedUrl` returned from Podcast Index `podcasts/byitunesid`
+  - When the opened show later needs episode data, continue to the Cloud PI episode-list relay backed by Podcast Index `episodes/byitunesid?max=1000`
 
 ## 2. Second Hop And Later Resolution
 
@@ -112,7 +112,6 @@ These APIs are used after a first-hop result, route, or previously cached data a
   - canonical podcast metadata
   - show page lookup
   - enriching first-hop Apple results
-  - obtaining canonical `feedUrl`
 - Previous hop:
   - Apple Search Podcasts
   - Apple Search Episodes
@@ -123,49 +122,60 @@ These APIs are used after a first-hop result, route, or previously cached data a
   - `podcastItunesId`
 - Produces:
   - canonical podcast contract used by show/detail flows
-  - `feedUrl` for later RSS resolution
 
-### 2.2 RSS Feed Parsing By Feed URL
+### 2.2 Podcast Index Episodes By iTunes ID (via Cloud relay)
 
 - Upstream:
-  - RSS feed fetch and parse by `feedUrl`
+  - Podcast Index `episodes/byitunesid?max=1000`
 - Used for:
-  - show page feed episode list
-  - final episode resolution fallback
-  - feed-native fields such as transcript, chapters, season/episode numbers, and HTML description
+  - show page episode list
+  - episodes page episode list
+  - direct-entry episode detail hydration
+  - canonical page-rendering fields such as transcript, chapters, season/episode numbers, and plain-text description
 - Previous hop:
   - Podcast Index `podcasts/byitunesid`
-  - cached canonical podcast data
-  - cached previously fetched feed data
 - Depends on previous hop providing:
-  - `feedUrl`
+  - `podcastItunesId`
 - Produces:
-  - normalized RSS episode rows keyed by stable episode identity
+  - normalized PI-owned episode rows keyed by stable episode identity
+  - relay-owned rows expose `guid` and required `artworkUrl`; rows without a valid backend-normalized artwork URL are dropped
 
-### 2.3 Episode Resolution Order
+### 2.3 Retired Discovery Feed Route
+
+- Status:
+  - `GET /api/v1/discovery/feed` is retired and must not be described as an active Cloud API
+- Active contract:
+  - repo-owned Cloud runtime contracts no longer expose or depend on the legacy feed transport field
+  - active Cloud page rendering and discovery routing do not fetch RSS by legacy feed transport identity
+- Implication:
+  - there is no active second-hop Cloud discovery API that parses RSS feed XML for show / episodes / detail rendering
+
+### 2.4 Episode Resolution Order
 
 - Step 1:
   - resolve route or compact key into a target stable episode identity
 - Step 2:
-  - match cached RSS feed episodes by stable episode identity if feed data already exists
+  - resolve canonical podcast metadata through Podcast Index `podcasts/byitunesid`
 - Step 3:
-  - fetch canonical podcast metadata through Podcast Index `podcasts/byitunesid`
+  - read the shared frontend PI episode-list cache family when available, otherwise fetch the Cloud PI episode-list relay backed by `episodes/byitunesid?max=1000`
+  - match by stable episode identity
 - Step 4:
-  - fetch RSS by canonical `feedUrl` and match by stable episode identity
+  - if the target `guid` is absent from that successful PI episode list, end in deterministic `episodeNotFound`
 
 ## 3. Surface Overview
 
 | Surface | First Hop | Second Hop | Later Resolution |
 |---|---|---|---|
-| Search podcasts | Apple Search Podcasts | Podcast Index `podcasts/byitunesid` when needed | RSS by `feedUrl` only if later detail flow needs it |
-| Search episodes | Apple Search Episodes | Podcast Index `podcasts/byitunesid` when needed | RSS by canonical `feedUrl` for episode resolution |
-| Explore Top Shows | Apple Top Podcasts | Podcast Index `podcasts/byitunesid` after user enters a show | RSS by `feedUrl` inside show/detail flow |
-| Explore Top Episodes | Apple Top Episodes | After click-through, continue from Podcast Index `podcasts/byitunesid` show context | RSS by `feedUrl` inside later detail/resolution flow |
-| Explore Editor's Picks | Podcast Index `podcasts/batch/byguid` | Podcast Index `podcasts/byitunesid` after show entry | RSS by `feedUrl` inside show/detail flow |
-| Show page | none | Podcast Index `podcasts/byitunesid` | RSS by `feedUrl` |
-| Episode detail page | none | Podcast Index `podcasts/byitunesid` | RSS by canonical `feedUrl` |
+| Search podcasts | Apple Search Podcasts | Podcast Index `podcasts/byitunesid` when needed | PI episode-list relay when the user enters page-rendering routes |
+| Search episodes | Apple Search Episodes | Podcast Index `podcasts/byitunesid` when needed | PI episode-list relay for episode resolution |
+| Explore Top Shows | Apple Top Podcasts | Podcast Index `podcasts/byitunesid` after user enters a show | PI episode-list relay inside show/detail flow |
+| Explore Top Episodes | Apple Top Episodes | After click-through, continue from Podcast Index `podcasts/byitunesid` show context | PI episode-list relay inside later detail/resolution flow |
+| Explore Editor's Picks | Podcast Index `podcasts/batch/byguid` | Podcast Index `podcasts/byitunesid` after show entry | PI episode-list relay inside show/detail flow |
+| Show page | none | Podcast Index `podcasts/byitunesid` | PI episode-list relay |
+| Episode detail page | none | Podcast Index `podcasts/byitunesid` | PI episode-list relay |
 
 ## 4. Explicit Non-Usage
 
 - Readio does not currently use Podcast Index `episodes/byguid` in the active discovery flow.
 - Readio still uses Podcast Index `podcasts/batch/byguid` for Editor's Picks.
+- Readio no longer treats `/api/v1/discovery/feed` as an active discovery route, and repo-owned Cloud runtime contracts no longer expose the legacy feed transport field.

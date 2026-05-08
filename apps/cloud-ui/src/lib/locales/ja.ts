@@ -261,11 +261,6 @@ const locale = {
     'Readio is a podcast player for personal, non-commercial use. You are solely responsible for the content you upload or access through this app.',
   termsNoWarranty:
     'The app is provided "as is" without warranties of any kind, either express or implied.',
-  settingsMigration: '移行',
-  settingsMigrationDesc:
-    'OPML形式を使用して購読をインポートまたはエクスポートします。インポートすると既存の購読にマージされます（重複排除、削除なし）。',
-  settingsImportOpml: 'OPMLをインポート',
-  settingsExportOpml: 'OPMLをエクスポート',
   settingsVault: '個人保管庫',
   settingsVaultDesc:
     'すべてのメタデータ（購読、お気に入り、履歴、フォルダ）をバックアップおよび復元します。オーディオファイルは含まれません。',
@@ -497,11 +492,6 @@ const locale = {
   toastVaultImportSuccess: '保管庫のインポートに成功しました',
   toastVaultImportFailed: '保管庫のインポートに失敗しました',
   toastVaultExportFailed: '保管庫のエクスポートに失敗しました',
-  toastOpmlEmpty: 'OPML ファイル内に購読が見つかりませんでした',
-  toastOpmlImportSuccess: 'OPML のインポートに成功しました',
-  toastOpmlImportFailed: 'OPML ファイルのインポートに失敗しました',
-  toastOpmlExportEmpty: 'エクスポートする購読がありません',
-  toastOpmlExportFailed: 'OPML のエクスポートに失敗しました',
   badgeFavorited: 'お気に入り',
   badgePlayed: '再生済み',
   badgeSubscribed: '購読中',

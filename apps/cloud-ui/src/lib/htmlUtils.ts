@@ -70,7 +70,7 @@ function initPurify(): void {
     }
   })
 
-  // Remove visually empty elements (like <p>&nbsp;</p>) that create large gaps in RSS feeds
+  // Remove visually empty elements (like <p>&nbsp;</p>) that create large gaps in imported rich text.
   DOMPurify.addHook('afterSanitizeElements', (node) => {
     if (node instanceof Element && node.tagName === 'P') {
       // Replace non-breaking spaces with regular spaces before trimming

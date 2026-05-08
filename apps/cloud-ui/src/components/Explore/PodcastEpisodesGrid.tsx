@@ -47,12 +47,9 @@ export function PodcastEpisodesGrid({ episodes, isLoading }: PodcastEpisodesGrid
   const totalColumns = isLoading ? visibleCount || 3 : Math.ceil(episodes.length / ROWS)
 
   async function handleOpenTopEpisode(episode: TopEpisode) {
-    const podcastId = String(episode.podcastItunesId ?? '').trim()
-    if (!podcastId || !normalizedCountry) return
-
     const route = buildTopEpisodeResolutionRoute({
       country: normalizedCountry,
-      podcastId,
+      podcastId: episode.podcastItunesId,
       title: episode.title,
     })
 

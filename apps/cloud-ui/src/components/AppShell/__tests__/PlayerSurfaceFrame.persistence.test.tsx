@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import { useEffect } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { usePlayerStore } from '../../../store/playerStore'
@@ -103,34 +103,42 @@ describe('PlayerSurfaceFrame - ReadingContent Persistence', () => {
     })
   })
 
-  it('keeps ReadingContent mounted when switching from docked to full', () => {
+  it('keeps ReadingContent mounted when switching from docked to full', async () => {
     const { rerender } = render(<PlayerSurfaceFrame mode="docked" />)
 
-    expect(screen.getByTestId('reading-content')).toBeTruthy()
+    await waitFor(() => {
+      expect(screen.getByTestId('reading-content')).toBeTruthy()
+    })
     expect(screen.getByTestId('reading-content').getAttribute('data-variant')).toBe('docked')
     expect(readingContentMountSpy).toHaveBeenCalledTimes(1)
 
     // Switch to full
     rerender(<PlayerSurfaceFrame mode="full" />)
 
-    expect(screen.getByTestId('reading-content')).toBeTruthy()
+    await waitFor(() => {
+      expect(screen.getByTestId('reading-content')).toBeTruthy()
+    })
     expect(screen.getByTestId('reading-content').getAttribute('data-variant')).toBe('full')
 
     // Crucially: mount spy should still be 1 if it didn't unmount/remount
     expect(readingContentMountSpy).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps ReadingContent mounted when switching from full to docked', () => {
+  it('keeps ReadingContent mounted when switching from full to docked', async () => {
     const { rerender } = render(<PlayerSurfaceFrame mode="full" />)
 
-    expect(screen.getByTestId('reading-content')).toBeTruthy()
+    await waitFor(() => {
+      expect(screen.getByTestId('reading-content')).toBeTruthy()
+    })
     expect(screen.getByTestId('reading-content').getAttribute('data-variant')).toBe('full')
     expect(readingContentMountSpy).toHaveBeenCalledTimes(1)
 
     // Switch to docked
     rerender(<PlayerSurfaceFrame mode="docked" />)
 
-    expect(screen.getByTestId('reading-content')).toBeTruthy()
+    await waitFor(() => {
+      expect(screen.getByTestId('reading-content')).toBeTruthy()
+    })
     expect(screen.getByTestId('reading-content').getAttribute('data-variant')).toBe('docked')
 
     expect(readingContentMountSpy).toHaveBeenCalledTimes(1)

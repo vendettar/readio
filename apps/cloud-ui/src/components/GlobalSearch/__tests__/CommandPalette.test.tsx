@@ -2,22 +2,30 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildEpisodeCompactKey } from '../../../lib/discovery/editorPicks'
+import { makeSearchPodcast } from '../../../lib/discovery/__tests__/fixtures'
 import { useSearchStore } from '../../../store/searchStore'
 import { CommandPalette } from '../CommandPalette'
 
 const navigateMock = vi.fn()
 const executeLocalSearchActionMock = vi.fn()
 const setSubtitlesMock = vi.fn()
+const makeSection = <T,>(
+  items: T[] = [],
+  status: 'idle' | 'loading' | 'ready' | 'unavailable' = 'ready'
+) => ({
+  items,
+  status,
+})
 const mockGlobalSearchState: {
-  podcasts: Record<string, unknown>[]
-  episodes: Record<string, unknown>[]
-  local: Record<string, unknown>[]
+  podcastSection: ReturnType<typeof makeSection<Record<string, unknown>>>
+  episodeSection: ReturnType<typeof makeSection<Record<string, unknown>>>
+  localSection: ReturnType<typeof makeSection<Record<string, unknown>>>
   isLoading: boolean
   isEmpty: boolean
 } = {
-  podcasts: [],
-  episodes: [],
-  local: [],
+  podcastSection: makeSection([]),
+  episodeSection: makeSection([]),
+  localSection: makeSection([]),
   isLoading: false,
   isEmpty: false,
 }
@@ -281,13 +289,36 @@ vi.mock('../../ui/command', () => {
 })
 
 describe('CommandPalette', () => {
+  const priorLocalResult = {
+    id: 'history-local-1',
+    type: 'history',
+    title: 'Prior Local Result',
+    subtitle: 'Files',
+    badges: ['history'],
+    data: {
+      id: 'session-local-1',
+      source: 'local',
+      title: 'Prior Local Result',
+      createdAt: Date.now(),
+      lastPlayedAt: Date.now(),
+      sizeBytes: 10,
+      durationSeconds: 30,
+      audioId: 'audio-local-1',
+      subtitleId: null,
+      hasAudioBlob: true,
+      progress: 0,
+      audioFilename: 'local.mp3',
+      subtitleFilename: '',
+    },
+  }
+
   beforeEach(() => {
     vi.clearAllMocks()
     executeLocalSearchActionMock.mockReset()
     setSubtitlesMock.mockReset()
-    mockGlobalSearchState.podcasts = []
-    mockGlobalSearchState.episodes = []
-    mockGlobalSearchState.local = []
+    mockGlobalSearchState.podcastSection = makeSection([])
+    mockGlobalSearchState.episodeSection = makeSection([])
+    mockGlobalSearchState.localSection = makeSection([])
     mockGlobalSearchState.isLoading = false
     mockGlobalSearchState.isEmpty = false
     useSearchStore.setState({
@@ -476,17 +507,17 @@ describe('CommandPalette', () => {
   })
 
   it('navigates to episode detail when selecting an episode result', async () => {
-    mockGlobalSearchState.episodes = [
+    mockGlobalSearchState.episodeSection = makeSection([
       {
         podcastItunesId: '7',
         title: 'Episode Name',
         showTitle: 'Show Name',
-        episodeUrl: 'https://example.com/audio.mp3',
-        episodeGuid: '75f3241b-439d-4786-8968-07e05e548074',
+        audioUrl: 'https://example.com/audio.mp3',
+        guid: '75f3241b-439d-4786-8968-07e05e548074',
         shortDescription: 'desc',
         artwork: '',
       },
-    ]
+    ])
     act(() => {
       useSearchStore.setState({
         query: 'episode',
@@ -506,31 +537,23 @@ describe('CommandPalette', () => {
           id: '7',
           episodeKey: buildEpisodeCompactKey('75f3241b-439d-4786-8968-07e05e548074'),
         },
-        state: {
-          episodeSnapshot: {
-            title: 'Episode Name',
-            audioUrl: 'https://example.com/audio.mp3',
-            description: 'desc',
-            pubDate: undefined,
-          },
-        },
       })
     })
     expect(useSearchStore.getState().isOverlayOpen).toBe(false)
   })
 
   it('navigates to episode detail when selecting a non-UUID episode result', async () => {
-    mockGlobalSearchState.episodes = [
+    mockGlobalSearchState.episodeSection = makeSection([
       {
         podcastItunesId: '7',
         title: 'Episode Name',
         showTitle: 'Show Name',
-        episodeUrl: 'https://example.com/audio.mp3',
-        episodeGuid: 'abc123-def456',
+        audioUrl: 'https://example.com/audio.mp3',
+        guid: 'abc123-def456',
         shortDescription: 'desc',
         artwork: '',
       },
-    ]
+    ])
     act(() => {
       useSearchStore.setState({
         query: 'episode',
@@ -550,43 +573,21 @@ describe('CommandPalette', () => {
           id: '7',
           episodeKey: buildEpisodeCompactKey('abc123-def456'),
         },
-        state: {
-          episodeSnapshot: {
-            title: 'Episode Name',
-            audioUrl: 'https://example.com/audio.mp3',
-            description: 'desc',
-            pubDate: undefined,
-          },
-        },
       })
     })
   })
 
   it('passes transcript setter deps when selecting a local result', () => {
-    mockGlobalSearchState.local = [
+    mockGlobalSearchState.localSection = makeSection([
       {
-        id: 'history-local-1',
-        type: 'history',
+        ...priorLocalResult,
         title: 'Local Session',
-        subtitle: 'Files',
-        badges: ['history'],
         data: {
-          id: 'session-local-1',
-          source: 'local',
+          ...priorLocalResult.data,
           title: 'Local Session',
-          createdAt: Date.now(),
-          lastPlayedAt: Date.now(),
-          sizeBytes: 10,
-          durationSeconds: 30,
-          audioId: 'audio-local-1',
-          subtitleId: null,
-          hasAudioBlob: true,
-          progress: 0,
-          audioFilename: 'local.mp3',
-          subtitleFilename: '',
         },
       },
-    ]
+    ])
     act(() => {
       useSearchStore.setState({
         query: 'local',
@@ -611,6 +612,117 @@ describe('CommandPalette', () => {
       })
     )
     expect(useSearchStore.getState().isOverlayOpen).toBe(false)
+  })
+
+  it('keeps prior local results visible while a local-only refresh is in flight', () => {
+    mockGlobalSearchState.localSection = makeSection([priorLocalResult])
+
+    act(() => {
+      useSearchStore.setState({
+        query: 'local',
+        isOverlayOpen: true,
+      })
+    })
+
+    const { rerender } = render(<CommandPalette />)
+
+    expect(screen.getByText('Prior Local Result')).toBeDefined()
+    expect(screen.queryByText('searchSearching')).toBeNull()
+
+    mockGlobalSearchState.localSection = makeSection([priorLocalResult], 'loading')
+    mockGlobalSearchState.isLoading = true
+
+    act(() => {
+      useSearchStore.setState({
+        query: 'local updated',
+        isOverlayOpen: true,
+      })
+    })
+    rerender(<CommandPalette />)
+
+    expect(screen.getByText('Prior Local Result')).toBeDefined()
+    expect(screen.getByText('searchSearching')).toBeDefined()
+    expect(screen.queryByText('searchNoResults')).toBeNull()
+  })
+
+  it('keeps ready podcast results visible while episode section is still loading', () => {
+    mockGlobalSearchState.podcastSection = makeSection([
+      makeSearchPodcast({
+        podcastItunesId: 'pod-1',
+        title: 'Podcast Result',
+        author: 'Host',
+      }),
+    ])
+    mockGlobalSearchState.episodeSection = makeSection([], 'loading')
+    mockGlobalSearchState.isLoading = true
+
+    act(() => {
+      useSearchStore.setState({
+        query: 'podcast',
+        isOverlayOpen: true,
+      })
+    })
+
+    render(<CommandPalette />)
+
+    expect(screen.getByText('Podcast Result')).toBeDefined()
+    expect(screen.getByText('searchSearching')).toBeDefined()
+    expect(screen.queryByText('searchNoResults')).toBeNull()
+  })
+
+  it('keeps panel visible and shows offline unavailable copy for active query', () => {
+    mockGlobalSearchState.podcastSection = makeSection([], 'unavailable')
+    mockGlobalSearchState.episodeSection = makeSection([], 'unavailable')
+
+    act(() => {
+      useSearchStore.setState({
+        query: 'offline search',
+        isOverlayOpen: true,
+      })
+    })
+
+    render(<CommandPalette />)
+
+    expect(screen.getByTestId('popover-content').className.includes('opacity-100')).toBe(true)
+    expect(screen.getByText('offline.badge')).toBeDefined()
+    expect(screen.getByText('offline.explanation')).toBeDefined()
+  })
+
+  it('keeps prior podcast results visible while a query refresh is in flight', () => {
+    mockGlobalSearchState.podcastSection = makeSection([
+      makeSearchPodcast({
+        podcastItunesId: 'pod-1',
+        title: 'Apple Podcast',
+        author: 'Host',
+      }),
+    ])
+
+    act(() => {
+      useSearchStore.setState({
+        query: 'apple',
+        isOverlayOpen: true,
+      })
+    })
+
+    const { rerender } = render(<CommandPalette />)
+
+    expect(screen.getByText('Apple Podcast')).toBeDefined()
+    expect(screen.queryByText('searchSearching')).toBeNull()
+
+    mockGlobalSearchState.episodeSection = makeSection([], 'loading')
+    mockGlobalSearchState.isLoading = true
+
+    act(() => {
+      useSearchStore.setState({
+        query: 'apple updated',
+        isOverlayOpen: true,
+      })
+    })
+    rerender(<CommandPalette />)
+
+    expect(screen.getByText('Apple Podcast')).toBeDefined()
+    expect(screen.getByText('searchSearching')).toBeDefined()
+    expect(screen.queryByText('searchNoResults')).toBeNull()
   })
 
   describe('Focus Restoration Contract', () => {

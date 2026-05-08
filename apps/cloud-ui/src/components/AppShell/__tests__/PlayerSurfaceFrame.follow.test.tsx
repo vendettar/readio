@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { TRANSCRIPT_IMPORTED_EVENT } from '../../../lib/player/playbackExport'
@@ -115,6 +115,9 @@ describe('PlayerSurfaceFrame follow restore', () => {
       render(<PlayerSurfaceFrame mode="full" />)
     })
 
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'disable-follow' })).toBeTruthy()
+    })
     fireEvent.click(screen.getByRole('button', { name: 'disable-follow' }))
     expect(screen.getByRole('button', { name: 'Follow' })).toBeTruthy()
 
@@ -138,6 +141,9 @@ describe('PlayerSurfaceFrame follow restore', () => {
       render(<PlayerSurfaceFrame mode="full" />)
     })
 
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'disable-follow' })).toBeTruthy()
+    })
     fireEvent.click(screen.getByRole('button', { name: 'disable-follow' }))
     expect(screen.getByRole('button', { name: 'Follow' })).toBeTruthy()
 

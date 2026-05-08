@@ -260,11 +260,6 @@ const locale = {
     'Readio is a podcast player for personal, non-commercial use. You are solely responsible for the content you upload or access through this app.',
   termsNoWarranty:
     'The app is provided "as is" without warranties of any kind, either express or implied.',
-  settingsMigration: '마이그레이션',
-  settingsMigrationDesc:
-    'OPML 형식을 사용하여 구독을 가져오거나 내보냅니다. 가져오기 시 기존 구독과 병합됩니다(중복 제거, 삭제 없음).',
-  settingsImportOpml: 'OPML 가져오기',
-  settingsExportOpml: 'OPML 내보내기',
   settingsVault: '개인 보관소',
   settingsVaultDesc:
     '모든 메타데이터(구독, 즐겨찾기, 기록, 폴더)를 백업하고 복원합니다. 오디오 파일은 포함되지 않습니다.',
@@ -494,11 +489,6 @@ const locale = {
   toastVaultImportSuccess: '보관소를 성공적으로 가져왔습니다',
   toastVaultImportFailed: '보관소를 가져오지 못했습니다',
   toastVaultExportFailed: '보관소를 내보내지 못했습니다',
-  toastOpmlEmpty: 'OPML 파일에서 구독을 찾을 수 없습니다',
-  toastOpmlImportSuccess: 'OPML을 성공적으로 가져왔습니다',
-  toastOpmlImportFailed: 'OPML 파일을 가져오지 못했습니다',
-  toastOpmlExportEmpty: '내보낼 구독이 없습니다',
-  toastOpmlExportFailed: 'OPML을 내보내지 못했습니다',
   badgeFavorited: '즐겨찾기',
   badgePlayed: '재생됨',
   badgeSubscribed: '구독 중',

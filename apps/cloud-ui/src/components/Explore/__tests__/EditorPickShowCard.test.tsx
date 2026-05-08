@@ -1,6 +1,5 @@
 import { render } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
 import type { EditorPickPodcast } from '../../../lib/discovery'
 import { EditorPickShowCard } from '../EditorPickShowCard'
 
@@ -29,7 +28,6 @@ describe('EditorPickShowCard routing', () => {
       author: 'Host',
       artwork: 'https://example.com/show-100.jpg',
       description: 'A podcast',
-      feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
       lastUpdateTime: 1613394044,
       podcastItunesId: '12345',
       episodeCount: 50,
@@ -63,7 +61,6 @@ describe('EditorPickShowCard routing', () => {
       author: 'Host',
       artwork: 'https://example.com/show-100.jpg',
       description: 'A podcast',
-      feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
       lastUpdateTime: 1613394044,
       podcastItunesId: '', // Invalid/Empty to trigger missing route check
       episodeCount: 50,

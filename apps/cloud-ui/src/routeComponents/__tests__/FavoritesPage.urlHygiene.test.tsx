@@ -1,7 +1,6 @@
 import { render } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
 import FavoritesPage from '../FavoritesPage'
 
 const buildPodcastEpisodeRouteMock = vi.fn((_args?: unknown) => ({
@@ -29,8 +28,7 @@ vi.mock('../../store/exploreStore', () => ({
       favorites: [
         {
           id: 'fav-1',
-          key: 'feed::audio',
-          feedUrl: normalizeFeedUrl('feed'),
+          key: '123::75f3241b-439d-4786-8968-07e05e548074',
           audioUrl: 'audio',
           podcastItunesId: '123',
           episodeGuid: '75f3241b-439d-4786-8968-07e05e548074',
@@ -43,10 +41,6 @@ vi.mock('../../store/exploreStore', () => ({
         },
       ],
     }),
-}))
-
-vi.mock('../../hooks/useSubscriptionMap', () => ({
-  useSubscriptionMap: () => new Map<string, string>(),
 }))
 
 vi.mock('../../hooks/useEpisodePlayback', () => ({
@@ -64,20 +58,17 @@ vi.mock('../../components/EpisodeRow', () => ({
   EpisodeListItem: () => <div data-testid="episode-row" />,
   fromFavorite: ({
     favorite,
-    subscriptionMap,
   }: {
     favorite: {
       episodeTitle: string
       countryAtSave?: string
       podcastItunesId?: string
-      feedUrl: string
       episodeGuid?: string
     }
-    subscriptionMap: Map<string, string>
   }) => {
     buildPodcastEpisodeRouteMock({
       country: favorite.countryAtSave,
-      podcastId: favorite.podcastItunesId || subscriptionMap.get(favorite.feedUrl),
+      podcastId: favorite.podcastItunesId,
       episodeKey: favorite.episodeGuid,
     })
     return {

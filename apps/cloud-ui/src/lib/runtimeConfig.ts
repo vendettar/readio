@@ -11,6 +11,10 @@ declare global {
       READIO_NETWORK_PROXY_URL?: string
       READIO_NETWORK_PROXY_AUTH_HEADER?: string
       READIO_NETWORK_PROXY_AUTH_VALUE?: string
+      VITE_GRAFANA_FARO_URL?: string
+      VITE_GRAFANA_FARO_APP_NAME?: string
+      VITE_GRAFANA_FARO_ENV?: string
+      VITE_GRAFANA_FARO_SAMPLE_RATE?: number | string
       READIO_ASR_API_KEY?: string
       READIO_ASR_RELAY_PUBLIC_TOKEN?: string
       READIO_OPENAI_API_KEY?: string
@@ -95,11 +99,18 @@ export function getAppConfig(): AppConfig {
     return cachedConfig
   }
 
-  const env = (typeof window !== 'undefined' && window.__READIO_ENV__) || {}
+  const runtimeEnv = (typeof window !== 'undefined' && window.__READIO_ENV__) || {}
 
   const rawConfig: Record<string, unknown> = {}
   for (const [key, envKey] of Object.entries(ENV_MAP)) {
-    const envValue = env[envKey as keyof typeof env]
+    // 1. Try window.__READIO_ENV__ (Runtime)
+    let envValue = runtimeEnv[envKey as keyof typeof runtimeEnv]
+
+    // 2. Fallback to import.meta.env (Build-time / CF Pages Env)
+    if (envValue === undefined || envValue === null || envValue === '') {
+      envValue = import.meta.env[envKey]
+    }
+
     rawConfig[key] = envValue
   }
 
@@ -109,7 +120,20 @@ export function getAppConfig(): AppConfig {
 
   try {
     const parsedConfig = AppConfigSchema.parse(rawConfig)
+
+    // Normalize relative paths if API_BASE_URL is set (Decoupled Frontend Support)
+    if (parsedConfig.API_BASE_URL) {
+      const baseUrl = parsedConfig.API_BASE_URL.replace(/\/$/, '')
+      if (parsedConfig.NETWORK_PROXY_URL.startsWith('/')) {
+        parsedConfig.NETWORK_PROXY_URL = `${baseUrl}${parsedConfig.NETWORK_PROXY_URL}`
+      }
+      if (parsedConfig.FALLBACK_PODCAST_IMAGE.startsWith('/')) {
+        parsedConfig.FALLBACK_PODCAST_IMAGE = `${baseUrl}${parsedConfig.FALLBACK_PODCAST_IMAGE}`
+      }
+    }
+
     const config = sanitizeBrowserRuntimeSecrets(parsedConfig)
+
     const hasProxyUrl = config.NETWORK_PROXY_URL.trim().length > 0
 
     if (hasProxyUrl && config.NETWORK_PROXY_AUTH_HEADER && !config.NETWORK_PROXY_AUTH_VALUE) {
@@ -135,6 +159,7 @@ export function getAppConfig(): AppConfig {
     cachedFromRuntimeEnv = runtimeReady
     return config
   } catch (error: unknown) {
+
     logError('[runtimeConfig] Unexpected schema parse failure:', error)
 
     const zodIssues =
@@ -164,3 +189,35 @@ export function getAppConfig(): AppConfig {
     return fallback
   }
 }
+
+/**
+ * fetchRuntimeConfig attempts to fetch configuration from the backend
+ * if window.__READIO_ENV__ is not already set. This is used in decoupled
+ * deployments (e.g., Cloudflare Pages) where /env.js is not served from the same origin.
+ */
+export async function fetchRuntimeConfig(): Promise<void> {
+  if (typeof window === 'undefined') return
+  if (window.__READIO_ENV__) return // Already set via script tag or previous fetch
+
+  const config = getAppConfig()
+  const apiBase = config.API_BASE_URL.replace(/\/$/, '')
+  const fetchUrl = apiBase ? `${apiBase}/api/v1/config` : '/api/v1/config'
+
+  try {
+    const resp = await fetch(fetchUrl)
+
+    if (resp.ok) {
+      const data = await resp.json()
+      window.__READIO_ENV__ = data
+      // Reset caches so getAppConfig() returns the fresh data
+      cachedConfig = null
+      cachedFromRuntimeEnv = true
+    }
+  } catch (err) {
+    // Silently fail, getAppConfig will use fallbacks/defaults
+    if (import.meta.env.DEV) {
+      console.warn('[runtimeConfig] Failed to fetch remote config:', err)
+    }
+  }
+}
+

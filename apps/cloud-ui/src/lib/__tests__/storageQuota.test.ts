@@ -4,7 +4,7 @@ import {
   QUOTA_HARD_BLOCK_THRESHOLD,
   QUOTA_WARNING_THRESHOLD,
 } from '../../constants/storageQuota'
-import { DB } from '../dexieDb'
+import { StorageRepository } from '../repositories/StorageRepository'
 import {
   checkStorageQuota,
   computeQuotaPercentage,
@@ -23,6 +23,12 @@ vi.mock('../toast', () => ({
     warningKey: vi.fn(),
     infoKey: vi.fn(),
     errorKey: vi.fn(),
+  },
+}))
+
+vi.mock('../repositories/StorageRepository', () => ({
+  StorageRepository: {
+    getStorageInfo: vi.fn(),
   },
 }))
 
@@ -49,7 +55,7 @@ describe('storage quota checks', () => {
   })
 
   it('fires warning toast when crossing 80%', async () => {
-    vi.spyOn(DB, 'getStorageInfo').mockResolvedValueOnce({
+    vi.mocked(StorageRepository.getStorageInfo).mockResolvedValueOnce({
       indexedDB: {
         sessions: 0,
         audioBlobs: 0,
@@ -77,7 +83,7 @@ describe('storage quota checks', () => {
   })
 
   it('does not emit warning toast in silent mode', async () => {
-    vi.spyOn(DB, 'getStorageInfo').mockResolvedValueOnce({
+    vi.mocked(StorageRepository.getStorageInfo).mockResolvedValueOnce({
       indexedDB: {
         sessions: 0,
         audioBlobs: 0,
@@ -105,8 +111,10 @@ describe('storage quota checks', () => {
   })
 
   it('dedupes concurrent in-flight quota checks', async () => {
-    const deferred = createDeferred<Awaited<ReturnType<typeof DB.getStorageInfo>>>()
-    const getStorageInfoSpy = vi.spyOn(DB, 'getStorageInfo').mockReturnValueOnce(deferred.promise)
+    const deferred = createDeferred<Awaited<ReturnType<typeof StorageRepository.getStorageInfo>>>()
+    const getStorageInfoSpy = vi
+      .mocked(StorageRepository.getStorageInfo)
+      .mockReturnValueOnce(deferred.promise)
 
     const check1 = checkStorageQuota()
     const check2 = checkStorageQuota()
@@ -137,8 +145,10 @@ describe('storage quota checks', () => {
   })
 
   it('keeps existing mode-mix semantics for in-flight checks', async () => {
-    const deferred = createDeferred<Awaited<ReturnType<typeof DB.getStorageInfo>>>()
-    const getStorageInfoSpy = vi.spyOn(DB, 'getStorageInfo').mockReturnValueOnce(deferred.promise)
+    const deferred = createDeferred<Awaited<ReturnType<typeof StorageRepository.getStorageInfo>>>()
+    const getStorageInfoSpy = vi
+      .mocked(StorageRepository.getStorageInfo)
+      .mockReturnValueOnce(deferred.promise)
 
     sessionStorage.setItem('readio-lite:quota-last-percent', JSON.stringify(79))
     sessionStorage.setItem('readio-lite:quota-warned', JSON.stringify(false))
@@ -175,7 +185,7 @@ describe('storage quota checks', () => {
 
   it('blocks upload when audio cache exceeds cap', async () => {
     const capBytes = 1 * 1024 * 1024 * 1024
-    vi.spyOn(DB, 'getStorageInfo').mockResolvedValueOnce({
+    vi.mocked(StorageRepository.getStorageInfo).mockResolvedValueOnce({
       indexedDB: {
         sessions: 0,
         audioBlobs: 0,
@@ -198,7 +208,7 @@ describe('storage quota checks', () => {
   })
 
   it('allows upload when quota is unavailable (best-effort mode)', async () => {
-    vi.spyOn(DB, 'getStorageInfo').mockResolvedValueOnce({
+    vi.mocked(StorageRepository.getStorageInfo).mockResolvedValueOnce({
       indexedDB: {
         sessions: 0,
         audioBlobs: 0,

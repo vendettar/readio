@@ -1,19 +1,18 @@
 import { Eye, Loader2 } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useImageObjectUrl } from '../../hooks/useImageObjectUrl'
 import { usePlayerController } from '../../hooks/usePlayerController'
 import { useZoom } from '../../hooks/useZoom'
-import { getAsrReadinessUpdatedEventName, isAsrReadyForGeneration } from '../../lib/asr/readiness'
 import { useDownloadProgressStore } from '../../lib/downloadService'
 import { normalizePodcastAudioUrl } from '../../lib/networking/urlUtils'
+import {
+  resolvePlaybackSourceAudioUrl,
+  withPlaybackRequestMode,
+} from '../../lib/player/playbackMetadata'
 import { PLAYBACK_REQUEST_MODE } from '../../lib/player/playbackMode'
 import {
-  autoIngestEpisodeTranscript,
-  getValidTranscriptUrl,
-  hasStoredTranscriptSource,
   startOnlineASRForCurrentTrack,
-  tryApplyCachedAsrTranscript,
 } from '../../lib/remoteTranscript'
 import { findSubtitleIndex } from '../../lib/subtitles'
 import { cn } from '../../lib/utils'
@@ -28,10 +27,8 @@ import styles from './FullPlayer.module.css'
 import {
   deriveReadingContentCtaState,
   READING_CONTENT_CTA_STATE,
-  STORED_TRANSCRIPT_SOURCE_STATE,
-  type StoredTranscriptSourceState,
-  TRANSCRIPT_LOADING_TIMEOUT_MS,
 } from './readingContentCta'
+import { useReadingContentTranscriptState } from './useReadingContentTranscriptState'
 
 interface ReadingContentProps {
   /** Whether to show the full-player style placeholder (larger, with emoji icons) */
@@ -40,16 +37,6 @@ interface ReadingContentProps {
   isAutoScrolling: boolean
   /** Shared setter for transcript auto-scrolling */
   setIsAutoScrolling: (val: boolean) => void
-}
-
-interface StoredTranscriptSourceLookupState {
-  key: string
-  state: StoredTranscriptSourceState
-}
-
-interface TranscriptLoadingTimeoutState {
-  key: string
-  timedOut: boolean
 }
 
 const NO_TRANSCRIPT_ARTWORK_SIZE_STYLE = {
@@ -124,7 +111,7 @@ export function ReadingContent({
   const toMini = usePlayerSurfaceStore((s) => s.toMini)
   const { jumpToSubtitle } = usePlayerController()
 
-  const targetAudioUrl = episodeMetadata?.originalAudioUrl || audioUrl || ''
+  const targetAudioUrl = resolvePlaybackSourceAudioUrl(audioUrl, episodeMetadata)
   const normalizedAudioUrlKey = normalizePodcastAudioUrl(targetAudioUrl)
   const currentProgress = useDownloadProgressStore((s) =>
     normalizedAudioUrlKey ? s.progressMap[normalizedAudioUrlKey] : null
@@ -138,42 +125,33 @@ export function ReadingContent({
   const hasDisplaySubtitles = displaySubtitles.length > 0
   const isActiveTranscribing =
     transcriptIngestionStatus === TRANSCRIPT_INGESTION_STATUS.TRANSCRIBING
-  const [asrGenerationReady, setAsrGenerationReady] = useState<boolean | null>(null)
-  const [storedTranscriptSourceLookupState, setStoredTranscriptSourceLookupState] =
-    useState<StoredTranscriptSourceLookupState>({
-      key: '',
-      state: STORED_TRANSCRIPT_SOURCE_STATE.UNKNOWN,
-    })
-  const [transcriptLoadingAttemptVersion, setTranscriptLoadingAttemptVersion] = useState(0)
-  const [transcriptLoadingTimeoutState, setTranscriptLoadingTimeoutState] =
-    useState<TranscriptLoadingTimeoutState>({
-      key: '',
-      timedOut: false,
-    })
-  const [asrReadinessVersion, setAsrReadinessVersion] = useState(0)
-  const asrReadinessVersionRef = useRef(0)
-  const transcriptSourceUrl = getValidTranscriptUrl(episodeMetadata?.transcriptUrl)
-  const hasDeclaredTranscriptSource = transcriptSourceUrl !== null
-  const storedTranscriptSourceLookupKey = `${localTrackId || ''}::${targetAudioUrl}`
-  const storedTranscriptSourceState =
-    storedTranscriptSourceLookupState.key === storedTranscriptSourceLookupKey
-      ? storedTranscriptSourceLookupState.state
-      : STORED_TRANSCRIPT_SOURCE_STATE.UNKNOWN
+  const {
+    asrGenerationReady,
+    beginTranscriptLoadAttempt,
+    hasDeclaredTranscriptSource,
+    hasTranscriptLoadingTimedOut,
+    shouldEvaluateAsrReadiness,
+    showTranscript,
+    storedTranscriptSourceState,
+  } = useReadingContentTranscriptState({
+    episodeMetadataTranscriptUrl: episodeMetadata?.transcriptUrl,
+    episodeMetadataPlaybackRequestMode: playbackRequestMode ?? null,
+    episodeMetadataForRestore: episodeMetadata,
+    hasDisplaySubtitles,
+    isActiveTranscribing,
+    loadRequestId,
+    localTrackId,
+    setEpisodeMetadata,
+    targetAudioUrl,
+    transcriptIngestionStatus,
+    withDefaultPlaybackRequestMode: (metadata) =>
+      withPlaybackRequestMode(metadata, PLAYBACK_REQUEST_MODE.DEFAULT),
+  })
 
   const isTranscriptFirstLoading =
     transcriptIngestionStatus === TRANSCRIPT_INGESTION_STATUS.LOADING &&
     hasDeclaredTranscriptSource &&
     episodeMetadata?.playbackRequestMode !== PLAYBACK_REQUEST_MODE.STREAM_WITHOUT_TRANSCRIPT
-  const shouldWatchTranscriptLoadingTimeout =
-    (transcriptIngestionStatus === TRANSCRIPT_INGESTION_STATUS.LOADING ||
-      transcriptIngestionStatus === TRANSCRIPT_INGESTION_STATUS.TRANSCRIBING) &&
-    playbackRequestMode !== PLAYBACK_REQUEST_MODE.STREAM_WITHOUT_TRANSCRIPT
-  const transcriptLoadingWatchKey = shouldWatchTranscriptLoadingTimeout
-    ? `${loadRequestId}:${targetAudioUrl}:${transcriptSourceUrl || localTrackId || 'none'}:${transcriptLoadingAttemptVersion}`
-    : ''
-  const hasTranscriptLoadingTimedOut =
-    transcriptLoadingTimeoutState.key === transcriptLoadingWatchKey &&
-    transcriptLoadingTimeoutState.timedOut
 
   const loadingLabel = isActiveTranscribing
     ? t('asrTranscribing')
@@ -182,14 +160,6 @@ export function ReadingContent({
       : transcriptIngestionStatus === TRANSCRIPT_INGESTION_STATUS.LOADING
         ? t('asrDownloading')
         : t('loading')
-  const shouldSuppressAsrReadinessForTranscriptFirst =
-    hasDeclaredTranscriptSource ||
-    storedTranscriptSourceState !== STORED_TRANSCRIPT_SOURCE_STATE.ABSENT
-  const shouldEvaluateAsrReadiness =
-    !hasDisplaySubtitles &&
-    Boolean(targetAudioUrl) &&
-    (!isActiveTranscribing || hasTranscriptLoadingTimedOut) &&
-    !shouldSuppressAsrReadinessForTranscriptFirst
   const blobUrl = useImageObjectUrl(coverArtUrl instanceof Blob ? coverArtUrl : null)
   const effectiveCoverArtUrl = typeof coverArtUrl === 'string' ? coverArtUrl : blobUrl
   const ctaState = deriveReadingContentCtaState({
@@ -212,156 +182,6 @@ export function ReadingContent({
       })
     )
   }, [toMini, variant])
-
-  const showTranscript = useCallback(() => {
-    if (episodeMetadata) {
-      setEpisodeMetadata({
-        ...episodeMetadata,
-        playbackRequestMode: PLAYBACK_REQUEST_MODE.DEFAULT,
-      })
-    }
-
-    if (hasDisplaySubtitles) {
-      return
-    }
-
-    setTranscriptLoadingAttemptVersion((version) => version + 1)
-
-    void (async () => {
-      const appliedStoredTranscript = await tryApplyCachedAsrTranscript(
-        targetAudioUrl,
-        localTrackId,
-        loadRequestId
-      )
-
-      if (appliedStoredTranscript) {
-        return
-      }
-
-      if (hasDeclaredTranscriptSource) {
-        autoIngestEpisodeTranscript(transcriptSourceUrl || undefined, targetAudioUrl)
-      }
-    })()
-  }, [
-    episodeMetadata,
-    hasDeclaredTranscriptSource,
-    hasDisplaySubtitles,
-    loadRequestId,
-    localTrackId,
-    setEpisodeMetadata,
-    targetAudioUrl,
-    transcriptSourceUrl,
-  ])
-
-  useEffect(() => {
-    const handleAsrReadinessUpdated = () => {
-      asrReadinessVersionRef.current += 1
-      setAsrReadinessVersion(asrReadinessVersionRef.current)
-    }
-    const asrReadinessEventName = getAsrReadinessUpdatedEventName()
-    window.addEventListener(asrReadinessEventName, handleAsrReadinessUpdated)
-    window.addEventListener('readio-settings-updated', handleAsrReadinessUpdated)
-    return () => {
-      window.removeEventListener(asrReadinessEventName, handleAsrReadinessUpdated)
-      window.removeEventListener('readio-settings-updated', handleAsrReadinessUpdated)
-    }
-  }, [])
-
-  useEffect(() => {
-    let isCancelled = false
-    const runVersion = asrReadinessVersion
-
-    if (!shouldEvaluateAsrReadiness) {
-      setAsrGenerationReady(null)
-      return () => {
-        isCancelled = true
-      }
-    }
-
-    setAsrGenerationReady(null)
-
-    void (async () => {
-      const ready = await isAsrReadyForGeneration()
-      if (!isCancelled && runVersion === asrReadinessVersionRef.current) {
-        setAsrGenerationReady(ready)
-      }
-    })()
-
-    return () => {
-      isCancelled = true
-    }
-  }, [shouldEvaluateAsrReadiness, asrReadinessVersion])
-
-  useEffect(() => {
-    if (!transcriptLoadingWatchKey) {
-      setTranscriptLoadingTimeoutState((state) =>
-        state.key || state.timedOut ? { key: '', timedOut: false } : state
-      )
-      return
-    }
-
-    setTranscriptLoadingTimeoutState((state) =>
-      state.key === transcriptLoadingWatchKey
-        ? state
-        : { key: transcriptLoadingWatchKey, timedOut: false }
-    )
-
-    const timeoutId = window.setTimeout(() => {
-      setTranscriptLoadingTimeoutState((state) =>
-        state.key === transcriptLoadingWatchKey
-          ? { key: transcriptLoadingWatchKey, timedOut: true }
-          : state
-      )
-    }, TRANSCRIPT_LOADING_TIMEOUT_MS)
-
-    return () => {
-      window.clearTimeout(timeoutId)
-    }
-  }, [transcriptLoadingWatchKey])
-
-  useEffect(() => {
-    let isCancelled = false
-    setStoredTranscriptSourceLookupState({
-      key: storedTranscriptSourceLookupKey,
-      state: targetAudioUrl
-        ? STORED_TRANSCRIPT_SOURCE_STATE.UNKNOWN
-        : STORED_TRANSCRIPT_SOURCE_STATE.ABSENT,
-    })
-
-    if (!targetAudioUrl) {
-      return () => {
-        isCancelled = true
-      }
-    }
-
-    void (async () => {
-      try {
-        const storedTranscriptSourceExists = await hasStoredTranscriptSource(
-          targetAudioUrl,
-          localTrackId
-        )
-        if (!isCancelled) {
-          setStoredTranscriptSourceLookupState({
-            key: storedTranscriptSourceLookupKey,
-            state: storedTranscriptSourceExists
-              ? STORED_TRANSCRIPT_SOURCE_STATE.PRESENT
-              : STORED_TRANSCRIPT_SOURCE_STATE.ABSENT,
-          })
-        }
-      } catch {
-        if (!isCancelled) {
-          setStoredTranscriptSourceLookupState({
-            key: storedTranscriptSourceLookupKey,
-            state: STORED_TRANSCRIPT_SOURCE_STATE.ABSENT,
-          })
-        }
-      }
-    })()
-
-    return () => {
-      isCancelled = true
-    }
-  }, [localTrackId, storedTranscriptSourceLookupKey, targetAudioUrl])
 
   // Subtitle synchronization
   useEffect(() => {
@@ -559,7 +379,7 @@ export function ReadingContent({
           size={isFull ? 'default' : 'sm'}
           className="mt-4"
           onClick={() => {
-            setTranscriptLoadingAttemptVersion((version) => version + 1)
+            beginTranscriptLoadAttempt()
             startOnlineASRForCurrentTrack('manual')
           }}
         >

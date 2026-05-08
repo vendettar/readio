@@ -27,9 +27,9 @@ vi.mock('@tanstack/react-router', () => ({
 
 vi.mock('../../../hooks/useGlobalSearch', () => ({
   useGlobalSearch: () => ({
-    podcasts: [],
-    episodes: [],
-    local: [],
+    podcastSection: { items: [], status: 'idle' },
+    episodeSection: { items: [], status: 'idle' },
+    localSection: { items: [], status: 'idle' },
     isLoading: false,
     isEmpty: false,
   }),

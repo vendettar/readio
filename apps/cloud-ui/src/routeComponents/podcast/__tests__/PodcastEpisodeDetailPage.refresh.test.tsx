@@ -1,12 +1,12 @@
 import { render } from '@testing-library/react'
+import type React from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { createQueryClientWrapper } from '../../../__tests__/queryClient'
 import {
   makeEditorPickSnapshot,
-  makeFeedEpisode,
+  makeEpisode,
   makeMinimalPodcast,
 } from '../../../lib/discovery/__tests__/fixtures'
-import { normalizeFeedUrl } from '../../../lib/discovery/feedUrl'
 import PodcastEpisodeDetailPage from '../PodcastEpisodeDetailPage'
 
 const useEpisodeResolutionMock = vi.fn()
@@ -35,8 +35,8 @@ vi.mock('@/hooks/useEpisodeResolution', () => ({
     podcastId: string,
     episodeKey: string,
     country: string,
-    routeState: unknown
-  ) => useEpisodeResolutionMock(podcastId, episodeKey, country, routeState),
+    routeStateValue: unknown
+  ) => useEpisodeResolutionMock(podcastId, episodeKey, country, routeStateValue),
 }))
 
 vi.mock('@/store/exploreStore', () => ({
@@ -104,19 +104,17 @@ describe('PodcastEpisodeDetailPage canonical refresh', () => {
           title: 'Modern Love',
           author: 'The New York Times',
           artwork: 'https://example.com/show-600.jpg',
-          feedUrl: normalizeFeedUrl('https://feeds.simplecast.com/eHEJ08b1'),
         }),
         editorPickSnapshot: makeEditorPickSnapshot({
           title: 'Modern Love',
           author: 'The New York Times',
           artwork: 'https://example.com/show-600.jpg',
-          feedUrl: normalizeFeedUrl('https://feeds.simplecast.com/eHEJ08b1'),
           podcastItunesId: '1065559535',
           genres: [],
         }),
       },
-      episode: makeFeedEpisode({
-        episodeGuid: 'a8343698-1dca-4c63-bb5d-3e2a61522c2a',
+      episode: makeEpisode({
+        guid: 'a8343698-1dca-4c63-bb5d-3e2a61522c2a',
         title: 'Lindy West Thought She Couldn’t Handle Polyamory. She Was Wrong.',
         audioUrl: 'https://example.com/audio.mp3',
         pubDate: '2025-01-01T00:00:00.000Z',
@@ -140,7 +138,7 @@ describe('PodcastEpisodeDetailPage canonical refresh', () => {
         params: {
           country: 'us',
           id: '1065559535',
-          episodeKey: 'qDQ2mB3KTGO7XT4qYVIsKg', // Compact key for a8343698-1dca-4c63-bb5d-3e2a61522c2a
+          episodeKey: 'qDQ2mB3KTGO7XT4qYVIsKg',
         },
         replace: true,
       })

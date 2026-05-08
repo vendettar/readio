@@ -4,7 +4,6 @@ import type { EpisodeMetadata } from '../store/playerStore'
 import { usePlayerSurfaceStore } from '../store/playerSurfaceStore'
 import type { ASRCue } from './asr/types'
 import {
-  DB,
   type Favorite,
   isNavigableExplorePlaybackSession,
   type PlaybackSession,
@@ -14,6 +13,7 @@ import { buildEpisodeCompactKey } from './discovery/editorPicks'
 import { logError } from './logger'
 import { mapPlaybackSessionToEpisodeMetadata } from './player/episodeMetadata'
 import { loadSessionSubtitleCues } from './player/localSessionRestore'
+import { PlaybackRepository } from './repositories/PlaybackRepository'
 import {
   bumpPlaybackEpoch,
   getPlaybackEpoch,
@@ -84,20 +84,9 @@ export async function executeLocalSearchAction(
   switch (result.type) {
     case 'subscription': {
       const subscription = result.data as Subscription
-      const persistedCountry = normalizeCountryParam(subscription.countryAtSave)
-      if (!persistedCountry) {
-        if (import.meta.env.DEV) {
-          logError('[LocalSearch] Missing subscription.countryAtSave; skip deep-link', {
-            feedUrl: subscription.feedUrl,
-            id: subscription.id,
-          })
-        }
-        void deps.navigate({ to: '/subscriptions' })
-        return
-      }
       const showRoute = buildPodcastShowRoute({
-        country: persistedCountry,
-        podcastId: subscription.podcastItunesId ?? '',
+        country: subscription.countryAtSave,
+        podcastId: subscription.podcastItunesId,
       })
 
       if (showRoute) {
@@ -111,14 +100,11 @@ export async function executeLocalSearchAction(
     }
     case 'favorite': {
       const favorite = result.data as Favorite
-      const episodeRoute =
-        favorite.podcastItunesId && favorite.episodeGuid
-          ? buildLibraryEpisodeRoute({
-              countryAtSave: favorite.countryAtSave,
-              podcastItunesId: favorite.podcastItunesId,
-              episodeGuid: favorite.episodeGuid,
-            })
-          : null
+      const episodeRoute = buildLibraryEpisodeRoute({
+        countryAtSave: favorite.countryAtSave,
+        podcastItunesId: favorite.podcastItunesId,
+        episodeGuid: favorite.episodeGuid,
+      })
       if (episodeRoute) {
         void deps.navigate(episodeRoute)
         return
@@ -126,6 +112,10 @@ export async function executeLocalSearchAction(
 
       const favoritePolicy = deriveSurfacePolicyFromFavorite(favorite)
       applySurfacePolicy({ setPlayableContext, toDocked, toMini }, favoritePolicy)
+      const normalizedCountryAtSave = normalizeCountryParam(favorite.countryAtSave)
+      if (!normalizedCountryAtSave) {
+        return
+      }
 
       void playFavoriteWithDeps(
         {
@@ -136,7 +126,7 @@ export async function executeLocalSearchAction(
         },
         favorite,
         {
-          countryAtSave: favorite.countryAtSave,
+          countryAtSave: normalizedCountryAtSave,
         }
       )
       return
@@ -174,10 +164,10 @@ export async function executeLocalSearchAction(
 
       if (session.source === 'local' && session.audioId) {
         const currentEpoch = bumpPlaybackEpoch()
-        let audioBlob: Awaited<ReturnType<typeof DB.getAudioBlob>> | null = null
+        let audioBlob: Awaited<ReturnType<typeof PlaybackRepository.getAudioBlob>> | null = null
 
         try {
-          audioBlob = await DB.getAudioBlob(session.audioId)
+          audioBlob = await PlaybackRepository.getAudioBlob(session.audioId)
           if (getPlaybackEpoch() !== currentEpoch) return
         } catch (error) {
           if (getPlaybackEpoch() !== currentEpoch) return

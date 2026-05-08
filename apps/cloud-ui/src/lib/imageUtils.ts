@@ -41,7 +41,7 @@ export function getDiscoveryArtworkUrl(url: string | undefined, size: number = 6
     return url.replace(/\d+x\d+bb/, sizeString)
   }
 
-  // For non-Apple artwork URLs (like RSS feed images), return as-is
+  // For non-Apple artwork URLs, return as-is.
   return url
 }
 
