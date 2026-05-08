@@ -2,10 +2,9 @@
 // Hook for loading Settings page data
 
 import { useCallback, useEffect, useState } from 'react'
-import { DB, type PlaybackSession } from '../lib/dexieDb'
+import type { PlaybackSession } from '../lib/dexieDb'
 import { logError } from '../lib/logger'
-
-type StorageInfo = Awaited<ReturnType<typeof DB.getStorageInfo>>
+import { loadSettingsDataSnapshot, type StorageInfo } from '../lib/settingsDataService'
 
 export function useSettingsData() {
   const [storageInfo, setStorageInfo] = useState<StorageInfo | null>(null)
@@ -14,10 +13,9 @@ export function useSettingsData() {
 
   const reload = useCallback(async () => {
     try {
-      const info = await DB.getStorageInfo()
-      setStorageInfo(info)
-      const items = await DB.getAllPlaybackSessions()
-      setSessions(items)
+      const snapshot = await loadSettingsDataSnapshot()
+      setStorageInfo(snapshot.storageInfo)
+      setSessions(snapshot.sessions)
     } catch (err) {
       logError('[useSettingsData] Failed to load data:', err)
     } finally {

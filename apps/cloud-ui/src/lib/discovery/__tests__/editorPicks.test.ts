@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildEpisodeCompactKey,
-  buildSearchEpisodeRouteState,
   getCanonicalEditorPickPodcastID,
+  getEditorPickPodcastItunesId,
   getEditorPickRouteState,
-  getEpisodeGuid,
   matchesEditorPickRouteID,
 } from '../editorPicks'
 import { makeEditorPickPodcast } from './fixtures'
@@ -44,90 +43,53 @@ describe('editorPicks canonical identifiers', () => {
     expect(
       matchesEditorPickRouteID(
         makeEditorPickPodcast({
-          podcastItunesId: undefined,
+          podcastItunesId: '1200361736',
         }),
         '75075'
       )
     ).toBe(false)
   })
 
-  it('prefers episodeGuid for stable feed episode identity', () => {
+  it('returns podcastItunesId for stable identity', () => {
     expect(
-      getEpisodeGuid({
-        episodeGuid: 'episode-guid-with-more-than-32-chars-long-string',
-      })
-    ).toBe('episode-guid-with-more-than-32-chars-long-string')
+      getEditorPickPodcastItunesId(
+        makeEditorPickPodcast({
+          podcastItunesId: '1200361736',
+        })
+      )
+    ).toBe('1200361736')
   })
 
-  it('returns undefined when episodeGuid is absent', () => {
-    expect(
-      getEpisodeGuid({
-        episodeGuid: '',
-      })
-    ).toBeUndefined()
-  })
-
-  it('builds search episode route state with a typed episode snapshot', () => {
-    const state = buildSearchEpisodeRouteState({
-      title: 'Search Episode',
-      episodeUrl: 'https://example.com/search.mp3',
-      shortDescription: 'desc',
-      releaseDate: '2025-01-02',
-    })
-
-    expect(state).toEqual({
-      episodeSnapshot: {
-        title: 'Search Episode',
-        audioUrl: 'https://example.com/search.mp3',
-        description: 'desc',
-        pubDate: '2025-01-02',
-      },
-    })
-  })
-
-  it('parses route state when only episodeSnapshot is present', () => {
-    const state = getEditorPickRouteState({
-      episodeSnapshot: {
-        title: 'Search Episode',
-        audioUrl: 'https://example.com/search.mp3',
-      },
-    })
-
-    expect(state).toEqual({
-      episodeSnapshot: {
-        title: 'Search Episode',
-        audioUrl: 'https://example.com/search.mp3',
-      },
-    })
-  })
-
-  it('preserves both editorPickSnapshot and episodeSnapshot when both are valid', () => {
+  it('parses route state when a valid editorPickSnapshot is present and strips legacy episodeSnapshot', () => {
     const editorPickSnapshot = makeEditorPickPodcast({
       podcastItunesId: '1200361736',
     })
 
     const state = getEditorPickRouteState({
       editorPickSnapshot,
-      episodeSnapshot: {
-        title: 'Search Episode',
-        audioUrl: 'https://example.com/search.mp3',
-      },
+      episodeSnapshot: { title: 'Legacy Search Episode' },
     })
 
     expect(state).toEqual({
       editorPickSnapshot,
-      episodeSnapshot: {
-        title: 'Search Episode',
-        audioUrl: 'https://example.com/search.mp3',
-      },
     })
   })
 
-  it('rejects route state without a usable editor pick or episode snapshot', () => {
+  it('rejects legacy route state when only episodeSnapshot is present', () => {
     expect(
       getEditorPickRouteState({
         episodeSnapshot: {
-          title: '   ',
+          title: 'Search Episode',
+        },
+      })
+    ).toBeNull()
+  })
+
+  it('rejects route state without a usable editor pick snapshot', () => {
+    expect(
+      getEditorPickRouteState({
+        editorPickSnapshot: {
+          podcastItunesId: '   ',
         },
       })
     ).toBeNull()

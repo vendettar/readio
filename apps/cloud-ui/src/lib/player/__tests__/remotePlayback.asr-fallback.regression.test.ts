@@ -1,17 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
-import type { FeedEpisode } from '../../discovery'
+import type { Episode } from '../../discovery'
 import { downloadEpisode, removeDownloadedTrack } from '../../downloadService'
 import * as playbackSource from '../playbackSource'
-import { bumpPlaybackEpoch, playFeedEpisodeWithDeps } from '../remotePlayback'
+import { bumpPlaybackEpoch, playEpisodeWithDeps } from '../remotePlayback'
 
 // Mock dependencies
-vi.mock('../../downloadService', () => ({
-  downloadEpisode: vi.fn(),
-  removeDownloadedTrack: vi.fn().mockResolvedValue(true),
-  normalizePodcastAudioUrl: (url: string) => url,
-  findDownloadedTrack: vi.fn(),
-}))
+vi.mock('../../downloadService', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../downloadService')>()
+  return {
+    ...actual,
+    downloadEpisode: vi.fn(),
+    removeDownloadedTrack: vi.fn().mockResolvedValue(true),
+    normalizePodcastAudioUrl: (url: string) => url,
+    findDownloadedTrack: vi.fn(),
+  }
+})
 
 vi.mock('../../remoteTranscript', () => ({
   autoIngestEpisodeTranscript: vi.fn(),
@@ -38,19 +41,22 @@ describe('remotePlayback ASR-Fallback Regression', () => {
 
     const audioUrl = 'https://example.com/audio.mp3'
     // Ensure transcriptUrl is missing to trigger ASR blocking
-    const episode: FeedEpisode = {
-      episodeGuid: 'ep1',
+    const episode: Episode = {
+      guid: 'ep1',
       audioUrl,
       title: 'Test',
       description: 'Desc',
-      descriptionHtml: undefined,
       pubDate: '2025-01-01T00:00:00.000Z',
+      fileSize: 1024,
+      duration: 60,
+      explicit: false,
+      artworkUrl: 'https://example.com/episode-art.jpg',
+      link: 'https://example.com/episodes/ep1',
       transcriptUrl: undefined,
     }
     const podcast = {
       podcastItunesId: '123',
       title: 'Pod',
-      feedUrl: normalizeFeedUrl('https://feed.com'),
       author: 'Author',
       artwork: 'https://example.com/art.jpg',
       description: 'Description',
@@ -76,7 +82,7 @@ describe('remotePlayback ASR-Fallback Regression', () => {
 
     vi.mocked(downloadEpisode).mockResolvedValue({ ok: true, trackId: 'existing-id' })
 
-    await playFeedEpisodeWithDeps(
+    await playEpisodeWithDeps(
       {
         setAudioUrl: setAudioUrlSpy,
         play: playSpy,

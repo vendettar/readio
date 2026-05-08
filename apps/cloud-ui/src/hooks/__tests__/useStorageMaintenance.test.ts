@@ -1,45 +1,26 @@
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { SETTINGS_STORAGE_KEY } from '../../lib/schemas/settings'
+import {
+  clearPlaybackSessionAudioCacheForMaintenance,
+  deletePlaybackSessionForMaintenance,
+  wipeAllPersistentStorage,
+  wipeStoredAudioCache,
+} from '../../lib/storageMaintenanceService'
 import { useStorageMaintenance } from '../useStorageMaintenance'
 
 const {
-  clearAllCredentialsMock,
-  clearAllDataMock,
-  clearAllAudioBlobsMock,
-  clearPlaybackSessionAudioCacheMock,
-  clearDictCacheMemoryMock,
   toastSuccessKeyMock,
   toastErrorKeyMock,
 } = vi.hoisted(() => ({
-  clearAllCredentialsMock: vi.fn(async () => {}),
-  clearAllDataMock: vi.fn(async () => {}),
-  clearAllAudioBlobsMock: vi.fn(async () => {}),
-  clearPlaybackSessionAudioCacheMock: vi.fn(async () => false),
-  clearDictCacheMemoryMock: vi.fn(async () => {}),
   toastSuccessKeyMock: vi.fn(),
   toastErrorKeyMock: vi.fn(),
 }))
 
-vi.mock('../../lib/db/credentialsRepository', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../lib/db/credentialsRepository')>()
-  return {
-    ...actual,
-    clearAllCredentials: clearAllCredentialsMock,
-  }
-})
-
-vi.mock('../../lib/dexieDb', () => ({
-  DB: {
-    clearAllData: clearAllDataMock,
-    clearAllAudioBlobs: clearAllAudioBlobsMock,
-    clearPlaybackSessionAudioCache: clearPlaybackSessionAudioCacheMock,
-    deletePlaybackSession: vi.fn(async () => {}),
-  },
-}))
-
-vi.mock('../../lib/selection/dictCache', () => ({
-  clearDictCacheMemory: clearDictCacheMemoryMock,
+vi.mock('../../lib/storageMaintenanceService', () => ({
+  deletePlaybackSessionForMaintenance: vi.fn(async () => {}),
+  clearPlaybackSessionAudioCacheForMaintenance: vi.fn(async () => false),
+  wipeAllPersistentStorage: vi.fn(async () => {}),
+  wipeStoredAudioCache: vi.fn(async () => {}),
 }))
 
 vi.mock('../../lib/logger', () => ({
@@ -56,17 +37,9 @@ vi.mock('../../lib/toast', () => ({
 describe('useStorageMaintenance', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    localStorage.clear()
   })
 
-  it('wipeAll clears db and local settings/obsolete browser-only key', async () => {
-    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify({ proxyUrl: 'https://proxy.local' }))
-    const OBSOLETE_BROWSER_STORAGE_KEY = 'readio-user-credentials'
-    localStorage.setItem(
-      OBSOLETE_BROWSER_STORAGE_KEY,
-      JSON.stringify({ translateKey: 'sk-test', groqKey: 'gsk_test' })
-    )
-
+  it('wipeAll delegates to service and reloads on success', async () => {
     const reload = vi.fn()
     const { result } = renderHook(() => useStorageMaintenance({ reload }))
 
@@ -74,20 +47,7 @@ describe('useStorageMaintenance', () => {
       await result.current.wipeAll()
     })
 
-    expect(clearAllCredentialsMock).toHaveBeenCalledTimes(1)
-    expect(clearAllDataMock).toHaveBeenCalledTimes(1)
-    expect(clearDictCacheMemoryMock).toHaveBeenCalledTimes(1)
-
-    // In some environments, wipeAll might trigger a re-parse that auto-selects groq.
-    // We check that at least it's not the OLD value.
-    const stored = localStorage.getItem(SETTINGS_STORAGE_KEY)
-    if (stored) {
-      expect(JSON.parse(stored).proxyUrl).toBeUndefined()
-    } else {
-      expect(stored).toBeNull()
-    }
-
-    expect(localStorage.getItem(OBSOLETE_BROWSER_STORAGE_KEY)).toBeNull()
+    expect(wipeAllPersistentStorage).toHaveBeenCalledTimes(1)
     expect(reload).toHaveBeenCalledTimes(1)
     expect(toastSuccessKeyMock).toHaveBeenCalledWith('toastAllDataCleared')
   })
@@ -100,12 +60,12 @@ describe('useStorageMaintenance', () => {
       await result.current.wipeAudioCache()
     })
 
-    expect(clearAllAudioBlobsMock).toHaveBeenCalledTimes(1)
-    expect(clearAllCredentialsMock).not.toHaveBeenCalled()
+    expect(wipeStoredAudioCache).toHaveBeenCalledTimes(1)
+    expect(wipeAllPersistentStorage).not.toHaveBeenCalled()
   })
 
   it('clearSessionCache delegates to safe DB API and reloads only when cleared', async () => {
-    clearPlaybackSessionAudioCacheMock.mockResolvedValueOnce(true)
+    vi.mocked(clearPlaybackSessionAudioCacheForMaintenance).mockResolvedValueOnce(true)
     const reload = vi.fn()
     const { result } = renderHook(() => useStorageMaintenance({ reload }))
 
@@ -113,13 +73,13 @@ describe('useStorageMaintenance', () => {
       await result.current.clearSessionCache('session-1')
     })
 
-    expect(clearPlaybackSessionAudioCacheMock).toHaveBeenCalledWith('session-1')
+    expect(clearPlaybackSessionAudioCacheForMaintenance).toHaveBeenCalledWith('session-1')
     expect(toastSuccessKeyMock).toHaveBeenCalledWith('toastAudioRemoved')
     expect(reload).toHaveBeenCalledTimes(1)
   })
 
   it('clearSessionCache remains no-op when no cache exists', async () => {
-    clearPlaybackSessionAudioCacheMock.mockResolvedValueOnce(false)
+    vi.mocked(clearPlaybackSessionAudioCacheForMaintenance).mockResolvedValueOnce(false)
     const reload = vi.fn()
     const { result } = renderHook(() => useStorageMaintenance({ reload }))
 
@@ -127,13 +87,15 @@ describe('useStorageMaintenance', () => {
       await result.current.clearSessionCache('session-2')
     })
 
-    expect(clearPlaybackSessionAudioCacheMock).toHaveBeenCalledWith('session-2')
+    expect(clearPlaybackSessionAudioCacheForMaintenance).toHaveBeenCalledWith('session-2')
     expect(toastSuccessKeyMock).not.toHaveBeenCalledWith('toastAudioRemoved')
     expect(reload).not.toHaveBeenCalled()
   })
 
   it('clearSessionCache reports error when DB API throws', async () => {
-    clearPlaybackSessionAudioCacheMock.mockRejectedValueOnce(new Error('clear failed'))
+    vi.mocked(clearPlaybackSessionAudioCacheForMaintenance).mockRejectedValueOnce(
+      new Error('clear failed')
+    )
     const reload = vi.fn()
     const { result } = renderHook(() => useStorageMaintenance({ reload }))
 
@@ -143,5 +105,18 @@ describe('useStorageMaintenance', () => {
 
     expect(toastErrorKeyMock).toHaveBeenCalledWith('toastRemoveDownloadedAudioFailed')
     expect(reload).not.toHaveBeenCalled()
+  })
+
+  it('deleteSession delegates to service and reloads on success', async () => {
+    const reload = vi.fn()
+    const { result } = renderHook(() => useStorageMaintenance({ reload }))
+
+    await act(async () => {
+      await result.current.deleteSession('session-delete')
+    })
+
+    expect(deletePlaybackSessionForMaintenance).toHaveBeenCalledWith('session-delete')
+    expect(toastSuccessKeyMock).toHaveBeenCalledWith('toastDeleted')
+    expect(reload).toHaveBeenCalledTimes(1)
   })
 })

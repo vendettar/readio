@@ -1,4 +1,5 @@
-import type { EpisodeMetadata } from '../../store/playerStore'
+import type { EpisodeMetadata } from './playbackMetadata'
+import { createCanonicalRemoteEpisodeMetadata, normalizeCountryAtSave } from './playbackMetadata'
 import type { ExplorePlaybackSession, PlaybackSession } from '../dexieDb'
 
 export interface RestoredPlaybackState {
@@ -47,32 +48,34 @@ export function buildRestoredRemoteSessionState(input: {
   localTrackId?: string | null
   originalAudioUrl?: string | null
 }): RestoredPlaybackState {
-  const episodeMetadata: EpisodeMetadata = {
-    description: input.session.description,
-    showTitle: input.session.podcastTitle,
-    podcastFeedUrl: input.session.podcastFeedUrl,
-    countryAtSave: input.session.countryAtSave,
-    transcriptUrl: input.session.transcriptUrl,
-    artworkUrl: input.session.artworkUrl,
-    publishedAt: input.session.publishedAt,
-    durationSeconds: input.session.durationSeconds,
-    episodeGuid: input.session.episodeGuid,
-    podcastItunesId: input.session.podcastItunesId,
-    originalAudioUrl: input.originalAudioUrl || input.session.audioUrl || undefined,
-  }
+  const countryAtSave = normalizeCountryAtSave(input.session.countryAtSave)
+  const episodeMetadata = countryAtSave
+    ? createCanonicalRemoteEpisodeMetadata({
+        description: input.session.description,
+        showTitle: input.session.showTitle,
+        countryAtSave,
+        transcriptUrl: input.session.transcriptUrl,
+        artworkUrl: input.session.artworkUrl,
+        publishedAt: input.session.publishedAt,
+        durationSeconds: input.session.durationSeconds,
+        episodeGuid: input.session.episodeGuid,
+        podcastItunesId: input.session.podcastItunesId,
+        originalAudioUrl: input.originalAudioUrl ?? input.session.audioUrl,
+      })
+    : null
 
   return {
     sessionId: input.session.id,
     audioUrl: input.audioUrl,
     playbackSourceUrl: input.audioUrl,
     audioLoaded: true,
-    audioTitle: input.session.title || '',
+    audioTitle: input.session.title,
     coverArtUrl: input.coverArtUrl,
     progress: input.session.progress,
     status: 'paused',
     isPlaying: false,
     ...(input.activeBlobUrls ? { activeBlobUrls: input.activeBlobUrls } : {}),
     ...(input.localTrackId !== undefined ? { localTrackId: input.localTrackId } : {}),
-    episodeMetadata,
+    ...(episodeMetadata ? { episodeMetadata } : {}),
   }
 }

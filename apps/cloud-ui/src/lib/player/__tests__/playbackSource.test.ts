@@ -1,24 +1,22 @@
 import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
 // ─── Imports ─────────────────────────────────────────────────────────
 
-import { db } from '../../dexieDb'
 import { findDownloadedTrack } from '../../downloadService'
+import { PlaybackRepository } from '../../repositories/PlaybackRepository'
 import {
   __dropPlaybackSourceObjectUrl,
   __resetPlaybackSourceCache,
   resolvePlaybackSource,
 } from '../playbackSource'
 
-vi.mock('../../dexieDb', () => ({
-  db: {
-    audioBlobs: {
-      get: vi.fn(),
-    },
-  },
-}))
-
 vi.mock('../../downloadService', () => ({
   findDownloadedTrack: vi.fn(),
+}))
+
+vi.mock('../../repositories/PlaybackRepository', () => ({
+  PlaybackRepository: {
+    getAudioBlob: vi.fn(),
+  },
 }))
 
 describe('resolvePlaybackSource', () => {
@@ -64,7 +62,7 @@ describe('resolvePlaybackSource', () => {
       sizeBytes: 0,
       createdAt: 0,
     } as unknown as import('../../db/types').PodcastDownload)
-    vi.mocked(db.audioBlobs.get as unknown as Mock).mockResolvedValue(undefined)
+    vi.mocked(PlaybackRepository.getAudioBlob as unknown as Mock).mockResolvedValue(undefined)
 
     const result = await resolvePlaybackSource('https://example.com/audio.mp3')
     expect(result).toEqual({ url: 'https://example.com/audio.mp3', trackId: 'track_1' })
@@ -83,7 +81,7 @@ describe('resolvePlaybackSource', () => {
     )
 
     const blobMock = new Blob(['dummy audio content'], { type: 'audio/mpeg' })
-    vi.mocked(db.audioBlobs.get as unknown as Mock).mockResolvedValue({
+    vi.mocked(PlaybackRepository.getAudioBlob as unknown as Mock).mockResolvedValue({
       blob: blobMock,
     })
 
@@ -106,7 +104,9 @@ describe('resolvePlaybackSource', () => {
     )
 
     const blobMock = new Blob([], { type: 'audio/mpeg' })
-    vi.mocked(db.audioBlobs.get as unknown as Mock).mockResolvedValue({ blob: blobMock })
+    vi.mocked(PlaybackRepository.getAudioBlob as unknown as Mock).mockResolvedValue({
+      blob: blobMock,
+    })
 
     let seq = 0
     vi.spyOn(global.URL, 'createObjectURL').mockImplementation(() => `blob:url-${++seq}`)

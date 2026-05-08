@@ -5,9 +5,9 @@ import type { FileTrack } from '../../lib/dexieDb'
 import { useFilePlayback } from '../useFilePlayback'
 
 const navigateMock = vi.fn()
-const getAudioBlobMock = vi.fn()
-const upsertPlaybackSessionMock = vi.fn()
-const parseSubtitlesMock = vi.fn()
+const prepareLocalFilePlaybackMock = vi.fn()
+const persistLocalFilePlaybackSessionMock = vi.fn()
+const updateFileTrackMock = vi.fn()
 const logErrorMock = vi.fn()
 const logWarnMock = vi.fn()
 
@@ -30,15 +30,19 @@ vi.mock('@tanstack/react-router', () => ({
   useRouter: () => ({ navigate: navigateMock }),
 }))
 
-vi.mock('../../lib/dexieDb', () => ({
-  DB: {
-    getAudioBlob: (...args: unknown[]) => getAudioBlobMock(...args),
-    upsertPlaybackSession: (...args: unknown[]) => upsertPlaybackSessionMock(...args),
+vi.mock('../../lib/player/localFilePlaybackService', () => ({
+  LOCAL_FILE_PLAYBACK_PREPARE_REASON: {
+    AUDIO_NOT_FOUND: 'audio_not_found',
   },
+  prepareLocalFilePlayback: (...args: unknown[]) => prepareLocalFilePlaybackMock(...args),
+  persistLocalFilePlaybackSession: (...args: unknown[]) =>
+    persistLocalFilePlaybackSessionMock(...args),
 }))
 
-vi.mock('../../lib/subtitles', () => ({
-  parseSubtitles: (...args: unknown[]) => parseSubtitlesMock(...args),
+vi.mock('../../lib/repositories/FilesRepository', () => ({
+  FilesRepository: {
+    updateFileTrack: (...args: unknown[]) => updateFileTrackMock(...args),
+  },
 }))
 
 vi.mock('../../lib/logger', () => ({
@@ -67,8 +71,22 @@ vi.mock('../../store/playerSurfaceStore', () => ({
 describe('useFilePlayback', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    getAudioBlobMock.mockResolvedValue({ blob: new Blob(['audio']), id: 'audio-1', storedAt: 1 })
-    upsertPlaybackSessionMock.mockResolvedValue(undefined)
+    prepareLocalFilePlaybackMock.mockResolvedValue({
+      ok: true,
+      payload: {
+        audioBlob: new Blob(['audio']),
+        artwork: null,
+        subtitles: [],
+        sessionId: 'local-track-track-1',
+        metadata: {
+          kind: 'local',
+          durationSeconds: 225,
+        },
+        selectedSubtitleContentId: null,
+      },
+    })
+    persistLocalFilePlaybackSessionMock.mockResolvedValue('local-track-track-1')
+    updateFileTrackMock.mockResolvedValue(undefined)
   })
 
   it('enters docked mode for local file playback even when subtitles are absent', async () => {
@@ -95,14 +113,32 @@ describe('useFilePlayback', () => {
       'local-track-track-1',
       undefined,
       expect.objectContaining({
+        kind: 'local',
         durationSeconds: 225,
       })
     )
     expect(transcriptState.setSubtitles).toHaveBeenCalledWith([])
-    expect(parseSubtitlesMock).not.toHaveBeenCalled()
     expect(surfaceState.setPlayableContext).toHaveBeenCalledWith(true)
     expect(surfaceState.toDocked).toHaveBeenCalled()
     expect(playerState.play).toHaveBeenCalled()
+    expect(persistLocalFilePlaybackSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        track,
+        sessionId: 'local-track-track-1',
+      })
+    )
     expect(navigateMock).toHaveBeenCalledWith({ to: '/' })
+  })
+
+  it('updates the active subtitle through FilesRepository', async () => {
+    const { result } = renderHook(() => useFilePlayback())
+
+    await act(async () => {
+      await result.current.handleSetActiveSubtitle('track-1', 'file-sub-2')
+    })
+
+    expect(updateFileTrackMock).toHaveBeenCalledWith('track-1', {
+      activeSubtitleId: 'file-sub-2',
+    })
   })
 })

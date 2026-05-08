@@ -2,6 +2,24 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { DB, db } from '../../dexieDb'
 import { isPodcastDownloadTrack, isUserUploadTrack, TRACK_SOURCE } from '../types'
 
+function makePodcastDownloadInput(overrides: Record<string, unknown> = {}) {
+  return {
+    name: 'Download',
+    audioId: 'a1',
+    sourceUrlNormalized: 'https://example.com/audio.mp3',
+    downloadedAt: Date.now(),
+    sizeBytes: 100,
+    countryAtSave: 'US',
+    sourcePodcastItunesId: 'podcast-1',
+    sourceEpisodeGuid: 'episode-guid-1',
+    sourcePodcastTitle: 'Podcast Title',
+    sourceEpisodeTitle: 'Episode Title',
+    sourceDescription: 'Episode description',
+    sourceArtworkUrl: 'https://example.com/cover.jpg',
+    ...overrides,
+  }
+}
+
 describe('Track Type Guards and Delete Protection', () => {
   beforeEach(async () => {
     await DB.clearAllData()
@@ -30,14 +48,9 @@ describe('Track Type Guards and Delete Protection', () => {
 
   describe('Fail-Closed Delete Protection', () => {
     it('deleteFileTrack blocks podcast_download deletion', async () => {
-      const downloadId = await DB.addPodcastDownload({
-        name: 'Download',
-        audioId: 'a1',
-        sourceUrlNormalized: 'url1',
-        downloadedAt: Date.now(),
-        sizeBytes: 100,
-        countryAtSave: 'US',
-      })
+      const downloadId = await DB.addPodcastDownload(
+        makePodcastDownloadInput({ sourceUrlNormalized: 'https://example.com/url1.mp3' })
+      )
 
       // Try to delete via deleteFileTrack
       await DB.deleteFileTrack(downloadId)
@@ -67,14 +80,12 @@ describe('Track Type Guards and Delete Protection', () => {
 
     it('removePodcastDownloadWithCleanup clears local session refs and removes unreferenced blob', async () => {
       const audioId = await DB.addAudioBlob(new Blob(['audio']), 'download.mp3')
-      const downloadId = await DB.addPodcastDownload({
-        name: 'Download',
-        audioId,
-        sourceUrlNormalized: 'https://example.com/audio.mp3',
-        downloadedAt: Date.now(),
-        sizeBytes: 100,
-        countryAtSave: 'US',
-      })
+      const downloadId = await DB.addPodcastDownload(
+        makePodcastDownloadInput({
+          audioId,
+          sourceUrlNormalized: 'https://example.com/audio.mp3',
+        })
+      )
 
       await DB.createPlaybackSession({
         id: 'session-local-download',
@@ -97,22 +108,25 @@ describe('Track Type Guards and Delete Protection', () => {
 
     it('removePodcastDownloadWithCleanup preserves blob when still referenced by explore session', async () => {
       const audioId = await DB.addAudioBlob(new Blob(['audio']), 'shared.mp3')
-      const downloadId = await DB.addPodcastDownload({
-        name: 'Download',
-        audioId,
-        sourceUrlNormalized: 'https://example.com/shared.mp3',
-        downloadedAt: Date.now(),
-        sizeBytes: 100,
-        countryAtSave: 'US',
-      })
+      const downloadId = await DB.addPodcastDownload(
+        makePodcastDownloadInput({
+          audioId,
+          sourceUrlNormalized: 'https://example.com/shared.mp3',
+        })
+      )
 
       await DB.createPlaybackSession({
         id: 'session-explore-shared',
         source: 'explore',
         title: 'Explore',
+        audioUrl: 'https://example.com/shared.mp3',
         audioId,
         hasAudioBlob: true,
         localTrackId: null,
+        artworkUrl: 'https://example.com/shared-cover.jpg',
+        showTitle: 'Shared Podcast',
+        episodeGuid: 'shared-episode-guid',
+        podcastItunesId: 'shared-podcast-id',
         countryAtSave: 'us',
       })
 

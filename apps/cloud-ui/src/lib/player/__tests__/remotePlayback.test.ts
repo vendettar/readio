@@ -1,13 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
 import { useTranscriptStore } from '../../../store/transcriptStore'
 import { TRACK_SOURCE } from '../../db/types'
 import type { Favorite, PlaybackSession } from '../../dexieDb'
-import type { FeedEpisode, Podcast, SearchEpisode } from '../../discovery'
+import type { Episode, Podcast, SearchEpisode } from '../../discovery'
 import { PLAYBACK_REQUEST_MODE } from '../playbackMode'
 import {
+  playEpisodeWithDeps,
   playFavoriteWithDeps,
-  playFeedEpisodeWithDeps,
   playHistorySessionWithDeps,
   playSearchEpisodeWithDeps,
   playStreamWithoutTranscriptWithDeps,
@@ -15,13 +14,18 @@ import {
 
 const TEST_COUNTRY = 'us'
 
-function makeFeedEpisode(overrides: Partial<FeedEpisode> = {}): FeedEpisode {
+function makeEpisode(overrides: Partial<Episode> = {}): Episode {
   return {
-    episodeGuid: 'test-ep',
+    guid: 'test-ep',
     title: 'Test Episode',
     description: 'Test description',
     audioUrl: 'https://example.com/audio.mp3',
     pubDate: '2024-01-01T00:00:00.000Z',
+    artworkUrl: 'https://example.com/episode-art.jpg',
+    fileSize: 1024,
+    duration: 120,
+    explicit: false,
+    link: 'https://example.com/episodes/test-ep',
     ...overrides,
   }
 }
@@ -33,7 +37,6 @@ function makePodcast(overrides: Partial<Podcast> = {}): Podcast {
     author: 'Test Author',
     artwork: 'https://example.com/art.jpg',
     description: 'Test description',
-    feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
     lastUpdateTime: 1704067200,
     episodeCount: 10,
     language: 'en',
@@ -75,16 +78,49 @@ vi.mock('../../dexieDb', () => ({
   },
 }))
 
-const { getJsonMock, downloadEpisodeMock } = vi.hoisted(() => ({
+const { getJsonMock, downloadEpisodeMock, buildDownloadJobOptionsFromCanonicalRemoteMetadataMock } =
+  vi.hoisted(() => ({
   getJsonMock: vi.fn().mockReturnValue(null),
   downloadEpisodeMock: vi.fn().mockResolvedValue({ ok: true }),
-}))
+  buildDownloadJobOptionsFromCanonicalRemoteMetadataMock: vi.fn((input: Record<string, unknown>) => {
+    const metadata = (input.metadata as Record<string, unknown> | null | undefined) ?? null
+
+    if (
+      typeof input.audioUrl !== 'string' ||
+      typeof input.episodeTitle !== 'string' ||
+      typeof metadata?.showTitle !== 'string' ||
+      typeof metadata.artworkUrl !== 'string' ||
+      typeof metadata.countryAtSave !== 'string' ||
+      typeof metadata.podcastItunesId !== 'string' ||
+      typeof metadata.episodeGuid !== 'string'
+    ) {
+      return null
+    }
+
+    return {
+      audioUrl: input.audioUrl,
+      episodeTitle: input.episodeTitle,
+      episodeDescription: metadata.description ?? '',
+      showTitle: metadata.showTitle,
+      artworkUrl: metadata.artworkUrl,
+      countryAtSave: metadata.countryAtSave,
+      podcastItunesId: metadata.podcastItunesId,
+      episodeGuid: metadata.episodeGuid,
+      durationSeconds:
+        typeof metadata.durationSeconds === 'number' ? metadata.durationSeconds : undefined,
+      transcriptUrl: typeof metadata.transcriptUrl === 'string' ? metadata.transcriptUrl : undefined,
+      signal: input.signal,
+    }
+  }),
+  }))
 
 vi.mock('../../storage', () => ({
   getJson: (...args: unknown[]) => getJsonMock(...args),
 }))
 
 vi.mock('../../downloadService', () => ({
+  buildDownloadJobOptionsFromCanonicalRemoteMetadata: (input: Record<string, unknown>) =>
+    buildDownloadJobOptionsFromCanonicalRemoteMetadataMock(input),
   downloadEpisode: (...args: unknown[]) => downloadEpisodeMock(...args),
 }))
 
@@ -104,6 +140,7 @@ describe('remotePlayback', () => {
     autoIngestEpisodeTranscriptMock.mockReset()
     getJsonMock.mockReset().mockReturnValue(null)
     downloadEpisodeMock.mockReset().mockResolvedValue({ ok: true })
+    buildDownloadJobOptionsFromCanonicalRemoteMetadataMock.mockClear()
     trackExistsMock.mockReset().mockResolvedValue(true)
     useTranscriptStore.getState().resetTranscript()
   })
@@ -113,15 +150,15 @@ describe('remotePlayback', () => {
     const play = vi.fn()
     const pause = vi.fn()
     const setPlaybackTrackId = vi.fn()
-    const episode = makeFeedEpisode({
-      episodeGuid: 'ep-1',
+    const episode = makeEpisode({
+      guid: 'ep-1',
       title: 'Episode',
       audioUrl: 'https://example.com/audio.mp3',
       transcriptUrl: 'https://example.com/ep.srt',
     })
     const podcast = makePodcast({ title: 'Podcast' })
 
-    const startPromise = playFeedEpisodeWithDeps(
+    const startPromise = playEpisodeWithDeps(
       { setAudioUrl, play, pause, setPlaybackTrackId },
       episode,
       podcast,
@@ -149,14 +186,14 @@ describe('remotePlayback', () => {
     const play = vi.fn()
     const pause = vi.fn()
     const setPlaybackTrackId = vi.fn()
-    const episode = makeFeedEpisode({
-      episodeGuid: 'ep-transcript-first',
+    const episode = makeEpisode({
+      guid: 'ep-transcript-first',
       title: 'Transcript First Episode',
       audioUrl: 'https://example.com/transcript-first.mp3',
       transcriptUrl: 'https://example.com/transcript-first.vtt',
     })
 
-    await playFeedEpisodeWithDeps(
+    await playEpisodeWithDeps(
       { setAudioUrl, play, pause, setPlaybackTrackId },
       episode,
       makePodcast({
@@ -164,7 +201,6 @@ describe('remotePlayback', () => {
         author: 'Author',
         artwork: 'https://example.com/art.jpg',
         description: 'Description',
-        feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
         lastUpdateTime: 1700000000000,
         podcastItunesId: '12345',
         episodeCount: 10,
@@ -189,9 +225,9 @@ describe('remotePlayback', () => {
     const pause = vi.fn()
     const setPlaybackTrackId = vi.fn()
 
-    const episode = makeFeedEpisode({ audioUrl: 'https://example.com/no-transcript.mp3' })
+    const episode = makeEpisode({ audioUrl: 'https://example.com/no-transcript.mp3' })
 
-    await playFeedEpisodeWithDeps(
+    await playEpisodeWithDeps(
       { setAudioUrl, play, pause, setPlaybackTrackId },
       episode,
       makePodcast(),
@@ -220,8 +256,8 @@ describe('remotePlayback', () => {
     const pause = vi.fn()
     const episode = {
       podcastItunesId: '7',
-      episodeUrl: 'https://example.com/search.mp3',
-      episodeGuid: 'guid-999',
+      audioUrl: 'https://example.com/search.mp3',
+      guid: 'guid-999',
       title: 'Search',
       showTitle: 'Podcast',
       artwork: 'https://example.com/artwork.jpg',
@@ -245,18 +281,23 @@ describe('remotePlayback', () => {
     const setAudioUrl = vi.fn()
     const play = vi.fn()
     const pause = vi.fn()
-    const favorite = {
+    const favorite: Favorite = {
       id: 'fav-1',
-      key: 'k',
-      feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
+      key: '123::favorite-guid-1',
       audioUrl: 'https://example.com/favorite.mp3',
       episodeTitle: 'Favorite',
       podcastTitle: 'Podcast',
       artworkUrl: 'https://example.com/art.jpg',
+      episodeArtworkUrl: 'https://example.com/ep-art.jpg',
       addedAt: Date.now(),
+      description: 'Test description',
+      pubDate: '2025-02-01',
+      durationSeconds: 180,
+      podcastItunesId: '123',
+      episodeGuid: 'favorite-guid-1',
       transcriptUrl: 'https://example.com/favorite.srt',
       countryAtSave: 'us',
-    } as Favorite
+    }
 
     await playFavoriteWithDeps({ setAudioUrl, play, pause }, favorite, {
       countryAtSave: TEST_COUNTRY,
@@ -265,7 +306,7 @@ describe('remotePlayback', () => {
     expect(setAudioUrl.mock.calls[0]).toEqual([
       null,
       'Favorite',
-      'https://example.com/art.jpg',
+      'https://example.com/ep-art.jpg',
       expect.objectContaining({
         originalAudioUrl: 'https://example.com/favorite.mp3',
         transcriptUrl: 'https://example.com/favorite.srt',
@@ -275,7 +316,7 @@ describe('remotePlayback', () => {
     expect(setAudioUrl.mock.calls[1]).toEqual([
       'https://example.com/favorite.mp3',
       'Favorite',
-      'https://example.com/art.jpg',
+      'https://example.com/ep-art.jpg',
       expect.any(Object),
       true,
     ])
@@ -343,13 +384,13 @@ describe('remotePlayback', () => {
     const pause = vi.fn()
     const deps = { setAudioUrl, play, pause }
 
-    const ep1 = makeFeedEpisode({ audioUrl: 'https://example.com/slow.mp3', title: 'Slow' })
-    const ep2 = makeFeedEpisode({ audioUrl: 'https://example.com/fast.mp3', title: 'Fast' })
+    const ep1 = makeEpisode({ audioUrl: 'https://example.com/slow.mp3', title: 'Slow' })
+    const ep2 = makeEpisode({ audioUrl: 'https://example.com/fast.mp3', title: 'Fast' })
     const pod = makePodcast({ title: 'Pod' })
 
     // Start slow playback, then immediately start fast playback
-    const p1 = playFeedEpisodeWithDeps(deps, ep1, pod, { countryAtSave: TEST_COUNTRY })
-    const p2 = playFeedEpisodeWithDeps(deps, ep2, pod, { countryAtSave: TEST_COUNTRY })
+    const p1 = playEpisodeWithDeps(deps, ep1, pod, { countryAtSave: TEST_COUNTRY })
+    const p2 = playEpisodeWithDeps(deps, ep2, pod, { countryAtSave: TEST_COUNTRY })
 
     await Promise.all([p1, p2])
 
@@ -377,19 +418,29 @@ describe('remotePlayback', () => {
     const play = vi.fn()
     const pause = vi.fn()
 
-    const ep1: FeedEpisode = {
-      episodeGuid: 'ep-1',
+    const ep1: Episode = {
+      guid: 'ep-1',
       title: 'Slow Episode',
       description: 'Description',
       audioUrl: 'https://example.com/slow.mp3',
       pubDate: '2024-01-01T00:00:00.000Z',
+      artworkUrl: 'https://example.com/slow-art.jpg',
+      fileSize: 1024,
+      duration: 120,
+      explicit: false,
+      link: 'https://example.com/episodes/slow',
     }
-    const ep2: FeedEpisode = {
-      episodeGuid: 'ep-2',
+    const ep2: Episode = {
+      guid: 'ep-2',
       title: 'Fast Episode',
       description: 'Description',
       audioUrl: 'https://example.com/fast.mp3',
       pubDate: '2024-01-02T00:00:00.000Z',
+      artworkUrl: 'https://example.com/fast-art.jpg',
+      fileSize: 1024,
+      duration: 120,
+      explicit: false,
+      link: 'https://example.com/episodes/fast',
     }
     const pod = makePodcast({ title: 'Podcast' })
 
@@ -401,11 +452,11 @@ describe('remotePlayback', () => {
       return { ok: true }
     })
 
-    const p1 = playFeedEpisodeWithDeps({ setAudioUrl, play, pause }, ep1, pod, {
+    const p1 = playEpisodeWithDeps({ setAudioUrl, play, pause }, ep1, pod, {
       countryAtSave: TEST_COUNTRY,
     })
     // Synchronously bump epoch by starting ep2 immediately
-    const p2 = playFeedEpisodeWithDeps({ setAudioUrl, play, pause }, ep2, pod, {
+    const p2 = playEpisodeWithDeps({ setAudioUrl, play, pause }, ep2, pod, {
       countryAtSave: TEST_COUNTRY,
     })
 
@@ -434,12 +485,12 @@ describe('remotePlayback', () => {
     const play = vi.fn()
     const pause = vi.fn()
 
-    const ep: FeedEpisode = makeFeedEpisode({
+    const ep: Episode = makeEpisode({
       title: 'Failed Episode',
       audioUrl: 'https://example.com/fail.mp3',
     })
 
-    await playFeedEpisodeWithDeps({ setAudioUrl, play, pause }, ep, makePodcast(), {
+    await playEpisodeWithDeps({ setAudioUrl, play, pause }, ep, makePodcast(), {
       countryAtSave: TEST_COUNTRY,
     })
 
@@ -456,8 +507,8 @@ describe('remotePlayback', () => {
     const play = vi.fn()
     const pause = vi.fn()
 
-    const ep = makeFeedEpisode({ audioUrl: 'https://example.com/audio.mp3' })
-    await playFeedEpisodeWithDeps({ setAudioUrl, play, pause }, ep, makePodcast(), {
+    const ep = makeEpisode({ audioUrl: 'https://example.com/audio.mp3' })
+    await playEpisodeWithDeps({ setAudioUrl, play, pause }, ep, makePodcast(), {
       countryAtSave: TEST_COUNTRY,
     })
 
@@ -473,12 +524,12 @@ describe('remotePlayback', () => {
     const setAudioUrl = vi.fn()
     const play = vi.fn()
     const pause = vi.fn()
-    const episode: FeedEpisode = makeFeedEpisode({
+    const episode: Episode = makeEpisode({
       audioUrl: 'https://example.com/no-transcript.mp3',
       title: 'Stream',
     })
 
-    await playFeedEpisodeWithDeps({ setAudioUrl, play, pause }, episode, makePodcast(), {
+    await playEpisodeWithDeps({ setAudioUrl, play, pause }, episode, makePodcast(), {
       countryAtSave: TEST_COUNTRY,
       mode: PLAYBACK_REQUEST_MODE.STREAM_WITHOUT_TRANSCRIPT,
     })
@@ -501,12 +552,12 @@ describe('remotePlayback', () => {
     const play = vi.fn()
     const pause = vi.fn()
     const setPlaybackTrackId = vi.fn()
-    const episode: FeedEpisode = makeFeedEpisode({
+    const episode: Episode = makeEpisode({
       audioUrl: 'https://example.com/already-downloaded.mp3',
       title: 'Downloaded Episode',
     })
 
-    await playFeedEpisodeWithDeps(
+    await playEpisodeWithDeps(
       { setAudioUrl, play, pause, setPlaybackTrackId },
       episode,
       makePodcast(),
@@ -533,13 +584,13 @@ describe('remotePlayback', () => {
     const setAudioUrl = vi.fn()
     const play = vi.fn()
     const pause = vi.fn()
-    const episode = makeFeedEpisode({
+    const episode = makeEpisode({
       audioUrl: 'https://example.com/title-fallback.mp3',
       title: '',
     })
     const podcast = makePodcast({ title: 'Podcast Fallback Title' })
 
-    await playFeedEpisodeWithDeps({ setAudioUrl, play, pause }, episode, podcast, {
+    await playEpisodeWithDeps({ setAudioUrl, play, pause }, episode, podcast, {
       countryAtSave: TEST_COUNTRY,
     })
 
@@ -563,13 +614,13 @@ describe('remotePlayback', () => {
     const setAudioUrl = vi.fn()
     const play = vi.fn()
     const pause = vi.fn()
-    const episode: FeedEpisode = makeFeedEpisode({
+    const episode: Episode = makeEpisode({
       audioUrl: 'https://example.com/untitled-fallback.mp3',
       title: '   ',
       transcriptUrl: 'https://example.com/untitled.srt',
     })
 
-    await playFeedEpisodeWithDeps({ setAudioUrl, play, pause }, episode, makePodcast(), {
+    await playEpisodeWithDeps({ setAudioUrl, play, pause }, episode, makePodcast(), {
       countryAtSave: TEST_COUNTRY,
     })
 
@@ -615,6 +666,42 @@ describe('remotePlayback', () => {
     expect(play).toHaveBeenCalledTimes(1)
   })
 
+  it('prefers trimmed sourceUrlNormalized over audioUrl for stream-without-transcript playback', async () => {
+    const playbackSource = await import('../playbackSource')
+    vi.mocked(playbackSource.resolvePlaybackSource).mockResolvedValueOnce({
+      url: 'https://example.com/canonical-stream.mp3',
+    })
+
+    const setAudioUrl = vi.fn()
+    const play = vi.fn()
+    const pause = vi.fn()
+
+    const startResult = await playStreamWithoutTranscriptWithDeps(
+      { setAudioUrl, play, pause },
+      {
+        streamTarget: {
+          sourceUrlNormalized: '  https://example.com/canonical-stream.mp3  ',
+          audioUrl: 'https://example.com/fallback-stream.mp3',
+        },
+        title: 'Canonical Stream',
+        artwork: '',
+        metadata: {},
+      }
+    )
+
+    expect(startResult).toEqual({ started: true, reason: 'started' })
+    expect(playbackSource.resolvePlaybackSource).toHaveBeenCalledWith(
+      'https://example.com/canonical-stream.mp3'
+    )
+    expect(setAudioUrl).toHaveBeenLastCalledWith(
+      'https://example.com/canonical-stream.mp3',
+      'Canonical Stream',
+      '',
+      expect.any(Object),
+      true
+    )
+  })
+
   it('returns false for stream-without-transcript when request becomes stale before start', async () => {
     const playbackSource = await import('../playbackSource')
     vi.mocked(playbackSource.resolvePlaybackSource).mockImplementation(async (url: string) => {
@@ -638,12 +725,12 @@ describe('remotePlayback', () => {
       }
     )
 
-    const episode: FeedEpisode = makeFeedEpisode({
+    const episode: Episode = makeEpisode({
       audioUrl: 'https://example.com/next.mp3',
       title: 'Next Episode',
       transcriptUrl: 'https://example.com/next.srt',
     })
-    const supersedingRequest = playFeedEpisodeWithDeps(
+    const supersedingRequest = playEpisodeWithDeps(
       { setAudioUrl, play, pause },
       episode,
       makePodcast(),
@@ -686,7 +773,7 @@ describe('remotePlayback', () => {
       transcriptUrl: 'https://example.com/slow-history.srt',
     } as PlaybackSession
 
-    const supersedingEpisode: FeedEpisode = makeFeedEpisode({
+    const supersedingEpisode: Episode = makeEpisode({
       audioUrl: 'https://example.com/next-after-history.mp3',
       title: 'Next Episode',
       transcriptUrl: 'https://example.com/next-after-history.srt',
@@ -696,7 +783,7 @@ describe('remotePlayback', () => {
       { setAudioUrl, play, pause, setSessionId, setPlaybackTrackId },
       historySession
     )
-    const supersedingPlay = playFeedEpisodeWithDeps(
+    const supersedingPlay = playEpisodeWithDeps(
       { setAudioUrl, play, pause },
       supersedingEpisode,
       makePodcast(),
@@ -729,6 +816,58 @@ describe('remotePlayback', () => {
     expect(play).not.toHaveBeenCalled()
   })
 
+  it('fails closed for stream-without-transcript when candidates are non-http urls', async () => {
+    const playbackSource = await import('../playbackSource')
+    const setAudioUrl = vi.fn()
+    const play = vi.fn()
+    const pause = vi.fn()
+
+    const startResult = await playStreamWithoutTranscriptWithDeps(
+      { setAudioUrl, play, pause },
+      {
+        streamTarget: {
+          sourceUrlNormalized: 'blob:local-only',
+          audioUrl: 'file:///tmp/local.mp3',
+        },
+        title: 'Invalid Stream',
+        artwork: '',
+        metadata: {},
+      }
+    )
+
+    expect(startResult).toEqual({ started: false, reason: 'no_playable_source' })
+    expect(playbackSource.resolvePlaybackSource).not.toHaveBeenCalledWith('blob:local-only')
+    expect(play).not.toHaveBeenCalled()
+  })
+
+  it('fails closed for stream-without-transcript when remote-shaped metadata is malformed', async () => {
+    const setAudioUrl = vi.fn()
+    const play = vi.fn()
+    const pause = vi.fn()
+
+    const startResult = await playStreamWithoutTranscriptWithDeps(
+      { setAudioUrl, play, pause },
+      {
+        streamTarget: {
+          sourceUrlNormalized: 'https://example.com/remote-only.mp3',
+        },
+        title: 'Broken Remote Metadata',
+        artwork: '',
+        metadata: {
+          showTitle: 'Podcast',
+          artworkUrl: 'https://example.com/art.jpg',
+          episodeGuid: 'episode-guid-1',
+          podcastItunesId: 'podcast-1',
+          countryAtSave: 'xx',
+        } as unknown as Parameters<typeof playStreamWithoutTranscriptWithDeps>[1]['metadata'],
+      }
+    )
+
+    expect(startResult).toEqual({ started: false, reason: 'download_failed' })
+    expect(setAudioUrl).not.toHaveBeenCalled()
+    expect(play).not.toHaveBeenCalled()
+  })
+
   it('prefers local downloaded source for history stream-without-transcript playback', async () => {
     const playbackSource = await import('../playbackSource')
     vi.mocked(playbackSource.resolvePlaybackSource).mockResolvedValueOnce({
@@ -757,6 +896,11 @@ describe('remotePlayback', () => {
       subtitleFilename: '',
       audioUrl: 'https://example.com/history-downloaded.mp3',
       localTrackId: 'history-track-1',
+      artworkUrl: 'https://example.com/history-cover.jpg',
+      showTitle: 'History Podcast',
+      episodeGuid: 'history-episode-guid',
+      podcastItunesId: 'history-podcast-1',
+      countryAtSave: 'us',
     } as PlaybackSession
 
     const didPlay = await playHistorySessionWithDeps(
@@ -769,7 +913,7 @@ describe('remotePlayback', () => {
     expect(setAudioUrl).toHaveBeenLastCalledWith(
       'blob:history-downloaded',
       'History Stream',
-      '',
+      'https://example.com/history-cover.jpg',
       expect.any(Object),
       true
     )

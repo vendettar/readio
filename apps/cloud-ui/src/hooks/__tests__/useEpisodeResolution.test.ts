@@ -4,24 +4,24 @@ import { resolveEpisodeResolutionError } from '../useEpisodeResolution'
 describe('resolveEpisodeResolutionError', () => {
   it('prioritizes podcast lookup failures', () => {
     const podcastError = new Error('podcast')
-    const feedError = new Error('feed')
+    const episodesError = new Error('episodes')
 
     expect(
       resolveEpisodeResolutionError({
         podcastError,
-        feedError,
+        episodesError,
       })
     ).toBe(podcastError)
   })
 
-  it('falls back to rss feed failures when podcast lookup succeeded', () => {
-    const feedError = new Error('feed')
+  it('falls back to PI episode list failures when podcast lookup succeeded', () => {
+    const episodesError = new Error('episodes')
 
     expect(
       resolveEpisodeResolutionError({
         podcastError: null,
-        feedError,
+        episodesError,
       })
-    ).toBe(feedError)
+    ).toBe(episodesError)
   })
 })

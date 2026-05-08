@@ -10,6 +10,7 @@ import {
 } from '../../remoteTranscript'
 import { DownloadsRepository } from '../../repositories/DownloadsRepository'
 import { FilesRepository } from '../../repositories/FilesRepository'
+import { PlaybackRepository } from '../../repositories/PlaybackRepository'
 import {
   exportCurrentAudioForPlayback,
   exportCurrentTranscriptAndAudioBundle,
@@ -22,10 +23,43 @@ vi.mock('../../download', () => ({
   downloadBlob: vi.fn(),
 }))
 
-vi.mock('../../downloadService', () => ({
-  downloadEpisode: vi.fn(),
-  removeDownloadedTrack: vi.fn(),
-}))
+vi.mock('../../downloadService', () => {
+  const buildDownloadJobOptions = vi.fn((input: Record<string, unknown>) => {
+    const metadata = input.metadata as Record<string, unknown> | null | undefined
+    if (typeof metadata?.countryAtSave !== 'string') {
+      return null
+    }
+    return {
+      audioUrl: input.audioUrl,
+      episodeTitle: input.episodeTitle,
+      episodeDescription: metadata?.description ?? '',
+      showTitle: metadata?.showTitle ?? 'Podcast',
+      artworkUrl: metadata?.artworkUrl ?? 'https://example.com/art.jpg',
+      countryAtSave: metadata.countryAtSave.toLowerCase(),
+      podcastItunesId: metadata?.podcastItunesId ?? 'pod-1',
+      episodeGuid: metadata?.episodeGuid ?? 'episode-guid-1',
+      silent: input.silent,
+      durationSeconds: metadata?.durationSeconds,
+      transcriptUrl: metadata?.transcriptUrl,
+    }
+  })
+
+  return {
+    buildDownloadJobOptions,
+    buildDownloadJobOptionsFromCanonicalRemoteMetadata: vi.fn((input: Record<string, unknown>) =>
+      buildDownloadJobOptions({
+        audioUrl: input.audioUrl,
+        episodeTitle: input.episodeTitle,
+        metadata: input.metadata,
+        silent: input.silent,
+        signal: input.signal,
+        onProgress: input.onProgress,
+      })
+    ),
+    downloadEpisode: vi.fn(),
+    removeDownloadedTrack: vi.fn(),
+  }
+})
 
 vi.mock('../../repositories/FilesRepository', () => ({
   FilesRepository: {
@@ -45,6 +79,12 @@ vi.mock('../../repositories/DownloadsRepository', () => ({
     deleteSubtitleVersion: vi.fn(),
     exportActiveTranscriptVersion: vi.fn(),
     exportAudioFile: vi.fn(),
+  },
+}))
+
+vi.mock('../../repositories/PlaybackRepository', () => ({
+  PlaybackRepository: {
+    getRemoteTranscriptByUrl: vi.fn(),
   },
 }))
 
@@ -82,7 +122,12 @@ function makePodcastTrack() {
     downloadedAt: Date.now(),
     countryAtSave: 'US',
     sourceUrlNormalized: 'https://example.com/episode.mp3',
+    sourcePodcastItunesId: 'pod-1',
+    sourceEpisodeGuid: 'episode-guid-1',
+    sourcePodcastTitle: 'Podcast',
     sourceEpisodeTitle: 'Downloaded Episode',
+    sourceDescription: '',
+    sourceArtworkUrl: 'https://example.com/art.jpg',
   }
 }
 
@@ -234,7 +279,12 @@ describe('playbackExport helper routing', () => {
       episodeMetadata: {
         originalAudioUrl: 'https://example.com/episode.mp3',
         playbackRequestMode: 'stream_without_transcript',
-      },
+        countryAtSave: 'US',
+        showTitle: 'Remote Podcast',
+        artworkUrl: 'https://example.com/remote-art.jpg',
+        episodeGuid: 'remote-episode-1',
+        podcastItunesId: 'remote-podcast-1',
+      } as unknown as ReturnType<typeof usePlayerStore.getState>['episodeMetadata'],
     })
 
     const result = await importTranscriptForCurrentPlayback(
@@ -249,6 +299,41 @@ describe('playbackExport helper routing', () => {
       expect.arrayContaining([expect.objectContaining({ text: 'Hello' })])
     )
     expect(useTranscriptStore.getState().subtitles).toHaveLength(1)
+  })
+
+  it('falls back to remote transcript persistence when localTrackId is stale but canonical remote metadata is still valid', async () => {
+    vi.mocked(FilesRepository.getTrackById).mockResolvedValue(undefined as never)
+    vi.mocked(DownloadsRepository.getTrackSnapshot).mockResolvedValue(undefined as never)
+    vi.mocked(hasStoredTranscriptSource).mockResolvedValue(false)
+    vi.mocked(persistImportedTranscriptForPlaybackIdentity).mockResolvedValue(true)
+
+    usePlayerStore.setState({
+      audioUrl: 'https://example.com/episode.mp3',
+      audioTitle: 'Remote Episode',
+      localTrackId: 'missing-track',
+      episodeMetadata: {
+        originalAudioUrl: 'https://example.com/episode.mp3',
+        playbackRequestMode: 'stream_without_transcript',
+        countryAtSave: 'US',
+        showTitle: 'Remote Podcast',
+        artworkUrl: 'https://example.com/remote-art.jpg',
+        episodeGuid: 'remote-episode-1',
+        podcastItunesId: 'remote-podcast-1',
+      } as unknown as ReturnType<typeof usePlayerStore.getState>['episodeMetadata'],
+    })
+
+    const result = await importTranscriptForCurrentPlayback(
+      new File(['1\n00:00:00,000 --> 00:00:01,000\nHello'], 'imported.srt', {
+        type: 'text/plain',
+      })
+    )
+
+    expect(result.ok).toBe(true)
+    expect(result.reason).toBe('imported')
+    expect(persistImportedTranscriptForPlaybackIdentity).toHaveBeenCalledWith(
+      'https://example.com/episode.mp3',
+      expect.arrayContaining([expect.objectContaining({ text: 'Hello' })])
+    )
   })
 
   it('does not corrupt playback mode or transcript state when import fails', async () => {
@@ -349,6 +434,40 @@ describe('playbackExport helper routing', () => {
     expect(downloadBlob).toHaveBeenCalledWith(expect.any(Blob), 'Local Track.transcript.vtt')
   })
 
+  it('exports cached remote transcript when no loaded subtitles are present', async () => {
+    vi.mocked(hasStoredTranscriptSource).mockResolvedValue(true)
+    vi.mocked(PlaybackRepository.getRemoteTranscriptByUrl).mockResolvedValue({
+      id: 'rt-1',
+      url: 'https://example.com/episode.mp3',
+      cues: [{ start: 0, end: 1, text: 'Cached cue' }],
+      cachedAt: Date.now(),
+      lastAccessedAt: Date.now(),
+    } as never)
+
+    usePlayerStore.setState({
+      audioUrl: 'https://example.com/episode.mp3',
+      audioTitle: 'Remote Episode',
+      localTrackId: null,
+      episodeMetadata: {
+        originalAudioUrl: 'https://example.com/episode.mp3',
+        playbackRequestMode: 'default',
+        countryAtSave: 'US',
+        showTitle: 'Remote Podcast',
+        artworkUrl: 'https://example.com/remote-art.jpg',
+        episodeGuid: 'remote-episode-1',
+        podcastItunesId: 'remote-podcast-1',
+      } as unknown as ReturnType<typeof usePlayerStore.getState>['episodeMetadata'],
+    })
+
+    const result = await exportCurrentTranscriptForPlayback()
+
+    expect(result.ok).toBe(true)
+    expect(PlaybackRepository.getRemoteTranscriptByUrl).toHaveBeenCalledWith(
+      'https://example.com/episode.mp3'
+    )
+    expect(downloadBlob).toHaveBeenCalledWith(expect.any(Blob), 'Remote Episode.transcript.srt')
+  })
+
   it('exports remote-only audio through the existing download contract', async () => {
     vi.mocked(hasStoredTranscriptSource).mockResolvedValue(true)
     vi.mocked(downloadEpisode).mockResolvedValue({
@@ -370,7 +489,11 @@ describe('playbackExport helper routing', () => {
         originalAudioUrl: 'https://example.com/episode.mp3',
         playbackRequestMode: 'default',
         countryAtSave: 'US',
-      },
+        showTitle: 'Remote Podcast',
+        artworkUrl: 'https://example.com/remote-art.jpg',
+        episodeGuid: 'remote-episode-1',
+        podcastItunesId: 'remote-podcast-1',
+      } as unknown as ReturnType<typeof usePlayerStore.getState>['episodeMetadata'],
     })
 
     const result = await exportCurrentAudioForPlayback()
@@ -412,7 +535,11 @@ describe('playbackExport helper routing', () => {
         originalAudioUrl: 'https://example.com/episode.mp3',
         playbackRequestMode: 'default',
         countryAtSave: 'US',
-      },
+        showTitle: 'Remote Podcast',
+        artworkUrl: 'https://example.com/remote-art.jpg',
+        episodeGuid: 'remote-episode-1',
+        podcastItunesId: 'remote-podcast-1',
+      } as unknown as ReturnType<typeof usePlayerStore.getState>['episodeMetadata'],
     })
 
     const result = await exportCurrentAudioForPlayback()
@@ -421,6 +548,49 @@ describe('playbackExport helper routing', () => {
     expect(removeDownloadedTrack).toHaveBeenCalledWith('download-temp-2', {
       suppressNotify: true,
     })
+  })
+
+  it('falls back to canonical remote audio export when localTrackId is stale but remote metadata is valid', async () => {
+    vi.mocked(FilesRepository.getTrackById).mockResolvedValue(undefined as never)
+    vi.mocked(DownloadsRepository.getTrackSnapshot).mockResolvedValue(undefined as never)
+    vi.mocked(downloadEpisode).mockResolvedValue({
+      ok: true,
+      trackId: 'download-temp-3',
+      reason: 'already_downloaded',
+    })
+    vi.mocked(DownloadsRepository.exportAudioFile).mockResolvedValue({
+      ok: true,
+      filename: 'Remote Episode.mp3',
+      blob: new Blob(['audio'], { type: 'audio/mpeg' }),
+    })
+
+    usePlayerStore.setState({
+      audioUrl: 'https://example.com/episode.mp3',
+      audioTitle: 'Remote Episode',
+      localTrackId: 'missing-track',
+      episodeMetadata: {
+        originalAudioUrl: 'https://example.com/episode.mp3',
+        playbackRequestMode: 'default',
+        countryAtSave: 'US',
+        showTitle: 'Remote Podcast',
+        artworkUrl: 'https://example.com/remote-art.jpg',
+        episodeGuid: 'remote-episode-1',
+        podcastItunesId: 'remote-podcast-1',
+      } as unknown as ReturnType<typeof usePlayerStore.getState>['episodeMetadata'],
+    })
+
+    const result = await exportCurrentAudioForPlayback()
+
+    expect(result.ok).toBe(true)
+    expect(downloadEpisode).toHaveBeenCalledWith(
+      expect.objectContaining({
+        audioUrl: 'https://example.com/episode.mp3',
+        episodeTitle: 'Remote Episode',
+        countryAtSave: 'us',
+        silent: true,
+      })
+    )
+    expect(downloadBlob).toHaveBeenCalledWith(expect.any(Blob), 'Remote Episode.mp3')
   })
 
   it('exports local audio through the existing file export helper without mutating playback state', async () => {
@@ -455,7 +625,7 @@ describe('playbackExport helper routing', () => {
     expect(usePlayerStore.getState().progress).toBe(42)
   })
 
-  it('returns no_audio for bundle export when transcript is available but audio is not exportable', async () => {
+  it('returns track_not_found for bundle export when a stale localTrackId blocks local audio and no canonical remote fallback exists', async () => {
     vi.mocked(FilesRepository.getTrackById).mockResolvedValue(undefined as never)
     vi.mocked(DownloadsRepository.getTrackSnapshot).mockResolvedValue(undefined as never)
     vi.mocked(hasStoredTranscriptSource).mockResolvedValue(false)
@@ -475,7 +645,7 @@ describe('playbackExport helper routing', () => {
 
     expect(result).toEqual({
       ok: false,
-      reason: 'no_audio',
+      reason: 'track_not_found',
     })
     expect(downloadBlob).not.toHaveBeenCalled()
   })

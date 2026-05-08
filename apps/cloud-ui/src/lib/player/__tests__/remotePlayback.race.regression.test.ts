@@ -1,12 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { removeDownloadedTrack } from '../../downloadService'
+import { createCanonicalRemoteEpisodeMetadata } from '../playbackMetadata'
 import { bumpPlaybackEpoch, downloadAndResolve, getPlaybackEpoch } from '../remotePlayback'
 
-vi.mock('../../downloadService', () => ({
-  downloadEpisode: vi.fn(),
-  findDownloadedTrack: vi.fn(),
-  removeDownloadedTrack: vi.fn(),
-}))
+vi.mock('../../downloadService', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../downloadService')>()
+  return {
+    ...actual,
+    downloadEpisode: vi.fn(),
+    findDownloadedTrack: vi.fn(),
+    removeDownloadedTrack: vi.fn(),
+  }
+})
 
 vi.mock('../playbackSource', () => ({
   resolvePlaybackSource: vi.fn(),
@@ -39,7 +44,13 @@ describe('remotePlayback Race Regression', () => {
       audioUrl: 'https://remote.com/audio.mp3',
       title: 'Test',
       artwork: '',
-      metadata: { podcastFeedUrl: 'feed' } as Record<string, unknown>,
+      metadata: createCanonicalRemoteEpisodeMetadata({
+        countryAtSave: 'us',
+        showTitle: 'Podcast',
+        artworkUrl: 'https://example.com/art.jpg',
+        episodeGuid: 'episode-guid-1',
+        podcastItunesId: 'podcast-1',
+      })!,
     }
 
     const currentEpoch = getPlaybackEpoch()

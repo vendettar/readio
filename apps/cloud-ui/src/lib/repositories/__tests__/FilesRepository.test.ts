@@ -146,4 +146,64 @@ describe('FilesRepository', () => {
       expect(track?.activeSubtitleId).toBe(result.fileSubtitleId)
     })
   })
+
+  describe('importTranscriptVersion', () => {
+    beforeEach(async () => {
+      await DB.clearAllData()
+    })
+
+    async function createEmptyFileTrack(): Promise<string> {
+      const audioId = await DB.addAudioBlob(new Blob(['audio']), 'track.mp3')
+      return DB.addFileTrack({
+        name: 'Local Track',
+        audioId,
+        sizeBytes: 1024,
+        durationSeconds: 120,
+        folderId: null,
+      })
+    }
+
+    it('suffixes duplicate imported transcript names deterministically', async () => {
+      const trackId = await createEmptyFileTrack()
+      const content = '1\n00:00:00,000 --> 00:00:01,000\nhello\n'
+
+      const first = await FilesRepository.importTranscriptVersion(trackId, {
+        filename: 'imported.srt',
+        content,
+      })
+      const second = await FilesRepository.importTranscriptVersion(trackId, {
+        filename: 'imported.srt',
+        content,
+      })
+
+      expect(first.ok).toBe(true)
+      expect(second.ok).toBe(true)
+      if (!first.fileSubtitleId || !second.fileSubtitleId) {
+        throw new Error('Expected imported transcript ids')
+      }
+
+      const firstSub = await db.local_subtitles.get(first.fileSubtitleId)
+      const secondSub = await db.local_subtitles.get(second.fileSubtitleId)
+      expect(firstSub?.name).toBe('imported.srt')
+      expect(secondSub?.name).toBe('imported (2).srt')
+    })
+
+    it('falls back to transcript.srt when imported filename is blank', async () => {
+      const trackId = await createEmptyFileTrack()
+      const content = '1\n00:00:00,000 --> 00:00:01,000\nhello\n'
+
+      const result = await FilesRepository.importTranscriptVersion(trackId, {
+        filename: '   ',
+        content,
+      })
+
+      expect(result.ok).toBe(true)
+      if (!result.fileSubtitleId) {
+        throw new Error('Expected imported transcript id')
+      }
+
+      const imported = await db.local_subtitles.get(result.fileSubtitleId)
+      expect(imported?.name).toBe('transcript.srt')
+    })
+  })
 })

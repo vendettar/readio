@@ -8,6 +8,24 @@ import {
   UPSERT_ASR_SUBTITLE_REASON,
 } from '../DownloadsRepository'
 
+function makePodcastDownloadInput(overrides: Record<string, unknown> = {}) {
+  return {
+    name: 'Test Episode',
+    audioId: 'audio-1',
+    sourceUrlNormalized: 'https://example.com/ep.mp3',
+    downloadedAt: Date.now(),
+    sizeBytes: 1024,
+    countryAtSave: 'US',
+    sourcePodcastItunesId: 'podcast-1',
+    sourceEpisodeGuid: 'episode-guid-1',
+    sourcePodcastTitle: 'Podcast Title',
+    sourceEpisodeTitle: 'Episode Title',
+    sourceDescription: 'Episode description',
+    sourceArtworkUrl: 'https://example.com/cover.jpg',
+    ...overrides,
+  }
+}
+
 async function extractZipEntryNames(blob: Blob): Promise<string[]> {
   const bytes = await blobToBytes(blob)
   const raw = new TextDecoder('latin1').decode(bytes)
@@ -126,12 +144,7 @@ describe('DownloadsRepository', () => {
     opts: { activeId?: string } = {}
   ) {
     const trackId = await DB.addPodcastDownload({
-      name: 'Test Episode',
-      audioId: 'audio-1',
-      sourceUrlNormalized: 'https://example.com/ep.mp3',
-      downloadedAt: Date.now(),
-      sizeBytes: 1024,
-      countryAtSave: 'US',
+      ...makePodcastDownloadInput(),
     })
 
     const subtitleIds: string[] = []
@@ -220,12 +233,11 @@ describe('DownloadsRepository', () => {
   describe('getSubtitleVersionSummary', () => {
     it('returns zero-count summary for track with no subtitles', async () => {
       const trackId = await DB.addPodcastDownload({
-        name: 'Empty',
-        audioId: 'a1',
-        sourceUrlNormalized: 'https://example.com/1.mp3',
-        downloadedAt: Date.now(),
-        sizeBytes: 1024,
-        countryAtSave: 'US',
+        ...makePodcastDownloadInput({
+          name: 'Empty',
+          audioId: 'a1',
+          sourceUrlNormalized: 'https://example.com/1.mp3',
+        }),
       })
 
       const summary = await DownloadsRepository.getSubtitleVersionSummary(trackId)
@@ -356,22 +368,22 @@ describe('DownloadsRepository', () => {
         'shared.srt'
       )
 
-      const trackId1 = await DB.addPodcastDownload({
-        name: 'Ep 1',
-        audioId: 'a1',
-        sourceUrlNormalized: 'https://example.com/1.mp3',
-        downloadedAt: Date.now(),
-        sizeBytes: 1024,
-        countryAtSave: 'US',
-      })
-      const trackId2 = await DB.addPodcastDownload({
-        name: 'Ep 2',
-        audioId: 'a2',
-        sourceUrlNormalized: 'https://example.com/2.mp3',
-        downloadedAt: Date.now(),
-        sizeBytes: 1024,
-        countryAtSave: 'US',
-      })
+      const trackId1 = await DB.addPodcastDownload(
+        makePodcastDownloadInput({
+          name: 'Ep 1',
+          audioId: 'a1',
+          sourceUrlNormalized: 'https://example.com/1.mp3',
+        })
+      )
+      const trackId2 = await DB.addPodcastDownload(
+        makePodcastDownloadInput({
+          name: 'Ep 2',
+          audioId: 'a2',
+          sourceUrlNormalized: 'https://example.com/2.mp3',
+          sourceEpisodeGuid: 'episode-guid-2',
+          sourceEpisodeTitle: 'Episode Title 2',
+        })
+      )
 
       await db.local_subtitles.add({
         id: 'link-1',
@@ -600,14 +612,13 @@ describe('DownloadsRepository', () => {
         new Blob(['download-audio'], { type: 'audio/mpeg' }),
         'ep.mp3'
       )
-      const trackId = await DB.addPodcastDownload({
-        name: 'Export Episode',
-        audioId,
-        sourceUrlNormalized: 'https://example.com/export.mp3',
-        downloadedAt: Date.now(),
-        sizeBytes: 1024,
-        countryAtSave: 'US',
-      })
+      const trackId = await DB.addPodcastDownload(
+        makePodcastDownloadInput({
+          name: 'Export Episode',
+          audioId,
+          sourceUrlNormalized: 'https://example.com/export.mp3',
+        })
+      )
 
       const result = await DownloadsRepository.exportAudioFile(trackId, 'Export Episode')
 
@@ -756,14 +767,13 @@ describe('DownloadsRepository', () => {
   describe('removeTrack', () => {
     it('clears local session audio references before blob cleanup', async () => {
       const audioId = await DB.addAudioBlob(new Blob(['audio']), 'episode.mp3')
-      const trackId = await DB.addPodcastDownload({
-        name: 'Ep remove test',
-        audioId,
-        sourceUrlNormalized: 'https://example.com/remove.mp3',
-        downloadedAt: Date.now(),
-        sizeBytes: 1024,
-        countryAtSave: 'US',
-      })
+      const trackId = await DB.addPodcastDownload(
+        makePodcastDownloadInput({
+          name: 'Ep remove test',
+          audioId,
+          sourceUrlNormalized: 'https://example.com/remove.mp3',
+        })
+      )
 
       await DB.createPlaybackSession({
         id: 'session-local-track',
@@ -791,14 +801,13 @@ describe('DownloadsRepository', () => {
 
     it('clears stale local session audio references without localTrackId to prevent blob pinning', async () => {
       const audioId = await DB.addAudioBlob(new Blob(['audio']), 'episode.mp3')
-      const trackId = await DB.addPodcastDownload({
-        name: 'Ep stale session',
-        audioId,
-        sourceUrlNormalized: 'https://example.com/stale.mp3',
-        downloadedAt: Date.now(),
-        sizeBytes: 1024,
-        countryAtSave: 'US',
-      })
+      const trackId = await DB.addPodcastDownload(
+        makePodcastDownloadInput({
+          name: 'Ep stale session',
+          audioId,
+          sourceUrlNormalized: 'https://example.com/stale.mp3',
+        })
+      )
 
       await DB.createPlaybackSession({
         id: 'session-stale-local',
@@ -984,14 +993,16 @@ describe('DownloadsRepository', () => {
         new Blob(['audio-bytes'], { type: 'audio/mpeg' }),
         'episode-audio.mp3'
       )
-      const trackId = await DB.addPodcastDownload({
-        name: 'Bundle Episode',
-        audioId,
-        sourceUrlNormalized: 'https://example.com/bundle.mp3',
-        downloadedAt: Date.now(),
-        sizeBytes: 2048,
-        countryAtSave: 'US',
-      })
+      const trackId = await DB.addPodcastDownload(
+        makePodcastDownloadInput({
+          name: 'Bundle Episode',
+          audioId,
+          sourceUrlNormalized: 'https://example.com/bundle.mp3',
+          downloadedAt: Date.now(),
+          sizeBytes: 2048,
+          countryAtSave: 'US',
+        })
+      )
 
       const subtitleId = await DB.addSubtitle([{ start: 0, end: 1, text: 'hello' }], 'sub-0.srt')
       await db.local_subtitles.add({
@@ -1023,14 +1034,16 @@ describe('DownloadsRepository', () => {
 
     it('exports audio-only zip when no subtitles exist', async () => {
       const audioId = await DB.addAudioBlob(new Blob(['audio-only']), 'only-audio.m4a')
-      const trackId = await DB.addPodcastDownload({
-        name: 'Audio Only Episode',
-        audioId,
-        sourceUrlNormalized: 'https://example.com/audio-only.m4a',
-        downloadedAt: Date.now(),
-        sizeBytes: 1024,
-        countryAtSave: 'US',
-      })
+      const trackId = await DB.addPodcastDownload(
+        makePodcastDownloadInput({
+          name: 'Audio Only Episode',
+          audioId,
+          sourceUrlNormalized: 'https://example.com/audio-only.m4a',
+          downloadedAt: Date.now(),
+          sizeBytes: 1024,
+          countryAtSave: 'US',
+        })
+      )
 
       const result = await DownloadsRepository.exportTrackBundle(trackId, 'audio-only-episode')
 
@@ -1045,14 +1058,16 @@ describe('DownloadsRepository', () => {
 
     it('returns failure when bundle exceeds export size threshold', async () => {
       const audioId = await DB.addAudioBlob(new Blob(['audio-only']), 'too-large-audio.m4a')
-      const trackId = await DB.addPodcastDownload({
-        name: 'Too Large Episode',
-        audioId,
-        sourceUrlNormalized: 'https://example.com/too-large.m4a',
-        downloadedAt: Date.now(),
-        sizeBytes: 401 * 1024 * 1024,
-        countryAtSave: 'US',
-      })
+      const trackId = await DB.addPodcastDownload(
+        makePodcastDownloadInput({
+          name: 'Too Large Episode',
+          audioId,
+          sourceUrlNormalized: 'https://example.com/too-large.m4a',
+          downloadedAt: Date.now(),
+          sizeBytes: 401 * 1024 * 1024,
+          countryAtSave: 'US',
+        })
+      )
       const audioBlobGetSpy = vi.spyOn(db.audioBlobs, 'get')
       audioBlobGetSpy.mockResolvedValueOnce({
         id: audioId,
@@ -1075,14 +1090,16 @@ describe('DownloadsRepository', () => {
 
     it('uses actual blob size as guard when metadata size is underestimated', async () => {
       const audioId = await DB.addAudioBlob(new Blob(['blob-bytes']), 'underestimated-audio.m4a')
-      const trackId = await DB.addPodcastDownload({
-        name: 'Underestimated Metadata Episode',
-        audioId,
-        sourceUrlNormalized: 'https://example.com/underestimated.m4a',
-        downloadedAt: Date.now(),
-        sizeBytes: 128,
-        countryAtSave: 'US',
-      })
+      const trackId = await DB.addPodcastDownload(
+        makePodcastDownloadInput({
+          name: 'Underestimated Metadata Episode',
+          audioId,
+          sourceUrlNormalized: 'https://example.com/underestimated.m4a',
+          downloadedAt: Date.now(),
+          sizeBytes: 128,
+          countryAtSave: 'US',
+        })
+      )
       const audioBlobGetSpy = vi.spyOn(db.audioBlobs, 'get')
       audioBlobGetSpy.mockResolvedValueOnce({
         id: audioId,

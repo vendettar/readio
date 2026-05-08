@@ -1,6 +1,6 @@
-import type { EpisodeMetadata } from '../../store/playerStore'
+import type { EpisodeMetadataInput } from './playbackMetadata'
 import { usePlayerStore } from '../../store/playerStore'
-import { normalizePodcastAudioUrl } from '../networking/urlUtils'
+import { resolvePlaybackStateIdentity } from './playbackIdentityModel'
 
 export interface PlaybackIdentitySnapshot {
   localTrackId: string | null
@@ -8,56 +8,49 @@ export interface PlaybackIdentitySnapshot {
   originalAudioUrl: string | null
   normalizedAudioUrl: string | null
   audioTitle: string
-  episodeMetadata: EpisodeMetadata | null
+  episodeMetadata: EpisodeMetadataInput | null
   playbackIdentityKey: string
+}
+
+export function resolvePlaybackStateIdentityKey(
+  state: Pick<
+    ReturnType<typeof usePlayerStore.getState>,
+    'localTrackId' | 'audioUrl' | 'episodeMetadata'
+  > = usePlayerStore.getState()
+): string | null {
+  return (
+    resolvePlaybackStateIdentity({
+      localTrackId: state.localTrackId,
+      audioUrl: state.audioUrl,
+      metadata: state.episodeMetadata,
+    })?.key ?? null
+  )
 }
 
 export function resolveCurrentPlaybackIdentity(
   state: ReturnType<typeof usePlayerStore.getState> = usePlayerStore.getState()
 ): PlaybackIdentitySnapshot | null {
-  const localTrackId = state.localTrackId
-  const audioUrl = state.audioUrl ?? null
-  const originalAudioUrl = state.episodeMetadata?.originalAudioUrl ?? null
-  const resolvedAudioUrl = originalAudioUrl || audioUrl
-
-  if (!localTrackId && !resolvedAudioUrl) {
+  const resolvedIdentity = resolvePlaybackStateIdentity({
+    localTrackId: state.localTrackId,
+    audioUrl: state.audioUrl,
+    metadata: state.episodeMetadata,
+  })
+  if (!resolvedIdentity) {
     return null
   }
 
-  const normalizedAudioUrl = resolvedAudioUrl
-    ? normalizePodcastAudioUrl(resolvedAudioUrl) || resolvedAudioUrl
-    : null
-
   return {
-    localTrackId,
-    audioUrl,
-    originalAudioUrl,
-    normalizedAudioUrl,
+    localTrackId: resolvedIdentity.localTrackId,
+    audioUrl: resolvedIdentity.audioUrl,
     audioTitle: state.audioTitle,
+    originalAudioUrl: resolvedIdentity.originalAudioUrl,
+    normalizedAudioUrl: resolvedIdentity.normalizedAudioUrl,
     episodeMetadata: state.episodeMetadata ?? null,
-    playbackIdentityKey: buildPlaybackIdentityKey({
-      localTrackId,
-      normalizedAudioUrl,
-      audioUrl,
-      originalAudioUrl,
-    }),
+    playbackIdentityKey: resolvedIdentity.key,
   }
 }
 
-export function buildPlaybackIdentityKey(input: {
-  localTrackId: string | null
-  normalizedAudioUrl: string | null
-  audioUrl?: string | null
-  originalAudioUrl?: string | null
-}): string {
-  if (input.localTrackId) {
-    return `local-track:${input.localTrackId}`
-  }
-
-  const normalizedAudioUrl =
-    input.normalizedAudioUrl || input.originalAudioUrl || input.audioUrl || ''
-  return `remote-playback:${normalizedAudioUrl}`
-}
+export { buildPlaybackIdentityKey } from './playbackIdentityModel'
 
 export function resolvePlaybackExportBaseName(
   identity: PlaybackIdentitySnapshot | null,

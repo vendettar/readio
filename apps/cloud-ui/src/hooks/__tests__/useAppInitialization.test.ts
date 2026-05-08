@@ -81,6 +81,10 @@ describe('useAppInitialization', () => {
     await waitFor(() => {
       expect(checkStorageQuota).toHaveBeenCalledWith({ mode: 'silent' })
     })
+
+    await waitFor(() => {
+      expect(runRemoteTranscriptCacheMaintenance).toHaveBeenCalledTimes(1)
+    })
   })
 
   it('continues retention and integrity when remote transcript maintenance fails', async () => {

@@ -2,11 +2,13 @@
 // Hook for storage maintenance actions (delete session, clear cache, wipe all)
 
 import { useCallback, useState } from 'react'
-import { clearAllCredentials } from '../lib/db/credentialsRepository'
-import { DB } from '../lib/dexieDb'
 import { logError } from '../lib/logger'
-import { bumpSettingsWriteEpoch, SETTINGS_STORAGE_KEY } from '../lib/schemas/settings'
-import { clearDictCacheMemory } from '../lib/selection/dictCache'
+import {
+  clearPlaybackSessionAudioCacheForMaintenance,
+  deletePlaybackSessionForMaintenance,
+  wipeAllPersistentStorage,
+  wipeStoredAudioCache,
+} from '../lib/storageMaintenanceService'
 import { toast } from '../lib/toast'
 
 interface UseStorageMaintenanceOptions {
@@ -19,7 +21,7 @@ export function useStorageMaintenance({ reload }: UseStorageMaintenanceOptions) 
   const deleteSession = useCallback(
     async (id: string) => {
       try {
-        await DB.deletePlaybackSession(id)
+        await deletePlaybackSessionForMaintenance(id)
         toast.successKey('toastDeleted')
         await reload()
       } catch (err) {
@@ -33,7 +35,7 @@ export function useStorageMaintenance({ reload }: UseStorageMaintenanceOptions) 
   const clearSessionCache = useCallback(
     async (id: string) => {
       try {
-        const didClear = await DB.clearPlaybackSessionAudioCache(id)
+        const didClear = await clearPlaybackSessionAudioCacheForMaintenance(id)
         if (didClear) {
           toast.successKey('toastAudioRemoved')
           await reload()
@@ -49,19 +51,7 @@ export function useStorageMaintenance({ reload }: UseStorageMaintenanceOptions) 
   const wipeAll = useCallback(async () => {
     setIsClearing(true)
     try {
-      // 1. Bump epoch counters FIRST — this invalidates any in-flight
-      //    async save (e.g. handleFieldBlur) that captured a stale epoch.
-      bumpSettingsWriteEpoch()
-      await clearAllCredentials()
-
-      // 2. Clear all persistent storage
-      await DB.clearAllData()
-      await clearDictCacheMemory()
-      localStorage.removeItem(SETTINGS_STORAGE_KEY)
-
-      // 3. Best-effort cleanup for obsolete browser-only storage keys
-      localStorage.removeItem('readio-user-credentials')
-
+      await wipeAllPersistentStorage()
       toast.successKey('toastAllDataCleared')
       await reload()
     } catch (err) {
@@ -75,7 +65,7 @@ export function useStorageMaintenance({ reload }: UseStorageMaintenanceOptions) 
   const wipeAudioCache = useCallback(async () => {
     setIsClearing(true)
     try {
-      await DB.clearAllAudioBlobs()
+      await wipeStoredAudioCache()
       toast.successKey('toastAudioRemoved')
       await reload()
     } catch (err) {

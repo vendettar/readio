@@ -1,24 +1,26 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
-import type { Favorite, PlaybackSession } from '../../dexieDb'
-import type { FeedEpisode, Podcast, SearchEpisode } from '../../discovery'
+import type { ExplorePlaybackSession, Favorite, LocalPlaybackSession, PlaybackSession } from '../../dexieDb'
+import type { Episode, Podcast, SearchEpisode } from '../../discovery'
 import {
+  mapEpisodeToPlaybackPayload,
   mapFavoriteToPlaybackPayload,
-  mapFeedEpisodeToPlaybackPayload,
   mapPlaybackSessionToEpisodeMetadata,
   mapSearchEpisodeToPlaybackPayload,
   mapSessionToPlaybackPayload,
 } from '../episodeMetadata'
 
-function makeFeedEpisode(overrides: Partial<FeedEpisode> = {}): FeedEpisode {
+function makeEpisode(overrides: Partial<Episode> & { guid?: string } = {}): Episode {
   return {
-    episodeGuid: 'test-ep',
+    guid: 'test-ep',
     title: 'Test Episode',
     description: 'Test description',
     audioUrl: 'https://example.com/audio.mp3',
     pubDate: '2024-01-01T00:00:00.000Z',
+    duration: 120,
+    explicit: false,
+    link: 'https://example.com/episodes/test-ep',
     ...overrides,
-  }
+  } as Episode
 }
 
 function makePodcast(overrides: Partial<Podcast> = {}): Podcast {
@@ -28,7 +30,6 @@ function makePodcast(overrides: Partial<Podcast> = {}): Podcast {
     author: 'Test Author',
     artwork: 'https://example.com/art.jpg',
     description: 'Test description',
-    feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
     lastUpdateTime: 1704067200,
     episodeCount: 10,
     language: 'en',
@@ -38,9 +39,9 @@ function makePodcast(overrides: Partial<Podcast> = {}): Podcast {
 }
 
 describe('episodeMetadata mappers', () => {
-  it('maps feed episode payload with normalized metadata', () => {
-    const episode = makeFeedEpisode({
-      episodeGuid: 'feed-guid-1',
+  it('maps PI episode payload with normalized metadata', () => {
+    const episode = makeEpisode({
+      guid: 'feed-guid-1',
       title: 'Episode',
       audioUrl: 'https://example.com/audio.mp3',
       description: 'desc',
@@ -51,7 +52,6 @@ describe('episodeMetadata mappers', () => {
     })
     const podcast = makePodcast({
       title: 'Podcast',
-      feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
       podcastItunesId: '123',
       author: 'Host',
       artwork: 'https://example.com/podcast-600.jpg',
@@ -62,8 +62,11 @@ describe('episodeMetadata mappers', () => {
       genres: ['Technology'],
     })
 
-    const payload = mapFeedEpisodeToPlaybackPayload(episode, podcast)
+    const payload = mapEpisodeToPlaybackPayload(episode, podcast)
     expect(payload.audioUrl).toBe('https://example.com/audio.mp3')
+    expect(payload.metadata.showTitle).toBe('Podcast')
+    expect(payload.metadata.artworkUrl).toBe('https://example.com/ep.jpg')
+    expect(payload.metadata.durationSeconds).toBe(120)
     expect(payload.metadata.podcastItunesId).toBe('123')
     expect(payload.metadata.episodeGuid).toBe('feed-guid-1')
     expect(payload.metadata.publishedAt).toBe(new Date('2024-01-01T00:00:00.000Z').getTime())
@@ -71,8 +74,8 @@ describe('episodeMetadata mappers', () => {
 
   it('maps search episode payload with canonical episode identity', () => {
     const episode: SearchEpisode = {
-      episodeUrl: 'https://example.com/search.mp3',
-      episodeGuid: 'search-guid-1',
+      audioUrl: 'https://example.com/search.mp3',
+      guid: 'search-guid-1',
       title: 'Search Episode',
       showTitle: 'Search Podcast',
       shortDescription: 'desc',
@@ -80,7 +83,7 @@ describe('episodeMetadata mappers', () => {
       trackTimeMillis: 90500,
       podcastItunesId: '456',
       artwork: 'https://example.com/search-art.jpg',
-    }
+    } as SearchEpisode
 
     const payload = mapSearchEpisodeToPlaybackPayload(episode)
     expect(payload.audioUrl).toBe('https://example.com/search.mp3')
@@ -89,23 +92,27 @@ describe('episodeMetadata mappers', () => {
     expect(payload.metadata.episodeGuid).toBe('search-guid-1')
     expect(payload.metadata.episodeGuid).toBeDefined()
     expect(payload.metadata.showTitle).toBe('Search Podcast')
+    expect(payload.metadata.artworkUrl).toBe('https://example.com/search-art.jpg')
   })
 
   it('maps favorite payload with episode artwork priority', () => {
-    const favorite = {
+    const favorite: Favorite = {
       id: 'fav-1',
-      key: 'k',
-      feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
+      key: 'pod-1::favorite-guid-1',
       audioUrl: 'https://example.com/favorite.mp3',
       episodeTitle: 'Favorite',
       podcastTitle: 'Podcast',
       artworkUrl: 'https://example.com/podcast.jpg',
       episodeArtworkUrl: 'https://example.com/art.jpg',
       addedAt: Date.now(),
+      description: 'Test description',
+      pubDate: '2025-02-01',
+      durationSeconds: 180,
       podcastItunesId: 'pod-1',
+      episodeGuid: 'favorite-guid-1',
       transcriptUrl: 'https://example.com/favorite.srt',
       countryAtSave: 'us',
-    } as Favorite
+    }
 
     const payload = mapFavoriteToPlaybackPayload(favorite)
     expect(payload.artwork).toBe('https://example.com/art.jpg')
@@ -129,21 +136,25 @@ describe('episodeMetadata mappers', () => {
       audioFilename: '',
       subtitleFilename: '',
       audioUrl: 'https://example.com/history.mp3',
+      artworkUrl: 'https://example.com/history.jpg',
+      showTitle: 'History Podcast',
       publishedAt: 1234,
       podcastItunesId: 'pod-2',
+      episodeGuid: 'history-guid-1',
       transcriptUrl: 'https://example.com/history.srt',
       countryAtSave: 'us',
-    } as PlaybackSession
+    } as ExplorePlaybackSession
 
     const mapped = mapSessionToPlaybackPayload(session)
     expect(mapped?.audioUrl).toBe('https://example.com/history.mp3')
+    expect(mapped?.metadata.kind).toBe('remote-episode')
     expect(mapped?.metadata.countryAtSave).toBe('us')
 
     expect(
       mapSessionToPlaybackPayload({
         ...session,
         audioUrl: undefined,
-      })
+      } as unknown as PlaybackSession)
     ).toBeNull()
   })
 
@@ -164,21 +175,54 @@ describe('episodeMetadata mappers', () => {
       subtitleFilename: 'local.srt',
       audioUrl: 'https://example.com/local.mp3',
       artworkUrl: 'https://example.com/default-art.jpg',
-      podcastTitle: 'Podcast',
-      podcastFeedUrl: 'https://example.com/feed.xml',
+      showTitle: 'Podcast',
       publishedAt: new Date('2024-06-01T00:00:00.000Z').getTime(),
-      podcastItunesId: '999',
       transcriptUrl: 'https://example.com/local.srt',
-    } as PlaybackSession
+    } as LocalPlaybackSession
 
     const metadata = mapPlaybackSessionToEpisodeMetadata(
       session,
       'https://example.com/override-art.jpg'
     )
+    expect(metadata.kind).toBe('local')
     expect(metadata.artworkUrl).toBe('https://example.com/override-art.jpg')
     expect(metadata.originalAudioUrl).toBe('https://example.com/local.mp3')
     expect(metadata.countryAtSave).toBeUndefined()
-    expect(metadata.podcastItunesId).toBe('999')
+    expect(metadata.podcastItunesId).toBeUndefined()
+    expect(metadata.episodeGuid).toBeUndefined()
     expect(metadata.publishedAt).toBe(new Date('2024-06-01T00:00:00.000Z').getTime())
+  })
+
+  it('normalizes remote playback-session metadata into explicit canonical remote metadata', () => {
+    const metadata = mapPlaybackSessionToEpisodeMetadata({
+      id: 's-remote-normalized',
+      source: 'explore',
+      title: 'Remote History',
+      createdAt: 1,
+      lastPlayedAt: 1,
+      sizeBytes: 1,
+      durationSeconds: 90,
+      audioId: null,
+      subtitleId: null,
+      hasAudioBlob: false,
+      progress: 10,
+      audioFilename: '',
+      subtitleFilename: '',
+      audioUrl: 'https://example.com/remote.mp3',
+      artworkUrl: ' https://example.com/remote-art.jpg ',
+      showTitle: ' Remote Podcast ',
+      publishedAt: 1234,
+      transcriptUrl: 'https://example.com/remote.srt',
+      podcastItunesId: ' podcast-remote ',
+      episodeGuid: ' episode-remote ',
+      countryAtSave: 'US',
+    } as PlaybackSession)
+
+    expect(metadata.kind).toBe('remote-episode')
+    expect(metadata.showTitle).toBe('Remote Podcast')
+    expect(metadata.artworkUrl).toBe('https://example.com/remote-art.jpg')
+    expect(metadata.podcastItunesId).toBe('podcast-remote')
+    expect(metadata.episodeGuid).toBe('episode-remote')
+    expect(metadata.countryAtSave).toBe('us')
   })
 })

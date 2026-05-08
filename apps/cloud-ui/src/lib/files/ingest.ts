@@ -3,8 +3,13 @@
 
 import type { ParseResult } from '../../workers/metadata.worker'
 import MetadataWorker from '../../workers/metadata.worker?worker'
-import { DB, DB_TABLE_NAMES, db } from '../dexieDb'
 import { log } from '../logger'
+import {
+  FilesRepository,
+  type FileIngestPersistenceResult,
+  type PreparedFileIngestInput,
+  type PreparedSubtitleAttachmentInput,
+} from '../repositories/FilesRepository'
 import { parseSubtitles } from '../subtitles'
 
 /**
@@ -103,7 +108,7 @@ interface PreparedItem {
   metadataArtist?: string
   artworkBlob?: Blob
   durationSeconds: number
-  matchingSubs: { file: File; text: string }[]
+  matchingSubs: PreparedSubtitleAttachmentInput[]
 }
 
 export async function ingestFiles(params: IngestParams): Promise<IngestResult> {
@@ -176,14 +181,17 @@ export async function ingestFiles(params: IngestParams): Promise<IngestResult> {
     }
 
     // Auto-match subtitles
-    const matchingSubs: { file: File; text: string }[] = []
+    const matchingSubs: PreparedSubtitleAttachmentInput[] = []
     const originalFileBase = file.name.replace(/\.[^/.]+$/, '')
 
     for (const sub of subFiles) {
       const subBaseName = sub.name.replace(/\.[^/.]+$/, '')
       if (subBaseName === originalFileBase || sub.name.startsWith(originalFileBase)) {
         const text = await readFileAsText(sub)
-        matchingSubs.push({ file: sub, text })
+        matchingSubs.push({
+          filename: sub.name,
+          cues: parseSubtitles(text),
+        })
       }
     }
 
@@ -198,99 +206,23 @@ export async function ingestFiles(params: IngestParams): Promise<IngestResult> {
     })
   }
 
-  // --- ATOMIC TRANSACTION START ---
-  return DB.transaction(
-    'rw',
-    [
-      DB_TABLE_NAMES.TRACKS,
-      DB_TABLE_NAMES.AUDIO_BLOBS,
-      DB_TABLE_NAMES.SUBTITLES,
-      DB_TABLE_NAMES.LOCAL_SUBTITLES,
-      DB_TABLE_NAMES.FOLDERS,
-    ],
-    async () => {
-      const createdTrackIds: string[] = []
-      let attachedSubtitleCount = 0
+  const preparedTracks: PreparedFileIngestInput[] = preparedItems.map((item) => ({
+    audioFile: item.file,
+    folderId,
+    trackName: item.metadataTitle || item.file.name.replace(/\.[^/.]+$/, ''),
+    durationSeconds: item.durationSeconds,
+    album: item.metadataAlbum,
+    artist: item.metadataArtist,
+    artworkBlob: item.artworkBlob,
+    matchingSubtitles: item.matchingSubs,
+  }))
 
-      // Fetch existing info inside transaction for consistency
-      const existingTracks = await DB.getFileTracksInFolder(folderId ?? null)
-      const existingTrackNames = existingTracks.map((t) => t.name)
-      const usedSubtitleFiles = new Set<string>() // tracked by filename for this batch
-
-      for (const item of preparedItems) {
-        const {
-          file,
-          metadataTitle,
-          metadataAlbum,
-          metadataArtist,
-          artworkBlob,
-          durationSeconds,
-          matchingSubs,
-        } = item
-
-        // Resolve name conflict
-        let baseName = metadataTitle || file.name.replace(/\.[^/.]+$/, '')
-        baseName = resolveDuplicateName(baseName, existingTrackNames)
-        existingTrackNames.push(baseName)
-
-        // Store artwork if present
-        let artworkId: string | undefined
-        if (artworkBlob) {
-          artworkId = await DB.addAudioBlob(artworkBlob, `artwork-${file.name}`)
-        }
-
-        // Store audio blob
-        const audioId = await DB.addAudioBlob(file, file.name)
-
-        // Create track
-        const trackId = await DB.addFileTrack({
-          folderId,
-          name: baseName,
-          audioId,
-          sizeBytes: file.size,
-          durationSeconds,
-          artworkId,
-          album: metadataAlbum,
-          artist: metadataArtist,
-        })
-        createdTrackIds.push(trackId)
-
-        // Attach matching subtitles
-        const existingSubtitles = await DB.getFileSubtitlesForTrack(trackId) // Should be empty
-        const existingSubtitleNames = existingSubtitles.map((s) => s.name)
-
-        for (const sub of matchingSubs) {
-          // Skip if we already used this exact subtitle file in this batch
-          // (Simple heuristic: uniqueness by filename in this upload batch)
-          if (usedSubtitleFiles.has(sub.file.name)) continue
-
-          const parsedCues = parseSubtitles(sub.text)
-          if (parsedCues.length === 0) {
-            log('[Files] Skipped attached subtitle due to parsing failure:', sub.file.name)
-            continue
-          }
-
-          let subName = sub.file.name
-          subName = resolveDuplicateName(subName, existingSubtitleNames)
-          existingSubtitleNames.push(subName)
-
-          const subtitleId = await DB.addSubtitle(parsedCues, subName)
-          await DB.addFileSubtitle({
-            trackId,
-            name: subName,
-            subtitleId,
-          })
-          attachedSubtitleCount++
-          usedSubtitleFiles.add(sub.file.name)
-        }
-
-        log('[Files] Added track (Transaction):', baseName)
-      }
-
-      return { createdTrackIds, attachedSubtitleCount }
-    }
-  )
-  // --- ATOMIC TRANSACTION END ---
+  const result: FileIngestPersistenceResult =
+    await FilesRepository.persistPreparedFileImports(preparedTracks, folderId)
+  for (const trackId of result.createdTrackIds) {
+    log('[Files] Added track (Transaction):', trackId)
+  }
+  return result
 }
 
 /**
@@ -298,36 +230,13 @@ export async function ingestFiles(params: IngestParams): Promise<IngestResult> {
  */
 export async function attachSubtitleToTrack(file: File, trackId: string): Promise<string> {
   const text = await readFileAsText(file)
+  const parsedCues = parseSubtitles(text)
+  if (parsedCues.length === 0) {
+    throw new Error(`Failed to parse subtitles from ${file.name} (file may be empty or invalid)`)
+  }
 
-  // --- ATOMIC TRANSACTION START ---
-  return DB.transaction(
-    'rw',
-    [DB_TABLE_NAMES.TRACKS, DB_TABLE_NAMES.LOCAL_SUBTITLES, DB_TABLE_NAMES.SUBTITLES],
-    async () => {
-      // Fetch existing subtitles to check duplicates (inside val)
-      const existingSubtitles = await DB.getFileSubtitlesForTrack(trackId)
-      const existingNames = existingSubtitles.map((s) => s.name)
-
-      const parsedCues = parseSubtitles(text)
-      if (parsedCues.length === 0) {
-        throw new Error(
-          `Failed to parse subtitles from ${file.name} (file may be empty or invalid)`
-        )
-      }
-
-      let subName = file.name
-      subName = resolveDuplicateName(subName, existingNames)
-
-      const subtitleId = await DB.addSubtitle(parsedCues, subName)
-      const fileSubtitleId = await DB.addFileSubtitle({
-        trackId,
-        name: subName,
-        subtitleId,
-      })
-
-      await db.tracks.update(trackId, { activeSubtitleId: fileSubtitleId })
-
-      return fileSubtitleId
-    }
-  )
+  return FilesRepository.attachPreparedSubtitleToTrack(trackId, {
+    filename: file.name,
+    cues: parsedCues,
+  })
 }

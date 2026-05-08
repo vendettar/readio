@@ -1,46 +1,59 @@
 import { create } from 'zustand'
-import { isAbortLikeError } from '../lib/fetchUtils'
-import { log, logError, warn } from '../lib/logger'
-import { normalizePodcastAudioUrl } from '../lib/networking/urlUtils'
-import type { PlaybackRequestMode } from '../lib/player/playbackMode'
-import { collectPlaybackBlobUrls, revokePlaybackBlobUrls } from '../lib/player/playerBlobUrls'
+import { logError, warn } from '../lib/logger'
 import {
-  buildRestoredLocalBlobState,
-  buildRestoredRemoteSessionState,
-} from '../lib/player/playerSessionRestore'
-import { DownloadsRepository } from '../lib/repositories/DownloadsRepository'
-import { FilesRepository } from '../lib/repositories/FilesRepository'
-import { PlaybackRepository } from '../lib/repositories/PlaybackRepository'
+  normalizeEpisodeMetadata,
+  type EpisodeMetadataInput,
+} from '../lib/player/playbackMetadata'
+import { collectPlaybackBlobUrls, revokePlaybackBlobUrls } from '../lib/player/playerBlobUrls'
 import { getAppConfig } from '../lib/runtimeConfig'
-import { getJson, setJson } from '../lib/storage'
-import { parseSubtitles } from '../lib/subtitles'
-import { usePlayerSurfaceStore } from './playerSurfaceStore'
+import {
+  applyLoadedSubtitles,
+  createPlayerStoreBlobLoadState,
+  persistManualAudioLoadInBackground,
+  persistManualSubtitlesInBackground,
+  readSubtitleFile,
+  resetTranscriptAfterMediaLoad,
+} from './playerStoreMediaLoading'
+import {
+  persistPlayerEndedProgress,
+  persistPlayerProgressOnUnmount,
+  persistPlayerProgressUpdate,
+} from './playerStoreProgressPersistence'
+import {
+  resolvePauseState,
+  resolvePlayState,
+  resolvePlayerErrorState,
+  resolveTogglePlayPauseState,
+} from './playerStorePlaybackControls'
+import {
+  resolvePlayerStoreAudioTransition,
+  type PlayerStoreAudioTransitionState,
+} from './playerStoreAudioTransition'
+import {
+  restorePlayerStoreSession,
+  type PlayerStoreSessionRestoreState,
+} from './playerStoreSessionRestore'
+import {
+  persistPlayerPlaybackRate,
+  persistPlayerVolume,
+  readInitialPlayerPlaybackRate,
+  readInitialPlayerVolume,
+} from './playerStorePreferences'
 import { useTranscriptStore } from './transcriptStore'
-
-interface EpisodeMetadataBase {
-  description?: string
-  showTitle?: string
-  podcastFeedUrl?: string
-  transcriptUrl?: string
-  artworkUrl?: string
-  publishedAt?: number
-  durationSeconds?: number // In seconds
-  episodeGuid?: string // Stable episode identity for compact route generation
-  podcastItunesId?: string // Podcast ID for navigation
-  originalAudioUrl?: string // Network URL identity for offline playback
-  playbackRequestMode?: PlaybackRequestMode // Request-scoped playback mode flag
-}
-
-export interface LocalEpisodeMetadata extends EpisodeMetadataBase {
-  countryAtSave?: undefined
-}
-
-export interface ExploreEpisodeMetadata extends EpisodeMetadataBase {
-  countryAtSave: string
-}
-
-// Episode metadata for session persistence.
-export type EpisodeMetadata = LocalEpisodeMetadata | ExploreEpisodeMetadata
+export type {
+  CanonicalEpisodeMetadata,
+  CanonicalRemoteEpisodeMetadata,
+  EpisodeMetadata,
+  EpisodeMetadataInput,
+} from '../lib/player/playbackMetadata'
+export {
+  isCanonicalEpisodeMetadata,
+  isCanonicalRemoteEpisodeMetadata,
+  isLocalEpisodeMetadata,
+  normalizeCountryAtSave,
+  normalizePlaybackAudioUrl,
+  resolveCanonicalPlaybackIdentity,
+} from '../lib/player/playbackMetadata'
 
 export const PLAYER_STATUS = {
   IDLE: 'idle',
@@ -82,7 +95,7 @@ interface PlayerState {
   localTrackId: string | null // FK to `tracks.id` or `tracks.id` for association during ASR/persistence.
 
   // Episode metadata for History display
-  episodeMetadata: EpisodeMetadata | null
+  episodeMetadata: EpisodeMetadataInput | null
 
   // lifecycle status
   initializationStatus: InitializationStatus
@@ -98,7 +111,7 @@ interface PlayerState {
     url: string | null,
     title?: string,
     coverArt?: string | Blob | null,
-    metadata?: EpisodeMetadata | null,
+    metadata?: EpisodeMetadataInput | null,
     isPlaying?: boolean
   ) => void
   setPlaybackSourceUrl: (url: string | null) => void
@@ -106,7 +119,7 @@ interface PlayerState {
   setSessionId: (id: string | null) => void
   suspendSessionPersistence: () => void
   setPlaybackTrackId: (id: string | null) => void
-  setEpisodeMetadata: (metadata: EpisodeMetadata | null) => void
+  setEpisodeMetadata: (metadata: EpisodeMetadataInput | null) => void
   seekTo: (time: number) => void // Unified seek entry point
   clearPendingSeek: () => void
   queueAutoplayAfterPendingSeek: () => void
@@ -124,7 +137,7 @@ interface PlayerState {
     artwork?: string | Blob | null,
     sessionId?: string | null,
     signal?: AbortSignal,
-    metadata?: EpisodeMetadata | null
+    metadata?: EpisodeMetadataInput | null
   ) => Promise<void>
   loadSubtitles: (file: File, signal?: AbortSignal) => Promise<void>
   updateProgress: (time: number) => void // Throttled progress update with DB persistence
@@ -149,7 +162,7 @@ const initialState = {
   sessionId: null as string | null,
   sessionPersistenceSuspended: false,
   localTrackId: null as string | null,
-  episodeMetadata: null as EpisodeMetadata | null,
+  episodeMetadata: null as EpisodeMetadataInput | null,
   activeBlobUrls: [] as string[],
 
   initializationStatus: INITIALIZATION_STATUS.IDLE,
@@ -157,128 +170,71 @@ const initialState = {
   loadRequestId: 0,
 }
 
-// Persistence keys
-const STORAGE_KEY_VOLUME = 'readio_volume'
-const STORAGE_KEY_RATE = 'readio_playback_rate'
-
-// Helper to get initial volume
-const getInitialVolume = (): number => {
-  const stored = getJson<number>(STORAGE_KEY_VOLUME)
-  if (typeof stored !== 'number' || Number.isNaN(stored)) return 0.8
-  return Math.max(0, Math.min(1, stored))
-}
-
-// Helper to get initial playback rate
-const getInitialRate = (): number => {
-  const stored = getJson<number>(STORAGE_KEY_RATE)
-  if (typeof stored !== 'number' || Number.isNaN(stored)) return 1
-  return Math.max(0.1, Math.min(4, stored))
-}
-
-// Throttling state for progress persistence (module-level to avoid closure issues)
-let lastProgressSaveTime = 0
-
-function isSessionNotFoundError(error: unknown): boolean {
-  if (!(error instanceof Error)) return false
-  return error.message.includes('Playback session') && error.message.includes('not found')
+function resolveMetadataDurationSeconds(
+  metadata: EpisodeMetadataInput | null | undefined
+): number | undefined {
+  if (typeof metadata?.durationSeconds !== 'number') return undefined
+  return Number.isFinite(metadata.durationSeconds) ? metadata.durationSeconds : undefined
 }
 
 export const usePlayerStore = create<PlayerState>((set, get) => ({
   ...initialState,
-  volume: getInitialVolume(),
-  playbackRate: getInitialRate(),
+  volume: readInitialPlayerVolume(),
+  playbackRate: readInitialPlayerPlaybackRate(),
 
   setProgress: (progress) => set({ progress }),
   setDuration: (duration) => set({ duration }),
   setVolume: (volume) => {
-    const newVolume = Math.max(0, Math.min(1, volume))
-    setJson(STORAGE_KEY_VOLUME, newVolume)
+    const newVolume = persistPlayerVolume(volume)
     set({ volume: newVolume })
   },
   setPlaybackRate: (rate) => {
-    const newRate = Math.max(0.1, Math.min(4, rate))
-    setJson(STORAGE_KEY_RATE, newRate)
+    const newRate = persistPlayerPlaybackRate(rate)
     set({ playbackRate: newRate })
   },
   setAudioUrl: (url, title = '', coverArt = '', metadata = null, isPlayingOverride?: boolean) => {
     const normalizedUrl = url || null
     const state = get()
+    const normalizedMetadata = normalizeEpisodeMetadata(metadata)
+    const nextDurationSeconds = resolveMetadataDurationSeconds(normalizedMetadata)
 
-    // Identity tracking
-    const identityUrl = metadata?.originalAudioUrl || normalizedUrl
-    const stateIdentityUrl = state.episodeMetadata?.originalAudioUrl || state.audioUrl
+    const transition = resolvePlayerStoreAudioTransition(
+      state as PlayerStoreAudioTransitionState,
+      {
+        url: normalizedUrl,
+        title,
+        coverArt,
+        metadata: normalizedMetadata,
+        isPlayingOverride,
+        nextDurationSeconds,
+      }
+    )
 
-    const isSameTrack =
-      !!identityUrl && identityUrl === stateIdentityUrl && state.status !== 'error'
-
-    // Conditionals for same track but different URL (blob swap)
-    const isSameTrackButDifferentUrl = isSameTrack && normalizedUrl !== state.audioUrl
-
-    if (isSameTrack && normalizedUrl === state.audioUrl) {
-      set({
-        audioTitle: title,
-        coverArtUrl: coverArt,
-        episodeMetadata: metadata,
-        audioLoaded: !!normalizedUrl,
-        autoplayAfterPendingSeek: false,
-        sessionPersistenceSuspended: false,
-        ...(metadata?.durationSeconds ? { duration: metadata.durationSeconds } : {}),
-      })
+    if (transition.kind === 'same-track') {
+      set(transition.nextStatePatch)
       return
     }
 
-    if (isSameTrackButDifferentUrl) {
+    if (transition.kind === 'same-track-url-swap') {
       revokePlaybackBlobUrls(state.activeBlobUrls)
       const newBlobUrls = collectPlaybackBlobUrls(normalizedUrl, coverArt)
 
       set({
-        audioUrl: normalizedUrl,
-        playbackSourceUrl: normalizedUrl,
-        audioTitle: title,
-        coverArtUrl: coverArt,
-        episodeMetadata: metadata,
-        audioLoaded: !!normalizedUrl,
+        ...transition.nextStatePatch,
         activeBlobUrls: newBlobUrls,
-        autoplayAfterPendingSeek: false,
-        sessionPersistenceSuspended: false,
-        isPlaying:
-          isPlayingOverride !== undefined ? isPlayingOverride : !!normalizedUrl && state.isPlaying,
-        ...(metadata?.durationSeconds ? { duration: metadata.durationSeconds } : {}),
       })
       return
     }
 
-    // New Track Implementation
     revokePlaybackBlobUrls(state.activeBlobUrls)
     const newBlobUrls = collectPlaybackBlobUrls(normalizedUrl, coverArt)
 
-    const shouldResetSession = (!!identityUrl && identityUrl !== stateIdentityUrl) || !identityUrl
-
-    set((state) => ({
-      audioUrl: normalizedUrl,
-      playbackSourceUrl: normalizedUrl,
-      audioLoaded: !!normalizedUrl,
-      audioTitle: title,
-      coverArtUrl: coverArt,
-      episodeMetadata: metadata,
+    set({
+      ...transition.nextStatePatch,
       activeBlobUrls: newBlobUrls,
-      autoplayAfterPendingSeek: false,
-      status: normalizedUrl || title ? 'loading' : 'idle',
-      isPlaying: isPlayingOverride !== undefined ? isPlayingOverride : !!normalizedUrl,
-      ...(shouldResetSession
-        ? {
-            sessionId: null,
-            sessionPersistenceSuspended: false,
-            progress: 0,
-            localTrackId: null,
-            duration: normalizedUrl ? metadata?.durationSeconds || 0 : 0,
-          }
-        : { sessionPersistenceSuspended: false }),
-      ...(metadata?.durationSeconds ? { duration: metadata.durationSeconds } : {}),
-      loadRequestId: state.loadRequestId + 1,
-    }))
+    })
 
-    if (!isSameTrack) {
+    if (transition.shouldResetTranscript) {
       useTranscriptStore.getState().resetTranscript()
     }
   },
@@ -287,7 +243,7 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   setPlaybackSourceUrl: (url) => set({ playbackSourceUrl: url }),
   suspendSessionPersistence: () => set({ sessionPersistenceSuspended: true, sessionId: null }),
   setPlaybackTrackId: (id) => set({ localTrackId: id }),
-  setEpisodeMetadata: (metadata) => set({ episodeMetadata: metadata }),
+  setEpisodeMetadata: (metadata) => set({ episodeMetadata: normalizeEpisodeMetadata(metadata) }),
 
   // Unified seek entry point: sets pendingSeek, App layer listens and syncs to audio element
   seekTo: (time) =>
@@ -299,155 +255,73 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
   queueAutoplayAfterPendingSeek: () => set({ autoplayAfterPendingSeek: true }),
   clearAutoplayAfterPendingSeek: () => set({ autoplayAfterPendingSeek: false }),
 
-  play: () =>
-    set((state) => {
-      // Allow retry from error state by re-entering loading.
-      if (!state.audioUrl) return {}
-      if (state.status === 'paused' || state.status === 'idle') {
-        return { isPlaying: true, status: 'playing' }
-      }
-      if (state.status === 'loading') {
-        return { isPlaying: true }
-      }
-      if (state.status === 'error') {
-        return { isPlaying: true, status: 'loading' }
-      }
-      return {}
-    }),
-  pause: () =>
-    set((state) => {
-      // If we were loading or playing, pausing moves us to 'paused'
-      if (state.status === 'playing' || state.status === 'loading') {
-        return { isPlaying: false, status: 'paused' }
-      }
-      return { isPlaying: false }
-    }),
-  togglePlayPause: () =>
-    set((state) => {
-      if (state.isPlaying) {
-        return { isPlaying: false, status: 'paused' }
-      }
-      if (state.audioUrl && (state.status === 'paused' || state.status === 'idle')) {
-        return { isPlaying: true, status: 'playing' }
-      }
-      if (state.audioUrl && state.status === 'loading') {
-        return { isPlaying: true }
-      }
-      if (state.audioUrl && state.status === 'error') {
-        return { isPlaying: true, status: 'loading' }
-      }
-      return {}
-    }),
+  play: () => set((state) => resolvePlayState(state)),
+  pause: () => set((state) => resolvePauseState(state)),
+  togglePlayPause: () => set((state) => resolveTogglePlayPauseState(state)),
   setStatus: (status) => set({ status }),
   setPlayerError: (message) => {
-    if (message === 'NotAllowedError') {
+    const resolved = resolvePlayerErrorState(message)
+    if (resolved.kind === 'autoplay-blocked') {
       warn('[PlayerStore] Player autoplay blocked:', message)
-      set({ status: 'paused', isPlaying: false })
+      set(resolved.nextState)
     } else {
       logError('[PlayerStore] Player Error:', message)
-      set({ status: 'error', isPlaying: false })
+      set(resolved.nextState)
     }
   },
 
   reset: () => {
     set((state) => {
       revokePlaybackBlobUrls(state.activeBlobUrls)
-      return initialState
+      return {
+        ...initialState,
+        volume: state.volume,
+        playbackRate: state.playbackRate,
+      }
     })
     useTranscriptStore.getState().resetTranscript()
   },
 
   loadAudio: async (file, signal) => {
-    // Create blob URL for immediate playback
-    const url = URL.createObjectURL(file)
-
-    // Save to IndexedDB in background (async, don't block UI)
-    const saveToDb = async () => {
-      try {
-        // Enforce storage quota for manual uploads as well
-        const { checkDownloadCapacity } = await import('../lib/downloadCapacity')
-        const capacity = await checkDownloadCapacity(file.size)
-        if (!capacity.allowed) {
-          const { toast } = await import('../lib/toast')
-          toast.errorKey('downloadStorageLimit')
-          return
-        }
-
-        const audioId = await PlaybackRepository.addAudioBlob(file, file.name)
-
-        // Link audio to current session
-        const currentSessionId = usePlayerStore.getState().sessionId
-        if (currentSessionId) {
-          await PlaybackRepository.updatePlaybackSession(currentSessionId, {
-            audioId,
-            audioFilename: file.name,
-            hasAudioBlob: true,
-            sizeBytes: file.size, // Ensure total size is updated
-          })
-        }
-      } catch (err) {
-        if (!isAbortLikeError(err)) warn('[PlayerStore] Failed to save audio to IndexedDB:', err)
-      }
-    }
-    void saveToDb()
+    void persistManualAudioLoadInBackground(file, () => get().sessionId)
 
     set((state) => {
-      // CRITICAL: Revoke any existing local blob URLs inside the updater to prevent race conditions
-      revokePlaybackBlobUrls(state.activeBlobUrls)
-
-      return {
-        audioUrl: url,
-        playbackSourceUrl: url,
-        audioLoaded: true,
-        audioTitle: file.name,
-        coverArtUrl: null,
-        activeBlobUrls: [url],
-        status: 'loading',
-        isPlaying: true,
-        // Reset session for NEW manual upload
-        sessionId: null,
-        progress: 0,
-        localTrackId: null,
-        loadRequestId: state.loadRequestId + 1,
-      }
+      return createPlayerStoreBlobLoadState(
+        state as PlayerStoreAudioTransitionState & { activeBlobUrls: string[] },
+        {
+          blob: file,
+          title: file.name,
+          coverArt: null,
+          sessionId: null,
+          metadata: null,
+          nextDurationSeconds: 0,
+        }
+      )
     })
 
-    useTranscriptStore.getState().resetTranscript()
+    resetTranscriptAfterMediaLoad()
     if (signal?.aborted) return
   },
 
   loadAudioBlob: async (blob, title, artwork, sessionId = null, signal, metadata = null) => {
-    const url = URL.createObjectURL(blob)
-    const newBlobUrls = [url]
-    const nextDurationSeconds =
-      typeof metadata?.durationSeconds === 'number' && metadata.durationSeconds > 0
-        ? metadata.durationSeconds
-        : 0
+    const normalizedMetadata = normalizeEpisodeMetadata(metadata)
+    const nextDurationSeconds = resolveMetadataDurationSeconds(normalizedMetadata) ?? 0
 
     set((state) => {
-      // CRITICAL: Revoke any existing local blob URLs inside the updater to prevent race conditions
-      revokePlaybackBlobUrls(state.activeBlobUrls)
-
-      return {
-        audioUrl: url,
-        playbackSourceUrl: url,
-        audioLoaded: true,
-        audioTitle: title,
-        coverArtUrl: artwork || null,
-        activeBlobUrls: newBlobUrls,
-        status: 'loading',
-        isPlaying: true,
-        sessionId: sessionId || null,
-        progress: 0,
-        duration: nextDurationSeconds,
-        localTrackId: null,
-        episodeMetadata: metadata,
-        // Increment request ID to invalidate any pending async operations
-        loadRequestId: state.loadRequestId + 1,
-      }
+      return createPlayerStoreBlobLoadState(
+        state as PlayerStoreAudioTransitionState & { activeBlobUrls: string[] },
+        {
+          blob,
+          title,
+          coverArt: artwork || null,
+          sessionId: sessionId || null,
+          metadata: normalizedMetadata,
+          nextDurationSeconds,
+        }
+      )
     })
 
-    useTranscriptStore.getState().resetTranscript()
+    resetTranscriptAfterMediaLoad()
     if (signal?.aborted) return
   },
 
@@ -455,35 +329,11 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     const requestId = get().loadRequestId + 1
     set({ loadRequestId: requestId })
 
-    const content = await file.text()
+    const subtitles = await readSubtitleFile(file)
     if (get().loadRequestId !== requestId || signal?.aborted) return
 
-    const subtitles = parseSubtitles(content)
-
-    // Save to IndexedDB in background
-    const saveToDb = async () => {
-      try {
-        const subtitleId = await PlaybackRepository.addSubtitle(subtitles, file.name)
-
-        // Link subtitle to current session
-        const currentSessionId = usePlayerStore.getState().sessionId
-        if (currentSessionId) {
-          await PlaybackRepository.updatePlaybackSession(currentSessionId, {
-            subtitleId,
-            subtitleFilename: file.name,
-          })
-        }
-      } catch (err) {
-        if (!isAbortLikeError(err)) warn('[PlayerStore] Failed to save subtitle to IndexedDB:', err)
-      }
-    }
-
-    void saveToDb()
-
-    const transcriptState = useTranscriptStore.getState()
-    transcriptState.setSubtitles(subtitles)
-    // Keep explicit reset here to avoid stale index if subtitle setter behavior changes.
-    transcriptState.setCurrentIndex(-1)
+    void persistManualSubtitlesInBackground(file.name, subtitles, () => get().sessionId)
+    applyLoadedSubtitles(subtitles)
   },
 
   // Throttled progress update with DB persistence
@@ -493,37 +343,17 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
     // Always update the store state
     set({ progress: time })
 
-    // Throttle DB writes
-    const now = Date.now()
-    if (now - lastProgressSaveTime < config.SAVE_PROGRESS_INTERVAL_MS) {
-      return
-    }
-    lastProgressSaveTime = now
-
-    // Save to DB in background
-    const state = usePlayerStore.getState()
-    if (!state.sessionId || time <= 0) return
-
-    void PlaybackRepository.updatePlaybackSession(state.sessionId, {
-      progress: time,
-      durationSeconds: state.duration || 0,
-      // Only update timestamp if actively playing
-      ...(state.isPlaying ? { lastPlayedAt: now } : {}),
+    const state = get()
+    persistPlayerProgressUpdate({
+      time,
+      saveIntervalMs: config.SAVE_PROGRESS_INTERVAL_MS,
+      state,
+      detachSessionPersistence: () => set({ sessionId: null, sessionPersistenceSuspended: true }),
     })
-      .then(() => {
-        log(`[PlayerStore] Saved progress: ${time.toFixed(1)}s`)
-      })
-      .catch((err) => {
-        if (isSessionNotFoundError(err)) {
-          set({ sessionId: null, sessionPersistenceSuspended: true })
-          return
-        }
-        if (!isAbortLikeError(err)) warn('[PlayerStore] Failed to save progress:', err)
-      })
   },
 
   handleEndedPlayback: async (endedProgress) => {
-    const state = usePlayerStore.getState()
+    const state = get()
     const clampedEndedProgress = Math.max(0, Math.min(endedProgress, state.duration || Infinity))
 
     set((current) => ({
@@ -535,204 +365,31 @@ export const usePlayerStore = create<PlayerState>((set, get) => ({
           : current.status,
     }))
 
-    const postPauseState = usePlayerStore.getState()
-    if (!postPauseState.sessionId) return
-
-    try {
-      await PlaybackRepository.updatePlaybackSession(postPauseState.sessionId, {
-        progress: 0,
-        durationSeconds: postPauseState.duration || 0,
-      })
-    } catch (err) {
-      if (isSessionNotFoundError(err)) {
-        set({ sessionId: null, sessionPersistenceSuspended: true })
-        return
-      }
-      if (!isAbortLikeError(err))
-        warn('[PlayerStore] Failed to persist ended playback completion:', err)
-    }
+    const postPauseState = get()
+    await persistPlayerEndedProgress({
+      sessionId: postPauseState.sessionId,
+      duration: postPauseState.duration,
+      detachSessionPersistence: () => set({ sessionId: null, sessionPersistenceSuspended: true }),
+    })
   },
 
   // Force immediate save (for unmount)
   // NOTE: This is a "persistence side-effect" and should NOT update loadRequestId
   // to avoid accidentally canceling ongoing restore/load operations
   saveProgressNow: async (signal) => {
-    const state = usePlayerStore.getState()
-    if (!state.sessionId || state.progress <= 0 || signal?.aborted) return
-
-    try {
-      await PlaybackRepository.updatePlaybackSession(state.sessionId, {
-        progress: state.progress,
-        durationSeconds: state.duration || 0,
-        // Only update timestamp if actively playing
-        ...(state.isPlaying ? { lastPlayedAt: Date.now() } : {}),
-      })
-    } catch (err) {
-      if (isSessionNotFoundError(err)) {
-        set({ sessionId: null, sessionPersistenceSuspended: true })
-        return
-      }
-      if (!isAbortLikeError(err)) warn('[PlayerStore] Failed to save progress on unmount:', err)
-    }
+    const state = get()
+    await persistPlayerProgressOnUnmount({
+      signal,
+      state,
+      detachSessionPersistence: () => set({ sessionId: null, sessionPersistenceSuspended: true }),
+    })
   },
 
   // Encapsulated restoration logic
-  restoreSession: async (signal) => {
-    const { initializationStatus } = usePlayerStore.getState()
-    if (initializationStatus === 'restoring' || initializationStatus === 'ready') return
-
-    const requestId = get().loadRequestId + 1
-    set({ initializationStatus: 'restoring', loadRequestId: requestId })
-
-    try {
-      const lastSession = await PlaybackRepository.getLastPlaybackSession()
-      if (!lastSession || lastSession.progress <= 0) {
-        if (get().loadRequestId !== requestId || signal?.aborted) return
-        usePlayerSurfaceStore.getState().setPlayableContext(false)
-        set({ initializationStatus: 'ready' })
-        return
-      }
-
-      // 1. Prepare Metadata
-      if (lastSession.durationSeconds) {
-        set({ duration: lastSession.durationSeconds })
-      }
-
-      // 2. Restore audio file from IndexedDB
-      if (lastSession.audioId) {
-        const audioData = await PlaybackRepository.getAudioBlob(lastSession.audioId)
-        if (audioData) {
-          const file = new File([audioData.blob], audioData.filename, {
-            type: audioData.type,
-          })
-
-          // Create blob URL for restored file
-          const url = URL.createObjectURL(file)
-
-          let artwork: string | Blob | null = null
-          // If we have a local track ID, try to restore its artwork
-          if (lastSession.localTrackId) {
-            try {
-              artwork = await FilesRepository.resolveTrackArtwork(lastSession.localTrackId)
-            } catch (err) {
-              if (!isAbortLikeError(err))
-                warn('[PlayerStore] Failed to restore artwork for local track', err)
-            }
-          }
-
-          // Update state ATOMICALLY with the restored sessionId
-          // Race Condition Guard: Check if a new request started while we were awaiting DB
-          if (get().loadRequestId !== requestId || signal?.aborted) {
-            // initializationStatus transition should be careful here
-            // If it was cancelled by a NEW load, don't set ready
-            if (get().loadRequestId === requestId) set({ initializationStatus: 'ready' })
-            return
-          }
-
-          set((state) => {
-            // CRITICAL: Revoke ANY existing blob URLs before setting new ones
-            revokePlaybackBlobUrls(state.activeBlobUrls)
-            return buildRestoredLocalBlobState({
-              session: lastSession,
-              audioUrl: url,
-              audioTitle: file.name,
-              coverArtUrl: artwork,
-              activeBlobUrls: [url],
-            })
-          })
-          useTranscriptStore.getState().resetTranscript()
-          usePlayerSurfaceStore.getState().setPlayableContext(true)
-        }
-      }
-      // 2b. Restore remote audio (Podcasts / Explore page)
-      // Prefer local download if available before falling back to remote URL
-      else if (lastSession.source === 'explore' && lastSession.audioUrl) {
-        if (get().loadRequestId !== requestId || signal?.aborted) {
-          if (get().loadRequestId === requestId) set({ initializationStatus: 'ready' })
-          return
-        }
-
-        const normalizedUrl = normalizePodcastAudioUrl(lastSession.audioUrl)
-        const downloadedTrack = await DownloadsRepository.findTrackByUrl(normalizedUrl)
-
-        if (downloadedTrack) {
-          const audioData = await PlaybackRepository.getAudioBlob(downloadedTrack.audioId)
-          if (audioData) {
-            const restoredLocalTrackId = downloadedTrack.id
-            log(
-              '[PlayerStore] Restoring remote session from local download:',
-              downloadedTrack.audioId
-            )
-            const file = new File([audioData.blob], audioData.filename, {
-              type: audioData.type,
-            })
-            const url = URL.createObjectURL(file)
-
-            let artwork: string | Blob | null = null
-            if (restoredLocalTrackId) {
-              try {
-                artwork = await FilesRepository.resolveTrackArtwork(restoredLocalTrackId)
-              } catch (err) {
-                if (!isAbortLikeError(err))
-                  warn('[PlayerStore] Failed to restore artwork for local track', err)
-              }
-            }
-
-            if (get().loadRequestId !== requestId || signal?.aborted) {
-              if (get().loadRequestId === requestId) set({ initializationStatus: 'ready' })
-              return
-            }
-
-            set((state) => {
-              revokePlaybackBlobUrls(state.activeBlobUrls)
-              return buildRestoredRemoteSessionState({
-                session: lastSession,
-                audioUrl: url,
-                coverArtUrl: artwork || lastSession.artworkUrl || '',
-                activeBlobUrls: [url],
-                localTrackId: restoredLocalTrackId,
-                originalAudioUrl: lastSession.audioUrl,
-              })
-            })
-            useTranscriptStore.getState().resetTranscript()
-            usePlayerSurfaceStore.getState().setPlayableContext(true)
-          }
-        }
-
-        // Fallback: no matching download or blob missing — restore from remote URL
-        if (!get().audioLoaded || get().sessionId !== lastSession.id) {
-          log('[PlayerStore] Restoring remote podcast session:', lastSession.audioUrl)
-          set(
-            buildRestoredRemoteSessionState({
-              session: lastSession,
-              audioUrl: lastSession.audioUrl,
-              coverArtUrl: lastSession.artworkUrl || '',
-            })
-          )
-          useTranscriptStore.getState().resetTranscript()
-          usePlayerSurfaceStore.getState().setPlayableContext(true)
-        }
-      }
-
-      // 3. Restore subtitle file from IndexedDB
-      if (lastSession.subtitleId) {
-        const subtitleData = await PlaybackRepository.getSubtitle(lastSession.subtitleId)
-        // Race Condition Guard: Ensure we haven't switched tracks
-        if (get().loadRequestId !== requestId || signal?.aborted) {
-          if (get().loadRequestId === requestId) set({ initializationStatus: 'ready' })
-          return
-        }
-        if (subtitleData) {
-          useTranscriptStore.getState().setSubtitles(subtitleData.cues)
-        }
-      }
-
-      set({ initializationStatus: 'ready' })
-    } catch (err) {
-      warn('[PlayerStore] Session restoration failed:', err)
-      usePlayerSurfaceStore.getState().setPlayableContext(false)
-      set({ initializationStatus: 'failed' })
-      // Keep it as failed so we can potentially retry or show error UI
-    }
-  },
+  restoreSession: async (signal): Promise<void> =>
+    restorePlayerStoreSession({
+      signal,
+      getState: () => get() as PlayerStoreSessionRestoreState,
+      setState: (patch) => set(patch as never),
+    }),
 }))

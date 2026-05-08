@@ -148,6 +148,32 @@ describe('useTabSync', () => {
     expect(localStorage.getItem('readio_sync')).toBeNull()
   })
 
+  it('ignores stale storage messages from other tabs', () => {
+    vi.stubGlobal('BroadcastChannel', undefined)
+
+    renderHook(() => useTabSync())
+
+    act(() => {
+      usePlayerStore.setState({ isPlaying: true, status: 'playing' })
+    })
+
+    act(() => {
+      window.dispatchEvent(
+        new StorageEvent('storage', {
+          key: 'readio_sync',
+          newValue: JSON.stringify({
+            type: 'PLAYING',
+            senderId: 'other-tab',
+            timestamp: Date.now() - 3000,
+          }),
+        })
+      )
+    })
+
+    expect(usePlayerStore.getState().isPlaying).toBe(true)
+    expect(usePlayerStore.getState().status).toBe('playing')
+  })
+
   it('cleans fallback storage timer on unmount without delayed side effects', () => {
     vi.stubGlobal('BroadcastChannel', undefined)
 

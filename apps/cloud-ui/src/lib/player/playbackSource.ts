@@ -1,7 +1,7 @@
-import { db } from '../dexieDb'
 import { findDownloadedTrack } from '../downloadService'
 import { logError } from '../logger'
 import { normalizePodcastAudioUrl, unwrapPodcastTrackingUrl } from '../networking/urlUtils'
+import { PlaybackRepository } from '../repositories/PlaybackRepository'
 
 // Singleton check (Instruction 124) to avoid redundant Blob URL creation for repeats
 let lastResolved: { normalizedUrl: string; objectUrl: string } | null = null
@@ -21,7 +21,7 @@ export async function resolvePlaybackSource(
       return { url: lastResolved.objectUrl, trackId: track.id }
     }
 
-    const audioBlobRecord = await db.audioBlobs.get(track.audioId)
+    const audioBlobRecord = await PlaybackRepository.getAudioBlob(track.audioId)
     if (!audioBlobRecord) {
       return { url: unwrapPodcastTrackingUrl(sourceUrl), trackId: track.id }
     }

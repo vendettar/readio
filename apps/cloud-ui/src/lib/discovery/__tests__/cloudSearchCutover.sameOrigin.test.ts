@@ -35,7 +35,7 @@ describe('cloud discovery 005b same-origin search cutover', () => {
     expect(results).toHaveLength(1)
     expect(results[0]?.title).toBe('Tech Podcast')
     expect(results[0]?.podcastItunesId).toBe('123')
-    expect(results[0]?.releaseDate).toBe('2026-03-27T00:00:00.000Z')
+    expect(results[0]?.releaseDate).toBe('2026-03-27T00:00:00Z')
     expect(results[0]?.episodeCount).toBe(321)
     expect(appleSearchHits).toBe(0)
   })
@@ -53,8 +53,8 @@ describe('cloud discovery 005b same-origin search cutover', () => {
             title: 'History Episode',
             showTitle: 'History Show',
             artwork: 'https://example.com/history-600.jpg',
-            episodeUrl: 'https://example.com/history.mp3',
-            episodeGuid: 'guid-123',
+            audioUrl: 'https://example.com/history.mp3',
+            guid: 'guid-123',
             podcastItunesId: '123',
           }),
         ])

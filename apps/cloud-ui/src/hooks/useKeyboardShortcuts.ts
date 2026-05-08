@@ -1,11 +1,14 @@
 import { useHotkeys } from 'react-hotkeys-hook'
+import {
+  executeKeyboardSeekBackward,
+  executeKeyboardSeekForward,
+} from '../lib/player/playerCommandActions'
 import { usePlayerStore } from '../store/playerStore'
 import { usePlayerSurfaceStore } from '../store/playerSurfaceStore'
 import { useSearchStore } from '../store/searchStore'
 
 export function useKeyboardShortcuts() {
   const togglePlayPause = usePlayerStore((s) => s.togglePlayPause)
-  const seekTo = usePlayerStore((s) => s.seekTo)
 
   // Space - Toggle Play/Pause
   useHotkeys(
@@ -21,8 +24,7 @@ export function useKeyboardShortcuts() {
     'left',
     (e) => {
       e.preventDefault()
-      const { progress } = usePlayerStore.getState()
-      seekTo(Math.max(0, progress - 15))
+      executeKeyboardSeekBackward()
     },
     { enableOnFormTags: false }
   )
@@ -32,10 +34,7 @@ export function useKeyboardShortcuts() {
     'right',
     (e) => {
       e.preventDefault()
-      const { progress, duration } = usePlayerStore.getState()
-      // If duration is not yet available (e.g., 0 or negative), just add 15s without clamping.
-      // Otherwise, clamp to duration.
-      seekTo(duration > 0 ? Math.min(duration, progress + 15) : progress + 15)
+      executeKeyboardSeekForward()
     },
     { enableOnFormTags: false }
   )

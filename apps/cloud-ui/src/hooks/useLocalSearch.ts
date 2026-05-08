@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatDuration } from '../lib/dateUtils'
 import {
-  DB,
   type Favorite,
   type FileTrack,
   type PlaybackSession,
@@ -10,6 +9,7 @@ import {
   type Subscription,
 } from '../lib/dexieDb'
 import { formatFileSize } from '../lib/formatters'
+import { loadLocalSearchDbSnapshot } from '../lib/localSearchService'
 import { logError } from '../lib/logger'
 import { useExploreStore } from '../store/exploreStore'
 
@@ -52,6 +52,16 @@ const LOCAL_FILE_SCAN_MAX = 1000
 const withinLimit = (count: number, limit: number) => limit === Infinity || count < limit
 const sliceWithLimit = <T>(items: T[], limit: number) =>
   limit === Infinity ? items : items.slice(0, limit)
+
+function buildCanonicalEpisodeResultKey(
+  podcastItunesId: string | null | undefined,
+  episodeGuid: string | null | undefined
+): string | null {
+  const normalizedPodcastItunesId = podcastItunesId?.trim() ?? ''
+  const normalizedEpisodeGuid = episodeGuid?.trim() ?? ''
+  if (!normalizedPodcastItunesId || !normalizedEpisodeGuid) return null
+  return `canonical:${normalizedPodcastItunesId}:${normalizedEpisodeGuid}`
+}
 
 function useDebouncedValue<T>(value: T, delayMs: number) {
   const [debouncedValue, setDebouncedValue] = useState(value)
@@ -109,15 +119,15 @@ export function useLocalSearch(
 
     for (const sub of subscriptions) {
       if (
-        (sub.title || '').toLowerCase().includes(normalizedQuery) ||
-        (sub.author || '').toLowerCase().includes(normalizedQuery)
+        sub.title.toLowerCase().includes(normalizedQuery) ||
+        sub.author.toLowerCase().includes(normalizedQuery)
       ) {
         if (!withinLimit(subscriptionCount, subscriptionLimit)) break
         results.push({
           type: 'subscription',
-          id: `sub-${sub.feedUrl}`,
-          title: sub.title || t('unknownPodcast'),
-          subtitle: sub.author || t('unknownArtist'),
+          id: `sub-${sub.podcastItunesId}`,
+          title: sub.title,
+          subtitle: sub.author,
           artworkUrl: sub.artworkUrl,
           extraSubtitle: t('badgeSubscribed'),
           badges: ['subscription'],
@@ -129,16 +139,16 @@ export function useLocalSearch(
 
     for (const fav of favorites) {
       if (
-        (fav.episodeTitle || '').toLowerCase().includes(normalizedQuery) ||
-        (fav.podcastTitle || '').toLowerCase().includes(normalizedQuery)
+        fav.episodeTitle.toLowerCase().includes(normalizedQuery) ||
+        fav.podcastTitle.toLowerCase().includes(normalizedQuery)
       ) {
         if (!withinLimit(favoriteCount, favoriteLimit)) break
         results.push({
           type: 'favorite',
           id: `fav-${fav.key}`,
-          title: fav.episodeTitle || t('unknownEpisode'),
-          subtitle: fav.podcastTitle || t('unknownPodcast'),
-          artworkUrl: fav.episodeArtworkUrl || fav.artworkUrl,
+          title: fav.episodeTitle,
+          subtitle: fav.podcastTitle,
+          artworkUrl: fav.episodeArtworkUrl,
           extraSubtitle: t('badgeFavorited'),
           badges: ['favorite'],
           data: fav,
@@ -175,36 +185,31 @@ export function useLocalSearch(
         const fileFetchLimit =
           fileLimit === Infinity ? LOCAL_FILE_SCAN_MAX : Math.max(fileLimit, LOCAL_FILE_SCAN_CHUNK)
 
-        // 1. Collect audioUrls from Favorites to look up their history explicitly
-        const favoriteAudioUrls = storeResults
+        // 1. Collect canonical favorite identities to look up matching remote history explicitly.
+        const favoriteCanonicalIdentities = storeResults
           .filter((r) => r.type === 'favorite')
-          .map((r) => (r.data as Favorite).audioUrl)
-          .filter((url) => typeof url === 'string' && url.length > 0)
+          .map((r) => r.data as Favorite)
+          .map((favorite) => ({
+            podcastItunesId: favorite.podcastItunesId,
+            episodeGuid: favorite.episodeGuid,
+          }))
 
-        const [titleSessions, tracks, downloads, favSessions] = await Promise.all([
-          DB.searchPlaybackSessionsByTitle(querySnapshot, historyFetchLimit),
-          DB.searchFileTracksByName(querySnapshot, fileFetchLimit),
-          DB.searchPodcastDownloadsByName(querySnapshot, fileFetchLimit),
-          favoriteAudioUrls.length > 0
-            ? DB.searchSessionsByAudioUrls(favoriteAudioUrls)
-            : Promise.resolve([] as PlaybackSession[]),
-        ])
-
-        // Merge title-matched sessions and favorite-matched sessions (deduplicated by ID)
-        const sessionMap = new Map<string, PlaybackSession>()
-        for (const s of titleSessions) sessionMap.set(s.id, s)
-        for (const s of favSessions) sessionMap.set(s.id, s)
-        const sessions = Array.from(sessionMap.values())
+        const snapshot = await loadLocalSearchDbSnapshot({
+          query: querySnapshot,
+          historyFetchLimit,
+          fileFetchLimit,
+          favoriteCanonicalIdentities,
+        })
 
         if (isCancelled) return
 
-        const historyResults: LocalSearchResult[] = sliceWithLimit(sessions, historyLimit).map(
+        const historyResults: LocalSearchResult[] = sliceWithLimit(snapshot.sessions, historyLimit).map(
           (session) => ({
             type: 'history',
             id: `history-${session.id}`,
             title: session.title || t('unknownTitle'),
             subtitle:
-              session.podcastTitle ||
+              session.showTitle ||
               (session.source === 'local' ? t('historySourceLocal') : t('historySourcePodcast')),
             artworkUrl: session.artworkUrl,
             extraSubtitle: t('historyTitle'),
@@ -214,23 +219,12 @@ export function useLocalSearch(
         )
 
         const fileResults: LocalSearchResult[] = await Promise.all(
-          sliceWithLimit(tracks, fileLimit).map(async (item) => {
-            const track = item as import('../lib/dexieDb').FileTrack
+          sliceWithLimit(snapshot.tracks, fileLimit).map(async ({ track, artworkBlob }) => {
             const sizeLabel = formatFileSize(track.sizeBytes ?? 0, language)
             const durationLabel = track.durationSeconds
               ? formatDuration(track.durationSeconds, t)
               : ''
             const subtitle = [sizeLabel, durationLabel].filter(Boolean).join(' • ')
-
-            let artworkBlob: Blob | undefined
-            if (track.artworkId) {
-              try {
-                const blob = await DB.getAudioBlob(track.artworkId)
-                if (blob) artworkBlob = blob.blob
-              } catch {
-                // Best-effort
-              }
-            }
 
             return {
               type: 'file' as const,
@@ -246,8 +240,7 @@ export function useLocalSearch(
         )
 
         const downloadResults: LocalSearchResult[] = await Promise.all(
-          sliceWithLimit(downloads, fileLimit).map(async (item) => {
-            const download = item as import('../lib/dexieDb').PodcastDownload
+          sliceWithLimit(snapshot.downloads, fileLimit).map(async ({ download, artworkBlob }) => {
             const sizeLabel = formatFileSize(download.sizeBytes ?? 0, language)
             const durationLabel = download.durationSeconds
               ? formatDuration(download.durationSeconds, t)
@@ -255,16 +248,6 @@ export function useLocalSearch(
             const subtitle = [download.sourcePodcastTitle, sizeLabel, durationLabel]
               .filter(Boolean)
               .join(' • ')
-
-            let artworkBlob: Blob | undefined
-            if (download.artworkId) {
-              try {
-                const blob = await DB.getAudioBlob(download.artworkId)
-                if (blob) artworkBlob = blob.blob
-              } catch {
-                // Best-effort
-              }
-            }
 
             return {
               type: 'download' as const,
@@ -280,11 +263,11 @@ export function useLocalSearch(
           })
         )
 
-        // Merge badges: if a local file has a corresponding history entry, add 'history' badge to the file result
+        // Merge badges: only true local-file history should be folded into file results.
         const localTrackIdsWithHistory = new Set<string>()
         for (const h of historyResults) {
           const session = h.data as PlaybackSession
-          if (session.localTrackId) {
+          if (session.source === 'local' && session.localTrackId) {
             localTrackIdsWithHistory.add(session.localTrackId)
           }
         }
@@ -302,7 +285,7 @@ export function useLocalSearch(
 
         const nonLocalHistoryResults = historyResults.filter((h) => {
           const session = h.data as PlaybackSession
-          return !session.localTrackId
+          return !(session.source === 'local' && session.localTrackId)
         })
 
         setDbResults([...nonLocalHistoryResults, ...mergedFileResults, ...downloadResults])
@@ -332,19 +315,32 @@ export function useLocalSearch(
     const resultsMap = new Map<string, LocalSearchResult>()
 
     const getUniqueKey = (item: LocalSearchResult): string => {
-      if (item.type === 'subscription') return `sub:${(item.data as Subscription).feedUrl}`
+      if (item.type === 'subscription') {
+        return `sub:${(item.data as Subscription).podcastItunesId}`
+      }
       if (item.type === 'favorite') {
         const fav = item.data as Favorite
-        return `audio:${fav.audioUrl}`
+        const canonicalKey = buildCanonicalEpisodeResultKey(fav.podcastItunesId, fav.episodeGuid)
+        return canonicalKey ?? `fav:${fav.key}`
       }
       if (item.type === 'history') {
         const session = item.data as PlaybackSession
-        if (session.audioUrl) return `audio:${session.audioUrl}`
-        if (session.episodeGuid) return `episode:${session.episodeGuid}`
+        if (session.source === 'explore') {
+          const canonicalKey = buildCanonicalEpisodeResultKey(
+            session.podcastItunesId,
+            session.episodeGuid
+          )
+          return canonicalKey ?? `history:${session.id}`
+        }
         return `history:${session.id}`
       }
       if (item.type === 'file') return `file:${(item.data as FileTrack).id}`
-      return item.id
+      const download = item.data as PodcastDownload
+      const canonicalKey = buildCanonicalEpisodeResultKey(
+        download.sourcePodcastItunesId,
+        download.sourceEpisodeGuid
+      )
+      return canonicalKey ?? item.id
     }
 
     // Process in order of priority: Subscriptions > Favorites > History > Files

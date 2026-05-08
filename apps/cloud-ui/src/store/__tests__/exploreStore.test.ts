@@ -2,10 +2,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DB } from '../../lib/dexieDb'
 import type { Podcast } from '../../lib/discovery'
-import { normalizeFeedUrl } from '../../lib/discovery/feedUrl'
-import { LibraryRepository } from '../../lib/repositories/LibraryRepository'
+import { FavoritesRepository } from '../../lib/repositories/FavoritesRepository'
+import { SettingsRepository } from '../../lib/repositories/SettingsRepository'
+import { SubscriptionRepository } from '../../lib/repositories/SubscriptionRepository'
 import { __resetRequestManagerStateForTests } from '../../lib/requestManager'
+import * as runtimeConfig from '../../lib/runtimeConfig'
 import { __testOnlyResetExploreStoreFlags, useExploreStore } from '../exploreStore'
+import { getInitialExploreCountry } from '../exploreStoreCountry'
 
 describe('ExploreStore', () => {
   afterEach(() => {
@@ -27,6 +30,42 @@ describe('ExploreStore', () => {
   })
 
   describe('Country', () => {
+    it('uses the runtime default country synchronously', () => {
+      const defaultConfig = runtimeConfig.getAppConfig()
+      vi.spyOn(runtimeConfig, 'getAppConfig').mockReturnValue({
+        ...defaultConfig,
+        DEFAULT_COUNTRY: 'JP',
+      })
+
+      expect(getInitialExploreCountry()).toBe('JP')
+    })
+
+    it('hydrates persisted country explicitly', async () => {
+      vi.spyOn(SettingsRepository, 'getSetting').mockResolvedValue('JP')
+
+      await useExploreStore.getState().hydrateCountry()
+
+      expect(SettingsRepository.getSetting).toHaveBeenCalledWith('explore_country')
+      expect(useExploreStore.getState().country).toBe('jp')
+    })
+
+    it('keeps manual selection when delayed hydration resolves later', async () => {
+      let resolveSetting: ((value: string) => void) | undefined
+      const settingGate = new Promise<string>((resolve) => {
+        resolveSetting = resolve
+      })
+
+      vi.spyOn(SettingsRepository, 'getSetting').mockImplementation(() => settingGate)
+      vi.spyOn(SettingsRepository, 'setSetting').mockResolvedValue()
+
+      const hydration = useExploreStore.getState().hydrateCountry()
+      useExploreStore.getState().setCountry('jp')
+      resolveSetting?.('cn')
+      await hydration
+
+      expect(useExploreStore.getState().country).toBe('jp')
+    })
+
     it('should update country', () => {
       const { setCountry } = useExploreStore.getState()
 
@@ -35,7 +74,7 @@ describe('ExploreStore', () => {
     })
 
     it('should normalize and persist country setting', () => {
-      const setSettingSpy = vi.spyOn(DB, 'setSetting').mockResolvedValue()
+      const setSettingSpy = vi.spyOn(SettingsRepository, 'setSetting').mockResolvedValue()
       const { setCountry } = useExploreStore.getState()
 
       setCountry('JP')
@@ -45,13 +84,28 @@ describe('ExploreStore', () => {
     })
 
     it('should skip persistence when country does not change after normalization', () => {
-      const setSettingSpy = vi.spyOn(DB, 'setSetting').mockResolvedValue()
+      const setSettingSpy = vi.spyOn(SettingsRepository, 'setSetting').mockResolvedValue()
       const { setCountry } = useExploreStore.getState()
 
       setCountry('US')
 
       expect(useExploreStore.getState().country).toBe('us')
-      expect(setSettingSpy).not.toHaveBeenCalled()
+      expect(setSettingSpy).toHaveBeenCalledWith('explore_country', 'us')
+    })
+
+    it('retries explicit hydration after a transient settings read failure', async () => {
+      const getSettingSpy = vi
+        .spyOn(SettingsRepository, 'getSetting')
+        .mockRejectedValueOnce(new Error('temporary indexeddb read failure'))
+        .mockResolvedValueOnce('JP')
+
+      await useExploreStore.getState().hydrateCountry()
+      expect(useExploreStore.getState().country).toBe('us')
+
+      await useExploreStore.getState().hydrateCountry()
+
+      expect(getSettingSpy).toHaveBeenCalledTimes(2)
+      expect(useExploreStore.getState().country).toBe('jp')
     })
   })
 
@@ -61,7 +115,6 @@ describe('ExploreStore', () => {
       title: 'Test Podcast',
       author: 'Test Artist',
       artwork: 'http://example.com/art-large.jpg',
-      feedUrl: normalizeFeedUrl('http://example.com/feed.xml'),
       description: 'A test podcast',
       lastUpdateTime: 1613394044,
       episodeCount: 50,
@@ -72,23 +125,50 @@ describe('ExploreStore', () => {
     it('should subscribe to a podcast', async () => {
       const { subscribe, isSubscribed } = useExploreStore.getState()
 
-      await subscribe(mockPodcast)
-      expect(isSubscribed('HTTP://EXAMPLE.COM:80/feed.xml')).toBe(true)
+      await subscribe(mockPodcast, undefined, 'us')
+      expect(isSubscribed('123')).toBe(true)
       expect(useExploreStore.getState().subscriptions[0]?.countryAtSave).toBe('us')
-      expect(useExploreStore.getState().subscriptions[0]?.feedUrl).toBe(
-        'http://example.com/feed.xml'
+      expect(useExploreStore.getState().subscriptions[0]?.podcastItunesId).toBe('123')
+    })
+
+    it('rejects subscription persistence when canonical remote metadata is incomplete', async () => {
+      const addSubscriptionSpy = vi.spyOn(SubscriptionRepository, 'addSubscription')
+      const { subscribe, isSubscribed } = useExploreStore.getState()
+
+      await subscribe(
+        {
+          ...mockPodcast,
+          title: '   ',
+        },
+        undefined,
+        'us'
       )
+
+      expect(addSubscriptionSpy).not.toHaveBeenCalled()
+      expect(isSubscribed('123')).toBe(false)
+      expect(useExploreStore.getState().subscriptions).toHaveLength(0)
     })
 
     it('should unsubscribe from a podcast', async () => {
       const { subscribe, unsubscribe, isSubscribed } = useExploreStore.getState()
 
-      await subscribe(mockPodcast)
-      await unsubscribe('http://EXAMPLE.COM:80/feed.xml#ignore')
-      expect(isSubscribed('http://example.com/feed.xml')).toBe(false)
+      await subscribe(mockPodcast, undefined, 'us')
+      await unsubscribe('123')
+      expect(isSubscribed('123')).toBe(false)
     })
 
-    it('coalesces concurrent subscribe writes for the same feedUrl', async () => {
+    it('rejects subscription persistence when countryAtSave is blank', async () => {
+      const addSubscriptionSpy = vi.spyOn(SubscriptionRepository, 'addSubscription')
+      const { subscribe, isSubscribed } = useExploreStore.getState()
+
+      await subscribe(mockPodcast, undefined, '   ')
+
+      expect(addSubscriptionSpy).not.toHaveBeenCalled()
+      expect(isSubscribed('123')).toBe(false)
+      expect(useExploreStore.getState().subscriptions).toHaveLength(0)
+    })
+
+    it('coalesces concurrent subscribe writes for the same podcastItunesId', async () => {
       useExploreStore.setState({
         subscriptions: [],
         subscriptionsLoaded: true,
@@ -99,27 +179,27 @@ describe('ExploreStore', () => {
         resolveExistingLookup = resolve
       })
 
-      const getByFeedUrlSpy = vi
-        .spyOn(LibraryRepository, 'getSubscriptionByFeedUrl')
+      const getByPodcastItunesIdSpy = vi
+        .spyOn(SubscriptionRepository, 'getSubscriptionByPodcastItunesId')
         .mockImplementation(async () => {
           await existingLookupGate
           return undefined
         })
       const addSubscriptionSpy = vi
-        .spyOn(LibraryRepository, 'addSubscription')
+        .spyOn(SubscriptionRepository, 'addSubscription')
         .mockResolvedValue('sub-coalesced')
 
       const { subscribe } = useExploreStore.getState()
-      const first = subscribe(mockPodcast)
-      const second = subscribe(mockPodcast)
+      const first = subscribe(mockPodcast, undefined, 'us')
+      const second = subscribe(mockPodcast, undefined, 'us')
 
       resolveExistingLookup?.()
       await Promise.all([first, second])
 
-      expect(getByFeedUrlSpy).toHaveBeenCalledTimes(1)
+      expect(getByPodcastItunesIdSpy).toHaveBeenCalledTimes(1)
       expect(addSubscriptionSpy).toHaveBeenCalledTimes(1)
       expect(useExploreStore.getState().subscriptions).toHaveLength(1)
-      expect(useExploreStore.getState().isSubscribed('http://example.com/feed.xml')).toBe(true)
+      expect(useExploreStore.getState().isSubscribed('123')).toBe(true)
     })
 
     it('keeps shared subscribe write alive when first caller aborts', async () => {
@@ -133,38 +213,39 @@ describe('ExploreStore', () => {
         resolveExistingLookup = resolve
       })
 
-      vi.spyOn(LibraryRepository, 'getSubscriptionByFeedUrl').mockImplementation(async () => {
-        await existingLookupGate
-        return undefined
-      })
+      vi.spyOn(SubscriptionRepository, 'getSubscriptionByPodcastItunesId').mockImplementation(
+        async () => {
+          await existingLookupGate
+          return undefined
+        }
+      )
       const addSubscriptionSpy = vi
-        .spyOn(LibraryRepository, 'addSubscription')
+        .spyOn(SubscriptionRepository, 'addSubscription')
         .mockResolvedValue('sub-after-abort')
 
       const { subscribe } = useExploreStore.getState()
       const firstController = new AbortController()
-      const first = subscribe(mockPodcast, firstController.signal)
-      const second = subscribe(mockPodcast)
+      const first = subscribe(mockPodcast, firstController.signal, 'us')
+      const second = subscribe(mockPodcast, undefined, 'us')
 
       firstController.abort()
       resolveExistingLookup?.()
       await Promise.all([first.catch(() => {}), second])
 
       expect(addSubscriptionSpy).toHaveBeenCalledTimes(1)
-      expect(useExploreStore.getState().isSubscribed('http://example.com/feed.xml')).toBe(true)
+      expect(useExploreStore.getState().isSubscribed('123')).toBe(true)
     })
 
-    it('coalesces concurrent unsubscribe writes for the same feedUrl', async () => {
+    it('coalesces concurrent unsubscribe writes for the same podcastItunesId', async () => {
       useExploreStore.setState({
         subscriptions: [
           {
             id: 'sub-remove',
-            feedUrl: normalizeFeedUrl('http://example.com/feed.xml'),
+            podcastItunesId: '123',
             title: 'Test Podcast',
             author: 'Test Artist',
             artworkUrl: 'http://example.com/art-large.jpg',
             addedAt: Date.now(),
-            podcastItunesId: '123',
             countryAtSave: 'us',
           },
         ],
@@ -177,64 +258,21 @@ describe('ExploreStore', () => {
       })
 
       const removeSpy = vi
-        .spyOn(LibraryRepository, 'removeSubscriptionByFeedUrl')
+        .spyOn(SubscriptionRepository, 'removeSubscriptionByPodcastItunesId')
         .mockImplementation(async () => {
           await removeGate
         })
 
       const { unsubscribe } = useExploreStore.getState()
-      const first = unsubscribe('HTTP://Example.com:80/feed.xml#frag')
-      const second = unsubscribe('http://example.com/feed.xml')
+      const first = unsubscribe('123')
+      const second = unsubscribe('123')
 
       resolveRemove?.()
       await Promise.all([first, second])
 
       expect(removeSpy).toHaveBeenCalledTimes(1)
       expect(useExploreStore.getState().subscriptions).toHaveLength(0)
-      expect(useExploreStore.getState().isSubscribed('http://example.com/feed.xml')).toBe(false)
-    })
-
-    it('coalesces concurrent bulkSubscribe writes for equivalent feed sets', async () => {
-      useExploreStore.setState({
-        subscriptionsLoaded: false,
-      })
-
-      let resolveBulkWrite: (() => void) | undefined
-      const bulkWriteGate = new Promise<void>((resolve) => {
-        resolveBulkWrite = resolve
-      })
-
-      const bulkAddSpy = vi
-        .spyOn(LibraryRepository, 'bulkAddSubscriptionsIfMissing')
-        .mockImplementation(async () => {
-          await bulkWriteGate
-          return 2
-        })
-
-      const podcastsFirst = [
-        { title: 'A', xmlUrl: 'HTTP://Example.com:80/feed.xml#frag' },
-        { title: 'A duplicate', xmlUrl: 'http://example.com/feed.xml' },
-        { title: 'B', xmlUrl: 'https://example.org/feed' },
-      ]
-      const podcastsSecond = [
-        { title: 'B reordered', xmlUrl: 'https://example.org/feed' },
-        { title: 'A reordered', xmlUrl: 'http://example.com/feed.xml' },
-      ]
-
-      const { bulkSubscribe } = useExploreStore.getState()
-      const first = bulkSubscribe(podcastsFirst)
-      const second = bulkSubscribe(podcastsSecond)
-
-      resolveBulkWrite?.()
-      await Promise.all([first, second])
-
-      expect(bulkAddSpy).toHaveBeenCalledTimes(1)
-      const persisted = bulkAddSpy.mock.calls[0]?.[0] ?? []
-      expect(persisted).toHaveLength(2)
-      expect(persisted.map((item) => item.feedUrl).sort()).toEqual([
-        'http://example.com/feed.xml',
-        'https://example.org/feed',
-      ])
+      expect(useExploreStore.getState().isSubscribed('123')).toBe(false)
     })
   })
 
@@ -244,7 +282,6 @@ describe('ExploreStore', () => {
       title: 'Test Podcast',
       author: 'Test Artist',
       artwork: 'http://example.com/art-large.jpg',
-      feedUrl: normalizeFeedUrl('http://example.com/feed.xml'),
       description: 'A test podcast',
       lastUpdateTime: 1613394044,
       episodeCount: 50,
@@ -253,33 +290,109 @@ describe('ExploreStore', () => {
     }
 
     const mockEpisode = {
-      id: 'ep1',
       title: 'Episode 1',
       description: 'Test episode',
       audioUrl: 'http://example.com/ep1.mp3',
       pubDate: '2024-01-01',
+      artworkUrl: 'http://example.com/ep1-art.jpg',
+      duration: 1800,
+      episodeGuid: 'episode-guid-1',
     }
 
     it('should add a favorite', async () => {
-      const { addFavorite, isFavorited, setCountry } = useExploreStore.getState()
-      setCountry('JP')
+      const { addFavorite, isFavorited } = useExploreStore.getState()
 
-      await addFavorite(mockPodcast, mockEpisode)
-      expect(
-        isFavorited('http://EXAMPLE.com:80/feed.xml#ignore', 'http://example.com/ep1.mp3')
-      ).toBe(true)
+      await addFavorite(mockPodcast, mockEpisode, undefined, 'jp')
+      expect(isFavorited('123', 'episode-guid-1')).toBe(true)
       expect(useExploreStore.getState().favorites[0]?.countryAtSave).toBe('jp')
-      expect(useExploreStore.getState().favorites[0]?.feedUrl).toBe('http://example.com/feed.xml')
+    })
+
+    it('persists favorite when podcast artwork exists but episode-specific artwork is absent', async () => {
+      const { addFavorite, isFavorited } = useExploreStore.getState()
+
+      await addFavorite(
+        mockPodcast,
+        {
+          ...mockEpisode,
+          artworkUrl: '',
+        },
+        undefined,
+        'jp'
+      )
+
+      expect(isFavorited('123', 'episode-guid-1')).toBe(true)
+      expect(useExploreStore.getState().favorites[0]).toMatchObject({
+        artworkUrl: 'http://example.com/art-large.jpg',
+        episodeArtworkUrl: 'http://example.com/art-large.jpg',
+      })
     })
 
     it('should remove a favorite', async () => {
       const { addFavorite, removeFavorite, isFavorited } = useExploreStore.getState()
 
-      await addFavorite(mockPodcast, mockEpisode)
-      const key = `http://example.com/feed.xml::http://example.com/ep1.mp3`
+      await addFavorite(mockPodcast, mockEpisode, undefined, 'jp')
+      const key = '123::episode-guid-1'
       await removeFavorite(key)
 
-      expect(isFavorited('http://example.com/feed.xml', 'http://example.com/ep1.mp3')).toBe(false)
+      expect(isFavorited('123', 'episode-guid-1')).toBe(false)
+    })
+
+    it('fails closed for empty canonical favorite identity lookups', async () => {
+      const { addFavorite, isFavorited } = useExploreStore.getState()
+
+      await addFavorite(mockPodcast, mockEpisode, undefined, 'jp')
+
+      expect(isFavorited('', 'episode-guid-1')).toBe(false)
+      expect(isFavorited('123', '')).toBe(false)
+    })
+
+    it('rejects favorite persistence when countryAtSave is blank', async () => {
+      const addFavoriteSpy = vi.spyOn(FavoritesRepository, 'addFavorite')
+      const { addFavorite, isFavorited } = useExploreStore.getState()
+
+      await addFavorite(mockPodcast, mockEpisode, undefined, '   ')
+
+      expect(addFavoriteSpy).not.toHaveBeenCalled()
+      expect(isFavorited('123', 'episode-guid-1')).toBe(false)
+      expect(useExploreStore.getState().favorites).toHaveLength(0)
+    })
+
+    it('rejects favorite persistence when canonical identity is missing', async () => {
+      const addFavoriteSpy = vi.spyOn(FavoritesRepository, 'addFavorite')
+      const { addFavorite, isFavorited } = useExploreStore.getState()
+
+      await addFavorite(
+        mockPodcast,
+        {
+          ...mockEpisode,
+          episodeGuid: '',
+        },
+        undefined,
+        'jp'
+      )
+
+      expect(addFavoriteSpy).not.toHaveBeenCalled()
+      expect(isFavorited('123', 'episode-guid-1')).toBe(false)
+      expect(useExploreStore.getState().favorites).toHaveLength(0)
+    })
+
+    it('rejects favorite persistence when required remote metadata is missing', async () => {
+      const addFavoriteSpy = vi.spyOn(FavoritesRepository, 'addFavorite')
+      const { addFavorite, isFavorited } = useExploreStore.getState()
+
+      await addFavorite(
+        mockPodcast,
+        {
+          ...mockEpisode,
+          audioUrl: '',
+        },
+        undefined,
+        'jp'
+      )
+
+      expect(addFavoriteSpy).not.toHaveBeenCalled()
+      expect(isFavorited('123', 'episode-guid-1')).toBe(false)
+      expect(useExploreStore.getState().favorites).toHaveLength(0)
     })
 
     it('coalesces concurrent addFavorite writes for the same key', async () => {
@@ -294,18 +407,18 @@ describe('ExploreStore', () => {
       })
 
       const getFavoriteSpy = vi
-        .spyOn(LibraryRepository, 'getFavoriteByKey')
+        .spyOn(FavoritesRepository, 'getFavoriteByKey')
         .mockImplementation(async () => {
           await favoriteLookupGate
           return undefined
         })
       const addFavoriteSpy = vi
-        .spyOn(LibraryRepository, 'addFavorite')
+        .spyOn(FavoritesRepository, 'addFavorite')
         .mockResolvedValue('fav-coalesced')
 
       const { addFavorite } = useExploreStore.getState()
-      const first = addFavorite(mockPodcast, mockEpisode)
-      const second = addFavorite(mockPodcast, mockEpisode)
+      const first = addFavorite(mockPodcast, mockEpisode, undefined, 'jp')
+      const second = addFavorite(mockPodcast, mockEpisode, undefined, 'jp')
 
       resolveFavoriteLookup?.()
       await Promise.all([first, second])
@@ -313,9 +426,7 @@ describe('ExploreStore', () => {
       expect(getFavoriteSpy).toHaveBeenCalledTimes(1)
       expect(addFavoriteSpy).toHaveBeenCalledTimes(1)
       expect(useExploreStore.getState().favorites).toHaveLength(1)
-      expect(
-        useExploreStore.getState().isFavorited(mockPodcast.feedUrl, mockEpisode.audioUrl)
-      ).toBe(true)
+      expect(useExploreStore.getState().isFavorited('123', 'episode-guid-1')).toBe(true)
     })
 
     it('keeps shared addFavorite write alive when first caller aborts', async () => {
@@ -329,27 +440,25 @@ describe('ExploreStore', () => {
         resolveFavoriteLookup = resolve
       })
 
-      vi.spyOn(LibraryRepository, 'getFavoriteByKey').mockImplementation(async () => {
+      vi.spyOn(FavoritesRepository, 'getFavoriteByKey').mockImplementation(async () => {
         await favoriteLookupGate
         return undefined
       })
       const addFavoriteSpy = vi
-        .spyOn(LibraryRepository, 'addFavorite')
+        .spyOn(FavoritesRepository, 'addFavorite')
         .mockResolvedValue('fav-after-abort')
 
       const { addFavorite } = useExploreStore.getState()
       const firstController = new AbortController()
-      const first = addFavorite(mockPodcast, mockEpisode, firstController.signal)
-      const second = addFavorite(mockPodcast, mockEpisode)
+      const first = addFavorite(mockPodcast, mockEpisode, firstController.signal, 'jp')
+      const second = addFavorite(mockPodcast, mockEpisode, undefined, 'jp')
 
       firstController.abort()
       resolveFavoriteLookup?.()
       await Promise.all([first.catch(() => {}), second])
 
       expect(addFavoriteSpy).toHaveBeenCalledTimes(1)
-      expect(
-        useExploreStore.getState().isFavorited(mockPodcast.feedUrl, mockEpisode.audioUrl)
-      ).toBe(true)
+      expect(useExploreStore.getState().isFavorited('123', 'episode-guid-1')).toBe(true)
     })
 
     it('aborts operation and skips state mutation when all callers abort', async () => {
@@ -359,7 +468,7 @@ describe('ExploreStore', () => {
       })
 
       const addFavoriteSpy = vi
-        .spyOn(LibraryRepository, 'addFavorite')
+        .spyOn(FavoritesRepository, 'addFavorite')
         .mockImplementation(async () => {
           await addGate
           return 'fav-id-all-aborted'
@@ -369,8 +478,8 @@ describe('ExploreStore', () => {
       const firstController = new AbortController()
       const secondController = new AbortController()
 
-      const first = addFavorite(mockPodcast, mockEpisode, firstController.signal)
-      const second = addFavorite(mockPodcast, mockEpisode, secondController.signal)
+      const first = addFavorite(mockPodcast, mockEpisode, firstController.signal, 'jp')
+      const second = addFavorite(mockPodcast, mockEpisode, secondController.signal, 'jp')
       firstController.abort()
       secondController.abort()
       resolveAdd?.()
@@ -383,27 +492,28 @@ describe('ExploreStore', () => {
 
       // Request might have reached the repository before abort or short-circuited
       // But state should NOT be mutated
-      expect(
-        useExploreStore.getState().isFavorited(mockPodcast.feedUrl, mockEpisode.audioUrl)
-      ).toBe(false)
+      expect(useExploreStore.getState().isFavorited('123', 'episode-guid-1')).toBe(false)
       expect(useExploreStore.getState().favorites).toHaveLength(0)
     })
 
     it('coalesces concurrent removeFavorite writes for the same key', async () => {
-      const key = 'http://example.com/feed.xml::http://example.com/ep1.mp3'
+      const key = '123::episode-guid-1'
       useExploreStore.setState({
         favorites: [
           {
             id: 'fav-remove',
             key,
-            feedUrl: normalizeFeedUrl('http://example.com/feed.xml'),
             podcastTitle: 'Test Podcast',
             episodeTitle: 'Episode 1',
             pubDate: '2024-01-01',
             audioUrl: 'http://example.com/ep1.mp3',
             durationSeconds: 0,
             artworkUrl: 'http://example.com/art.jpg',
+            episodeArtworkUrl: '',
+            description: 'test',
             addedAt: Date.now(),
+            episodeGuid: 'episode-guid-1',
+            podcastItunesId: '123',
             countryAtSave: 'us',
           },
         ],
@@ -416,7 +526,7 @@ describe('ExploreStore', () => {
       })
 
       const removeSpy = vi
-        .spyOn(LibraryRepository, 'removeFavoriteByKey')
+        .spyOn(FavoritesRepository, 'removeFavoriteByKey')
         .mockImplementation(async () => {
           await removeGate
         })
@@ -430,11 +540,7 @@ describe('ExploreStore', () => {
 
       expect(removeSpy).toHaveBeenCalledTimes(1)
       expect(useExploreStore.getState().favorites).toHaveLength(0)
-      expect(
-        useExploreStore
-          .getState()
-          .isFavorited('http://example.com/feed.xml', 'http://example.com/ep1.mp3')
-      ).toBe(false)
+      expect(useExploreStore.getState().isFavorited('123', 'episode-guid-1')).toBe(false)
     })
   })
 
@@ -442,7 +548,6 @@ describe('ExploreStore', () => {
     it('retries subscription lazy hydration after transient failure', async () => {
       const subscription = {
         id: 'sub-retry',
-        feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
         title: 'Subscription Retry',
         author: 'Author',
         artworkUrl: '',
@@ -452,7 +557,7 @@ describe('ExploreStore', () => {
       }
 
       const getAllSubscriptionsSpy = vi
-        .spyOn(LibraryRepository, 'getAllSubscriptions')
+        .spyOn(SubscriptionRepository, 'getAllSubscriptions')
         .mockRejectedValueOnce(new Error('temporary indexeddb read failure'))
         .mockResolvedValueOnce([subscription])
 
@@ -474,18 +579,23 @@ describe('ExploreStore', () => {
     it('retries favorites lazy hydration after transient failure', async () => {
       const favorite = {
         id: 'fav-retry',
-        key: 'fav-retry-key',
-        feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
+        key: '123::episode-guid-retry',
         podcastTitle: 'Podcast Retry',
         episodeTitle: 'Episode Retry',
         audioUrl: 'https://example.com/audio.mp3',
         artworkUrl: '',
+        episodeArtworkUrl: '',
+        description: 'test',
+        pubDate: '2025-02-01',
+        durationSeconds: 0,
         addedAt: Date.now(),
+        podcastItunesId: '123',
+        episodeGuid: 'episode-guid-retry',
         countryAtSave: 'us',
       }
 
       const getAllFavoritesSpy = vi
-        .spyOn(LibraryRepository, 'getAllFavorites')
+        .spyOn(FavoritesRepository, 'getAllFavorites')
         .mockRejectedValueOnce(new Error('temporary indexeddb read failure'))
         .mockResolvedValueOnce([favorite])
 
@@ -508,7 +618,6 @@ describe('ExploreStore', () => {
       const subscriptions = [
         {
           id: 'sub-1',
-          feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
           title: 'Subscription',
           author: 'Author',
           artworkUrl: '',
@@ -520,19 +629,24 @@ describe('ExploreStore', () => {
       const favorites = [
         {
           id: 'fav-1',
-          key: 'k1',
-          feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
+          key: '123::episode-guid-1',
           podcastTitle: 'Podcast',
           episodeTitle: 'Episode',
           audioUrl: 'https://example.com/audio.mp3',
           artworkUrl: '',
+          episodeArtworkUrl: '',
+          description: 'test',
+          pubDate: '2025-02-01',
+          durationSeconds: 0,
           addedAt: Date.now(),
+          podcastItunesId: '123',
+          episodeGuid: 'episode-guid-1',
           countryAtSave: 'us',
         },
       ]
 
-      vi.spyOn(LibraryRepository, 'getAllSubscriptions').mockResolvedValue(subscriptions)
-      vi.spyOn(LibraryRepository, 'getAllFavorites').mockResolvedValue(favorites)
+      vi.spyOn(SubscriptionRepository, 'getAllSubscriptions').mockResolvedValue(subscriptions)
+      vi.spyOn(FavoritesRepository, 'getAllFavorites').mockResolvedValue(favorites)
 
       useExploreStore.setState({
         subscriptions: [],

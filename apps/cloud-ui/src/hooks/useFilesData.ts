@@ -2,7 +2,8 @@
 // Event-driven data loading hook with status tracking and request guard
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { DB, type FileFolder, type FileSubtitle, type FileTrack } from '../lib/dexieDb'
+import type { FileFolder, FileSubtitle, FileTrack } from '../lib/dexieDb'
+import { loadFilesDataSnapshot } from '../lib/filesDataService'
 import { logError } from '../lib/logger'
 
 export type LoadStatus = 'idle' | 'loading' | 'success' | 'error'
@@ -54,62 +55,18 @@ export function useFilesData(): UseFilesDataReturn {
     setError(null)
 
     try {
-      const folderId = currentFolderIdRef.current
-
-      const foldersData = await DB.getAllFolders()
-
-      // Check if this request is still valid
-      if (thisRequestId !== requestIdRef.current) {
-        return
-      }
-
-      const tracksData = await DB.getFileTracksInFolder(folderId)
-
-      if (thisRequestId !== requestIdRef.current) {
-        return
-      }
-
-      // Load subtitles for current tracks
-      const allSubPromises = tracksData.map((t) => DB.getFileSubtitlesForTrack(t.id))
-      const subsArrays = await Promise.all(allSubPromises)
-
-      if (thisRequestId !== requestIdRef.current) {
-        return
-      }
-
-      let folder: FileFolder | undefined
-      if (folderId !== null) {
-        folder = await DB.getFolder(folderId)
-      }
-
-      if (thisRequestId !== requestIdRef.current) {
-        return
-      }
-
-      if (thisRequestId !== requestIdRef.current) {
-        return
-      }
-
-      // Load folder counts only if at root (where folders are displayed)
-      const folderCounts: Record<string, number> = {}
-      if (folderId === null && foldersData.length > 0) {
-        const countPromises = foldersData.map((f) => DB.getFileTracksCountInFolder(f.id))
-        const counts = await Promise.all(countPromises)
-        foldersData.forEach((f, i) => {
-          folderCounts[f.id] = counts[i]
-        })
-      }
+      const snapshot = await loadFilesDataSnapshot(currentFolderIdRef.current)
 
       if (thisRequestId !== requestIdRef.current) {
         return
       }
 
       setData({
-        folders: foldersData,
-        tracks: tracksData,
-        subtitles: subsArrays.flat(),
-        currentFolder: folder,
-        folderCounts,
+        folders: snapshot.folders,
+        tracks: snapshot.tracks,
+        subtitles: snapshot.subtitles,
+        currentFolder: snapshot.currentFolder,
+        folderCounts: snapshot.folderCounts,
       })
       setStatus('success')
     } catch (err) {

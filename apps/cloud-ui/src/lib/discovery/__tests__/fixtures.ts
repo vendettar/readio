@@ -1,9 +1,8 @@
-import { normalizeFeedUrl } from '../feedUrl'
 import type {
   EditorPickPodcast,
-  FeedEpisode,
-  ParsedFeed,
+  Episode,
   Podcast,
+  PodcastEpisodes,
   SearchEpisode,
   SearchPodcast,
   TopEpisode,
@@ -17,7 +16,8 @@ export function makeMinimalPodcast(overrides: Partial<Podcast> = {}): Podcast {
     author: 'Host',
     artwork: 'https://example.com/podcast-600.jpg',
     description: 'A podcast',
-    feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
+    lastUpdateTime: 1613394044,
+    episodeCount: 50,
     genres: [],
     ...overrides,
   }
@@ -29,48 +29,49 @@ export function makeSearchPodcast(overrides: Partial<SearchPodcast> = {}): Searc
     title: 'Tech Podcast',
     author: 'Host',
     artwork: 'https://example.com/tech-600.jpg',
-    releaseDate: '2026-03-27T00:00:00.000Z',
+    releaseDate: '2026-03-27T00:00:00Z',
     episodeCount: 321,
     genres: ['Technology'],
     ...overrides,
   }
 }
 
-export function makeSearchEpisode(overrides: Partial<SearchEpisode> = {}): SearchEpisode {
+export function makeSearchEpisode(
+  overrides: Partial<SearchEpisode> & { guid?: string } = {}
+): SearchEpisode {
   return {
     podcastItunesId: 'podcast-123',
     title: 'Episode Name',
     showTitle: 'Show Name',
     artwork: 'https://example.com/episode-600.jpg',
-    episodeUrl: 'https://example.com/audio.mp3',
-    episodeGuid: 'guid-episode-123',
-    releaseDate: '2026-03-27T00:00:00.000Z',
+    audioUrl: 'https://example.com/audio.mp3',
+    guid: 'guid-episode-123',
+    releaseDate: '2026-03-27T00:00:00Z',
     trackTimeMillis: 1800000,
     shortDescription: 'Episode summary',
     ...overrides,
-  }
+  } as SearchEpisode
 }
 
-export function makeFeedEpisode(overrides: Partial<FeedEpisode> = {}): FeedEpisode {
+export function makeEpisode(overrides: Partial<Episode> & { guid?: string } = {}): Episode {
   return {
-    episodeGuid: 'feed-episode-guid-1',
-    title: 'Feed Episode',
-    description: 'Feed episode description',
-    audioUrl: 'https://example.com/feed-audio.mp3',
-    pubDate: '2026-03-27T00:00:00.000Z',
-    artworkUrl: 'https://example.com/feed-episode-art.jpg',
+    guid: 'discovery-episode-guid-1',
+    title: 'Discovery Episode',
+    description: 'Discovery episode description',
+    audioUrl: 'https://example.com/discovery-audio.mp3',
+    pubDate: '2026-03-27T00:00:00Z',
+    artworkUrl: 'https://example.com/discovery-episode-art.jpg',
+    fileSize: 1024,
     duration: 1800,
+    explicit: false,
+    link: 'https://example.com/discovery-episode',
     ...overrides,
-  }
+  } as Episode
 }
 
-export function makeParsedFeed(overrides: Partial<ParsedFeed> = {}): ParsedFeed {
+export function makePodcastEpisodes(overrides: Partial<PodcastEpisodes> = {}): PodcastEpisodes {
   return {
-    title: 'Cloud Feed Podcast',
-    description: 'Backend-owned feed',
-    artworkUrl: 'https://example.com/feed-art.jpg',
-    pageInfo: undefined,
-    episodes: [makeFeedEpisode()],
+    episodes: [makeEpisode()],
     ...overrides,
   }
 }
@@ -81,7 +82,6 @@ export function makePodcast(overrides: Partial<Podcast> = {}): Podcast {
       podcastItunesId: '123',
       title: 'Cloud Feed Podcast',
       artwork: 'https://example.com/art-600.jpg',
-      feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
     }),
     lastUpdateTime: 1613394044,
     episodeCount: 50,

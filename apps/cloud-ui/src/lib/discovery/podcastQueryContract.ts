@@ -1,50 +1,64 @@
-import type { NormalizedFeedUrl } from './feedUrl'
+import { normalizeCountryParam } from '../routes/podcastRoutes'
 
-export const PODCAST_DEFAULT_FEED_QUERY_LIMIT = 20
+export const PODCAST_EPISODES_QUERY_FAMILY = 'pi-list'
+
+interface PodcastEpisodeListAuthorityKeyInput {
+  lastUpdateTime?: number
+  episodeCount?: number
+}
 
 export const PODCAST_QUERY_CACHE_POLICY = {
   podcastDetail: {
     staleTime: 24 * 60 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
   },
-  feed: {
+  episodes: {
     staleTime: 24 * 60 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
   },
 } as const
 
-export function buildPodcastDetailQueryKey(podcastId: string, country: string | null | undefined) {
-  return ['podcast', 'podcast-detail', podcastId.trim(), country ?? ''] as const
+function buildPodcastCountryToken(country: string | undefined) {
+  const normalizedCountry = normalizeCountryParam(country)
+  return normalizedCountry ? [`country-${normalizedCountry}`] : []
 }
 
-export interface PodcastFeedQueryOptions {
-  limit?: number | null
-  offset?: number | null
+export function buildPodcastDetailQueryKey(podcastId: string, country?: string) {
+  return ['podcast', 'podcast-detail', podcastId.trim(), ...buildPodcastCountryToken(country)] as const
 }
 
-function isPositiveFeedLimit(limit: number | null | undefined) {
-  return typeof limit === 'number' && Number.isFinite(limit) && limit > 0
-}
-
-function isNonNegativeFeedOffset(offset: number | null | undefined) {
-  return typeof offset === 'number' && Number.isFinite(offset) && offset >= 0
-}
-
-export function buildPodcastFeedQueryKey(
-  normalizedFeedUrl: NormalizedFeedUrl | '' | null | undefined,
-  options?: PodcastFeedQueryOptions
+export function buildPodcastEpisodesQueryKey(
+  podcastId: string,
+  authority?: PodcastEpisodeListAuthorityKeyInput,
+  country?: string
 ) {
-  const hasPagedWindow = isPositiveFeedLimit(options?.limit)
-  const modeToken = hasPagedWindow ? 'page' : 'full'
-  const limitToken = hasPagedWindow ? options?.limit : 'all'
-  const offsetToken =
-    hasPagedWindow && isNonNegativeFeedOffset(options?.offset) ? options?.offset : 0
-
-  return ['podcast', 'feed', normalizedFeedUrl ?? '', modeToken, limitToken, offsetToken] as const
+  return [
+    ...buildPodcastEpisodesQueryPrefix(podcastId, country),
+    ...buildPodcastEpisodesAuthorityTokens(authority),
+  ] as const
 }
 
-export function buildPodcastCanonicalFeedQueryKey(
-  normalizedFeedUrl: NormalizedFeedUrl | '' | null | undefined
+export function buildPodcastEpisodesQueryPrefix(podcastId: string, country?: string) {
+  return [
+    'podcast',
+    'episodes',
+    podcastId.trim(),
+    ...buildPodcastCountryToken(country),
+    PODCAST_EPISODES_QUERY_FAMILY,
+  ] as const
+}
+
+export function buildPodcastEpisodesAuthorityTokens(
+  authority?: PodcastEpisodeListAuthorityKeyInput
 ) {
-  return ['podcast', 'feed', normalizedFeedUrl ?? '', 'canonical'] as const
+  const lastUpdateTimeToken =
+    typeof authority?.lastUpdateTime === 'number' && Number.isFinite(authority.lastUpdateTime)
+      ? authority.lastUpdateTime
+      : 'na'
+  const episodeCountToken =
+    typeof authority?.episodeCount === 'number' && Number.isFinite(authority.episodeCount)
+      ? authority.episodeCount
+      : 'na'
+
+  return [`lut-${lastUpdateTimeToken}`, `count-${episodeCountToken}`] as const
 }

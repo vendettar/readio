@@ -1,6 +1,5 @@
-import type { PodcastFeedPageOptions } from './cloudApi'
 import {
-  fetchPodcastFeed as fetchCloudPodcastFeed,
+  fetchPodcastEpisodes as fetchCloudPodcastEpisodes,
   fetchTopEpisodes as fetchCloudTopEpisodes,
   fetchTopPodcasts as fetchCloudTopPodcasts,
   getPodcastIndexPodcastByItunesId as getCloudPodcastIndexPodcastByItunesId,
@@ -8,20 +7,11 @@ import {
   searchEpisodes as searchCloudEpisodes,
   searchPodcasts as searchCloudPodcasts,
 } from './cloudApi'
-import {
-  type EpisodeCommonFields,
-  mapSessionToDiscovery,
-  mapTrackToDiscovery,
-  toEpisodeCommonFields,
-} from './mappers'
 import type {
   EditorPickPodcast,
-  FavoriteEpisodeInput,
-  FeedEpisode,
-  ParsedFeed,
-  PlaybackEpisodeStub,
-  PlaybackPodcastStub,
+  Episode,
   Podcast,
+  PodcastEpisodes,
   SearchEpisode,
   SearchPodcast,
   TopEpisode,
@@ -47,9 +37,8 @@ const discovery = {
     return getCloudPodcastIndexPodcastsBatchByGuid(guids, signal)
   },
 
-  // Feed
-  fetchPodcastFeed: (feedUrl: string, signal?: AbortSignal, options?: PodcastFeedPageOptions) => {
-    return fetchCloudPodcastFeed(feedUrl, signal, options)
+  fetchPodcastEpisodes: (podcastItunesId: string, signal?: AbortSignal) => {
+    return fetchCloudPodcastEpisodes(podcastItunesId, signal)
   },
 
   // Top charts (Apple first-hop via cloud relay)
@@ -66,19 +55,12 @@ export default discovery
 
 // Re-export types for consumers
 export type {
+  Episode,
   EditorPickPodcast,
-  FeedEpisode,
-  ParsedFeed,
+  PodcastEpisodes,
   Podcast,
   SearchEpisode,
   SearchPodcast,
   TopEpisode,
   TopPodcast,
-  PlaybackPodcastStub,
-  PlaybackEpisodeStub,
-  FavoriteEpisodeInput,
 }
-
-// Re-export adapter utilities
-export { toEpisodeCommonFields, mapTrackToDiscovery, mapSessionToDiscovery }
-export type { EpisodeCommonFields }

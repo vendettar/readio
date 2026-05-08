@@ -1,21 +1,24 @@
 import { describe, expect, it } from 'vitest'
 import { TRACK_SOURCE } from '../../db/types'
 import {
+  createCanonicalRemoteEpisodeMetadata,
+  createLocalEpisodeMetadata,
+} from '../playbackMetadata'
+import {
   buildLocalTrackPlaybackSessionCreateInput,
   buildManagedPlaybackSessionCreateInput,
   resolveSessionAudioSnapshot,
 } from '../playbackSessionFactory'
 
 describe('playbackSessionFactory', () => {
-  it('builds managed explore session input with normalized feed and country', () => {
+  it('builds managed explore session input with canonical country snapshot', () => {
     const input = buildManagedPlaybackSessionCreateInput({
       id: 'session-1',
       audioTitle: 'Episode',
       durationSeconds: 180,
       normalizedAudioUrl: 'https://cdn.example.com/audio.mp3',
-      metadata: {
-        countryAtSave: 'US',
-        podcastFeedUrl: ' HTTPS://Example.COM:443/feed.xml#frag ',
+      metadata: createCanonicalRemoteEpisodeMetadata({
+        countryAtSave: 'us',
         showTitle: 'Show',
         description: 'Desc',
         artworkUrl: 'https://example.com/art.jpg',
@@ -23,7 +26,7 @@ describe('playbackSessionFactory', () => {
         publishedAt: 123,
         episodeGuid: 'guid-1',
         podcastItunesId: '42',
-      },
+      }),
     })
 
     expect(input).toEqual(
@@ -31,21 +34,42 @@ describe('playbackSessionFactory', () => {
         id: 'session-1',
         source: 'explore',
         audioUrl: 'https://cdn.example.com/audio.mp3',
-        podcastFeedUrl: 'https://example.com/feed.xml',
         countryAtSave: 'us',
         title: 'Episode',
       })
     )
   })
 
-  it('rejects explore session input when countryAtSave is invalid', () => {
+  it('builds a local managed session input when metadata is absent', () => {
     const input = buildManagedPlaybackSessionCreateInput({
       id: 'session-2',
       audioTitle: 'Episode',
       durationSeconds: 180,
-      metadata: {
-        countryAtSave: 'zz',
-      },
+      normalizedAudioUrl: 'https://cdn.example.com/audio.mp3',
+      metadata: null,
+    })
+
+    expect(input).toEqual(
+      expect.objectContaining({
+        id: 'session-2',
+        source: 'local',
+        audioUrl: 'https://cdn.example.com/audio.mp3',
+      })
+    )
+  })
+
+  it('rejects explore session input when canonical remote metadata has no playable audio url', () => {
+    const input = buildManagedPlaybackSessionCreateInput({
+      id: 'session-3',
+      audioTitle: 'Episode',
+      durationSeconds: 180,
+      metadata: createCanonicalRemoteEpisodeMetadata({
+        countryAtSave: 'us',
+        showTitle: 'Show',
+        artworkUrl: 'https://example.com/art.jpg',
+        episodeGuid: 'guid-2',
+        podcastItunesId: 'pod-2',
+      }),
     })
 
     expect(input).toBeNull()
@@ -78,7 +102,7 @@ describe('playbackSessionFactory', () => {
         subtitleId: 'subtitle-1',
         artworkUrl: 'https://example.com/art.jpg',
         description: 'Album',
-        podcastTitle: 'Artist',
+        showTitle: 'Artist',
         durationSeconds: 245,
       })
     )
@@ -90,5 +114,30 @@ describe('playbackSessionFactory', () => {
         originalAudioUrl: ' https://cdn.example.com/audio.mp3 ',
       })
     ).toBe('https://cdn.example.com/audio.mp3')
+  })
+
+  it('does not persist canonical remote identity onto local playback sessions', () => {
+    const input = buildManagedPlaybackSessionCreateInput({
+      id: 'session-local-metadata',
+      audioTitle: 'Episode',
+      durationSeconds: 180,
+      normalizedAudioUrl: 'https://cdn.example.com/audio.mp3',
+      metadata: createLocalEpisodeMetadata({
+        showTitle: 'Show',
+        artworkUrl: 'https://example.com/art.jpg',
+      }),
+    })
+
+    expect(input).toEqual(
+      expect.objectContaining({
+        id: 'session-local-metadata',
+        source: 'local',
+        showTitle: 'Show',
+        artworkUrl: 'https://example.com/art.jpg',
+      })
+    )
+    expect(input).not.toHaveProperty('episodeGuid')
+    expect(input).not.toHaveProperty('podcastItunesId')
+    expect(input).not.toHaveProperty('countryAtSave')
   })
 })

@@ -20,6 +20,7 @@ export type InitDegradedReason = (typeof INIT_DEGRADED_REASON)[keyof typeof INIT
  * are inherently safe, but separate effects prevent unnecessary work.
  */
 export function useAppInitialization() {
+  const hydrateCountry = useExploreStore((s) => s.hydrateCountry)
   const loadSubscriptions = useExploreStore((s) => s.loadSubscriptions)
   const loadFavorites = useExploreStore((s) => s.loadFavorites)
   const subscriptionsLoaded = useExploreStore((s) => s.subscriptionsLoaded)
@@ -30,9 +31,10 @@ export function useAppInitialization() {
   // 1. Load explore data (fire-and-forget, runs once on mount)
   //    Promise Coalescing inside each method guarantees idempotency.
   useEffect(() => {
+    void hydrateCountry()
     void loadSubscriptions()
     void loadFavorites()
-  }, [loadSubscriptions, loadFavorites]) // Stable Zustand refs — effectively runs once
+  }, [hydrateCountry, loadSubscriptions, loadFavorites]) // Stable Zustand refs — effectively runs once
 
   // 2. Restore playback session (runs once when player is idle)
   useEffect(() => {
@@ -67,10 +69,10 @@ export function useAppInitialization() {
           logError('[Init] Retention module failed to load', err)
         })
 
-      void import('../lib/remoteTranscript')
-        .then(({ runRemoteTranscriptCacheMaintenance }) => {
+      void import('../lib/remoteTranscriptMaintenance')
+        .then(({ runRemoteTranscriptMaintenanceTask }) => {
           void Promise.resolve()
-            .then(() => runRemoteTranscriptCacheMaintenance())
+            .then(() => runRemoteTranscriptMaintenanceTask())
             .catch((err) => {
               logError('[Init] Remote transcript cache maintenance failed', err)
             })

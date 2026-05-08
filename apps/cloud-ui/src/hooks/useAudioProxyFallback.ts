@@ -2,34 +2,28 @@ import type React from 'react'
 import { useCallback, useEffect, useRef } from 'react'
 import { warn } from '../lib/logger'
 import { buildProxyUrl, getNetworkProxyConfig } from '../lib/networking/proxyUrl'
-import { usePlayerStore } from '../store/playerStore'
+import {
+  beginProxyAudioRecovery,
+  shouldResumeAfterProxyAudioRecovery,
+} from '../lib/player/playerRuntimeActions'
 import type { AudioFallbackRecoveryState } from './audioFallbackRecovery'
+import {
+  AUDIO_DIRECT_FAILOVER_TIMEOUT_MS,
+  beginAudioProxyRecovery,
+  clearAudioProxyRecoveryState,
+  finalizeAudioProxyRecovery,
+  getAudioProxyFailoverLogMessage,
+  resolveAudioProxyFailoverPlan,
+} from './audioProxyFallbackRuntime'
 import { useEventListener } from './useEventListener'
+
+export { AUDIO_DIRECT_FAILOVER_TIMEOUT_MS } from './audioProxyFallbackRuntime'
 
 interface UseAudioProxyFallbackParams {
   audioRef: React.RefObject<HTMLAudioElement | null>
   audioUrl: string | null
   playbackSourceUrl: string | null
   recoveryRef: React.MutableRefObject<AudioFallbackRecoveryState>
-}
-
-export const AUDIO_DIRECT_FAILOVER_TIMEOUT_MS = 3000
-
-function isSameOriginProxyUrl(proxyUrl: string): boolean {
-  const trimmed = proxyUrl.trim()
-  if (!trimmed) return false
-  if (trimmed.startsWith('/')) return true
-  if (typeof window === 'undefined') return false
-
-  try {
-    return new URL(trimmed, window.location.href).origin === window.location.origin
-  } catch {
-    return false
-  }
-}
-
-function clearRecoveryState(recoveryRef: React.MutableRefObject<AudioFallbackRecoveryState>): void {
-  recoveryRef.current.isRecovering = false
 }
 
 export function useAudioProxyFallback({
@@ -56,52 +50,70 @@ export function useAudioProxyFallback({
       if (!audio || !audioUrl) return false
 
       const { proxyUrl: proxyBase } = getNetworkProxyConfig()
-      if (!proxyBase) return false
-      if (!isSameOriginProxyUrl(proxyBase)) {
-        clearRecoveryState(recoveryRef)
-        warn(
-          '[AudioProxyFallback] Skipping proxy retry because audio fallback only supports same-origin proxy URLs.',
-          { proxyUrl: proxyBase }
-        )
-        return false
-      }
+      const plan = resolveAudioProxyFailoverPlan({
+        audioUrl,
+        playbackSourceUrl,
+        attemptedAudioUrl: attemptedAudioUrlRef.current,
+        proxyBase,
+        buildProxyUrl,
+      })
 
-      const isAlreadyOnProxySource = !!playbackSourceUrl && playbackSourceUrl !== audioUrl
-      if (attemptedAudioUrlRef.current === audioUrl || isAlreadyOnProxySource) {
-        clearRecoveryState(recoveryRef)
+      if (!plan.ok) {
+        if (plan.reason === 'cross_origin_proxy') {
+          clearAudioProxyRecoveryState({
+            attemptedAudioUrlRef,
+            pendingResumeTimeRef,
+            pendingResumePlaybackRef,
+            recoveryRef,
+          })
+          warn(
+            '[AudioProxyFallback] Skipping proxy retry because audio fallback only supports same-origin proxy URLs.',
+            { proxyUrl: proxyBase }
+          )
+        } else if (plan.reason === 'already_recovering') {
+          clearAudioProxyRecoveryState(
+            {
+              attemptedAudioUrlRef,
+              pendingResumeTimeRef,
+              pendingResumePlaybackRef,
+              recoveryRef,
+            },
+            { clearAttemptedAudioUrl: false }
+          )
+        }
         return false
       }
 
       try {
-        const proxiedUrl = buildProxyUrl(proxyBase, audioUrl)
         warn(
-          reason === 'timeout'
-            ? '[AudioProxyFallback] Direct access timed out, retrying via proxy...'
-            : '[AudioProxyFallback] Direct access failed, retrying via proxy...',
+          getAudioProxyFailoverLogMessage(reason),
           {
             original: audioUrl,
-            proxied: proxiedUrl,
+            proxied: plan.proxiedUrl,
           }
         )
 
-        clearDirectWatchdog()
-        recoveryRef.current.isRecovering = true
-        attemptedAudioUrlRef.current = audioUrl
-        pendingResumeTimeRef.current = Number.isFinite(audio.currentTime) ? audio.currentTime : null
-        pendingResumePlaybackRef.current = usePlayerStore.getState().isPlaying
-
-        usePlayerStore.getState().setStatus('loading')
-        usePlayerStore.getState().setPlaybackSourceUrl(proxiedUrl)
-
-        // Apply immediately so the media element switches sources in the current task;
-        // store state remains the authoritative source for subsequent syncs.
-        audio.src = proxiedUrl
-        audio.load()
+        beginAudioProxyRecovery({
+          audio,
+          audioUrl,
+          proxiedUrl: plan.proxiedUrl,
+          refs: {
+            attemptedAudioUrlRef,
+            pendingResumeTimeRef,
+            pendingResumePlaybackRef,
+            recoveryRef,
+          },
+          clearDirectWatchdog,
+          beginProxyAudioRecovery,
+        })
         return true
       } catch (err) {
-        clearRecoveryState(recoveryRef)
-        pendingResumeTimeRef.current = null
-        pendingResumePlaybackRef.current = false
+        clearAudioProxyRecoveryState({
+          attemptedAudioUrlRef,
+          pendingResumeTimeRef,
+          pendingResumePlaybackRef,
+          recoveryRef,
+        })
         warn('[AudioProxyFallback] Failed to build proxy URL:', err)
         return false
       }
@@ -114,10 +126,12 @@ export function useAudioProxyFallback({
     if (nextAudioUrl === attemptedAudioUrlRef.current) return
 
     clearDirectWatchdog()
-    attemptedAudioUrlRef.current = null
-    pendingResumeTimeRef.current = null
-    pendingResumePlaybackRef.current = false
-    clearRecoveryState(recoveryRef)
+    clearAudioProxyRecoveryState({
+      attemptedAudioUrlRef,
+      pendingResumeTimeRef,
+      pendingResumePlaybackRef,
+      recoveryRef,
+    })
   }, [audioUrl, clearDirectWatchdog, recoveryRef])
 
   const handleError = useCallback(() => {
@@ -134,28 +148,17 @@ export function useAudioProxyFallback({
     const audio = audioRef.current
     if (!audio) return
 
-    clearDirectWatchdog()
-    const resumeTime = pendingResumeTimeRef.current
-    const shouldResumePlayback =
-      pendingResumePlaybackRef.current && usePlayerStore.getState().isPlaying
-
-    pendingResumeTimeRef.current = null
-    pendingResumePlaybackRef.current = false
-    clearRecoveryState(recoveryRef)
-
-    if (resumeTime !== null) {
-      try {
-        audio.currentTime = resumeTime
-      } catch {
-        // Ignore seek restore failures and keep playback recovery best-effort.
-      }
-    }
-
-    if (shouldResumePlayback) {
-      void audio.play().catch(() => {
-        // Autoplay might be blocked after recovery; keep the retry best-effort.
-      })
-    }
+    finalizeAudioProxyRecovery({
+      audio,
+      refs: {
+        attemptedAudioUrlRef,
+        pendingResumeTimeRef,
+        pendingResumePlaybackRef,
+        recoveryRef,
+      },
+      clearDirectWatchdog,
+      shouldResumeAfterProxyAudioRecovery,
+    })
   }, [audioRef, clearDirectWatchdog, recoveryRef])
 
   const handleLoadStart = useCallback(() => {

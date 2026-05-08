@@ -97,6 +97,27 @@ describe('useAudioProxyFallback', () => {
     expect(usePlayerStore.getState().playbackSourceUrl).toContain('/api/proxy?url=')
   })
 
+  it('does not auto-resume proxy recovery after the user pauses during recovery', () => {
+    const playSpy = vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined)
+
+    usePlayerStore.setState({
+      isPlaying: true,
+      status: 'loading',
+      playbackSourceUrl: 'https://cdn.example.com/audio.mp3',
+    })
+
+    const { getByTestId } = render(<Harness audioUrl="https://cdn.example.com/audio.mp3" />)
+    const audio = getByTestId('audio-proxy-fallback-target') as HTMLAudioElement
+
+    Object.defineProperty(audio, 'currentTime', { value: 37, writable: true, configurable: true })
+
+    fireEvent.error(audio)
+    usePlayerStore.getState().pause()
+    fireEvent(audio, new Event('loadedmetadata'))
+
+    expect(playSpy).not.toHaveBeenCalled()
+  })
+
   it('does not retry indefinitely when proxied playback also errors', () => {
     const loadSpy = vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {})
 

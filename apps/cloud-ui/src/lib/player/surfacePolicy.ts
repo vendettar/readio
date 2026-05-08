@@ -1,7 +1,7 @@
 import type { Favorite, PlaybackSession } from '../dexieDb'
-import type { FeedEpisode, SearchEpisode } from '../discovery'
+import type { Episode, SearchEpisode } from '../discovery'
 
-export type PlayerSurfaceEpisode = Pick<FeedEpisode, 'transcriptUrl'>
+export type PlayerSurfaceEpisode = Pick<Episode, 'transcriptUrl'>
 
 export type PlayerSurfaceMode = 'docked' | 'mini'
 

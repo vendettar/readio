@@ -1,11 +1,10 @@
 import { z } from 'zod'
 
 import { FetchError, NetworkError } from '../fetchUtils'
-import { normalizeFeedUrl } from './feedUrl'
 import type {
   EditorPickPodcast,
-  ParsedFeed,
   Podcast,
+  PodcastEpisodes,
   SearchEpisode,
   SearchPodcast,
   TopEpisode,
@@ -13,8 +12,8 @@ import type {
 } from './schema'
 import {
   EditorPickPodcastSchema,
-  ParsedFeedSchema,
   PIPodcastSchema,
+  PodcastEpisodesSchema,
   SearchEpisodeSchema,
   SearchPodcastSchema,
   TopEpisodeSchema,
@@ -41,11 +40,6 @@ export class DiscoveryInvalidPayloadError extends Error {
   }
 }
 
-export interface PodcastFeedPageOptions {
-  limit?: number
-  offset?: number
-}
-
 const DiscoveryErrorSchema = z.object({
   code: z.string(),
   message: z.string(),
@@ -59,7 +53,8 @@ const DISCOVERY_ROUTE = {
   topEpisodes: '/api/v1/discovery/top-episodes',
   podcasts: '/api/v1/discovery/podcasts',
   podcastsBatch: '/api/v1/discovery/podcasts/batch',
-  feed: '/api/v1/discovery/feed',
+  podcastEpisodes: (podcastItunesId: string) =>
+    `/api/v1/discovery/podcasts/${encodeURIComponent(podcastItunesId)}/episodes`,
 } as const
 
 function buildDiscoveryURL(pathname: string, search: URLSearchParams): string {
@@ -242,30 +237,13 @@ export function getPodcastIndexPodcastsBatchByGuid(
   )
 }
 
-export function fetchPodcastFeed(
-  feedUrl: string,
-  signal?: AbortSignal,
-  options?: PodcastFeedPageOptions
-): Promise<ParsedFeed> {
-  const search = new URLSearchParams({ url: normalizeFeedUrl(feedUrl) })
-  const hasPagedLimit =
-    typeof options?.limit === 'number' && Number.isFinite(options.limit) && options.limit > 0
-
-  if (hasPagedLimit) {
-    search.set('limit', String(options.limit))
-  }
-  if (
-    hasPagedLimit &&
-    typeof options?.offset === 'number' &&
-    Number.isFinite(options.offset) &&
-    options.offset >= 0
-  ) {
-    search.set('offset', String(options.offset))
-  }
-
+export function fetchPodcastEpisodes(
+  podcastItunesId: string,
+  signal?: AbortSignal
+): Promise<PodcastEpisodes> {
   return fetchDiscoveryJSON(
-    buildDiscoveryURL(DISCOVERY_ROUTE.feed, search),
-    (value) => ParsedFeedSchema.parse(value),
+    buildDiscoveryURL(DISCOVERY_ROUTE.podcastEpisodes(podcastItunesId), new URLSearchParams()),
+    (value) => PodcastEpisodesSchema.parse(value),
     signal
   )
 }

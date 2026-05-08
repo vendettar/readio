@@ -1,7 +1,10 @@
 import type React from 'react'
 import { useEffect, useRef } from 'react'
 import { warn } from '../lib/logger'
-import { toast } from '../lib/toast'
+import {
+  handleAutoplayBlocked,
+  shouldContinueAutoplayRetry,
+} from '../lib/player/playerInteractionRuntime'
 import { usePlayerStore } from '../store/playerStore'
 
 interface UseAutoplayRetryParams {
@@ -38,8 +41,7 @@ export function useAutoplayRetry({ audioRef, audioUrl, isPlaying }: UseAutoplayR
               warn('[Player] Format error on redirect, retrying...', { audioUrl })
               audio.load()
               retryTimeoutRef.current = setTimeout(() => {
-                const currentState = usePlayerStore.getState()
-                if (cancelled || !currentState.isPlaying || currentState.audioUrl !== audioUrl) {
+                if (!shouldContinueAutoplayRetry(audioUrl, cancelled)) {
                   return
                 }
                 playWithRetry(retryCount + 1)
@@ -49,8 +51,7 @@ export function useAutoplayRetry({ audioRef, audioUrl, isPlaying }: UseAutoplayR
 
             warn('[Player] play() failed', { error: err, audioUrl })
             if (err.name === 'NotAllowedError') {
-              usePlayerStore.getState().pause()
-              toast.infoKey('player.autoplayBlocked')
+              handleAutoplayBlocked()
             }
           })
         }

@@ -1,5 +1,22 @@
 import { z } from 'zod'
-import { normalizeFeedUrl } from './feedUrl'
+
+const HttpUrlSchema = z.url().refine((value) => {
+  try {
+    const parsed = new URL(value)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+  } catch {
+    return false
+  }
+}, 'Expected an http or https URL')
+
+const UtcRfc3339SecondSchema = z
+  .string()
+  .regex(
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/,
+    'Expected a UTC RFC3339 timestamp with second precision'
+  )
+
+const NonNegativeIntegerSchema = z.number().int().nonnegative()
 
 /**
  * Shared podcast fields across PI detail and editor-pick snapshot contracts.
@@ -8,15 +25,11 @@ import { normalizeFeedUrl } from './feedUrl'
 const PIBasePodcastSchema = z.object({
   title: z.string().min(1),
   author: z.string().min(1),
-  artwork: z.url(),
+  artwork: HttpUrlSchema,
   description: z.string().min(1),
-  feedUrl: z
-    .string()
-    .min(1)
-    .transform((value) => normalizeFeedUrl(value)),
-  lastUpdateTime: z.number().int().nonnegative().optional(),
+  lastUpdateTime: z.number().int().nonnegative(),
   podcastItunesId: z.string().min(1),
-  episodeCount: z.number().int().nonnegative().optional(),
+  episodeCount: z.number().int().nonnegative(),
   language: z.string().min(1).optional(),
   genres: z.array(z.string()),
 })
@@ -31,26 +44,26 @@ export const EditorPickPodcastSchema = PIBasePodcastSchema
 /**
  * Top Podcast type (narrow DTO for Explore Top Shows surface)
  * Identity: podcastItunesId
- * Source: Apple RSS feed
+ * Source: Apple charts feed API
  */
 export const TopPodcastSchema = z.object({
   podcastItunesId: z.string().min(1),
   title: z.string().min(1),
   author: z.string().min(1),
-  artwork: z.url().min(1),
+  artwork: HttpUrlSchema,
   genres: z.array(z.string()),
 })
 
 /**
  * Top Episode type (narrow DTO for Explore Top Episodes surface)
  * Identity: title + podcastItunesId
- * Source: Apple RSS feed
+ * Source: Apple charts feed API
  */
 export const TopEpisodeSchema = z.object({
   podcastItunesId: z.string().min(1),
   title: z.string().min(1),
   author: z.string().min(1),
-  artwork: z.url().min(1),
+  artwork: HttpUrlSchema,
   genres: z.array(z.string()),
 })
 
@@ -69,65 +82,50 @@ export const SearchPodcastSchema = z.object({
   podcastItunesId: z.string().min(1),
   title: z.string().min(1),
   author: z.string().min(1),
-  artwork: z.url().min(1),
-  releaseDate: z.string().optional(),
+  artwork: HttpUrlSchema,
+  releaseDate: z.string().min(1),
   episodeCount: z.number().int().nonnegative(),
   genres: z.array(z.string()),
 })
 
 /**
  * Search-specific episode DTO (Apple search contract)
- * Identity: episodeUrl
+ * Identity: podcastItunesId + guid
  */
 export const SearchEpisodeSchema = z.object({
   podcastItunesId: z.string().min(1),
   title: z.string().min(1),
   showTitle: z.string().min(1),
-  artwork: z.url(),
-  episodeUrl: z.url(),
-  episodeGuid: z.string().min(1),
-  releaseDate: z.string().min(1).optional(),
+  artwork: HttpUrlSchema,
+  audioUrl: HttpUrlSchema,
+  guid: z.string().min(1),
+  releaseDate: z.string().min(1),
   trackTimeMillis: z.number().int().optional(),
-  shortDescription: z.string().min(1).optional(),
+  shortDescription: z.string().min(1),
 })
 
 /**
- * Canonical episode contract from RSS feed.
+ * Canonical page-rendering episode contract owned by PodcastIndex episodes/byitunesid.
  */
-export const FeedEpisodeSchema = z.object({
-  episodeGuid: z.string().min(1),
+export const PIEpisodeSchema = z.object({
+  guid: z.string().min(1),
   title: z.string().min(1),
   description: z.string(),
-  descriptionHtml: z.string().optional(),
-  audioUrl: z.url(),
-  pubDate: z.string().min(1),
-  artworkUrl: z.url().optional(),
-  duration: z.number().nonnegative().optional(),
-  seasonNumber: z.number().int().nonnegative().optional(),
-  episodeNumber: z.number().int().nonnegative().optional(),
+  audioUrl: HttpUrlSchema,
+  pubDate: UtcRfc3339SecondSchema,
+  artworkUrl: HttpUrlSchema,
+  fileSize: NonNegativeIntegerSchema,
+  duration: NonNegativeIntegerSchema,
+  seasonNumber: NonNegativeIntegerSchema.optional(),
+  episodeNumber: NonNegativeIntegerSchema.optional(),
   episodeType: z.enum(['full', 'trailer', 'bonus']).optional(),
-  explicit: z.boolean().optional(),
-  link: z.url().optional(),
-  fileSize: z.number().int().nonnegative().optional(),
-  transcriptUrl: z.url().optional(),
+  explicit: z.boolean(),
+  link: HttpUrlSchema,
+  transcriptUrl: HttpUrlSchema.optional(),
 })
 
-export const ParsedFeedPageInfoSchema = z.object({
-  limit: z.number().int().positive(),
-  offset: z.number().int().nonnegative(),
-  returned: z.number().int().nonnegative(),
-  hasMore: z.boolean(),
-})
-
-/**
- * Canonical parsed feed payload returned by cloud discovery.
- */
-export const ParsedFeedSchema = z.object({
-  title: z.string().min(1),
-  description: z.string(),
-  artworkUrl: z.url().optional(),
-  pageInfo: ParsedFeedPageInfoSchema.optional(),
-  episodes: z.array(FeedEpisodeSchema),
+export const PodcastEpisodesSchema = z.object({
+  episodes: z.array(PIEpisodeSchema),
 })
 
 export type TopPodcast = z.infer<typeof TopPodcastSchema>
@@ -136,49 +134,11 @@ export type TopEpisode = z.infer<typeof TopEpisodeSchema>
 export type Podcast = z.infer<typeof PIPodcastSchema>
 export type SearchPodcast = z.infer<typeof SearchPodcastSchema>
 export type SearchEpisode = z.infer<typeof SearchEpisodeSchema>
-export type FeedEpisode = z.infer<typeof FeedEpisodeSchema>
-export type ParsedFeed = z.infer<typeof ParsedFeedSchema>
-export type ParsedFeedPageInfo = z.infer<typeof ParsedFeedPageInfoSchema>
+export type Episode = z.infer<typeof PIEpisodeSchema>
+export type PodcastEpisodes = z.infer<typeof PodcastEpisodesSchema>
 
 /**
  * Narrow adapter type for favorites/add operations.
  * Accepts any episode-like object with the minimum required fields.
  * This is a loose type for internal bridge code, not a strict schema.
  */
-export interface FavoriteEpisodeInput {
-  title?: string
-  audioUrl?: string
-  description?: string
-  artworkUrl?: string
-  duration?: number
-  pubDate?: string
-  episodeGuid?: string
-  transcriptUrl?: string
-}
-
-/**
- * Narrow internal adapter type for non-canonical contexts
- * where we only have partial podcast metadata from downloads/history.
- */
-export interface PlaybackPodcastStub {
-  podcastItunesId: string
-  title: string
-  author: string
-  artwork: string
-  feedUrl: string
-}
-
-/**
- * Narrow internal adapter type for non-canonical episode contexts
- * from local track/session data.
- */
-export interface PlaybackEpisodeStub {
-  episodeGuid: string
-  title: string
-  audioUrl: string
-  description?: string
-  artworkUrl?: string
-  duration: number
-  pubDate: string
-  transcriptUrl?: string
-}

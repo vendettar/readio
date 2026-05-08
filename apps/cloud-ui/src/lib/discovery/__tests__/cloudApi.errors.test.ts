@@ -2,7 +2,11 @@ import { HttpResponse, http } from 'msw'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { DISCOVERY_TEST_ROUTE, discoveryUrl } from '../../../__tests__/constants'
 import { server } from '../../../__tests__/setup'
-import { fetchPodcastFeed, fetchTopPodcasts, getPodcastIndexPodcastsBatchByGuid } from '../cloudApi'
+import {
+  fetchPodcastEpisodes,
+  fetchTopPodcasts,
+  getPodcastIndexPodcastsBatchByGuid,
+} from '../cloudApi'
 
 describe('cloudApi discovery error mapping', () => {
   beforeEach(() => {
@@ -77,29 +81,29 @@ describe('cloudApi discovery error mapping', () => {
     })
   })
 
-  it('fails closed when feed payload omits canonical episodeGuid', async () => {
+  it('fails closed when podcast episode payload omits required audioUrl', async () => {
     server.use(
-      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.feed), () =>
+      http.get(discoveryUrl(DISCOVERY_TEST_ROUTE.podcastEpisodesByItunesId('123')), () =>
         HttpResponse.json({
-          title: 'Podcast',
-          description: 'desc',
-          artworkUrl: 'https://example.com/art.jpg',
           episodes: [
             {
-              title: 'Episode without guid',
+              guid: 'ep-1',
+              title: 'Episode without audioUrl',
               description: 'desc',
-              audioUrl: 'https://example.com/audio.mp3',
               pubDate: '2025-01-01T00:00:00Z',
+              artworkUrl: 'https://example.com/art.jpg',
+              duration: 54,
+              explicit: false,
+              link: 'https://example.com/episode',
             },
           ],
         })
       )
     )
 
-    await expect(fetchPodcastFeed('https://example.com/feed.xml')).rejects.toMatchObject({
+    await expect(fetchPodcastEpisodes('123')).rejects.toMatchObject({
       name: 'DiscoveryInvalidPayloadError',
-      message:
-        'GET /api/v1/discovery/feed?url=https%3A%2F%2Fexample.com%2Ffeed.xml: discovery payload validation failed',
+      message: 'GET /api/v1/discovery/podcasts/123/episodes: discovery payload validation failed',
     })
   })
 })

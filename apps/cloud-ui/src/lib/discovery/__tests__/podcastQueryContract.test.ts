@@ -1,53 +1,65 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeFeedUrl } from '../feedUrl'
-import { buildPodcastFeedQueryKey, PODCAST_DEFAULT_FEED_QUERY_LIMIT } from '../podcastQueryContract'
+import {
+  buildPodcastDetailQueryKey,
+  buildPodcastEpisodesQueryKey,
+  buildPodcastEpisodesQueryPrefix,
+  PODCAST_EPISODES_QUERY_FAMILY,
+} from '../podcastQueryContract'
 
 describe('podcastQueryContract', () => {
-  it('keeps normalized feedUrl input stable in the query key', () => {
-    expect(buildPodcastFeedQueryKey(normalizeFeedUrl('http://example.com/feed.xml'))).toEqual([
+  it('keys page-rendering PI episode lists by trimmed podcastItunesId', () => {
+    expect(buildPodcastEpisodesQueryKey(' 123 ')).toEqual([
       'podcast',
-      'feed',
-      'http://example.com/feed.xml',
-      'full',
-      'all',
-      0,
+      'episodes',
+      '123',
+      PODCAST_EPISODES_QUERY_FAMILY,
+      'lut-na',
+      'count-na',
     ])
   })
 
-  it('treats query-key input as already canonicalized contract data', () => {
-    expect(
-      buildPodcastFeedQueryKey(normalizeFeedUrl('HTTP://Example.com:80/feed.xml#frag'))
-    ).toEqual(['podcast', 'feed', 'http://example.com/feed.xml', 'full', 'all', 0])
-  })
-
-  it('keeps equivalent canonical feedUrl variants on the same query key', () => {
-    expect(
-      buildPodcastFeedQueryKey(normalizeFeedUrl('HTTPS://Example.com:443/feed.xml#latest'))
-    ).toEqual(['podcast', 'feed', 'https://example.com/feed.xml', 'full', 'all', 0])
-  })
-
-  it('distinguishes paged windows from full-feed requests', () => {
-    expect(
-      buildPodcastFeedQueryKey(normalizeFeedUrl('https://example.com/feed.xml'), {
-        limit: 20,
-        offset: 0,
-      })
-    ).toEqual(['podcast', 'feed', 'https://example.com/feed.xml', 'page', 20, 0])
-  })
-
-  it('distinguishes page one from later paged windows', () => {
-    expect(
-      buildPodcastFeedQueryKey(normalizeFeedUrl('https://example.com/feed.xml'), {
-        limit: PODCAST_DEFAULT_FEED_QUERY_LIMIT,
-        offset: PODCAST_DEFAULT_FEED_QUERY_LIMIT,
-      })
-    ).toEqual([
+  it('adds route-country authority to page-rendering PI episode-list keys when present', () => {
+    expect(buildPodcastEpisodesQueryKey('123', undefined, 'jp')).toEqual([
       'podcast',
-      'feed',
-      'https://example.com/feed.xml',
-      'page',
-      PODCAST_DEFAULT_FEED_QUERY_LIMIT,
-      PODCAST_DEFAULT_FEED_QUERY_LIMIT,
+      'episodes',
+      '123',
+      'country-jp',
+      PODCAST_EPISODES_QUERY_FAMILY,
+      'lut-na',
+      'count-na',
+    ])
+  })
+
+  it('keys page-rendering PI episode lists by authority markers when present', () => {
+    expect(buildPodcastEpisodesQueryKey('123', { lastUpdateTime: 42, episodeCount: 7 })).toEqual([
+      'podcast',
+      'episodes',
+      '123',
+      PODCAST_EPISODES_QUERY_FAMILY,
+      'lut-42',
+      'count-7',
+    ])
+  })
+
+  it('exposes a stable PI episode-list key prefix for same-podcast family scans', () => {
+    expect(buildPodcastEpisodesQueryPrefix(' 123 ')).toEqual([
+      'podcast',
+      'episodes',
+      '123',
+      PODCAST_EPISODES_QUERY_FAMILY,
+    ])
+  })
+
+  it('keys podcast detail only by trimmed podcastItunesId', () => {
+    expect(buildPodcastDetailQueryKey(' 123 ')).toEqual(['podcast', 'podcast-detail', '123'])
+  })
+
+  it('adds route-country authority to podcast detail keys when present', () => {
+    expect(buildPodcastDetailQueryKey('123', 'jp')).toEqual([
+      'podcast',
+      'podcast-detail',
+      '123',
+      'country-jp',
     ])
   })
 })

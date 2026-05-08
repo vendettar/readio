@@ -11,13 +11,22 @@ import type { PodcastDownload } from '../lib/db/types'
 import {
   DOWNLOAD_STATUS,
   type DownloadStatus,
-  findDownloadedTrack,
-  getStoredDownloadStatus,
+  findDownloadedTrackForEpisode,
+  getStoredDownloadStatusForEpisode,
   subscribeToDownloads,
   useDownloadProgressStore,
 } from '../lib/downloadService'
 import { normalizePodcastAudioUrl } from '../lib/networking/urlUtils'
 import { useNetworkStatus } from './useNetworkStatus'
+
+interface EpisodeStatusLookupInput {
+  audioUrl: string | null | undefined
+}
+
+interface CanonicalEpisodeStatusLookupInput extends EpisodeStatusLookupInput {
+  podcastItunesId: string
+  episodeGuid: string
+}
 
 export interface EpisodeStatus {
   /** Whether the episode can be played right now */
@@ -42,20 +51,46 @@ export interface EpisodeStatus {
   refresh: () => void
 }
 
+function hasCanonicalEpisodeStatusLookup(
+  input: string | EpisodeStatusLookupInput | CanonicalEpisodeStatusLookupInput | undefined | null
+): input is CanonicalEpisodeStatusLookupInput {
+  return (
+    typeof input === 'object' &&
+    input !== null &&
+    'podcastItunesId' in input &&
+    'episodeGuid' in input &&
+    typeof input.podcastItunesId === 'string' &&
+    typeof input.episodeGuid === 'string'
+  )
+}
+
 /**
  * Determine the playability and download status of an episode.
  */
-export function useEpisodeStatus(audioUrl: string | undefined | null): EpisodeStatus {
+export function useEpisodeStatus(
+  input: string | EpisodeStatusLookupInput | CanonicalEpisodeStatusLookupInput | undefined | null
+): EpisodeStatus {
   const { isOnline } = useNetworkStatus()
   const [track, setTrack] = useState<PodcastDownload | undefined>(undefined)
   const [loading, setLoading] = useState(true)
   // useReducer instead of useState for refresh trigger to avoid biome exhaustive-deps
   const [refreshToken, forceRefresh] = useReducer((c: number) => c + 1, 0)
   const progressMap = useDownloadProgressStore((state) => state.progressMap)
+  const lookupAudioUrl = typeof input === 'string' ? input : input?.audioUrl
+  const canonicalLookup = hasCanonicalEpisodeStatusLookup(input) ? input : null
+  const lookupPodcastItunesId = canonicalLookup?.podcastItunesId
+  const lookupEpisodeGuid = canonicalLookup?.episodeGuid
 
   const normalizedUrl = useMemo(
-    () => (audioUrl ? normalizePodcastAudioUrl(audioUrl) : ''),
-    [audioUrl]
+    () => (lookupAudioUrl ? normalizePodcastAudioUrl(lookupAudioUrl) : ''),
+    [lookupAudioUrl]
+  )
+  const canonicalStatusKey = useMemo(
+    () =>
+      lookupPodcastItunesId?.trim() && lookupEpisodeGuid?.trim()
+        ? `canonical:${lookupPodcastItunesId.trim()}:${lookupEpisodeGuid.trim()}`
+        : '',
+    [lookupEpisodeGuid, lookupPodcastItunesId]
   )
 
   const refresh = useCallback(() => {
@@ -66,7 +101,7 @@ export function useEpisodeStatus(audioUrl: string | undefined | null): EpisodeSt
     // refreshToken is read to re-trigger query on refresh()
     void refreshToken
 
-    if (!normalizedUrl) {
+    if (!normalizedUrl && !canonicalStatusKey) {
       setTrack(undefined)
       setLoading(false)
       return
@@ -75,7 +110,11 @@ export function useEpisodeStatus(audioUrl: string | undefined | null): EpisodeSt
     let cancelled = false
     setLoading(true)
 
-    findDownloadedTrack(normalizedUrl)
+    findDownloadedTrackForEpisode({
+      audioUrl: lookupAudioUrl,
+      podcastItunesId: lookupPodcastItunesId,
+      episodeGuid: lookupEpisodeGuid,
+    })
       .then((result) => {
         if (!cancelled) {
           setTrack(result)
@@ -92,7 +131,14 @@ export function useEpisodeStatus(audioUrl: string | undefined | null): EpisodeSt
     return () => {
       cancelled = true
     }
-  }, [normalizedUrl, refreshToken])
+  }, [
+    canonicalStatusKey,
+    lookupAudioUrl,
+    lookupEpisodeGuid,
+    lookupPodcastItunesId,
+    normalizedUrl,
+    refreshToken,
+  ])
 
   useEffect(() => {
     const unsubscribe = subscribeToDownloads(() => {
@@ -107,8 +153,12 @@ export function useEpisodeStatus(audioUrl: string | undefined | null): EpisodeSt
   let downloadStatus: DownloadStatus = DOWNLOAD_STATUS.IDLE
   if (isLocal) {
     downloadStatus = DOWNLOAD_STATUS.DOWNLOADED
-  } else if (normalizedUrl) {
-    downloadStatus = getStoredDownloadStatus(normalizedUrl)
+  } else if (normalizedUrl || canonicalStatusKey) {
+    downloadStatus = getStoredDownloadStatusForEpisode({
+      audioUrl: lookupAudioUrl,
+      podcastItunesId: lookupPodcastItunesId,
+      episodeGuid: lookupEpisodeGuid,
+    })
   }
 
   // When online, we can always attempt playback (optimistic/remote fallback).
@@ -118,7 +168,9 @@ export function useEpisodeStatus(audioUrl: string | undefined | null): EpisodeSt
   const disabledReason: 'offline_remote_only' | null =
     !playable && !isOnline && !isLocal ? 'offline_remote_only' : null
 
-  const currentProgress = normalizedUrl ? progressMap[normalizedUrl] : undefined
+  const currentProgress =
+    (canonicalStatusKey ? progressMap[canonicalStatusKey] : undefined) ??
+    (normalizedUrl ? progressMap[normalizedUrl] : undefined)
 
   return {
     playable,

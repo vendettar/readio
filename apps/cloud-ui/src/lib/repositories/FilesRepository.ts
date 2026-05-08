@@ -17,6 +17,11 @@ import {
   serializeSubtitleExport,
 } from '../subtitles'
 import { buildPrioritizedSubtitleCandidates } from './SubtitleCandidateBuilder'
+import {
+  findLatestAsrSubtitleVersion,
+  replaceSubtitleVersionContentAndCleanup,
+  resolveDuplicateSubtitleFilename,
+} from './subtitleVersionShared'
 
 export const UPSERT_FILE_ASR_SUBTITLE_REASON = {
   TRACK_NOT_FOUND: 'track_not_found',
@@ -54,8 +59,25 @@ export interface FileExportResult {
   blob?: Blob
 }
 
-function normalizeProviderModelForMatch(value: string | undefined): string {
-  return value?.trim().toLowerCase() ?? ''
+export interface PreparedSubtitleAttachmentInput {
+  filename: string
+  cues: ASRCue[]
+}
+
+export interface PreparedFileIngestInput {
+  audioFile: File
+  folderId: string | null
+  trackName: string
+  durationSeconds: number
+  album?: string
+  artist?: string
+  artworkBlob?: Blob
+  matchingSubtitles: PreparedSubtitleAttachmentInput[]
+}
+
+export interface FileIngestPersistenceResult {
+  createdTrackIds: string[]
+  attachedSubtitleCount: number
 }
 
 export const FilesRepository = {
@@ -63,12 +85,28 @@ export const FilesRepository = {
     return DB.getAllFolders()
   },
 
+  addFolder(name: string): Promise<string> {
+    return DB.addFolder(name)
+  },
+
+  deleteFolder(id: string): Promise<void> {
+    return DB.deleteFolder(id)
+  },
+
   getAllFileTracks(): Promise<FileTrack[]> {
     return DB.getAllFileTracks()
   },
 
-  getFileTracksInFolder(folderId: string): Promise<FileTrack[]> {
+  searchFileTracksByName(query: string, limit = 200): Promise<FileTrack[]> {
+    return DB.searchFileTracksByName(query, limit)
+  },
+
+  getFileTracksInFolder(folderId: string | null | undefined): Promise<FileTrack[]> {
     return DB.getFileTracksInFolder(folderId)
+  },
+
+  getFileTracksCountInFolder(folderId: string | null | undefined): Promise<number> {
+    return DB.getFileTracksCountInFolder(folderId)
   },
 
   getFolder(id: string): Promise<FileFolder | undefined> {
@@ -163,6 +201,107 @@ export const FilesRepository = {
     return DB.deleteFileSubtitle(id)
   },
 
+  async persistPreparedFileImports(
+    preparedTracks: PreparedFileIngestInput[],
+    folderId: string | null
+  ): Promise<FileIngestPersistenceResult> {
+    return db.transaction(
+      'rw',
+      [db.tracks, db.audioBlobs, db.subtitles, db.local_subtitles, db.folders],
+      async () => {
+        const createdTrackIds: string[] = []
+        let attachedSubtitleCount = 0
+        const existingTracks = await DB.getFileTracksInFolder(folderId)
+        const existingTrackNames = existingTracks.map((track) => track.name)
+        const usedSubtitleFilenames = new Set<string>()
+
+        for (const preparedTrack of preparedTracks) {
+          const finalTrackName = resolveDuplicateTrackName(
+            preparedTrack.trackName,
+            existingTrackNames
+          )
+          existingTrackNames.push(finalTrackName)
+
+          let artworkId: string | undefined
+          if (preparedTrack.artworkBlob) {
+            artworkId = await DB.addAudioBlob(
+              preparedTrack.artworkBlob,
+              `artwork-${preparedTrack.audioFile.name}`
+            )
+          }
+
+          const audioId = await DB.addAudioBlob(preparedTrack.audioFile, preparedTrack.audioFile.name)
+          const trackId = await DB.addFileTrack({
+            folderId: preparedTrack.folderId,
+            name: finalTrackName,
+            audioId,
+            sizeBytes: preparedTrack.audioFile.size,
+            durationSeconds: preparedTrack.durationSeconds,
+            artworkId,
+            album: preparedTrack.album,
+            artist: preparedTrack.artist,
+          })
+          createdTrackIds.push(trackId)
+
+          const existingSubtitleNames = (await DB.getFileSubtitlesForTrack(trackId)).map(
+            (subtitle) => subtitle.name
+          )
+
+          for (const matchingSubtitle of preparedTrack.matchingSubtitles) {
+            if (usedSubtitleFilenames.has(matchingSubtitle.filename)) {
+              continue
+            }
+
+            if (matchingSubtitle.cues.length === 0) {
+              continue
+            }
+
+            const subtitleName = resolveDuplicateSubtitleFilename(
+              matchingSubtitle.filename,
+              existingSubtitleNames
+            )
+            existingSubtitleNames.push(subtitleName)
+
+            const subtitleId = await DB.addSubtitle(matchingSubtitle.cues, subtitleName)
+            await DB.addFileSubtitle({
+              trackId,
+              name: subtitleName,
+              subtitleId,
+            })
+            attachedSubtitleCount += 1
+            usedSubtitleFilenames.add(matchingSubtitle.filename)
+          }
+        }
+
+        return { createdTrackIds, attachedSubtitleCount }
+      }
+    )
+  },
+
+  async attachPreparedSubtitleToTrack(
+    trackId: string,
+    subtitle: PreparedSubtitleAttachmentInput
+  ): Promise<string> {
+    return db.transaction('rw', [db.tracks, db.local_subtitles, db.subtitles], async () => {
+      const track = await db.tracks.get(trackId)
+      if (!isUserUploadTrack(track)) {
+        throw new Error(`Track ${trackId} not found for subtitle attachment`)
+      }
+
+      const existingNames = (await DB.getFileSubtitlesForTrack(trackId)).map((item) => item.name)
+      const subtitleName = resolveDuplicateSubtitleFilename(subtitle.filename, existingNames)
+      const subtitleId = await DB.addSubtitle(subtitle.cues, subtitleName)
+      const fileSubtitleId = await DB.addFileSubtitle({
+        trackId,
+        name: subtitleName,
+        subtitleId,
+      })
+
+      await db.tracks.update(trackId, { activeSubtitleId: fileSubtitleId })
+      return fileSubtitleId
+    })
+  },
+
   async importTranscriptVersion(
     trackId: string,
     input: { filename: string; content: string }
@@ -180,7 +319,11 @@ export const FilesRepository = {
 
       const existing = await db.local_subtitles.where('trackId').equals(trackId).toArray()
       const existingNames = existing.map((subtitle) => subtitle.name)
-      const versionName = resolveDuplicateName(input.filename, existingNames)
+      const versionName = resolveDuplicateSubtitleFilename(
+        input.filename,
+        existingNames,
+        'transcript.srt'
+      )
 
       const subtitleId = await DB.addSubtitle(cues, versionName)
       const fileSubtitleId = await DB.addFileSubtitle({
@@ -258,42 +401,31 @@ export const FilesRepository = {
         return { ok: false, reason: UPSERT_FILE_ASR_SUBTITLE_REASON.TRACK_NOT_FOUND }
       }
 
-      const providerKey = normalizeProviderModelForMatch(input.provider)
-      const modelKey = normalizeProviderModelForMatch(input.model)
       const now = Date.now()
 
       const allVersions = await db.local_subtitles.where('trackId').equals(input.trackId).toArray()
-      const matchedVersion = [...allVersions]
-        .filter((version) => {
-          if (version.sourceKind === 'manual_upload') return false
-          return (
-            normalizeProviderModelForMatch(version.provider) === providerKey &&
-            normalizeProviderModelForMatch(version.model) === modelKey
-          )
-        })
-        .sort((a, b) => b.createdAt - a.createdAt)[0]
+      const matchedVersion = findLatestAsrSubtitleVersion(
+        allVersions,
+        input.provider,
+        input.model
+      )
 
       const subtitleId = await DB.addSubtitle(input.cues, input.subtitleFilename, input.fingerprint)
 
       if (matchedVersion) {
-        const oldSubtitleId = matchedVersion.subtitleId
-        await db.local_subtitles.update(matchedVersion.id, {
-          subtitleId,
-          name: input.subtitleName,
-          sourceKind: 'asr_online',
-          provider: input.provider,
-          model: input.model,
-          createdAt: now,
-          status: 'ready',
+        await replaceSubtitleVersionContentAndCleanup({
+          versionId: matchedVersion.id,
+          oldSubtitleId: matchedVersion.subtitleId,
+          newSubtitleId: subtitleId,
+          patch: {
+            name: input.subtitleName,
+            sourceKind: 'asr_online',
+            provider: input.provider,
+            model: input.model,
+            createdAt: now,
+            status: 'ready',
+          },
         })
-
-        const oldRefCount = await db.local_subtitles
-          .where('subtitleId')
-          .equals(oldSubtitleId)
-          .count()
-        if (oldRefCount === 0) {
-          await db.subtitles.delete(oldSubtitleId)
-        }
 
         if (input.setActive !== false) {
           await db.tracks.update(input.trackId, { activeSubtitleId: matchedVersion.id })
@@ -326,23 +458,17 @@ export const FilesRepository = {
   },
 }
 
-function resolveDuplicateName(filename: string, existingNames: string[]): string {
-  const trimmed = filename.trim() || 'transcript.srt'
-  if (!existingNames.includes(trimmed)) {
-    return trimmed
+function resolveDuplicateTrackName(name: string, existingNames: string[]): string {
+  const base = name.trim()
+  let candidate = base
+  let counter = 2
+  const lower = (value: string) => value.trim().toLowerCase()
+
+  while (existingNames.some((existing) => lower(existing) === lower(candidate))) {
+    candidate = `${base} (${counter})`
+    counter += 1
   }
 
-  const lastDotIndex = trimmed.lastIndexOf('.')
-  const hasExtension = lastDotIndex > 0
-  const basename = hasExtension ? trimmed.slice(0, lastDotIndex) : trimmed
-  const extension = hasExtension ? trimmed.slice(lastDotIndex) : ''
-
-  let suffix = 2
-  let candidate = `${basename} (${suffix})${extension}`
-  while (existingNames.includes(candidate)) {
-    suffix += 1
-    candidate = `${basename} (${suffix})${extension}`
-  }
   return candidate
 }
 

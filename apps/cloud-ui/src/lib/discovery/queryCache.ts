@@ -1,19 +1,21 @@
 import type { QueryClient } from '@tanstack/react-query'
-import { readPodcastFeedSliceFromCanonicalCache, writePodcastFeedPageToCaches } from './feedCache'
-import { type NormalizedFeedUrl, normalizeFeedUrl } from './feedUrl'
-import discovery, { type ParsedFeed, type Podcast } from './index'
+import {
+  type PodcastEpisodeListAuthority,
+  readPodcastEpisodesFromCache,
+  writePodcastEpisodesToCache,
+} from './episodeCache'
+import discovery, { type Podcast, type PodcastEpisodes } from './index'
 import {
   buildPodcastDetailQueryKey,
-  buildPodcastFeedQueryKey,
+  buildPodcastEpisodesQueryKey,
   PODCAST_QUERY_CACHE_POLICY,
-  type PodcastFeedQueryOptions,
 } from './podcastQueryContract'
 
 export async function ensurePodcastDetail(
   queryClient: QueryClient,
   podcastItunesId: string,
-  country: string | null | undefined,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  country?: string
 ): Promise<Podcast | null> {
   const normalizedPodcastItunesId = podcastItunesId.trim()
   if (!normalizedPodcastItunesId) {
@@ -29,80 +31,72 @@ export async function ensurePodcastDetail(
   })
 }
 
-interface EnsurePodcastFeedOptions extends PodcastFeedQueryOptions {
-  signal?: AbortSignal
+export async function fetchAndCachePodcastEpisodes(
+  queryClient: QueryClient,
+  podcastItunesId: string,
+  signal?: AbortSignal,
+  authority?: PodcastEpisodeListAuthority,
+  country?: string
+): Promise<PodcastEpisodes> {
+  const normalizedPodcastItunesId = podcastItunesId.trim()
+  const fetchedEpisodes = await discovery.fetchPodcastEpisodes(normalizedPodcastItunesId, signal)
+  return writePodcastEpisodesToCache(queryClient, normalizedPodcastItunesId, fetchedEpisodes, {
+    authority,
+    country,
+  })
 }
 
-interface PodcastFeedPageOptions {
-  limit?: number
-  offset?: number
-}
-
-function sanitizePodcastFeedPageOptions(
-  options?: PodcastFeedQueryOptions
-): PodcastFeedPageOptions | undefined {
-  if (!options) {
-    return undefined
+export async function readOrFetchPodcastEpisodes(
+  queryClient: QueryClient,
+  podcastItunesId: string,
+  signal?: AbortSignal,
+  authority?: PodcastEpisodeListAuthority,
+  country?: string
+): Promise<PodcastEpisodes> {
+  const normalizedPodcastItunesId = podcastItunesId.trim()
+  const cachedEpisodes = readPodcastEpisodesFromCache(queryClient, normalizedPodcastItunesId, {
+    authority,
+    country,
+  })
+  if (cachedEpisodes) {
+    return cachedEpisodes
   }
 
-  const limit = typeof options.limit === 'number' ? options.limit : undefined
-  const offset = typeof options.offset === 'number' ? options.offset : undefined
-
-  if (limit === undefined && offset === undefined) {
-    return undefined
-  }
-
-  return { limit, offset }
-}
-
-export async function fetchAndCachePodcastFeedPage(
-  queryClient: QueryClient,
-  feedUrl: string | NormalizedFeedUrl,
-  signal?: AbortSignal,
-  options?: PodcastFeedPageOptions
-): Promise<ParsedFeed> {
-  const canonicalFeedUrl = normalizeFeedUrl(feedUrl)
-  const fetchedFeed = await discovery.fetchPodcastFeed(canonicalFeedUrl, signal, options)
-  return writePodcastFeedPageToCaches(queryClient, canonicalFeedUrl, fetchedFeed, options)
-}
-
-export async function readOrFetchPodcastFeed(
-  queryClient: QueryClient,
-  feedUrl: string | NormalizedFeedUrl,
-  signal?: AbortSignal,
-  options?: PodcastFeedPageOptions
-): Promise<ParsedFeed> {
-  const canonicalFeedUrl = normalizeFeedUrl(feedUrl)
-  const cachedCanonicalSlice = readPodcastFeedSliceFromCanonicalCache(
+  return fetchAndCachePodcastEpisodes(
     queryClient,
-    canonicalFeedUrl,
-    options
+    normalizedPodcastItunesId,
+    signal,
+    authority,
+    country
   )
-  if (cachedCanonicalSlice) {
-    return cachedCanonicalSlice
-  }
-
-  return fetchAndCachePodcastFeedPage(queryClient, canonicalFeedUrl, signal, options)
 }
 
-export async function ensurePodcastFeed(
+export async function ensurePodcastEpisodes(
   queryClient: QueryClient,
-  feedUrl: string | NormalizedFeedUrl,
-  options?: EnsurePodcastFeedOptions
-): Promise<ParsedFeed> {
-  const canonicalFeedUrl = normalizeFeedUrl(feedUrl)
-  const pagingOptions = sanitizePodcastFeedPageOptions(options)
+  podcastItunesId: string,
+  options?: {
+    signal?: AbortSignal
+    authority?: PodcastEpisodeListAuthority
+    country?: string
+  }
+): Promise<PodcastEpisodes> {
+  const normalizedPodcastItunesId = podcastItunesId.trim()
 
   return queryClient.fetchQuery({
-    queryKey: buildPodcastFeedQueryKey(canonicalFeedUrl, pagingOptions),
+    queryKey: buildPodcastEpisodesQueryKey(
+      normalizedPodcastItunesId,
+      options?.authority,
+      options?.country
+    ),
     queryFn: ({ signal: querySignal }) =>
-      readOrFetchPodcastFeed(
+      readOrFetchPodcastEpisodes(
         queryClient,
-        canonicalFeedUrl,
+        normalizedPodcastItunesId,
         options?.signal ?? querySignal,
-        pagingOptions
+        options?.authority,
+        options?.country
       ),
-    staleTime: PODCAST_QUERY_CACHE_POLICY.feed.staleTime,
-    gcTime: PODCAST_QUERY_CACHE_POLICY.feed.gcTime,
+    staleTime: PODCAST_QUERY_CACHE_POLICY.episodes.staleTime,
+    gcTime: PODCAST_QUERY_CACHE_POLICY.episodes.gcTime,
   })
 }

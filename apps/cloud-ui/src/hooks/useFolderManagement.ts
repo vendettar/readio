@@ -1,6 +1,7 @@
 // src/hooks/useFolderManagement.ts
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { DB, type FileFolder } from '../lib/dexieDb'
+import type { FileFolder } from '../lib/dexieDb'
+import { createManagedFolder, deleteManagedFolder } from '../lib/folderManagementService'
 import { logError } from '../lib/logger'
 import { toast } from '../lib/toast'
 import { useOnClickOutside } from './useOnClickOutside'
@@ -49,16 +50,7 @@ export function useFolderManagement({
 
     setIsLoading(true)
     try {
-      let finalName = trimmed
-      let counter = 2
-
-      // Case-insensitive check for existing names
-      while (folders.some((f) => f.name.trim().toLowerCase() === finalName.toLowerCase())) {
-        finalName = `${trimmed} (${counter})`
-        counter++
-      }
-
-      await DB.addFolder(finalName)
+      await createManagedFolder(trimmed, folders)
       setNewFolderName('')
       setIsNamingFolder(false)
       await onComplete()
@@ -72,7 +64,7 @@ export function useFolderManagement({
   const executeDeleteFolder = useCallback(
     async (folder: FileFolder): Promise<boolean> => {
       try {
-        await DB.deleteFolder(folder.id)
+        await deleteManagedFolder(folder.id)
         await onComplete()
         return true
       } catch (err) {

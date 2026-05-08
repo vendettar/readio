@@ -1,20 +1,21 @@
 // src/hooks/useSession.ts
 import { useCallback, useEffect, useRef } from 'react'
-import { DB, type PlaybackSession } from '../lib/dexieDb'
 import { log, error as logError } from '../lib/logger'
+import { resolvePlaybackStateIdentityKey } from '../lib/player/playbackIdentity'
 import {
-  buildManagedPlaybackSessionCreateInput,
-  resolveSessionAudioSnapshot,
-} from '../lib/player/playbackSessionFactory'
-import { generateSessionId } from '../lib/session'
+  applyExistingManagedPlaybackSession,
+  resolveCurrentPlaybackRestoreTarget,
+  restorePlaybackProgressForTarget,
+} from '../lib/player/playerSessionRuntime'
+import { type RestoreAppliedEntry } from '../lib/player/playerRestoreProgressResolver'
+import { resolveManagedPlaybackSession } from '../lib/player/playerManagedSessionResolver'
 import { usePlayerStore } from '../store/playerStore'
 import { useTranscriptStore } from '../store/transcriptStore'
 
 const COMPLETED_RESTORE_THRESHOLD_SECONDS = 2
 
 function getCurrentPlaybackIdentity(): string {
-  const state = usePlayerStore.getState()
-  return `${state.localTrackId ?? ''}::${resolveSessionAudioSnapshot(state.audioUrl, state.episodeMetadata) ?? ''}`
+  return resolvePlaybackStateIdentityKey() ?? ''
 }
 
 export function useSession() {
@@ -32,9 +33,7 @@ export function useSession() {
   const restoreSession = usePlayerStore((s) => s.restoreSession)
   const initializationStatus = usePlayerStore((s) => s.initializationStatus)
   const restoreInFlightKeysRef = useRef<Set<string>>(new Set())
-  const restoreAppliedRef = useRef<Map<string, { targetTime: number; appliedAt: number }>>(
-    new Map()
-  )
+  const restoreAppliedRef = useRef<Map<string, RestoreAppliedEntry>>(new Map())
 
   // 1. Initialize session on mount - now fully encapsulated in store
   useEffect(() => {
@@ -58,81 +57,38 @@ export function useSession() {
     }
     if (!audioLoaded && !subtitlesLoaded) return
 
-    const liveState = usePlayerStore.getState()
-    const currentLocalTrackId = liveState.localTrackId ?? localTrackId
-    const effectiveMetadata = liveState.episodeMetadata ?? episodeMetadata
-    const normalizedAudioUrl = resolveSessionAudioSnapshot(liveState.audioUrl, effectiveMetadata)
-    const currentIdentity = `${currentLocalTrackId ?? ''}::${normalizedAudioUrl ?? ''}`
-
     const findOrStartSession = async () => {
       isManagingSessionRef.current = true
       try {
-        // Identity guard: ignore stale async work after playback context switches.
-        if (getCurrentPlaybackIdentity() !== currentIdentity) {
+        const liveState = usePlayerStore.getState()
+        const resolved = await resolveManagedPlaybackSession({
+          durationSeconds: duration || 0,
+          liveState: {
+            audioTitle: liveState.audioTitle,
+            audioUrl: liveState.audioUrl,
+            coverArtUrl: liveState.coverArtUrl,
+            localTrackId: liveState.localTrackId,
+            episodeMetadata: liveState.episodeMetadata,
+          },
+          fallbackLocalTrackId: localTrackId,
+          fallbackEpisodeMetadata: episodeMetadata,
+          getCurrentPlaybackIdentity,
+        })
+        if (resolved.kind === 'stale') {
+          return
+        }
+        if (resolved.kind === 'invalid_remote_metadata') {
+          logError('[Session] Rejecting session persistence: invalid canonical remote metadata')
           return
         }
 
-        let existingSession: PlaybackSession | undefined
-
-        // Try to find existing session by localTrackId (library)
-        if (currentLocalTrackId) {
-          const expectedSessionId = `local-track-${currentLocalTrackId}`
-          const directSession = await DB.getPlaybackSession(expectedSessionId)
-          if (directSession) {
-            if (getCurrentPlaybackIdentity() !== currentIdentity) return
-
-            setStoreSessionId(directSession.id)
-            if (directSession.progress > 0) {
-              setProgress(directSession.progress)
-              usePlayerStore.getState().seekTo(directSession.progress)
-            }
-            if (directSession.durationSeconds) {
-              usePlayerStore.getState().setDuration(directSession.durationSeconds)
-            }
-            return
-          }
-          existingSession = await DB.findLastSessionByTrackId(currentLocalTrackId)
-        }
-        // Try to find existing session by URL (podcast)
-        else if (normalizedAudioUrl) {
-          existingSession = await DB.findLastSessionByUrl(normalizedAudioUrl)
-        }
-
-        // Identity guard: check if context switched during DB await.
-        if (getCurrentPlaybackIdentity() !== currentIdentity) {
+        if (resolved.kind === 'existing') {
+          applyExistingManagedPlaybackSession(resolved.session)
           return
         }
 
-        if (existingSession) {
-          setStoreSessionId(existingSession.id)
-          if (existingSession.progress > 0) {
-            setProgress(existingSession.progress)
-            usePlayerStore.getState().seekTo(existingSession.progress)
-          }
-          if (existingSession.durationSeconds) {
-            usePlayerStore.getState().setDuration(existingSession.durationSeconds)
-          }
-        } else {
-          const { coverArtUrl, audioTitle } = usePlayerStore.getState()
-          const sessionInput = buildManagedPlaybackSessionCreateInput({
-            id: generateSessionId(),
-            audioTitle,
-            durationSeconds: duration || 0,
-            normalizedAudioUrl,
-            localTrackId: currentLocalTrackId,
-            coverArtUrl,
-            metadata: effectiveMetadata,
-          })
-          if (!sessionInput) {
-            logError('[Session] Rejecting explore session persistence: missing countryAtSave')
-            return
-          }
-
-          await DB.upsertPlaybackSession(sessionInput)
-          if (getCurrentPlaybackIdentity() !== currentIdentity) return
-          setStoreSessionId(sessionInput.id ?? null)
-          log('[Session] Created new playback session:', sessionInput.id)
-        }
+        setStoreSessionId(resolved.sessionId)
+        log('[Session] Created new playback session:', resolved.sessionId)
       } catch (err) {
         logError('[Session] Failed to manage session:', err)
       } finally {
@@ -151,7 +107,6 @@ export function useSession() {
     episodeMetadata,
     initializationStatus,
     setStoreSessionId,
-    setProgress,
   ])
 
   // 3. Save on unmount
@@ -164,71 +119,20 @@ export function useSession() {
   // 4. Restore progress to physical audio element
   const restoreProgress = useCallback(
     async (audioElement: HTMLAudioElement) => {
-      const state = usePlayerStore.getState()
-      const currentSessionId = state.sessionId
-      const audioIdentity = resolveSessionAudioSnapshot(state.audioUrl, state.episodeMetadata) ?? ''
-      const restoreKey = `${currentSessionId ?? ''}::${audioIdentity}`
-      const isRestoreTargetCurrent = (): boolean => {
-        const liveState = usePlayerStore.getState()
-        const liveAudioIdentity =
-          resolveSessionAudioSnapshot(liveState.audioUrl, liveState.episodeMetadata) ?? ''
-        return liveState.sessionId === currentSessionId && liveAudioIdentity === audioIdentity
-      }
-
-      if (!currentSessionId) return
-      if (restoreInFlightKeysRef.current.has(restoreKey)) return
+      const target = resolveCurrentPlaybackRestoreTarget()
+      if (!target) return
 
       try {
-        restoreInFlightKeysRef.current.add(restoreKey)
-        const session = await DB.getPlaybackSession(currentSessionId)
-        if (!isRestoreTargetCurrent()) return
-
-        if (session && session.progress >= 0) {
-          const duration = session.durationSeconds
-          const isSessionComplete =
-            duration > 0 &&
-            session.progress >= Math.max(0, duration - COMPLETED_RESTORE_THRESHOLD_SECONDS)
-
-          const targetTime = isSessionComplete ? 0 : session.progress
-          const clampedProgress = duration > 0 ? Math.min(targetTime, duration) : targetTime
-          const now = Date.now()
-          const lastApplied = restoreAppliedRef.current.get(restoreKey)
-          if (
-            lastApplied &&
-            Math.abs(lastApplied.targetTime - clampedProgress) < 0.2 &&
-            now - lastApplied.appliedAt < 750
-          ) {
-            return
-          }
-
-          // Apply physical seek
-          audioElement.currentTime = clampedProgress
-          setProgress(clampedProgress)
-          restoreAppliedRef.current.set(restoreKey, { targetTime: clampedProgress, appliedAt: now })
-
-          if (isSessionComplete) {
-            if (!isRestoreTargetCurrent()) return
-            await DB.updatePlaybackSession(currentSessionId, { progress: 0 })
-          }
-
-          log('[Session] Restored playback physical position:', clampedProgress, {
-            sessionId: currentSessionId,
-            isComplete: isSessionComplete,
-          })
-
-          if (restoreAppliedRef.current.size > 64) {
-            const cutoff = now - 5 * 60 * 1000
-            for (const [key, value] of restoreAppliedRef.current.entries()) {
-              if (value.appliedAt < cutoff) {
-                restoreAppliedRef.current.delete(key)
-              }
-            }
-          }
-        }
+        await restorePlaybackProgressForTarget({
+          audioElement,
+          target,
+          restoreInFlight: restoreInFlightKeysRef.current,
+          restoreApplied: restoreAppliedRef.current,
+          completedRestoreThresholdSeconds: COMPLETED_RESTORE_THRESHOLD_SECONDS,
+          setProgress,
+        })
       } catch (err) {
         logError('[Session] Failed to restore progress:', err)
-      } finally {
-        restoreInFlightKeysRef.current.delete(restoreKey)
       }
     },
     [setProgress]

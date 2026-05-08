@@ -2,6 +2,13 @@ import { useMemo } from 'react'
 import type { SearchEpisode, SearchPodcast } from '../lib/discovery'
 import { useDiscoverySearch } from './useDiscoverySearch'
 import {
+  buildSearchSection,
+  type GlobalSearchOverallState,
+  hasActiveSearchQuery,
+  resolveGlobalSearchPresentation,
+  type SearchSection,
+} from './searchSection'
+import {
   type GlobalSearchLimits,
   type LocalSearchBadge,
   type LocalSearchResult,
@@ -11,9 +18,11 @@ import {
 export type { LocalSearchBadge, LocalSearchResult, GlobalSearchLimits }
 
 export interface GlobalSearchResults {
-  podcasts: SearchPodcast[]
-  episodes: SearchEpisode[]
-  local: LocalSearchResult[]
+  podcastSection: SearchSection<SearchPodcast>
+  episodeSection: SearchSection<SearchEpisode>
+  localSection: SearchSection<LocalSearchResult>
+  totalResultsCount: number
+  overallState: GlobalSearchOverallState
   isLoading: boolean
   isEmpty: boolean
 }
@@ -25,21 +34,32 @@ export function useGlobalSearch(
   enabled = true,
   limits?: Partial<GlobalSearchLimits>
 ): GlobalSearchResults {
-  const { podcasts, episodes, isLoading: isLoadingDiscovery } = useDiscoverySearch(query, enabled)
+  const { podcastSection, episodeSection } = useDiscoverySearch(query, enabled)
   const { localResults, isLoading: isLoadingLocal } = useLocalSearch(query, enabled, limits)
-
-  const isLoading = isLoadingDiscovery || isLoadingLocal
-  const isEmpty =
-    !isLoading && podcasts.length === 0 && episodes.length === 0 && localResults.length === 0
+  const hasActiveQuery = enabled && hasActiveSearchQuery(query)
+  const localSection: SearchSection<LocalSearchResult> = buildSearchSection(
+    localResults,
+    hasActiveQuery,
+    isLoadingLocal
+  )
+  const presentation = resolveGlobalSearchPresentation({
+    query,
+    enabled,
+    podcastSection,
+    episodeSection,
+    localSection,
+  })
 
   return useMemo(
     () => ({
-      podcasts,
-      episodes,
-      local: localResults,
-      isLoading,
-      isEmpty,
+      podcastSection,
+      episodeSection,
+      localSection,
+      totalResultsCount: presentation.totalResultsCount,
+      overallState: presentation.overallState,
+      isLoading: presentation.isLoading,
+      isEmpty: presentation.isEmpty,
     }),
-    [podcasts, episodes, localResults, isLoading, isEmpty]
+    [podcastSection, episodeSection, localSection, presentation]
   )
 }

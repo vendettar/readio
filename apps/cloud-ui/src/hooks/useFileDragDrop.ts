@@ -9,8 +9,8 @@ import {
   useSensors,
 } from '@dnd-kit/core'
 import { useCallback, useState } from 'react'
-import { DB, type FileTrack } from '../lib/dexieDb'
-import { resolveDuplicateName } from '../lib/files/ingest'
+import type { FileTrack } from '../lib/dexieDb'
+import { moveTrackToFolder } from '../lib/fileDragDropService'
 import { logError } from '../lib/logger'
 import { toast } from '../lib/toast'
 
@@ -36,24 +36,12 @@ export function useFileDragDrop({ onComplete }: UseFileDragDropOptions) {
   const executeMoveTrack = useCallback(
     async (trackId: string, targetFolderId: string | null, currentName: string) => {
       try {
-        // Check for duplicates in target folder
-        const existingTracks = await DB.getFileTracksInFolder(targetFolderId)
-        const existingNames = existingTracks.map((t) => t.name)
-
-        // Resolve name conflict
-        const newName = resolveDuplicateName(currentName, existingNames)
-        const isRenamed = newName !== currentName
-
-        // Update track
-        await DB.updateFileTrack(trackId, {
-          folderId: targetFolderId,
-          name: newName,
-        })
+        const moveResult = await moveTrackToFolder(trackId, targetFolderId, currentName)
 
         await onComplete()
 
-        if (isRenamed) {
-          toast.successKey('toastMoveRenamed', { name: newName })
+        if (moveResult.renamed) {
+          toast.successKey('toastMoveRenamed', { name: moveResult.finalName })
         }
       } catch (err) {
         logError('[Files] Failed to move track', err)

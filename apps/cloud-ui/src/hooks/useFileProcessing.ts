@@ -2,10 +2,13 @@
 // Thin wrapper hook for file input handling - delegates to pure ingest module
 
 import { useCallback } from 'react'
-import { attachSubtitleToTrack, ingestFiles } from '../lib/files/ingest'
+import {
+  FILE_PROCESSING_RESULT,
+  processDroppedFiles,
+  processSelectedAudioFiles,
+  processSelectedSubtitleFile,
+} from '../lib/fileProcessingService'
 import { logError } from '../lib/logger'
-import { isValidAudioFile } from '../lib/schemas/files'
-import { checkStorageQuota, evaluateUploadGuardrails } from '../lib/storageQuota'
 import { toast } from '../lib/toast'
 
 interface UseFileProcessingOptions {
@@ -22,18 +25,10 @@ export function useFileProcessing({ currentFolderId, onComplete }: UseFileProces
       if (files.length === 0) return
 
       try {
-        const { blocked } = await evaluateUploadGuardrails(files)
-        if (blocked) {
-          return
+        const result = await processDroppedFiles(files, currentFolderId)
+        if (result === FILE_PROCESSING_RESULT.PROCESSED) {
+          await onComplete()
         }
-
-        await ingestFiles({
-          files,
-          folderId: currentFolderId,
-        })
-        // ingestFiles now includes a flush transaction, so all related writes across stores are guaranteed committed
-        await onComplete()
-        void checkStorageQuota({ mode: 'silent' })
       } catch (err) {
         logError('[Files] Failed to ingest dropped files:', err)
         toast.errorKey('toastUploadFailed')
@@ -52,28 +47,10 @@ export function useFileProcessing({ currentFolderId, onComplete }: UseFileProces
     ) => {
       if (e.target.files?.length) {
         try {
-          const list = Array.from(e.target.files)
-          const hasAudio = list.some((f) => isValidAudioFile(f))
-
-          if (!hasAudio) {
-            toast.errorKey('validationInvalidAudioFormat')
-            if (inputRef.current) inputRef.current.value = ''
-            return
+          const result = await processSelectedAudioFiles(e.target.files, currentFolderId)
+          if (result === FILE_PROCESSING_RESULT.PROCESSED) {
+            await onComplete()
           }
-
-          const { blocked } = await evaluateUploadGuardrails(list)
-          if (blocked) {
-            if (inputRef.current) inputRef.current.value = ''
-            return
-          }
-
-          await ingestFiles({
-            files: list,
-            folderId: currentFolderId,
-          })
-          // ingestFiles now includes a flush transaction, so all related writes across stores are guaranteed committed
-          await onComplete()
-          void checkStorageQuota({ mode: 'silent' })
         } catch (err) {
           logError('[Files] Failed to ingest files:', err)
           toast.errorKey('toastUploadFailed')
@@ -93,18 +70,10 @@ export function useFileProcessing({ currentFolderId, onComplete }: UseFileProces
     ) => {
       if (targetTrackId && e.target.files?.length) {
         try {
-          const list = Array.from(e.target.files)
-          const { blocked } = await evaluateUploadGuardrails(list)
-          if (blocked) {
-            clearTargetTrackId()
-            if (inputRef.current) inputRef.current.value = ''
-            return
+          const result = await processSelectedSubtitleFile(e.target.files, targetTrackId)
+          if (result === FILE_PROCESSING_RESULT.PROCESSED) {
+            await onComplete()
           }
-
-          await attachSubtitleToTrack(e.target.files[0], targetTrackId)
-          // attachSubtitleToTrack now includes a flush transaction, so all related writes are guaranteed committed
-          await onComplete()
-          void checkStorageQuota({ mode: 'silent' })
         } catch (err) {
           logError('[Files] Failed to attach subtitle:', err)
           toast.errorKey('toastUploadFailed')

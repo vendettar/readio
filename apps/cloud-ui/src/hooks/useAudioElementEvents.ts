@@ -1,10 +1,18 @@
 import type { TFunction } from 'i18next'
 import type React from 'react'
-import { mapAudioErrorMessage } from '../lib/audioErrors'
-import { warn } from '../lib/logger'
-import { usePlayerStore } from '../store/playerStore'
-import { useSleepTimerStore } from '../store/sleepTimerStore'
+import {
+  handleAudioCanPlay,
+  handleAudioDurationChange,
+  handleAudioPlaying,
+  handleAudioWaiting,
+} from '../lib/player/playerRuntimeActions'
 import type { AudioFallbackRecoveryState } from './audioFallbackRecovery'
+import {
+  processAudioEndedEvent,
+  processAudioErrorEvent,
+  processAudioTimeUpdate,
+  shouldIgnoreAudioPauseEvent,
+} from './audioElementEventRuntime'
 import { useEventListener } from './useEventListener'
 
 interface UseAudioElementEventsParams {
@@ -34,21 +42,14 @@ export function useAudioElementEvents({
       const audio = audioRef.current
       if (!audio) return
       const now = Date.now()
-      if (!isVisibleRef.current) {
-        if (now - lastProgressUpdateRef.current < 1000) return
-      }
-      lastProgressUpdateRef.current = now
-      const playerState = usePlayerStore.getState()
-      playerState.updateProgress(audio.currentTime)
-      if (
-        playerState.status === 'loading' &&
-        playerState.isPlaying &&
-        !audio.paused &&
-        !audio.ended &&
-        audio.currentTime > 0
-      ) {
-        playerState.setStatus('playing')
-      }
+      const processedAt = processAudioTimeUpdate({
+        audio,
+        isVisible: isVisibleRef.current,
+        lastProgressUpdateAt: lastProgressUpdateRef.current,
+        now,
+      })
+      if (processedAt === null) return
+      lastProgressUpdateRef.current = processedAt
     },
     audioRef
   )
@@ -58,7 +59,7 @@ export function useAudioElementEvents({
     () => {
       const audio = audioRef.current
       if (!audio) return
-      usePlayerStore.getState().setDuration(audio.duration)
+      handleAudioDurationChange(audio.duration)
     },
     audioRef
   )
@@ -67,7 +68,7 @@ export function useAudioElementEvents({
   useEventListener(
     'pause',
     () => {
-      if (recoveryRef.current.isRecovering && usePlayerStore.getState().isPlaying) {
+      if (shouldIgnoreAudioPauseEvent(recoveryRef.current.isRecovering)) {
         return
       }
       onPause()
@@ -80,12 +81,7 @@ export function useAudioElementEvents({
     () => {
       const audio = audioRef.current
       if (!audio) return
-      const playerState = usePlayerStore.getState()
-      void playerState.handleEndedPlayback(audio.duration || audio.currentTime)
-
-      if (useSleepTimerStore.getState().isEndOfEpisode) {
-        useSleepTimerStore.getState().reset()
-      }
+      void processAudioEndedEvent(audio)
     },
     audioRef
   )
@@ -93,10 +89,7 @@ export function useAudioElementEvents({
   useEventListener(
     'waiting',
     () => {
-      const { isPlaying } = usePlayerStore.getState()
-      if (isPlaying) {
-        usePlayerStore.getState().setStatus('loading')
-      }
+      handleAudioWaiting()
     },
     audioRef
   )
@@ -104,7 +97,7 @@ export function useAudioElementEvents({
   useEventListener(
     'playing',
     () => {
-      usePlayerStore.getState().setStatus('playing')
+      handleAudioPlaying()
     },
     audioRef
   )
@@ -112,10 +105,7 @@ export function useAudioElementEvents({
   useEventListener(
     'canplay',
     () => {
-      const { isPlaying, status } = usePlayerStore.getState()
-      if (status === 'loading') {
-        usePlayerStore.getState().setStatus(isPlaying ? 'playing' : 'paused')
-      }
+      handleAudioCanPlay()
     },
     audioRef
   )
@@ -123,23 +113,13 @@ export function useAudioElementEvents({
   useEventListener(
     'error',
     () => {
-      if (recoveryRef.current.isRecovering) {
-        return
-      }
-
       const audio = audioRef.current
       if (!audio) return
-      const err = audio.error
-      const message = mapAudioErrorMessage(t, err)
-
-      if (err) {
-        warn('[GlobalAudioController] Audio Error Details:', {
-          code: err.code,
-          message: err.message,
-          src: audio.src,
-        })
-      }
-      usePlayerStore.getState().setPlayerError(message)
+      processAudioErrorEvent({
+        audio,
+        isRecovering: recoveryRef.current.isRecovering,
+        t,
+      })
     },
     audioRef
   )

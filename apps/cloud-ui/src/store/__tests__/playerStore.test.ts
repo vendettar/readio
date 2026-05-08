@@ -1,10 +1,15 @@
-import { act, render, renderHook } from '@testing-library/react'
+import { act, render, renderHook, waitFor } from '@testing-library/react'
 import 'fake-indexeddb/auto'
 import { createElement } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { GlobalAudioController } from '../../components/AppShell/GlobalAudioController'
+import { checkDownloadCapacity } from '../../lib/downloadCapacity'
 import { DB } from '../../lib/dexieDb'
-import { usePlayerStore } from '../playerStore'
+import { createCanonicalRemoteEpisodeMetadata } from '../../lib/player/playbackMetadata'
+import { FilesRepository } from '../../lib/repositories/FilesRepository'
+import { DownloadsRepository } from '../../lib/repositories/DownloadsRepository'
+import { toast } from '../../lib/toast'
+import { isCanonicalRemoteEpisodeMetadata, usePlayerStore } from '../playerStore'
 import { usePlayerSurfaceStore } from '../playerSurfaceStore'
 import { useTranscriptStore } from '../transcriptStore'
 
@@ -24,6 +29,9 @@ vi.mock('../../hooks/useSession', () => ({
   useSession: () => ({ restoreProgress: vi.fn() }),
 }))
 vi.mock('../../hooks/useTabSync', () => ({ useTabSync: vi.fn() }))
+vi.mock('../../lib/downloadCapacity', () => ({
+  checkDownloadCapacity: vi.fn(),
+}))
 vi.mock('../../lib/toast', () => ({ toast: { infoKey: vi.fn(), errorKey: vi.fn() } }))
 
 // Mock URL.createObjectURL and URL.revokeObjectURL
@@ -137,6 +145,10 @@ describe('playerStore - Session Restoration', () => {
     await DB.createPlaybackSession({
       id: 'session-remote',
       audioUrl: 'https://example.com/episode.mp3',
+      artworkUrl: 'https://example.com/episode.jpg',
+      showTitle: 'Remote Podcast',
+      episodeGuid: 'remote-episode-guid-1',
+      podcastItunesId: 'remote-podcast-1',
       progress: 120,
       durationSeconds: 180,
       source: 'explore',
@@ -156,6 +168,52 @@ describe('playerStore - Session Restoration', () => {
     expect(result.current.episodeMetadata?.durationSeconds).toBe(180)
     expect(usePlayerSurfaceStore.getState().canDockedRestore).toBe(true)
   })
+
+  it('prefers canonical downloaded tracks before URL fallback when restoring explore sessions', async () => {
+    const downloadedBlob = new Blob(['downloaded audio data'], { type: 'audio/mp3' })
+    const downloadedAudioId = await DB.addAudioBlob(downloadedBlob, 'downloaded-episode.mp3')
+    const findByCanonicalSpy = vi
+      .spyOn(DownloadsRepository, 'findTrackByPodcastAndEpisode')
+      .mockResolvedValue({
+        id: 'download-track-1',
+        audioId: downloadedAudioId,
+      } as Awaited<ReturnType<typeof DownloadsRepository.findTrackByPodcastAndEpisode>>)
+    const findByUrlSpy = vi.spyOn(DownloadsRepository, 'findTrackByUrl').mockResolvedValue(undefined)
+    const artworkSpy = vi.spyOn(FilesRepository, 'resolveTrackArtwork').mockResolvedValue(null)
+
+    await DB.createPlaybackSession({
+      id: 'session-remote-rotated',
+      audioUrl: 'https://old-cdn.example.com/episode.mp3',
+      artworkUrl: 'https://example.com/episode.jpg',
+      showTitle: 'Remote Podcast',
+      episodeGuid: 'remote-episode-guid-2',
+      podcastItunesId: 'remote-podcast-2',
+      progress: 42,
+      durationSeconds: 180,
+      source: 'explore',
+      title: 'Remote Episode',
+      countryAtSave: 'us',
+    })
+
+    const { result } = renderHook(() => usePlayerStore())
+
+    await act(async () => {
+      await result.current.restoreSession()
+    })
+
+    expect(findByCanonicalSpy).toHaveBeenCalledWith('remote-podcast-2', 'remote-episode-guid-2')
+    expect(findByUrlSpy).not.toHaveBeenCalled()
+    expect(result.current.audioUrl).toBe('blob:mock-url')
+    expect(result.current.localTrackId).toBe('download-track-1')
+    expect(result.current.episodeMetadata?.kind).toBe('remote-episode')
+    expect(result.current.episodeMetadata?.originalAudioUrl).toBe(
+      'https://old-cdn.example.com/episode.mp3'
+    )
+
+    findByCanonicalSpy.mockRestore()
+    findByUrlSpy.mockRestore()
+    artworkSpy.mockRestore()
+  })
 })
 
 describe('playerStore - Status & Control Logic', () => {
@@ -164,7 +222,13 @@ describe('playerStore - Status & Control Logic', () => {
     act(() => {
       result.current.reset()
     })
+    await DB.clearAllData()
     vi.clearAllMocks()
+    vi.mocked(checkDownloadCapacity).mockResolvedValue({
+      allowed: true,
+      currentUsageBytes: 0,
+      capBytes: 1024,
+    })
   })
 
   it('should treat track as loaded and status as loading even if audioUrl is null but title is present', () => {
@@ -361,6 +425,21 @@ describe('playerStore - Status & Control Logic', () => {
     expect(useTranscriptStore.getState().asrActiveTrackKey).toBeNull()
   })
 
+  it('preserves persisted volume and playback rate when resetting playback state', () => {
+    const { result } = renderHook(() => usePlayerStore())
+
+    act(() => {
+      result.current.setVolume(0.35)
+      result.current.setPlaybackRate(1.75)
+      result.current.setAudioUrl('https://example.com/audio.mp3', 'Track 1')
+      result.current.reset()
+    })
+
+    expect(result.current.volume).toBe(0.35)
+    expect(result.current.playbackRate).toBe(1.75)
+    expect(result.current.audioUrl).toBeNull()
+  })
+
   it('should revert to paused if autoplay is blocked', async () => {
     const playSpy = vi.spyOn(HTMLMediaElement.prototype, 'play').mockRejectedValue({
       name: 'NotAllowedError',
@@ -404,6 +483,47 @@ describe('playerStore - Status & Control Logic', () => {
 
     expect(useTranscriptStore.getState().subtitlesLoaded).toBe(true)
     expect(useTranscriptStore.getState().subtitles[0]?.text).toBe('Manual subtitle line')
+    expect(result.current.episodeMetadata).toMatchObject({
+      kind: 'local',
+      transcriptUrl: 'https://example.com/transcript-1.srt',
+    })
+  })
+
+  it('treats canonical remote metadata as invalid when countryAtSave is not in the allowlist', () => {
+    const metadata = {
+      countryAtSave: 'xx',
+      showTitle: 'Podcast',
+      artworkUrl: 'https://example.com/art.jpg',
+      episodeGuid: 'episode-guid-1',
+      podcastItunesId: 'podcast-1',
+    } as unknown as Parameters<typeof isCanonicalRemoteEpisodeMetadata>[0]
+
+    expect(isCanonicalRemoteEpisodeMetadata(metadata)).toBe(false)
+  })
+
+  it('preserves explicit canonical remote playback metadata', () => {
+    const { result } = renderHook(() => usePlayerStore())
+
+    act(() => {
+      result.current.setEpisodeMetadata(
+        createCanonicalRemoteEpisodeMetadata({
+          showTitle: 'Podcast',
+          artworkUrl: 'https://example.com/art.jpg',
+          episodeGuid: 'episode-guid-1',
+          podcastItunesId: 'podcast-1',
+          countryAtSave: 'us',
+        })
+      )
+    })
+
+    expect(result.current.episodeMetadata).toMatchObject({
+      kind: 'remote-episode',
+      showTitle: 'Podcast',
+      artworkUrl: 'https://example.com/art.jpg',
+      episodeGuid: 'episode-guid-1',
+      podcastItunesId: 'podcast-1',
+      countryAtSave: 'us',
+    })
   })
 
   it('uses monotonic loadRequestId increments even if Date.now collides', () => {
@@ -493,5 +613,96 @@ describe('playerStore - Status & Control Logic', () => {
     })
 
     expect(result.current.duration).toBe(245)
+  })
+
+  it('keeps manual upload playable while surfacing quota rejection for background persistence', async () => {
+    vi.mocked(checkDownloadCapacity).mockResolvedValue({
+      allowed: false,
+      reason: 'known_size_exceeds',
+      currentUsageBytes: 900,
+      capBytes: 1024,
+    })
+    const { result } = renderHook(() => usePlayerStore())
+    const file = new File(['audio bytes'], 'manual.mp3', { type: 'audio/mpeg' })
+
+    await act(async () => {
+      await result.current.loadAudio(file)
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(result.current.audioUrl).toBe('blob:mock-url')
+    expect(result.current.audioLoaded).toBe(true)
+    expect(result.current.audioTitle).toBe('manual.mp3')
+    expect(toast.errorKey).toHaveBeenCalledWith('downloadStorageLimit')
+    expect(await DB.getAllAudioBlobIds()).toEqual([])
+  })
+
+  it('clears stale remote metadata and duration when loading a manual upload', async () => {
+    const { result } = renderHook(() => usePlayerStore())
+    const file = new File(['audio bytes'], 'manual.mp3', { type: 'audio/mpeg' })
+
+    act(() => {
+      usePlayerStore.setState({
+        duration: 321,
+        episodeMetadata: createCanonicalRemoteEpisodeMetadata({
+          showTitle: 'Remote Podcast',
+          artworkUrl: 'https://example.com/art.jpg',
+          episodeGuid: 'episode-guid-1',
+          podcastItunesId: 'podcast-1',
+          countryAtSave: 'us',
+        }),
+      })
+    })
+
+    await act(async () => {
+      await result.current.loadAudio(file)
+    })
+
+    expect(result.current.duration).toBe(0)
+    expect(result.current.episodeMetadata).toBeNull()
+  })
+
+  it('persists loaded subtitles and patches the active playback session', async () => {
+    const { result } = renderHook(() => usePlayerStore())
+    await DB.createPlaybackSession({
+      id: 'session-subtitle-active',
+      source: 'local',
+      title: 'Track',
+      progress: 0,
+    })
+
+    act(() => {
+      usePlayerStore.setState({ sessionId: 'session-subtitle-active' })
+    })
+
+    const subtitleFile = new File(
+      ['WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nHello world\n'],
+      'manual.vtt',
+      { type: 'text/vtt' }
+    )
+    Object.defineProperty(subtitleFile, 'text', {
+      value: vi.fn().mockResolvedValue(
+        'WEBVTT\n\n00:00:00.000 --> 00:00:01.000\nHello world\n'
+      ),
+    })
+
+    await act(async () => {
+      await result.current.loadSubtitles(subtitleFile)
+    })
+    await waitFor(async () => {
+      const session = await DB.getPlaybackSession('session-subtitle-active')
+      expect(session?.subtitleId).toEqual(expect.any(String))
+      expect(session?.subtitleFilename).toBe('manual.vtt')
+    })
+    expect(useTranscriptStore.getState().subtitlesLoaded).toBe(true)
+    expect(useTranscriptStore.getState().subtitles).toEqual([
+      expect.objectContaining({
+        start: 0,
+        end: 1,
+        text: 'Hello world',
+      }),
+    ])
   })
 })

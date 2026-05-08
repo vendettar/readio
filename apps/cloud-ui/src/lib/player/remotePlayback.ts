@@ -1,40 +1,34 @@
-import type { EpisodeMetadata } from '../../store/playerStore'
-import { TRANSCRIPT_INGESTION_STATUS, useTranscriptStore } from '../../store/transcriptStore'
-import { getAsrCredentialKey, getCredential } from '../db/credentialsRepository'
-import type { Favorite, PlaybackSession } from '../dexieDb'
-import type { FeedEpisode, Podcast, SearchEpisode } from '../discovery'
-import { downloadEpisode, removeDownloadedTrack } from '../downloadService'
-import { log, logError } from '../logger'
+import { getValidTranscriptUrl } from '../remoteTranscript'
+import type { SupportedCountry } from '../routes/podcastRoutes'
 import {
-  autoIngestEpisodeTranscript,
-  getAsrSettingsSnapshot,
-  getValidTranscriptUrl,
-} from '../remoteTranscript'
-import { PlaybackRepository } from '../repositories/PlaybackRepository'
-import { normalizeCountryParam } from '../routes/podcastRoutes'
-import { DEFAULTS } from '../runtimeConfig.defaults'
-import {
-  mapFavoriteToPlaybackPayload,
-  mapFeedEpisodeToPlaybackPayload,
-  mapSearchEpisodeToPlaybackPayload,
-  mapSessionToPlaybackPayload,
-} from './episodeMetadata'
+  createCanonicalRemoteEpisodeMetadata,
+  type CanonicalEpisodeMetadata,
+  type CanonicalRemoteEpisodeMetadata,
+  type EpisodeMetadata,
+  type LocalEpisodeMetadata,
+} from './playbackMetadata'
 import { PLAYBACK_REQUEST_MODE, type PlaybackRequestMode } from './playbackMode'
-import { resolvePlaybackSource } from './playbackSource'
+import {
+  createRemotePlaybackEntryPoints,
+  type PlaybackStartResult,
+  type RemotePlaybackDeps,
+  type RemoteStreamTargetCandidates,
+} from './remotePlaybackEntryPoints'
+import {
+  resolveDownloadedPlaybackSource,
+  resolvePlayableSourceForPlayback,
+} from './remotePlaybackSourceResolver'
+import {
+  applyPlaybackLoadingState,
+  completePlaybackReadyState,
+  handlePlaybackResolutionFailure,
+} from './remotePlaybackFlowState'
 
-type MetadataPatch = {
-  countryAtSave: string
-}
-
-type PlaybackModeOptions = {
-  mode?: PlaybackRequestMode
-}
-
-type RemotePlaybackPayload = {
+type ManagedPlaybackPayload<TMetadata extends EpisodeMetadata = EpisodeMetadata> = {
   audioUrl: string
   title: string
   artwork: string
-  metadata: EpisodeMetadata
+  metadata: TMetadata
   transcriptUrl?: string
   streamTarget?: RemoteStreamTargetCandidates
 }
@@ -48,42 +42,8 @@ export const PLAYBACK_START_REASON = {
 
 export type PlaybackStartReason = (typeof PLAYBACK_START_REASON)[keyof typeof PLAYBACK_START_REASON]
 type PlaybackNonStartReason = Exclude<PlaybackStartReason, typeof PLAYBACK_START_REASON.STARTED>
-export type PlaybackStartResult =
-  | { started: true; reason: typeof PLAYBACK_START_REASON.STARTED }
-  | { started: false; reason: PlaybackNonStartReason }
 
 const UNTITLED_PLAYBACK_TITLE = 'Untitled'
-
-type SetAudioUrl = (
-  url: string | null,
-  title?: string,
-  coverArt?: string | Blob | null,
-  metadata?: EpisodeMetadata | null,
-  isPlaying?: boolean
-) => void
-
-export interface RemotePlaybackDeps {
-  setAudioUrl: SetAudioUrl
-  play: () => void
-  pause: () => void
-  setSessionId?: (id: string | null) => void
-  setPlaybackTrackId?: (id: string | null) => void
-}
-
-export interface RemoteStreamTargetCandidates {
-  sourceUrlNormalized?: string | null
-  audioUrl?: string | null
-}
-
-type PlaybackSourceResolution =
-  | {
-      ok: true
-      source: { url: string; trackId?: string }
-    }
-  | {
-      ok: false
-      reason: PlaybackNonStartReason
-    }
 
 function sanitizeRemoteUrl(value: string | null | undefined): string | null {
   if (typeof value !== 'string') return null
@@ -110,12 +70,52 @@ export function canPlayRemoteStreamWithoutTranscript(
   return hasStreamTargetForPlayback(candidates)
 }
 
-function mergeMetadata(metadata: EpisodeMetadata, patch?: MetadataPatch): EpisodeMetadata {
-  if (!patch?.countryAtSave) return metadata
+function decoratePlaybackMetadata(input: {
+  metadata: EpisodeMetadata
+  audioUrl: string
+  mode: PlaybackRequestMode
+}): EpisodeMetadata
+function decoratePlaybackMetadata(input: {
+  metadata: LocalEpisodeMetadata
+  audioUrl: string
+  mode: PlaybackRequestMode
+}): LocalEpisodeMetadata
+function decoratePlaybackMetadata(input: {
+  metadata: CanonicalRemoteEpisodeMetadata
+  audioUrl: string
+  mode: PlaybackRequestMode
+}): CanonicalRemoteEpisodeMetadata
+function decoratePlaybackMetadata<TMetadata extends EpisodeMetadata>(input: {
+  metadata: TMetadata
+  audioUrl: string
+  mode: PlaybackRequestMode
+}): TMetadata {
   return {
-    ...metadata,
-    countryAtSave: patch.countryAtSave,
-  }
+    ...input.metadata,
+    originalAudioUrl: input.audioUrl,
+    playbackRequestMode: input.mode,
+  } as TMetadata
+}
+
+function buildCanonicalRemotePlaybackMetadata(input: {
+  metadata: CanonicalEpisodeMetadata
+  audioUrl: string
+  mode: PlaybackRequestMode
+  countryAtSave: SupportedCountry
+}): CanonicalRemoteEpisodeMetadata | null {
+  return createCanonicalRemoteEpisodeMetadata({
+    description: input.metadata.description,
+    showTitle: input.metadata.showTitle,
+    artworkUrl: input.metadata.artworkUrl,
+    publishedAt: input.metadata.publishedAt,
+    durationSeconds: input.metadata.durationSeconds,
+    episodeGuid: input.metadata.episodeGuid,
+    podcastItunesId: input.metadata.podcastItunesId,
+    transcriptUrl: input.metadata.transcriptUrl,
+    originalAudioUrl: input.audioUrl,
+    playbackRequestMode: input.mode,
+    countryAtSave: input.countryAtSave,
+  })
 }
 
 function resolvePlayableTitle(title: string | undefined, metadata: EpisodeMetadata): string {
@@ -150,63 +150,6 @@ function isEpochStale(epoch: number): boolean {
   return epoch !== globalPlaybackEpoch
 }
 
-async function resolveSourceForPlaybackMode(
-  currentEpoch: number,
-  mode: PlaybackRequestMode,
-  audioUrl: string,
-  streamTarget?: RemoteStreamTargetCandidates
-): Promise<PlaybackSourceResolution> {
-  const resolved = await resolvePlaybackSource(audioUrl)
-  if (isEpochStale(currentEpoch)) {
-    return { ok: false, reason: PLAYBACK_START_REASON.STALE }
-  }
-
-  if (mode !== PLAYBACK_REQUEST_MODE.STREAM_WITHOUT_TRANSCRIPT) {
-    return { ok: true, source: resolved }
-  }
-
-  if (resolved.url.startsWith('blob:')) {
-    return { ok: true, source: resolved }
-  }
-
-  const remoteTarget = resolveRemoteStreamTargetUrl(streamTarget ?? { audioUrl })
-  if (!remoteTarget) {
-    return { ok: false, reason: PLAYBACK_START_REASON.NO_PLAYABLE_SOURCE }
-  }
-
-  return { ok: true, source: { url: remoteTarget } }
-}
-
-/**
- * Checks if ASR is fully configured (provider + model).
- * Note: Does not check API key presence as that is async (DB).
- */
-function isAsrConfigured(): boolean {
-  const settings = getAsrSettingsSnapshot()
-  return !!settings.asrProvider && !!settings.asrModel
-}
-
-/**
- * Checks whether the given source requires ASR-blocking download.
- * Returns true if: source is remote (not blob:), no transcript URL exists,
- * and provider/model/key are configured.
- */
-async function needsAsrDownloadBlocking(
-  source: { url: string },
-  transcriptUrl?: string
-): Promise<boolean> {
-  if (source.url.startsWith('blob:')) return false
-  if (transcriptUrl) return false
-  if (!isAsrConfigured()) return false
-
-  const settings = getAsrSettingsSnapshot()
-  const provider = settings.asrProvider
-  if (!provider) return false
-
-  const apiKey = (await getCredential(getAsrCredentialKey(provider))).trim()
-  return !!apiKey
-}
-
 /**
  * Downloads the episode audio and returns the resolved local source.
  * Returns null if download failed or was cancelled.
@@ -217,169 +160,40 @@ export async function downloadAndResolve(
     audioUrl: string
     title: string
     artwork: string
-    metadata: EpisodeMetadata
+    metadata: CanonicalRemoteEpisodeMetadata
   },
   isRetry = false
 ): Promise<{ url: string; trackId?: string } | null> {
-  useTranscriptStore.getState().setTranscriptIngestionStatus(TRANSCRIPT_INGESTION_STATUS.LOADING)
-
-  const res = await downloadEpisode({
-    audioUrl: payload.audioUrl,
-    episodeTitle: payload.title,
-    episodeDescription: payload.metadata.description,
-    showTitle: payload.metadata.showTitle || '',
-    feedUrl: payload.metadata.podcastFeedUrl,
-    artworkUrl: payload.artwork,
-    podcastItunesId: payload.metadata.podcastItunesId,
-    episodeGuid: payload.metadata.episodeGuid,
-    durationSeconds: payload.metadata.durationSeconds,
-    countryAtSave:
-      normalizeCountryParam(payload.metadata.countryAtSave) ?? DEFAULTS.DEFAULT_COUNTRY,
-    signal: currentPlaybackAbortController?.signal,
-  })
-
-  if (currentEpoch !== getPlaybackEpoch()) return null
-  if (!res.ok) return null
-
-  const newSource = await resolvePlaybackSource(payload.audioUrl)
-  if (currentEpoch !== getPlaybackEpoch()) return null
-
-  // Mandatory local-blob check for ASR-ready paths (Instruction 127)
-  // If resolvePlaybackSource returned a non-blob URL but we have a trackId, it means the blob is missing (dirty track).
-  if (!newSource.url.startsWith('blob:') && newSource.trackId) {
-    if (isRetry) {
-      logError('[remotePlayback] downloadAndResolve failed even after retry.')
-      return null
-    }
-
-    log(
-      '[remotePlayback] Detected dirty track (metadata exists but blob missing). Cleaning up and retrying...',
-      {
-        trackId: newSource.trackId,
-      }
-    )
-
-    // Race protection: ensure epoch hasn't changed before destructive cleanup (Instruction 20260228-R2)
-    if (currentEpoch !== getPlaybackEpoch()) return null
-    await removeDownloadedTrack(newSource.trackId)
-    if (currentEpoch !== getPlaybackEpoch()) return null
-
-    // Second chance: retry the download flow now that the dirty record is purged
-    return downloadAndResolve(currentEpoch, payload, true)
-  }
-
-  return newSource
-}
-
-async function playRemotePayload(
-  deps: RemotePlaybackDeps,
-  payload: RemotePlaybackPayload,
-  patch?: MetadataPatch,
-  options?: PlaybackModeOptions
-): Promise<PlaybackStartResult> {
-  const mode = options?.mode ?? PLAYBACK_REQUEST_MODE.DEFAULT
-  return runPlaybackFlow(deps, payload, {
-    mode,
-    patch,
-    onReadyToPlay: ({ source, isStreamWithoutTranscript }) => {
-      if (isStreamWithoutTranscript) {
-        deps.setPlaybackTrackId?.(null)
-      } else if (source.trackId) {
-        deps.setPlaybackTrackId?.(source.trackId)
-      }
-    },
+  return resolveDownloadedPlaybackSource({
+    currentEpoch,
+    getPlaybackEpoch,
+    isEpochStale,
+    abortSignal: currentPlaybackAbortController?.signal,
+    payload,
+    isRetry,
   })
 }
 
-export async function playFeedEpisodeWithDeps(
-  deps: RemotePlaybackDeps,
-  episode: FeedEpisode,
-  podcast: Podcast,
-  options: MetadataPatch & PlaybackModeOptions
-): Promise<void> {
-  const payload = mapFeedEpisodeToPlaybackPayload(episode, podcast)
-  await playRemotePayload(deps, payload, options, options)
-}
+const {
+  playEpisodeWithDeps,
+  playSearchEpisodeWithDeps,
+  playFavoriteWithDeps,
+  playStreamWithoutTranscriptWithDeps,
+  playHistorySessionWithDeps,
+} = createRemotePlaybackEntryPoints({
+  buildCanonicalRemotePlaybackMetadata,
+  createNonStartedResult,
+  hasStreamTargetForPlayback,
+  resolveRemoteStreamTargetUrl,
+  runPlaybackFlow,
+})
 
-export async function playSearchEpisodeWithDeps(
-  deps: RemotePlaybackDeps,
-  episode: SearchEpisode,
-  options: { podcastFeedUrl?: string; countryAtSave: string; mode?: PlaybackRequestMode }
-): Promise<void> {
-  const payload = mapSearchEpisodeToPlaybackPayload(episode, options?.podcastFeedUrl)
-  await playRemotePayload(deps, payload, options, options)
-}
-
-export async function playFavoriteWithDeps(
-  deps: RemotePlaybackDeps,
-  favorite: Favorite,
-  options: MetadataPatch & PlaybackModeOptions
-): Promise<void> {
-  const payload = mapFavoriteToPlaybackPayload(favorite)
-  await playRemotePayload(deps, payload, options, options)
-}
-
-export async function playStreamWithoutTranscriptWithDeps(
-  deps: RemotePlaybackDeps,
-  payload: {
-    streamTarget: RemoteStreamTargetCandidates
-    title: string
-    artwork: string
-    metadata: EpisodeMetadata
-  },
-  patch?: MetadataPatch
-): Promise<PlaybackStartResult> {
-  const audioUrl =
-    payload.streamTarget.sourceUrlNormalized?.trim() || payload.streamTarget.audioUrl?.trim() || ''
-  if (!audioUrl) {
-    return createNonStartedResult(PLAYBACK_START_REASON.NO_PLAYABLE_SOURCE)
-  }
-
-  return playRemotePayload(
-    deps,
-    {
-      audioUrl,
-      title: payload.title,
-      artwork: payload.artwork,
-      metadata: payload.metadata,
-      streamTarget: payload.streamTarget,
-    },
-    patch,
-    {
-      mode: PLAYBACK_REQUEST_MODE.STREAM_WITHOUT_TRANSCRIPT,
-    }
-  )
-}
-
-export async function playHistorySessionWithDeps(
-  deps: RemotePlaybackDeps,
-  session: PlaybackSession,
-  options?: PlaybackModeOptions
-): Promise<boolean> {
-  const payload = mapSessionToPlaybackPayload(session)
-  if (!payload) return false
-
-  const mode = options?.mode ?? PLAYBACK_REQUEST_MODE.DEFAULT
-  const startResult = await runPlaybackFlow(deps, payload, {
-    mode,
-    onReadyToPlay: async ({ source, isStreamWithoutTranscript }) => {
-      let finalTrackId = source.trackId
-      if (isStreamWithoutTranscript) {
-        deps.setPlaybackTrackId?.(null)
-      } else if (!finalTrackId && session.localTrackId) {
-        const trackExists = await PlaybackRepository.trackExists(session.localTrackId)
-        if (trackExists) {
-          finalTrackId = session.localTrackId
-        }
-      }
-
-      if (finalTrackId) {
-        deps.setPlaybackTrackId?.(finalTrackId)
-      }
-      deps.setSessionId?.(session.id)
-    },
-  })
-  return startResult.started
+export {
+  playEpisodeWithDeps,
+  playFavoriteWithDeps,
+  playHistorySessionWithDeps,
+  playSearchEpisodeWithDeps,
+  playStreamWithoutTranscriptWithDeps,
 }
 
 type PlaybackReadyContext = {
@@ -391,11 +205,34 @@ type PlaybackReadyContext = {
 
 async function runPlaybackFlow(
   deps: RemotePlaybackDeps,
-  payload: RemotePlaybackPayload,
+  payload: ManagedPlaybackPayload<EpisodeMetadata>,
   options: {
     mode: PlaybackRequestMode
-    patch?: MetadataPatch
     onReadyToPlay?: (ctx: PlaybackReadyContext) => void | Promise<void>
+  }
+): Promise<PlaybackStartResult>
+async function runPlaybackFlow(
+  deps: RemotePlaybackDeps,
+  payload: ManagedPlaybackPayload<CanonicalRemoteEpisodeMetadata>,
+  options: {
+    mode: PlaybackRequestMode
+    onReadyToPlay?: (ctx: PlaybackReadyContext) => void | Promise<void>
+  }
+): Promise<PlaybackStartResult>
+async function runPlaybackFlow(
+  deps: RemotePlaybackDeps,
+  payload: ManagedPlaybackPayload<LocalEpisodeMetadata>,
+  options: {
+    mode: PlaybackRequestMode
+    onReadyToPlay?: (ctx: PlaybackReadyContext) => void | Promise<void>
+  }
+): Promise<PlaybackStartResult>
+async function runPlaybackFlow<TMetadata extends EpisodeMetadata>(
+  deps: RemotePlaybackDeps,
+  payload: ManagedPlaybackPayload<TMetadata>,
+  options: {
+    mode: PlaybackRequestMode
+    onReadyToPlay?: (ctx: PlaybackReadyContext & { metadata: TMetadata }) => void | Promise<void>
   }
 ): Promise<PlaybackStartResult> {
   const mode = options.mode
@@ -406,71 +243,59 @@ async function runPlaybackFlow(
   const hasTranscriptSource = transcriptSourceUrl !== null
   const currentEpoch = bumpPlaybackEpoch()
 
-  const metadata = mergeMetadata(
-    {
-      ...payload.metadata,
-      originalAudioUrl: payload.audioUrl,
-      playbackRequestMode: mode,
-    },
-    options.patch
-  )
+  const metadata = decoratePlaybackMetadata({
+    metadata: payload.metadata,
+    audioUrl: payload.audioUrl,
+    mode,
+  }) as TMetadata
   const playableTitle = resolvePlayableTitle(payload.title, metadata)
 
   deps.pause()
-  if (hasTranscriptSource) {
-    deps.setAudioUrl(null, playableTitle, payload.artwork, metadata, true)
-    useTranscriptStore.getState().setTranscriptIngestionStatus(TRANSCRIPT_INGESTION_STATUS.LOADING)
-  } else {
-    deps.setAudioUrl(null, playableTitle, payload.artwork, metadata, true)
-  }
+  applyPlaybackLoadingState({
+    deps,
+    playableTitle,
+    artwork: payload.artwork,
+    metadata,
+    hasTranscriptSource,
+  })
 
-  const sourceResolution = await resolveSourceForPlaybackMode(
+  const sourceResolution = await resolvePlayableSourceForPlayback({
     currentEpoch,
+    getPlaybackEpoch,
+    isEpochStale,
+    abortSignal: currentPlaybackAbortController?.signal,
     mode,
-    payload.audioUrl,
-    payload.streamTarget
-  )
+    audioUrl: payload.audioUrl,
+    title: payload.title,
+    artwork: payload.artwork,
+    metadata,
+    transcriptUrl: transcriptSourceUrl || undefined,
+    streamTarget: payload.streamTarget,
+    resolveRemoteStreamTargetUrl,
+  })
   if (!sourceResolution.ok) {
-    if (hasTranscriptSource && sourceResolution.reason !== PLAYBACK_START_REASON.STALE) {
-      useTranscriptStore.getState().setTranscriptIngestionStatus(TRANSCRIPT_INGESTION_STATUS.IDLE)
-    }
-    if (sourceResolution.reason === PLAYBACK_START_REASON.NO_PLAYABLE_SOURCE) {
-      deps.setAudioUrl(null)
-    }
+    handlePlaybackResolutionFailure({
+      deps,
+      reason: sourceResolution.reason,
+      hasTranscriptSource,
+    })
     return createNonStartedResult(sourceResolution.reason)
   }
-  let source: { url: string; trackId?: string } = sourceResolution.source
+  const source: { url: string; trackId?: string } = sourceResolution.source
 
-  const shouldBlockForAsr =
-    !isStreamWithoutTranscript &&
-    !hasTranscriptSource &&
-    (await needsAsrDownloadBlocking(source, transcriptSourceUrl || undefined))
-  if (shouldBlockForAsr) {
-    const downloadedSource = await downloadAndResolve(currentEpoch, payload)
-    if (isEpochStale(currentEpoch)) {
-      return createNonStartedResult(PLAYBACK_START_REASON.STALE)
-    }
-
-    if (!downloadedSource) {
-      deps.setAudioUrl(null)
-      return createNonStartedResult(PLAYBACK_START_REASON.DOWNLOAD_FAILED)
-    }
-    source = downloadedSource
-  }
-
-  if (isStreamWithoutTranscript) {
-    useTranscriptStore.getState().resetTranscript()
-  }
-
-  deps.setAudioUrl(source.url, playableTitle, payload.artwork, metadata, true)
-  await options.onReadyToPlay?.({ source, isStreamWithoutTranscript, metadata, playableTitle })
+  await completePlaybackReadyState({
+    deps,
+    source,
+    playableTitle,
+    artwork: payload.artwork,
+    metadata,
+    isStreamWithoutTranscript,
+    transcriptSourceUrl,
+    originalAudioUrl: payload.audioUrl,
+    onReadyToPlay: options.onReadyToPlay,
+  })
   if (isEpochStale(currentEpoch)) {
     return createNonStartedResult(PLAYBACK_START_REASON.STALE)
-  }
-  deps.play()
-
-  if (!isStreamWithoutTranscript) {
-    autoIngestEpisodeTranscript(transcriptSourceUrl || undefined, payload.audioUrl)
   }
   return createStartedResult()
 }

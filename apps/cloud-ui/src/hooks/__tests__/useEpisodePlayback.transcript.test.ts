@@ -1,9 +1,8 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
 import { createQueryClientWrapper } from '../../__tests__/queryClient'
 import { DB, type Favorite } from '../../lib/dexieDb'
-import type { FeedEpisode, Podcast } from '../../lib/discovery'
+import type { Episode, Podcast } from '../../lib/discovery'
 import {
   __resetRemoteTranscriptStateForTests,
   normalizeTranscriptUrl,
@@ -31,18 +30,23 @@ vi.mock('../../lib/logger', () => ({
 }))
 
 function makeEpisode(
-  overrides: Partial<FeedEpisode> &
-    Pick<FeedEpisode, 'audioUrl' | 'title' | 'description' | 'pubDate'> & {
+  overrides: Partial<Episode> &
+    Pick<Episode, 'audioUrl' | 'title' | 'description' | 'pubDate'> & {
       id?: string
     }
-): FeedEpisode {
-  const { audioUrl, title, episodeGuid, description, pubDate, ...rest } = overrides
+): Episode {
+  const { audioUrl, title, guid, description, pubDate, ...rest } = overrides
   return {
     audioUrl,
     title,
-    episodeGuid: episodeGuid ?? `guid-${audioUrl}`,
+    guid: guid ?? `guid-${audioUrl}`,
     description,
     pubDate,
+    fileSize: 1024,
+    duration: 60,
+    explicit: false,
+    artworkUrl: 'https://example.com/episode-art.jpg',
+    link: `https://example.com/episodes/${encodeURIComponent(guid ?? title)}`,
     ...rest,
   }
 }
@@ -54,7 +58,6 @@ function makePodcast(overrides: Partial<Podcast> = {}): Podcast {
     author: 'Host',
     artwork: 'https://example.com/art.jpg',
     description: 'A podcast',
-    feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
     lastUpdateTime: 1613394044,
     episodeCount: 50,
     language: 'en',
@@ -64,19 +67,29 @@ function makePodcast(overrides: Partial<Podcast> = {}): Podcast {
 }
 
 function makeFavorite(overrides: Partial<Favorite> = {}): Favorite {
-  return {
+  const favorite: Favorite = {
     id: 'fav-1',
-    key: 'https://example.com/feed.xml::https://example.com/fav.mp3',
-    feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
+    key: '100::favorite-guid-1',
     audioUrl: 'https://example.com/fav.mp3',
     episodeTitle: 'Favorite Episode',
     podcastTitle: 'Favorite Podcast',
     artworkUrl: 'https://example.com/art.jpg',
+    episodeArtworkUrl: 'https://example.com/ep-art.jpg',
     addedAt: Date.now(),
+    description: 'Test description',
+    pubDate: '2025-02-01',
+    durationSeconds: 180,
     transcriptUrl: 'https://example.com/fav.srt',
+    podcastItunesId: '100',
+    episodeGuid: 'favorite-guid-1',
     countryAtSave: 'us',
     ...overrides,
   }
+  return {
+    ...favorite,
+    key: `${favorite.podcastItunesId}::${favorite.episodeGuid}`,
+    episodeArtworkUrl: favorite.episodeArtworkUrl ?? favorite.artworkUrl,
+  } as Favorite
 }
 
 async function wait(ms: number): Promise<void> {
@@ -105,13 +118,13 @@ Hello transcript
       pubDate: 'Mon, 01 Jan 2024 00:00:00 GMT',
       transcriptUrl: 'https://example.com/ep-1.srt',
     })
-    const podcast = makePodcast({ feedUrl: normalizeFeedUrl('https://example.com/feed.xml') })
+    const podcast = makePodcast()
 
     const { result } = renderHook(() => useEpisodePlayback(), {
       wrapper: createQueryClientWrapper(),
     })
     act(() => {
-      result.current.playEpisode(episode, podcast)
+      result.current.playEpisode(episode, podcast, 'us')
     })
 
     await waitFor(() =>
@@ -151,7 +164,7 @@ Delayed transcript
       wrapper: createQueryClientWrapper(),
     })
     act(() => {
-      result.current.playEpisode(episode, makePodcast())
+      result.current.playEpisode(episode, makePodcast(), 'us')
     })
 
     await waitFor(() => {
@@ -204,7 +217,7 @@ Delayed transcript
       wrapper: createQueryClientWrapper(),
     })
     act(() => {
-      result.current.playEpisode(episode, makePodcast())
+      result.current.playEpisode(episode, makePodcast(), 'us')
     })
 
     await waitFor(() => {
@@ -253,7 +266,8 @@ Delayed transcript
           pubDate: 'Mon, 01 Jan 2024 00:00:00 GMT',
           transcriptUrl: 'https://example.com/old.srt',
         }),
-        makePodcast()
+        makePodcast(),
+        'us'
       )
       result.current.playEpisode(
         makeEpisode({
@@ -264,7 +278,8 @@ Delayed transcript
           pubDate: 'Mon, 01 Jan 2024 00:00:00 GMT',
           transcriptUrl: 'https://example.com/new.srt',
         }),
-        makePodcast()
+        makePodcast(),
+        'us'
       )
     })
 
@@ -299,7 +314,7 @@ Delayed transcript
       wrapper: createQueryClientWrapper(),
     })
     act(() => {
-      result.current.playEpisode(episode, makePodcast())
+      result.current.playEpisode(episode, makePodcast(), 'us')
     })
 
     await waitFor(() =>
@@ -329,7 +344,7 @@ Favorite transcript
       wrapper: createQueryClientWrapper(),
     })
     act(() => {
-      result.current.playFavorite(makeFavorite())
+      result.current.playFavorite(makeFavorite(), 'us')
     })
 
     await wait(20)
@@ -365,7 +380,7 @@ Learn all about this tick-borne disease in this classic episode.`)
       wrapper: createQueryClientWrapper(),
     })
     act(() => {
-      result.current.playEpisode(episode, makePodcast())
+      result.current.playEpisode(episode, makePodcast(), 'us')
     })
 
     await waitFor(() => {

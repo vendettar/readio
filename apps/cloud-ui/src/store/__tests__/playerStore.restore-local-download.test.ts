@@ -26,6 +26,24 @@ vi.mock('../../lib/toast', () => ({ toast: { infoKey: vi.fn(), errorKey: vi.fn()
 vi.spyOn(URL, 'createObjectURL').mockImplementation(() => 'blob:mock-local-url')
 vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
 
+function makePodcastDownloadInput(overrides: Record<string, unknown> = {}) {
+  return {
+    name: 'Test Episode',
+    audioId: 'audio-1',
+    sourceUrlNormalized: 'https://example.com/ep.mp3',
+    downloadedAt: Date.now(),
+    sizeBytes: 1024,
+    countryAtSave: 'US',
+    sourcePodcastItunesId: 'podcast-1',
+    sourceEpisodeGuid: 'episode-guid-1',
+    sourcePodcastTitle: 'Podcast Title',
+    sourceEpisodeTitle: 'Episode Title',
+    sourceDescription: 'Episode description',
+    sourceArtworkUrl: 'https://example.com/cover.jpg',
+    ...overrides,
+  }
+}
+
 describe('playerStore - Session Restore Prefer Local Download', () => {
   beforeEach(async () => {
     const { result } = renderHook(() => usePlayerStore())
@@ -47,21 +65,28 @@ describe('playerStore - Session Restore Prefer Local Download', () => {
       durationSeconds: 300,
       source: 'explore',
       title: 'My Episode',
-      podcastTitle: 'My Podcast',
+      artworkUrl: 'https://example.com/my-episode-cover.jpg',
+      showTitle: 'My Podcast',
+      episodeGuid: 'my-episode-guid',
+      podcastItunesId: 'my-podcast-id',
       countryAtSave: 'us',
     })
 
     const mockAudioBlob = new Blob(['downloaded audio'], { type: 'audio/mp3' })
     const audioId = await DB.addAudioBlob(mockAudioBlob, 'my-episode.mp3')
 
-    const downloadedTrackId = await DB.addPodcastDownload({
-      name: 'my-episode.mp3',
-      audioId,
-      sizeBytes: mockAudioBlob.size,
-      sourceUrlNormalized: remoteUrl,
-      downloadedAt: Date.now(),
-      countryAtSave: 'US',
-    })
+    const downloadedTrackId = await DB.addPodcastDownload(
+      makePodcastDownloadInput({
+        name: 'my-episode.mp3',
+        audioId,
+        sizeBytes: mockAudioBlob.size,
+        sourceUrlNormalized: remoteUrl,
+        downloadedAt: Date.now(),
+        countryAtSave: 'US',
+        sourcePodcastItunesId: 'my-podcast-id',
+        sourceEpisodeGuid: 'my-episode-guid',
+      })
+    )
 
     const { result } = renderHook(() => usePlayerStore())
 
@@ -87,6 +112,10 @@ describe('playerStore - Session Restore Prefer Local Download', () => {
       progress: 60,
       source: 'explore',
       title: 'Unique Episode',
+      artworkUrl: 'https://example.com/unique-episode-cover.jpg',
+      showTitle: 'Unique Podcast',
+      episodeGuid: 'unique-episode-guid',
+      podcastItunesId: 'unique-podcast-id',
       countryAtSave: 'us',
     })
 
@@ -112,17 +141,23 @@ describe('playerStore - Session Restore Prefer Local Download', () => {
       progress: 30,
       source: 'explore',
       title: 'Missing Blob Episode',
+      artworkUrl: 'https://example.com/missing-blob-cover.jpg',
+      showTitle: 'Missing Blob Podcast',
+      episodeGuid: 'missing-blob-guid',
+      podcastItunesId: 'missing-blob-podcast-id',
       countryAtSave: 'us',
     })
 
-    await DB.addPodcastDownload({
-      name: 'missing-blob.mp3',
-      audioId: 'non-existent-audio-id',
-      sizeBytes: 0,
-      sourceUrlNormalized: remoteUrl,
-      downloadedAt: Date.now(),
-      countryAtSave: 'US',
-    })
+    await DB.addPodcastDownload(
+      makePodcastDownloadInput({
+        name: 'missing-blob.mp3',
+        audioId: 'non-existent-audio-id',
+        sizeBytes: 0,
+        sourceUrlNormalized: remoteUrl,
+        downloadedAt: Date.now(),
+        countryAtSave: 'US',
+      })
+    )
 
     const { result } = renderHook(() => usePlayerStore())
 
@@ -134,6 +169,49 @@ describe('playerStore - Session Restore Prefer Local Download', () => {
     expect(result.current.audioLoaded).toBe(true)
     expect(result.current.progress).toBe(30)
     expect(result.current.sessionId).toBe('session-remote-3')
+  })
+
+  it('does not revive explore downloads by URL when canonical identity mismatches', async () => {
+    const remoteUrl = 'https://example.com/episodes/non-canonical.mp3'
+    const mockAudioBlob = new Blob(['downloaded audio'], { type: 'audio/mp3' })
+    const audioId = await DB.addAudioBlob(mockAudioBlob, 'non-canonical.mp3')
+
+    await DB.createPlaybackSession({
+      id: 'session-remote-non-canonical',
+      audioUrl: remoteUrl,
+      progress: 15,
+      source: 'explore',
+      title: 'Non Canonical Episode',
+      artworkUrl: 'https://example.com/non-canonical-cover.jpg',
+      showTitle: 'Non Canonical Podcast',
+      episodeGuid: 'episode-expected',
+      podcastItunesId: 'podcast-expected',
+      countryAtSave: 'us',
+    })
+
+    await DB.addPodcastDownload(
+      makePodcastDownloadInput({
+        name: 'non-canonical.mp3',
+        audioId,
+        sizeBytes: mockAudioBlob.size,
+        sourceUrlNormalized: remoteUrl,
+        downloadedAt: Date.now(),
+        countryAtSave: 'US',
+        sourcePodcastItunesId: 'podcast-other',
+        sourceEpisodeGuid: 'episode-other',
+      })
+    )
+
+    const { result } = renderHook(() => usePlayerStore())
+
+    await act(async () => {
+      await result.current.restoreSession()
+    })
+
+    expect(result.current.audioUrl).toBe(remoteUrl)
+    expect(result.current.localTrackId).toBeNull()
+    expect(result.current.audioLoaded).toBe(true)
+    expect(result.current.progress).toBe(15)
   })
 
   it('existing local-session restore path still works unchanged', async () => {
@@ -175,8 +253,7 @@ describe('playerStore - Session Restore Prefer Local Download', () => {
       durationSeconds: 360,
       source: 'explore',
       title: 'Episode 42',
-      podcastTitle: 'Test Show',
-      podcastFeedUrl: 'https://feeds.example.com/test-show',
+      showTitle: 'Test Show',
       description: 'A great episode',
       artworkUrl: 'https://example.com/art.jpg',
       publishedAt: 1700000000,
@@ -189,14 +266,22 @@ describe('playerStore - Session Restore Prefer Local Download', () => {
     const mockBlob = new Blob(['ep42 audio'], { type: 'audio/mpeg' })
     const audioId = await DB.addAudioBlob(mockBlob, 'ep42.mp3')
 
-    const downloadedTrackId = await DB.addPodcastDownload({
-      name: 'ep42.mp3',
-      audioId,
-      sizeBytes: mockBlob.size,
-      sourceUrlNormalized: 'https://cdn.podcast.com/shows/ep42.mp3',
-      downloadedAt: Date.now(),
-      countryAtSave: 'US',
-    })
+    const downloadedTrackId = await DB.addPodcastDownload(
+      makePodcastDownloadInput({
+        name: 'ep42.mp3',
+        audioId,
+        sizeBytes: mockBlob.size,
+        sourceUrlNormalized: 'https://cdn.podcast.com/shows/ep42.mp3',
+        downloadedAt: Date.now(),
+        countryAtSave: 'US',
+        sourcePodcastItunesId: 'pod-123',
+        sourceEpisodeGuid: 'ep-guid-42',
+        sourcePodcastTitle: 'Test Show',
+        sourceEpisodeTitle: 'Episode 42',
+        sourceDescription: 'A great episode',
+        sourceArtworkUrl: 'https://example.com/art.jpg',
+      })
+    )
 
     const { result } = renderHook(() => usePlayerStore())
 
@@ -211,7 +296,6 @@ describe('playerStore - Session Restore Prefer Local Download', () => {
 
     const meta = result.current.episodeMetadata
     expect(meta?.showTitle).toBe('Test Show')
-    expect(meta?.podcastFeedUrl).toBe('https://feeds.example.com/test-show')
     expect(meta?.description).toBe('A great episode')
     expect(meta?.artworkUrl).toBe('https://example.com/art.jpg')
     expect(meta?.publishedAt).toBe(1700000000)

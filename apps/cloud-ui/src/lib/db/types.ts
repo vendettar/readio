@@ -39,29 +39,32 @@ interface PlaybackSessionBase {
   audioFilename: string
   subtitleFilename: string
 
-  // Resume playback
-  audioUrl?: string
   // File tracking
   localTrackId?: string | null // FK to tracks.id (UUID) (nullable)
 
   // Episode metadata for History display
-  artworkUrl?: string // Cover art URL
   description?: string // Episode description
-  podcastTitle?: string // Podcast name
-  podcastFeedUrl?: string // Feed URL for favorite operations
   publishedAt?: number // Episode publishing date (timestamp)
-  episodeGuid?: string // Stable episode identity for compact route generation
-  podcastItunesId?: string // Platform-specific podcast ID for navigation
   transcriptUrl?: string // Podcast transcript source URL (Podcasting 2.0)
 }
 
 export interface LocalPlaybackSession extends PlaybackSessionBase {
   source: 'local'
+  audioUrl?: string
+  artworkUrl?: string // Cover art URL
+  showTitle?: string // Display subtitle / source title
   countryAtSave?: undefined
+  episodeGuid?: undefined
+  podcastItunesId?: undefined
 }
 
 export interface ExplorePlaybackSession extends PlaybackSessionBase {
   source: 'explore'
+  audioUrl: string
+  artworkUrl: string
+  showTitle: string
+  episodeGuid: string
+  podcastItunesId: string
   countryAtSave: string // Country snapshot when the record was persisted
 }
 
@@ -72,12 +75,19 @@ export type NavigableExplorePlaybackSession = ExplorePlaybackSession & {
   episodeGuid: string
 }
 
+function hasNonEmptyText(value: string | null | undefined): value is string {
+  return typeof value === 'string' && value.trim().length > 0
+}
+
 export function isNavigableExplorePlaybackSession(
   session: PlaybackSession
 ): session is NavigableExplorePlaybackSession {
   if (session.source !== 'explore') return false
-  if (!session.countryAtSave) return false
-  return !!session.podcastItunesId && !!session.episodeGuid
+  return (
+    hasNonEmptyText(session.countryAtSave) &&
+    hasNonEmptyText(session.podcastItunesId) &&
+    hasNonEmptyText(session.episodeGuid)
+  )
 }
 
 interface PlaybackSessionCreateInputBase {
@@ -93,25 +103,29 @@ interface PlaybackSessionCreateInputBase {
   progress?: number
   audioFilename?: string
   subtitleFilename?: string
-  audioUrl?: string
   localTrackId?: string | null
-  artworkUrl?: string
   description?: string
-  podcastTitle?: string
-  podcastFeedUrl?: string
   publishedAt?: number
-  episodeGuid?: string
-  podcastItunesId?: string
   transcriptUrl?: string
 }
 
 export interface LocalPlaybackSessionCreateInput extends PlaybackSessionCreateInputBase {
   source?: 'local'
+  audioUrl?: string
+  artworkUrl?: string
+  showTitle?: string
   countryAtSave?: undefined
+  episodeGuid?: undefined
+  podcastItunesId?: undefined
 }
 
 export interface ExplorePlaybackSessionCreateInput extends PlaybackSessionCreateInputBase {
   source: 'explore'
+  audioUrl: string
+  artworkUrl: string
+  showTitle: string
+  episodeGuid: string
+  podcastItunesId: string
   countryAtSave: string
 }
 
@@ -136,8 +150,7 @@ export type PlaybackSessionUpdatePatch = Partial<
     | 'localTrackId'
     | 'artworkUrl'
     | 'description'
-    | 'podcastTitle'
-    | 'podcastFeedUrl'
+    | 'showTitle'
     | 'publishedAt'
     | 'episodeGuid'
     | 'podcastItunesId'
@@ -169,33 +182,48 @@ export interface SubtitleText {
 
 export interface Subscription {
   id: string // UUID Primary key
-  feedUrl: string // Unique index for deduplication
+  podcastItunesId: string // Unique canonical identity for deduplication
   title: string
   author: string
   artworkUrl: string
   addedAt: number
-  podcastItunesId?: string // Apple provider collection ID for navigation
   countryAtSave: string // Country snapshot when subscribed
 }
 
 export interface Favorite {
   id: string // UUID Primary key
-  key: string // Unique index: feedUrl::audioUrl (for deduplication)
-  feedUrl: string
+  key: string // Unique favorite identity key: podcastItunesId::episodeGuid
   audioUrl: string
   episodeTitle: string
   podcastTitle: string
   artworkUrl: string
   addedAt: number
   // Episode metadata
-  description?: string
-  pubDate?: string // ISO date string
-  durationSeconds?: number // Duration in seconds
-  episodeArtworkUrl?: string // Episode-specific artwork
-  episodeGuid?: string // Stable episode identity for compact route generation
-  podcastItunesId?: string // Platform-specific podcast ID for navigation
+  description: string
+  pubDate: string // ISO date string
+  durationSeconds: number // Duration in seconds
+  episodeArtworkUrl: string // Episode-specific artwork
+  episodeGuid: string // Required canonical favorite identity component
+  podcastItunesId: string // Required canonical favorite identity component
   transcriptUrl?: string // Podcast transcript source URL (Podcasting 2.0)
   countryAtSave: string // Country snapshot when favorited
+}
+
+export interface FavoritePodcastInput {
+  podcastItunesId: string
+  title: string
+  artwork: string
+}
+
+export interface FavoriteEpisodeInput {
+  title: string
+  audioUrl: string
+  description: string
+  artworkUrl: string
+  duration: number
+  pubDate: string
+  episodeGuid: string
+  transcriptUrl?: string
 }
 
 export interface RemoteTranscriptCache {
@@ -281,18 +309,17 @@ export interface UserUploadTrack extends TrackBase, TrackSubtitleState {
 
 export interface PodcastDownloadIdentity {
   sourceUrlNormalized: string // Normalized episode audio URL for dedup
-  sourceFeedUrl?: string // Source RSS feed URL for favorite/navigation
   countryAtSave: string // Country at time of download for routing (required invariant)
-  sourcePodcastItunesId?: string // Provider podcast ID
-  sourceEpisodeGuid?: string // Stable episode identity for compact route generation
+  sourcePodcastItunesId: string // Provider podcast ID
+  sourceEpisodeGuid: string // Stable episode identity for compact route generation
 }
 
 export interface PodcastDownloadSnapshot {
   transcriptUrl?: string // Podcast transcript source URL (Podcasting 2.0)
-  sourcePodcastTitle?: string // Display podcast title
-  sourceEpisodeTitle?: string // Display episode title
-  sourceDescription?: string // Episode description
-  sourceArtworkUrl?: string // Episode/podcast artwork URL
+  sourcePodcastTitle: string // Display podcast title
+  sourceEpisodeTitle: string // Display episode title
+  sourceDescription: string // Episode description
+  sourceArtworkUrl: string // Episode/podcast artwork URL
   downloadedAt: number // Download completion timestamp
 }
 

@@ -1,27 +1,27 @@
 import { renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { writePodcastFeedPageToCaches } from '@/lib/discovery/feedCache'
-import { normalizeFeedUrl } from '@/lib/discovery/feedUrl'
+import { writePodcastEpisodesToCache } from '@/lib/discovery/episodeCache'
 import { createQueryClientHarness } from '../../__tests__/queryClient'
-import type { ParsedFeed, Podcast } from '../../lib/discovery'
+import type { Podcast, PodcastEpisodes } from '../../lib/discovery'
+import { makeEpisode, makePodcastEpisodes } from '../../lib/discovery/__tests__/fixtures'
 import { buildPodcastDetailQueryKey } from '../../lib/discovery/podcastQueryContract'
 import { episodeIdentityToCompactKey } from '../../lib/routes/compactKey'
 import { resolveEpisodeResolutionError, useEpisodeResolution } from '../useEpisodeResolution'
 
 const getPodcastIndexPodcastByItunesIdMock = vi.fn()
-const fetchPodcastFeedMock = vi.fn()
+const fetchPodcastEpisodesMock = vi.fn()
 
 vi.mock('@/lib/discovery', () => ({
   default: {
     getPodcastIndexPodcastByItunesId: (...args: unknown[]) =>
       getPodcastIndexPodcastByItunesIdMock(...args),
-    fetchPodcastFeed: (...args: unknown[]) => fetchPodcastFeedMock(...args),
+    fetchPodcastEpisodes: (...args: unknown[]) => fetchPodcastEpisodesMock(...args),
   },
 }))
 
 type WrapperOptions = {
   podcast?: Podcast
-  feed?: ParsedFeed
+  episodeList?: PodcastEpisodes
 }
 
 type DeferredPodcast = {
@@ -31,7 +31,7 @@ type DeferredPodcast = {
 }
 
 function makePodcast(
-  overrides: Partial<Podcast> & Pick<Podcast, 'podcastItunesId' | 'title' | 'author' | 'feedUrl'>
+  overrides: Partial<Podcast> & Pick<Podcast, 'podcastItunesId' | 'title' | 'author'>
 ): Podcast {
   return {
     artwork: 'https://example.com/show-600.jpg',
@@ -54,31 +54,44 @@ function createWrapper(options: WrapperOptions = {}) {
         )
       }
 
-      if (options.feed && options.podcast?.feedUrl) {
-        writePodcastFeedPageToCaches(queryClient, options.podcast.feedUrl, options.feed)
+      if (options.episodeList) {
+        writePodcastEpisodesToCache(
+          queryClient,
+          options.podcast?.podcastItunesId ?? '12345',
+          options.episodeList,
+          {
+            country: 'us',
+            authority: options.podcast
+              ? {
+                  lastUpdateTime: options.podcast.lastUpdateTime,
+                  episodeCount: options.podcast.episodeCount,
+                }
+              : undefined,
+          }
+        )
       }
     },
   })
 }
 
-describe('useEpisodeResolution cancellation semantics', () => {
+describe('useEpisodeResolution PI episode list semantics', () => {
   beforeEach(() => {
     getPodcastIndexPodcastByItunesIdMock.mockReset()
-    fetchPodcastFeedMock.mockReset()
-    fetchPodcastFeedMock.mockResolvedValue({ episodes: [] })
+    fetchPodcastEpisodesMock.mockReset()
+    fetchPodcastEpisodesMock.mockResolvedValue(makePodcastEpisodes({ episodes: [] }))
     vi.useRealTimers()
   })
 
-  it('returns feed errors when no higher-priority lookup error exists', () => {
+  it('returns PI episode list errors when no higher-priority lookup error exists', () => {
     const resolutionError = resolveEpisodeResolutionError({
       podcastError: null,
-      feedError: new Error('feed failed'),
+      episodesError: new Error('episodes failed'),
     })
 
-    expect(resolutionError?.message).toBe('feed failed')
+    expect(resolutionError?.message).toBe('episodes failed')
   })
 
-  it('switches country query key and prevents stale overwrite from old in-flight request', async () => {
+  it('starts a new country-scoped podcast detail query across country changes', async () => {
     const deferredCalls: DeferredPodcast[] = []
 
     getPodcastIndexPodcastByItunesIdMock.mockImplementation((_id: string, signal?: AbortSignal) => {
@@ -96,8 +109,13 @@ describe('useEpisodeResolution cancellation semantics', () => {
       })
     })
 
+    const targetKey = episodeIdentityToCompactKey('episode-guid-1')
+    if (!targetKey) {
+      throw new Error('expected compact key')
+    }
+
     const { result, rerender } = renderHook(
-      ({ country }) => useEpisodeResolution('12345', 'dm8RLqvNEjRWeAfgXlSAdA', country),
+      ({ country }) => useEpisodeResolution('12345', targetKey, country),
       {
         initialProps: { country: 'us' },
         wrapper: createWrapper().wrapper,
@@ -110,383 +128,272 @@ describe('useEpisodeResolution cancellation semantics', () => {
 
     await waitFor(() => expect(deferredCalls).toHaveLength(2))
 
+    expect(deferredCalls[0]?.signal?.aborted).toBe(true)
+
     deferredCalls[1]?.resolve(
       makePodcast({
         podcastItunesId: '12345',
         title: 'JP Podcast',
         author: 'Host',
-        feedUrl: normalizeFeedUrl('https://example.com/jp-feed.xml'),
       })
     )
 
-    await waitFor(() =>
-      expect(result.current.podcast?.feedUrl).toBe('https://example.com/jp-feed.xml')
-    )
-
-    const oldSignal = deferredCalls[0]?.signal
-    expect(oldSignal?.aborted).toBe(true)
-
-    deferredCalls[0]?.resolve(
-      makePodcast({
-        podcastItunesId: '12345',
-        title: 'US Podcast',
-        author: 'Host',
-        feedUrl: normalizeFeedUrl('https://example.com/us-feed.xml'),
-      })
-    )
-
-    await waitFor(() =>
-      expect(result.current.podcast?.feedUrl).toBe('https://example.com/jp-feed.xml')
-    )
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+    expect(result.current.resolvedContent).toBeNull()
+    expect(result.current.notFound).toBe('episode')
   })
 
-  it('uses cached feed data for warm navigation without extra network fetches', async () => {
-    const podcast: Podcast = makePodcast({
+  it('uses cached PI episode list for warm navigation without extra network fetches', async () => {
+    const podcast = makePodcast({
       podcastItunesId: '12345',
       title: 'Warm Podcast',
       author: 'Host',
-      feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
     })
-    const feed: ParsedFeed = {
-      title: 'Warm Podcast',
-      description: '',
-      artworkUrl: 'https://example.com/show-600.jpg',
-      pageInfo: {
-        limit: 20,
-        offset: 0,
-        returned: 1,
-        hasMore: true,
-      },
+    const episodeList = makePodcastEpisodes({
       episodes: [
-        {
-          episodeGuid: '766f112e-abcd-1234-5678-07e05e548074',
+        makeEpisode({
+          guid: '766f112e-abcd-1234-5678-07e05e548074',
           title: 'Warm Episode',
-          description: '',
-          audioUrl: 'https://example.com/audio.mp3',
-          pubDate: '2025-01-01T00:00:00.000Z',
-        },
+        }),
       ],
+    })
+
+    const targetKey = episodeIdentityToCompactKey('766f112e-abcd-1234-5678-07e05e548074')
+    if (!targetKey) {
+      throw new Error('expected compact key')
     }
 
-    const { result } = renderHook(
-      () => useEpisodeResolution('12345', 'dm8RLqvNEjRWeAfgXlSAdA', 'us'),
-      {
-        wrapper: createWrapper({ podcast, feed }).wrapper,
-      }
-    )
+    const { result } = renderHook(() => useEpisodeResolution('12345', targetKey, 'us'), {
+      wrapper: createWrapper({ podcast, episodeList }).wrapper,
+    })
 
     await waitFor(() => expect(result.current.isLoading).toBe(false))
     expect(getPodcastIndexPodcastByItunesIdMock).not.toHaveBeenCalled()
-    expect(fetchPodcastFeedMock).not.toHaveBeenCalled()
-    expect(result.current.episode?.title).toBe('Warm Episode')
+    expect(fetchPodcastEpisodesMock).not.toHaveBeenCalled()
+    expect(result.current.resolvedContent?.episode.title).toBe('Warm Episode')
+    expect(result.current.notFound).toBeNull()
   })
 
-  it('resolves cold opens from RSS feed when no cached episode exists', async () => {
+  it('resolves cold opens from PI episode list when no cached episode exists', async () => {
     getPodcastIndexPodcastByItunesIdMock.mockResolvedValue(
       makePodcast({
         podcastItunesId: '12345',
         title: 'Cold Podcast',
         author: 'Host',
-        feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
       })
     )
-    fetchPodcastFeedMock.mockResolvedValue({
-      title: 'Cold Podcast',
-      description: '',
-      artworkUrl: 'https://example.com/show-600.jpg',
-      episodes: [
-        {
-          episodeGuid: '766f112e-abcd-1234-5678-07e05e548074',
-          title: 'RSS Episode',
-          description: '',
-          audioUrl: 'https://example.com/audio.mp3',
-          pubDate: '2025-01-01T00:00:00.000Z',
-        },
-      ],
-    } satisfies ParsedFeed)
-
-    const { result } = renderHook(
-      () => useEpisodeResolution('12345', 'dm8RLqvNEjRWeAfgXlSAdA', 'us'),
-      {
-        wrapper: createWrapper().wrapper,
-      }
+    fetchPodcastEpisodesMock.mockResolvedValue(
+      makePodcastEpisodes({
+        episodes: [
+          makeEpisode({
+            guid: '766f112e-abcd-1234-5678-07e05e548074',
+            title: 'PI Episode',
+          }),
+        ],
+      })
     )
 
-    await waitFor(() => expect(result.current.isLoading).toBe(false))
-    expect(getPodcastIndexPodcastByItunesIdMock).toHaveBeenCalledWith('12345', expect.anything())
-    expect(fetchPodcastFeedMock).toHaveBeenCalledWith(
-      'https://example.com/feed.xml',
-      expect.anything(),
-      undefined
-    )
-    expect(result.current.episode?.title).toBe('RSS Episode')
-  })
-
-  it('resolves a warm cached episode from route-state snapshot when audioUrl matches', async () => {
-    const podcast: Podcast = makePodcast({
-      podcastItunesId: '12345',
-      title: 'Warm Podcast',
-      author: 'Host',
-      feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
-    })
-    const feed: ParsedFeed = {
-      title: 'Warm Podcast',
-      description: '',
-      artworkUrl: 'https://example.com/show-600.jpg',
-      pageInfo: {
-        limit: 20,
-        offset: 0,
-        returned: 1,
-        hasMore: false,
-      },
-      episodes: [
-        {
-          episodeGuid: 'feed-guid-1',
-          title: 'Canonical Feed Title',
-          description: '',
-          audioUrl: 'https://example.com/search.mp3',
-          pubDate: '2025-01-03T00:00:00.000Z',
-        },
-      ],
+    const targetKey = episodeIdentityToCompactKey('766f112e-abcd-1234-5678-07e05e548074')
+    if (!targetKey) {
+      throw new Error('expected compact key')
     }
 
-    const { result } = renderHook(
-      () =>
-        useEpisodeResolution('12345', 'e_bWlzbWF0Y2gtZ3VpZA', 'us', {
-          episodeSnapshot: {
-            title: 'Different Search Title',
-            audioUrl: 'https://example.com/search.mp3',
-          },
-        }),
-      {
-        wrapper: createWrapper({ podcast, feed }).wrapper,
-      }
-    )
-
-    await waitFor(() => expect(result.current.isLoading).toBe(false))
-    expect(fetchPodcastFeedMock).not.toHaveBeenCalled()
-    expect(result.current.episode?.episodeGuid).toBe('feed-guid-1')
-  })
-
-  it('resolves a cold fetched episode from route-state snapshot when title matches', async () => {
-    getPodcastIndexPodcastByItunesIdMock.mockResolvedValue(
-      makePodcast({
-        podcastItunesId: '12345',
-        title: 'Cold Podcast',
-        author: 'Host',
-        feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
-      })
-    )
-    fetchPodcastFeedMock.mockResolvedValue({
-      title: 'Cold Podcast',
-      description: '',
-      artworkUrl: 'https://example.com/show-600.jpg',
-      episodes: [
-        {
-          episodeGuid: 'fetched-guid',
-          title: 'Snapshot Matched Episode',
-          description: '',
-          audioUrl: 'https://example.com/cold-search.mp3',
-          pubDate: '2025-01-04T00:00:00.000Z',
-        },
-      ],
-    } satisfies ParsedFeed)
-
-    const { result } = renderHook(
-      () =>
-        useEpisodeResolution('12345', 'e_bWlzbWF0Y2gtY29sZA', 'us', {
-          episodeSnapshot: {
-            title: 'Snapshot Matched Episode',
-          },
-        }),
-      {
-        wrapper: createWrapper().wrapper,
-      }
-    )
-
-    await waitFor(() => expect(result.current.isLoading).toBe(false))
-    expect(fetchPodcastFeedMock).toHaveBeenCalledTimes(1)
-    expect(result.current.episode?.episodeGuid).toBe('fetched-guid')
-  })
-
-  it('coexists with editor-pick bootstrap and route-state episode snapshot matching', async () => {
-    const mismatchedKey = episodeIdentityToCompactKey('snapshot-miss')
-    if (!mismatchedKey) throw new Error('expected snapshot mismatch compact key')
-
-    const editorPickSnapshot = {
-      id: '304b84f0-07b0-5265-b6b7-da5cf5aeb56e',
-      title: 'Snapshot Podcast',
-      author: 'Host',
-      artwork: 'https://example.com/show-600.jpg',
-      link: 'https://example.com/show',
-      genres: ['Technology'],
-      description: 'snapshot description',
-      feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
-      podcastGuid: '304b84f0-07b0-5265-b6b7-da5cf5aeb56e',
-      podcastItunesId: '12345',
-    }
-
-    fetchPodcastFeedMock.mockResolvedValue({
-      title: 'Snapshot Podcast',
-      description: '',
-      artworkUrl: 'https://example.com/show-600.jpg',
-      episodes: [
-        {
-          episodeGuid: 'snapshot-guid',
-          title: 'Snapshot Episode',
-          description: '',
-          audioUrl: 'https://example.com/snapshot.mp3',
-          pubDate: '2025-01-05T00:00:00.000Z',
-        },
-      ],
-    } satisfies ParsedFeed)
-
-    const { result } = renderHook(
-      () =>
-        useEpisodeResolution('12345', mismatchedKey, 'us', {
-          editorPickSnapshot,
-          episodeSnapshot: {
-            title: 'Snapshot Episode',
-          },
-        }),
-      {
-        wrapper: createWrapper().wrapper,
-      }
-    )
-
-    await waitFor(() => expect(result.current.isLoading).toBe(false))
-    expect(result.current.podcast?.title).toBe('Snapshot Podcast')
-    expect(result.current.episode?.episodeGuid).toBe('snapshot-guid')
-  })
-
-  it('resolves older deep links beyond the first 100 feed entries', async () => {
-    const olderEpisodeGuid = 'older-episode-guid'
-    const olderEpisodeKey = episodeIdentityToCompactKey(olderEpisodeGuid)
-    if (!olderEpisodeKey) throw new Error('expected older episode compact key')
-
-    getPodcastIndexPodcastByItunesIdMock.mockResolvedValue(
-      makePodcast({
-        podcastItunesId: '12345',
-        title: 'Deep Link Podcast',
-        author: 'Host',
-        feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
-      })
-    )
-    fetchPodcastFeedMock.mockImplementation(
-      async (_feedUrl: string, _signal?: AbortSignal, limit?: number) => ({
-        title: 'Deep Link Podcast',
-        description: '',
-        artworkUrl: 'https://example.com/show-600.jpg',
-        episodes: Array.from({ length: typeof limit === 'number' ? limit : 150 }, (_, index) => {
-          const episodeNumber = index + 1
-          return {
-            episodeGuid: episodeNumber === 150 ? olderEpisodeGuid : `episode-guid-${episodeNumber}`,
-            title: episodeNumber === 150 ? 'Older RSS Episode' : `Episode ${episodeNumber}`,
-            description: '',
-            audioUrl: `https://example.com/audio-${episodeNumber}.mp3`,
-            pubDate: '2025-01-01T00:00:00.000Z',
-          }
-        }),
-      })
-    )
-
-    const { result } = renderHook(() => useEpisodeResolution('12345', olderEpisodeKey, 'us'), {
+    const { result } = renderHook(() => useEpisodeResolution('12345', targetKey, 'us'), {
       wrapper: createWrapper().wrapper,
     })
 
     await waitFor(() => expect(result.current.isLoading).toBe(false))
-    expect(fetchPodcastFeedMock).toHaveBeenCalledWith(
-      'https://example.com/feed.xml',
-      expect.anything(),
-      undefined
-    )
-    expect(result.current.episode?.title).toBe('Older RSS Episode')
+    expect(getPodcastIndexPodcastByItunesIdMock).toHaveBeenCalledWith('12345', expect.anything())
+    expect(fetchPodcastEpisodesMock).toHaveBeenCalledWith('12345', expect.anything())
+    expect(result.current.resolvedContent?.episode.title).toBe('PI Episode')
+    expect(result.current.notFound).toBeNull()
   })
 
-  it('does not let a stale complete canonical cache block deep-link refresh for a missing guid', async () => {
+  it('returns episodeNotFound semantics when the target guid is absent from the PI episode list', async () => {
+    getPodcastIndexPodcastByItunesIdMock.mockResolvedValue(
+      makePodcast({
+        podcastItunesId: '12345',
+        title: 'Cold Podcast',
+        author: 'Host',
+      })
+    )
+    fetchPodcastEpisodesMock.mockResolvedValue(
+      makePodcastEpisodes({
+        episodes: [makeEpisode({ guid: 'different-guid' })],
+      })
+    )
+
+    const missingKey = episodeIdentityToCompactKey('missing-guid')
+    if (!missingKey) {
+      throw new Error('expected compact key')
+    }
+
+    const { result } = renderHook(() => useEpisodeResolution('12345', missingKey, 'us'), {
+      wrapper: createWrapper().wrapper,
+    })
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+    expect(fetchPodcastEpisodesMock).toHaveBeenCalledTimes(1)
+    expect(result.current.resolvedContent).toBeNull()
+    expect(result.current.resolutionError).toBeNull()
+    expect(result.current.notFound).toBe('episode')
+  })
+
+  it('does not let a stale complete episode cache block deep-link refresh for a missing guid', async () => {
     const targetGuid = 'fresh-guid'
     const targetKey = episodeIdentityToCompactKey(targetGuid)
-    if (!targetKey) throw new Error('expected target compact key')
+    if (!targetKey) {
+      throw new Error('expected compact key')
+    }
 
-    const podcast: Podcast = makePodcast({
+    const podcast = makePodcast({
       podcastItunesId: '12345',
       title: 'Stale Complete Podcast',
       author: 'Host',
-      feedUrl: normalizeFeedUrl('https://example.com/feed.xml'),
     })
 
-    const staleFeed: ParsedFeed = {
-      title: 'Stale Complete Podcast',
-      description: '',
-      artworkUrl: 'https://example.com/show-600.jpg',
-      episodes: [
-        {
-          episodeGuid: 'stale-guid',
-          title: 'Old Episode',
-          description: '',
-          audioUrl: 'https://example.com/old.mp3',
-          pubDate: '2025-01-01T00:00:00.000Z',
-        },
-      ],
-    }
+    const staleEpisodeList = makePodcastEpisodes({
+      episodes: [makeEpisode({ guid: 'stale-guid', title: 'Old Episode' })],
+    })
 
-    const staleFeedUpdatedAt = Date.now() - 2 * 24 * 60 * 60 * 1000
+    const staleUpdatedAt = Date.now() - 2 * 24 * 60 * 60 * 1000
     const { wrapper } = createQueryClientHarness({
       setup: (queryClient) => {
         queryClient.setQueryData(buildPodcastDetailQueryKey('12345', 'us'), podcast)
-        writePodcastFeedPageToCaches(
-          queryClient,
-          podcast.feedUrl,
-          staleFeed,
-          undefined,
-          staleFeedUpdatedAt
-        )
+        writePodcastEpisodesToCache(queryClient, '12345', staleEpisodeList, {
+          now: staleUpdatedAt,
+        })
       },
     })
 
-    fetchPodcastFeedMock.mockResolvedValue({
-      title: 'Stale Complete Podcast',
-      description: '',
-      artworkUrl: 'https://example.com/show-600.jpg',
-      episodes: [
-        {
-          episodeGuid: targetGuid,
-          title: 'Fresh Episode',
-          description: '',
-          audioUrl: 'https://example.com/fresh.mp3',
-          pubDate: '2025-01-02T00:00:00.000Z',
-        },
-      ],
-    } satisfies ParsedFeed)
+    fetchPodcastEpisodesMock.mockResolvedValue(
+      makePodcastEpisodes({
+        episodes: [makeEpisode({ guid: targetGuid, title: 'Fresh Episode' })],
+      })
+    )
 
     const { result } = renderHook(() => useEpisodeResolution('12345', targetKey, 'us'), {
       wrapper,
     })
 
     await waitFor(() => expect(result.current.isLoading).toBe(false))
-    expect(fetchPodcastFeedMock).toHaveBeenCalledTimes(1)
-    expect(result.current.episode?.title).toBe('Fresh Episode')
+    expect(fetchPodcastEpisodesMock).toHaveBeenCalledTimes(1)
+    expect(result.current.resolvedContent?.episode.title).toBe('Fresh Episode')
   })
 
-  it('returns null when feedUrl is unavailable for fallback', async () => {
-    getPodcastIndexPodcastByItunesIdMock.mockResolvedValue(
-      makePodcast({
-        podcastItunesId: '12345',
-        title: 'Cold Podcast',
-        author: 'Host',
-        feedUrl: normalizeFeedUrl(''),
+  it('keeps cold-open detail resolution loading while the target guid only exists in the refetch result', async () => {
+    const targetGuid = 'late-guid'
+    const targetKey = episodeIdentityToCompactKey(targetGuid)
+    if (!targetKey) {
+      throw new Error('expected compact key')
+    }
+
+    const podcast = makePodcast({
+      podcastItunesId: '12345',
+      title: 'Deferred Detail Podcast',
+      author: 'Host',
+    })
+
+    const staleEpisodeList = makePodcastEpisodes({
+      episodes: [makeEpisode({ guid: 'stale-guid', title: 'Old Episode' })],
+    })
+
+    let resolveFetch: ((value: PodcastEpisodes) => void) | undefined
+    fetchPodcastEpisodesMock.mockImplementation(
+      () =>
+        new Promise<PodcastEpisodes>((resolve) => {
+          resolveFetch = resolve
+        })
+    )
+
+    const staleUpdatedAt = Date.now() - 2 * 24 * 60 * 60 * 1000
+    const { wrapper } = createQueryClientHarness({
+      setup: (queryClient) => {
+        queryClient.setQueryData(buildPodcastDetailQueryKey('12345', 'us'), podcast)
+        writePodcastEpisodesToCache(queryClient, '12345', staleEpisodeList, {
+          now: staleUpdatedAt,
+        })
+      },
+    })
+
+    const { result } = renderHook(() => useEpisodeResolution('12345', targetKey, 'us'), {
+      wrapper,
+    })
+
+    await waitFor(() => expect(fetchPodcastEpisodesMock).toHaveBeenCalledTimes(1))
+    expect(result.current.isLoading).toBe(true)
+    expect(result.current.resolvedContent).toBeNull()
+    expect(result.current.resolutionError).toBeNull()
+
+    resolveFetch?.(
+      makePodcastEpisodes({
+        episodes: [makeEpisode({ guid: targetGuid, title: 'Late Episode' })],
       })
     )
 
-    const { result } = renderHook(
-      () => useEpisodeResolution('12345', 'dm8RLqvNEjRWeAfgXlSAdA', 'us'),
-      {
-        wrapper: createWrapper().wrapper,
-      }
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+    expect(result.current.resolvedContent?.episode.title).toBe('Late Episode')
+    expect(result.current.resolutionError).toBeNull()
+    expect(result.current.notFound).toBeNull()
+  })
+
+  it('does not resolve the target episode from authority-mismatched bootstrap data while refetch is in flight', async () => {
+    const targetGuid = 'shared-guid'
+    const targetKey = episodeIdentityToCompactKey(targetGuid)
+    if (!targetKey) {
+      throw new Error('expected compact key')
+    }
+
+    const podcast = makePodcast({
+      podcastItunesId: '12345',
+      title: 'Authority Drift Podcast',
+      author: 'Host',
+      lastUpdateTime: 2,
+      episodeCount: 10,
+    })
+
+    const staleEpisodeList = makePodcastEpisodes({
+      episodes: [makeEpisode({ guid: targetGuid, title: 'Stale Episode' })],
+    })
+
+    let resolveFetch: ((value: PodcastEpisodes) => void) | undefined
+    fetchPodcastEpisodesMock.mockImplementation(
+      () =>
+        new Promise<PodcastEpisodes>((resolve) => {
+          resolveFetch = resolve
+        })
+    )
+
+    const { wrapper } = createQueryClientHarness({
+      setup: (queryClient) => {
+        queryClient.setQueryData(buildPodcastDetailQueryKey('12345', 'us'), podcast)
+        writePodcastEpisodesToCache(queryClient, '12345', staleEpisodeList, {
+          authority: {
+            lastUpdateTime: 1,
+            episodeCount: 10,
+          },
+        })
+      },
+    })
+
+    const { result } = renderHook(() => useEpisodeResolution('12345', targetKey, 'us'), {
+      wrapper,
+    })
+
+    await waitFor(() => expect(fetchPodcastEpisodesMock).toHaveBeenCalledTimes(1))
+    expect(result.current.isLoading).toBe(true)
+    expect(result.current.resolvedContent).toBeNull()
+    expect(result.current.resolutionError).toBeNull()
+    expect(fetchPodcastEpisodesMock).toHaveBeenCalledTimes(1)
+
+    resolveFetch?.(
+      makePodcastEpisodes({
+        episodes: [makeEpisode({ guid: targetGuid, title: 'Fresh Episode' })],
+      })
     )
 
     await waitFor(() => expect(result.current.isLoading).toBe(false))
-    expect(fetchPodcastFeedMock).not.toHaveBeenCalled()
-    expect(result.current.episode).toBeUndefined()
+    expect(result.current.resolvedContent?.episode.title).toBe('Fresh Episode')
+    expect(result.current.notFound).toBeNull()
   })
 })
