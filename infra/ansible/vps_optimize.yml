@@ -19,7 +19,7 @@
     readio_nginx_site_source: "{{ playbook_dir }}/../../scripts/nginx-readio-cloud.conf"
     readio_nginx_sites_available_dir: /etc/nginx/sites-available
     readio_nginx_sites_enabled_dir: /etc/nginx/sites-enabled
-    readio_nginx_enable_site: false
+    readio_nginx_enable_site: true
 
     readio_manage_unattended_upgrades: false
 
