@@ -5,6 +5,10 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+concurrency:
+  group: deploy-cloud-preprod
+  cancel-in-progress: true
+
 permissions:
   contents: read
   packages: write
@@ -34,106 +38,70 @@ jobs:
         with:
           context: ./apps/cloud-api
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/readio-cloud-api:${{ steps.slug.outputs.sha8 }}
+          tags: ghcr.io/${{ github.repository_owner }}/readio-cloud-api-pre:${{ steps.slug.outputs.sha8 }}
 
-      - name: Prepare Server
-        uses: appleboy/ssh-action@v1.2.5
-        with:
-          host: ${{ secrets.CLOUD_SSH_HOST }}
-          port: ${{ secrets.CLOUD_SSH_PORT }}
-          username: ${{ secrets.CLOUD_SSH_USER }}
-          key: ${{ secrets.CLOUD_SSH_PRIVATE_KEY }}
-          script: |
-            sudo mkdir -p /etc/readio/pre/data
-            sudo chown -R $USER:$USER /etc/readio
+      - name: Configure SSH for Docker Context
+        env:
+          CLOUD_SSH_HOST: ${{ secrets.CLOUD_SSH_HOST }}
+          CLOUD_SSH_PORT: ${{ secrets.CLOUD_SSH_PORT }}
+          CLOUD_SSH_USER: ${{ secrets.CLOUD_SSH_USER }}
+          CLOUD_SSH_PRIVATE_KEY: ${{ secrets.CLOUD_SSH_PRIVATE_KEY }}
+          CLOUD_SSH_KNOWN_HOSTS: ${{ secrets.CLOUD_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$CLOUD_SSH_PRIVATE_KEY" > ~/.ssh/readio_cloud
+          chmod 600 ~/.ssh/readio_cloud
+          printf '%s\n' "$CLOUD_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOF
+          Host ${CLOUD_SSH_HOST}
+            HostName ${CLOUD_SSH_HOST}
+            Port ${CLOUD_SSH_PORT}
+            User ${CLOUD_SSH_USER}
+            IdentityFile ~/.ssh/readio_cloud
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+            UserKnownHostsFile ~/.ssh/known_hosts
+          EOF
+          chmod 600 ~/.ssh/config
 
-      - name: Transfer Docker Compose
-        uses: appleboy/scp-action@v1
-        with:
-          host: ${{ secrets.CLOUD_SSH_HOST }}
-          port: ${{ secrets.CLOUD_SSH_PORT }}
-          username: ${{ secrets.CLOUD_SSH_USER }}
-          key: ${{ secrets.CLOUD_SSH_PRIVATE_KEY }}
-          source: "docker-compose.readio.yml"
-          target: "/etc/readio/pre/"
-          rm: true
-
-      - name: Deploy and Wait for Health
-        uses: appleboy/ssh-action@v1.2.5
-        with:
-          host: ${{ secrets.CLOUD_SSH_HOST }}
-          port: ${{ secrets.CLOUD_SSH_PORT }}
-          username: ${{ secrets.CLOUD_SSH_USER }}
-          key: ${{ secrets.CLOUD_SSH_PRIVATE_KEY }}
-          script: |
-            cd /etc/readio/pre
-            mv docker-compose.readio.yml docker-compose.yml
-
-            env_file="./readio-pre.env"
-            touch "$env_file" && chmod 600 "$env_file"
-
-            sync_env() {
-              local key=$1
-              local val=$2
-              if [ -n "$val" ]; then
-                grep -q "^${key}=" "$env_file" && sed -i "/^${key}=/c\\${key}=${val}" "$env_file" || printf '%s=%s\n' "$key" "$val" >> "$env_file"
-              fi
-            }
-
-            # App Secrets
-            sync_env "READIO_ADMIN_TOKEN" "${{ secrets.READIO_ADMIN_TOKEN }}"
-            sync_env "PODCAST_INDEX_API_KEY" "${{ secrets.PODCAST_INDEX_API_KEY }}"
-            sync_env "PODCAST_INDEX_API_SECRET" "${{ secrets.PODCAST_INDEX_API_SECRET }}"
-            sync_env "READIO_ASR_RELAY_PUBLIC_TOKEN" "${{ secrets.READIO_ASR_RELAY_PUBLIC_TOKEN }}"
-            sync_env "READIO_ASR_WORKER_SHARED_SECRET" "${{ secrets.READIO_ASR_WORKER_SHARED_SECRET }}"
-            sync_env "READIO_GRAFANA_OTLP_TOKEN" "${{ secrets.READIO_GRAFANA_OTLP_TOKEN }}"
-
-            # App Variables
-            sync_env "READIO_ASR_ALLOWED_ORIGINS" "${{ vars.READIO_ASR_ALLOWED_ORIGINS }}"
-            sync_env "READIO_PROXY_ALLOWED_ORIGINS" "${{ vars.READIO_PROXY_ALLOWED_ORIGINS }}"
-            sync_env "READIO_GRAFANA_OTLP_ENDPOINT" "${{ vars.READIO_GRAFANA_OTLP_ENDPOINT }}"
-            sync_env "READIO_TRUSTED_PROXY_CIDRS" "${{ vars.READIO_TRUSTED_PROXY_CIDRS }}"
-            sync_env "READIO_ASR_WORKER_BASE_URL" "${{ vars.READIO_ASR_WORKER_BASE_URL }}"
-
-            # Deploy with Isolation
-            export REPO_OWNER="${{ github.repository_owner }}"
-            export IMAGE_TAG="${{ steps.slug.outputs.sha8 }}"
-            export CONTAINER_NAME="readio-api-pre"
-            export HOST_PORT="8079"
-            export APP_PORT="8080"
-            export DATA_DIR="./data"
-            export ENV_FILE_PATH="./readio-pre.env"
-
-            docker compose -p readio-pre pull
-            docker compose -p readio-pre up -d --wait --remove-orphans
-
-            image_repo="ghcr.io/${REPO_OWNER}/readio-cloud-api"
-            preserve_file="$(mktemp)"
-
-            docker ps --format '{{.Image}}' \
-              | grep "^${image_repo}:" \
-              | sort -u > "$preserve_file" || true
-
-            docker image ls "$image_repo" --format '{{.Repository}}:{{.Tag}} {{.CreatedAt}}' \
-              | grep -v '<none>' \
-              | sort -rk2,3 \
-              | awk 'NR <= 5 { print $1 }' >> "$preserve_file"
-
-            sort -u "$preserve_file" -o "$preserve_file"
-
-            docker image ls "$image_repo" --format '{{.Repository}}:{{.Tag}}' \
-              | grep -v '<none>' \
-              | while read -r image_ref; do
-                  grep -qx "$image_ref" "$preserve_file" && continue
-                  docker image rm "$image_ref" || true
-                done
-
-            rm -f "$preserve_file"
-            docker image prune -f
+      - name: Deploy through Docker Context
+        env:
+          CLOUD_SSH_HOST: ${{ secrets.CLOUD_SSH_HOST }}
+          CLOUD_SSH_PORT: ${{ secrets.CLOUD_SSH_PORT }}
+          CLOUD_SSH_USER: ${{ secrets.CLOUD_SSH_USER }}
+          REPO_OWNER: ${{ github.repository_owner }}
+          IMAGE_TAG: ${{ steps.slug.outputs.sha8 }}
+          READIO_ADMIN_TOKEN: ${{ secrets.READIO_ADMIN_TOKEN }}
+          PODCAST_INDEX_API_KEY: ${{ secrets.PODCAST_INDEX_API_KEY }}
+          PODCAST_INDEX_API_SECRET: ${{ secrets.PODCAST_INDEX_API_SECRET }}
+          READIO_ASR_RELAY_PUBLIC_TOKEN: ${{ secrets.READIO_ASR_RELAY_PUBLIC_TOKEN }}
+          READIO_ASR_WORKER_SHARED_SECRET: ${{ secrets.READIO_ASR_WORKER_SHARED_SECRET }}
+          READIO_GRAFANA_OTLP_TOKEN: ${{ secrets.READIO_GRAFANA_OTLP_TOKEN }}
+          READIO_ASR_ALLOWED_ORIGINS: ${{ vars.READIO_ASR_ALLOWED_ORIGINS }}
+          READIO_DISCOVERY_ALLOWED_ORIGINS: ${{ vars.READIO_DISCOVERY_ALLOWED_ORIGINS }}
+          READIO_PROXY_ALLOWED_ORIGINS: ${{ vars.READIO_PROXY_ALLOWED_ORIGINS }}
+          READIO_GRAFANA_OTLP_ENDPOINT: ${{ vars.READIO_GRAFANA_OTLP_ENDPOINT }}
+          READIO_GRAFANA_OTLP_INSTANCE_ID: ${{ vars.READIO_GRAFANA_OTLP_INSTANCE_ID }}
+          READIO_TRUSTED_PROXY_CIDRS: ${{ vars.READIO_TRUSTED_PROXY_CIDRS }}
+          READIO_ASR_WORKER_BASE_URL: ${{ vars.READIO_ASR_WORKER_BASE_URL }}
+          READIO_EN_DICTIONARY_API_URL: ${{ vars.READIO_EN_DICTIONARY_API_URL }}
+          READIO_EN_DICTIONARY_API_TRANSPORT: ${{ vars.READIO_EN_DICTIONARY_API_TRANSPORT }}
+          VITE_GRAFANA_FARO_URL: ${{ vars.VITE_GRAFANA_FARO_URL }}
+          VITE_GRAFANA_FARO_APP_NAME: ${{ vars.VITE_GRAFANA_FARO_APP_NAME }}
+          VITE_GRAFANA_FARO_ENV: ${{ vars.VITE_GRAFANA_FARO_ENV }}
+          VITE_GRAFANA_FARO_SAMPLE_RATE: ${{ vars.VITE_GRAFANA_FARO_SAMPLE_RATE }}
+        run: |
+          set -euo pipefail
+          make context-setup
+          make deploy-pre
+          make prune-images-pre
 
       - name: Cleanup old GHCR package versions
         uses: actions/delete-package-versions@v5
         with:
-          package-name: 'readio-cloud-api'
+          package-name: 'readio-cloud-api-pre'
           package-type: 'container'
           min-versions-to-keep: 10

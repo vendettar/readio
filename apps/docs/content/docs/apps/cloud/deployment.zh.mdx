@@ -5,14 +5,14 @@ description: 基于 Docker 的云端 CI/CD 运维手册。
 
 # Cloud 部署指南
 
-本指南描述 Readio Cloud 的标准 Docker 化部署流程。
+本指南描述 Readio Cloud 基于 Docker Context 的标准部署流程。
 
 ## 1. 运行时配置 (Runtime Config)
 
 系统采用后端驱动的异步配置机制：
 
 - **抓取流程**：前端启动时请求 `GET /api/v1/config` 获取环境参数。
-- **配置隔离**：敏感密钥留在后端 `.env`；仅非敏感参数（如 ASR Token、监控 URL）发往浏览器。
+- **配置隔离**：服务端密钥保存在 GitHub Actions secrets 和后端容器环境中；只有浏览器公开运行时值会通过 `/env.js` 暴露。
 
 ## 2. GitHub 配置清单
 
@@ -27,6 +27,7 @@ description: 基于 Docker 的云端 CI/CD 运维手册。
 | `CLOUD_SSH_USER` | 登录用户名 (如 root) |
 | `CLOUD_SSH_PRIVATE_KEY` | SSH 私钥 (需在 VPS 的 `authorized_keys` 中) |
 | `CLOUD_SSH_PORT` | SSH 端口 (默认 22) |
+| `CLOUD_SSH_KNOWN_HOSTS` | Docker Context 严格主机校验使用的固定 SSH host key 记录 |
 | `READIO_ADMIN_TOKEN` | 管理后台 Bearer Token |
 | `PODCAST_INDEX_API_KEY` | PodcastIndex API Key |
 | `PODCAST_INDEX_API_SECRET` | PodcastIndex API Secret |
@@ -41,37 +42,36 @@ description: 基于 Docker 的云端 CI/CD 运维手册。
 | 名称 | 说明 |
 | :--- | :--- |
 | `READIO_ASR_ALLOWED_ORIGINS` | ASR 允许的跨域来源 |
+| `READIO_DISCOVERY_ALLOWED_ORIGINS` | Discovery 允许的跨域来源 |
 | `READIO_PROXY_ALLOWED_ORIGINS` | 代理允许的跨域来源 |
 | `READIO_GRAFANA_OTLP_ENDPOINT` | Grafana OTLP 上报地址 |
+| `READIO_GRAFANA_OTLP_INSTANCE_ID` | 与上报 token 配套的 Grafana OTLP instance ID |
 | `READIO_TRUSTED_PROXY_CIDRS` | 信任的代理 IP (用于获取真实 IP) |
 | `READIO_ASR_WORKER_BASE_URL` | Cloudflare ASR Worker 的基础 URL |
+| `READIO_EN_DICTIONARY_API_URL` | 通过 `/env.js` 暴露给浏览器的英文词典 API 地址 |
+| `READIO_EN_DICTIONARY_API_TRANSPORT` | 通过 `/env.js` 暴露给浏览器的英文词典传输契约 |
+| `VITE_GRAFANA_FARO_URL` | 部署契约要求配置的浏览器公开 Grafana Faro collector URL |
+| `VITE_GRAFANA_FARO_APP_NAME` | 浏览器公开的 Faro 应用名 |
+| `VITE_GRAFANA_FARO_ENV` | 浏览器公开的 Faro 环境名 |
+| `VITE_GRAFANA_FARO_SAMPLE_RATE` | 浏览器公开的 Faro 采样率 |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare Pages 项目的 account ID |
 | `CLOUDFLARE_PAGES_PROJECT_NAME` | `apps/cloud-ui` 对应的 Cloudflare Pages 项目名 |
 | `CLOUD_UI_VITE_API_BASE_URL` | 注入到 `cloud-ui` 生产构建中的公开 API Base URL |
 
 ## 3. VPS 新机初始化 (Bootstrap Checklist)
 
-对于一台全新的 Ubuntu/Debian VPS，请按照以下步骤快速初始化：
+对于一台全新的 Ubuntu VPS，请使用 `infra/ansible/vps_optimize.yml` 完成初始化。
 
-### 3.1 基础环境安装
-执行以下命令安装 Docker 引擎：
-```bash
-curl -fsSL https://get.docker.com | sh
-sudo usermod -aG docker $USER
-```
+初始化后必须满足：
 
-### 3.2 权限配置
-如果你使用非 root 用户进行部署，请确保该用户拥有免密 `sudo` 权限：
-```bash
-# 执行 sudo visudo
-# 添加一行: 用户名 ALL=(ALL) NOPASSWD:ALL
-```
+- Docker Engine 和 Docker Compose V2 已安装。
+- Nginx 已安装并按 `scripts/nginx-readio-cloud.conf` 配置 HTTPS 反向代理。
+- 部署用户、SSH authorized keys、有限 sudo 权限由 Ansible 变量管理，不在 workflow 内硬编码。
+- `/etc/readio/pre/data` 和 `/etc/readio/prod/data` 已存在，并且所有权兼容部署用户和 Docker runtime。
+- 生产端口 `8080` 与测试端口 `8079` 未被其他服务占用。
 
-### 3.3 SSH 密钥准备
-将你的公钥内容（通常是 `id_ed25519.pub`）添加到 VPS 的 `~/.ssh/authorized_keys` 文件中。
-
-### 3.4 镜像拉取前提
-VPS 必须能够拉取 `ghcr.io/${owner}/readio-cloud-api` 镜像。做法有两种：
+### 3.1 镜像拉取前提
+VPS 必须能够拉取 `ghcr.io/${owner}/readio-cloud-api-pre` 和 `ghcr.io/${owner}/readio-cloud-api-prod` 镜像。做法有两种：
 
 - 将 GHCR 包设为 public
 - 或者预先在服务器上执行 `docker login ghcr.io`
@@ -82,19 +82,46 @@ VPS 必须能够拉取 `ghcr.io/${owner}/readio-cloud-api` 镜像。做法有两
 - **前端路由**：仓库已提交 `apps/cloud-ui/public/_redirects`，内容为 `/* /index.html 200`，因此节目页、单集详情页这类深链在 Pages 上不会 404。
 - **测试 API 环境**：`deploy-cloud-preprod.yml` 在 push 到 `main` 时自动部署，也可以手动执行。
 - **生产 API 环境**：`deploy-cloud-prod.yml` 需要在 Actions 页面手动点击 `Run workflow`，并且只有选中的 ref 是 `main` 时才会真正部署。
+- **仓库部署命令**：根目录 `Makefile` 负责 API 部署和运维的 Docker Context 命令入口。
+- **远程执行**：部署使用 Docker Context over SSH。workflow 使用 `CLOUD_SSH_PRIVATE_KEY` 和固定的 `CLOUD_SSH_KNOWN_HOSTS` 非交互配置 SSH，然后执行 `make context-setup` 与对应部署目标。
+- **运行时环境**：CI 不再在 VPS 上写入或修改明文 env 文件。`docker-compose.readio.yml` 显式列出必需环境变量，由 Compose 从 workflow 或本地 shell 环境中插值。
+- **密钥边界**：容器环境变量仍处在 Docker 管理员边界内；它们不是 memory-only，Docker 管理员或 Docker daemon metadata 可能看到这些值。
 - **镜像清理**：每次部署后，VPS 会保留当前运行中容器正在使用的镜像，以及最近 5 个后端镜像 tag；更早的本地镜像会自动删除。
-- **GHCR 清理**：后端镜像只使用部署对应的 `sha8` 作为 tag。每次部署后，GHCR 会保留最近 10 个后端镜像版本；更早的版本会自动删除。
+- **GHCR 清理**：后端镜像只使用部署对应的 `sha8` 作为 tag。测试和生产分别使用独立的 GHCR package：`readio-cloud-api-pre` 与 `readio-cloud-api-prod`。每个 package 都会独立保留最近 10 个后端镜像版本。
 - **目录隔离**：
   - preproduction 使用 `/etc/readio/pre`，compose project 名为 `readio-pre`
   - production 使用 `/etc/readio/prod`，compose project 名为 `readio-prod`
   - 两套环境可以在同一台 VPS 上并存
   - `cloud-ui` 的生产发布与 VPS 解耦，不走 Docker Compose
-- **自动化流**：CI/CD 会自动在 VPS 上创建对应目录并完成配置同步。
+- **可观测性**：
+  - 此部署不安装 Grafana Alloy、node_exporter、本地 Prometheus 或 Loki agent。
+  - 配置 `READIO_GRAFANA_OTLP_ENDPOINT`、`READIO_GRAFANA_OTLP_INSTANCE_ID` 和 `READIO_GRAFANA_OTLP_TOKEN` 后，`apps/cloud-api` 会通过 OTLP 向 Grafana Cloud 推送应用指标和应用侧采集的主机关键指标。
+  - 主机日志不会投递到 Grafana；日志界面仍是 `/admin/logs` 和 Docker logs。
+  - 主机指标是 `apps/cloud-api` 内部采集的 best-effort 信号，不是 node_exporter 的完整替代。
+  - 主机指标采集默认 `READIO_HOST_METRICS_INTERVAL_SECONDS=60`。
+  - 主机指标名称包括 `readio_cloud_process_goroutines`、`readio_cloud_process_heap_alloc_bytes`、`readio_cloud_process_memory_sys_bytes`、`readio_cloud_process_uptime_seconds`、`readio_cloud_sqlite_db_size_bytes`、`readio_cloud_sqlite_wal_size_bytes`、`readio_cloud_data_filesystem_free_bytes`、`readio_cloud_data_filesystem_total_bytes` 和 `readio_cloud_transcript_assets_size_bytes`。
+  - `/admin/logs` 仍是 same-origin、memory-only 的运维日志界面。
+  - Docker logs 仍可通过 `make logs-pre`、`make logs-prod` 或直接 Docker 操作查看。
 
 ## 5. 运维常用命令
 
-- **查看日志**：`docker logs -f readio-api-prod`。
-- **重启测试环境**：`cd /etc/readio/pre && docker compose -p readio-pre restart`
-- **重启生产环境**：`cd /etc/readio/prod && docker compose -p readio-prod restart`
+- **验证测试环境配置**：`make check-env-pre`
+- **验证生产环境配置**：`make check-env-prod`
+- **创建 / 更新 Docker Context**：`make context-setup`
+- **演示 Docker Context 配置命令**：`make context-setup DRY_RUN=1`
+- **部署测试环境**：`make deploy-pre`
+- **部署生产环境**：`make deploy-prod CONFIRM=deploy`
+- **查看测试环境日志**：`make logs-pre`
+- **查看生产环境日志**：`make logs-prod`
+- **清理旧测试环境 API 镜像**：`make prune-images-pre`
+- **清理旧生产环境 API 镜像**：`make prune-images-prod`
+- **更新配置**：更新 GitHub Secrets/Variables 或本地环境变量后，重新执行对应部署命令。
 - **测试环境数据库**：`/etc/readio/pre/data/readio.db`
 - **生产环境数据库**：`/etc/readio/prod/data/readio.db`
+
+## 6. 回滚
+
+1. 从 GitHub Actions 或 GHCR package 历史中找到上一个镜像 tag。
+2. 使用旧的 `IMAGE_TAG` 重新执行对应 Makefile 部署目标。
+3. 回滚时不要删除 `/etc/readio/pre/data` 或 `/etc/readio/prod/data`。
+4. 常规回滚流程不要执行破坏性的 Docker volume 清理。

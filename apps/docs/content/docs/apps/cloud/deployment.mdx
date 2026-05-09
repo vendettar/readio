@@ -5,14 +5,14 @@ description: CI/CD operations manual for Docker-based Cloud deployment.
 
 # Cloud Deployment Guide
 
-This guide describes the standard Docker-based deployment process for Readio Cloud.
+This guide describes the standard Docker Context based deployment process for Readio Cloud.
 
 ## 1. Runtime Config
 
 The system uses a backend-driven asynchronous configuration mechanism:
 
 - **Flow**: The frontend fetches environment parameters via `GET /api/v1/config` at startup.
-- **Isolation**: Sensitive keys stay in the backend `.env`; only non-sensitive parameters (e.g., ASR Tokens, monitoring URLs) are sent to the browser.
+- **Isolation**: Server-owned secrets stay in GitHub Actions secrets and the backend container environment. Browser-public runtime values are the only values exposed through `/env.js`.
 - **Adaptation**:
     - **Same-origin**: Fetches directly from `/api/v1/config`.
     - **Decoupled**: Uses the `VITE_API_BASE_URL` environment variable to target the backend.
@@ -29,6 +29,7 @@ Create three environments in GitHub **Settings -> Environments**: `cloud-product
 | `CLOUD_SSH_PORT` | SSH port, usually `22` |
 | `CLOUD_SSH_USER` | Login username used by the deploy workflow |
 | `CLOUD_SSH_PRIVATE_KEY` | SSH private key for that user |
+| `CLOUD_SSH_KNOWN_HOSTS` | Pinned SSH host key entry used by Docker Context with strict host checking |
 | `READIO_ADMIN_TOKEN` | Bearer Token for Admin UI |
 | `PODCAST_INDEX_API_KEY` | PodcastIndex API Key |
 | `PODCAST_INDEX_API_SECRET` | PodcastIndex API Secret |
@@ -42,20 +43,28 @@ Create three environments in GitHub **Settings -> Environments**: `cloud-product
 | Name | Description |
 | :--- | :--- |
 | `READIO_ASR_ALLOWED_ORIGINS` | Allowed CORS origins for ASR |
+| `READIO_DISCOVERY_ALLOWED_ORIGINS` | Allowed CORS origins for Discovery |
 | `READIO_PROXY_ALLOWED_ORIGINS` | Allowed CORS origins for Proxy |
 | `READIO_GRAFANA_OTLP_ENDPOINT` | OTLP Data Push Endpoint |
+| `READIO_GRAFANA_OTLP_INSTANCE_ID` | Grafana OTLP instance ID paired with the push token |
 | `READIO_TRUSTED_PROXY_CIDRS` | Trusted proxy CIDR list for client IP restoration |
 | `READIO_ASR_WORKER_BASE_URL` | Base URL of the Cloudflare Worker ASR proxy |
+| `READIO_EN_DICTIONARY_API_URL` | Browser-public English dictionary API endpoint emitted through `/env.js` |
+| `READIO_EN_DICTIONARY_API_TRANSPORT` | Browser-public English dictionary transport emitted through `/env.js` |
+| `VITE_GRAFANA_FARO_URL` | Browser-public Grafana Faro collector URL required by the deploy contract |
+| `VITE_GRAFANA_FARO_APP_NAME` | Browser-public Faro application name |
+| `VITE_GRAFANA_FARO_ENV` | Browser-public Faro environment name |
+| `VITE_GRAFANA_FARO_SAMPLE_RATE` | Browser-public Faro sample rate |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID for the Pages project |
 | `CLOUDFLARE_PAGES_PROJECT_NAME` | Cloudflare Pages project name for `apps/cloud-ui` |
 | `CLOUD_UI_VITE_API_BASE_URL` | Public API base URL baked into the `cloud-ui` production build |
 
 ## 3. VPS Prerequisites
 
-1. **Dependencies**: Install Docker and Docker Compose V2.
-2. **Directories**: The workflows create `/etc/readio/pre` and `/etc/readio/prod` automatically, each with its own `data/` directory.
+1. **Dependencies**: Provision Docker Engine, Docker Compose V2, Nginx, the deploy user, and data directories with `infra/ansible/vps_optimize.yml`.
+2. **Directories**: The VPS must already contain `/etc/readio/pre/data` and `/etc/readio/prod/data` with deploy-user compatible ownership.
 3. **Network**: Configure Nginx reverse-proxy with HTTPS (refer to `scripts/nginx-readio-cloud.conf`).
-4. **Registry Access**: The VPS must be able to pull `ghcr.io/${owner}/readio-cloud-api`. Keep the package public, or pre-configure `docker login ghcr.io` on the server.
+4. **Registry Access**: The VPS must be able to pull `ghcr.io/${owner}/readio-cloud-api-pre` and `ghcr.io/${owner}/readio-cloud-api-prod`. Keep both packages public, or pre-configure `docker login ghcr.io` on the server.
 5. **Cleanup**: Ensure ports 8080 (Prod) / 8079 (Pre) are not occupied.
 
 ## 4. CI/CD & Release
@@ -64,20 +73,47 @@ Create three environments in GitHub **Settings -> Environments**: `cloud-product
 - **Frontend routing**: `apps/cloud-ui/public/_redirects` is committed with `/* /index.html 200`, so direct deep links such as podcast and episode detail routes resolve correctly on Pages.
 - **Pre-production API**: `deploy-cloud-preprod.yml` is triggered automatically on push to `main`, and may also be run manually.
 - **Production API**: `deploy-cloud-prod.yml` is triggered manually via the GitHub Actions `Run workflow` button, and the workflow only deploys when the selected ref is `main`.
+- **Repo-owned deploy commands**: the root `Makefile` owns the Docker Context command surface for API deploys and operations.
+- **Remote execution**: deployment uses Docker Context over SSH. The workflows configure SSH non-interactively with `CLOUD_SSH_PRIVATE_KEY` and pinned `CLOUD_SSH_KNOWN_HOSTS`, then run `make context-setup` and the relevant deploy target.
+- **Runtime environment**: CI no longer writes or mutates plaintext env files on the VPS. `docker-compose.readio.yml` lists required environment variables explicitly and Compose interpolates them from the workflow or local shell environment.
+- **Secret boundary**: container environment values remain inside the Docker administrator boundary; they are not memory-only and can be visible to Docker administrators or Docker daemon metadata.
 - **Image Management**: After each deploy, the VPS keeps the images currently used by running containers plus the latest 5 backend image tags; older local images are removed automatically.
-- **GHCR Retention**: Backend images are tagged only with the deployment `sha8`. After each deploy, GHCR keeps the latest 10 backend image versions; older versions are deleted automatically.
+- **GHCR Retention**: Backend images are tagged only with the deployment `sha8`. Preproduction and production use separate GHCR packages: `readio-cloud-api-pre` and `readio-cloud-api-prod`. Each package keeps its latest 10 backend image versions independently.
 - **Deployment isolation**:
   - preproduction runs under `/etc/readio/pre` with compose project `readio-pre`
   - production runs under `/etc/readio/prod` with compose project `readio-prod`
   - the two environments can coexist on the same VPS without replacing each other
   - `cloud-ui` production deploy is isolated from the VPS workflows and does not use Docker Compose
+- **Observability**:
+  - Grafana Alloy, node_exporter, local Prometheus, and Loki agents are not installed by this deployment.
+  - `apps/cloud-api` pushes application and app-owned host-critical metrics to Grafana Cloud through OTLP when `READIO_GRAFANA_OTLP_ENDPOINT`, `READIO_GRAFANA_OTLP_INSTANCE_ID`, and `READIO_GRAFANA_OTLP_TOKEN` are configured.
+  - Host logs are not shipped to Grafana. `/admin/logs` and Docker logs remain the log surfaces.
+  - Host metrics are best-effort app-owned signals collected inside `apps/cloud-api`, not a replacement for node_exporter.
+  - Host metric collection defaults to `READIO_HOST_METRICS_INTERVAL_SECONDS=60`.
+  - Host metric names include `readio_cloud_process_goroutines`, `readio_cloud_process_heap_alloc_bytes`, `readio_cloud_process_memory_sys_bytes`, `readio_cloud_process_uptime_seconds`, `readio_cloud_sqlite_db_size_bytes`, `readio_cloud_sqlite_wal_size_bytes`, `readio_cloud_data_filesystem_free_bytes`, `readio_cloud_data_filesystem_total_bytes`, and `readio_cloud_transcript_assets_size_bytes`.
+  - `/admin/logs` remains a same-origin, memory-only operator log surface.
+  - Docker logs remain available through `make logs-pre`, `make logs-prod`, or direct Docker operations.
 
 ## 5. Operations
 
-- **View Logs**: `docker logs -f readio-api-prod`.
-- **Update Config**: Update GitHub Secrets and re-run the workflow to sync and restart.
-- **Restart preproduction**: `cd /etc/readio/pre && docker compose -p readio-pre restart`
-- **Restart production**: `cd /etc/readio/prod && docker compose -p readio-prod restart`
+- **Validate preproduction config**: `make check-env-pre`
+- **Validate production config**: `make check-env-prod`
+- **Create/update Docker Context**: `make context-setup`
+- **Dry-run Docker Context setup**: `make context-setup DRY_RUN=1`
+- **Deploy preproduction**: `make deploy-pre`
+- **Deploy production**: `make deploy-prod CONFIRM=deploy`
+- **View preproduction logs**: `make logs-pre`
+- **View production logs**: `make logs-prod`
+- **Prune old preproduction API images**: `make prune-images-pre`
+- **Prune old production API images**: `make prune-images-prod`
+- **Update Config**: Update GitHub Secrets/Variables or local environment variables, then re-run the relevant deploy command.
 - **Preproduction DB path**: `/etc/readio/pre/data/readio.db`
 - **Production DB path**: `/etc/readio/prod/data/readio.db`
-- **Cleanup**: Run `docker image prune -f` periodically to free disk space.
+- **Cleanup**: Use `make prune-images-pre` and `make prune-images-prod` to remove old Readio API images without touching Docker volumes or unrelated workload images.
+
+## 6. Rollback
+
+1. Identify the previous GHCR image tag from GitHub Actions or GHCR package history.
+2. Re-run the relevant Makefile deployment target with the previous `IMAGE_TAG`.
+3. Never delete `/etc/readio/pre/data` or `/etc/readio/prod/data` during rollback.
+4. Do not run destructive Docker volume cleanup as part of normal rollback.

@@ -1,0 +1,120 @@
+name: Bootstrap VPS
+
+on:
+  workflow_dispatch:
+    inputs:
+      vps_ip:
+        description: Target VPS IP address (optional, defaults to CLOUD_SSH_HOST secret)
+        required: false
+        type: string
+      vps_user:
+        description: SSH user used for the initial bootstrap connection
+        required: false
+        default: root
+        type: string
+
+concurrency:
+  group: vps-bootstrap-${{ github.event.inputs.vps_ip }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    environment: cloud-production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.2.2
+
+      - name: Install Ansible
+        run: |
+          set -euo pipefail
+          if ! command -v ansible-playbook >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y ansible
+          fi
+
+      - name: Configure SSH
+        env:
+          VPS_IP: ${{ github.event.inputs.vps_ip || secrets.CLOUD_SSH_HOST }}
+          VPS_USER: ${{ github.event.inputs.vps_user || 'root' }}
+          CLOUD_SSH_PORT: ${{ secrets.CLOUD_SSH_PORT }}
+          CLOUD_SSH_PRIVATE_KEY: ${{ secrets.CLOUD_SSH_PRIVATE_KEY }}
+          CLOUD_SSH_KNOWN_HOSTS: ${{ secrets.CLOUD_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          ssh_port="${CLOUD_SSH_PORT:-22}"
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$CLOUD_SSH_PRIVATE_KEY" > ~/.ssh/readio_cloud
+          chmod 600 ~/.ssh/readio_cloud
+          if [ -n "${CLOUD_SSH_KNOWN_HOSTS:-}" ]; then
+            printf '%s\n' "$CLOUD_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+            chmod 600 ~/.ssh/known_hosts
+            strict_host_key_checking=yes
+          else
+            touch ~/.ssh/known_hosts
+            chmod 600 ~/.ssh/known_hosts
+            strict_host_key_checking=accept-new
+          fi
+          cat > ~/.ssh/config <<EOF
+          Host ${VPS_IP}
+            HostName ${VPS_IP}
+            Port ${ssh_port}
+            User ${VPS_USER}
+            IdentityFile ~/.ssh/readio_cloud
+            IdentitiesOnly yes
+            StrictHostKeyChecking ${strict_host_key_checking}
+            UserKnownHostsFile ~/.ssh/known_hosts
+          EOF
+          chmod 600 ~/.ssh/config
+
+      - name: Build Ansible extra vars
+        env:
+          READIO_DEPLOY_USER: ${{ vars.READIO_DEPLOY_USER }}
+          READIO_DEPLOY_USER_SSH_KEYS: ${{ vars.READIO_DEPLOY_USER_SSH_KEYS }}
+          CLOUD_SSH_USER: ${{ secrets.CLOUD_SSH_USER }}
+        run: |
+          set -euo pipefail
+          if [ -z "${READIO_DEPLOY_USER_SSH_KEYS:-}" ]; then
+            READIO_DEPLOY_USER_SSH_KEYS="$(ssh-keygen -y -f ~/.ssh/readio_cloud)"
+            export READIO_DEPLOY_USER_SSH_KEYS
+          fi
+
+          python3 - <<'PY'
+          import json
+          import os
+
+          keys = [
+              line.strip()
+              for line in os.environ["READIO_DEPLOY_USER_SSH_KEYS"].splitlines()
+              if line.strip()
+          ]
+          if not keys:
+              raise SystemExit("READIO_DEPLOY_USER_SSH_KEYS must contain at least one public SSH key.")
+
+          payload = {
+              "readio_deploy_user": os.environ.get("READIO_DEPLOY_USER") or os.environ.get("CLOUD_SSH_USER") or "deploy",
+              "readio_deploy_user_ssh_keys": keys,
+          }
+          with open("ansible-extra-vars.json", "w", encoding="utf-8") as fh:
+              json.dump(payload, fh)
+          PY
+
+      - name: Run VPS bootstrap playbook
+        env:
+          VPS_IP: ${{ github.event.inputs.vps_ip || secrets.CLOUD_SSH_HOST }}
+          VPS_USER: ${{ github.event.inputs.vps_user || 'root' }}
+          CLOUD_SSH_PORT: ${{ secrets.CLOUD_SSH_PORT }}
+        run: |
+          set -euo pipefail
+          ssh_port="${CLOUD_SSH_PORT:-22}"
+          ansible-playbook -i "${VPS_IP}," infra/ansible/vps_optimize.yml \
+            -e "ansible_user=${VPS_USER}" \
+            -e "ansible_port=${ssh_port}" \
+            -e "readio_target_hosts=${VPS_IP}" \
+            -e "@ansible-extra-vars.json" \
+            --private-key ~/.ssh/readio_cloud

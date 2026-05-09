@@ -1,17 +1,41 @@
 services:
   readio-api:
-    image: ghcr.io/${REPO_OWNER}/readio-cloud-api:${IMAGE_TAG}
-    container_name: ${CONTAINER_NAME}
+    image: ghcr.io/${REPO_OWNER:?REPO_OWNER is required}/${IMAGE_NAME:?IMAGE_NAME is required}:${IMAGE_TAG:?IMAGE_TAG is required}
+    container_name: ${CONTAINER_NAME:?CONTAINER_NAME is required}
     restart: always
     ports:
-      - "${HOST_PORT}:${APP_PORT}"
+      - "${HOST_PORT:?HOST_PORT is required}:${APP_PORT:?APP_PORT is required}"
     volumes:
-      - ${DATA_DIR}:/app/data
-    env_file:
-      - ${ENV_FILE_PATH}
+      - ${DATA_DIR:?DATA_DIR is required}:/app/data
     environment:
-      - PORT=${APP_PORT}
-      - READIO_CLOUD_DB_PATH=/app/data/readio.db
+      # Server non-secret runtime variables.
+      PORT: ${APP_PORT:?APP_PORT is required}
+      READIO_CLOUD_DB_PATH: /app/data/readio.db
+      READIO_ASR_ALLOWED_ORIGINS: ${READIO_ASR_ALLOWED_ORIGINS:?READIO_ASR_ALLOWED_ORIGINS is required}
+      READIO_DISCOVERY_ALLOWED_ORIGINS: ${READIO_DISCOVERY_ALLOWED_ORIGINS:?READIO_DISCOVERY_ALLOWED_ORIGINS is required}
+      READIO_PROXY_ALLOWED_ORIGINS: ${READIO_PROXY_ALLOWED_ORIGINS:?READIO_PROXY_ALLOWED_ORIGINS is required}
+      READIO_GRAFANA_OTLP_ENDPOINT: ${READIO_GRAFANA_OTLP_ENDPOINT:?READIO_GRAFANA_OTLP_ENDPOINT is required}
+      READIO_GRAFANA_OTLP_INSTANCE_ID: ${READIO_GRAFANA_OTLP_INSTANCE_ID:?READIO_GRAFANA_OTLP_INSTANCE_ID is required}
+      READIO_HOST_METRICS_INTERVAL_SECONDS: ${READIO_HOST_METRICS_INTERVAL_SECONDS:-60}
+      READIO_TRUSTED_PROXY_CIDRS: ${READIO_TRUSTED_PROXY_CIDRS:?READIO_TRUSTED_PROXY_CIDRS is required}
+      READIO_ASR_WORKER_BASE_URL: ${READIO_ASR_WORKER_BASE_URL:?READIO_ASR_WORKER_BASE_URL is required}
+
+      # Server secrets. Compose interpolation avoids CI writing plaintext env files,
+      # but Docker administrators can still inspect container environment values.
+      READIO_ADMIN_TOKEN: ${READIO_ADMIN_TOKEN:?READIO_ADMIN_TOKEN is required}
+      PODCAST_INDEX_API_KEY: ${PODCAST_INDEX_API_KEY:?PODCAST_INDEX_API_KEY is required}
+      PODCAST_INDEX_API_SECRET: ${PODCAST_INDEX_API_SECRET:?PODCAST_INDEX_API_SECRET is required}
+      READIO_ASR_WORKER_SHARED_SECRET: ${READIO_ASR_WORKER_SHARED_SECRET:?READIO_ASR_WORKER_SHARED_SECRET is required}
+      READIO_GRAFANA_OTLP_TOKEN: ${READIO_GRAFANA_OTLP_TOKEN:?READIO_GRAFANA_OTLP_TOKEN is required}
+
+      # Browser-public runtime variables for /env.js only.
+      READIO_ASR_RELAY_PUBLIC_TOKEN: ${READIO_ASR_RELAY_PUBLIC_TOKEN:?READIO_ASR_RELAY_PUBLIC_TOKEN is required}
+      READIO_EN_DICTIONARY_API_URL: ${READIO_EN_DICTIONARY_API_URL:?READIO_EN_DICTIONARY_API_URL is required}
+      READIO_EN_DICTIONARY_API_TRANSPORT: ${READIO_EN_DICTIONARY_API_TRANSPORT:?READIO_EN_DICTIONARY_API_TRANSPORT is required}
+      VITE_GRAFANA_FARO_URL: ${VITE_GRAFANA_FARO_URL:?VITE_GRAFANA_FARO_URL is required}
+      VITE_GRAFANA_FARO_APP_NAME: ${VITE_GRAFANA_FARO_APP_NAME:?VITE_GRAFANA_FARO_APP_NAME is required}
+      VITE_GRAFANA_FARO_ENV: ${VITE_GRAFANA_FARO_ENV:?VITE_GRAFANA_FARO_ENV is required}
+      VITE_GRAFANA_FARO_SAMPLE_RATE: ${VITE_GRAFANA_FARO_SAMPLE_RATE:?VITE_GRAFANA_FARO_SAMPLE_RATE is required}
     healthcheck:
       test: ["CMD", "./cloud-api", "-check-health"]
       interval: 60s

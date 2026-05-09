@@ -1,0 +1,289 @@
+---
+- name: Bootstrap Readio Cloud VPS
+  hosts: "{{ readio_target_hosts | default('readio_vps') }}"
+  become: true
+  gather_facts: true
+
+  vars:
+    readio_deploy_user: ""
+    readio_deploy_user_home: "/home/{{ readio_deploy_user }}"
+    readio_deploy_user_shell: /bin/bash
+    readio_deploy_user_ssh_keys: []
+    readio_sudo_command_allowlist: []
+
+    readio_pre_data_root: /etc/readio/pre/data
+    readio_prod_data_root: /etc/readio/prod/data
+    readio_data_directory_mode: "0770"
+
+    readio_nginx_site_name: readio-cloud
+    readio_nginx_site_source: "{{ playbook_dir }}/../../scripts/nginx-readio-cloud.conf"
+    readio_nginx_sites_available_dir: /etc/nginx/sites-available
+    readio_nginx_sites_enabled_dir: /etc/nginx/sites-enabled
+    readio_nginx_enable_site: false
+
+    readio_manage_unattended_upgrades: false
+
+    readio_journald_system_max_use: 100M
+    readio_journald_runtime_max_use: 50M
+    readio_journald_max_retention_sec: 7day
+
+    readio_sysctl_settings:
+      - name: vm.swappiness
+        value: "10"
+        rationale: Prefer reclaiming file cache before swapping application memory on small VPS hosts.
+      - name: net.core.somaxconn
+        value: "1024"
+        rationale: Allow a modest listen backlog for Nginx and containerized HTTP services.
+
+    docker_apt_arch_map:
+      x86_64: amd64
+      aarch64: arm64
+      armv7l: armhf
+
+  pre_tasks:
+    - name: Validate supported Ubuntu release
+      ansible.builtin.assert:
+        that:
+          - ansible_distribution == "Ubuntu"
+          - ansible_distribution_release == "noble"
+        fail_msg: "This playbook is scoped to Ubuntu Noble VPS hosts."
+
+    - name: Validate deployment user variables
+      ansible.builtin.assert:
+        that:
+          - readio_deploy_user | length > 0
+          - readio_deploy_user_ssh_keys | length > 0
+        fail_msg: "Set readio_deploy_user and at least one readio_deploy_user_ssh_keys entry."
+
+    - name: Validate sudo allowlist stays scoped
+      ansible.builtin.assert:
+        that:
+          - readio_sudo_command_allowlist | select('match', '^\\s*ALL\\s*$') | list | length == 0
+          - readio_sudo_command_allowlist | select('search', '\\bNOPASSWD\\b|\\bALL=|\\(ALL\\)') | list | length == 0
+        fail_msg: "readio_sudo_command_allowlist must contain exact command paths, not broad sudoers expressions."
+
+    - name: Validate Nginx site source exists on controller
+      ansible.builtin.stat:
+        path: "{{ readio_nginx_site_source }}"
+      delegate_to: localhost
+      become: false
+      register: readio_nginx_site_source_stat
+
+    - name: Fail when Nginx site source is missing
+      ansible.builtin.assert:
+        that:
+          - readio_nginx_site_source_stat.stat.exists
+        fail_msg: "Nginx site source not found at {{ readio_nginx_site_source }}."
+
+  tasks:
+    - name: Install base apt packages
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - curl
+          - gnupg
+          - nginx
+          - sudo
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Ensure apt keyring directory exists
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Install Docker apt signing key
+      ansible.builtin.get_url:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        dest: /etc/apt/keyrings/docker.asc
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Configure Docker apt repository
+      ansible.builtin.apt_repository:
+        repo: >-
+          deb [arch={{ docker_apt_arch_map.get(ansible_architecture, ansible_architecture) }}
+          signed-by=/etc/apt/keyrings/docker.asc]
+          https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable
+        filename: docker
+        state: present
+        update_cache: true
+
+    - name: Install Docker Engine and Compose plugin
+      ansible.builtin.apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+        update_cache: true
+
+    - name: Ensure Docker service is enabled and running
+      ansible.builtin.service:
+        name: docker
+        enabled: true
+        state: started
+
+    - name: Ensure Nginx service is enabled and running
+      ansible.builtin.service:
+        name: nginx
+        enabled: true
+        state: started
+
+    - name: Ensure deployment user exists
+      ansible.builtin.user:
+        name: "{{ readio_deploy_user }}"
+        shell: "{{ readio_deploy_user_shell }}"
+        groups:
+          - docker
+        append: true
+        create_home: true
+        state: present
+
+    - name: Ensure deployment SSH directory exists
+      ansible.builtin.file:
+        path: "{{ readio_deploy_user_home }}/.ssh"
+        state: directory
+        owner: "{{ readio_deploy_user }}"
+        group: "{{ readio_deploy_user }}"
+        mode: "0700"
+
+    - name: Install deployment SSH public keys
+      ansible.builtin.copy:
+        dest: "{{ readio_deploy_user_home }}/.ssh/authorized_keys"
+        owner: "{{ readio_deploy_user }}"
+        group: "{{ readio_deploy_user }}"
+        mode: "0600"
+        content: |
+          {% for key in readio_deploy_user_ssh_keys %}
+          {{ key }}
+          {% endfor %}
+
+    - name: Configure scoped passwordless sudo allowlist
+      ansible.builtin.copy:
+        dest: "/etc/sudoers.d/readio-{{ readio_deploy_user }}"
+        owner: root
+        group: root
+        mode: "0440"
+        validate: /usr/sbin/visudo -cf %s
+        content: |
+          {{ readio_deploy_user }} ALL=(root) NOPASSWD: {{ readio_sudo_command_allowlist | join(', ') }}
+      when: readio_sudo_command_allowlist | length > 0
+
+    - name: Remove Readio sudoers file when no allowlist is configured
+      ansible.builtin.file:
+        path: "/etc/sudoers.d/readio-{{ readio_deploy_user }}"
+        state: absent
+      when: readio_sudo_command_allowlist | length == 0
+
+    - name: Ensure Readio environment parent directories exist
+      ansible.builtin.file:
+        path: "{{ item | dirname }}"
+        state: directory
+        owner: "{{ readio_deploy_user }}"
+        group: docker
+        mode: "0770"
+      loop:
+        - "{{ readio_pre_data_root }}"
+        - "{{ readio_prod_data_root }}"
+
+    - name: Ensure Readio data directories exist
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ readio_deploy_user }}"
+        group: docker
+        mode: "{{ readio_data_directory_mode }}"
+      loop:
+        - "{{ readio_pre_data_root }}"
+        - "{{ readio_prod_data_root }}"
+
+    - name: Render Readio Nginx site into sites-available
+      ansible.builtin.copy:
+        src: "{{ readio_nginx_site_source }}"
+        dest: "{{ readio_nginx_sites_available_dir }}/{{ readio_nginx_site_name }}"
+        owner: root
+        group: root
+        mode: "0644"
+      notify:
+        - Validate Nginx configuration
+        - Reload Nginx
+
+    - name: Enable Readio Nginx site when requested
+      ansible.builtin.file:
+        src: "{{ readio_nginx_sites_available_dir }}/{{ readio_nginx_site_name }}"
+        dest: "{{ readio_nginx_sites_enabled_dir }}/{{ readio_nginx_site_name }}"
+        state: link
+        owner: root
+        group: root
+      notify:
+        - Validate Nginx configuration
+        - Reload Nginx
+      when: readio_nginx_enable_site | bool
+
+    - name: Ensure journald drop-in directory exists
+      ansible.builtin.file:
+        path: /etc/systemd/journald.conf.d
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Configure journald size limits
+      ansible.builtin.copy:
+        dest: /etc/systemd/journald.conf.d/readio-cloud.conf
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Journal]
+          SystemMaxUse={{ readio_journald_system_max_use }}
+          RuntimeMaxUse={{ readio_journald_runtime_max_use }}
+          MaxRetentionSec={{ readio_journald_max_retention_sec }}
+      notify: Restart systemd-journald
+
+    - name: Render documented conservative sysctl settings
+      ansible.builtin.copy:
+        dest: /etc/sysctl.d/99-readio-cloud.conf
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          {% for setting in readio_sysctl_settings %}
+          # {{ setting.rationale }}
+          {{ setting.name }} = {{ setting.value }}
+
+          {% endfor %}
+      notify: Apply sysctl settings
+
+    - name: Manage unattended-upgrades only when explicitly requested
+      ansible.builtin.apt:
+        name: unattended-upgrades
+        state: present
+      when: readio_manage_unattended_upgrades | bool
+
+  handlers:
+    - name: Validate Nginx configuration
+      ansible.builtin.command: nginx -t
+      changed_when: false
+
+    - name: Reload Nginx
+      ansible.builtin.service:
+        name: nginx
+        state: reloaded
+
+    - name: Restart systemd-journald
+      ansible.builtin.service:
+        name: systemd-journald
+        state: restarted
+
+    - name: Apply sysctl settings
+      ansible.builtin.command: sysctl --system
+      changed_when: false

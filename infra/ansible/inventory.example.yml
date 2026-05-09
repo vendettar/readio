@@ -1,0 +1,24 @@
+---
+readio_vps:
+  hosts:
+    example-vps:
+      ansible_host: 203.0.113.10
+      ansible_user: root
+      ansible_port: 22
+  vars:
+    readio_deploy_user: deploy
+    readio_deploy_user_home: /home/deploy
+    readio_deploy_user_ssh_keys:
+      - "ssh-ed25519 AAAA_REPLACE_WITH_PUBLIC_KEY deploy@example"
+
+    # Keep this empty unless a deployment workflow needs a specific root command.
+    # Prefer Docker group access for Compose operations instead of broad sudo.
+    readio_sudo_command_allowlist: []
+
+    readio_pre_data_root: /etc/readio/pre/data
+    readio_prod_data_root: /etc/readio/prod/data
+
+    readio_nginx_site_name: readio-cloud
+    readio_nginx_enable_site: false
+
+    readio_manage_unattended_upgrades: false
