@@ -60,6 +60,41 @@ describe('ASR backend relay', () => {
     expect(result.cues[0]?.text).toBe('relay text')
   })
 
+  it('submits transcription to API_BASE_URL when frontend and backend are decoupled', async () => {
+    window.__READIO_ENV__ = {
+      VITE_API_BASE_URL: 'https://api-pre.readio.top',
+      READIO_ASR_RELAY_PUBLIC_TOKEN: 'relay-public-token',
+    }
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      expect(typeof input === 'string' ? input : input.toString()).toBe(
+        'https://api-pre.readio.top/api/v1/asr/transcriptions'
+      )
+
+      return new Response(
+        JSON.stringify({
+          cues: [],
+          provider: 'groq',
+          model: 'whisper-large-v3',
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }
+      )
+    })
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    await transcribeViaCloudRelay({
+      blob: new Blob(['audio'], { type: 'audio/mpeg' }),
+      apiKey: 'gsk_test',
+      provider: 'groq',
+      model: 'whisper-large-v3',
+    })
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
   it('normalizes relay upload filename for m4a-family audio blobs', async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       const payload = init?.body as FormData

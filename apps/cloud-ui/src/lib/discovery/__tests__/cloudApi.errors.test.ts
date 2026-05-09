@@ -1,5 +1,5 @@
 import { HttpResponse, http } from 'msw'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DISCOVERY_TEST_ROUTE, discoveryUrl } from '../../../__tests__/constants'
 import { server } from '../../../__tests__/setup'
 import { FetchError, NetworkError } from '../../fetchUtils'
@@ -15,6 +15,11 @@ import {
 describe('cloudApi discovery error mapping', () => {
   beforeEach(() => {
     server.resetHandlers()
+    window.__READIO_ENV__ = undefined
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
   })
 
   it('throws DiscoveryParseError with method and path context for invalid JSON', async () => {
@@ -67,6 +72,27 @@ describe('cloudApi discovery error mapping', () => {
       requestId: 'req_123',
       url: '/api/v1/discovery/top-podcasts?country=us',
     })
+  })
+
+  it('uses API_BASE_URL for decoupled Cloud discovery requests', async () => {
+    window.__READIO_ENV__ = {
+      VITE_API_BASE_URL: 'https://api-pre.readio.top',
+    }
+
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await fetchTopPodcasts('us')
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api-pre.readio.top/api/v1/discovery/top-podcasts?country=us',
+      expect.objectContaining({ method: 'GET' })
+    )
   })
 
   it('falls back to generic FetchError when a non-2xx discovery response is not the standard error payload', async () => {

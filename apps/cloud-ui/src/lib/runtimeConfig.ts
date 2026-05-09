@@ -51,6 +51,7 @@ declare global {
 
 let cachedConfig: AppConfig | null = null
 let cachedFromRuntimeEnv = false
+let cachedRuntimeEnv: Window['__READIO_ENV__'] | null = null
 
 export { DEFAULTS }
 export type { AppConfig }
@@ -94,12 +95,16 @@ export function isRuntimeConfigReady(): boolean {
 
 export function getAppConfig(): AppConfig {
   const runtimeReady = isRuntimeConfigReady()
-
-  if (cachedConfig && (cachedFromRuntimeEnv || !runtimeReady)) {
-    return cachedConfig
-  }
-
   const runtimeEnv = (typeof window !== 'undefined' && window.__READIO_ENV__) || {}
+
+  if (cachedConfig) {
+    if (runtimeReady && cachedFromRuntimeEnv && cachedRuntimeEnv === runtimeEnv) {
+      return cachedConfig
+    }
+    if (!runtimeReady && !cachedFromRuntimeEnv) {
+      return cachedConfig
+    }
+  }
 
   const rawConfig: Record<string, unknown> = {}
   for (const [key, envKey] of Object.entries(ENV_MAP)) {
@@ -157,6 +162,7 @@ export function getAppConfig(): AppConfig {
 
     cachedConfig = config
     cachedFromRuntimeEnv = runtimeReady
+    cachedRuntimeEnv = runtimeReady ? runtimeEnv : null
     return config
   } catch (error: unknown) {
     logError('[runtimeConfig] Unexpected schema parse failure:', error)
@@ -185,8 +191,28 @@ export function getAppConfig(): AppConfig {
       : AppConfigSchema.parse({})
     cachedConfig = fallback
     cachedFromRuntimeEnv = runtimeReady
+    cachedRuntimeEnv = runtimeReady ? runtimeEnv : null
     return fallback
   }
+}
+
+export function getApiBaseUrl(): string {
+  return getAppConfig().API_BASE_URL.replace(/\/$/, '')
+}
+
+export function buildBackendURL(pathname: string): string {
+  if (/^https?:\/\//i.test(pathname)) {
+    return pathname
+  }
+  const apiBase = getApiBaseUrl()
+  if (!apiBase) {
+    if (!import.meta.env.DEV) {
+      throw new Error('VITE_API_BASE_URL is required for backend API requests in production builds')
+    }
+    return pathname
+  }
+  const normalizedPath = pathname.startsWith('/') ? pathname : `/${pathname}`
+  return `${apiBase}${normalizedPath}`
 }
 
 /**

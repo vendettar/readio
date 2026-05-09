@@ -25,6 +25,7 @@ describe('selection api dictionary transport', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     vi.doMock('../runtimeConfig', () => ({
+      buildBackendURL: (pathname: string) => pathname,
       getAppConfig: () => ({
         EN_DICTIONARY_API_URL: 'https://english.example/api',
         EN_DICTIONARY_API_TRANSPORT: 'direct',
@@ -64,6 +65,7 @@ describe('selection api dictionary transport', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     vi.doMock('../runtimeConfig', () => ({
+      buildBackendURL: (pathname: string) => pathname,
       getAppConfig: () => ({
         EN_DICTIONARY_API_URL: 'https://english.example/api',
         EN_DICTIONARY_API_TRANSPORT: 'go-proxy',
@@ -98,6 +100,47 @@ describe('selection api dictionary transport', () => {
     })
   })
 
+  it('uses API_BASE_URL for go-proxy transport when frontend and backend origins differ', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify([
+          {
+            word: 'hello',
+            meanings: [],
+          },
+        ]),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      )
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    vi.doMock('../runtimeConfig', () => ({
+      buildBackendURL: (pathname: string) => `https://api-pre.readio.top${pathname}`,
+      getAppConfig: () => ({
+        EN_DICTIONARY_API_URL: 'https://english.example/api',
+        EN_DICTIONARY_API_TRANSPORT: 'go-proxy',
+        PROXY_TIMEOUT_MS: 1234,
+      }),
+    }))
+    vi.doMock('../selection/dictCache', () => ({
+      getCachedEntry: vi.fn(() => null),
+      setCachedEntry: vi.fn(),
+    }))
+
+    const { fetchDefinition } = await import('../selection/api')
+    await fetchDefinition('Hello')
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api-pre.readio.top/api/proxy',
+      expect.objectContaining({
+        method: 'POST',
+        credentials: 'omit',
+        headers: { 'Content-Type': 'application/json' },
+      })
+    )
+  })
+
   it('does not fallback to /api/proxy after a direct failure', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response('upstream boom', {
@@ -108,6 +151,7 @@ describe('selection api dictionary transport', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     vi.doMock('../runtimeConfig', () => ({
+      buildBackendURL: (pathname: string) => pathname,
       getAppConfig: () => ({
         EN_DICTIONARY_API_URL: 'https://english.example/api',
         EN_DICTIONARY_API_TRANSPORT: 'direct',
@@ -149,6 +193,7 @@ describe('selection api dictionary transport', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     vi.doMock('../runtimeConfig', () => ({
+      buildBackendURL: (pathname: string) => pathname,
       getAppConfig: () => ({
         EN_DICTIONARY_API_URL: 'https://english.example/api',
         EN_DICTIONARY_API_TRANSPORT: 'direct',
@@ -186,6 +231,7 @@ describe('selection api dictionary transport', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     vi.doMock('../runtimeConfig', () => ({
+      buildBackendURL: (pathname: string) => pathname,
       getAppConfig: () => ({
         EN_DICTIONARY_API_URL: 'https://english.example/api',
         EN_DICTIONARY_API_TRANSPORT: 'go-proxy',
@@ -222,6 +268,7 @@ describe('selection api dictionary transport', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     vi.doMock('../runtimeConfig', () => ({
+      buildBackendURL: (pathname: string) => pathname,
       getAppConfig: () => ({
         EN_DICTIONARY_API_URL: 'https://english.example/api',
         EN_DICTIONARY_API_TRANSPORT: 'go-proxy',

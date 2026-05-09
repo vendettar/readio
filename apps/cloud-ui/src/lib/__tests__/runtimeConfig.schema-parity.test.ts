@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolveEnabledAsrProviders } from '../asr/providerToggles'
 
 const logErrorMock = vi.hoisted(() => vi.fn())
@@ -14,6 +14,10 @@ describe('runtimeConfig schema parity', () => {
     const globalWindow = globalThis as { window?: Window & typeof globalThis }
     globalWindow.window = globalWindow.window || ({} as Window & typeof globalThis)
     window.__READIO_ENV__ = undefined
+  })
+
+  afterEach(() => {
+    vi.unstubAllEnvs()
   })
 
   it('maps representative runtime env values with expected coercion', async () => {
@@ -64,6 +68,42 @@ describe('runtimeConfig schema parity', () => {
     const config = getAppConfig()
 
     expect(config.NETWORK_PROXY_URL).toBe('/api/proxy')
+  })
+
+  it('builds backend URLs from API_BASE_URL while preserving local development fallback', async () => {
+    window.__READIO_ENV__ = {
+      VITE_API_BASE_URL: 'https://api-pre.readio.top/',
+    }
+
+    const { buildBackendURL, getApiBaseUrl } = await import('../runtimeConfig')
+
+    expect(getApiBaseUrl()).toBe('https://api-pre.readio.top')
+    expect(buildBackendURL('/api/v1/discovery/top-podcasts')).toBe(
+      'https://api-pre.readio.top/api/v1/discovery/top-podcasts'
+    )
+    expect(buildBackendURL('api/v1/config')).toBe('https://api-pre.readio.top/api/v1/config')
+    expect(buildBackendURL('https://external.example/api')).toBe('https://external.example/api')
+
+    vi.resetModules()
+    window.__READIO_ENV__ = {}
+    const { buildBackendURL: buildSameOriginBackendURL } = await import('../runtimeConfig')
+
+    expect(buildSameOriginBackendURL('/api/v1/discovery/top-podcasts')).toBe(
+      '/api/v1/discovery/top-podcasts'
+    )
+  })
+
+  it('fails closed without API_BASE_URL in production builds', async () => {
+    vi.stubEnv('DEV', false)
+    vi.stubEnv('PROD', true)
+    window.__READIO_ENV__ = {}
+
+    const { buildBackendURL } = await import('../runtimeConfig')
+
+    expect(() => buildBackendURL('/api/v1/discovery/top-podcasts')).toThrow(
+      'VITE_API_BASE_URL is required for backend API requests in production builds'
+    )
+    expect(buildBackendURL('https://external.example/api')).toBe('https://external.example/api')
   })
 
   it('keeps missing Faro URL valid and disabled by default', async () => {

@@ -1,5 +1,5 @@
 import { FetchError, NetworkError } from '../fetchUtils'
-import { getAppConfig } from '../runtimeConfig'
+import { buildBackendURL, getAppConfig } from '../runtimeConfig'
 import { getCachedEntry, setCachedEntry } from './dictCache'
 import type { DictEntry } from './types'
 
@@ -74,7 +74,7 @@ async function fetchDictionaryJSON(
     try {
       response =
         options.transport === 'go-proxy'
-          ? await fetch('/api/proxy', {
+          ? await fetch(buildBackendURL('/api/proxy'), {
               method: 'POST',
               signal: controller.signal,
               credentials: 'omit',

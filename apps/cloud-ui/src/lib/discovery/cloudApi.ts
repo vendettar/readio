@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import { FetchError, NetworkError } from '../fetchUtils'
+import { buildBackendURL } from '../runtimeConfig'
 import type {
   EditorPickPodcast,
   Podcast,
@@ -134,7 +135,7 @@ async function executeDiscoveryRequest<T>(
   }
 
   try {
-    const response = await fetch(pathname, fetchOptions)
+    const response = await fetch(buildBackendURL(pathname), fetchOptions)
     const text = await response.text()
     const value = parseDiscoveryJSON(method, pathname, text)
 

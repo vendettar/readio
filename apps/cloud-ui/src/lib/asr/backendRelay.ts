@@ -1,4 +1,4 @@
-import { getAppConfig } from '../runtimeConfig'
+import { buildBackendURL, getAppConfig } from '../runtimeConfig'
 import { ASRClientError, type ASRProvider, type ASRTranscriptionResult } from './types'
 
 const ASR_RELAY_ROUTE = '/api/v1/asr/transcriptions'
@@ -98,7 +98,7 @@ export async function transcribeViaCloudRelay(options: {
       formData.set('audioMimeType', blob.type)
     }
 
-    response = await fetch(ASR_RELAY_ROUTE, {
+    response = await fetch(buildBackendURL(ASR_RELAY_ROUTE), {
       method: 'POST',
       signal,
       headers: getRelayHeaders(),
@@ -141,7 +141,7 @@ export async function verifyAsrKeyViaCloudRelay(options: {
 
   let response: Response
   try {
-    response = await fetch(ASR_VERIFY_ROUTE, {
+    response = await fetch(buildBackendURL(ASR_VERIFY_ROUTE), {
       method: 'POST',
       signal,
       headers: {
