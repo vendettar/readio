@@ -139,14 +139,26 @@ interface UseOverflowMenuConfirmFocusOptions<TStep extends string> {
   menuFocusRef: RefObject<HTMLElement | null>
 }
 
-export function useOverflowMenuConfirmFocus<TStep extends string>({
+interface OverflowMenuStepFocusTransition<TStep extends string> {
+  step: TStep
+  focusRef: RefObject<HTMLElement | null>
+  returnStep?: TStep
+  returnFocusRef?: RefObject<HTMLElement | null>
+}
+
+interface UseOverflowMenuStepFocusOptions<TStep extends string> {
+  initialStep: TStep
+  isMenuOpen: boolean
+  step: TStep
+  transitions: OverflowMenuStepFocusTransition<TStep>[]
+}
+
+export function useOverflowMenuStepFocus<TStep extends string>({
   initialStep,
-  confirmStep,
   isMenuOpen,
   step,
-  confirmFocusRef,
-  menuFocusRef,
-}: UseOverflowMenuConfirmFocusOptions<TStep>) {
+  transitions,
+}: UseOverflowMenuStepFocusOptions<TStep>) {
   const previousStepRef = useRef(initialStep)
 
   useLayoutEffect(() => {
@@ -158,13 +170,130 @@ export function useOverflowMenuConfirmFocus<TStep extends string>({
     const previousStep = previousStepRef.current
     previousStepRef.current = step
 
-    if (step === confirmStep && previousStep !== confirmStep) {
-      confirmFocusRef.current?.focus()
+    const enteredTransition = transitions.find(
+      (transition) => step === transition.step && previousStep !== transition.step
+    )
+    if (enteredTransition) {
+      enteredTransition.focusRef.current?.focus()
       return
     }
 
-    if (step === initialStep && previousStep === confirmStep) {
-      menuFocusRef.current?.focus()
+    const returnedTransition = transitions.find(
+      (transition) =>
+        step === (transition.returnStep ?? initialStep) && previousStep === transition.step
+    )
+    if (returnedTransition) {
+      returnedTransition.returnFocusRef?.current?.focus()
     }
-  }, [confirmFocusRef, confirmStep, initialStep, isMenuOpen, menuFocusRef, step])
+  }, [initialStep, isMenuOpen, step, transitions])
+}
+
+export function useOverflowMenuConfirmFocus<TStep extends string>({
+  initialStep,
+  confirmStep,
+  isMenuOpen,
+  step,
+  confirmFocusRef,
+  menuFocusRef,
+}: UseOverflowMenuConfirmFocusOptions<TStep>) {
+  useOverflowMenuStepFocus({
+    initialStep,
+    isMenuOpen,
+    step,
+    transitions: [
+      {
+        focusRef: confirmFocusRef,
+        returnFocusRef: menuFocusRef,
+        step: confirmStep,
+      },
+    ],
+  })
+}
+
+interface UseOverflowMenuAsyncActionOptions {
+  action: () => Promise<boolean> | boolean
+  isMenuOpen?: boolean
+  onError?: (error: unknown) => void
+  onSuccess: () => void
+}
+
+export function useOverflowMenuAsyncAction({
+  action,
+  isMenuOpen,
+  onError,
+  onSuccess,
+}: UseOverflowMenuAsyncActionOptions) {
+  const isPendingRef = useRef(false)
+  const [isPending, setIsPending] = useState(false)
+
+  const reset = useCallback(() => {
+    isPendingRef.current = false
+    setIsPending(false)
+  }, [])
+
+  const run = useCallback(async () => {
+    if (isPendingRef.current) return false
+
+    isPendingRef.current = true
+    setIsPending(true)
+
+    try {
+      const ok = await action()
+      if (ok) {
+        onSuccess()
+      }
+      reset()
+      return ok
+    } catch (error) {
+      onError?.(error)
+      reset()
+      return false
+    }
+  }, [action, onError, onSuccess, reset])
+
+  useEffect(() => {
+    if (isMenuOpen === false) {
+      reset()
+    }
+  }, [isMenuOpen, reset])
+
+  return {
+    isPending,
+    reset,
+    run,
+  }
+}
+
+interface CloseAutoFocusEvent {
+  preventDefault: () => void
+}
+
+export function useOverflowMenuDeferredAction(action: () => void) {
+  const shouldRunActionRef = useRef(false)
+
+  const deferAction = useCallback((closeMenu: () => void) => {
+    shouldRunActionRef.current = true
+    closeMenu()
+  }, [])
+
+  const handleCloseAutoFocus = useCallback(
+    (event: CloseAutoFocusEvent) => {
+      if (!shouldRunActionRef.current) return
+
+      event.preventDefault()
+      shouldRunActionRef.current = false
+      action()
+    },
+    [action]
+  )
+
+  const reset = useCallback(() => {
+    shouldRunActionRef.current = false
+  }, [])
+
+  return {
+    deferAction,
+    handleCloseAutoFocus,
+    reset,
+  }
 }

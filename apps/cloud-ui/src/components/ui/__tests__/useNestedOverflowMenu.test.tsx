@@ -1,6 +1,11 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { useRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { type OutsideInteractionBehavior, useNestedOverflowMenu } from '../useNestedOverflowMenu'
+import {
+  type OutsideInteractionBehavior,
+  useNestedOverflowMenu,
+  useOverflowMenuStepFocus,
+} from '../useNestedOverflowMenu'
 
 function NestedMenuHarness({
   closeOnNestedOutside = true,
@@ -46,6 +51,49 @@ function NestedMenuHarness({
       ) : null}
       <div data-testid="is-open">{String(isMenuOpen)}</div>
       <div data-testid="step">{step}</div>
+    </div>
+  )
+}
+
+function StepFocusHarness() {
+  const menuItemRef = useRef<HTMLButtonElement>(null)
+  const nestedButtonRef = useRef<HTMLButtonElement>(null)
+  const { handleOpenChange, isMenuOpen, menuContentRef, setStep, step, triggerRef } =
+    useNestedOverflowMenu<'menu' | 'nested'>({
+      initialStep: 'menu',
+    })
+
+  useOverflowMenuStepFocus({
+    initialStep: 'menu',
+    isMenuOpen,
+    step,
+    transitions: [
+      {
+        focusRef: nestedButtonRef,
+        returnFocusRef: menuItemRef,
+        step: 'nested',
+      },
+    ],
+  })
+
+  return (
+    <div>
+      <button ref={triggerRef} type="button" onClick={() => handleOpenChange(!isMenuOpen)}>
+        trigger
+      </button>
+      {isMenuOpen ? (
+        <div ref={menuContentRef}>
+          {step === 'menu' ? (
+            <button ref={menuItemRef} type="button" onClick={() => setStep('nested')}>
+              open nested
+            </button>
+          ) : (
+            <button ref={nestedButtonRef} type="button" onClick={() => setStep('menu')}>
+              back
+            </button>
+          )}
+        </div>
+      ) : null}
     </div>
   )
 }
@@ -158,5 +206,20 @@ describe('useNestedOverflowMenu', () => {
     fireEvent.click(screen.getByRole('button', { name: 'outside' }))
 
     expect(secondOutsideClick).toHaveBeenCalledTimes(1)
+  })
+
+  it('focuses nested step controls and restores focus to the originating menu item', async () => {
+    render(<StepFocusHarness />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'trigger' }))
+    fireEvent.click(screen.getByRole('button', { name: 'open nested' }))
+
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'back' }))
+
+    fireEvent.click(screen.getByRole('button', { name: 'back' }))
+
+    await waitFor(() => {
+      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'open nested' }))
+    })
   })
 })

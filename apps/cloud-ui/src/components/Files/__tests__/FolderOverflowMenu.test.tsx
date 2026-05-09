@@ -30,9 +30,14 @@ describe('FolderOverflowMenu', () => {
 
     fireEvent.pointerDown(screen.getByLabelText('ariaMoreActions'))
     fireEvent.click(await screen.findByRole('menuitem', { name: 'folderDelete' }))
-    fireEvent.click(screen.getByRole('button', { name: 'commonCancel' }))
+    const cancelButton = screen.getByRole('button', { name: 'commonCancel' })
+    expect(document.activeElement).toBe(cancelButton)
 
-    expect(await screen.findByRole('menuitem', { name: 'folderDelete' })).toBeDefined()
+    fireEvent.click(cancelButton)
+
+    expect(document.activeElement).toBe(
+      await screen.findByRole('menuitem', { name: 'folderDelete' })
+    )
   })
 
   it('closes the menu after a successful delete', async () => {
@@ -84,6 +89,71 @@ describe('FolderOverflowMenu', () => {
       expect(onDelete).toHaveBeenCalledTimes(1)
     })
     expect(screen.getByRole('button', { name: 'commonCancel' })).toBeDefined()
+  })
+
+  it('prevents duplicate delete submits and restores confirm actions when delete returns false', async () => {
+    let resolveDelete: (ok: boolean) => void = () => {}
+    const onDelete = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveDelete = resolve
+        })
+    )
+
+    render(
+      <FolderOverflowMenu
+        isPinned={false}
+        onPin={() => {}}
+        onUnpin={() => {}}
+        onRename={() => {}}
+        onDelete={onDelete}
+      />
+    )
+
+    fireEvent.pointerDown(screen.getByLabelText('ariaMoreActions'))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'folderDelete' }))
+    const confirmButton = screen.getByRole('button', { name: 'commonDelete' })
+
+    fireEvent.click(confirmButton)
+
+    expect((confirmButton as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(confirmButton)
+    expect(onDelete).toHaveBeenCalledTimes(1)
+
+    resolveDelete(false)
+
+    await waitFor(() => {
+      expect((confirmButton as HTMLButtonElement).disabled).toBe(false)
+    })
+    expect(screen.getByRole('button', { name: 'commonCancel' })).toBeDefined()
+  })
+
+  it('stays on confirm and restores actions when delete throws', async () => {
+    const onDelete = vi.fn(async () => {
+      throw new Error('delete failed')
+    })
+
+    render(
+      <FolderOverflowMenu
+        isPinned={false}
+        onPin={() => {}}
+        onUnpin={() => {}}
+        onRename={() => {}}
+        onDelete={onDelete}
+      />
+    )
+
+    fireEvent.pointerDown(screen.getByLabelText('ariaMoreActions'))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'folderDelete' }))
+    fireEvent.click(screen.getByRole('button', { name: 'commonDelete' }))
+
+    await waitFor(() => {
+      expect(onDelete).toHaveBeenCalledTimes(1)
+    })
+    expect(screen.getByRole('button', { name: 'commonCancel' })).toBeDefined()
+    expect(
+      (screen.getByRole('button', { name: 'commonDelete' }) as HTMLButtonElement).disabled
+    ).toBe(false)
   })
 
   it('defers rename until close auto focus runs', async () => {

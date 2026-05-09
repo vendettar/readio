@@ -10,7 +10,7 @@ import {
   Pencil,
   Trash2,
 } from 'lucide-react'
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { FileFolder } from '../../lib/db/types'
 import { cn } from '../../lib/utils'
@@ -22,7 +22,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu'
-import { useNestedOverflowMenu, useOverflowMenuConfirmFocus } from '../ui/useNestedOverflowMenu'
+import {
+  useNestedOverflowMenu,
+  useOverflowMenuAsyncAction,
+  useOverflowMenuDeferredAction,
+  useOverflowMenuStepFocus,
+} from '../ui/useNestedOverflowMenu'
 
 type Step = 'menu' | 'move' | 'confirm'
 
@@ -48,48 +53,41 @@ export function TrackOverflowMenu({
   disabled = false,
 }: TrackOverflowMenuProps) {
   const { t } = useTranslation()
-  // Track if we are closing because of a rename to prevent focus restoration conflict
-  const isClosingForRenameRef = useRef(false)
-  const [isDeleting, setIsDeleting] = useState(false)
+  const renameAction = useOverflowMenuDeferredAction(onRename)
 
   // Refs for focus management
   const moveItemRef = useRef<HTMLDivElement>(null)
   const deleteItemRef = useRef<HTMLDivElement>(null)
   const cancelButtonRef = useRef<HTMLButtonElement>(null)
   const moveBackButtonRef = useRef<HTMLButtonElement>(null)
-  const prevStepRef = useRef<Step>('menu')
   const { closeMenu, handleOpenChange, isMenuOpen, menuContentRef, setStep, step, triggerRef } =
     useNestedOverflowMenu<Step>({
       initialStep: 'menu',
-      onMenuClose: () => {
-        setIsDeleting(false)
-      },
     })
 
-  useOverflowMenuConfirmFocus({
-    initialStep: 'menu',
-    confirmStep: 'confirm',
+  const { isPending: isDeleting, run: runDeleteTrack } = useOverflowMenuAsyncAction({
+    action: onDeleteTrack,
     isMenuOpen,
-    step,
-    confirmFocusRef: cancelButtonRef,
-    menuFocusRef: deleteItemRef,
+    onSuccess: closeMenu,
   })
 
-  useLayoutEffect(() => {
-    if (!isMenuOpen) {
-      prevStepRef.current = 'menu'
-      return
-    }
-
-    const prevStep = prevStepRef.current
-    prevStepRef.current = step
-
-    if (step === 'move' && prevStep !== 'move') {
-      moveBackButtonRef.current?.focus()
-    } else if (step === 'menu' && prevStep === 'move') {
-      moveItemRef.current?.focus()
-    }
-  }, [isMenuOpen, step])
+  useOverflowMenuStepFocus({
+    initialStep: 'menu',
+    isMenuOpen,
+    step,
+    transitions: [
+      {
+        focusRef: moveBackButtonRef,
+        returnFocusRef: moveItemRef,
+        step: 'move',
+      },
+      {
+        focusRef: cancelButtonRef,
+        returnFocusRef: deleteItemRef,
+        step: 'confirm',
+      },
+    ],
+  })
 
   const handleMove = (folderId: string | null) => {
     onMove(folderId)
@@ -120,13 +118,7 @@ export function TrackOverflowMenu({
         className="w-52 p-0 rounded-xl shadow-2xl overflow-hidden"
         onMouseDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
-        onCloseAutoFocus={(e) => {
-          if (isClosingForRenameRef.current) {
-            e.preventDefault()
-            isClosingForRenameRef.current = false
-            onRename()
-          }
-        }}
+        onCloseAutoFocus={renameAction.handleCloseAutoFocus}
       >
         {/* Grid container - single cell overlay, all panels in same cell */}
         <div ref={menuContentRef} className="grid [grid-template-areas:'panel'] p-0 gap-0">
@@ -144,8 +136,7 @@ export function TrackOverflowMenu({
               className="justify-between"
               onSelect={(e) => {
                 e.preventDefault()
-                isClosingForRenameRef.current = true
-                closeMenu()
+                renameAction.deferAction(closeMenu)
               }}
             >
               <span>{t('trackRename')}</span>
@@ -190,7 +181,6 @@ export function TrackOverflowMenu({
               onSelect={(e) => {
                 e.preventDefault()
                 e.stopPropagation()
-                setIsDeleting(false)
                 setStep('confirm')
               }}
             >
@@ -309,14 +299,7 @@ export function TrackOverflowMenu({
                   tabIndex={step === 'confirm' ? 0 : -1}
                   onClick={async (e) => {
                     e.stopPropagation()
-                    if (isDeleting) return
-                    setIsDeleting(true)
-                    const ok = await onDeleteTrack()
-                    if (ok) {
-                      closeMenu()
-                    } else {
-                      setIsDeleting(false)
-                    }
+                    await runDeleteTrack()
                   }}
                 >
                   {t('commonDelete')}

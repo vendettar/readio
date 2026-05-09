@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import { logError } from '../../../lib/logger'
 import { DownloadTrackOverflowMenu } from '../DownloadTrackOverflowMenu'
 
 vi.mock('react-i18next', () => ({
@@ -135,5 +136,70 @@ describe('DownloadTrackOverflowMenu', () => {
       expect(onRemove).toHaveBeenCalledTimes(1)
     })
     expect(screen.getByTestId('downloads-overflow-confirm-panel')).toBeDefined()
+  })
+
+  it('prevents duplicate remove submits and restores confirm actions when remove returns false', async () => {
+    let resolveRemove: (ok: boolean) => void = () => {}
+    const onRemove = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveRemove = resolve
+        })
+    )
+
+    render(
+      <DownloadTrackOverflowMenu
+        hasAudioExportAction={false}
+        hasSubtitles={false}
+        onRemove={onRemove}
+        showPlayWithoutTranscriptAction={false}
+      />
+    )
+
+    fireEvent.pointerDown(screen.getByLabelText('ariaMoreActions'))
+    fireEvent.click((await screen.findAllByRole('menuitem', { name: 'commonDelete' }))[0])
+    const confirmButton = screen.getAllByRole('button', { name: 'commonDelete' })[0]
+
+    fireEvent.click(confirmButton)
+
+    expect((confirmButton as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(confirmButton)
+    expect(onRemove).toHaveBeenCalledTimes(1)
+
+    resolveRemove(false)
+
+    await waitFor(() => {
+      expect((confirmButton as HTMLButtonElement).disabled).toBe(false)
+    })
+    expect(screen.getByTestId('downloads-overflow-confirm-panel')).toBeDefined()
+  })
+
+  it('keeps the existing error log semantics and restores actions when remove throws', async () => {
+    const error = new Error('remove failed')
+    const onRemove = vi.fn(async () => {
+      throw error
+    })
+
+    render(
+      <DownloadTrackOverflowMenu
+        hasAudioExportAction={false}
+        hasSubtitles={false}
+        onRemove={onRemove}
+        showPlayWithoutTranscriptAction={false}
+      />
+    )
+
+    fireEvent.pointerDown(screen.getByLabelText('ariaMoreActions'))
+    fireEvent.click((await screen.findAllByRole('menuitem', { name: 'commonDelete' }))[0])
+    fireEvent.click(screen.getAllByRole('button', { name: 'commonDelete' })[0])
+
+    await waitFor(() => {
+      expect(onRemove).toHaveBeenCalledTimes(1)
+    })
+    expect(logError).toHaveBeenCalledWith('Error removing download', error)
+    expect(screen.getByTestId('downloads-overflow-confirm-panel')).toBeDefined()
+    expect(
+      (screen.getAllByRole('button', { name: 'commonDelete' })[0] as HTMLButtonElement).disabled
+    ).toBe(false)
   })
 })

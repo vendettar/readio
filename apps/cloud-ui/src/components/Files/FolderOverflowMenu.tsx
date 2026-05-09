@@ -1,7 +1,7 @@
 // src/components/Files/FolderOverflowMenu.tsx
 
 import { MoreHorizontal, Pencil, Pin, PinOff, Trash2 } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { Button } from '../ui/button'
@@ -12,7 +12,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu'
-import { useNestedOverflowMenu, useOverflowMenuConfirmFocus } from '../ui/useNestedOverflowMenu'
+import {
+  useNestedOverflowMenu,
+  useOverflowMenuAsyncAction,
+  useOverflowMenuDeferredAction,
+  useOverflowMenuStepFocus,
+} from '../ui/useNestedOverflowMenu'
 
 interface FolderOverflowMenuProps {
   isPinned: boolean
@@ -34,9 +39,7 @@ export function FolderOverflowMenu({
   disabled = false,
 }: FolderOverflowMenuProps) {
   const { t } = useTranslation()
-  // Track if we are closing because of a rename to prevent focus restoration conflict
-  const isClosingForRenameRef = useRef(false)
-  const [isDeleting, setIsDeleting] = useState(false)
+  const renameAction = useOverflowMenuDeferredAction(onRename)
 
   // Refs for focus management
   const deleteItemRef = useRef<HTMLDivElement>(null)
@@ -44,9 +47,6 @@ export function FolderOverflowMenu({
   const { closeMenu, handleOpenChange, isMenuOpen, menuContentRef, setStep, step, triggerRef } =
     useNestedOverflowMenu<'menu' | 'confirm'>({
       initialStep: 'menu',
-      onMenuClose: () => {
-        setIsDeleting(false)
-      },
     })
 
   const handleMenuOpenChange = (open: boolean) => {
@@ -54,13 +54,26 @@ export function FolderOverflowMenu({
     onOpenChange?.(open)
   }
 
-  useOverflowMenuConfirmFocus({
+  const { isPending: isDeleting, run: runDelete } = useOverflowMenuAsyncAction({
+    action: onDelete,
+    isMenuOpen,
+    onSuccess: () => {
+      closeMenu()
+      onOpenChange?.(false)
+    },
+  })
+
+  useOverflowMenuStepFocus({
     initialStep: 'menu',
-    confirmStep: 'confirm',
     isMenuOpen,
     step,
-    confirmFocusRef: cancelButtonRef,
-    menuFocusRef: deleteItemRef,
+    transitions: [
+      {
+        focusRef: cancelButtonRef,
+        returnFocusRef: deleteItemRef,
+        step: 'confirm',
+      },
+    ],
   })
 
   return (
@@ -90,13 +103,7 @@ export function FolderOverflowMenu({
         className="w-56 p-0 rounded-xl shadow-2xl overflow-hidden"
         onMouseDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
-        onCloseAutoFocus={(e) => {
-          if (isClosingForRenameRef.current) {
-            e.preventDefault()
-            isClosingForRenameRef.current = false
-            onRename()
-          }
-        }}
+        onCloseAutoFocus={renameAction.handleCloseAutoFocus}
       >
         {/* Grid container - single cell overlay, both panels in same cell */}
         <div ref={menuContentRef} className="grid [grid-template-areas:'panel'] p-0 gap-0">
@@ -131,9 +138,10 @@ export function FolderOverflowMenu({
               className="justify-between"
               onSelect={(e) => {
                 e.preventDefault()
-                isClosingForRenameRef.current = true
-                closeMenu()
-                onOpenChange?.(false)
+                renameAction.deferAction(() => {
+                  closeMenu()
+                  onOpenChange?.(false)
+                })
               }}
             >
               <span>{t('folderRename')}</span>
@@ -149,7 +157,6 @@ export function FolderOverflowMenu({
               onSelect={(e) => {
                 e.preventDefault()
                 e.stopPropagation()
-                setIsDeleting(false)
                 setStep('confirm')
               }}
             >
@@ -195,15 +202,7 @@ export function FolderOverflowMenu({
                   tabIndex={step === 'confirm' ? 0 : -1}
                   onClick={async (e) => {
                     e.stopPropagation()
-                    if (isDeleting) return
-                    setIsDeleting(true)
-                    const ok = await onDelete()
-                    if (ok) {
-                      closeMenu()
-                      onOpenChange?.(false)
-                    } else {
-                      setIsDeleting(false)
-                    }
+                    await runDelete()
                   }}
                 >
                   {t('commonDelete')}

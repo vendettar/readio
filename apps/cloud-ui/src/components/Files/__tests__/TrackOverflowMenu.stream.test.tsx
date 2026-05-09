@@ -100,6 +100,29 @@ describe('TrackOverflowMenu actions', () => {
     })
   })
 
+  it('restores focus to the move menu item when returning from the move step', async () => {
+    render(
+      <TrackOverflowMenu
+        folders={[{ id: 'folder-1', name: 'Folder One' } as never]}
+        currentFolderId={null}
+        onMove={() => {}}
+        onRename={() => {}}
+        onDeleteTrack={async () => true}
+      />
+    )
+
+    fireEvent.pointerDown(screen.getByLabelText('ariaMoreActions'))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'filesMoveToFolder' }))
+    const backButton = screen.getByRole('button', { name: 'commonBack' })
+    expect(document.activeElement).toBe(backButton)
+
+    fireEvent.click(backButton)
+
+    expect(document.activeElement).toBe(
+      await screen.findByRole('menuitem', { name: 'filesMoveToFolder' })
+    )
+  })
+
   it('returns from confirm step back to the root menu when cancel is clicked', async () => {
     render(
       <TrackOverflowMenu
@@ -143,5 +166,70 @@ describe('TrackOverflowMenu actions', () => {
       expect(onRename).toHaveBeenCalledTimes(1)
     })
     expect(screen.queryByRole('menuitem', { name: 'trackRename' })).toBeNull()
+  })
+
+  it('prevents duplicate delete submits and restores confirm actions when delete returns false', async () => {
+    let resolveDelete: (ok: boolean) => void = () => {}
+    const onDeleteTrack = vi.fn(
+      () =>
+        new Promise<boolean>((resolve) => {
+          resolveDelete = resolve
+        })
+    )
+
+    render(
+      <TrackOverflowMenu
+        folders={[]}
+        currentFolderId={null}
+        onMove={() => {}}
+        onRename={() => {}}
+        onDeleteTrack={onDeleteTrack}
+      />
+    )
+
+    fireEvent.pointerDown(screen.getByLabelText('ariaMoreActions'))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'filesDeleteTrack' }))
+    const confirmButton = screen.getByRole('button', { name: 'commonDelete' })
+
+    fireEvent.click(confirmButton)
+
+    expect((confirmButton as HTMLButtonElement).disabled).toBe(true)
+    fireEvent.click(confirmButton)
+    expect(onDeleteTrack).toHaveBeenCalledTimes(1)
+
+    resolveDelete(false)
+
+    await waitFor(() => {
+      expect((confirmButton as HTMLButtonElement).disabled).toBe(false)
+    })
+    expect(screen.getByRole('button', { name: 'commonCancel' })).toBeDefined()
+  })
+
+  it('stays on confirm and restores actions when delete throws', async () => {
+    const onDeleteTrack = vi.fn(async () => {
+      throw new Error('delete failed')
+    })
+
+    render(
+      <TrackOverflowMenu
+        folders={[]}
+        currentFolderId={null}
+        onMove={() => {}}
+        onRename={() => {}}
+        onDeleteTrack={onDeleteTrack}
+      />
+    )
+
+    fireEvent.pointerDown(screen.getByLabelText('ariaMoreActions'))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'filesDeleteTrack' }))
+    fireEvent.click(screen.getByRole('button', { name: 'commonDelete' }))
+
+    await waitFor(() => {
+      expect(onDeleteTrack).toHaveBeenCalledTimes(1)
+    })
+    expect(screen.getByRole('button', { name: 'commonCancel' })).toBeDefined()
+    expect(
+      (screen.getByRole('button', { name: 'commonDelete' }) as HTMLButtonElement).disabled
+    ).toBe(false)
   })
 })

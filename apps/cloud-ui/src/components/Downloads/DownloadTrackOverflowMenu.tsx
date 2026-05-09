@@ -7,7 +7,7 @@ import {
   RefreshCcw,
   Trash2,
 } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import { logError } from '../../lib/logger'
 import { Button } from '../ui/button'
@@ -18,7 +18,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu'
-import { useNestedOverflowMenu, useOverflowMenuConfirmFocus } from '../ui/useNestedOverflowMenu'
+import {
+  useNestedOverflowMenu,
+  useOverflowMenuAsyncAction,
+  useOverflowMenuStepFocus,
+} from '../ui/useNestedOverflowMenu'
 
 type OverflowStep = 'menu' | 'confirm'
 
@@ -44,25 +48,34 @@ export function DownloadTrackOverflowMenu({
   showPlayWithoutTranscriptAction,
 }: DownloadTrackOverflowMenuProps) {
   const { t } = useTranslation()
-  const [isRemoving, setIsRemoving] = useState(false)
   const deleteItemRef = useRef<HTMLDivElement>(null)
   const backButtonRef = useRef<HTMLButtonElement>(null)
   const cancelButtonRef = useRef<HTMLButtonElement>(null)
   const { closeMenu, handleOpenChange, isMenuOpen, menuContentRef, setStep, step, triggerRef } =
     useNestedOverflowMenu<OverflowStep>({
       initialStep: 'menu',
-      onMenuClose: () => {
-        setIsRemoving(false)
-      },
     })
 
-  useOverflowMenuConfirmFocus({
+  const { isPending: isRemoving, run: runRemove } = useOverflowMenuAsyncAction({
+    action: onRemove,
+    isMenuOpen,
+    onError: (error) => {
+      logError('Error removing download', error)
+    },
+    onSuccess: closeMenu,
+  })
+
+  useOverflowMenuStepFocus({
     initialStep: 'menu',
-    confirmStep: 'confirm',
     isMenuOpen,
     step,
-    confirmFocusRef: backButtonRef,
-    menuFocusRef: deleteItemRef,
+    transitions: [
+      {
+        focusRef: backButtonRef,
+        returnFocusRef: deleteItemRef,
+        step: 'confirm',
+      },
+    ],
   })
 
   const handleMenuChange = (open: boolean) => {
@@ -235,18 +248,7 @@ export function DownloadTrackOverflowMenu({
                   tabIndex={step === 'confirm' ? 0 : -1}
                   onClick={async (e) => {
                     e.stopPropagation()
-                    if (isRemoving) return
-                    setIsRemoving(true)
-                    try {
-                      const ok = await onRemove()
-                      if (ok) {
-                        closeMenu()
-                      }
-                    } catch (error) {
-                      logError('Error removing download', error)
-                    } finally {
-                      setIsRemoving(false)
-                    }
+                    await runRemove()
                   }}
                 >
                   {t('commonDelete')}
