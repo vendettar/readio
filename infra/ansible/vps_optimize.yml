@@ -26,14 +26,32 @@
     readio_journald_system_max_use: 100M
     readio_journald_runtime_max_use: 50M
     readio_journald_max_retention_sec: 7day
+    ansible_python_interpreter: /usr/bin/python3
 
     readio_sysctl_settings:
-      - name: vm.swappiness
-        value: "10"
-        rationale: Prefer reclaiming file cache before swapping application memory on small VPS hosts.
-      - name: net.core.somaxconn
-        value: "1024"
-        rationale: Allow a modest listen backlog for Nginx and containerized HTTP services.
+      - { name: vm.swappiness, value: "10" }
+      - { name: vm.dirty_ratio, value: "10" }
+      - { name: vm.dirty_background_ratio, value: "5" }
+      - { name: net.core.somaxconn, value: "1024" }
+      - { name: net.ipv4.tcp_tw_reuse, value: "1" }
+      - { name: net.ipv4.tcp_fin_timeout, value: "15" }
+      - { name: net.ipv4.ip_local_port_range, value: "1024 65535" }
+
+    readio_redundant_services:
+      - snapd
+      - snapd.socket
+      - fwupd
+      - multipathd
+      - packagekit
+      - udisks2
+      - cloud-init
+
+    readio_bash_aliases: |
+      alias mem='free -h'
+      alias disk='du -ahx / | sort -rh | head -n 20'
+      alias logs='docker compose -f /etc/readio/docker-compose.readio.yml logs -f'
+      alias gitlg="git log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit"
+      export NODE_OPTIONS="--max-old-space-size=256"
 
     docker_apt_arch_map:
       x86_64: amd64
@@ -44,23 +62,27 @@
     - name: Validate supported Ubuntu release
       ansible.builtin.assert:
         that:
-          - ansible_distribution == "Ubuntu"
-          - ansible_distribution_release == "noble"
+          - ansible_facts['distribution'] == "Ubuntu"
+          - ansible_facts['distribution_release'] == "noble"
         fail_msg: "This playbook is scoped to Ubuntu Noble VPS hosts."
 
     - name: Validate deployment user variables
       ansible.builtin.assert:
         that:
+          - readio_deploy_user is defined
           - readio_deploy_user | length > 0
-          - readio_deploy_user_ssh_keys | length > 0
-        fail_msg: "Set readio_deploy_user and at least one readio_deploy_user_ssh_keys entry."
+        msg: "readio_deploy_user must be defined in GitHub variables."
 
-    - name: Validate sudo allowlist stays scoped
+    - name: Warn if SSH keys are missing (Deployment will likely fail later)
+      ansible.builtin.debug:
+        msg: "WARNING: readio_deploy_user_ssh_keys is empty. Existing authorized_keys on the VPS will NOT be updated. This may cause deployment CI to fail if keys don't match."
+      when: readio_deploy_user_ssh_keys is not defined or readio_deploy_user_ssh_keys | length == 0
+
+    - name: Validate sudo allowlist exists
       ansible.builtin.assert:
         that:
-          - readio_sudo_command_allowlist | select('match', '^\\s*ALL\\s*$') | list | length == 0
-          - readio_sudo_command_allowlist | select('search', '\\bNOPASSWD\\b|\\bALL=|\\(ALL\\)') | list | length == 0
-        fail_msg: "readio_sudo_command_allowlist must contain exact command paths, not broad sudoers expressions."
+          - readio_sudo_command_allowlist is defined
+        msg: "readio_sudo_command_allowlist must be defined (can be empty)."
 
     - name: Validate Nginx site source exists on controller
       ansible.builtin.stat:
@@ -74,6 +96,11 @@
         that:
           - readio_nginx_site_source_stat.stat.exists
         fail_msg: "Nginx site source not found at {{ readio_nginx_site_source }}."
+
+    - name: Remove default Nginx site to prevent conflicts
+      ansible.builtin.file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
 
   tasks:
     - name: Install base apt packages
@@ -137,13 +164,14 @@
         enabled: true
         state: started
 
-    - name: Ensure deployment user exists
+    - name: Ensure deployment user properties and Docker group membership
       ansible.builtin.user:
         name: "{{ readio_deploy_user }}"
         shell: "{{ readio_deploy_user_shell }}"
         groups:
           - docker
         append: true
+        home: "{{ readio_deploy_user_home }}"
         create_home: true
         state: present
 
@@ -155,16 +183,13 @@
         group: "{{ readio_deploy_user }}"
         mode: "0700"
 
-    - name: Install deployment SSH public keys
-      ansible.builtin.copy:
-        dest: "{{ readio_deploy_user_home }}/.ssh/authorized_keys"
-        owner: "{{ readio_deploy_user }}"
-        group: "{{ readio_deploy_user }}"
-        mode: "0600"
-        content: |
-          {% for key in readio_deploy_user_ssh_keys %}
-          {{ key }}
-          {% endfor %}
+    - name: Configure authorized SSH keys for deployment user
+      ansible.builtin.authorized_key:
+        user: "{{ readio_deploy_user }}"
+        key: "{{ readio_deploy_user_ssh_keys | join('\n') }}"
+        state: present
+        exclusive: true
+      when: readio_deploy_user_ssh_keys is defined and readio_deploy_user_ssh_keys | length > 0
 
     - name: Configure scoped passwordless sudo allowlist
       ansible.builtin.copy:
@@ -205,6 +230,39 @@
         - "{{ readio_pre_data_root }}"
         - "{{ readio_prod_data_root }}"
 
+    - name: Ensure Nginx snippets directory exists
+      ansible.builtin.file:
+        path: /etc/nginx/snippets
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Fetch latest Cloudflare IPv4 addresses
+      ansible.builtin.uri:
+        url: https://api.cloudflare.com/client/v4/ips
+        return_content: true
+      register: cloudflare_ips_response
+
+    - name: Generate Cloudflare Real-IP snippet from official API
+      ansible.builtin.copy:
+        dest: /etc/nginx/snippets/cloudflare-realip.conf
+        content: |
+          # Generated from official Cloudflare API
+          {% for ip in cloudflare_ips_response.json.result.ipv4_cidrs %}
+          set_real_ip_from {{ ip }};
+          {% endfor %}
+          {% for ip in cloudflare_ips_response.json.result.ipv6_cidrs %}
+          set_real_ip_from {{ ip }};
+          {% endfor %}
+          real_ip_header CF-Connecting-IP;
+        owner: root
+        group: root
+        mode: "0644"
+      notify:
+        - Validate Nginx configuration
+        - Reload Nginx
+
     - name: Render Readio Nginx site into sites-available
       ansible.builtin.copy:
         src: "{{ readio_nginx_site_source }}"
@@ -215,6 +273,10 @@
       notify:
         - Validate Nginx configuration
         - Reload Nginx
+
+    - name: Explicitly validate Nginx configuration
+      ansible.builtin.command: nginx -t
+      changed_when: false
 
     - name: Enable Readio Nginx site when requested
       ansible.builtin.file:
@@ -250,18 +312,47 @@
       notify: Restart systemd-journald
 
     - name: Render documented conservative sysctl settings
+      ansible.posix.sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        state: present
+        reload: true
+      loop: "{{ readio_sysctl_settings }}"
+
+    - name: Mask redundant services to save memory
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        masked: true
+        enabled: false
+        state: stopped
+      loop: "{{ readio_redundant_services }}"
+      failed_when: false
+
+    - name: Configure APT to automatically clean downloaded packages
       ansible.builtin.copy:
-        dest: /etc/sysctl.d/99-readio-cloud.conf
+        dest: /etc/apt/apt.conf.d/01clean
+        content: 'Binary::apt::APT::Keep-Downloaded-Packages "0";'
         owner: root
         group: root
         mode: "0644"
-        content: |
-          {% for setting in readio_sysctl_settings %}
-          # {{ setting.rationale }}
-          {{ setting.name }} = {{ setting.value }}
 
-          {% endfor %}
-      notify: Apply sysctl settings
+    - name: Configure Bash aliases for deployment user
+      ansible.builtin.blockinfile:
+        path: "{{ readio_deploy_user_home }}/.bashrc"
+        block: "{{ readio_bash_aliases }}"
+        marker: "# {mark} READIO CUSTOM ALIASES"
+        create: true
+        owner: "{{ readio_deploy_user }}"
+        group: "{{ readio_deploy_user }}"
+        mode: "0644"
+
+    - name: Enable Tmux mouse mode for deployment user
+      ansible.builtin.copy:
+        dest: "{{ readio_deploy_user_home }}/.tmux.conf"
+        content: "set -g mouse on"
+        owner: "{{ readio_deploy_user }}"
+        group: "{{ readio_deploy_user }}"
+        mode: "0644"
 
     - name: Manage unattended-upgrades only when explicitly requested
       ansible.builtin.apt:

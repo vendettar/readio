@@ -2,8 +2,23 @@ name: Deploy Cloud (Pre-production)
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
+    paths:
+      - 'apps/cloud-api/**'
+      - 'infra/**'
+      - 'Makefile'
+      - 'docker-compose.readio.yml'
+      - 'scripts/nginx-readio-cloud.conf'
+      - 'scripts/readio-cloud-prune-images.sh'
+      - '.github/workflows/deploy-cloud-preprod.yml'
+      - '.github/workflows/_deploy-cloud-base.yml'
   workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "deploy" to confirm deployment'
+        required: true
+        default: ''
 
 concurrency:
   group: deploy-cloud-preprod
@@ -14,102 +29,15 @@ permissions:
   packages: write
 
 jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    environment: cloud-preproduction
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4.2.2
-
-      - name: Get Short SHA
-        id: slug
-        run: echo "sha8=$(echo ${GITHUB_SHA} | cut -c1-8)" >> $GITHUB_OUTPUT
-
-      - name: Log in to the Container registry
-        uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v6.15.0
-        with:
-          context: ./apps/cloud-api
-          push: true
-          tags: ghcr.io/${{ github.repository_owner }}/readio-cloud-api-pre:${{ steps.slug.outputs.sha8 }}
-
-      - name: Configure SSH for Docker Context
-        env:
-          CLOUD_SSH_HOST: ${{ secrets.CLOUD_SSH_HOST }}
-          CLOUD_SSH_PORT: ${{ secrets.CLOUD_SSH_PORT }}
-          CLOUD_SSH_USER: ${{ secrets.CLOUD_SSH_USER }}
-          CLOUD_SSH_PRIVATE_KEY: ${{ secrets.CLOUD_SSH_PRIVATE_KEY }}
-          CLOUD_SSH_KNOWN_HOSTS: ${{ secrets.CLOUD_SSH_KNOWN_HOSTS }}
-        run: |
-          set -euo pipefail
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          printf '%s\n' "$CLOUD_SSH_PRIVATE_KEY" > ~/.ssh/readio_cloud
-          chmod 600 ~/.ssh/readio_cloud
-          printf '%s\n' "$CLOUD_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
-          chmod 600 ~/.ssh/known_hosts
-          cat > ~/.ssh/config <<EOF
-          Host ${CLOUD_SSH_HOST}
-            HostName ${CLOUD_SSH_HOST}
-            Port ${CLOUD_SSH_PORT}
-            User ${CLOUD_SSH_USER}
-            IdentityFile ~/.ssh/readio_cloud
-            IdentitiesOnly yes
-            StrictHostKeyChecking yes
-            UserKnownHostsFile ~/.ssh/known_hosts
-          EOF
-          chmod 600 ~/.ssh/config
-
-      - name: Deploy through Docker Context
-        env:
-          CLOUD_SSH_HOST: ${{ secrets.CLOUD_SSH_HOST }}
-          CLOUD_SSH_PORT: ${{ secrets.CLOUD_SSH_PORT }}
-          CLOUD_SSH_USER: ${{ secrets.CLOUD_SSH_USER }}
-          REPO_OWNER: ${{ github.repository_owner }}
-          IMAGE_TAG: ${{ steps.slug.outputs.sha8 }}
-          READIO_ADMIN_TOKEN: ${{ secrets.READIO_ADMIN_TOKEN }}
-          PODCAST_INDEX_API_KEY: ${{ secrets.PODCAST_INDEX_API_KEY }}
-          PODCAST_INDEX_API_SECRET: ${{ secrets.PODCAST_INDEX_API_SECRET }}
-          READIO_ASR_RELAY_PUBLIC_TOKEN: ${{ secrets.READIO_ASR_RELAY_PUBLIC_TOKEN }}
-          READIO_ASR_WORKER_SHARED_SECRET: ${{ secrets.READIO_ASR_WORKER_SHARED_SECRET }}
-          READIO_GRAFANA_OTLP_TOKEN: ${{ secrets.READIO_GRAFANA_OTLP_TOKEN }}
-          READIO_GRAFANA_LOKI_TOKEN: ${{ secrets.READIO_GRAFANA_LOKI_TOKEN }}
-          READIO_ASR_ALLOWED_ORIGINS: ${{ vars.READIO_ASR_ALLOWED_ORIGINS }}
-          READIO_DISCOVERY_ALLOWED_ORIGINS: ${{ vars.READIO_DISCOVERY_ALLOWED_ORIGINS }}
-          READIO_PROXY_ALLOWED_ORIGINS: ${{ vars.READIO_PROXY_ALLOWED_ORIGINS }}
-          READIO_GRAFANA_OTLP_ENDPOINT: ${{ vars.READIO_GRAFANA_OTLP_ENDPOINT }}
-          READIO_GRAFANA_OTLP_INSTANCE_ID: ${{ vars.READIO_GRAFANA_OTLP_INSTANCE_ID }}
-          READIO_DEPLOY_ENV: preproduction
-          READIO_GRAFANA_LOKI_URL: ${{ vars.READIO_GRAFANA_LOKI_URL }}
-          READIO_GRAFANA_LOKI_USER: ${{ vars.READIO_GRAFANA_LOKI_USER }}
-          READIO_LOKI_LOG_LEVEL: ${{ vars.READIO_LOKI_LOG_LEVEL }}
-          READIO_LOKI_BATCH_SIZE: ${{ vars.READIO_LOKI_BATCH_SIZE }}
-          READIO_LOKI_FLUSH_INTERVAL_SECONDS: ${{ vars.READIO_LOKI_FLUSH_INTERVAL_SECONDS }}
-          READIO_LOKI_QUEUE_SIZE: ${{ vars.READIO_LOKI_QUEUE_SIZE }}
-          READIO_TRUSTED_PROXY_CIDRS: ${{ vars.READIO_TRUSTED_PROXY_CIDRS }}
-          READIO_ASR_WORKER_BASE_URL: ${{ vars.READIO_ASR_WORKER_BASE_URL }}
-          READIO_EN_DICTIONARY_API_URL: ${{ vars.READIO_EN_DICTIONARY_API_URL }}
-          READIO_EN_DICTIONARY_API_TRANSPORT: ${{ vars.READIO_EN_DICTIONARY_API_TRANSPORT }}
-          VITE_GRAFANA_FARO_URL: ${{ vars.VITE_GRAFANA_FARO_URL }}
-          VITE_GRAFANA_FARO_APP_NAME: ${{ vars.VITE_GRAFANA_FARO_APP_NAME }}
-          VITE_GRAFANA_FARO_ENV: ${{ vars.VITE_GRAFANA_FARO_ENV }}
-          VITE_GRAFANA_FARO_SAMPLE_RATE: ${{ vars.VITE_GRAFANA_FARO_SAMPLE_RATE }}
-        run: |
-          set -euo pipefail
-          make context-setup
-          make deploy-pre
-          make prune-images-pre
-
-      - name: Cleanup old GHCR package versions
-        uses: actions/delete-package-versions@v5
-        with:
-          package-name: 'readio-cloud-api-pre'
-          package-type: 'container'
-          min-versions-to-keep: 10
+  call-deploy:
+    uses: ./.github/workflows/_deploy-cloud-base.yml
+    with:
+      environment: cloud-preproduction
+      deploy_env: preproduction
+      image_tag_suffix: pre
+      # TODO: If preproduction should only deploy from merged PRs on main,
+      # change this to true so manual dispatches from feature branches are blocked too.
+      require_main_branch: false
+      confirm_required: ${{ github.event_name == 'workflow_dispatch' }}
+      confirm_input: ${{ github.event.inputs.confirm }}
+    secrets: inherit

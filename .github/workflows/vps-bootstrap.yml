@@ -8,13 +8,12 @@ on:
         required: false
         type: string
       vps_user:
-        description: SSH user used for the initial bootstrap connection
+        description: SSH user used for the initial bootstrap connection (optional, defaults to CLOUD_SSH_USER secret)
         required: false
-        default: root
         type: string
 
 concurrency:
-  group: vps-bootstrap-${{ github.event.inputs.vps_ip }}
+  group: vps-bootstrap-${{ github.event.inputs.vps_ip || vars.CLOUD_SSH_HOST_LABEL || 'default' }}-${{ github.ref }}
   cancel-in-progress: false
 
 permissions:
@@ -27,7 +26,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@v6
 
       - name: Install Ansible
         run: |
@@ -40,26 +39,26 @@ jobs:
       - name: Configure SSH
         env:
           VPS_IP: ${{ github.event.inputs.vps_ip || secrets.CLOUD_SSH_HOST }}
-          VPS_USER: ${{ github.event.inputs.vps_user || 'root' }}
+          VPS_USER: ${{ github.event.inputs.vps_user || secrets.CLOUD_SSH_USER }}
           CLOUD_SSH_PORT: ${{ secrets.CLOUD_SSH_PORT }}
           CLOUD_SSH_PRIVATE_KEY: ${{ secrets.CLOUD_SSH_PRIVATE_KEY }}
           CLOUD_SSH_KNOWN_HOSTS: ${{ secrets.CLOUD_SSH_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
+          required_vars="VPS_IP VPS_USER CLOUD_SSH_PRIVATE_KEY CLOUD_SSH_KNOWN_HOSTS"
+          for var in $required_vars; do
+            if [ -z "${!var:-}" ]; then
+              echo "$var is required for VPS bootstrap." >&2
+              exit 1
+            fi
+          done
           ssh_port="${CLOUD_SSH_PORT:-22}"
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
           printf '%s\n' "$CLOUD_SSH_PRIVATE_KEY" > ~/.ssh/readio_cloud
           chmod 600 ~/.ssh/readio_cloud
-          if [ -n "${CLOUD_SSH_KNOWN_HOSTS:-}" ]; then
-            printf '%s\n' "$CLOUD_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
-            chmod 600 ~/.ssh/known_hosts
-            strict_host_key_checking=yes
-          else
-            touch ~/.ssh/known_hosts
-            chmod 600 ~/.ssh/known_hosts
-            strict_host_key_checking=accept-new
-          fi
+          printf '%s\n' "$CLOUD_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
           cat > ~/.ssh/config <<EOF
           Host ${VPS_IP}
             HostName ${VPS_IP}
@@ -67,7 +66,7 @@ jobs:
             User ${VPS_USER}
             IdentityFile ~/.ssh/readio_cloud
             IdentitiesOnly yes
-            StrictHostKeyChecking ${strict_host_key_checking}
+            StrictHostKeyChecking yes
             UserKnownHostsFile ~/.ssh/known_hosts
           EOF
           chmod 600 ~/.ssh/config
@@ -76,9 +75,13 @@ jobs:
         env:
           READIO_DEPLOY_USER: ${{ vars.READIO_DEPLOY_USER }}
           READIO_DEPLOY_USER_SSH_KEYS: ${{ vars.READIO_DEPLOY_USER_SSH_KEYS }}
-          CLOUD_SSH_USER: ${{ secrets.CLOUD_SSH_USER }}
+          READIO_SUDO_COMMAND_ALLOWLIST: ${{ vars.READIO_SUDO_COMMAND_ALLOWLIST }}
         run: |
           set -euo pipefail
+          if [ -z "${READIO_DEPLOY_USER:-}" ]; then
+            echo "READIO_DEPLOY_USER is required. Set the repository/environment variable before running bootstrap." >&2
+            exit 1
+          fi
           if [ -z "${READIO_DEPLOY_USER_SSH_KEYS:-}" ]; then
             READIO_DEPLOY_USER_SSH_KEYS="$(ssh-keygen -y -f ~/.ssh/readio_cloud)"
             export READIO_DEPLOY_USER_SSH_KEYS
@@ -96,9 +99,19 @@ jobs:
           if not keys:
               raise SystemExit("READIO_DEPLOY_USER_SSH_KEYS must contain at least one public SSH key.")
 
+          allowlist = []
+          raw_allowlist = os.environ.get("READIO_SUDO_COMMAND_ALLOWLIST")
+          if raw_allowlist:
+              try:
+                  allowlist = json.loads(raw_allowlist)
+              except json.JSONDecodeError:
+                  # Fallback to single string if not a JSON array
+                  allowlist = [raw_allowlist]
+
           payload = {
-              "readio_deploy_user": os.environ.get("READIO_DEPLOY_USER") or os.environ.get("CLOUD_SSH_USER") or "deploy",
+              "readio_deploy_user": os.environ["READIO_DEPLOY_USER"],
               "readio_deploy_user_ssh_keys": keys,
+              "readio_sudo_command_allowlist": allowlist,
           }
           with open("ansible-extra-vars.json", "w", encoding="utf-8") as fh:
               json.dump(payload, fh)
@@ -106,11 +119,19 @@ jobs:
 
       - name: Run VPS bootstrap playbook
         env:
+          ANSIBLE_DEPRECATION_WARNINGS: "False"
           VPS_IP: ${{ github.event.inputs.vps_ip || secrets.CLOUD_SSH_HOST }}
-          VPS_USER: ${{ github.event.inputs.vps_user || 'root' }}
+          VPS_USER: ${{ github.event.inputs.vps_user || secrets.CLOUD_SSH_USER }}
           CLOUD_SSH_PORT: ${{ secrets.CLOUD_SSH_PORT }}
         run: |
           set -euo pipefail
+          required_vars="VPS_IP VPS_USER"
+          for var in $required_vars; do
+            if [ -z "${!var:-}" ]; then
+              echo "$var is required for VPS bootstrap." >&2
+              exit 1
+            fi
+          done
           ssh_port="${CLOUD_SSH_PORT:-22}"
           ansible-playbook -i "${VPS_IP}," infra/ansible/vps_optimize.yml \
             -e "ansible_user=${VPS_USER}" \

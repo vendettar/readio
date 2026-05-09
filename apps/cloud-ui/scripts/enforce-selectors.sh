@@ -6,6 +6,12 @@ set -euo pipefail
 
 echo "🔍 Checking for direct store subscriptions (missing selectors)..."
 
+if ! command -v rg >/dev/null 2>&1; then
+  echo "❌ Error: ripgrep (rg) is required for selector enforcement but was not found on PATH." >&2
+  echo "Install ripgrep in the runner environment before running lint:selectors." >&2
+  exit 1
+fi
+
 # Discover active Zustand store hooks from source ownership rather than
 # maintaining a stale hardcoded subset in this guard script.
 STORE_HOOK_PATTERN=$(

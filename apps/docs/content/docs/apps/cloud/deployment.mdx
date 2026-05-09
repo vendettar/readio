@@ -77,7 +77,7 @@ Create three environments in GitHub **Settings -> Environments**: `cloud-product
 
 ## 4. CI/CD & Release
 
-- **Frontend / Cloudflare Pages**: `deploy-cloud-ui-pages.yml` builds `apps/cloud-ui` and deploys `apps/cloud-ui/dist` to Cloudflare Pages on push to `main`, or by manual dispatch.
+- **Frontend / Cloudflare Pages**: `deploy-cloud-ui-pages.yml` builds `apps/cloud-ui` and deploys `apps/cloud-ui/dist` to Cloudflare Pages by manual dispatch from `main`.
 - **Frontend routing**: `apps/cloud-ui/public/_redirects` is committed with `/* /index.html 200`, so direct deep links such as podcast and episode detail routes resolve correctly on Pages.
 - **Pre-production API**: `deploy-cloud-preprod.yml` is triggered automatically on push to `main`, and may also be run manually.
 - **Production API**: `deploy-cloud-prod.yml` is triggered manually via the GitHub Actions `Run workflow` button, and the workflow only deploys when the selected ref is `main`.

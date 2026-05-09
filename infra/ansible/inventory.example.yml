@@ -3,7 +3,7 @@ readio_vps:
   hosts:
     example-vps:
       ansible_host: 203.0.113.10
-      ansible_user: root
+      ansible_user: bootstrap
       ansible_port: 22
   vars:
     readio_deploy_user: deploy
@@ -19,6 +19,6 @@ readio_vps:
     readio_prod_data_root: /etc/readio/prod/data
 
     readio_nginx_site_name: readio-cloud
-    readio_nginx_enable_site: false
+    readio_nginx_enable_site: true
 
     readio_manage_unattended_upgrades: false

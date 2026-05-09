@@ -1,14 +1,6 @@
 name: Deploy Cloud UI (Cloudflare Pages)
 
 on:
-  push:
-    branches: [ main ]
-    paths:
-      - 'apps/cloud-ui/**'
-      - '.github/workflows/deploy-cloud-ui-pages.yml'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - 'pnpm-workspace.yaml'
   workflow_dispatch:
 
 permissions:
@@ -26,7 +18,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@v6
 
       - name: Install pnpm
         uses: pnpm/action-setup@v5

@@ -15,6 +15,16 @@ const COMPONENT_DIRS = ['src/components', 'src/routeComponents']
 let hasViolations = false
 let hasScanErrors = false
 
+try {
+  execFileSync('rg', ['--version'], {
+    stdio: ['ignore', 'ignore', 'ignore'],
+  })
+} catch {
+  console.error('❌ ripgrep (rg) is required for DB Access Guard but was not found on PATH.')
+  console.error('Install ripgrep in the runner environment before running lint:db-guard.\n')
+  process.exit(1)
+}
+
 console.log('🔍 Checking for direct DB access from UI components...\n')
 
 for (const dir of COMPONENT_DIRS) {

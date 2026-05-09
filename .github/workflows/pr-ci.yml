@@ -30,9 +30,6 @@ jobs:
       - name: License Check
         run: pnpm --filter @readio/cloud-ui exec license-checker-rseidelsohn --summary --failOn 'GPL;AGPL;LGPL'
 
-      - name: Install Ripgrep for DB Guard
-        run: sudo apt-get update && sudo apt-get install -y ripgrep
-
       - name: Lint (Cloud UI)
         run: pnpm -C apps/cloud-ui lint
 
@@ -54,6 +51,9 @@ jobs:
       - name: Typecheck (Cloud UI)
         run: pnpm -C apps/cloud-ui typecheck
 
+      - name: Test (Cloud UI)
+        run: pnpm -C apps/cloud-ui test:run
+
       - name: Build (Cloud UI)
         run: pnpm -C apps/cloud-ui build
 
@@ -70,7 +70,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.26.2'
+          go-version: '1.26.3'
 
       - name: Go Lint (golangci-lint)
         uses: golangci/golangci-lint-action@v9
