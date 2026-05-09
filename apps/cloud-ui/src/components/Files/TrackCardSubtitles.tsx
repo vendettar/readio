@@ -197,12 +197,12 @@ export function TrackCardSubtitles({
         </div>
       )}
 
-      <button
-        type="button"
+      <Button
+        variant="ghost"
         onClick={onAddSub}
         disabled={isSubtitleLimit}
         className={cn(
-          'w-full text-start focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-md text-xs font-medium text-muted-foreground',
+          'w-full h-auto justify-start whitespace-normal text-start focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring rounded-md text-xs font-medium text-muted-foreground',
           !isSubtitleLimit && 'hover:text-foreground opacity-60 hover:opacity-100 cursor-pointer',
           isSubtitleLimit && 'opacity-40 cursor-not-allowed',
           subtitleRowVariants({ density })
@@ -220,7 +220,7 @@ export function TrackCardSubtitles({
             {isSubtitleLimit ? t('subtitleLimitHint') : t('subtitleAdd')}
           </span>
         </div>
-      </button>
+      </Button>
     </div>
   )
 }

@@ -1,5 +1,5 @@
-import { getAsrCredentialKey, getCredential } from '../db/credentialsRepository'
 import { sha256 } from '../networking/urlUtils'
+import { CredentialsRepository } from '../repositories/CredentialsRepository'
 import { getSettingsSnapshot } from '../schemas/settings'
 import { getJson, removeItem, setJson } from '../storage'
 import { type AsrConfigErrorCode, validateAsrProviderModelSelection } from './registry'
@@ -64,7 +64,9 @@ export async function getAsrReadiness(): Promise<AsrReadinessResult> {
     return { ready: false, reasonCode: selection.code }
   }
 
-  const apiKey = (await getCredential(getAsrCredentialKey(selection.provider))).trim()
+  const apiKey = (
+    await CredentialsRepository.get(CredentialsRepository.getAsrCredentialKey(selection.provider))
+  ).trim()
   if (!apiKey) {
     return { ready: false, reasonCode: 'missing_key' }
   }

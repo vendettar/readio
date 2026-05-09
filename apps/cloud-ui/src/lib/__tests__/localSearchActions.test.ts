@@ -159,7 +159,7 @@ describe('executeLocalSearchAction', () => {
     expect(deps.play).not.toHaveBeenCalled()
   })
 
-  it('applies fallback playback surface policy for favorite when canonical route metadata is incomplete', async () => {
+  it('fails closed for favorite when canonical route metadata is incomplete', async () => {
     const deps = createDeps()
     const result = {
       type: 'favorite',
@@ -188,8 +188,10 @@ describe('executeLocalSearchAction', () => {
     await executeLocalSearchAction(result, deps)
 
     expect(deps.navigate).not.toHaveBeenCalled()
-    expect(setPlayableContextMock).toHaveBeenCalledWith(true)
-    expect(toDockedMock).toHaveBeenCalledTimes(1)
+    expect(deps.play).not.toHaveBeenCalled()
+    expect(deps.setAudioUrl).not.toHaveBeenCalled()
+    expect(setPlayableContextMock).not.toHaveBeenCalled()
+    expect(toDockedMock).not.toHaveBeenCalled()
     expect(toMiniMock).not.toHaveBeenCalled()
   })
 

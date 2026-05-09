@@ -1,3 +1,4 @@
+import { FetchError, NetworkError } from '../fetchUtils'
 import { getAppConfig } from '../runtimeConfig'
 import { getCachedEntry, setCachedEntry } from './dictCache'
 import type { DictEntry } from './types'
@@ -20,6 +21,8 @@ interface DictionaryApiNotFoundPayload {
   title?: unknown
   message?: unknown
   resolution?: unknown
+  code?: unknown
+  request_id?: unknown
 }
 
 function parseJsonObject(text: string): Record<string, unknown> | null {
@@ -49,6 +52,10 @@ function toProxyErrorMessage(payload: Record<string, unknown> | null, fallback: 
   return typeof message === 'string' && message.trim() ? message : fallback
 }
 
+function toFetchSource(transport: DictionaryTransport): 'direct' | 'cloudBackend' {
+  return transport === 'go-proxy' ? 'cloudBackend' : 'direct'
+}
+
 async function fetchDictionaryJSON(
   lookupUrl: string,
   options: {
@@ -63,37 +70,46 @@ async function fetchDictionaryJSON(
   options.signal?.addEventListener('abort', abort, { once: true })
 
   try {
-    const response =
-      options.transport === 'go-proxy'
-        ? await fetch('/api/proxy', {
-            method: 'POST',
-            signal: controller.signal,
-            credentials: 'omit',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              url: lookupUrl,
+    let response: Response
+    try {
+      response =
+        options.transport === 'go-proxy'
+          ? await fetch('/api/proxy', {
+              method: 'POST',
+              signal: controller.signal,
+              credentials: 'omit',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                url: lookupUrl,
+                method: 'GET',
+                headers: {
+                  Accept: 'application/json',
+                },
+              }),
+            })
+          : await fetch(lookupUrl, {
               method: 'GET',
+              signal: controller.signal,
+              credentials: 'omit',
               headers: {
                 Accept: 'application/json',
               },
-            }),
-          })
-        : await fetch(lookupUrl, {
-            method: 'GET',
-            signal: controller.signal,
-            credentials: 'omit',
-            headers: {
-              Accept: 'application/json',
-            },
-          })
+            })
+    } catch (error) {
+      if (error instanceof TypeError) {
+        throw new NetworkError('Network failure during dictionary lookup')
+      }
+      throw error
+    }
 
     const text = await response.text()
     if (!response.ok) {
       const payload = parseJsonObject(text)
+      const source = toFetchSource(options.transport)
       if (response.status === 404 && isDictionaryApiNotFoundPayload(payload)) {
-        throw new Error('Word not found')
+        throw new FetchError('Word not found', lookupUrl, 404, source, { code: 'not_found' })
       }
 
       let message = `Dictionary request failed with ${response.status}`
@@ -102,7 +118,10 @@ async function fetchDictionaryJSON(
       } else if (text) {
         message = text
       }
-      throw new Error(message)
+      throw new FetchError(message, lookupUrl, response.status, source, {
+        code: typeof payload?.code === 'string' ? payload.code : undefined,
+        requestId: typeof payload?.request_id === 'string' ? payload.request_id : undefined,
+      })
     }
 
     return text ? JSON.parse(text) : null

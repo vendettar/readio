@@ -2,10 +2,14 @@ import { HttpResponse, http } from 'msw'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { DISCOVERY_TEST_ROUTE, discoveryUrl } from '../../../__tests__/constants'
 import { server } from '../../../__tests__/setup'
+import { FetchError, NetworkError } from '../../fetchUtils'
 import {
+  DiscoveryInvalidPayloadError,
+  DiscoveryParseError,
   fetchPodcastEpisodes,
   fetchTopPodcasts,
   getPodcastIndexPodcastsBatchByGuid,
+  shouldRetryDiscoveryRequest,
 } from '../cloudApi'
 
 describe('cloudApi discovery error mapping', () => {
@@ -105,5 +109,60 @@ describe('cloudApi discovery error mapping', () => {
       name: 'DiscoveryInvalidPayloadError',
       message: 'GET /api/v1/discovery/podcasts/123/episodes: discovery payload validation failed',
     })
+  })
+})
+
+describe('cloudApi discovery retry taxonomy', () => {
+  it('does not retry network errors', () => {
+    expect(shouldRetryDiscoveryRequest(0, new NetworkError('offline'))).toBe(false)
+  })
+
+  it('does not retry parse or invalid-payload errors', () => {
+    expect(shouldRetryDiscoveryRequest(0, new DiscoveryParseError('bad json'))).toBe(false)
+    expect(
+      shouldRetryDiscoveryRequest(0, new DiscoveryInvalidPayloadError('invalid payload'))
+    ).toBe(false)
+  })
+
+  it('retries only first-attempt 5xx discovery fetch errors', () => {
+    expect(
+      shouldRetryDiscoveryRequest(
+        0,
+        new FetchError(
+          'temporarily unavailable',
+          '/api/v1/discovery/search/podcasts',
+          503,
+          'direct'
+        )
+      )
+    ).toBe(true)
+
+    expect(
+      shouldRetryDiscoveryRequest(
+        1,
+        new FetchError(
+          'temporarily unavailable',
+          '/api/v1/discovery/search/podcasts',
+          503,
+          'direct'
+        )
+      )
+    ).toBe(false)
+  })
+
+  it('does not retry non-5xx discovery fetch errors', () => {
+    expect(
+      shouldRetryDiscoveryRequest(
+        0,
+        new FetchError('not found', '/api/v1/discovery/search/podcasts', 404, 'direct')
+      )
+    ).toBe(false)
+
+    expect(
+      shouldRetryDiscoveryRequest(
+        0,
+        new FetchError('rate limited', '/api/v1/discovery/search/podcasts', 429, 'direct')
+      )
+    ).toBe(false)
   })
 })

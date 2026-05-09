@@ -109,6 +109,30 @@ function LocalItemArtwork({ item }: { item: LocalSearchResult }) {
   )
 }
 
+const resultItemClassName =
+  'relative py-1.5 px-3 rounded-md flex items-center gap-3 hover:bg-primary hover:text-primary-foreground hover:[&_.text-muted-foreground]:text-primary-foreground/80 aria-selected:bg-primary aria-selected:text-primary-foreground aria-selected:[&_.text-muted-foreground]:text-primary-foreground/80 data-[selected=true]:bg-primary data-[selected=true]:text-primary-foreground data-[selected=true]:[&_.text-muted-foreground]:text-primary-foreground/80 cursor-pointer group/search-item -mt-px hover:z-10 aria-selected:z-10 data-[selected=true]:z-10'
+
+function ResultCommandItem({
+  children,
+  onSelect,
+  showDivider,
+  value,
+}: {
+  children: React.ReactNode
+  onSelect: () => void
+  showDivider: boolean
+  value: string
+}) {
+  return (
+    <CommandItem value={value} onSelect={onSelect} className={resultItemClassName}>
+      {children}
+      {showDivider && (
+        <div className="absolute bottom-0 start-3 end-3 h-px bg-border smart-divider smart-divider-bottom" />
+      )}
+    </CommandItem>
+  )
+}
+
 export function CommandPalette() {
   const navigate = useNavigate()
   const { t } = useTranslation()
@@ -174,16 +198,13 @@ export function CommandPalette() {
     }
   }, [isOverlayOpen])
 
-  // Separate effect for ephemeral selection state
   useEffect(() => {
-    if (isOverlayOpen) {
-      setSelectedValue(defaultSearchActionValue)
+    if (!isOverlayOpen) {
+      return
     }
-  }, [isOverlayOpen, defaultSearchActionValue])
 
-  useEffect(() => {
     setSelectedValue(defaultSearchActionValue)
-  }, [defaultSearchActionValue])
+  }, [defaultSearchActionValue, isOverlayOpen])
 
   const searchResults = useGlobalSearch(query, isOverlayOpen)
   const { podcastSection, episodeSection, localSection } = searchResults
@@ -430,11 +451,11 @@ export function CommandPalette() {
               {local.length > 0 && (
                 <CommandGroup heading={t('searchYourLibrary')}>
                   {local.map((item, index, arr) => (
-                    <CommandItem
+                    <ResultCommandItem
                       key={item.id}
                       value={`local-${item.id}`}
                       onSelect={() => handleSelectLocal(item)}
-                      className="relative py-1.5 px-3 rounded-md flex items-center gap-3 hover:bg-primary hover:text-primary-foreground hover:[&_.text-muted-foreground]:text-primary-foreground/80 aria-selected:bg-primary aria-selected:text-primary-foreground aria-selected:[&_.text-muted-foreground]:text-primary-foreground/80 data-[selected=true]:bg-primary data-[selected=true]:text-primary-foreground data-[selected=true]:[&_.text-muted-foreground]:text-primary-foreground/80 cursor-pointer group/search-item -mt-px hover:z-10 aria-selected:z-10 data-[selected=true]:z-10"
+                      showDivider={index < arr.length - 1}
                     >
                       <LocalItemArtwork item={item} />
                       <div className="flex flex-col flex-1 min-w-0">
@@ -454,10 +475,7 @@ export function CommandPalette() {
                           </span>
                         ))}
                       </div>
-                      {index < arr.length - 1 && (
-                        <div className="absolute bottom-0 start-3 end-3 h-px bg-border smart-divider smart-divider-bottom" />
-                      )}
-                    </CommandItem>
+                    </ResultCommandItem>
                   ))}
                 </CommandGroup>
               )}
@@ -468,11 +486,11 @@ export function CommandPalette() {
                   <CommandSeparator className="my-1" />
                   <CommandGroup heading={t('searchPodcasts')}>
                     {podcasts.slice(0, config.SEARCH_PODCASTS_LIMIT).map((podcast, index, arr) => (
-                      <CommandItem
+                      <ResultCommandItem
                         key={`podcast-${podcast.podcastItunesId}`}
                         value={`podcast-${podcast.podcastItunesId}`}
                         onSelect={() => handleSelectPodcast(podcast)}
-                        className="relative py-1.5 px-3 rounded-md flex items-center gap-3 hover:bg-primary hover:text-primary-foreground hover:[&_.text-muted-foreground]:text-primary-foreground/80 aria-selected:bg-primary aria-selected:text-primary-foreground aria-selected:[&_.text-muted-foreground]:text-primary-foreground/80 data-[selected=true]:bg-primary data-[selected=true]:text-primary-foreground data-[selected=true]:[&_.text-muted-foreground]:text-primary-foreground/80 cursor-pointer group/search-item -mt-px hover:z-10 aria-selected:z-10 data-[selected=true]:z-10"
+                        showDivider={index < arr.length - 1}
                       >
                         <InteractiveArtwork
                           src={podcast.artwork}
@@ -486,10 +504,7 @@ export function CommandPalette() {
                             {podcast.author}
                           </span>
                         </div>
-                        {index < arr.length - 1 && (
-                          <div className="absolute bottom-0 start-3 end-3 h-px bg-border smart-divider smart-divider-bottom" />
-                        )}
-                      </CommandItem>
+                      </ResultCommandItem>
                     ))}
                   </CommandGroup>
                 </>
@@ -503,11 +518,11 @@ export function CommandPalette() {
                     {episodes.slice(0, config.SEARCH_EPISODES_LIMIT).map((episode, index, arr) => {
                       const episodeKey = `${episode.podcastItunesId}::${episode.guid}`
                       return (
-                        <CommandItem
+                        <ResultCommandItem
                           key={`episode-${episodeKey}`}
                           value={`episode-${episodeKey}`}
                           onSelect={() => handleSelectEpisode(episode)}
-                          className="relative py-1.5 px-3 rounded-md flex items-center gap-3 hover:bg-primary hover:text-primary-foreground hover:[&_.text-muted-foreground]:text-primary-foreground/80 aria-selected:bg-primary aria-selected:text-primary-foreground aria-selected:[&_.text-muted-foreground]:text-primary-foreground/80 data-[selected=true]:bg-primary data-[selected=true]:text-primary-foreground data-[selected=true]:[&_.text-muted-foreground]:text-primary-foreground/80 cursor-pointer group/search-item -mt-px hover:z-10 aria-selected:z-10 data-[selected=true]:z-10"
+                          showDivider={index < arr.length - 1}
                         >
                           <InteractiveArtwork
                             src={episode.artwork}
@@ -521,10 +536,7 @@ export function CommandPalette() {
                               {episode.showTitle}
                             </span>
                           </div>
-                          {index < arr.length - 1 && (
-                            <div className="absolute bottom-0 start-3 end-3 h-px bg-border smart-divider smart-divider-bottom" />
-                          )}
-                        </CommandItem>
+                        </ResultCommandItem>
                       )
                     })}
                   </CommandGroup>

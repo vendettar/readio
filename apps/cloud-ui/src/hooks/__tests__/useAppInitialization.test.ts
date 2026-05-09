@@ -4,6 +4,7 @@ import { INIT_DEGRADED_REASON, useAppInitialization } from '../useAppInitializat
 
 const { mockExploreState, mockPlayerState } = vi.hoisted(() => ({
   mockExploreState: {
+    hydrateCountry: vi.fn(),
     loadSubscriptions: vi.fn(),
     loadFavorites: vi.fn(),
     subscriptionsLoaded: true,
@@ -62,6 +63,10 @@ vi.mock('../../lib/logger', () => ({
 
 describe('useAppInitialization', () => {
   beforeEach(() => {
+    mockExploreState.hydrateCountry.mockReset()
+    mockExploreState.loadSubscriptions.mockReset()
+    mockExploreState.loadFavorites.mockReset()
+    mockPlayerState.restoreSession.mockReset()
     prunePlaybackHistory.mockReset()
     runIntegrityCheck.mockReset()
     runRemoteTranscriptCacheMaintenance.mockReset()
@@ -75,8 +80,20 @@ describe('useAppInitialization', () => {
     mockPlayerState.initializationStatus = 'ready'
   })
 
+  it('owns boot restore and triggers restoreSession exactly once when player is idle', () => {
+    mockPlayerState.initializationStatus = 'idle'
+
+    renderHook(() => useAppInitialization())
+
+    expect(mockPlayerState.restoreSession).toHaveBeenCalledTimes(1)
+  })
+
   it('checks storage quota silently on boot', async () => {
     renderHook(() => useAppInitialization())
+
+    expect(mockExploreState.hydrateCountry).toHaveBeenCalledTimes(1)
+    expect(mockExploreState.loadSubscriptions).toHaveBeenCalledTimes(1)
+    expect(mockExploreState.loadFavorites).toHaveBeenCalledTimes(1)
 
     await waitFor(() => {
       expect(checkStorageQuota).toHaveBeenCalledWith({ mode: 'silent' })

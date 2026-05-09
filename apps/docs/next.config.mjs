@@ -1,4 +1,5 @@
 import { createMDX } from 'fumadocs-mdx/next'
+import { docsDefaultLanguage, getDocsMdxRewriteDestination } from './lib/docsLocale.mjs'
 
 const withMDX = createMDX({
   buildSearchIndex: false,
@@ -11,11 +12,11 @@ const config = {
     return [
       {
         source: '/docs/:path*.mdx',
-        destination: '/en/llms.mdx/docs/:path*',
+        destination: getDocsMdxRewriteDestination(docsDefaultLanguage),
       },
       {
         source: '/:lang/docs/:path*.mdx',
-        destination: '/:lang/llms.mdx/docs/:path*',
+        destination: getDocsMdxRewriteDestination(':lang'),
       },
     ]
   },

@@ -4,6 +4,7 @@
 - **Idempotency**: Check if the requirement (e.g., adding a signature) is already met before performing the edit.
 - **Preservation**: If another agent has already updated the status, do not revert or duplicate.
 - **Path Style Rule**: Use repo-relative paths for repository content in instruction completions, handoff notes, and reports. Do not write local absolute filesystem paths for in-repo files.
+- **Steady-State Writing Rule**: When updating docs or instruction files, write the current system contract directly: what the system is and how it works. Do not explain what it migrated from unless the file is explicitly an audit/history/rationale document.
 
 ## [Skill Mastery Protocol]
 - **Tooling First**: Always check available `skills/` before manually implementing complex transformations (e.g., i18n, DB schema).

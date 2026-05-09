@@ -1,7 +1,6 @@
 import { z } from 'zod'
 import { SUPPORTED_CONTENT_REGIONS } from '../constants/app'
 import { buildFavoriteKey } from './db/favoriteIdentity'
-import { TRACK_SOURCE } from './db/types'
 import type {
   Favorite,
   FileFolder,
@@ -11,12 +10,8 @@ import type {
   PodcastDownload,
   Setting,
   Subscription,
-} from './dexieDb'
-import {
-  normalizeFavoriteRecord,
-  normalizePlaybackSessionRecord,
-  normalizeSubscriptionRecord,
-} from './dexieDb'
+} from './db/types'
+import { TRACK_SOURCE } from './db/types'
 import { verifyVaultIntegrity } from './integrity'
 import { log, error as logError } from './logger'
 import { VaultRepository } from './repositories/VaultRepository'
@@ -273,23 +268,13 @@ export async function importVault(json: unknown): Promise<void> {
     throw new Error(integrity.error || 'Data integrity check failed')
   }
 
-  const normalizedSubscriptions = vault.data.subscriptions.map((subscription) =>
-    normalizeSubscriptionRecord(subscription, 'vault subscription')
-  )
-  const normalizedFavorites = vault.data.favorites.map((favorite) =>
-    normalizeFavoriteRecord(favorite, 'vault favorite')
-  )
-  const normalizedPlaybackSessions = vault.data.playback_sessions.map((session) =>
-    normalizePlaybackSessionRecord(session, 'vault playback session')
-  )
-
   await VaultRepository.replaceMetadata({
     folders: vault.data.folders,
     tracks: vault.data.tracks,
     localSubtitles: vault.data.local_subtitles,
-    subscriptions: normalizedSubscriptions,
-    favorites: normalizedFavorites,
-    playbackSessions: normalizedPlaybackSessions,
+    subscriptions: vault.data.subscriptions,
+    favorites: vault.data.favorites,
+    playbackSessions: vault.data.playback_sessions,
     settings: vault.data.settings.filter((entry) => !isCredentialLikeSettingKey(entry.key)),
   })
 

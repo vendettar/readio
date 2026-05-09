@@ -119,7 +119,7 @@ describe('PlayerSurfaceFrame follow restore', () => {
       expect(screen.getByRole('button', { name: 'disable-follow' })).toBeTruthy()
     })
     fireEvent.click(screen.getByRole('button', { name: 'disable-follow' }))
-    expect(screen.getByRole('button', { name: 'Follow' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'ariaFollow' })).toBeTruthy()
 
     await act(async () => {
       window.dispatchEvent(
@@ -145,7 +145,7 @@ describe('PlayerSurfaceFrame follow restore', () => {
       expect(screen.getByRole('button', { name: 'disable-follow' })).toBeTruthy()
     })
     fireEvent.click(screen.getByRole('button', { name: 'disable-follow' }))
-    expect(screen.getByRole('button', { name: 'Follow' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'ariaFollow' })).toBeTruthy()
 
     await act(async () => {
       window.dispatchEvent(
@@ -159,6 +159,6 @@ describe('PlayerSurfaceFrame follow restore', () => {
       )
     })
 
-    expect(screen.getByRole('button', { name: 'Follow' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'ariaFollow' })).toBeTruthy()
   })
 })

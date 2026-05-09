@@ -1,5 +1,4 @@
 import { TRANSCRIPT_INGESTION_STATUS, useTranscriptStore } from '../../../store/transcriptStore'
-import { getAsrCredentialKey, getCredential } from '../../db/credentialsRepository'
 import {
   buildDownloadJobOptionsFromCanonicalRemoteMetadata,
   downloadEpisode,
@@ -7,6 +6,7 @@ import {
 } from '../../downloadService'
 import { log, logError } from '../../logger'
 import { getAsrSettingsSnapshot } from '../../remoteTranscript'
+import { CredentialsRepository } from '../../repositories/CredentialsRepository'
 import {
   type CanonicalRemoteEpisodeMetadata,
   type EpisodeMetadata,
@@ -82,7 +82,9 @@ async function needsAsrDownloadBlocking(
   const provider = settings.asrProvider
   if (!provider) return false
 
-  const apiKey = (await getCredential(getAsrCredentialKey(provider))).trim()
+  const apiKey = (
+    await CredentialsRepository.get(CredentialsRepository.getAsrCredentialKey(provider))
+  ).trim()
   return !!apiKey
 }
 
@@ -123,8 +125,6 @@ async function resolveSourceForPlaybackMode(
 export async function resolveDownloadedPlaybackSource(
   input: DownloadAndResolveInput
 ): Promise<ResolvedPlaybackSource | null> {
-  useTranscriptStore.getState().setTranscriptIngestionStatus(TRANSCRIPT_INGESTION_STATUS.LOADING)
-
   const downloadOptions = buildDownloadJobOptionsFromCanonicalRemoteMetadata({
     audioUrl: input.payload.audioUrl,
     episodeTitle: input.payload.title,
@@ -171,15 +171,20 @@ export async function resolvePlayableSourceForPlayback(input: ResolvePlayableSou
   | {
       ok: true
       source: ResolvedPlaybackSource
+      didEnterTranscriptIngestionLoadingState: boolean
     }
   | {
       ok: false
       reason: PlaybackSourceFailureReason
+      didEnterTranscriptIngestionLoadingState: boolean
     }
 > {
   const sourceResolution = await resolveSourceForPlaybackMode(input)
   if (!sourceResolution.ok) {
-    return sourceResolution
+    return {
+      ...sourceResolution,
+      didEnterTranscriptIngestionLoadingState: false,
+    }
   }
 
   let source = sourceResolution.source
@@ -188,12 +193,14 @@ export async function resolvePlayableSourceForPlayback(input: ResolvePlayableSou
     (await needsAsrDownloadBlocking(source, input.transcriptUrl))
 
   if (!shouldBlockForAsr) {
-    return { ok: true, source }
+    return { ok: true, source, didEnterTranscriptIngestionLoadingState: false }
   }
 
   if (!isCanonicalRemoteEpisodeMetadata(input.metadata)) {
-    return { ok: false, reason: 'download_failed' }
+    return { ok: false, reason: 'download_failed', didEnterTranscriptIngestionLoadingState: false }
   }
+
+  useTranscriptStore.getState().setTranscriptIngestionStatus(TRANSCRIPT_INGESTION_STATUS.LOADING)
 
   const downloadedSource = await resolveDownloadedPlaybackSource({
     currentEpoch: input.currentEpoch,
@@ -208,13 +215,13 @@ export async function resolvePlayableSourceForPlayback(input: ResolvePlayableSou
     },
   })
   if (input.isEpochStale(input.currentEpoch)) {
-    return { ok: false, reason: 'stale' }
+    return { ok: false, reason: 'stale', didEnterTranscriptIngestionLoadingState: true }
   }
 
   if (!downloadedSource) {
-    return { ok: false, reason: 'download_failed' }
+    return { ok: false, reason: 'download_failed', didEnterTranscriptIngestionLoadingState: true }
   }
 
   source = downloadedSource
-  return { ok: true, source }
+  return { ok: true, source, didEnterTranscriptIngestionLoadingState: true }
 }

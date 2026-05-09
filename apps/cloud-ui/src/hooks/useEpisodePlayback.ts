@@ -52,13 +52,20 @@ export function useEpisodePlayback() {
     ) => {
       const resolvedCountryAtSave = resolveRequiredCountryAtSave(countryAtSave)
       if (!resolvedCountryAtSave) return
-      const episodePolicy = deriveSurfacePolicyFromEpisode(episode)
-      applySurfacePolicy({ setPlayableContext, toDocked, toMini }, episodePolicy)
-
-      void playEpisodeWithDeps({ setAudioUrl, play, pause, setPlaybackTrackId }, episode, podcast, {
-        countryAtSave: resolvedCountryAtSave,
-        mode: options?.mode ?? PLAYBACK_REQUEST_MODE.DEFAULT,
-      })
+      void (async () => {
+        const startResult = await playEpisodeWithDeps(
+          { setAudioUrl, play, pause, setPlaybackTrackId },
+          episode,
+          podcast,
+          {
+            countryAtSave: resolvedCountryAtSave,
+            mode: options?.mode ?? PLAYBACK_REQUEST_MODE.DEFAULT,
+          }
+        )
+        if (!startResult.started) return
+        const episodePolicy = deriveSurfacePolicyFromEpisode(episode)
+        applySurfacePolicy({ setPlayableContext, toDocked, toMini }, episodePolicy)
+      })()
     },
     [
       resolveRequiredCountryAtSave,
@@ -79,13 +86,18 @@ export function useEpisodePlayback() {
     (episode: SearchEpisode, countryAtSave: string, options?: { mode?: PlaybackRequestMode }) => {
       const resolvedCountryAtSave = resolveRequiredCountryAtSave(countryAtSave)
       if (!resolvedCountryAtSave) return
-      const searchPolicy = deriveSurfacePolicyFromSearchEpisode(episode)
-      applySurfacePolicy({ setPlayableContext, toDocked, toMini }, searchPolicy)
       void (async () => {
-        await playSearchEpisodeWithDeps({ setAudioUrl, play, pause, setPlaybackTrackId }, episode, {
-          countryAtSave: resolvedCountryAtSave,
-          mode: options?.mode ?? PLAYBACK_REQUEST_MODE.DEFAULT,
-        })
+        const startResult = await playSearchEpisodeWithDeps(
+          { setAudioUrl, play, pause, setPlaybackTrackId },
+          episode,
+          {
+            countryAtSave: resolvedCountryAtSave,
+            mode: options?.mode ?? PLAYBACK_REQUEST_MODE.DEFAULT,
+          }
+        )
+        if (!startResult.started) return
+        const searchPolicy = deriveSurfacePolicyFromSearchEpisode(episode)
+        applySurfacePolicy({ setPlayableContext, toDocked, toMini }, searchPolicy)
       })()
     },
     [
@@ -107,13 +119,19 @@ export function useEpisodePlayback() {
     (favorite: Favorite, countryAtSave: string, options?: { mode?: PlaybackRequestMode }) => {
       const resolvedCountryAtSave = resolveRequiredCountryAtSave(countryAtSave)
       if (!resolvedCountryAtSave) return
-      const favoritePolicy = deriveSurfacePolicyFromFavorite(favorite)
-      applySurfacePolicy({ setPlayableContext, toDocked, toMini }, favoritePolicy)
-
-      void playFavoriteWithDeps({ setAudioUrl, play, pause, setPlaybackTrackId }, favorite, {
-        countryAtSave: resolvedCountryAtSave,
-        mode: options?.mode ?? PLAYBACK_REQUEST_MODE.DEFAULT,
-      })
+      void (async () => {
+        const startResult = await playFavoriteWithDeps(
+          { setAudioUrl, play, pause, setPlaybackTrackId },
+          favorite,
+          {
+            countryAtSave: resolvedCountryAtSave,
+            mode: options?.mode ?? PLAYBACK_REQUEST_MODE.DEFAULT,
+          }
+        )
+        if (!startResult.started) return
+        const favoritePolicy = deriveSurfacePolicyFromFavorite(favorite)
+        applySurfacePolicy({ setPlayableContext, toDocked, toMini }, favoritePolicy)
+      })()
     },
     [
       resolveRequiredCountryAtSave,

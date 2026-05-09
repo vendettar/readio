@@ -179,26 +179,6 @@ describe('FilesIndexPage sections', () => {
     expect(screen.getByText('filesFiles')).not.toBeNull()
   })
 
-  it('renders folder mode sections and back-to-root action', () => {
-    useFilesDataMock.mockReturnValue({
-      folders: [{ id: 'f1', name: 'Folder A' }],
-      tracks: [],
-      subtitles: [],
-      currentFolder: { id: 'f1', name: 'Folder A' },
-      currentFolderId: 'f1',
-      setCurrentFolderId: vi.fn(),
-      folderCounts: { f1: 0 },
-      loadData: vi.fn().mockResolvedValue(undefined),
-      status: 'ready',
-    })
-
-    render(<FilesIndexPage />)
-
-    expect(screen.getByText('Folder A')).not.toBeNull()
-    expect(screen.getByText('filesBackToRoot')).not.toBeNull()
-    expect(screen.getByText('filesEmptyFolder')).not.toBeNull()
-  })
-
   it('shows ASR settings toast and navigates when retranscribe is unconfigured', async () => {
     useFilesDataMock.mockReturnValue({
       folders: [],

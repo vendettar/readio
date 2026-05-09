@@ -1,7 +1,7 @@
 // src/components/Files/FolderOverflowMenu.tsx
 
 import { MoreHorizontal, Pencil, Pin, PinOff, Trash2 } from 'lucide-react'
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 import { Button } from '../ui/button'
@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu'
-import { useNestedOverflowMenu } from '../ui/useNestedOverflowMenu'
+import { useNestedOverflowMenu, useOverflowMenuConfirmFocus } from '../ui/useNestedOverflowMenu'
 
 interface FolderOverflowMenuProps {
   isPinned: boolean
@@ -41,36 +41,27 @@ export function FolderOverflowMenu({
   // Refs for focus management
   const deleteItemRef = useRef<HTMLDivElement>(null)
   const cancelButtonRef = useRef<HTMLButtonElement>(null)
-  const prevStepRef = useRef<'menu' | 'confirm'>('menu')
   const { closeMenu, handleOpenChange, isMenuOpen, menuContentRef, setStep, step, triggerRef } =
     useNestedOverflowMenu<'menu' | 'confirm'>({
       initialStep: 'menu',
+      onMenuClose: () => {
+        setIsDeleting(false)
+      },
     })
 
   const handleMenuOpenChange = (open: boolean) => {
     handleOpenChange(open)
     onOpenChange?.(open)
-    if (!open) {
-      setIsDeleting(false)
-    }
   }
 
-  // Focus management via useLayoutEffect (more stable than rAF)
-  useLayoutEffect(() => {
-    if (!isMenuOpen) {
-      prevStepRef.current = 'menu'
-      return
-    }
-
-    const prevStep = prevStepRef.current
-    prevStepRef.current = step
-
-    if (step === 'confirm' && prevStep !== 'confirm') {
-      cancelButtonRef.current?.focus()
-    } else if (step === 'menu' && prevStep === 'confirm') {
-      deleteItemRef.current?.focus()
-    }
-  }, [isMenuOpen, step])
+  useOverflowMenuConfirmFocus({
+    initialStep: 'menu',
+    confirmStep: 'confirm',
+    isMenuOpen,
+    step,
+    confirmFocusRef: cancelButtonRef,
+    menuFocusRef: deleteItemRef,
+  })
 
   return (
     <DropdownMenu open={isMenuOpen} onOpenChange={handleMenuOpenChange} modal={false}>

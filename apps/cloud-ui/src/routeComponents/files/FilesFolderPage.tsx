@@ -7,7 +7,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { FileDropZone } from '../../components/Files/FileDropZone'
 import { TrackCard } from '../../components/Files/TrackCard'
-import type { ViewDensity } from '../../components/Files/types'
 import { ViewControlsBar } from '../../components/Files/ViewControlsBar'
 import { PageHeader, PageShell } from '../../components/layout'
 import { Button } from '../../components/ui/button'
@@ -15,7 +14,9 @@ import { HiddenFileInput } from '../../components/ui/hidden-file-input'
 import { useFileDragDrop } from '../../hooks/useFileDragDrop'
 import { useFilePlayback } from '../../hooks/useFilePlayback'
 import { useFileProcessing } from '../../hooks/useFileProcessing'
-import type { FileFolder, FileSubtitle, FileTrack } from '../../lib/db/types'
+import { useFilesData } from '../../hooks/useFilesData'
+import { useViewDensity } from '../../hooks/useViewDensity'
+import type { FileSubtitle } from '../../lib/db/types'
 import { snapCenterCursor } from '../../lib/dnd/modifiers'
 import { getDragPreviewWidthClass } from '../../lib/dnd/previewSizing'
 import { logError, warn as logWarn } from '../../lib/logger'
@@ -83,104 +84,21 @@ export default function FilesFolderPage() {
   const navigate = useNavigate()
   const { t } = useTranslation()
 
-  // folderId is now a string UUID from the route
-  const folderIdIsValid = folderId && folderId.length > 0
-
-  // Data state
-  const [folder, setFolder] = useState<FileFolder | null>(null)
-  const [tracks, setTracks] = useState<FileTrack[]>([])
-  const [subtitles, setSubtitles] = useState<FileSubtitle[]>([])
-  const [folders, setFolders] = useState<FileFolder[]>([])
+  const { folders, tracks, subtitles, currentFolder, loadData } = useFilesData(folderId)
+  const { density, handleDensityChange } = useViewDensity('files.viewDensity')
 
   // Files store for DB operations
-  const getFolder = useFilesStore((s) => s.getFolder)
-  const getSetting = useFilesStore((s) => s.getSetting)
-  const setSetting = useFilesStore((s) => s.setSetting)
   const getArtworkBlob = useFilesStore((s) => s.getAudioBlob)
   const updateFileTrack = useFilesStore((s) => s.updateFileTrack)
   const deleteFileTrack = useFilesStore((s) => s.deleteFileTrack)
   const deleteFileSubtitle = useFilesStore((s) => s.deleteFileSubtitle)
-  const loadAllFolders = useFilesStore((s) => s.loadAllFolders)
-  const loadAllTracks = useFilesStore((s) => s.loadAllTracks)
-  const getFileSubtitlesForTrack = useFilesStore((s) => s.getFileSubtitlesForTrack)
-
-  // Guard: request ID counter to prevent stale updates
-  const requestIdRef = useRef(0)
-
-  // Load data
-  const loadData = useCallback(async () => {
-    requestIdRef.current += 1
-    const thisRequestId = requestIdRef.current
-
-    try {
-      const [folderData, allFolders, allTracks] = await Promise.all([
-        getFolder(folderId),
-        loadAllFolders(),
-        loadAllTracks(),
-      ])
-
-      if (thisRequestId !== requestIdRef.current) return
-
-      if (!folderData) {
-        void navigate({ to: '/files', replace: true })
-        return
-      }
-
-      setFolder(folderData)
-      setFolders(allFolders)
-
-      // Filter tracks to this folder
-      const folderTracks = allTracks.filter((t: FileTrack) => t.folderId === folderId)
-      setTracks(folderTracks)
-
-      // Load subtitles for filter tracks
-      const subsPromises = folderTracks.map((t: FileTrack) => getFileSubtitlesForTrack(t.id))
-      const subsArrays = await Promise.all(subsPromises)
-
-      if (thisRequestId !== requestIdRef.current) return
-      setSubtitles(subsArrays.flat())
-    } catch (error) {
-      logError('[FolderView] Failed to load data', error)
-    }
-  }, [navigate, folderId, getFolder, loadAllFolders, loadAllTracks, getFileSubtitlesForTrack])
 
   useEffect(() => {
-    if (!folderIdIsValid) {
-      void navigate({ to: '/files', replace: true })
-      return
-    }
     const raf = window.requestAnimationFrame(() => {
       void loadData()
     })
     return () => window.cancelAnimationFrame(raf)
-  }, [loadData, folderIdIsValid, navigate])
-
-  // Density state
-  const [density, setDensity] = useState<ViewDensity>('comfortable')
-
-  const loadDensity = useCallback(async () => {
-    const saved = await getSetting('files.viewDensity')
-    if (saved === 'compact') setDensity('compact')
-  }, [getSetting])
-
-  useEffect(() => {
-    const raf = window.requestAnimationFrame(() => {
-      void loadDensity()
-    })
-    return () => window.cancelAnimationFrame(raf)
-  }, [loadDensity])
-
-  const handleDensityChange = useCallback(
-    async (value: ViewDensity) => {
-      setDensity(value)
-      try {
-        await setSetting('files.viewDensity', value)
-      } catch (err) {
-        logWarn('[FolderView] Failed to persist density setting', err)
-      }
-    },
-    [setSetting]
-  )
+  }, [loadData])
 
   // File processing - uploads go to this folder
   const { handleDroppedFiles, handleAudioInputChange, handleSubtitleInputChange } =
@@ -236,7 +154,7 @@ export default function FilesFolderPage() {
       // Always use original handler to ensure state cleanup (activeDragItem, etc.)
       void originalHandleDragEnd(event)
     },
-    [originalHandleDragEnd, folderId, loadData, updateFileTrack]
+    [folderId, originalHandleDragEnd, loadData, updateFileTrack]
   )
 
   // File input refs
@@ -312,11 +230,6 @@ export default function FilesFolderPage() {
     void navigate({ to: '/files' })
   }, [navigate])
 
-  // Redirect if folder not found
-  if (folder === null && tracks.length === 0) {
-    // Still loading or folder doesn't exist
-  }
-
   const itemCount = tracks.length
 
   return (
@@ -343,7 +256,7 @@ export default function FilesFolderPage() {
                 </Button>
               </BackDropTarget>
             }
-            title={folder?.name || t('loading')}
+            title={currentFolder?.name || t('loading')}
             subtitle={t('filesItemCount', { count: itemCount })}
             actions={
               <Button

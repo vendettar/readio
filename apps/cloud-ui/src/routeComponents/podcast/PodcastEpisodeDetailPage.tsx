@@ -1,10 +1,10 @@
 // src/routes/podcast/$country/$id/$episodeKey.tsx
 // Single episode detail page - Maximum information extraction
 
-import { useLocation, useNavigate, useParams } from '@tanstack/react-router'
+import { useLocation, useParams } from '@tanstack/react-router'
 import { motion } from 'framer-motion'
 import { AlertTriangle, FileText, Play, SquareArrowUpRight, Star } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { InteractiveArtwork } from '@/components/interactive/InteractiveArtwork'
 import { InteractiveTitle } from '@/components/interactive/InteractiveTitle'
@@ -16,14 +16,10 @@ import { useEpisodeResolution } from '@/hooks/useEpisodeResolution'
 import { formatDuration, formatRelativeTime } from '@/lib/dateUtils'
 import { buildFavoriteKey } from '@/lib/db/favoriteIdentity'
 import { mapCanonicalEpisodeToFavoriteInputs } from '@/lib/db/favoriteMappers'
-import { buildEpisodeCompactKey, getEditorPickRouteState } from '@/lib/discovery/editorPicks'
+import { getEditorPickRouteState } from '@/lib/discovery/editorPicks'
 import { logError } from '@/lib/logger'
 import { openExternal } from '@/lib/openExternal'
-import {
-  buildPodcastEpisodeRoute,
-  buildPodcastShowRoute,
-  normalizeCountryParam,
-} from '@/lib/routes/podcastRoutes'
+import { buildPodcastShowRoute, normalizeCountryParam } from '@/lib/routes/podcastRoutes'
 import { getValidExternalHttpUrl } from '@/lib/urlSafety'
 import { cn } from '@/lib/utils'
 import { useExploreStore } from '@/store/exploreStore'
@@ -56,8 +52,8 @@ export default function PodcastEpisodeDetailPage() {
   const id = String((params as { id?: string }).id ?? '')
   const episodeKey = String((params as { episodeKey?: string }).episodeKey ?? '')
   const location = useLocation()
-  const navigate = useNavigate()
   const normalizedRouteCountry = normalizeCountryParam(routeCountry)
+
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false)
 
   // Resolve podcast and episode metadata using centralized logic
@@ -73,30 +69,6 @@ export default function PodcastEpisodeDetailPage() {
     resolvedContent?.podcast.podcastItunesId ??
     editorPickState?.editorPickSnapshot?.podcastItunesId ??
     id.trim()
-
-  // Canonical key enforcement: redirect to canonical URL if key or podcast ID doesn't match
-  useEffect(() => {
-    if (!resolvedContent || isLoading) return
-    const { episode } = resolvedContent
-    const episodeGuid = episode.guid
-
-    const canonicalKey = buildEpisodeCompactKey(episodeGuid)
-    if (!canonicalKey) return
-
-    if (episodeKey !== canonicalKey || id !== canonicalPodcastId) {
-      const canonicalRoute = buildPodcastEpisodeRoute({
-        country: routeCountry,
-        podcastId: canonicalPodcastId,
-        episodeKey: canonicalKey,
-      })
-      if (canonicalRoute) {
-        void navigate({
-          ...canonicalRoute,
-          replace: true,
-        })
-      }
-    }
-  }, [canonicalPodcastId, resolvedContent, episodeKey, routeCountry, id, isLoading, navigate])
 
   // Favorite state - use atomic selectors
   const addFavorite = useExploreStore((s) => s.addFavorite)

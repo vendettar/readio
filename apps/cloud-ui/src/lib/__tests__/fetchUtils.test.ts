@@ -6,6 +6,7 @@ import {
   buildProxyUrl,
   CLOUD_BACKEND_FALLBACK_CLASSES,
   checkNetworkProxyHealth,
+  fetchTextWithFallback,
   fetchWithFallback,
 } from '../fetchUtils'
 import type { AppConfig } from '../runtimeConfig'
@@ -464,6 +465,150 @@ describe('fetchUtils: fetchWithFallback', () => {
 
     expect(directCalls).toBe(2)
     expect(proxyCalls).toBe(3)
+  })
+})
+
+describe('fetchUtils: fetchTextWithFallback', () => {
+  const url = 'https://internal.test/transcript'
+
+  const setupConfig = (overrides: Partial<AppConfig> = {}) => {
+    vi.mocked(runtimeConfig.getAppConfig).mockReturnValue({
+      PROXY_TIMEOUT_MS: 100,
+      DIRECT_TIMEOUT_MS: 50,
+      NETWORK_PROXY_URL: '',
+      ...overrides,
+    } as AppConfig)
+    vi.mocked(runtimeConfig.isRuntimeConfigReady).mockReturnValue(true)
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    server.resetHandlers()
+    __resetCloudBackendBreakerForTests()
+  })
+
+  it('treats plain text as the default text contract', async () => {
+    setupConfig()
+    server.use(
+      http.get(url, () => {
+        return new HttpResponse('WEBVTT\n\n00:00.000 --> 00:01.000\nHello')
+      })
+    )
+
+    await expect(fetchTextWithFallback(url)).resolves.toBe(
+      'WEBVTT\n\n00:00.000 --> 00:01.000\nHello'
+    )
+  })
+
+  it('still supports explicit structured-markup validation when requested', async () => {
+    setupConfig()
+    server.use(
+      http.get(url, () => {
+        return new HttpResponse('not xml')
+      })
+    )
+
+    await expect(fetchTextWithFallback(url, { expectXml: true })).rejects.toMatchObject({
+      name: 'FetchError',
+      message: expect.stringMatching(/structured markup/i),
+      url,
+      source: 'direct',
+      code: 'invalid_structured_markup',
+      status: undefined,
+    })
+  })
+})
+
+describe('fetchUtils: structured error propagation', () => {
+  const url = 'https://internal.test/resource'
+
+  const setupConfig = (overrides: Partial<AppConfig> = {}) => {
+    vi.mocked(runtimeConfig.getAppConfig).mockReturnValue({
+      PROXY_TIMEOUT_MS: 100,
+      DIRECT_TIMEOUT_MS: 50,
+      NETWORK_PROXY_URL: '',
+      ...overrides,
+    } as AppConfig)
+    vi.mocked(runtimeConfig.isRuntimeConfigReady).mockReturnValue(true)
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    server.resetHandlers()
+    __resetCloudBackendBreakerForTests()
+  })
+
+  it('preserves structured backend error payload details on standard proxy fallback responses', async () => {
+    const customProxy = 'https://my-proxy.com'
+    setupConfig({
+      NETWORK_PROXY_URL: customProxy,
+    })
+
+    server.use(
+      http.get(url, () => HttpResponse.error()),
+      http.post(customProxy, () =>
+        HttpResponse.json(
+          {
+            code: 'rate_limited',
+            message: 'too many requests',
+            request_id: 'req_proxy_123',
+          },
+          { status: 429 }
+        )
+      )
+    )
+
+    await expect(fetchWithFallback(url)).rejects.toMatchObject({
+      name: 'FetchError',
+      message: 'too many requests',
+      status: 429,
+      source: 'customProxy',
+      code: 'rate_limited',
+      requestId: 'req_proxy_123',
+      url,
+    })
+  })
+
+  it('preserves structured backend error payload details on cloud backend fallback responses', async () => {
+    setupConfig()
+    const fetchImpl = vi.fn(async (input: string) => {
+      if (input === url) {
+        throw new TypeError('Failed to fetch')
+      }
+
+      if (input === '/api/proxy') {
+        return new Response(
+          JSON.stringify({
+            code: 'proxy_unavailable',
+            message: 'cloud backend unavailable',
+            request_id: 'req_cloud_123',
+          }),
+          {
+            status: 503,
+            headers: {
+              'content-type': 'application/json',
+            },
+          }
+        )
+      }
+
+      throw new Error(`unexpected fetch target: ${input}`)
+    })
+
+    await expect(
+      fetchWithFallback(url, {
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+        cloudBackendFallbackClass: CLOUD_BACKEND_FALLBACK_CLASSES.TRANSCRIPT,
+      })
+    ).rejects.toMatchObject({
+      name: 'FetchError',
+      message: 'cloud backend unavailable',
+      status: 503,
+      source: 'cloudBackend',
+      code: 'proxy_unavailable',
+      requestId: 'req_cloud_123',
+      url,
+    })
   })
 })
 

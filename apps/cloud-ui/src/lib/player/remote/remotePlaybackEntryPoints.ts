@@ -129,27 +129,27 @@ export function createRemotePlaybackEntryPoints(deps: RemotePlaybackEntryPointDe
     episode: Episode,
     podcast: Podcast,
     options: CanonicalPlaybackModeOptions
-  ): Promise<void> {
+  ): Promise<PlaybackStartResult> {
     const payload = mapEpisodeToPlaybackPayload(episode, podcast)
-    await playRemotePayload(playbackDeps, payload, options)
+    return playRemotePayload(playbackDeps, payload, options)
   }
 
   async function playSearchEpisodeWithDeps(
     playbackDeps: RemotePlaybackDeps,
     episode: SearchEpisode,
     options: CanonicalPlaybackModeOptions
-  ): Promise<void> {
+  ): Promise<PlaybackStartResult> {
     const payload = mapSearchEpisodeToPlaybackPayload(episode)
-    await playRemotePayload(playbackDeps, payload, options)
+    return playRemotePayload(playbackDeps, payload, options)
   }
 
   async function playFavoriteWithDeps(
     playbackDeps: RemotePlaybackDeps,
     favorite: Favorite,
     options: CanonicalPlaybackModeOptions
-  ): Promise<void> {
+  ): Promise<PlaybackStartResult> {
     const payload = mapFavoriteToPlaybackPayload(favorite)
-    await playRemotePayload(playbackDeps, payload, options)
+    return playRemotePayload(playbackDeps, payload, options)
   }
 
   async function playStreamWithoutTranscriptWithDeps(
@@ -189,9 +189,9 @@ export function createRemotePlaybackEntryPoints(deps: RemotePlaybackEntryPointDe
     playbackDeps: RemotePlaybackDeps,
     session: PlaybackSession,
     options?: PlaybackModeOptions
-  ): Promise<boolean> {
+  ): Promise<PlaybackStartResult> {
     const payload = mapSessionToPlaybackPayload(session)
-    if (!payload) return false
+    if (!payload) return deps.createNonStartedResult('download_failed')
 
     const mode = options?.mode ?? PLAYBACK_REQUEST_MODE.DEFAULT
     const startResult = await deps.runPlaybackFlow<EpisodeMetadata>(playbackDeps, payload, {
@@ -213,7 +213,7 @@ export function createRemotePlaybackEntryPoints(deps: RemotePlaybackEntryPointDe
         playbackDeps.setSessionId?.(session.id)
       },
     })
-    return startResult.started
+    return startResult
   }
 
   return {

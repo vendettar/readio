@@ -1,6 +1,19 @@
 import { describe, expect, it, vi } from 'vitest'
+import { FetchError } from '../../fetchUtils'
 import { transcribeWithDeepgram, verifyDeepgramKey } from '../providers/deepgramCompatible'
 import { getAsrProviderConfig } from '../registry'
+
+const { fetchWithFallbackMock } = vi.hoisted(() => ({
+  fetchWithFallbackMock: vi.fn(),
+}))
+
+vi.mock('../../fetchUtils', async (importActual) => {
+  const actual = await importActual<typeof import('../../fetchUtils')>()
+  return {
+    ...actual,
+    fetchWithFallback: (...args: unknown[]) => fetchWithFallbackMock(...args),
+  }
+})
 
 describe('Deepgram native provider', () => {
   it('sends raw blob with token auth and fixed query params', async () => {
@@ -279,18 +292,15 @@ describe('Deepgram native provider', () => {
 
   it('verifyDeepgramKey follows 200/401/other contract', async () => {
     const providerConfig = getAsrProviderConfig('deepgram')
-    const fetchMock = vi
-      .fn()
-      .mockResolvedValueOnce({ ok: true, status: 200, headers: { get: () => null } })
-      .mockResolvedValueOnce({ ok: false, status: 401, headers: { get: () => null } })
-      .mockResolvedValueOnce({
-        ok: false,
-        status: 429,
-        headers: { get: () => null },
-        text: async () => 'rate limited',
-      })
 
-    vi.stubGlobal('fetch', fetchMock)
+    fetchWithFallbackMock
+      .mockResolvedValueOnce({ ok: true, status: 200 })
+      .mockRejectedValueOnce(
+        new FetchError('unauthorized', 'https://api.deepgram.com', 401, 'direct')
+      )
+      .mockRejectedValueOnce(
+        new FetchError('rate limited', 'https://api.deepgram.com', 429, 'direct')
+      )
 
     await expect(verifyDeepgramKey({ apiKey: 'dg_ok', providerConfig })).resolves.toBe(true)
     await expect(verifyDeepgramKey({ apiKey: 'dg_bad', providerConfig })).resolves.toBe(false)

@@ -1,4 +1,5 @@
 // src/router.tsx
+import type { QueryClient } from '@tanstack/react-query'
 import { createRouter } from '@tanstack/react-router'
 import { RouteErrorFallback } from './components/RouteErrorFallback'
 import { RouteNotFound } from './components/RouteNotFound'
@@ -12,6 +13,9 @@ export const router = createRouter({
   defaultErrorComponent: RouteErrorFallback,
   defaultNotFoundComponent: RouteNotFound,
   defaultPendingComponent: RoutePending,
+  context: {
+    queryClient: undefined as unknown as QueryClient,
+  },
 })
 
 // Register the router for type safety

@@ -2,6 +2,8 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createQueryClientWrapper } from '../../__tests__/queryClient'
 import { makeSearchEpisode, makeSearchPodcast } from '../../lib/discovery/__tests__/fixtures'
+import { DiscoveryParseError } from '../../lib/discovery/cloudApi'
+import { FetchError, NetworkError } from '../../lib/fetchUtils'
 import { useDiscoverySearch } from '../useDiscoverySearch'
 
 const searchPodcastsMock = vi.fn()
@@ -114,5 +116,70 @@ describe('useDiscoverySearch', () => {
     expect(result.current.isLoading).toBe(false)
     expect(searchPodcastsMock).not.toHaveBeenCalled()
     expect(searchEpisodesMock).not.toHaveBeenCalled()
+  })
+
+  it('retries once when the discovery boundary marks a 5xx search error as retryable', async () => {
+    searchPodcastsMock
+      .mockRejectedValueOnce(
+        new FetchError('service unavailable', '/api/v1/discovery/search/podcasts', 503, 'direct')
+      )
+      .mockResolvedValueOnce([makeSearchPodcast({ title: 'Retry Podcast Result' })])
+    searchEpisodesMock
+      .mockRejectedValueOnce(
+        new FetchError('service unavailable', '/api/v1/discovery/search/episodes', 503, 'direct')
+      )
+      .mockResolvedValueOnce([makeSearchEpisode({ title: 'Retry Episode Result' })])
+
+    const { result } = renderHook(() => useDiscoverySearch('podcast', true), {
+      wrapper: createQueryClientWrapper({
+        setup: (queryClient) => {
+          queryClient.setDefaultOptions({
+            queries: {
+              retry: false,
+              retryDelay: 0,
+            },
+          })
+        },
+      }),
+    })
+
+    await waitFor(() => {
+      expect(result.current.podcastSection.status).toBe('ready')
+      expect(result.current.episodeSection.status).toBe('ready')
+      expect(result.current.podcastSection.items[0]?.title).toBe('Retry Podcast Result')
+      expect(result.current.episodeSection.items[0]?.title).toBe('Retry Episode Result')
+    })
+
+    expect(searchPodcastsMock).toHaveBeenCalledTimes(2)
+    expect(searchEpisodesMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not retry discovery errors that the discovery boundary marks as terminal', async () => {
+    searchPodcastsMock.mockRejectedValue(
+      new DiscoveryParseError('GET /api/v1/discovery/search/podcasts: invalid JSON response')
+    )
+    searchEpisodesMock.mockRejectedValue(new NetworkError('offline'))
+
+    const { result } = renderHook(() => useDiscoverySearch('podcast', true), {
+      wrapper: createQueryClientWrapper({
+        setup: (queryClient) => {
+          queryClient.setDefaultOptions({
+            queries: {
+              retry: false,
+              retryDelay: 0,
+            },
+          })
+        },
+      }),
+    })
+
+    await waitFor(() => {
+      expect(result.current.podcastSection.status).toBe('ready')
+      expect(result.current.episodeSection.status).toBe('ready')
+      expect(result.current.isLoading).toBe(false)
+    })
+
+    expect(searchPodcastsMock).toHaveBeenCalledTimes(1)
+    expect(searchEpisodesMock).toHaveBeenCalledTimes(1)
   })
 })

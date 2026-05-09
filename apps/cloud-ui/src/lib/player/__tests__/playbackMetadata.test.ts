@@ -13,6 +13,13 @@ import {
 } from '../playbackMetadata'
 
 describe('playbackMetadata normalization', () => {
+  function expectCanonicalRemoteMetadata(
+    metadata: ReturnType<typeof createCanonicalRemoteEpisodeMetadata>
+  ) {
+    expect(metadata).not.toBeNull()
+    return metadata
+  }
+
   it('rejects remote-shaped metadata when canonical country snapshot is missing', () => {
     expect(
       normalizeEpisodeMetadata({
@@ -25,15 +32,17 @@ describe('playbackMetadata normalization', () => {
   })
 
   it('preserves canonical remote metadata shape when updating playback mode', () => {
-    const metadata = createCanonicalRemoteEpisodeMetadata({
-      showTitle: 'Podcast',
-      artworkUrl: 'https://example.com/art.jpg',
-      episodeGuid: 'episode-1',
-      podcastItunesId: 'podcast-1',
-      countryAtSave: 'us',
-    })
+    const metadata = expectCanonicalRemoteMetadata(
+      createCanonicalRemoteEpisodeMetadata({
+        showTitle: 'Podcast',
+        artworkUrl: 'https://example.com/art.jpg',
+        episodeGuid: 'episode-1',
+        podcastItunesId: 'podcast-1',
+        countryAtSave: 'us',
+      })
+    )
 
-    expect(withPlaybackRequestMode(metadata!, 'default')).toMatchObject({
+    expect(withPlaybackRequestMode(metadata, 'default')).toMatchObject({
       kind: 'remote-episode',
       countryAtSave: 'us',
       playbackRequestMode: 'default',

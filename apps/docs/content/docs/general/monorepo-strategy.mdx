@@ -13,7 +13,7 @@ This document outlines the current role of `apps/cloud-ui`, `apps/cloud-api`, an
 |---|---|---|---|---|
 | **Cloud UI** | `apps/cloud-ui` | SPA/Web App | 🟢 Live | Main frontend surface for playback, discovery, library, files, and settings. |
 | **Cloud API** | `apps/cloud-api` | Go backend | 🟢 Live | Serve `apps/cloud-ui/dist`, own same-origin relays, proxy/fallback routes, and bootstrap SQLite. |
-| **Native** | `apps/native` | Mobile | ⚪ Scaffold only | iOS/Android wrapper via Capacitor. |
+| **Native** | `apps/native` | Mobile | ⚪ Scaffold only | iOS/Android wrapper via Flutter (planned). |
 
 ---
 
@@ -49,8 +49,9 @@ This document outlines the current role of `apps/cloud-ui`, `apps/cloud-api`, an
 - **CarPlay / Auto**: Simplified UI for driving.
 
 ### Tech Stack
-- **Framework**: Capacitor-based shell remains a future direction.
+- **Framework**: Flutter-based shell remains a future direction.
 - **Shared Code**: Shared package topology is intentionally minimal today; docs must not claim shared packages that no longer exist.
+
 
 ---
 

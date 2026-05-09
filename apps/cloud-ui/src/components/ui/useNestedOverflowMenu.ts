@@ -1,22 +1,25 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 export type OutsideInteractionBehavior = 'dismiss-only' | 'dismiss-and-allow-click-through'
 
 interface UseNestedOverflowMenuOptions<TStep extends string> {
   initialStep: TStep
   closeOnNestedOutside?: boolean
+  onMenuClose?: () => void
   outsideInteractionBehavior?: OutsideInteractionBehavior
 }
 
 export function useNestedOverflowMenu<TStep extends string>({
   initialStep,
   closeOnNestedOutside = true,
+  onMenuClose,
   outsideInteractionBehavior = 'dismiss-only',
 }: UseNestedOverflowMenuOptions<TStep>) {
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const menuContentRef = useRef<HTMLDivElement | null>(null)
   const suppressedClickTargetRef = useRef<Node | null>(null)
   const suppressedClickTimeoutRef = useRef<number | null>(null)
+  const wasMenuOpenRef = useRef(false)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [step, setStep] = useState<TStep>(initialStep)
 
@@ -39,6 +42,13 @@ export function useNestedOverflowMenu<TStep extends string>({
       setStep(initialStep)
     }
   }
+
+  useEffect(() => {
+    if (wasMenuOpenRef.current && !isMenuOpen) {
+      onMenuClose?.()
+    }
+    wasMenuOpenRef.current = isMenuOpen
+  }, [isMenuOpen, onMenuClose])
 
   useEffect(() => {
     if (!isMenuOpen || step === initialStep) return
@@ -118,4 +128,43 @@ export function useNestedOverflowMenu<TStep extends string>({
     step,
     triggerRef,
   }
+}
+
+interface UseOverflowMenuConfirmFocusOptions<TStep extends string> {
+  initialStep: TStep
+  confirmStep: TStep
+  isMenuOpen: boolean
+  step: TStep
+  confirmFocusRef: RefObject<HTMLElement | null>
+  menuFocusRef: RefObject<HTMLElement | null>
+}
+
+export function useOverflowMenuConfirmFocus<TStep extends string>({
+  initialStep,
+  confirmStep,
+  isMenuOpen,
+  step,
+  confirmFocusRef,
+  menuFocusRef,
+}: UseOverflowMenuConfirmFocusOptions<TStep>) {
+  const previousStepRef = useRef(initialStep)
+
+  useLayoutEffect(() => {
+    if (!isMenuOpen) {
+      previousStepRef.current = initialStep
+      return
+    }
+
+    const previousStep = previousStepRef.current
+    previousStepRef.current = step
+
+    if (step === confirmStep && previousStep !== confirmStep) {
+      confirmFocusRef.current?.focus()
+      return
+    }
+
+    if (step === initialStep && previousStep === confirmStep) {
+      menuFocusRef.current?.focus()
+    }
+  }, [confirmFocusRef, confirmStep, initialStep, isMenuOpen, menuFocusRef, step])
 }

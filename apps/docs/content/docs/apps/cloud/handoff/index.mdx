@@ -4,12 +4,12 @@ title: Cloud Handoff
 
 # Cloud Handoff
 
-This document is the current entry point for the Cloud bootstrap phase.
+This document is the entry point for Cloud handoff.
 It records the implemented `apps/cloud-ui` + `apps/cloud-api` contracts and should stay aligned with the actual code.
 
 ## 0. Documentation Map
 
-Use the Cloud handoff tree as the current SSOT for app-level frontend/backend contracts:
+Use the Cloud handoff tree as the SSOT for app-level frontend/backend contracts:
 
 - `handoff/architecture.mdx`
 - `handoff/database.mdx`
@@ -18,22 +18,22 @@ Use the Cloud handoff tree as the current SSOT for app-level frontend/backend co
 - `handoff/features/*`
 - `frontend/*`
 
-`handoff/` should stay focused on ownership, contracts, and bootstrap context. Long-lived frontend implementation notes now live under `cloud/frontend/`.
+`handoff/` should stay focused on ownership and contracts. Long-lived frontend implementation notes live under `cloud/frontend/`.
 
 ## 1. Current Purpose
 
 - Build `apps/cloud-ui` as a full Lite-equivalent frontend clone.
 - Serve the built `apps/cloud-ui/dist` frontend output from `apps/cloud-api`.
-- Keep migrated discovery flows backend-owned and same-origin through `apps/cloud-api`, including search, top, Editor's Picks batch lookup, podcast lookup, and PI episode-list lookup.
+- Keep discovery flows backend-owned and same-origin through `apps/cloud-api`, including search, top, Editor's Picks batch lookup, podcast lookup, and PI episode-list lookup.
 - Prefer direct browser media access when available, and use `apps/cloud-api` as the built-in fallback proxy only for supported media failure classes.
 - Keep browser-local downloads, local transcripts, and other browser-owned media artifacts browser-local; clearing site data still removes them.
 - Allow backend-owned shared podcast transcript assets for eligible podcast episodes to persist separately under deployment-owned storage.
-- Keep Cloud Settings free of the `CORS Proxy` block for the current Cloud contract.
-- Route Cloud ASR provider transcription through a dedicated same-origin relay in `apps/cloud-api`, while keeping provider credentials user-owned and browser-supplied per request in this phase.
-- Keep Cloud ASR provider verification/readiness browser-direct until a later instruction explicitly changes that ownership.
-- Keep Workbox/PWA disabled in the current Cloud phase unless a later instruction explicitly restores it.
-- Provide the `/api/proxy` RSS proxy contract for the current scaffold phase.
-- Bootstrap SQLite for the Cloud backend scaffold and keep the lifecycle explicit.
+- Keep Cloud Settings free of the `CORS Proxy` block.
+- Route Cloud ASR provider transcription through a dedicated same-origin relay in `apps/cloud-api`, while keeping provider credentials user-owned and browser-supplied per request.
+- Keep Cloud ASR provider verification/readiness browser-direct.
+- Keep Workbox/PWA disabled.
+- Provide the `/api/proxy` RSS proxy contract.
+- Use SQLite for the Cloud backend and keep the lifecycle explicit.
 
 ## 2. Static Serving Strategy
 
@@ -55,27 +55,27 @@ Use the Cloud handoff tree as the current SSOT for app-level frontend/backend co
 
 ## 4. SQLite Bootstrap Status
 
-- SQLite is the current Cloud persistence bootstrap target.
+- SQLite is the Cloud persistence target.
 - The bootstrap path opens the database, applies the platform pragma baseline, runs goose migrations, and closes cleanly on shutdown.
 - Shared podcast transcript asset metadata now live in backend SQLite, while the canonical transcript cue payload is stored as backend-owned `json.gz` files under `PODCASR_TRANSCRIPTS_DIR`.
 - Browser-local transcript artifacts remain browser-owned; this backend storage layer is separate and only applies to eligible shared podcast transcript assets.
 
 ## 5. Boundaries
 
-- Do describe Cloud as a Lite-equivalent frontend clone served by the Go backend for this phase.
-- Do describe migrated discovery requests as backend-owned same-origin flows, including search, top, Editor's Picks batch lookup, podcast lookup, and PI episode-list lookup.
+- Do describe Cloud as a Lite-equivalent frontend clone served by the Go backend.
+- Do describe discovery requests as backend-owned same-origin flows, including search, top, Editor's Picks batch lookup, podcast lookup, and PI episode-list lookup.
 - Do describe Cloud Settings as no longer including the `CORS Proxy` block.
 - Do describe Cloud media as browser-direct first, with backend fallback only for approved failure classes.
 - Do describe Cloud ASR provider transcription as same-origin relay-owned through a dedicated backend route.
-- Do describe provider credentials in Cloud ASR as user-owned and browser-supplied per request in this phase.
+- Do describe provider credentials in Cloud ASR as user-owned and browser-supplied per request.
 - Do describe Cloud ASR provider verification/readiness as still browser-direct.
 - Do describe backend media fallback as pass-through and non-caching.
 - Do describe browser-local media artifacts as remaining browser-local.
-- Do note that Cloud currently keeps Workbox/PWA disabled in this phase.
-- Do not claim schema, sync, auth, or multi-user SaaS behavior in this scaffold stage.
+- Do note that Cloud keeps Workbox/PWA disabled.
+- Do not claim schema, sync, auth, or multi-user SaaS behavior.
 - Do not claim all audio always goes through backend.
 - Do not claim `/api/proxy` handles provider transcription.
-- Do not claim Cloud stores user ASR provider credentials server-side in this phase.
+- Do not claim Cloud stores user ASR provider credentials server-side.
 - Do not claim generic server-side media caching or a server-backed browser library.
 - Do describe backend-owned shared podcast transcript assets as a narrow persistent backend artifact contract for eligible podcast episodes.
 - Keep future Cloud evolution in docs that are explicitly labeled as future direction.

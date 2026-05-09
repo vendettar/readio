@@ -1,4 +1,4 @@
-import { clearAllCredentials } from './db/credentialsRepository'
+import { CredentialsRepository } from './repositories/CredentialsRepository'
 import { PlaybackRepository } from './repositories/PlaybackRepository'
 import { StorageRepository } from './repositories/StorageRepository'
 import { bumpSettingsWriteEpoch, SETTINGS_STORAGE_KEY } from './schemas/settings'
@@ -14,7 +14,7 @@ export async function clearPlaybackSessionAudioCacheForMaintenance(id: string): 
 
 export async function wipeAllPersistentStorage(): Promise<void> {
   bumpSettingsWriteEpoch()
-  await clearAllCredentials()
+  await CredentialsRepository.clearAll()
   await StorageRepository.clearAllData()
   await clearDictCacheMemory()
   localStorage.removeItem(SETTINGS_STORAGE_KEY)

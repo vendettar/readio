@@ -5,7 +5,6 @@ import {
   resolveAsrEffectiveModel,
   validateAsrProviderModelSelection,
 } from './asr/registry'
-import { getAsrCredentialKey, getCredential } from './db/credentialsRepository'
 import {
   buildDownloadJobOptionsFromCanonicalRemoteMetadata,
   persistAudioBlobAsDownload,
@@ -39,6 +38,7 @@ import {
   isTrackStillCurrent,
   resolveAsrIdentityUrl,
 } from './remoteTranscriptRuntime'
+import { CredentialsRepository } from './repositories/CredentialsRepository'
 import { getSettingsSnapshot } from './schemas/settings'
 import { toast } from './toast'
 
@@ -116,7 +116,9 @@ async function resolveAsrApiKeyAndSettings(): Promise<
     return { ok: false, reasonCode: selectionValidation.code }
   }
 
-  const apiKey = (await getCredential(getAsrCredentialKey(settings.asrProvider))).trim()
+  const apiKey = (
+    await CredentialsRepository.get(CredentialsRepository.getAsrCredentialKey(settings.asrProvider))
+  ).trim()
   if (!apiKey) return { ok: false }
 
   return {

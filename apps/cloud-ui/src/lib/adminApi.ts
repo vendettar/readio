@@ -1,46 +1,58 @@
+import { z } from 'zod'
+
 const ADMIN_BASE = '/admin'
 
-export interface AdminLogEntry {
-  ts: string
-  level: string
-  msg: string
-  route?: string
-  upstream_kind?: string
-  upstream_host?: string
-  elapsed_ms?: number
-  error_class?: string
-  status?: number
-  attrs?: Record<string, string>
-}
+export const AdminLogEntrySchema = z.object({
+  ts: z.string(),
+  level: z.string(),
+  msg: z.string(),
+  route: z.string().optional(),
+  upstream_kind: z.string().optional(),
+  upstream_host: z.string().optional(),
+  elapsed_ms: z.number().optional(),
+  error_class: z.string().optional(),
+  status: z.number().optional(),
+  attrs: z.record(z.string(), z.string()).optional(),
+})
 
-export interface AdminLogsResponse {
-  entries: AdminLogEntry[]
-  total: number
-  buffer_capacity: number
-}
+export type AdminLogEntry = z.infer<typeof AdminLogEntrySchema>
 
-export interface AdminHealthResponse {
-  uptime_seconds: number
-  buffer_size: number
-  buffer_capacity: number
-  go_version: string
-  goroutines: number
-  memory_alloc_mb: number
-  memory_sys_mb: number
-}
+export const AdminLogsResponseSchema = z.object({
+  entries: z.array(AdminLogEntrySchema),
+  total: z.number(),
+  buffer_capacity: z.number(),
+})
 
-export interface RouteStat {
-  count: number
-  errors: number
-  p95_ms: number
-}
+export type AdminLogsResponse = z.infer<typeof AdminLogsResponseSchema>
 
-export interface AdminMetricsSummary {
-  uptime_seconds: number
-  total_requests: number
-  by_route: Record<string, RouteStat>
-  by_error_class: Record<string, number>
-}
+export const AdminHealthResponseSchema = z.object({
+  uptime_seconds: z.number(),
+  buffer_size: z.number(),
+  buffer_capacity: z.number(),
+  go_version: z.string(),
+  goroutines: z.number(),
+  memory_alloc_mb: z.number(),
+  memory_sys_mb: z.number(),
+})
+
+export type AdminHealthResponse = z.infer<typeof AdminHealthResponseSchema>
+
+export const RouteStatSchema = z.object({
+  count: z.number(),
+  errors: z.number(),
+  p95_ms: z.number(),
+})
+
+export type RouteStat = z.infer<typeof RouteStatSchema>
+
+export const AdminMetricsSummarySchema = z.object({
+  uptime_seconds: z.number(),
+  total_requests: z.number(),
+  by_route: z.record(z.string(), RouteStatSchema),
+  by_error_class: z.record(z.string(), z.number()),
+})
+
+export type AdminMetricsSummary = z.infer<typeof AdminMetricsSummarySchema>
 
 interface LogFilters {
   level?: string
@@ -52,6 +64,7 @@ interface LogFilters {
 async function adminFetch<T>(
   token: string,
   path: string,
+  schema: z.ZodSchema<T>,
   params?: Record<string, string>
 ): Promise<T> {
   const url = new URL(path, window.location.origin)
@@ -65,7 +78,9 @@ async function adminFetch<T>(
   })
   if (res.status === 401) throw new Error('UNAUTHORIZED')
   if (!res.ok) throw new Error(`Admin API error: ${res.status}`)
-  return res.json()
+
+  const data = await res.json()
+  return schema.parse(data)
 }
 
 export async function fetchAdminLogs(
@@ -77,15 +92,15 @@ export async function fetchAdminLogs(
   if (filters.route) params.route = filters.route
   if (filters.error_class) params.error_class = filters.error_class
   if (filters.limit) params.limit = String(filters.limit)
-  return adminFetch<AdminLogsResponse>(token, `${ADMIN_BASE}/logs`, params)
+  return adminFetch(token, `${ADMIN_BASE}/logs`, AdminLogsResponseSchema, params)
 }
 
 export async function fetchAdminHealth(token: string): Promise<AdminHealthResponse> {
-  return adminFetch<AdminHealthResponse>(token, `${ADMIN_BASE}/health`)
+  return adminFetch(token, `${ADMIN_BASE}/health`, AdminHealthResponseSchema)
 }
 
 export async function fetchAdminMetricsSummary(token: string): Promise<AdminMetricsSummary> {
-  return adminFetch<AdminMetricsSummary>(token, `${ADMIN_BASE}/metrics/summary`)
+  return adminFetch(token, `${ADMIN_BASE}/metrics/summary`, AdminMetricsSummarySchema)
 }
 
 export async function clearAdminLogs(token: string): Promise<void> {

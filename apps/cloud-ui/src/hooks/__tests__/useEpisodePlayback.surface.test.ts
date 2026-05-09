@@ -66,9 +66,12 @@ vi.mock('../../lib/discovery/queryCache', () => ({
 describe('useEpisodePlayback surface mode', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    playEpisodeWithDepsMock.mockResolvedValue({ started: true, reason: 'started' })
+    playSearchEpisodeWithDepsMock.mockResolvedValue({ started: true, reason: 'started' })
+    playFavoriteWithDepsMock.mockResolvedValue({ started: true, reason: 'started' })
   })
 
-  it('opens docked when playing a feed episode and falls back to normalized store country', () => {
+  it('opens docked when playing a feed episode and falls back to normalized store country', async () => {
     const episode: Episode = {
       guid: 'ep-1',
       title: 'Episode',
@@ -98,7 +101,9 @@ describe('useEpisodePlayback surface mode', () => {
       result.current.playEpisode(episode, podcast, 'us')
     })
 
-    expect(setPlayableContextMock).toHaveBeenCalledWith(true)
+    await waitFor(() => {
+      expect(setPlayableContextMock).toHaveBeenCalledWith(true)
+    })
     expect(toDockedMock).toHaveBeenCalledTimes(1)
     expect(toMiniMock).not.toHaveBeenCalled()
     expect(playEpisodeWithDepsMock).toHaveBeenCalledTimes(1)
@@ -154,6 +159,49 @@ describe('useEpisodePlayback surface mode', () => {
     )
   })
 
+  it('does not open docked when feed playback fails to start', async () => {
+    playEpisodeWithDepsMock.mockResolvedValueOnce({
+      started: false,
+      reason: 'download_failed',
+    })
+
+    const episode: Episode = {
+      guid: 'ep-fail',
+      title: 'Failed Episode',
+      audioUrl: 'https://example.com/failed.mp3',
+      description: '',
+      pubDate: '2024-01-01',
+      artworkUrl: 'https://example.com/episode-art-fail.jpg',
+      fileSize: 1024,
+      duration: 60,
+      explicit: false,
+      link: 'https://example.com/episodes/failed',
+    }
+    const podcast: Podcast = {
+      podcastItunesId: '10',
+      title: 'Podcast',
+      author: '',
+      artwork: '',
+      description: '',
+      lastUpdateTime: 0,
+      episodeCount: 0,
+      language: 'en',
+      genres: ['Technology'],
+    }
+
+    const { result } = renderHook(() => useEpisodePlayback())
+    act(() => {
+      result.current.playEpisode(episode, podcast, 'us')
+    })
+
+    await waitFor(() => {
+      expect(playEpisodeWithDepsMock).toHaveBeenCalledTimes(1)
+    })
+    expect(setPlayableContextMock).not.toHaveBeenCalled()
+    expect(toDockedMock).not.toHaveBeenCalled()
+    expect(toMiniMock).not.toHaveBeenCalled()
+  })
+
   it('opens docked when playing a search episode', async () => {
     const episode = {
       podcastItunesId: '2',
@@ -170,12 +218,12 @@ describe('useEpisodePlayback surface mode', () => {
       result.current.playSearchEpisode(episode, 'us')
     })
 
-    expect(setPlayableContextMock).toHaveBeenCalledWith(true)
-    expect(toDockedMock).toHaveBeenCalledTimes(1)
-    expect(toMiniMock).not.toHaveBeenCalled()
     await waitFor(() => {
       expect(playSearchEpisodeWithDepsMock).toHaveBeenCalledTimes(1)
     })
+    expect(setPlayableContextMock).toHaveBeenCalledWith(true)
+    expect(toDockedMock).toHaveBeenCalledTimes(1)
+    expect(toMiniMock).not.toHaveBeenCalled()
     expect(playSearchEpisodeWithDepsMock).toHaveBeenCalledWith(
       expect.anything(),
       episode,
@@ -214,7 +262,7 @@ describe('useEpisodePlayback surface mode', () => {
     })
   })
 
-  it('opens docked when playing a favorite', () => {
+  it('opens docked when playing a favorite', async () => {
     const favorite: Favorite = {
       id: 'fav-1',
       key: '101::favorite-guid-1',
@@ -238,10 +286,49 @@ describe('useEpisodePlayback surface mode', () => {
       result.current.playFavorite(favorite, 'us')
     })
 
+    await waitFor(() => {
+      expect(playFavoriteWithDepsMock).toHaveBeenCalledTimes(1)
+    })
     expect(setPlayableContextMock).toHaveBeenCalledWith(true)
     expect(toDockedMock).toHaveBeenCalledTimes(1)
     expect(toMiniMock).not.toHaveBeenCalled()
-    expect(playFavoriteWithDepsMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not open docked when favorite playback fails to start', async () => {
+    playFavoriteWithDepsMock.mockResolvedValueOnce({
+      started: false,
+      reason: 'no_playable_source',
+    })
+
+    const favorite: Favorite = {
+      id: 'fav-no-start',
+      key: '104::favorite-guid-4',
+      audioUrl: 'https://example.com/favorite-4.mp3',
+      episodeTitle: 'Favorite 4',
+      podcastTitle: 'Podcast',
+      artworkUrl: '',
+      episodeArtworkUrl: '',
+      addedAt: Date.now(),
+      description: 'Test description',
+      pubDate: '2025-02-01',
+      durationSeconds: 180,
+      podcastItunesId: '104',
+      episodeGuid: 'favorite-guid-4',
+      transcriptUrl: '',
+      countryAtSave: 'us',
+    }
+
+    const { result } = renderHook(() => useEpisodePlayback())
+    act(() => {
+      result.current.playFavorite(favorite, 'us')
+    })
+
+    await waitFor(() => {
+      expect(playFavoriteWithDepsMock).toHaveBeenCalledTimes(1)
+    })
+    expect(setPlayableContextMock).not.toHaveBeenCalled()
+    expect(toDockedMock).not.toHaveBeenCalled()
+    expect(toMiniMock).not.toHaveBeenCalled()
   })
 
   it('fails closed when favorite playback caller passes an invalid country snapshot', () => {

@@ -28,7 +28,7 @@ describe('useFilesData', () => {
       folderCounts: { 'folder-1': 3 },
     })
 
-    const { result } = renderHook(() => useFilesData())
+    const { result } = renderHook(() => useFilesData(null))
 
     await act(async () => {
       await result.current.loadData()
@@ -57,12 +57,28 @@ describe('useFilesData', () => {
           })
       )
 
-    const { result } = renderHook(() => useFilesData())
+    const { result, rerender } = renderHook(
+      ({ folderId }: { folderId: string | null }) => useFilesData(folderId),
+      {
+        initialProps: { folderId: null as string | null },
+      }
+    )
+
+    let first!: Promise<void>
+    act(() => {
+      first = result.current.loadData()
+    })
 
     await act(async () => {
-      result.current.setCurrentFolderId('folder-2')
-      const first = result.current.loadData()
-      const second = result.current.loadData()
+      rerender({ folderId: 'folder-2' })
+    })
+
+    let second!: Promise<void>
+    act(() => {
+      second = result.current.loadData()
+    })
+
+    await act(async () => {
       resolverB?.({
         folders: [],
         tracks: [
@@ -99,6 +115,9 @@ describe('useFilesData', () => {
       })
       await Promise.all([first, second])
     })
+
+    expect(loadFilesDataSnapshot).toHaveBeenNthCalledWith(1, null)
+    expect(loadFilesDataSnapshot).toHaveBeenNthCalledWith(2, 'folder-2')
 
     await waitFor(() => {
       expect(result.current.tracks).toEqual([

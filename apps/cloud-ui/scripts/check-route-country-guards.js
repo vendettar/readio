@@ -5,23 +5,22 @@ import { fileURLToPath } from 'node:url'
 import ts from 'typescript'
 
 const root = path.resolve(process.cwd(), 'src')
-const targets = [
-  path.join(root, 'hooks', 'useEpisodeResolution.ts'),
-  path.join(root, 'lib', 'discovery', 'podcastQueryContract.ts'),
-  path.join(root, 'lib', 'discovery', 'libraryRouteSearch.ts'),
-  path.join(root, 'routes', '$country', 'podcast'),
-  path.join(root, 'routeComponents', 'SearchPage.tsx'),
-  path.join(root, 'components', 'GlobalSearch'),
-  path.join(root, 'components', 'Explore', 'PodcastEpisodesGrid.tsx'),
-  path.join(root, 'components', 'Explore', 'PodcastShowsCarousel.tsx'),
-  path.join(root, 'components', 'Explore', 'PodcastShowCard.tsx'),
-  path.join(root, 'routeComponents', 'podcast'),
-  path.join(root, 'routeComponents', 'HistoryPage.tsx'),
-  path.join(root, 'routeComponents', 'FavoritesPage.tsx'),
-  path.join(root, 'routeComponents', 'SubscriptionsPage.tsx'),
-]
 
 export const ROUTE_GUARD_ALLOWLIST_PATTERNS = [/\.test\./, /__tests__/, /routeTree\.gen\.ts$/]
+export const ROUTE_GUARD_INCLUDE_PATTERNS = [
+  /^src\/routes\//,
+  /^src\/routeComponents\//,
+  /^src\/components\/GlobalSearch\//,
+  /^src\/components\/Explore\//,
+  /^src\/lib\/discovery\//,
+  /^src\/lib\/routes\//,
+  /^src\/hooks\/use[A-Za-z0-9]*(Discovery|Search|Resolution|Podcast|Route)[A-Za-z0-9]*\.(ts|tsx)$/,
+]
+export const ROUTE_GUARD_EXCLUDE_PATTERNS = [
+  /^src\/lib\/discovery\/cloudApi\.ts$/,
+  /^src\/lib\/discovery\/index\.ts$/,
+  /^src\/lib\/discovery\/schema\.ts$/,
+]
 
 export const ROUTE_GUARD_FORBIDDEN_PATTERNS = [
   /location\.state\.country/,
@@ -41,6 +40,12 @@ export const ROUTE_GUARD_FORBIDDEN_PATTERNS = [
 
 const ALLOWED_LOCATION_STATE_FIELDS = new Set(['fromLayoutPrefix'])
 
+export function shouldScanRouteGuardFile(scanPath) {
+  if (ROUTE_GUARD_ALLOWLIST_PATTERNS.some((pattern) => pattern.test(scanPath))) return false
+  if (ROUTE_GUARD_EXCLUDE_PATTERNS.some((pattern) => pattern.test(scanPath))) return false
+  return ROUTE_GUARD_INCLUDE_PATTERNS.some((pattern) => pattern.test(scanPath))
+}
+
 function walk(dir) {
   const out = []
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -50,18 +55,16 @@ function walk(dir) {
       continue
     }
     if (!/\.(ts|tsx)$/.test(entry.name)) continue
-    if (ROUTE_GUARD_ALLOWLIST_PATTERNS.some((pattern) => pattern.test(full))) continue
+    const relativeToRoot = path.relative(root, full).split(path.sep).join('/')
+    const scanPath = `src/${relativeToRoot}`
+    if (!shouldScanRouteGuardFile(scanPath)) continue
     out.push(full)
   }
   return out
 }
 
 export function findRouteGuardViolations() {
-  const files = targets.flatMap((target) => {
-    if (!fs.existsSync(target)) return []
-    const stat = fs.statSync(target)
-    return stat.isDirectory() ? walk(target) : [target]
-  })
+  const files = walk(root)
 
   const violations = []
   for (const file of files) {

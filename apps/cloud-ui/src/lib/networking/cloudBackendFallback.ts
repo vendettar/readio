@@ -38,6 +38,12 @@ type CloudBackendBreakerState = {
   bypassUntil: number
 }
 
+interface StructuredErrorPayload {
+  code?: unknown
+  message?: unknown
+  request_id?: unknown
+}
+
 const cloudBackendBreaker = new Map<string, CloudBackendBreakerState>()
 
 function getCloudBackendBreakerKey(
@@ -104,6 +110,40 @@ function buildCloudBackendProxyBody(options: {
     url: options.url,
     method: options.method,
     ...(Object.keys(options.headers).length > 0 ? { headers: options.headers } : {}),
+  })
+}
+
+function parseStructuredErrorPayload(text: string): StructuredErrorPayload | null {
+  if (!text.trim()) return null
+
+  try {
+    const value = JSON.parse(text) as unknown
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as StructuredErrorPayload)
+      : null
+  } catch {
+    return null
+  }
+}
+
+async function toFetchErrorFromResponse(
+  response: Response,
+  options: {
+    url: string
+    source: 'direct' | 'cloudBackend'
+    defaultMessage: string
+  }
+): Promise<FetchError> {
+  const text = await response.text()
+  const payload = parseStructuredErrorPayload(text)
+  const message =
+    typeof payload?.message === 'string' && payload.message.trim()
+      ? payload.message
+      : text.trim() || options.defaultMessage
+
+  return new FetchError(message, options.url, response.status, options.source, {
+    code: typeof payload?.code === 'string' ? payload.code : undefined,
+    requestId: typeof payload?.request_id === 'string' ? payload.request_id : undefined,
   })
 }
 
@@ -193,12 +233,11 @@ export async function fetchCloudBackendWithFallback<T>(
 
   const parseResult = async (response: Response, source: 'direct' | 'cloudBackend'): Promise<T> => {
     if (!response.ok) {
-      throw new FetchError(
-        `${source === 'direct' ? 'Direct fetch' : 'Cloud backend fallback'} failed: ${response.status}`,
+      throw await toFetchErrorFromResponse(response, {
         url,
-        response.status,
-        source
-      )
+        source,
+        defaultMessage: `${source === 'direct' ? 'Direct fetch' : 'Cloud backend fallback'} failed: ${response.status}`,
+      })
     }
     if (raw) return response as unknown as T
     return (await parseFetchedResponse(response, { raw, json })) as T

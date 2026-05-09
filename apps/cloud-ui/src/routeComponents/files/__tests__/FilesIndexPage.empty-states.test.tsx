@@ -70,8 +70,6 @@ function makeFilesDataResult(overrides: Partial<FilesDataResult> = {}): FilesDat
     subtitles: [],
     currentFolder: undefined,
     folderCounts: {},
-    currentFolderId: null,
-    setCurrentFolderId: vi.fn(),
     status: 'success',
     error: null,
     loadData: vi.fn(),
@@ -104,11 +102,7 @@ describe('FilesIndexPage Empty States', () => {
   })
 
   it('shows root-level onboarding empty state when library is empty', () => {
-    vi.mocked(useFilesData).mockReturnValue(
-      makeFilesDataResult({
-        currentFolderId: null,
-      })
-    )
+    vi.mocked(useFilesData).mockReturnValue(makeFilesDataResult())
 
     render(<FilesIndexPage />)
 
@@ -116,27 +110,8 @@ describe('FilesIndexPage Empty States', () => {
     expect(screen.getByText('filesEmptyDesc')).toBeDefined()
   })
 
-  it('shows folder-specific empty state when a subfolder is empty', () => {
-    vi.mocked(useFilesData).mockReturnValue(
-      makeFilesDataResult({
-        currentFolderId: 'folder-123',
-        currentFolder: { id: 'folder-123', name: 'My Folder', createdAt: Date.now() },
-      })
-    )
-
-    render(<FilesIndexPage />)
-
-    expect(screen.getByText('folderEmptyTitle')).toBeDefined()
-    expect(screen.getByText('folderEmptyDesc')).toBeDefined()
-    expect(screen.queryByText('filesEmptyTitle')).toBeNull()
-  })
-
   it('suppresses root-level empty state while naming a new folder', () => {
-    vi.mocked(useFilesData).mockReturnValue(
-      makeFilesDataResult({
-        currentFolderId: null,
-      })
-    )
+    vi.mocked(useFilesData).mockReturnValue(makeFilesDataResult())
 
     vi.mocked(useFolderManagement).mockReturnValue(
       makeFolderManagementResult({

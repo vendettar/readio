@@ -43,11 +43,11 @@ vi.mock('@tanstack/react-router', () => ({
 
 vi.mock('../../../hooks/useEpisodeResolution', () => ({
   useEpisodeResolution: () => ({
-    podcast,
-    episode: resolvedEpisode,
+    resolvedContent: podcast && resolvedEpisode ? { podcast, episode: resolvedEpisode } : null,
     isLoading: false,
     podcastError: null,
     resolutionError: null,
+    notFound: null,
   }),
 }))
 

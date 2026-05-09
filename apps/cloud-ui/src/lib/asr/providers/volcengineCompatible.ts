@@ -1,3 +1,4 @@
+import { generateRequestId } from '../../id'
 import type { ASRProviderConfig } from '../registry'
 import { ASRClientError, type ASRCue, type ASRTranscriptionResult, type ASRWord } from '../types'
 
@@ -284,7 +285,7 @@ export async function transcribeWithVolcengine({
         'X-Api-App-Key': appId,
         'X-Api-Access-Key': accessToken,
         'X-Api-Resource-Id': 'volc.bigasr.auc_turbo',
-        'X-Api-Request-Id': crypto.randomUUID(),
+        'X-Api-Request-Id': generateRequestId(),
         'X-Api-Sequence': '-1',
       },
       body,
@@ -452,7 +453,7 @@ export async function verifyVolcengineKey({
         'X-Api-App-Key': appId,
         'X-Api-Access-Key': accessToken,
         'X-Api-Resource-Id': 'volc.bigasr.auc_turbo',
-        'X-Api-Request-Id': crypto.randomUUID(),
+        'X-Api-Request-Id': generateRequestId(),
         'X-Api-Sequence': '-1',
       },
       body,

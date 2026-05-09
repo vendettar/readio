@@ -1,4 +1,4 @@
-import { FetchError, fetchWithFallback } from '../../fetchUtils'
+import { fetchWithFallback } from '../../fetchUtils'
 import type { ASRProviderConfig } from '../registry'
 import { ASRClientError, type ASRCue, type ASRTranscriptionResult, type ASRWord } from '../types'
 import { extractRetryAfterMs } from './openaiCompatible'
@@ -273,12 +273,12 @@ export async function verifyDeepgramKey({
     })
     return true
   } catch (error: unknown) {
-    if (error instanceof FetchError && error.status === 401) return false
-    if (error instanceof FetchError && error.status) {
-      throw mapStatusToError(
-        error.status,
-        `${providerConfig.label} verify failed with ${error.status}`
-      )
+    const status = (error as { status?: number })?.status
+    if (status === 401) {
+      return false
+    }
+    if (status && typeof status === 'number') {
+      throw mapStatusToError(status, `${providerConfig.label} verify failed with ${status}`)
     }
     throw mapFetchErrorToAsrError(error)
   }

@@ -9,6 +9,7 @@
 - **Idempotency**: Verify the current state of documentation before applying updates.
 - **Sync**: Ensure architecture diagrams and standard docs reflect the post-refactor reality.
 - **Path Style Rule**: Use repo-relative paths for repository content in docs, instructions, and reports. Do not write local absolute filesystem paths for in-repo files.
+- **Steady-State Writing Rule**: When updating docs after a refactor, document the resulting system directly: what it is and how it works. Do not narrate the old system or migration path unless the doc is explicitly audit/history/rationale scoped.
 
 ## [Skill Mastery Protocol]
 - **AST Manipulation**: Prioritize tools like `ts-morph` or structural search/replace over manual editing for large-scale renames or moves.

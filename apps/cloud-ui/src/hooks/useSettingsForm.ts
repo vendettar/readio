@@ -5,15 +5,9 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useEffect, useMemo, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
-import {
-  ASR_CREDENTIAL_KEY,
-  getAllCredentials,
-  getCredentialWriteEpoch,
-  setCredentials,
-  TRANSLATE_CREDENTIAL_KEY,
-} from '../lib/db/credentialsRepository'
 import { isAbortLikeError } from '../lib/fetchUtils'
 import { warn } from '../lib/logger'
+import { CredentialsRepository } from '../lib/repositories/CredentialsRepository'
 
 import {
   createSettingsFormSchema,
@@ -32,16 +26,26 @@ function mapCredentialRecordToSettings(
   credentials: Record<string, string>
 ): SettingsCredentialValues {
   return {
-    asrKey: credentials[ASR_CREDENTIAL_KEY] ?? '',
-    translateKey: credentials[TRANSLATE_CREDENTIAL_KEY] ?? '',
+    asrKey: credentials[CredentialsRepository.ASR_CREDENTIAL_KEY] ?? '',
+    translateKey: credentials[CredentialsRepository.TRANSLATE_CREDENTIAL_KEY] ?? '',
   }
 }
 
 function mapSettingsToCredentialRecord(values: SettingsCredentialValues): Record<string, string> {
   return {
-    [ASR_CREDENTIAL_KEY]: values.asrKey,
-    [TRANSLATE_CREDENTIAL_KEY]: values.translateKey,
+    [CredentialsRepository.ASR_CREDENTIAL_KEY]: values.asrKey,
+    [CredentialsRepository.TRANSLATE_CREDENTIAL_KEY]: values.translateKey,
   }
+}
+
+type SettingsSaveEpochs = {
+  expectedCredentialEpoch: number
+  expectedSettingsEpoch: number
+}
+
+type SettingsSavePayload = {
+  preferences: SettingsPreferenceValues
+  credentials: Record<string, string>
 }
 
 /**
@@ -81,7 +85,7 @@ export function useSettingsForm() {
 
     const preferences = getSettingsSnapshot()
 
-    void getAllCredentials()
+    void CredentialsRepository.getAll()
       .then((credentialsStored) => {
         if (!isMounted) return
         const credentials = mapCredentialRecordToSettings(credentialsStored)
@@ -100,22 +104,38 @@ export function useSettingsForm() {
     }
   }, [form])
 
-  // Save settings to storage
-  const saveSettings = async (
-    values: SettingsFormValues,
-    expectedCredentialEpoch: number,
-    expectedSettingsEpoch: number
-  ) => {
+  const captureSaveEpochs = (): SettingsSaveEpochs => ({
+    expectedCredentialEpoch: CredentialsRepository.getWriteEpoch(),
+    expectedSettingsEpoch: getSettingsWriteEpoch(),
+  })
+
+  const persistSettingsPayload = async (
+    payload: SettingsSavePayload,
+    epochs: SettingsSaveEpochs
+  ): Promise<void> => {
     // Guard: Never save if we failed to load credentials (avoids overwriting with defaults)
     if (loadError) {
       throw new Error('Cannot save settings because credentials failed to load')
     }
 
+    // Guard against race conditions during wipeAll
+    if (epochs.expectedSettingsEpoch !== getSettingsWriteEpoch()) {
+      throw new Error('Settings write aborted due to newer wipe action')
+    }
+
+    const settingsSaved = setJson(SETTINGS_STORAGE_KEY, payload.preferences)
+    if (!settingsSaved) {
+      throw new Error('Failed to persist settings preferences')
+    }
+
+    await CredentialsRepository.setMany(payload.credentials, epochs.expectedCredentialEpoch)
+  }
+
+  const saveSettings = async (values: SettingsFormValues, epochs: SettingsSaveEpochs) => {
     const normalizedAsr = normalizeAsrPreferenceValues({
       asrProvider: values.asrProvider,
       asrModel: values.asrModel,
     })
-
     const preferences: SettingsPreferenceValues = {
       ...normalizedAsr,
       pauseOnDictionaryLookup: values.pauseOnDictionaryLookup,
@@ -125,64 +145,17 @@ export function useSettingsForm() {
       translateKey: values.translateKey,
     }
 
-    // Guard against race conditions during wipeAll
-    if (expectedSettingsEpoch !== getSettingsWriteEpoch()) {
-      throw new Error('Settings write aborted due to newer wipe action')
-    }
-
-    const settingsSaved = setJson(SETTINGS_STORAGE_KEY, preferences)
-    if (!settingsSaved) {
-      throw new Error('Failed to persist settings preferences')
-    }
-
-    await setCredentials(mapSettingsToCredentialRecord(credentials), expectedCredentialEpoch)
-  }
-
-  // Handle form submission (explicit save)
-  const onSubmit = async () => {
-    if (loadError) {
-      toast.errorKey('settingsNotSaved')
-      return
-    }
-    const expectedCredentialEpoch = getCredentialWriteEpoch()
-    const expectedSettingsEpoch = getSettingsWriteEpoch()
-    const isValid = await form.trigger()
-    if (!isValid) return
-
-    try {
-      await saveSettings(form.getValues(), expectedCredentialEpoch, expectedSettingsEpoch)
-    } catch (error) {
-      if (!isAbortLikeError(error)) warn('[useSettingsForm] Failed to save settings:', error)
-      toast.errorKey('settingsNotSaved')
-    }
-  }
-
-  // Handle field blur - auto-save if valid
-  const handleFieldBlur = async () => {
-    if (loadError) return
-    const expectedCredentialEpoch = getCredentialWriteEpoch()
-    const expectedSettingsEpoch = getSettingsWriteEpoch()
-    const isValid = await form.trigger()
-    if (isValid) {
-      try {
-        await saveSettings(form.getValues(), expectedCredentialEpoch, expectedSettingsEpoch)
-      } catch (error) {
-        if (!isAbortLikeError(error)) warn('[useSettingsForm] Failed to auto-save settings:', error)
-        toast.errorKey('settingsNotSaved')
-      }
-    }
+    await persistSettingsPayload(
+      {
+        preferences,
+        credentials: mapSettingsToCredentialRecord(credentials),
+      },
+      epochs
+    )
   }
 
   // Handle ASR section blur - persist ASR preference changes without forcing full ASR completeness errors.
-  const saveAsrDraftSettings = async (
-    values: SettingsFormValues,
-    expectedCredentialEpoch: number,
-    expectedSettingsEpoch: number
-  ) => {
-    if (loadError) {
-      throw new Error('Cannot save settings because credentials failed to load')
-    }
-
+  const saveAsrDraftSettings = async (values: SettingsFormValues, epochs: SettingsSaveEpochs) => {
     const normalizedAsr = normalizeAsrPreferenceValues({
       asrProvider: values.asrProvider,
       asrModel: values.asrModel,
@@ -193,34 +166,77 @@ export function useSettingsForm() {
       ...normalizedAsr,
     }
 
-    if (expectedSettingsEpoch !== getSettingsWriteEpoch()) {
-      throw new Error('Settings write aborted due to newer wipe action')
-    }
-
-    const settingsSaved = setJson(SETTINGS_STORAGE_KEY, asrScopedPreferences)
-    if (!settingsSaved) {
-      throw new Error('Failed to persist settings preferences')
-    }
-
-    await setCredentials(
+    await persistSettingsPayload(
       {
-        [ASR_CREDENTIAL_KEY]: values.asrKey,
+        preferences: asrScopedPreferences,
+        credentials: {
+          [CredentialsRepository.ASR_CREDENTIAL_KEY]: values.asrKey,
+        },
       },
-      expectedCredentialEpoch
+      epochs
     )
   }
 
-  const handleAsrFieldBlur = async () => {
-    if (loadError) return
-    const expectedCredentialEpoch = getCredentialWriteEpoch()
-    const expectedSettingsEpoch = getSettingsWriteEpoch()
+  const runSaveAction = async (
+    saveAction: () => Promise<void>,
+    warningMessage: string,
+    options?: { skipWhenLoadError?: boolean }
+  ) => {
+    if (loadError) {
+      if (options?.skipWhenLoadError) return
+      toast.errorKey('settingsNotSaved')
+      return
+    }
+
     try {
-      await saveAsrDraftSettings(form.getValues(), expectedCredentialEpoch, expectedSettingsEpoch)
+      await saveAction()
     } catch (error) {
-      if (!isAbortLikeError(error))
-        warn('[useSettingsForm] Failed to auto-save ASR settings:', error)
+      if (!isAbortLikeError(error)) warn(warningMessage, error)
       toast.errorKey('settingsNotSaved')
     }
+  }
+
+  // Handle form submission (explicit save)
+  const onSubmit = async () => {
+    if (loadError) {
+      toast.errorKey('settingsNotSaved')
+      return
+    }
+
+    const epochs = captureSaveEpochs()
+    const isValid = await form.trigger()
+    if (!isValid) return
+
+    await runSaveAction(
+      () => saveSettings(form.getValues(), epochs),
+      '[useSettingsForm] Failed to save settings:'
+    )
+  }
+
+  // Handle field blur - auto-save if valid
+  const handleFieldBlur = async () => {
+    if (loadError) return
+
+    const epochs = captureSaveEpochs()
+    const isValid = await form.trigger()
+    if (isValid) {
+      await runSaveAction(
+        () => saveSettings(form.getValues(), epochs),
+        '[useSettingsForm] Failed to auto-save settings:',
+        { skipWhenLoadError: true }
+      )
+    }
+  }
+
+  const handleAsrFieldBlur = async () => {
+    const epochs = captureSaveEpochs()
+    await runSaveAction(
+      () => saveAsrDraftSettings(form.getValues(), epochs),
+      '[useSettingsForm] Failed to auto-save ASR settings:',
+      {
+        skipWhenLoadError: true,
+      }
+    )
   }
 
   return {

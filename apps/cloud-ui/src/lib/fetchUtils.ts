@@ -247,6 +247,6 @@ export async function fetchTextWithFallback(
   return fetchWithFallback<string>(url, {
     ...options,
     json: false,
-    expectXml: options.expectXml ?? true,
+    expectXml: options.expectXml ?? false,
   })
 }

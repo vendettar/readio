@@ -30,21 +30,13 @@ export function useSession() {
   const setProgress = usePlayerStore((s) => s.setProgress)
   const updateProgress = usePlayerStore((s) => s.updateProgress)
   const saveProgressNow = usePlayerStore((s) => s.saveProgressNow)
-  const restoreSession = usePlayerStore((s) => s.restoreSession)
   const initializationStatus = usePlayerStore((s) => s.initializationStatus)
   const restoreInFlightKeysRef = useRef<Set<string>>(new Set())
   const restoreAppliedRef = useRef<Map<string, RestoreAppliedEntry>>(new Map())
 
-  // 1. Initialize session on mount - now fully encapsulated in store
-  useEffect(() => {
-    if (initializationStatus === 'idle') {
-      void restoreSession()
-    }
-  }, [initializationStatus, restoreSession])
-
   const isManagingSessionRef = useRef(false)
 
-  // 2. Create NEW session if files are loaded manually (not via restoration)
+  // 1. Create NEW session if files are loaded manually (not via restoration)
   useEffect(() => {
     // We allow session creation if restoration is ready OR if it failed (so users can still upload)
     if (
@@ -109,14 +101,14 @@ export function useSession() {
     setStoreSessionId,
   ])
 
-  // 3. Save on unmount
+  // 2. Save on unmount
   useEffect(() => {
     return () => {
       void saveProgressNow()
     }
   }, [saveProgressNow])
 
-  // 4. Restore progress to physical audio element
+  // 3. Restore progress to physical audio element
   const restoreProgress = useCallback(
     async (audioElement: HTMLAudioElement) => {
       const target = resolveCurrentPlaybackRestoreTarget()

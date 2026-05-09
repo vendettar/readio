@@ -15,15 +15,12 @@ import { mapPlaybackSessionToFavoriteInputs } from '../lib/db/favoriteMappers'
 import { isNavigableExplorePlaybackSession, type PlaybackSession } from '../lib/db/types'
 import { formatDateShort } from '../lib/formatters'
 import { logError } from '../lib/logger'
-import { mapPlaybackSessionToEpisodeMetadata } from '../lib/player/episodeMetadata'
+import { restoreLocalHistoryPlayback } from '../lib/player/localHistoryPlayback'
 import { PLAYBACK_REQUEST_MODE, type PlaybackRequestMode } from '../lib/player/playbackMode'
 import {
-  bumpPlaybackEpoch,
   canPlayRemoteStreamWithoutTranscript,
-  getPlaybackEpoch,
   playHistorySessionWithDeps,
 } from '../lib/player/remotePlayback'
-import { loadSessionSubtitleCues } from '../lib/player/session/playerSessionSubtitleLoader'
 import {
   applySurfacePolicy,
   deriveSurfacePolicyFromHistorySession,
@@ -111,10 +108,7 @@ export default function HistoryPage() {
     async (session: PlaybackSession, mode: PlaybackRequestMode = PLAYBACK_REQUEST_MODE.DEFAULT) => {
       // For explore/podcast sessions with audioUrl, delegate to the shared remote playback flow.
       if (session.source === 'explore' && session.audioUrl) {
-        const policy = deriveSurfacePolicyFromHistorySession(session)
-        applySurfacePolicy({ setPlayableContext, toDocked, toMini }, policy)
-
-        void playHistorySessionWithDeps(
+        const startResult = await playHistorySessionWithDeps(
           {
             setAudioUrl,
             play: startPlayback,
@@ -125,59 +119,28 @@ export default function HistoryPage() {
           session,
           { mode }
         )
+        if (startResult.started) {
+          const policy = deriveSurfacePolicyFromHistorySession(session)
+          applySurfacePolicy({ setPlayableContext, toDocked, toMini }, policy)
+        }
         return
       }
 
       // For local sessions, restore directly from IDB blobs.
       if (session.source === 'local' && session.audioId) {
-        const currentEpoch = bumpPlaybackEpoch()
-        const audioBlob = await getAudioBlobForSession(session.audioId)
-        if (getPlaybackEpoch() !== currentEpoch) return
-
-        if (audioBlob) {
-          const loadAudioBlob = usePlayerStore.getState().loadAudioBlob
-          const artworkUrl = artworkBlobs[session.id] ?? session.artworkUrl ?? ''
-          await loadAudioBlob(
-            audioBlob,
-            session.title,
-            artworkUrl,
-            session.id,
-            undefined,
-            mapPlaybackSessionToEpisodeMetadata(session)
-          )
-
-          // Second epoch check after async blob loading/revocation
-          if (getPlaybackEpoch() !== currentEpoch) return
-
-          let subtitleCues: Awaited<ReturnType<typeof loadSessionSubtitleCues>> = null
-          try {
-            subtitleCues = await loadSessionSubtitleCues(session)
-          } catch (error) {
-            if (import.meta.env.DEV) {
-              logError('[History] Failed to restore subtitles for local session', {
-                sessionId: session.id,
-                subtitleId: session.subtitleId,
-                error,
-              })
-            }
-          }
-          if (getPlaybackEpoch() !== currentEpoch) return
-          if (subtitleCues) {
-            useTranscriptStore.getState().setSubtitles(subtitleCues)
-          }
-
-          setPlaybackTrackId(session.localTrackId ?? null)
-          setPlayableContext(true)
-          toDocked()
-          startPlayback()
-          return
-        }
-        if (import.meta.env.DEV) {
-          logError('[History] Missing local audio blob for session playback', {
-            sessionId: session.id,
-            audioId: session.audioId,
-          })
-        }
+        await restoreLocalHistoryPlayback(session, {
+          scope: 'History',
+          getAudioBlob: getAudioBlobForSession,
+          loadAudioBlob: usePlayerStore.getState().loadAudioBlob,
+          setSubtitles: useTranscriptStore.getState().setSubtitles,
+          setPlaybackTrackId,
+          applyStartedSurface: () => {
+            setPlayableContext(true)
+            toDocked()
+          },
+          play: startPlayback,
+          resolveArtwork: () => artworkBlobs[session.id] ?? session.artworkUrl ?? '',
+        })
       } else {
         // Log failure but don't force navigate, which can interrupt audio loading
         logError('[Session] Invalid session type for playback', session)
@@ -186,7 +149,6 @@ export default function HistoryPage() {
     [
       artworkBlobs,
       getAudioBlobForSession,
-      setAudioUrl,
       setPlaybackTrackId,
       setPlayableContext,
       setSessionId,
@@ -194,6 +156,7 @@ export default function HistoryPage() {
       toDocked,
       toMini,
       pausePlayback,
+      setAudioUrl,
     ]
   )
 

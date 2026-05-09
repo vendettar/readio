@@ -60,18 +60,19 @@ describe('editorPicks canonical identifiers', () => {
     ).toBe('1200361736')
   })
 
-  it('parses route state when a valid editorPickSnapshot is present and strips legacy episodeSnapshot', () => {
+  it('parses route state when a valid editorPickSnapshot is present', () => {
     const editorPickSnapshot = makeEditorPickPodcast({
       podcastItunesId: '1200361736',
     })
 
     const state = getEditorPickRouteState({
       editorPickSnapshot,
-      episodeSnapshot: { title: 'Legacy Search Episode' },
+      source: 'editor-pick-card',
     })
 
     expect(state).toEqual({
       editorPickSnapshot,
+      source: 'editor-pick-card',
     })
   })
 

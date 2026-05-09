@@ -14,9 +14,9 @@ import {
   type SubtitleExportFormat,
   serializeSubtitleExport,
 } from '../../subtitles'
-import type { PlaybackExportContext } from './playbackExportContext'
 import { resolvePlaybackExportBaseName } from '../playbackIdentity'
 import { resolveCanonicalRemotePlaybackSource } from '../playbackMetadata'
+import type { PlaybackExportContext } from './playbackExportContext'
 
 export interface ExportAsset {
   filename: string

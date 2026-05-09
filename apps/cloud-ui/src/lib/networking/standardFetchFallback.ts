@@ -20,6 +20,46 @@ export interface StandardFetchFallbackOptions {
   body?: string
 }
 
+interface StructuredErrorPayload {
+  code?: unknown
+  message?: unknown
+  request_id?: unknown
+}
+
+function parseStructuredErrorPayload(text: string): StructuredErrorPayload | null {
+  if (!text.trim()) return null
+
+  try {
+    const value = JSON.parse(text) as unknown
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as StructuredErrorPayload)
+      : null
+  } catch {
+    return null
+  }
+}
+
+async function toFetchErrorFromResponse(
+  response: Response,
+  options: {
+    url: string
+    source: FetchSource
+    defaultMessage: string
+  }
+): Promise<FetchError> {
+  const text = await response.text()
+  const payload = parseStructuredErrorPayload(text)
+  const message =
+    typeof payload?.message === 'string' && payload.message.trim()
+      ? payload.message
+      : text.trim() || options.defaultMessage
+
+  return new FetchError(message, options.url, response.status, options.source, {
+    code: typeof payload?.code === 'string' ? payload.code : undefined,
+    requestId: typeof payload?.request_id === 'string' ? payload.request_id : undefined,
+  })
+}
+
 /**
  * Helper to execute a function with exponential backoff retry logic
  */
@@ -99,12 +139,11 @@ export async function fetchStandardWithFallback<T = string>(
         ...(requestBody !== undefined ? { body: requestBody } : {}),
       })
       if (!response.ok) {
-        throw new FetchError(
-          `Direct fetch failed: ${response.status}`,
+        throw await toFetchErrorFromResponse(response, {
           url,
-          response.status,
-          'direct'
-        )
+          source: 'direct',
+          defaultMessage: `Direct fetch failed: ${response.status}`,
+        })
       }
       if (raw) return response as unknown as T
       return json ? await response.json() : ((await response.text()) as unknown as T)
@@ -139,12 +178,11 @@ export async function fetchStandardWithFallback<T = string>(
     try {
       const response = await fetch(baseProxyUrl, init)
       if (!response.ok) {
-        throw new FetchError(
-          `Proxy (${baseProxyUrl}) failed: ${response.status}`,
+        throw await toFetchErrorFromResponse(response, {
           url,
-          response.status,
-          source
-        )
+          source,
+          defaultMessage: `Proxy (${baseProxyUrl}) failed: ${response.status}`,
+        })
       }
       if (raw) return response as unknown as T
       if (json) return await response.json()
@@ -240,7 +278,13 @@ export async function fetchStandardWithFallback<T = string>(
             log(
               `[fetchWithFallback]${retryLabel} [${name}] Success but invalid content (HTML instead of structured markup). Snippet: ${trimmed.slice(0, 100)}`
             )
-            throw new Error('Received HTML instead of expected structured markup content')
+            throw new FetchError(
+              'Received HTML instead of expected structured markup content',
+              url,
+              undefined,
+              name === 'Direct' ? 'direct' : 'customProxy',
+              { code: 'invalid_structured_markup' }
+            )
           }
         }
 
@@ -283,7 +327,9 @@ export async function fetchStandardWithFallback<T = string>(
           error instanceof NetworkError
             ? 'Network Error/CORS'
             : error instanceof FetchError
-              ? `HTTP ${error.status}`
+              ? error.status !== undefined
+                ? `HTTP ${error.status}`
+                : error.message
               : error instanceof Error
                 ? error.message
                 : 'Unknown'

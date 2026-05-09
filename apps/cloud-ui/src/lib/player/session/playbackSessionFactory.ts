@@ -1,9 +1,6 @@
 import type { FileTrack, PlaybackSessionCreateInput } from '../../dexieDb'
 import type { CanonicalRemoteEpisodeMetadata, EpisodeMetadata } from '../playbackMetadata'
-import {
-  isCanonicalRemoteEpisodeMetadata,
-  normalizePlaybackAudioUrl,
-} from '../playbackMetadata'
+import { isCanonicalRemoteEpisodeMetadata, normalizePlaybackAudioUrl } from '../playbackMetadata'
 
 function normalizeRequiredSessionField(value: string | null | undefined): string | undefined {
   if (typeof value !== 'string') return undefined

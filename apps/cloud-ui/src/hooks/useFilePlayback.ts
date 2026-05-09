@@ -1,5 +1,5 @@
 import { useRouter } from '@tanstack/react-router'
-import { useCallback } from 'react'
+import { useCallback, useRef } from 'react'
 import type { FileSubtitle, FileTrack } from '../lib/dexieDb'
 import { logError, warn as logWarn } from '../lib/logger'
 import {
@@ -18,16 +18,21 @@ interface UseFilePlaybackProps {
 
 export function useFilePlayback({ onComplete }: UseFilePlaybackProps = {}) {
   const router = useRouter()
+  const requestIdRef = useRef(0)
 
   /**
    * Handles playing a local track with optional specific subtitle
    */
   const handlePlay = useCallback(
     async (track: FileTrack, availableSubtitles: FileSubtitle[], subtitle?: FileSubtitle) => {
+      requestIdRef.current += 1
+      const thisRequestId = requestIdRef.current
       const { loadAudioBlob, play, setPlaybackTrackId } = usePlayerStore.getState()
       const { setSubtitles: setPlayerSubtitles } = useTranscriptStore.getState()
 
       const { setPlayableContext, toDocked } = usePlayerSurfaceStore.getState()
+
+      const isStaleRequest = () => thisRequestId !== requestIdRef.current
 
       try {
         const prepared = await prepareLocalFilePlayback({
@@ -35,6 +40,9 @@ export function useFilePlayback({ onComplete }: UseFilePlaybackProps = {}) {
           availableSubtitles,
           subtitle,
         })
+        if (isStaleRequest()) {
+          return
+        }
         if (!prepared.ok) {
           if (prepared.reason === LOCAL_FILE_PLAYBACK_PREPARE_REASON.AUDIO_NOT_FOUND) {
             logError('[Files] audio blob not found')
@@ -46,6 +54,9 @@ export function useFilePlayback({ onComplete }: UseFilePlaybackProps = {}) {
           prepared.payload
 
         await loadAudioBlob(audioBlob, track.name, artwork, sessionId, undefined, metadata)
+        if (isStaleRequest()) {
+          return
+        }
         setPlayerSubtitles(subtitles)
 
         // Surface Mode Logic
@@ -65,6 +76,9 @@ export function useFilePlayback({ onComplete }: UseFilePlaybackProps = {}) {
           selectedSubtitleContentId,
           artwork,
         })
+        if (isStaleRequest()) {
+          return
+        }
 
         // Navigate to home page (player)
         router.navigate({ to: '/' })
@@ -72,6 +86,9 @@ export function useFilePlayback({ onComplete }: UseFilePlaybackProps = {}) {
         // Trigger refresh
         onComplete?.()
       } catch (error) {
+        if (isStaleRequest()) {
+          return
+        }
         logError('[Files] Error loading track', error)
       }
     },

@@ -277,7 +277,8 @@ async function runPlaybackFlow<TMetadata extends EpisodeMetadata>(
     handlePlaybackResolutionFailure({
       deps,
       reason: sourceResolution.reason,
-      hasTranscriptSource,
+      shouldResetTranscriptIngestionStatus:
+        hasTranscriptSource || sourceResolution.didEnterTranscriptIngestionLoadingState,
     })
     return createNonStartedResult(sourceResolution.reason)
   }

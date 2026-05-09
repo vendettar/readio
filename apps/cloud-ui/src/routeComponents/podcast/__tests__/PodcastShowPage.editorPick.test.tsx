@@ -124,7 +124,7 @@ describe('PodcastShowPage editor pick path', () => {
     render(<PodcastShowPage />, { wrapper: harness.wrapper })
 
     expect(await screen.findByText('PI Episode 1')).not.toBeNull()
-    expect(getPodcastEpisodesCacheEntries(harness.queryClient, '12345')).toEqual([
+    expect(getPodcastEpisodesCacheEntries(harness.queryClient, '12345', 'us')).toEqual([
       expect.objectContaining({
         authority: { lastUpdateTime: 1711497600, episodeCount: 2 },
         data: expect.objectContaining({
@@ -141,7 +141,7 @@ describe('PodcastShowPage editor pick path', () => {
 
     expect(await screen.findByText('PI Episode 1')).not.toBeNull()
     expect(episodeListHits).toBe(1)
-    expect(getPodcastEpisodesCacheEntries(harness.queryClient, '12345')).toHaveLength(1)
+    expect(getPodcastEpisodesCacheEntries(harness.queryClient, '12345', 'us')).toHaveLength(1)
 
     showRender.unmount()
 
@@ -149,7 +149,7 @@ describe('PodcastShowPage editor pick path', () => {
 
     expect(await screen.findByText('PI Episode 1')).not.toBeNull()
     expect(episodeListHits).toBe(1)
-    expect(getPodcastEpisodesCacheEntries(harness.queryClient, '12345')).toHaveLength(1)
+    expect(getPodcastEpisodesCacheEntries(harness.queryClient, '12345', 'us')).toHaveLength(1)
   })
 
   it('still performs authoritative PI lookup when an editor-pick snapshot exists', async () => {

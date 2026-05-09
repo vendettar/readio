@@ -1,4 +1,5 @@
 import { RootProvider } from 'fumadocs-ui/provider/next'
+import { getDocsLocaleOptions } from '@/lib/docsLocale.mjs'
 import '../global.css'
 
 function normalizeSiteUrl(siteUrl: string): string {
@@ -30,10 +31,7 @@ export default async function Layout({
         <RootProvider
           i18n={{
             locale: lang,
-            locales: [
-              { name: 'English', locale: 'en' },
-              { name: '中文', locale: 'zh' },
-            ],
+            locales: getDocsLocaleOptions(),
           }}
         >
           {children}

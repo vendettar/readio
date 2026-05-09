@@ -17,6 +17,7 @@ async function loadHookWithRemoteModuleFailure() {
   vi.doMock('../../store/exploreStore', () => ({
     useExploreStore: (
       selector: (state: {
+        hydrateCountry: () => void
         loadSubscriptions: () => void
         loadFavorites: () => void
         subscriptionsLoaded: boolean
@@ -24,6 +25,7 @@ async function loadHookWithRemoteModuleFailure() {
       }) => unknown
     ) =>
       selector({
+        hydrateCountry: vi.fn(),
         loadSubscriptions: vi.fn(),
         loadFavorites: vi.fn(),
         subscriptionsLoaded: true,

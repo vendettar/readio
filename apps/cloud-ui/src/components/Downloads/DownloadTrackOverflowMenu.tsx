@@ -7,7 +7,7 @@ import {
   RefreshCcw,
   Trash2,
 } from 'lucide-react'
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { logError } from '../../lib/logger'
 import { Button } from '../ui/button'
@@ -18,7 +18,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu'
-import { useNestedOverflowMenu } from '../ui/useNestedOverflowMenu'
+import { useNestedOverflowMenu, useOverflowMenuConfirmFocus } from '../ui/useNestedOverflowMenu'
 
 type OverflowStep = 'menu' | 'confirm'
 
@@ -46,34 +46,27 @@ export function DownloadTrackOverflowMenu({
   const { t } = useTranslation()
   const [isRemoving, setIsRemoving] = useState(false)
   const deleteItemRef = useRef<HTMLDivElement>(null)
+  const backButtonRef = useRef<HTMLButtonElement>(null)
   const cancelButtonRef = useRef<HTMLButtonElement>(null)
-  const prevStepRef = useRef<OverflowStep>('menu')
   const { closeMenu, handleOpenChange, isMenuOpen, menuContentRef, setStep, step, triggerRef } =
     useNestedOverflowMenu<OverflowStep>({
       initialStep: 'menu',
+      onMenuClose: () => {
+        setIsRemoving(false)
+      },
     })
 
-  useLayoutEffect(() => {
-    if (!isMenuOpen) {
-      prevStepRef.current = 'menu'
-      return
-    }
-
-    const prevStep = prevStepRef.current
-    prevStepRef.current = step
-
-    if (step === 'confirm' && prevStep !== 'confirm') {
-      cancelButtonRef.current?.focus()
-    } else if (step === 'menu' && prevStep === 'confirm') {
-      deleteItemRef.current?.focus()
-    }
-  }, [isMenuOpen, step])
+  useOverflowMenuConfirmFocus({
+    initialStep: 'menu',
+    confirmStep: 'confirm',
+    isMenuOpen,
+    step,
+    confirmFocusRef: backButtonRef,
+    menuFocusRef: deleteItemRef,
+  })
 
   const handleMenuChange = (open: boolean) => {
     handleOpenChange(open)
-    if (!open) {
-      setIsRemoving(false)
-    }
   }
 
   return (
@@ -198,9 +191,11 @@ export function DownloadTrackOverflowMenu({
           >
             <div className="px-1.5 py-1.5 bg-muted/40 border-b border-border">
               <Button
+                ref={backButtonRef}
                 variant="ghost"
                 size="sm"
                 className="w-full justify-start h-7 px-2 text-muted-foreground hover:text-foreground hover:bg-background"
+                tabIndex={step === 'confirm' ? 0 : -1}
                 onClick={(e) => {
                   e.stopPropagation()
                   setStep('menu')
@@ -224,6 +219,7 @@ export function DownloadTrackOverflowMenu({
                   variant="secondary"
                   size="sm"
                   disabled={isRemoving}
+                  tabIndex={step === 'confirm' ? 0 : -1}
                   onClick={(e) => {
                     e.stopPropagation()
                     setStep('menu')
@@ -236,6 +232,7 @@ export function DownloadTrackOverflowMenu({
                   variant="destructive"
                   size="sm"
                   disabled={isRemoving}
+                  tabIndex={step === 'confirm' ? 0 : -1}
                   onClick={async (e) => {
                     e.stopPropagation()
                     if (isRemoving) return

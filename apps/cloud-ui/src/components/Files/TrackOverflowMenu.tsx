@@ -22,7 +22,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '../ui/dropdown-menu'
-import { useNestedOverflowMenu } from '../ui/useNestedOverflowMenu'
+import { useNestedOverflowMenu, useOverflowMenuConfirmFocus } from '../ui/useNestedOverflowMenu'
 
 type Step = 'menu' | 'move' | 'confirm'
 
@@ -61,16 +61,20 @@ export function TrackOverflowMenu({
   const { closeMenu, handleOpenChange, isMenuOpen, menuContentRef, setStep, step, triggerRef } =
     useNestedOverflowMenu<Step>({
       initialStep: 'menu',
+      onMenuClose: () => {
+        setIsDeleting(false)
+      },
     })
 
-  const handleMenuOpenChange = (open: boolean) => {
-    handleOpenChange(open)
-    if (!open) {
-      setIsDeleting(false)
-    }
-  }
+  useOverflowMenuConfirmFocus({
+    initialStep: 'menu',
+    confirmStep: 'confirm',
+    isMenuOpen,
+    step,
+    confirmFocusRef: cancelButtonRef,
+    menuFocusRef: deleteItemRef,
+  })
 
-  // Focus management via useLayoutEffect
   useLayoutEffect(() => {
     if (!isMenuOpen) {
       prevStepRef.current = 'menu'
@@ -80,17 +84,10 @@ export function TrackOverflowMenu({
     const prevStep = prevStepRef.current
     prevStepRef.current = step
 
-    if (step === 'confirm' && prevStep !== 'confirm') {
-      cancelButtonRef.current?.focus()
-    } else if (step === 'move' && prevStep !== 'move') {
+    if (step === 'move' && prevStep !== 'move') {
       moveBackButtonRef.current?.focus()
-    } else if (step === 'menu' && prevStep !== 'menu') {
-      // Return focus to appropriate item
-      if (prevStep === 'confirm') {
-        deleteItemRef.current?.focus()
-      } else if (prevStep === 'move') {
-        moveItemRef.current?.focus()
-      }
+    } else if (step === 'menu' && prevStep === 'move') {
+      moveItemRef.current?.focus()
     }
   }, [isMenuOpen, step])
 
@@ -100,7 +97,7 @@ export function TrackOverflowMenu({
   }
 
   return (
-    <DropdownMenu open={isMenuOpen} onOpenChange={handleMenuOpenChange} modal={false}>
+    <DropdownMenu open={isMenuOpen} onOpenChange={handleOpenChange} modal={false}>
       <DropdownMenuTrigger asChild>
         <Button
           ref={triggerRef}

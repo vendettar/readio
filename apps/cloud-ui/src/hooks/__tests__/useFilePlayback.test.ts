@@ -26,6 +26,16 @@ const surfaceState = {
   toDocked: vi.fn(),
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
 vi.mock('@tanstack/react-router', () => ({
   useRouter: () => ({ navigate: navigateMock }),
 }))
@@ -140,5 +150,112 @@ describe('useFilePlayback', () => {
     expect(updateFileTrackMock).toHaveBeenCalledWith('track-1', {
       activeSubtitleId: 'file-sub-2',
     })
+  })
+
+  it('ignores stale playback side effects when a newer local play request wins', async () => {
+    const onComplete = vi.fn()
+    const { result } = renderHook(() => useFilePlayback({ onComplete }))
+    const firstLoadDeferred = createDeferred<void>()
+
+    const firstTrack: FileTrack = {
+      id: 'track-1',
+      folderId: null,
+      name: 'First Track',
+      audioId: 'audio-1',
+      sizeBytes: 1234,
+      durationSeconds: 225,
+      createdAt: 1,
+      sourceType: TRACK_SOURCE.USER_UPLOAD,
+    }
+    const secondTrack: FileTrack = {
+      id: 'track-2',
+      folderId: null,
+      name: 'Second Track',
+      audioId: 'audio-2',
+      sizeBytes: 4321,
+      durationSeconds: 180,
+      createdAt: 2,
+      sourceType: TRACK_SOURCE.USER_UPLOAD,
+    }
+
+    prepareLocalFilePlaybackMock
+      .mockResolvedValueOnce({
+        ok: true,
+        payload: {
+          audioBlob: new Blob(['first-audio']),
+          artwork: null,
+          subtitles: [{ startMs: 0, endMs: 500, text: 'first subtitle' }],
+          sessionId: 'local-track-track-1',
+          metadata: {
+            kind: 'local',
+            durationSeconds: 225,
+          },
+          selectedSubtitleContentId: 'subtitle-1',
+        },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        payload: {
+          audioBlob: new Blob(['second-audio']),
+          artwork: null,
+          subtitles: [{ startMs: 0, endMs: 500, text: 'second subtitle' }],
+          sessionId: 'local-track-track-2',
+          metadata: {
+            kind: 'local',
+            durationSeconds: 180,
+          },
+          selectedSubtitleContentId: 'subtitle-2',
+        },
+      })
+
+    playerState.loadAudioBlob
+      .mockImplementationOnce(() => firstLoadDeferred.promise)
+      .mockResolvedValueOnce(undefined)
+
+    let firstPlayPromise!: Promise<void>
+    let secondPlayPromise!: Promise<void>
+
+    await act(async () => {
+      firstPlayPromise = result.current.handlePlay(firstTrack, [], undefined)
+      await Promise.resolve()
+      secondPlayPromise = result.current.handlePlay(secondTrack, [], undefined)
+      await Promise.resolve()
+      firstLoadDeferred.resolve(undefined)
+      await Promise.all([firstPlayPromise, secondPlayPromise])
+    })
+
+    expect(playerState.loadAudioBlob).toHaveBeenCalledTimes(2)
+    expect(playerState.loadAudioBlob).toHaveBeenNthCalledWith(
+      2,
+      expect.any(Blob),
+      secondTrack.name,
+      null,
+      'local-track-track-2',
+      undefined,
+      expect.objectContaining({
+        kind: 'local',
+        durationSeconds: 180,
+      })
+    )
+    expect(transcriptState.setSubtitles).toHaveBeenCalledTimes(1)
+    expect(transcriptState.setSubtitles).toHaveBeenCalledWith([
+      { startMs: 0, endMs: 500, text: 'second subtitle' },
+    ])
+    expect(surfaceState.setPlayableContext).toHaveBeenCalledTimes(1)
+    expect(surfaceState.toDocked).toHaveBeenCalledTimes(1)
+    expect(playerState.setPlaybackTrackId).toHaveBeenCalledTimes(1)
+    expect(playerState.setPlaybackTrackId).toHaveBeenCalledWith('track-2')
+    expect(playerState.play).toHaveBeenCalledTimes(1)
+    expect(persistLocalFilePlaybackSessionMock).toHaveBeenCalledTimes(1)
+    expect(persistLocalFilePlaybackSessionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        track: secondTrack,
+        sessionId: 'local-track-track-2',
+        selectedSubtitleContentId: 'subtitle-2',
+      })
+    )
+    expect(navigateMock).toHaveBeenCalledTimes(1)
+    expect(navigateMock).toHaveBeenCalledWith({ to: '/' })
+    expect(onComplete).toHaveBeenCalledTimes(1)
   })
 })

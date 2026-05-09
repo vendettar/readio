@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { clearAllCredentials } from '../db/credentialsRepository'
+import { CredentialsRepository } from '../repositories/CredentialsRepository'
 import { PlaybackRepository } from '../repositories/PlaybackRepository'
 import { StorageRepository } from '../repositories/StorageRepository'
 import { SETTINGS_STORAGE_KEY } from '../schemas/settings'
@@ -11,8 +11,10 @@ import {
   wipeStoredAudioCache,
 } from '../storageMaintenanceService'
 
-vi.mock('../db/credentialsRepository', () => ({
-  clearAllCredentials: vi.fn(async () => {}),
+vi.mock('../repositories/CredentialsRepository', () => ({
+  CredentialsRepository: {
+    clearAll: vi.fn(async () => {}),
+  },
 }))
 
 vi.mock('../repositories/PlaybackRepository', () => ({
@@ -60,7 +62,7 @@ describe('storageMaintenanceService', () => {
 
     await wipeAllPersistentStorage()
 
-    expect(clearAllCredentials).toHaveBeenCalledTimes(1)
+    expect(CredentialsRepository.clearAll).toHaveBeenCalledTimes(1)
     expect(StorageRepository.clearAllData).toHaveBeenCalledTimes(1)
     expect(clearDictCacheMemory).toHaveBeenCalledTimes(1)
     expect(localStorage.getItem(SETTINGS_STORAGE_KEY)).toBeNull()

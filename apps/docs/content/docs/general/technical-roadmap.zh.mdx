@@ -74,7 +74,7 @@ title: 技术路线图
 - [x] **034**: 功能：外部播客迁移预研（后续已移除）。
 - [x] **035**: 功能：个人保险箱（完整数据导出）。
 - [x] **036**: 加固 PWA 元数据（iOS 图标）。
-- [ ] **037**: 实现 URL Slugs（美化链接）。
+- [x] **037**: 实现 URL Slugs（美化链接）。
 
 ---
 
@@ -103,8 +103,8 @@ title: 技术路线图
 - [x] **049**: 导入时数据完整性验证 (可靠性)。
 - [x] **050**: 包体积与性能预算 (监控)。
 - [x] **116**: 国家前缀播客路由与规范 URL 契约收口（116a-116e）。
-- [ ] **083**: 标准化测试文件放置 (标准化)。
-- [ ] **051**: Iframe 与 HTML 沙箱 (安全)。
+- [x] **083**: 标准化测试文件放置 (标准化)。
+- [x] **051**: Iframe 与 HTML 沙箱 (安全)。
 - [ ] **053**: 离线内容可视化管理 (实用性)。
 - [ ] **054**: 高级排序与过滤 (实用性)。
 - [x] **056**: 多语言排版 (质量)。
@@ -134,11 +134,11 @@ title: 技术路线图
 
 - [x] **069**: 健壮的元数据解析器 (功能)。
 - [x] **070**: 骨架屏系统 (UX)。
-- [ ] **071**: 全局弹窗管理器 (架构)。
+- [x] **071**: 全局弹窗管理器 (架构)。
 - [ ] **072**: 媒体缓存淘汰策略 (维护)。
 - [x] **073**: 网络退避与熔断 (弹性)。
-- [ ] **074**: 存储配额监控 (UX)。
-- [ ] **075**: Intl API 升级 (质量)。
+- [x] **074**: 存储配额监控 (UX)。
+- [x] **075**: Intl API 升级 (质量)。
 - [x] **076**: 细粒度错误边界 (容错)。
 - [x] **077**: Lighthouse CI 预算 (自动化 QA)。
 - [x] **078**: 依赖审计与许可证策略 (合规)。
@@ -169,6 +169,15 @@ title: 技术路线图
 - [x] **014a-014b**: Cloud 轻量级管理可观测性 — 内存环形缓冲 slog 处理器，含敏感信息脱敏；/admin/logs、/admin/health、/admin/metrics/summary 端点；Bearer 鉴权；React 管理页面 /ops，含过滤器、自动刷新、401 退避；部署文档。
 - [x] **001d**: 文档同步与 SSOT 对齐，仅在审阅批准后完成。
 - [x] **003**: Cloud Lite 全量克隆引导（`apps/cloud-ui` 克隆 + Go 托管 `8080` 运行入口）。
+- [x] **015a**: Streaming Audio Cloud Fallback — remote streaming audio 使用 direct -> proxy fallback；6s bootstrap timeout；same-origin `/api/proxy` fallback target；session-scoped host breaker；保持原生 streaming 语义。
+- [x] **015b**: Streaming Audio Cloud Fallback — fallback observability 与 proxy Range 修复；新增 `getPlaybackSourceMode()` debug getter；GET proxy 转发 `Range` / `If-Range`。
+- [x] **016**: Cloud 错误处理与日志标准化 — ASR relay / discovery / proxy 统一 JSON error shape；前端日志降噪与 bilingual error code docs。
+- [x] **017**: Cloud UI 移动端 Sidebar 响应式适配 — mobile sidebar overlay drawer、ESC close、route change auto-close、scroll lock 与 focus management。
+- [x] **018**: Cloud Session Restore Prefer Local Download — session restore 优先匹配本地下载 blob 后再回退 remote URL。
+- [x] **019**: Cloud Transcript-First Playback — transcript-bearing episodes 优先 transcript ingestion 并抑制自动 ASR / full-audio download。
+- [x] **020**: Cloud Playback Resilience Hardening — 增加后端 proxy max redirects 并延长前端 bootstrap timeout。
+- [x] **021**: Cloud Reading Area Artwork Sizing — 统一 reading area artwork sizing。
+- [x] **022**: Cloud Core Networking Fallback Observability — 增加 fallback correlation ID。
 
 **位置**：Cloud 指令位于 `agent/instructions/cloud/`。
 **当前状态**：005a-005g 已关闭。Cloud 的可见 discovery 流量已经完全由后端接管。006a-006e 已关闭，建立了浏览器直连优先、仅对已批准失败类回退到后端的媒体契约，文档与部署/运行时契约也已与该契约保持一致。007 已关闭，覆盖了 ASR 相关媒体 fallback 缺口。008 已关闭，把 Cloud 播客内容页的单集所有权从 RSS/feed XML 切换到 PodcastIndex `episodes/byitunesid?max=1000` relay chain，并保留 podcast-keyed `episodeCache` 与确定性的 `episodeNotFound` 行为。024 已退役旧的 `/api/v1/discovery/feed` surface 与 feed-cache / feed-SQLite 规划方向；RSS/feed XML 已不再作为页面渲染来源，OPML/XML 迁移入口也不属于当前产品面，而且 repo-owned 运行时契约已不再暴露或依赖旧的 feed transport 字段。008a-008e 已关闭，把 Cloud ASR provider 转写迁移到独立的同源 relay，同时保持 provider 验证 / readiness 仍为 browser-direct，浏览器本地媒体输入也继续留在浏览器本地。009a-009b 已关闭，生产 `/env.js` 所有权已切换为后端生成并使用显式浏览器安全白名单；服务端配置驻留在后端运行时环境中；开发环境静态 `public/env.js` 保留为模板。010 已关闭，可信代理客户端 IP 提取已就位；共享 helper 覆盖 `/api/proxy` 与 ASR relay 限速；`READIO_TRUSTED_PROXY_CIDRS` 后端配置及 Cloudflare -> nginx -> Go 信任链部署文档已发布。011 已关闭，`/api/proxy` 与 ASR relay 限速均完全可通过环境变量配置；`BURST <= 0` 在两个接口上一致禁用应用层限速器，禁用时输出 `slog.Warn`。012 已关闭，部署了面向 Groq 转写的 Cloudflare Workers ASR 代理，支持后端鉴权、流式透传与自动 direct fallback。014a-014b 已关闭，新增轻量级管理可观测性，包括内存环形缓冲日志处理、Bearer 鉴权的管理端点，以及带过滤器、自动刷新与 401 退避的 React /ops 仪表板。
@@ -200,6 +209,11 @@ title: 技术路线图
 - [x] **137h**: DB Guard Fail-Closed。
 - [x] **137i**: Repo Verification Pipeline Hardening。
 - [x] **137j**: Doc SSOT Drift Reconciliation。
+- [x] **141a**: PlayerSurfaceFrame Refactor (子组件解耦)。
+- [x] **141b**: VaultRepository Owner Convergence (Architectural Refinement)。
+- [x] **142**: Frontend Hook Unification (View Density & Debounce)。
+- [x] **143**: ASR Multipart Buffer Convergence (Memory Optimization)。
+- [x] **144**: Unified Request ID Strategy (Standardization)。
 
 ---
 

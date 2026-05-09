@@ -1,4 +1,5 @@
-import { createRootRoute, Outlet, useRouter } from '@tanstack/react-router'
+import type { QueryClient } from '@tanstack/react-query'
+import { createRootRouteWithContext, Outlet, useRouter } from '@tanstack/react-router'
 import { AnimatePresence } from 'framer-motion'
 import {
   createContext,
@@ -195,6 +196,6 @@ function RootLayout() {
   )
 }
 
-export const Route = createRootRoute({
+export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   component: RootLayout,
 })

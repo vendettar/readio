@@ -1,8 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
-import { useEffect, useState } from 'react'
 import type { SearchEpisode, SearchPodcast } from '../lib/discovery'
 import discovery from '../lib/discovery'
-import { NetworkError } from '../lib/fetchUtils'
+import { shouldRetryDiscoveryRequest } from '../lib/discovery/cloudApi'
 import { getAppConfig } from '../lib/runtimeConfig'
 import { useExploreStore } from '../store/exploreStore'
 import {
@@ -12,20 +11,10 @@ import {
   isSearchSectionLoading,
   normalizeSearchQuery,
 } from './searchSection'
+import { useDebouncedValue } from './useDebouncedValue'
 import { useNetworkStatus } from './useNetworkStatus'
 
 const DISCOVERY_SEARCH_DEBOUNCE_MS = 300
-
-function useDebouncedValue<T>(value: T, delayMs: number) {
-  const [debouncedValue, setDebouncedValue] = useState(value)
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedValue(value), delayMs)
-    return () => clearTimeout(timer)
-  }, [value, delayMs])
-
-  return debouncedValue
-}
 
 export function useDiscoverySearch(query: string, enabled = true) {
   const { isOnline } = useNetworkStatus()
@@ -44,10 +33,7 @@ export function useDiscoverySearch(query: string, enabled = true) {
     enabled: shouldSearch,
     staleTime: 30 * 60 * 1000,
     placeholderData: (prev) => prev,
-    retry: (failureCount, error) => {
-      if (error instanceof NetworkError || error.name === 'NetworkError') return false
-      return failureCount < 1
-    },
+    retry: shouldRetryDiscoveryRequest,
   })
 
   // Discovery Provider: Episode Search (Debounced)
@@ -57,10 +43,7 @@ export function useDiscoverySearch(query: string, enabled = true) {
     enabled: shouldSearch,
     staleTime: 30 * 60 * 1000,
     placeholderData: (prev) => prev,
-    retry: (failureCount, error) => {
-      if (error instanceof NetworkError || error.name === 'NetworkError') return false
-      return failureCount < 1
-    },
+    retry: shouldRetryDiscoveryRequest,
   })
 
   const podcastSection = !hasActiveQuery

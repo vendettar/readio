@@ -10,20 +10,9 @@ import {
   type Subscription,
 } from './dexieDb'
 import { buildEpisodeCompactKey } from './discovery/editorPicks'
-import { logError } from './logger'
-import { mapPlaybackSessionToEpisodeMetadata } from './player/episodeMetadata'
-import {
-  bumpPlaybackEpoch,
-  getPlaybackEpoch,
-  playFavoriteWithDeps,
-  playHistorySessionWithDeps,
-} from './player/remotePlayback'
-import { loadSessionSubtitleCues } from './player/session/playerSessionSubtitleLoader'
-import {
-  applySurfacePolicy,
-  deriveSurfacePolicyFromFavorite,
-  deriveSurfacePolicyFromHistorySession,
-} from './player/surfacePolicy'
+import { restoreLocalHistoryPlayback } from './player/localHistoryPlayback'
+import { playHistorySessionWithDeps } from './player/remotePlayback'
+import { applySurfacePolicy, deriveSurfacePolicyFromHistorySession } from './player/surfacePolicy'
 import { PlaybackRepository } from './repositories/PlaybackRepository'
 import {
   buildPodcastEpisodeRoute,
@@ -107,28 +96,7 @@ export async function executeLocalSearchAction(
       })
       if (episodeRoute) {
         void deps.navigate(episodeRoute)
-        return
       }
-
-      const favoritePolicy = deriveSurfacePolicyFromFavorite(favorite)
-      applySurfacePolicy({ setPlayableContext, toDocked, toMini }, favoritePolicy)
-      const normalizedCountryAtSave = normalizeCountryParam(favorite.countryAtSave)
-      if (!normalizedCountryAtSave) {
-        return
-      }
-
-      void playFavoriteWithDeps(
-        {
-          setAudioUrl: deps.setAudioUrl,
-          play: deps.play,
-          pause: deps.pause,
-          setPlaybackTrackId: deps.setPlaybackTrackId,
-        },
-        favorite,
-        {
-          countryAtSave: normalizedCountryAtSave,
-        }
-      )
       return
     }
     case 'history': {
@@ -146,10 +114,7 @@ export async function executeLocalSearchAction(
       }
 
       if (session.audioUrl) {
-        const historyPolicy = deriveSurfacePolicyFromHistorySession(session)
-        applySurfacePolicy({ setPlayableContext, toDocked, toMini }, historyPolicy)
-
-        void playHistorySessionWithDeps(
+        const startResult = await playHistorySessionWithDeps(
           {
             setAudioUrl: deps.setAudioUrl,
             play: deps.play,
@@ -159,75 +124,34 @@ export async function executeLocalSearchAction(
           },
           session
         )
+        if (startResult.started) {
+          const historyPolicy = deriveSurfacePolicyFromHistorySession(session)
+          applySurfacePolicy({ setPlayableContext, toDocked, toMini }, historyPolicy)
+        }
         return
       }
 
       if (session.source === 'local' && session.audioId) {
-        const currentEpoch = bumpPlaybackEpoch()
-        let audioBlob: Awaited<ReturnType<typeof PlaybackRepository.getAudioBlob>> | null = null
-
-        try {
-          audioBlob = await PlaybackRepository.getAudioBlob(session.audioId)
-          if (getPlaybackEpoch() !== currentEpoch) return
-        } catch (error) {
-          if (getPlaybackEpoch() !== currentEpoch) return
-          if (import.meta.env.DEV) {
-            logError('[LocalSearch] Failed to restore local history session', {
-              sessionId: session.id,
-              audioId: session.audioId,
-              error,
-            })
-          }
-          void deps.navigate({ to: '/' })
+        const startResult = await restoreLocalHistoryPlayback(session, {
+          scope: 'LocalSearch',
+          getAudioBlob: async (audioId) => {
+            const audioBlob = await PlaybackRepository.getAudioBlob(audioId)
+            return audioBlob?.blob ?? null
+          },
+          loadAudioBlob: deps.loadAudioBlob,
+          setSubtitles: deps.setSubtitles,
+          setPlaybackTrackId: deps.setPlaybackTrackId,
+          applyStartedSurface: () => {
+            setPlayableContext(true)
+            toDocked()
+          },
+          play: deps.play,
+          resolveArtwork: () => result.artworkBlob || session.artworkUrl || null,
+        })
+        if (startResult.started) {
           return
         }
-
-        if (audioBlob) {
-          try {
-            await deps.loadAudioBlob(
-              audioBlob.blob,
-              session.title,
-              result.artworkBlob || session.artworkUrl || null,
-              session.id,
-              undefined,
-              mapPlaybackSessionToEpisodeMetadata(session)
-            )
-          } catch (error) {
-            if (getPlaybackEpoch() !== currentEpoch) return
-            if (import.meta.env.DEV) {
-              logError('[LocalSearch] Failed to load local audio blob', {
-                sessionId: session.id,
-                audioId: session.audioId,
-                error,
-              })
-            }
-            void deps.navigate({ to: '/' })
-            return
-          }
-          if (getPlaybackEpoch() !== currentEpoch) return
-
-          let subtitleCues: ASRCue[] | null = null
-          try {
-            subtitleCues = await loadSessionSubtitleCues(session)
-          } catch (error) {
-            if (import.meta.env.DEV) {
-              logError('[LocalSearch] Failed to restore local subtitles', {
-                sessionId: session.id,
-                subtitleId: session.subtitleId,
-                error,
-              })
-            }
-          }
-          if (getPlaybackEpoch() !== currentEpoch) return
-          if (subtitleCues) {
-            deps.setSubtitles(subtitleCues)
-          }
-          // Local history restore still opens docked; transcript placeholder handles missing text.
-          deps.setPlaybackTrackId?.(session.localTrackId ?? null)
-          setPlayableContext(true)
-          toDocked()
-
-          deps.play()
+        if (startResult.reason === 'stale') {
           return
         }
       }

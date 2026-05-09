@@ -14,6 +14,14 @@ import {
 
 const TEST_COUNTRY = 'us'
 
+function asMalformedStreamMetadata(
+  metadata: Record<string, unknown>
+): Parameters<typeof playStreamWithoutTranscriptWithDeps>[1]['metadata'] {
+  return metadata as unknown as Parameters<
+    typeof playStreamWithoutTranscriptWithDeps
+  >[1]['metadata']
+}
+
 function makeEpisode(overrides: Partial<Episode> = {}): Episode {
   return {
     guid: 'test-ep',
@@ -127,9 +135,11 @@ vi.mock('../../downloadService', () => ({
   downloadEpisode: (...args: unknown[]) => downloadEpisodeMock(...args),
 }))
 
-vi.mock('../../db/credentialsRepository', () => ({
-  getCredential: vi.fn().mockResolvedValue('fake-key'),
-  getAsrCredentialKey: vi.fn().mockReturnValue('asrKey'),
+vi.mock('../../repositories/CredentialsRepository', () => ({
+  CredentialsRepository: {
+    get: vi.fn().mockResolvedValue('fake-key'),
+    getAsrCredentialKey: vi.fn().mockReturnValue('asrKey'),
+  },
 }))
 
 vi.mock('../../repositories/PlaybackRepository', () => ({
@@ -361,7 +371,7 @@ describe('remotePlayback', () => {
       session
     )
 
-    expect(result).toBe(true)
+    expect(result).toEqual({ started: true, reason: 'started' })
     expect(pause).toHaveBeenCalledTimes(1)
     expect(setPlaybackTrackId).toHaveBeenCalledWith('track-1')
     expect(setSessionId).toHaveBeenCalledWith('session-1')
@@ -502,9 +512,30 @@ describe('remotePlayback', () => {
     expect(setAudioUrl).toHaveBeenLastCalledWith(null)
   })
 
+  it('resets transcript ingestion to idle when transcript-less ASR-blocked playback download fails', async () => {
+    getJsonMock.mockReturnValue({ asrProvider: 'groq', asrModel: 'whisper' })
+    downloadEpisodeMock.mockResolvedValue({ ok: false })
+
+    const setAudioUrl = vi.fn()
+    const play = vi.fn()
+    const pause = vi.fn()
+    const episode = makeEpisode({
+      title: 'ASR Blocked Failure',
+      audioUrl: 'https://example.com/asr-blocked-fail.mp3',
+    })
+
+    await playEpisodeWithDeps({ setAudioUrl, play, pause }, episode, makePodcast(), {
+      countryAtSave: TEST_COUNTRY,
+    })
+
+    expect(downloadEpisodeMock).toHaveBeenCalledTimes(1)
+    expect(useTranscriptStore.getState().transcriptIngestionStatus).toBe('idle')
+    expect(play).not.toHaveBeenCalled()
+  })
+
   it('skips ASR download blocking if API key is missing', async () => {
-    const { getCredential } = await import('../../db/credentialsRepository')
-    vi.mocked(getCredential).mockResolvedValue('') // Empty key
+    const { CredentialsRepository } = await import('../../repositories/CredentialsRepository')
+    vi.mocked(CredentialsRepository.get).mockResolvedValue('') // Empty key
 
     const setAudioUrl = vi.fn()
     const play = vi.fn()
@@ -795,7 +826,7 @@ describe('remotePlayback', () => {
 
     const [historyResult] = await Promise.all([slowHistory, supersedingPlay])
 
-    expect(historyResult).toBe(false)
+    expect(historyResult).toEqual({ started: false, reason: 'stale' })
     expect(play).toHaveBeenCalledTimes(1)
     expect(setSessionId).not.toHaveBeenCalledWith('session-slow-history')
   })
@@ -856,13 +887,13 @@ describe('remotePlayback', () => {
         },
         title: 'Broken Remote Metadata',
         artwork: '',
-        metadata: {
+        metadata: asMalformedStreamMetadata({
           showTitle: 'Podcast',
           artworkUrl: 'https://example.com/art.jpg',
           episodeGuid: 'episode-guid-1',
           podcastItunesId: 'podcast-1',
           countryAtSave: 'xx',
-        } as unknown as Parameters<typeof playStreamWithoutTranscriptWithDeps>[1]['metadata'],
+        }),
       }
     )
 
@@ -912,7 +943,7 @@ describe('remotePlayback', () => {
       { mode: PLAYBACK_REQUEST_MODE.STREAM_WITHOUT_TRANSCRIPT }
     )
 
-    expect(didPlay).toBe(true)
+    expect(didPlay).toEqual({ started: true, reason: 'started' })
     expect(setAudioUrl).toHaveBeenLastCalledWith(
       'blob:history-downloaded',
       'History Stream',

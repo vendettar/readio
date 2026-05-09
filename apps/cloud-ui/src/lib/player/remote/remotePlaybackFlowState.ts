@@ -29,9 +29,9 @@ export function applyPlaybackLoadingState(input: {
 export function handlePlaybackResolutionFailure(input: {
   deps: RemotePlaybackFlowDeps
   reason: 'stale' | 'no_playable_source' | 'download_failed'
-  hasTranscriptSource: boolean
+  shouldResetTranscriptIngestionStatus: boolean
 }): void {
-  if (input.hasTranscriptSource && input.reason !== 'stale') {
+  if (input.shouldResetTranscriptIngestionStatus && input.reason !== 'stale') {
     useTranscriptStore.getState().setTranscriptIngestionStatus(TRANSCRIPT_INGESTION_STATUS.IDLE)
   }
   if (input.reason === 'no_playable_source' || input.reason === 'download_failed') {

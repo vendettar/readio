@@ -4,7 +4,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getEditorPicksForRegion, isPodcastGuid } from '../constants/app'
 import discovery, { type EditorPickPodcast, type TopPodcast } from '../lib/discovery'
-import { NetworkError } from '../lib/fetchUtils'
+import { shouldRetryDiscoveryRequest } from '../lib/discovery/cloudApi'
 import { useNetworkStatus } from './useNetworkStatus'
 
 // Query keys
@@ -31,16 +31,7 @@ export function useTopPodcasts(country: string = 'us') {
     enabled: isOnline,
     staleTime: 24 * 60 * 60 * 1000, // 24 hours
     gcTime: 24 * 60 * 60 * 1000, // 24 hours
-    retry: (failureCount, error) => {
-      // TypeError happens on true offline or severe CORS/Network issues - don't retry
-      if (
-        error instanceof NetworkError ||
-        error.name === 'NetworkError' ||
-        error instanceof TypeError
-      )
-        return false
-      return failureCount < 2
-    },
+    retry: shouldRetryDiscoveryRequest,
   })
 }
 
@@ -70,16 +61,7 @@ export function useEditorPicks(country: string = 'us') {
     enabled: isOnline,
     staleTime: 24 * 60 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
-    retry: (failureCount, error) => {
-      if (
-        error instanceof NetworkError ||
-        error.name === 'NetworkError' ||
-        error instanceof TypeError
-      ) {
-        return false
-      }
-      return failureCount < 2
-    },
+    retry: shouldRetryDiscoveryRequest,
   })
 }
 
@@ -100,16 +82,7 @@ export function useTopEpisodes(country: string = 'us') {
     enabled: isOnline,
     staleTime: 24 * 60 * 60 * 1000, // 24 hours
     gcTime: 24 * 60 * 60 * 1000, // 24 hours
-    retry: (failureCount, error) => {
-      // TypeError happens on true offline or severe CORS/Network issues - don't retry
-      if (
-        error instanceof NetworkError ||
-        error.name === 'NetworkError' ||
-        error instanceof TypeError
-      )
-        return false
-      return failureCount < 2
-    },
+    retry: shouldRetryDiscoveryRequest,
   })
 }
 

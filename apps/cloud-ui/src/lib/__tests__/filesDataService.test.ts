@@ -58,22 +58,57 @@ describe('filesDataService', () => {
     expect(snapshot.subtitles).toHaveLength(1)
   })
 
-  it('loads non-root snapshot without folder counts', async () => {
-    vi.mocked(FilesRepository.getAllFolders).mockResolvedValue([])
-    vi.mocked(FilesRepository.getFileTracksInFolder).mockResolvedValue([])
+  it('loads folder snapshot through the shared snapshot authority', async () => {
+    vi.mocked(FilesRepository.getAllFolders).mockResolvedValue([
+      { id: 'folder-1', name: 'Folder 1', createdAt: 1 },
+    ] as never)
+    vi.mocked(FilesRepository.getFileTracksInFolder).mockResolvedValue([
+      {
+        id: 'track-1',
+        folderId: 'folder-1',
+        name: 'Track 1',
+        audioId: 'audio-1',
+        sizeBytes: 123,
+        createdAt: 1,
+        sourceType: 'user_upload',
+      },
+    ] as never)
     vi.mocked(FilesRepository.getFolder).mockResolvedValue({
       id: 'folder-1',
       name: 'Folder 1',
       createdAt: 1,
     } as never)
+    vi.mocked(FilesRepository.getFileSubtitlesForTrack).mockResolvedValue([
+      {
+        id: 'sub-1',
+        trackId: 'track-1',
+        subtitleId: 'subtitle-1',
+        name: 'Sub 1',
+        sourceKind: 'manual_upload',
+        status: 'ready',
+        createdAt: 1,
+      },
+    ] as never)
 
     const snapshot = await loadFilesDataSnapshot('folder-1')
 
+    expect(FilesRepository.getFileTracksInFolder).toHaveBeenCalledWith('folder-1')
     expect(FilesRepository.getFileTracksCountInFolder).not.toHaveBeenCalled()
     expect(snapshot.currentFolder).toEqual(
       expect.objectContaining({
         id: 'folder-1',
       })
     )
+    expect(snapshot.tracks).toEqual([
+      expect.objectContaining({
+        id: 'track-1',
+      }),
+    ])
+    expect(snapshot.subtitles).toEqual([
+      expect.objectContaining({
+        id: 'sub-1',
+      }),
+    ])
+    expect(snapshot.folderCounts).toEqual({})
   })
 })

@@ -5,13 +5,20 @@ import { describe, expect, it } from 'vitest'
 interface RouteGuardScriptModule {
   findRouteGuardViolations: () => Array<{ file: string; pattern: string }>
   ROUTE_GUARD_ALLOWLIST_PATTERNS: RegExp[]
+  ROUTE_GUARD_INCLUDE_PATTERNS: RegExp[]
   ROUTE_GUARD_FORBIDDEN_PATTERNS: RegExp[]
+  shouldScanRouteGuardFile: (file: string) => boolean
 }
 
 // @ts-expect-error guard script is JS-only and intentionally loaded in tests for runtime behavior assertions
 const routeGuardScriptImport = await import('../../scripts/check-route-country-guards.js')
-const { findRouteGuardViolations, ROUTE_GUARD_ALLOWLIST_PATTERNS, ROUTE_GUARD_FORBIDDEN_PATTERNS } =
-  routeGuardScriptImport as RouteGuardScriptModule
+const {
+  findRouteGuardViolations,
+  ROUTE_GUARD_ALLOWLIST_PATTERNS,
+  ROUTE_GUARD_INCLUDE_PATTERNS,
+  ROUTE_GUARD_FORBIDDEN_PATTERNS,
+  shouldScanRouteGuardFile,
+} = routeGuardScriptImport as RouteGuardScriptModule
 
 describe('route guard script patterns', () => {
   it('flags production-source query-hint regressions by regex behavior', () => {
@@ -68,6 +75,23 @@ describe('route guard script patterns', () => {
     ).toBe(true)
   })
 
+  it('scans route-aware source scopes instead of a fixed target list', () => {
+    expect(
+      ROUTE_GUARD_INCLUDE_PATTERNS.some((pattern) =>
+        pattern.test('src/components/Explore/NewEpisodeRail.tsx')
+      )
+    ).toBe(true)
+    expect(
+      ROUTE_GUARD_INCLUDE_PATTERNS.some((pattern) =>
+        pattern.test('src/hooks/usePodcastShowContent.ts')
+      )
+    ).toBe(true)
+    expect(shouldScanRouteGuardFile('src/components/Explore/NewEpisodeRail.tsx')).toBe(true)
+    expect(shouldScanRouteGuardFile('src/lib/networking/cloudBackendFallback.ts')).toBe(false)
+    expect(shouldScanRouteGuardFile('src/lib/discovery/schema.ts')).toBe(false)
+    expect(shouldScanRouteGuardFile('src/foo/__tests__/a.tsx')).toBe(false)
+  })
+
   it('findRouteGuardViolations returns structured violations list', () => {
     const violations = findRouteGuardViolations()
     for (const violation of violations) {
@@ -79,7 +103,7 @@ describe('route guard script patterns', () => {
   it('findRouteGuardViolations detects real forbidden usage in scanned targets', () => {
     const tempFile = path.resolve(
       process.cwd(),
-      `src/components/GlobalSearch/__routeGuard.semantic.fixture.${process.pid}.${Date.now()}.ts`
+      `src/components/Explore/__routeGuard.semantic.fixture.${process.pid}.${Date.now()}.ts`
     )
     fs.writeFileSync(
       tempFile,

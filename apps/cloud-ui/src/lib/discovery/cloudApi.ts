@@ -40,6 +40,24 @@ export class DiscoveryInvalidPayloadError extends Error {
   }
 }
 
+export function shouldRetryDiscoveryRequest(failureCount: number, error: unknown): boolean {
+  if (failureCount >= 1) return false
+
+  if (
+    error instanceof NetworkError ||
+    error instanceof DiscoveryParseError ||
+    error instanceof DiscoveryInvalidPayloadError
+  ) {
+    return false
+  }
+
+  if (error instanceof FetchError) {
+    return (error.status ?? 0) >= 500
+  }
+
+  return false
+}
+
 const DiscoveryErrorSchema = z.object({
   code: z.string(),
   message: z.string(),

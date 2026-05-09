@@ -5,12 +5,8 @@ import { Button } from '@/components/ui/button'
 import { CircularProgress } from '@/components/ui/circular-progress'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useEpisodeStatus } from '@/hooks/useEpisodeStatus'
-import {
-  buildDownloadJobOptionsFromEpisodeProps,
-  downloadEpisode,
-  type EpisodeDownloadProps,
-  removeDownloadedTrack,
-} from '@/lib/downloadService'
+import { type EpisodeDownloadProps, removeDownloadedTrack } from '@/lib/downloadService'
+import { executeEpisodeDownload } from '@/lib/executeEpisodeDownload'
 import { logError } from '@/lib/logger'
 import { cn } from '@/lib/utils'
 
@@ -41,24 +37,21 @@ export function EpisodeDetailDownloadButton({
   const [isRemoving, setIsRemoving] = useState(false)
 
   const handleDownload = useCallback(() => {
-    if (status.downloadStatus === 'downloading') return
-
-    const downloadOptions = buildDownloadJobOptionsFromEpisodeProps({
-      audioUrl,
-      episodeTitle,
-      episodeDescription,
-      showTitle,
-      artworkUrl,
-      transcriptUrl,
-      countryAtSave,
-      podcastItunesId,
-      episodeGuid,
-      durationSeconds,
-    })
-    if (!downloadOptions) return
-
-    void downloadEpisode(downloadOptions).then(() => {
-      status.refresh()
+    executeEpisodeDownload({
+      episode: {
+        audioUrl,
+        episodeTitle,
+        episodeDescription,
+        showTitle,
+        artworkUrl,
+        transcriptUrl,
+        countryAtSave,
+        podcastItunesId,
+        episodeGuid,
+        durationSeconds,
+      },
+      downloadStatus: status.downloadStatus,
+      refresh: status.refresh,
     })
   }, [
     audioUrl,

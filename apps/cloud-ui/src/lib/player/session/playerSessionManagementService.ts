@@ -2,10 +2,7 @@ import type { PlaybackSession } from '../../dexieDb'
 import { PlaybackRepository } from '../../repositories/PlaybackRepository'
 import { generateSessionId } from '../../session'
 import type { EpisodeMetadata } from '../playbackMetadata'
-import {
-  isCanonicalRemoteEpisodeMetadata,
-  PLAYBACK_METADATA_KIND,
-} from '../playbackMetadata'
+import { isCanonicalRemoteEpisodeMetadata, PLAYBACK_METADATA_KIND } from '../playbackMetadata'
 import {
   buildManagedPlaybackSessionCreateInput,
   resolveSessionAudioSnapshot,

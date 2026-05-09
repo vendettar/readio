@@ -3,6 +3,7 @@ import { Menu } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { usePlayerSurfaceStore } from '../../store/playerSurfaceStore'
+import { Button } from '../ui/button'
 import { Sidebar } from './Sidebar'
 
 const MiniPlayer = lazy(async () => {
@@ -179,16 +180,17 @@ export function AppShell({ children }: AppShellProps) {
         {/* Hamburger menu button - mobile only */}
         {mode !== 'full' && (
           <div className="md:hidden flex items-center px-4 py-3 border-b border-border/50">
-            <button
+            <Button
               ref={hamburgerRef}
-              type="button"
+              variant="ghost"
+              size="icon"
               onClick={() => setSidebarOpen(true)}
               className="h-10 w-10 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-muted/60 hover:text-foreground transition-colors"
               aria-expanded={sidebarOpen}
               aria-label="Open sidebar navigation"
             >
               <Menu size={24} />
-            </button>
+            </Button>
           </div>
         )}
 

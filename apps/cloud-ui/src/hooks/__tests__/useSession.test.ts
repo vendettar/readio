@@ -123,7 +123,7 @@ describe('useSession', () => {
       progress: 0,
       duration: 0,
       sessionId: null,
-      initializationStatus: 'idle',
+      initializationStatus: 'ready',
     })
     useTranscriptStore.setState({
       subtitlesLoaded: false,
@@ -135,51 +135,25 @@ describe('useSession', () => {
     vi.useRealTimers()
   })
 
-  it('should trigger restoreSession on mount', async () => {
-    const mockLastSession = makeLocalPlaybackSession({
-      id: 'last-session-id',
-      title: 'Test',
-      progress: 120,
-      durationSeconds: 300,
-      audioId: 'audio-1',
-      audioFilename: 'test.mp3',
-      hasAudioBlob: true,
-      sizeBytes: 1000,
-    })
-    vi.mocked(DB.getLastPlaybackSession).mockResolvedValue(mockLastSession)
-    vi.mocked(DB.getAudioBlob).mockResolvedValue({
-      id: 'audio-1',
-      blob: new Blob(['audio']),
-      filename: 'test.mp3',
-      type: 'audio/mpeg',
-      size: 5,
-      storedAt: Date.now(),
-    })
+  it('does not own boot restore when player initialization is still idle', async () => {
+    usePlayerStore.setState({ initializationStatus: 'idle' })
 
     renderHook(() => useSession())
 
-    // Wait for restoreSession (which is async)
     await act(async () => {
       await vi.runOnlyPendingTimersAsync()
     })
 
-    expect(usePlayerStore.getState().initializationStatus).toBe('ready')
-    expect(usePlayerStore.getState().sessionId).toBe('last-session-id')
-    expect(usePlayerStore.getState().audioUrl).toBe('mock-blob-url')
+    expect(usePlayerStore.getState().initializationStatus).toBe('idle')
+    expect(usePlayerStore.getState().sessionId).toBeNull()
+    expect(DB.getLastPlaybackSession).not.toHaveBeenCalled()
   })
 
-  it('should create a new playback session when audio is loaded after restoration', async () => {
-    vi.mocked(DB.getLastPlaybackSession).mockResolvedValue(undefined)
-
+  it('should create a new playback session when audio is loaded after boot restoration is already complete', async () => {
     renderHook(() => useSession())
 
-    // 1. Wait for restoration to complete (to 'ready')
-    await act(async () => {
-      await vi.runOnlyPendingTimersAsync()
-    })
     expect(usePlayerStore.getState().initializationStatus).toBe('ready')
 
-    // 2. Simulate loading audio manually
     act(() => {
       usePlayerStore.setState({
         audioLoaded: true,
@@ -196,7 +170,6 @@ describe('useSession', () => {
       })
     })
 
-    // 3. Wait for new session creation
     await act(async () => {
       await vi.runOnlyPendingTimersAsync()
     })
@@ -213,13 +186,7 @@ describe('useSession', () => {
   })
 
   it('normalizes audioUrl before persistence for canonical remote sessions', async () => {
-    vi.mocked(DB.getLastPlaybackSession).mockResolvedValue(undefined)
-
     renderHook(() => useSession())
-
-    await act(async () => {
-      await vi.runOnlyPendingTimersAsync()
-    })
 
     act(() => {
       usePlayerStore.setState({
@@ -255,13 +222,7 @@ describe('useSession', () => {
   })
 
   it('uses originalAudioUrl when persisting canonical remote sessions backed by blob playback', async () => {
-    vi.mocked(DB.getLastPlaybackSession).mockResolvedValue(undefined)
-
     renderHook(() => useSession())
-
-    await act(async () => {
-      await vi.runOnlyPendingTimersAsync()
-    })
 
     act(() => {
       usePlayerStore.setState({
@@ -298,7 +259,6 @@ describe('useSession', () => {
   })
 
   it('reuses an existing remote session by canonical identity without falling back to URL lookup', async () => {
-    vi.mocked(DB.getLastPlaybackSession).mockResolvedValue(undefined)
     vi.mocked(DB.findLastExploreSessionByCanonicalIdentity).mockResolvedValue(
       makeExplorePlaybackSession({
         id: 'existing-remote-session',
@@ -314,10 +274,6 @@ describe('useSession', () => {
     )
 
     renderHook(() => useSession())
-
-    await act(async () => {
-      await vi.runOnlyPendingTimersAsync()
-    })
 
     act(() => {
       usePlayerStore.setState({
@@ -364,13 +320,7 @@ describe('useSession', () => {
   })
 
   it('rejects explore session persistence when countryAtSave is outside supported allowlist', async () => {
-    vi.mocked(DB.getLastPlaybackSession).mockResolvedValue(undefined)
-
     renderHook(() => useSession())
-
-    await act(async () => {
-      await vi.runOnlyPendingTimersAsync()
-    })
 
     act(() => {
       usePlayerStore.setState({
@@ -393,13 +343,7 @@ describe('useSession', () => {
   })
 
   it('rejects explore session persistence when remote metadata is only partially canonical', async () => {
-    vi.mocked(DB.getLastPlaybackSession).mockResolvedValue(undefined)
-
     renderHook(() => useSession())
-
-    await act(async () => {
-      await vi.runOnlyPendingTimersAsync()
-    })
 
     act(() => {
       usePlayerStore.setState({
@@ -425,17 +369,10 @@ describe('useSession', () => {
   })
 
   it('should still allow manual session creation if restoration fails', async () => {
-    vi.mocked(DB.getLastPlaybackSession).mockRejectedValue(new Error('DB Error'))
+    usePlayerStore.setState({ initializationStatus: 'failed' })
 
     renderHook(() => useSession())
 
-    // 1. Wait for restoration to fail
-    await act(async () => {
-      await vi.runOnlyPendingTimersAsync()
-    })
-    expect(usePlayerStore.getState().initializationStatus).toBe('failed')
-
-    // 2. Simulate loading audio manually
     act(() => {
       usePlayerStore.setState({
         audioLoaded: true,
@@ -452,7 +389,6 @@ describe('useSession', () => {
       })
     })
 
-    // 3. Wait for new session creation
     await act(async () => {
       await vi.runOnlyPendingTimersAsync()
     })

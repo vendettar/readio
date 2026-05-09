@@ -3,6 +3,7 @@
 ## [Doc Update Protocol]
 - **Idempotency**: Before flagging a roadmap or instruction, verify its current state to prevent repetitive entries.
 - **Path Style Rule**: Use repo-relative paths for repository content in review notes, docs, and instruction feedback. Do not write local absolute filesystem paths for in-repo files.
+- **Steady-State Writing Rule**: When reviewing doc changes, require steady-state wording that explains what the system is and how it works now. Migration/evolution narration belongs only in explicitly scoped audit/history/rationale docs.
 
 ## [Skill Mastery Protocol]
 - **Automated Auditing**: Use specialized audit skills (if available) to supplement manual code reviews.

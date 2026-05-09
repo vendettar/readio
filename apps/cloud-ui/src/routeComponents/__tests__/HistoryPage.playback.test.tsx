@@ -299,7 +299,7 @@ describe('HistoryPage playback session wiring', () => {
       )
       deps.setSessionId?.(session.id)
       deps.play()
-      return true
+      return { started: true, reason: 'started' }
     })
   })
 
@@ -332,6 +332,18 @@ describe('HistoryPage playback session wiring', () => {
 
     await waitFor(() => expect(setPlayableContextMock).toHaveBeenCalledWith(true))
     expect(toDockedMock).toHaveBeenCalledTimes(1)
+    expect(toMiniMock).not.toHaveBeenCalled()
+  })
+
+  it('does not open remote surface when shared helper reports non-start', async () => {
+    playHistorySessionWithDepsMock.mockResolvedValue({ started: false, reason: 'stale' })
+
+    render(<HistoryPage />)
+    fireEvent.click(screen.getByLabelText('btnPlayOnly'))
+
+    await waitFor(() => expect(playHistorySessionWithDepsMock).toHaveBeenCalledTimes(1))
+    expect(setPlayableContextMock).not.toHaveBeenCalled()
+    expect(toDockedMock).not.toHaveBeenCalled()
     expect(toMiniMock).not.toHaveBeenCalled()
   })
 

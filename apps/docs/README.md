@@ -25,5 +25,5 @@ pnpm -C apps/docs typecheck
 
 ## Structure Notes
 
-- `lib/source.ts`: content-source loader and metadata wiring.
+- `lib/source.ts`: generated docs source adapter for the Fumadocs loader.
 - `source.config.ts`: MDX/source generation config.

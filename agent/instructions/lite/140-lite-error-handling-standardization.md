@@ -162,10 +162,10 @@ first-pass standardization must require a stable error shape for the Lite surfac
 ### 4. 错误码文档
 
 4.1 创建：
-- `apps/docs/content/docs/apps/lite/error-codes.mdx`
+- `apps/docs/content/docs/apps/cloud/error-codes.mdx`
 
 4.2 若 Lite docs 当前要求双语，则同步创建：
-- `apps/docs/content/docs/apps/lite/error-codes.zh.mdx`
+- `apps/docs/content/docs/apps/cloud/error-codes.zh.mdx`
 
 4.3 每个文档条目至少包含：
 - `code`
@@ -200,8 +200,8 @@ first-pass standardization must require a stable error shape for the Lite surfac
 ## Documentation
 
 - Update `apps/docs/content/docs/general/technical-roadmap.mdx` **only after Reviewer sign-off**
-- Create `apps/docs/content/docs/apps/lite/error-codes.mdx`
-- Create `apps/docs/content/docs/apps/lite/error-codes.zh.mdx` if Lite docs remain bilingual for this surface
+- Create `apps/docs/content/docs/apps/cloud/error-codes.mdx`
+- Create `apps/docs/content/docs/apps/cloud/error-codes.zh.mdx` if Lite docs remain bilingual for this surface
 
 ## Completion
 - **Completed by**:

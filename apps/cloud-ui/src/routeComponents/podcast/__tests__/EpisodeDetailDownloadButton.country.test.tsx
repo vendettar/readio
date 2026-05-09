@@ -6,9 +6,21 @@ vi.mock('../../../lib/logger', () => ({
   logError: vi.fn(),
 }))
 
-const { downloadEpisodeMock, refreshMock } = vi.hoisted(() => ({
+const { downloadEpisodeMock, refreshMock, mockEpisodeStatus } = vi.hoisted(() => ({
   downloadEpisodeMock: vi.fn(() => Promise.resolve({ ok: true })),
   refreshMock: vi.fn(),
+  mockEpisodeStatus: {
+    playable: true,
+    downloadStatus: 'idle' as 'idle' | 'downloading' | 'downloaded',
+    progress: null as number | null,
+    speedBytesPerSecond: undefined as number | undefined,
+    localTrackId: null as string | null,
+    disabledReason: null as string | null,
+    normalizedUrl: 'https://example.com/audio.mp3',
+    isLocal: false,
+    loading: false,
+    refresh: vi.fn(),
+  },
 }))
 
 vi.mock('react-i18next', () => ({
@@ -29,24 +41,17 @@ vi.mock('../../../lib/downloadService', async (importOriginal) => {
 })
 
 vi.mock('../../../hooks/useEpisodeStatus', () => ({
-  useEpisodeStatus: () => ({
-    playable: true,
-    downloadStatus: 'idle',
-    progress: null,
-    speedBytesPerSecond: undefined,
-    localTrackId: null,
-    disabledReason: null,
-    normalizedUrl: 'https://example.com/audio.mp3',
-    isLocal: false,
-    loading: false,
-    refresh: refreshMock,
-  }),
+  useEpisodeStatus: () => mockEpisodeStatus,
 }))
 
 describe('EpisodeDetailDownloadButton country normalization', () => {
   beforeEach(() => {
     downloadEpisodeMock.mockClear()
     refreshMock.mockClear()
+    mockEpisodeStatus.downloadStatus = 'idle'
+    mockEpisodeStatus.progress = null
+    mockEpisodeStatus.localTrackId = null
+    mockEpisodeStatus.refresh = refreshMock
   })
 
   it.each([
@@ -121,5 +126,48 @@ describe('EpisodeDetailDownloadButton country normalization', () => {
 
     expect(downloadEpisodeMock).not.toHaveBeenCalled()
     expect(refreshMock).not.toHaveBeenCalled()
+  })
+
+  it('short-circuits when already downloading', () => {
+    mockEpisodeStatus.downloadStatus = 'downloading'
+    mockEpisodeStatus.progress = 42
+
+    render(
+      <EpisodeDetailDownloadButton
+        episodeTitle="Episode"
+        showTitle="Podcast"
+        audioUrl="https://example.com/audio.mp3"
+        artworkUrl="https://example.com/art.jpg"
+        countryAtSave="us"
+        podcastItunesId="pod-1"
+        episodeGuid="episode-guid-1"
+      />
+    )
+
+    expect(
+      screen.getByRole('button', { name: 'downloadEpisodeDownloading' }).hasAttribute('disabled')
+    ).toBe(true)
+    expect(downloadEpisodeMock).not.toHaveBeenCalled()
+    expect(refreshMock).not.toHaveBeenCalled()
+  })
+
+  it('refreshes status after download succeeds', async () => {
+    render(
+      <EpisodeDetailDownloadButton
+        episodeTitle="Episode"
+        showTitle="Podcast"
+        audioUrl="https://example.com/audio.mp3"
+        artworkUrl="https://example.com/art.jpg"
+        countryAtSave="US"
+        podcastItunesId="pod-1"
+        episodeGuid="episode-guid-1"
+      />
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'downloadEpisode' }))
+
+    await Promise.resolve()
+
+    expect(refreshMock).toHaveBeenCalledTimes(1)
   })
 })

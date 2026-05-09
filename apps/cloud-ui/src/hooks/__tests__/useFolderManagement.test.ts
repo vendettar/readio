@@ -29,12 +29,10 @@ describe('useFolderManagement', () => {
 
   it('creates folder through service and refreshes data', async () => {
     vi.mocked(createManagedFolder).mockResolvedValue('folder-1')
-    const setCurrentFolderId = vi.fn()
     const onComplete = vi.fn(async () => {})
 
     const { result } = renderHook(() =>
       useFolderManagement({
-        setCurrentFolderId,
         onComplete,
         folders: [{ id: 'existing', name: 'Inbox', createdAt: 1 }],
       })
@@ -52,7 +50,6 @@ describe('useFolderManagement', () => {
       await result.current.handleConfirmNewFolder()
     })
 
-    expect(setCurrentFolderId).toHaveBeenCalledWith(null)
     expect(createManagedFolder).toHaveBeenCalledWith('Inbox', [
       { id: 'existing', name: 'Inbox', createdAt: 1 },
     ])
@@ -64,7 +61,6 @@ describe('useFolderManagement', () => {
   it('cancels blank folder names without calling service', async () => {
     const { result } = renderHook(() =>
       useFolderManagement({
-        setCurrentFolderId: vi.fn(),
         onComplete: vi.fn(async () => {}),
         folders: [],
       })
@@ -89,7 +85,6 @@ describe('useFolderManagement', () => {
 
     const { result } = renderHook(() =>
       useFolderManagement({
-        setCurrentFolderId: vi.fn(),
         onComplete,
         folders: [],
       })

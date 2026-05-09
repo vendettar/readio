@@ -1,5 +1,5 @@
 > **⚠️ CRITICAL**: You MUST preserve the current UI/UX layout and styling. Do NOT change visual appearance unless explicitly instructed.
-> **Prerequisites**: Read `agent/instructions/lite/084-harden-public-proxy-controls.md`, `apps/docs/content/docs/general/security.mdx`, and `apps/docs/content/docs/apps/lite/handoff/environment.mdx` before starting.
+> **Prerequisites**: Read `agent/instructions/lite/084-harden-public-proxy-controls.md`, `apps/docs/content/docs/general/security.mdx`, and `apps/docs/content/docs/apps/cloud/handoff/environment.mdx` before starting.
 
 # Task: 084b - Enable Multi-Dimensional Proxy Rate Limits and 429 Policy
 
@@ -57,15 +57,15 @@ Harden Readio Lite public proxy against abuse by adding production-safe rate lim
 - Logs include required dimensions without leaking raw token.
 
 ### Commands
-- `pnpm -C apps/lite test:run`
-- `pnpm -C apps/lite build`
+- `pnpm -C apps/cloud-ui test:run`
+- `pnpm -C apps/cloud-ui build`
 
 ## Documentation Sync (Required)
 Update both EN and ZH:
 - `apps/docs/content/docs/general/security.mdx`
 - `apps/docs/content/docs/general/security.zh.mdx`
-- `apps/docs/content/docs/apps/lite/handoff/environment.mdx`
-- `apps/docs/content/docs/apps/lite/handoff/environment.zh.mdx`
+- `apps/docs/content/docs/apps/cloud/handoff/environment.mdx`
+- `apps/docs/content/docs/apps/cloud/handoff/environment.zh.mdx`
 
 Must include:
 - Primary/secondary rate-limit architecture.

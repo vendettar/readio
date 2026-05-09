@@ -1,6 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PlaybackSession, Track } from '../db/types'
-import { createCanonicalRemoteEpisodeMetadata } from '../player/playbackMetadata'
+import {
+  type CanonicalRemoteEpisodeMetadata,
+  createCanonicalRemoteEpisodeMetadata,
+} from '../player/playbackMetadata'
+
+function expectCanonicalRemoteMetadata(
+  metadata: ReturnType<typeof createCanonicalRemoteEpisodeMetadata>
+): CanonicalRemoteEpisodeMetadata {
+  expect(metadata).not.toBeNull()
+  return metadata as CanonicalRemoteEpisodeMetadata
+}
+
+function asInvalidDownloadJobOptions(
+  options: Record<string, unknown>
+): import('../downloadService').DownloadJobOptions {
+  return options as unknown as import('../downloadService').DownloadJobOptions
+}
 
 const {
   checkDownloadCapacityMock,
@@ -257,16 +273,18 @@ describe('downloadService regressions', () => {
   })
 
   it('fails closed when downloadEpisode receives whitespace-only canonical required fields', async () => {
-    const result = await downloadEpisode({
-      audioUrl: ' https://example.com/audio.mp3 ',
-      episodeTitle: 'Episode',
-      episodeDescription: '',
-      showTitle: 'Podcast',
-      artworkUrl: '   ',
-      countryAtSave: 'us',
-      podcastItunesId: 'pod-1',
-      episodeGuid: 'episode-guid-1',
-    } as unknown as import('../downloadService').DownloadJobOptions)
+    const result = await downloadEpisode(
+      asInvalidDownloadJobOptions({
+        audioUrl: ' https://example.com/audio.mp3 ',
+        episodeTitle: 'Episode',
+        episodeDescription: '',
+        showTitle: 'Podcast',
+        artworkUrl: '   ',
+        countryAtSave: 'us',
+        podcastItunesId: 'pod-1',
+        episodeGuid: 'episode-guid-1',
+      })
+    )
 
     expect(result).toEqual({
       ok: false,
@@ -315,20 +333,24 @@ describe('downloadService regressions', () => {
   })
 
   it('normalizes remote metadata download options from canonical metadata and fails closed on invalid country', () => {
+    const metadata = expectCanonicalRemoteMetadata(
+      createCanonicalRemoteEpisodeMetadata({
+        showTitle: ' Podcast ',
+        artworkUrl: ' https://example.com/art.jpg ',
+        episodeGuid: ' guid-2 ',
+        podcastItunesId: ' pod-2 ',
+        countryAtSave: 'us',
+        description: ' Description ',
+        durationSeconds: 120,
+        transcriptUrl: ' https://example.com/transcript.vtt ',
+      })
+    )
+
     expect(
       buildDownloadJobOptionsFromCanonicalRemoteMetadata({
         audioUrl: ' https://example.com/audio.mp3 ',
         episodeTitle: ' Episode ',
-        metadata: createCanonicalRemoteEpisodeMetadata({
-          showTitle: ' Podcast ',
-          artworkUrl: ' https://example.com/art.jpg ',
-          episodeGuid: ' guid-2 ',
-          podcastItunesId: ' pod-2 ',
-          countryAtSave: 'us',
-          description: ' Description ',
-          durationSeconds: 120,
-          transcriptUrl: ' https://example.com/transcript.vtt ',
-        })!,
+        metadata,
       })
     ).toEqual(
       expect.objectContaining({
@@ -424,15 +446,18 @@ describe('downloadService regressions', () => {
   })
 
   it('rejects blob persistence when countryAtSave is missing', async () => {
-    const result = await persistAudioBlobAsDownload(new Blob(['audio']), {
-      audioUrl: 'https://example.com/audio.mp3',
-      episodeTitle: 'Episode',
-      episodeDescription: '',
-      showTitle: 'Podcast',
-      artworkUrl: 'https://example.com/art.jpg',
-      podcastItunesId: 'pod-1',
-      episodeGuid: 'episode-guid-1',
-    } as unknown as import('../downloadService').DownloadJobOptions)
+    const result = await persistAudioBlobAsDownload(
+      new Blob(['audio']),
+      asInvalidDownloadJobOptions({
+        audioUrl: 'https://example.com/audio.mp3',
+        episodeTitle: 'Episode',
+        episodeDescription: '',
+        showTitle: 'Podcast',
+        artworkUrl: 'https://example.com/art.jpg',
+        podcastItunesId: 'pod-1',
+        episodeGuid: 'episode-guid-1',
+      })
+    )
 
     expect(result).toEqual({
       ok: false,
@@ -442,16 +467,19 @@ describe('downloadService regressions', () => {
   })
 
   it('rejects blob persistence when countryAtSave is invalid', async () => {
-    const result = await persistAudioBlobAsDownload(new Blob(['audio']), {
-      audioUrl: 'https://example.com/audio.mp3',
-      episodeTitle: 'Episode',
-      episodeDescription: '',
-      showTitle: 'Podcast',
-      artworkUrl: 'https://example.com/art.jpg',
-      countryAtSave: 'zz',
-      podcastItunesId: 'pod-1',
-      episodeGuid: 'episode-guid-1',
-    } as unknown as import('../downloadService').DownloadJobOptions)
+    const result = await persistAudioBlobAsDownload(
+      new Blob(['audio']),
+      asInvalidDownloadJobOptions({
+        audioUrl: 'https://example.com/audio.mp3',
+        episodeTitle: 'Episode',
+        episodeDescription: '',
+        showTitle: 'Podcast',
+        artworkUrl: 'https://example.com/art.jpg',
+        countryAtSave: 'zz',
+        podcastItunesId: 'pod-1',
+        episodeGuid: 'episode-guid-1',
+      })
+    )
 
     expect(result).toEqual({
       ok: false,
@@ -461,16 +489,19 @@ describe('downloadService regressions', () => {
   })
 
   it('rejects blob persistence when canonical remote metadata is missing', async () => {
-    const result = await persistAudioBlobAsDownload(new Blob(['audio']), {
-      audioUrl: 'https://example.com/audio.mp3',
-      episodeTitle: 'Episode',
-      episodeDescription: '',
-      showTitle: '',
-      artworkUrl: 'https://example.com/art.jpg',
-      countryAtSave: 'us',
-      podcastItunesId: 'pod-1',
-      episodeGuid: 'episode-guid-1',
-    } as unknown as import('../downloadService').DownloadJobOptions)
+    const result = await persistAudioBlobAsDownload(
+      new Blob(['audio']),
+      asInvalidDownloadJobOptions({
+        audioUrl: 'https://example.com/audio.mp3',
+        episodeTitle: 'Episode',
+        episodeDescription: '',
+        showTitle: '',
+        artworkUrl: 'https://example.com/art.jpg',
+        countryAtSave: 'us',
+        podcastItunesId: 'pod-1',
+        episodeGuid: 'episode-guid-1',
+      })
+    )
 
     expect(result).toEqual({
       ok: false,
@@ -480,16 +511,19 @@ describe('downloadService regressions', () => {
   })
 
   it('rejects blob persistence when artworkUrl is empty after normalization', async () => {
-    const result = await persistAudioBlobAsDownload(new Blob(['audio']), {
-      audioUrl: 'https://example.com/audio.mp3',
-      episodeTitle: 'Episode',
-      episodeDescription: '',
-      showTitle: 'Podcast',
-      artworkUrl: '   ',
-      countryAtSave: 'us',
-      podcastItunesId: 'pod-1',
-      episodeGuid: 'episode-guid-1',
-    } as unknown as import('../downloadService').DownloadJobOptions)
+    const result = await persistAudioBlobAsDownload(
+      new Blob(['audio']),
+      asInvalidDownloadJobOptions({
+        audioUrl: 'https://example.com/audio.mp3',
+        episodeTitle: 'Episode',
+        episodeDescription: '',
+        showTitle: 'Podcast',
+        artworkUrl: '   ',
+        countryAtSave: 'us',
+        podcastItunesId: 'pod-1',
+        episodeGuid: 'episode-guid-1',
+      })
+    )
 
     expect(result).toEqual({
       ok: false,

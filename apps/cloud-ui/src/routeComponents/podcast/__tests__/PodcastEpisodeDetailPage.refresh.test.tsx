@@ -2,11 +2,7 @@ import { render } from '@testing-library/react'
 import type React from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { createQueryClientWrapper } from '../../../__tests__/queryClient'
-import {
-  makeEditorPickSnapshot,
-  makeEpisode,
-  makeMinimalPodcast,
-} from '../../../lib/discovery/__tests__/fixtures'
+import { makeEpisode, makeMinimalPodcast } from '../../../lib/discovery/__tests__/fixtures'
 import PodcastEpisodeDetailPage from '../PodcastEpisodeDetailPage'
 
 const useEpisodeResolutionMock = vi.fn()
@@ -75,11 +71,10 @@ vi.mock('@/lib/logger', () => ({
 describe('PodcastEpisodeDetailPage canonical refresh', () => {
   it('resolves from path params without requiring query hints', () => {
     useEpisodeResolutionMock.mockReturnValue({
-      podcast: null,
-      episode: undefined,
+      resolvedContent: null,
       isLoading: false,
-      podcastError: new Error('not-found'),
       resolutionError: new Error('not-found'),
+      notFound: 'podcast',
     })
     navigateMock.mockReset()
     routePodcastId = '123'
@@ -96,34 +91,29 @@ describe('PodcastEpisodeDetailPage canonical refresh', () => {
     )
   })
 
-  it('redirects editor-pick detail pages onto podcastItunesId plus stable episode identity canonical routes', () => {
-    useEpisodeResolutionMock.mockReturnValue({
-      podcast: {
-        ...makeMinimalPodcast({
-          podcastItunesId: '1065559535',
-          title: 'Modern Love',
-          author: 'The New York Times',
-          artwork: 'https://example.com/show-600.jpg',
-        }),
-        editorPickSnapshot: makeEditorPickSnapshot({
-          title: 'Modern Love',
-          author: 'The New York Times',
-          artwork: 'https://example.com/show-600.jpg',
-          podcastItunesId: '1065559535',
-          genres: [],
-        }),
-      },
-      episode: makeEpisode({
-        guid: 'a8343698-1dca-4c63-bb5d-3e2a61522c2a',
-        title: 'Lindy West Thought She Couldn’t Handle Polyamory. She Was Wrong.',
-        audioUrl: 'https://example.com/audio.mp3',
-        pubDate: '2025-01-01T00:00:00.000Z',
-        duration: 1200,
-        description: 'desc',
+  it('no longer handles canonical redirects in component (handled by loader)', () => {
+    const podcast = {
+      ...makeMinimalPodcast({
+        podcastItunesId: '1065559535',
+        title: 'Modern Love',
+        author: 'The New York Times',
+        artwork: 'https://example.com/show-600.jpg',
       }),
+    }
+    const episode = makeEpisode({
+      guid: 'a8343698-1dca-4c63-bb5d-3e2a61522c2a',
+      title: 'Lindy West Thought She Couldn’t Handle Polyamory. She Was Wrong.',
+      audioUrl: 'https://example.com/audio.mp3',
+      pubDate: '2025-01-01T00:00:00.000Z',
+      duration: 1200,
+      description: 'desc',
+    })
+
+    useEpisodeResolutionMock.mockReturnValue({
+      resolvedContent: { podcast, episode },
       isLoading: false,
-      podcastError: null,
       resolutionError: null,
+      notFound: null,
     })
     navigateMock.mockReset()
     routePodcastId = '1065559535'
@@ -132,16 +122,6 @@ describe('PodcastEpisodeDetailPage canonical refresh', () => {
 
     render(<PodcastEpisodeDetailPage />, { wrapper: createQueryClientWrapper() })
 
-    expect(navigateMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        to: '/podcast/$country/$id/$episodeKey',
-        params: {
-          country: 'us',
-          id: '1065559535',
-          episodeKey: 'qDQ2mB3KTGO7XT4qYVIsKg',
-        },
-        replace: true,
-      })
-    )
+    expect(navigateMock).not.toHaveBeenCalled()
   })
 })

@@ -4,13 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { DownloadedTrackItem } from '../components/Downloads/DownloadedTrackItem'
 import { EpisodeListSkeleton } from '../components/EpisodeRow'
-import type { ViewDensity } from '../components/Files/types'
 import { ViewControlsBar } from '../components/Files/ViewControlsBar'
 import { PageHeader, PageShell } from '../components/layout'
 import { OfflineBanner } from '../components/OfflineBanner'
 import { Button } from '../components/ui/button'
 import { EmptyState } from '../components/ui/empty-state'
 import { HiddenFileInput } from '../components/ui/hidden-file-input'
+import { useViewDensity } from '../hooks/useViewDensity'
 import { buildFavoriteKey, buildFavoriteKeyFromFavorite } from '../lib/db/favoriteIdentity'
 import { mapPodcastDownloadToFavoriteInputs } from '../lib/db/favoriteMappers'
 import type { FileSubtitle, PodcastDownload } from '../lib/db/types'
@@ -20,7 +20,7 @@ import {
   removeDownloadedTrack,
   subscribeToDownloads,
 } from '../lib/downloadService'
-import { logError, warn as logWarn } from '../lib/logger'
+import { logError } from '../lib/logger'
 import {
   RETRANSCRIBE_DOWNLOAD_REASON,
   retranscribeDownloadedTrackWithCurrentSettings,
@@ -35,7 +35,6 @@ import type { SubtitleExportFormat } from '../lib/subtitles'
 import { toast } from '../lib/toast'
 import type { TranslationKey } from '../lib/translations'
 import { useExploreStore } from '../store/exploreStore'
-import { useFilesStore } from '../store/filesStore'
 
 interface PodcastGroup {
   podcastTitle: string
@@ -88,30 +87,7 @@ export default function DownloadsPage() {
   const loadSeqRef = useRef(0)
   const reloadQueuedRef = useRef(false)
 
-  const getSetting = useFilesStore((s) => s.getSetting)
-  const setSetting = useFilesStore((s) => s.setSetting)
-  const [density, setDensity] = useState<ViewDensity>('comfortable')
-
-  const loadDensity = useCallback(async () => {
-    const saved = await getSetting('downloads.viewDensity')
-    if (saved === 'compact') setDensity('compact')
-  }, [getSetting])
-
-  useEffect(() => {
-    void loadDensity()
-  }, [loadDensity])
-
-  const handleDensityChange = useCallback(
-    async (value: ViewDensity) => {
-      setDensity(value)
-      try {
-        await setSetting('downloads.viewDensity', value)
-      } catch (err) {
-        logWarn('[Downloads] Failed to persist density setting', err)
-      }
-    },
-    [setSetting]
-  )
+  const { density, handleDensityChange } = useViewDensity('downloads.viewDensity')
 
   const loadTracks = useCallback(async () => {
     const seq = ++loadSeqRef.current

@@ -1,6 +1,7 @@
 // src/hooks/selection/useSelectionActions.ts
 import { useCallback, useEffect, useRef } from 'react'
 import { DEFAULT_SEARCH_ENGINE } from '../../constants/app'
+import { FetchError } from '../../lib/fetchUtils'
 import { warn } from '../../lib/logger'
 import { openExternal } from '../../lib/openExternal'
 import { getSettingsSnapshot } from '../../lib/schemas/settings'
@@ -295,7 +296,8 @@ export function useSelectionActions(
 
         if (currentSequence === lookupSequenceRef.current) {
           pendingLookupHighlightWordRef.current = null
-          const isNotFound = error instanceof Error && error.message === 'Word not found'
+          const isNotFound =
+            error instanceof FetchError && error.status === 404 && error.code === 'not_found'
           setState((s) => ({
             ...s,
             lookupLoading: false,

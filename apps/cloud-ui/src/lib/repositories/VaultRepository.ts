@@ -1,3 +1,8 @@
+import {
+  normalizeFavoriteRecord,
+  normalizePlaybackSessionRecord,
+  normalizeSubscriptionRecord,
+} from '../db/recordNormalizers'
 import type {
   Favorite,
   FileFolder,
@@ -7,7 +12,7 @@ import type {
   PodcastDownload,
   Setting,
   Subscription,
-} from '../dexieDb'
+} from '../db/types'
 import { db } from '../dexieDb'
 
 export interface VaultMetadataSnapshot {
@@ -54,6 +59,11 @@ export const VaultRepository = {
     )
   },
 
+  /**
+   * Replaces all metadata tables with the provided snapshot.
+   * Performs normalization on subscriptions, favorites, and playback sessions
+   * before adding them to the database.
+   */
   async replaceMetadata(snapshot: VaultMetadataSnapshot): Promise<void> {
     await db.transaction(
       'rw',
@@ -67,6 +77,18 @@ export const VaultRepository = {
         db.settings,
       ],
       async () => {
+        // 1. Normalize records before adding them
+        const normalizedSubscriptions = snapshot.subscriptions.map((s) =>
+          normalizeSubscriptionRecord(s, 'vault subscription')
+        )
+        const normalizedFavorites = snapshot.favorites.map((f) =>
+          normalizeFavoriteRecord(f, 'vault favorite')
+        )
+        const normalizedPlaybackSessions = snapshot.playbackSessions.map((p) =>
+          normalizePlaybackSessionRecord(p, 'vault playback session')
+        )
+
+        // 2. Clear existing data
         await db.folders.clear()
         await db.tracks.clear()
         await db.local_subtitles.clear()
@@ -75,12 +97,13 @@ export const VaultRepository = {
         await db.playback_sessions.clear()
         await db.settings.clear()
 
+        // 3. Bulk add new data
         await db.folders.bulkAdd(snapshot.folders)
         await db.tracks.bulkAdd(snapshot.tracks)
         await db.local_subtitles.bulkAdd(snapshot.localSubtitles)
-        await db.subscriptions.bulkAdd(snapshot.subscriptions)
-        await db.favorites.bulkAdd(snapshot.favorites)
-        await db.playback_sessions.bulkAdd(snapshot.playbackSessions)
+        await db.subscriptions.bulkAdd(normalizedSubscriptions)
+        await db.favorites.bulkAdd(normalizedFavorites)
+        await db.playback_sessions.bulkAdd(normalizedPlaybackSessions)
         await db.settings.bulkAdd(snapshot.settings)
       }
     )

@@ -25,53 +25,64 @@ Cloud frontend runtime config is emitted by the backend through `/env.js`.
 
 Cloud currently keeps Workbox/PWA disabled unless a later instruction explicitly restores it.
 
-## 5. Prometheus Metrics Contract
+## 5. Application Metrics Contract
 
-`apps/cloud-api` exposes `/metrics` for host-side Prometheus scraping.
+`apps/cloud-api` pushes application and app-owned host-critical metrics directly to Grafana Cloud through OTLP when the Grafana environment variables are configured.
 
-- `READIO_METRICS_TOKEN` is backend-only runtime config; keep it out of `/env.js` and browser allowlists.
-- Empty or unset `READIO_METRICS_TOKEN` disables `/metrics` with `404`; configured tokens require `Authorization: Bearer <token>`.
-- Application metrics are additive to Go/process collectors:
+- Required OTLP runtime config is `READIO_GRAFANA_OTLP_ENDPOINT`, `READIO_GRAFANA_OTLP_INSTANCE_ID`, and `READIO_GRAFANA_OTLP_TOKEN`.
+- Discovery CORS is owned by `READIO_DISCOVERY_ALLOWED_ORIGINS`; proxy CORS remains owned by `READIO_PROXY_ALLOWED_ORIGINS`.
+- Browser-public English dictionary config is deployed as `READIO_EN_DICTIONARY_API_URL` and `READIO_EN_DICTIONARY_API_TRANSPORT` and emitted only through backend-generated `/env.js`.
+- `READIO_GRAFANA_OTLP_TOKEN` is backend-only runtime config; keep it out of `/env.js` and browser allowlists.
+- The current 00A deployment does not expose a Prometheus scrape endpoint and does not install local Prometheus or Grafana Alloy.
+- Application metrics currently include:
   - `readio_cloud_http_request_duration_seconds`
   - `readio_cloud_upstream_request_duration_seconds`
   - `readio_cloud_upstream_errors_total`
   - `readio_cloud_asr_relay_requests_total`
+- App-owned host metrics currently include:
+  - `readio_cloud_process_goroutines`
+  - `readio_cloud_process_heap_alloc_bytes`
+  - `readio_cloud_process_memory_sys_bytes`
+  - `readio_cloud_process_uptime_seconds`
+  - `readio_cloud_sqlite_db_size_bytes`
+  - `readio_cloud_sqlite_wal_size_bytes`
+  - `readio_cloud_data_filesystem_free_bytes`
+  - `readio_cloud_data_filesystem_total_bytes`
+  - `readio_cloud_transcript_assets_size_bytes`
 - Metric labels use closed low-cardinality enums for `route`, `provider`, `status_class`, `error_class`, `cache_status`, and `mode`.
 - Metric labels must not include full URLs, query strings, route IDs, search terms, GUIDs, header names/values, raw errors, request/response bodies, audio bytes, or transcript text.
 
-## 6. Loki Log Shipping Contract
+## 6. Log Access Contract
 
-Cloud API logs remain stdout/systemd-journal logs produced by Go `slog`.
+Cloud API logs remain stdout logs produced by Go `slog` and Docker's configured json-file logging driver.
 
-- Host-side Grafana Alloy reads the `readio-cloud.service` journal and ships logs to Grafana Cloud Loki.
-- Do not add an app-side Go Loki client.
-- Grafana Cloud Loki endpoint, user, and token are Alloy/server-owned secrets; keep them out of `/env.js`, frontend `.env`, Vite config, and static frontend assets.
-- Recommended Loki labels are low-cardinality only: `job=readio-cloud`, `env=production|preproduction`, and `service=readio-cloud-api`.
-- Loki labels must not include full URLs, route params, user input, raw errors, request IDs, headers, cookies, tokens, audio bytes, transcript text, or local paths.
+- 00A does not ship logs to Grafana Loki and does not install Grafana Alloy or another host log shipping agent.
+- `/admin/logs` remains the same-origin, memory-only operator log surface.
+- Docker logs remain available through `make logs-pre`, `make logs-prod`, or direct Docker operations on the VPS.
+- Do not add an app-side Go Loki client unless a later instruction explicitly changes the log shipping boundary.
+- If log shipping is added later, labels must remain low-cardinality and must not include full URLs, route params, user input, raw errors, request IDs, headers, cookies, tokens, audio bytes, transcript text, or local paths.
 
 ## 7. Faro Browser RUM Contract
 
 Cloud UI Faro telemetry is optional and browser-public-config driven.
 
-- `VITE_GRAFANA_FARO_URL` empty disables Faro.
+- `VITE_GRAFANA_FARO_URL` is required by the current deployment validation when Faro is configured for Grafana Cloud.
 - `VITE_GRAFANA_FARO_SAMPLE_RATE` defaults to `0`; invalid or out-of-range values are safe.
 - Faro collector URL, app name, env, and sample rate are public metadata, not credentials.
 - No Grafana write credential, admin token, metrics token, relay secret, provider credential, Basic Auth value, local media, transcript text, or `/ops` session state may be read or exported by Faro.
 - Sanitized schema diagnostics may include only schema name, provider enum, route class, issue path, issue code, and coarse error class.
 - Faro initialization must fail open and never block app boot.
 
-## 8. Grafana Cloud Host Monitoring Contract
+## 8. Host Observability Boundary
 
-Grafana Cloud observability is additive to `/ops` and stays outside app-side remote write paths.
+Grafana Cloud observability is app-owned OTLP metrics plus optional browser Faro telemetry.
 
-- Host-side Grafana Alloy owns three pipelines: systemd journal to Loki, local `/metrics` scrape to Grafana Cloud metrics, and host metrics to Grafana Cloud metrics.
-- `/metrics` should be scraped from localhost or an internal-only path and remains protected by `READIO_METRICS_TOKEN`.
-- `/metrics`, `/admin/*`, and `/ops` should not be publicly exposed without outer restrictions such as Cloudflare, nginx, VPN, or IP allowlists.
-- Required host monitoring covers CPU, memory, disk usage, disk free under `/opt/readio/shared/data`, SQLite WAL growth, and transcript asset storage pressure under `/opt/readio/shared/data/podcast/transcripts`.
-- Expected dashboards cover upstream latency by provider/route, upstream errors by provider/error class, ASR relay request/error rates, host disk pressure, Loki error discovery for discovery/proxy/ASR, and Faro crash/schema diagnostic rates.
-- Suggested alerts cover shared-data disk free, sustained `5xx` or non-`none` error-class rates, ASR relay failure spikes, PodcastIndex/Apple p95 latency spikes, and Faro crash spikes.
-- Cost controls require deliberate log retention, conservative Faro sampling, low-cardinality labels, and no raw log fields promoted to labels.
-- Rollback disables Alloy pipelines and clears Faro public config while leaving `/ops` and `/admin/*` intact.
+- Do not install Grafana Alloy, node_exporter, local Prometheus, Loki agents, or any other persistent observability agent as part of 00A.
+- Process/runtime, data filesystem, SQLite DB/WAL size, and configured transcript asset directory size are collected inside `apps/cloud-api` on a bounded interval. They are best-effort app-owned signals, not a full node_exporter replacement.
+- `/admin/*` and `/ops` should not be publicly exposed without outer restrictions such as Cloudflare, nginx, VPN, or IP allowlists.
+- Expected dashboards for 00A can cover upstream latency by provider/route, upstream errors by provider/error class, ASR relay request/error rates, and Faro crash/schema diagnostic rates.
+- Cost controls require conservative Faro sampling, low-cardinality labels, and no raw log fields promoted to labels.
+- Rollback clears Faro public config and/or unsets OTLP runtime variables while leaving `/ops` and `/admin/*` intact.
 
 ## 9. Deployment Docs
 

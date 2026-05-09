@@ -46,19 +46,19 @@ Current phase policy:
 
 ## Read First (Required)
 
-- `apps/lite/src/lib/runtimeConfig.defaults.ts`
-- `apps/lite/src/lib/runtimeConfig.schema.ts`
-- `apps/lite/src/lib/runtimeConfig.ts`
-- `apps/lite/public/env.js`
-- `apps/lite/src/lib/selection/api.ts`
-- `apps/lite/src/hooks/selection/useSelectionActions.ts`
-- `apps/lite/src/components/Selection/SelectionUI.tsx`
-- `apps/lite/src/lib/locales/en.ts`
-- `apps/lite/src/lib/locales/zh.ts`
-- `apps/docs/content/docs/apps/lite/handoff/features/transcript-reading.mdx`
-- `apps/docs/content/docs/apps/lite/handoff/features/transcript-reading.zh.mdx`
-- `apps/docs/content/docs/apps/lite/handoff/environment.mdx`
-- `apps/docs/content/docs/apps/lite/handoff/environment.zh.mdx`
+- `apps/cloud-ui/src/lib/runtimeConfig.defaults.ts`
+- `apps/cloud-ui/src/lib/runtimeConfig.schema.ts`
+- `apps/cloud-ui/src/lib/runtimeConfig.ts`
+- `apps/cloud-ui/public/env.js`
+- `apps/cloud-ui/src/lib/selection/api.ts`
+- `apps/cloud-ui/src/hooks/selection/useSelectionActions.ts`
+- `apps/cloud-ui/src/components/Selection/SelectionUI.tsx`
+- `apps/cloud-ui/src/lib/locales/en.ts`
+- `apps/cloud-ui/src/lib/locales/zh.ts`
+- `apps/docs/content/docs/apps/cloud/frontend/transcript-reading.mdx`
+- `apps/docs/content/docs/apps/cloud/frontend/transcript-reading.zh.mdx`
+- `apps/docs/content/docs/apps/cloud/handoff/environment.mdx`
+- `apps/docs/content/docs/apps/cloud/handoff/environment.zh.mdx`
 - `apps/docs/content/docs/general/decision-log.mdx`
 - `apps/docs/content/docs/general/decision-log.zh.mdx`
 
@@ -251,11 +251,11 @@ This task changes runtime config contract and product behavior, so documentation
 
 Required docs:
 
-- `apps/docs/content/docs/apps/lite/handoff/index.mdx`
-- `apps/docs/content/docs/apps/lite/handoff/features/transcript-reading.mdx`
-- `apps/docs/content/docs/apps/lite/handoff/features/transcript-reading.zh.mdx`
-- `apps/docs/content/docs/apps/lite/handoff/environment.mdx`
-- `apps/docs/content/docs/apps/lite/handoff/environment.zh.mdx`
+- `apps/docs/content/docs/apps/cloud/handoff/index.mdx`
+- `apps/docs/content/docs/apps/cloud/frontend/transcript-reading.mdx`
+- `apps/docs/content/docs/apps/cloud/frontend/transcript-reading.zh.mdx`
+- `apps/docs/content/docs/apps/cloud/handoff/environment.mdx`
+- `apps/docs/content/docs/apps/cloud/handoff/environment.zh.mdx`
 - `apps/docs/content/docs/general/decision-log.mdx`
 - `apps/docs/content/docs/general/decision-log.zh.mdx`
 
@@ -292,8 +292,8 @@ Follow child instruction verification commands if split.
 If not explicitly split, minimum verification must include:
 
 - relevant narrow `vitest` suites for runtime config + lookup state
-- `pnpm -C apps/lite lint`
-- `pnpm -C apps/lite typecheck`
+- `pnpm -C apps/cloud-ui lint`
+- `pnpm -C apps/cloud-ui typecheck`
 - `pnpm -C apps/docs lint`
 
 ## Decision Log
@@ -307,19 +307,19 @@ If not explicitly split, minimum verification must include:
 ## Reviewer Evidence Surface
 
 ### Changed-Zone Files (Must Review)
-- `apps/lite/src/lib/runtimeConfig.defaults.ts`
-- `apps/lite/src/lib/runtimeConfig.schema.ts`
-- `apps/lite/src/lib/runtimeConfig.ts`
-- `apps/lite/public/env.js`
-- `apps/lite/src/lib/selection/api.ts`
-- `apps/lite/src/hooks/selection/useSelectionActions.ts`
-- `apps/lite/src/components/Selection/SelectionUI.tsx`
+- `apps/cloud-ui/src/lib/runtimeConfig.defaults.ts`
+- `apps/cloud-ui/src/lib/runtimeConfig.schema.ts`
+- `apps/cloud-ui/src/lib/runtimeConfig.ts`
+- `apps/cloud-ui/public/env.js`
+- `apps/cloud-ui/src/lib/selection/api.ts`
+- `apps/cloud-ui/src/hooks/selection/useSelectionActions.ts`
+- `apps/cloud-ui/src/components/Selection/SelectionUI.tsx`
 - touched locale files
 - touched docs / decision log files
 
 ### Adjacent Critical Files (Spot Check)
-- `apps/lite/src/lib/selection/dictCache.ts`
-- `apps/lite/src/lib/selection/types.ts`
-- `apps/docs/content/docs/apps/lite/handoff/i18n.mdx`
-- `apps/docs/content/docs/apps/lite/handoff/i18n.zh.mdx`
+- `apps/cloud-ui/src/lib/selection/dictCache.ts`
+- `apps/cloud-ui/src/lib/selection/types.ts`
+- `apps/docs/content/docs/apps/cloud/frontend/i18n.mdx`
+- `apps/docs/content/docs/apps/cloud/frontend/i18n.zh.mdx`
 - transcript handoff docs

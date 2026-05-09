@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import { ChevronDown, Minimize2, Settings2 } from 'lucide-react'
+import { Minimize2 } from 'lucide-react'
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -18,25 +18,16 @@ import {
 } from '../../lib/player/playbackExport'
 import { resolveCurrentPlaybackIdentity } from '../../lib/player/playbackIdentity'
 import { resolvePlaybackContentIdentityKey } from '../../lib/player/playbackMetadata'
-import { formatTimeLabel } from '../../lib/subtitles'
 import { cn } from '../../lib/utils'
 import { usePlayerStore } from '../../store/playerStore'
 import type { SurfaceMode } from '../../store/playerSurfaceStore'
 import { usePlayerSurfaceStore } from '../../store/playerSurfaceStore'
 import { useTranscriptStore } from '../../store/transcriptStore'
-import { FollowButton } from '../FollowButton'
-import { PlaybackSpeedButton } from '../Player/controls/PlaybackSpeedButton'
-import { TransportPlayPauseButton } from '../Player/controls/TransportPlayPauseButton'
-import { TransportSkipButton } from '../Player/controls/TransportSkipButton'
-import { DownloadedBadge, PlayerDownloadAction } from '../Player/PlayerDownloadAction'
-import { ShareButton } from '../Player/ShareButton'
-import { SleepTimerButton } from '../Player/SleepTimerButton'
-import { ReadingBgControl } from '../ReadingBgControl'
+import { FollowButton } from '../FollowButton/FollowButton'
 import { Button } from '../ui/button'
-
-import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
-import { Slider } from '../ui/slider'
-import styles from './FullPlayer.module.css'
+import { PlayerSurfaceArtwork } from './PlayerSurfaceArtwork'
+import { PlayerSurfaceFooter } from './PlayerSurfaceFooter'
+import { PlayerSurfaceHeader } from './PlayerSurfaceHeader'
 
 const ReadingContent = lazy(async () => {
   const module = await import('./ReadingContent')
@@ -57,37 +48,6 @@ const PLAYER_OWNED_OVERLAY_ATTR = 'data-player-overlay-owned'
 
 function isWithinPlayerOwnedOverlay(target: EventTarget | null) {
   return target instanceof HTMLElement && !!target.closest(`[${PLAYER_OWNED_OVERLAY_ATTR}="true"]`)
-}
-
-/**
- * Isolated seek bar and time labels (only used in full mode)
- */
-const FullPlayerSeekBar = ({ ariaLabel }: { ariaLabel: string }) => {
-  const progress = usePlayerStore((s) => s.progress)
-  const duration = usePlayerStore((s) => s.duration)
-  const seekTo = usePlayerStore((s) => s.seekTo)
-
-  return (
-    <div className="flex items-center gap-4 mb-6 group">
-      <span className="text-xs text-muted-foreground tabular-nums w-12 text-start font-medium">
-        {formatTimeLabel(progress)}
-      </span>
-      <div className="flex-1 relative h-5 flex items-center cursor-pointer">
-        <Slider
-          value={[progress]}
-          min={0}
-          max={duration || 100}
-          step={0.1}
-          onValueChange={(values) => seekTo(values[0])}
-          aria-label={ariaLabel}
-          className="w-full cursor-pointer"
-        />
-      </div>
-      <span className="text-xs text-muted-foreground tabular-nums w-12 font-medium">
-        {formatTimeLabel(duration)}
-      </span>
-    </div>
-  )
 }
 
 /**
@@ -144,12 +104,9 @@ export function PlayerSurfaceFrame({ mode }: { mode: Exclude<SurfaceMode, 'mini'
   const activeEpisodeId =
     resolvePlaybackContentIdentityKey({ audioUrl, metadata: episodeMetadata }) ?? 'active'
 
-  // Shared state: transcript auto-scrolling (replaces the old isFollowing in ReadingContent)
-  // Moving it up allows FollowButton (rendered in PlayerSurfaceFrame) to react to it.
   const [isAutoScrolling, setIsAutoScrolling] = useState(true)
   const [isPlayerSettingsOpen, setIsPlayerSettingsOpen] = useState(false)
   const [isSleepTimerOpen, setIsSleepTimerOpen] = useState(false)
-  // Keep this as the single frame-level gate for nested player-owned overlay Escape deferral.
   const hasActivePlayerOwnedOverlay = isPlayerSettingsOpen || isSleepTimerOpen
   const showFollowButton = !isAutoScrolling && subtitlesLoaded && isFull
   const previousModeRef = useRef<typeof mode>(mode)
@@ -184,18 +141,6 @@ export function PlayerSurfaceFrame({ mode }: { mode: Exclude<SurfaceMode, 'mini'
       )
     }
   }, [])
-
-  // TODO(player-surface): restore docked "Full Mode" entry when the product contract is defined again.
-  // const handleExpandToFull = useCallback(
-  //   (event: React.MouseEvent<HTMLButtonElement>) => {
-  //     fullOpenTriggerRef.current = {
-  //       type: 'docked-expand',
-  //       element: event.currentTarget,
-  //     }
-  //     toFull()
-  //   },
-  //   [toFull]
-  // )
 
   useEffect(() => {
     const previousMode = previousModeRef.current
@@ -429,97 +374,27 @@ export function PlayerSurfaceFrame({ mode }: { mode: Exclude<SurfaceMode, 'mini'
           {audioTitle || t('untitled')}
         </h2>
       )}
-      {/* 1. Mode-Specific Header/Buttons */}
-      {isDocked ? (
-        <div className="flex items-center justify-between px-6 py-4 border-b border-border/50 bg-background/95 backdrop-blur-md z-10 flex-shrink-0">
-          <h3 className="font-semibold text-lg truncate max-w-[80%]">
-            {audioTitle || t('untitled')}
-          </h3>
-          <div className="flex items-center gap-1">
-            {/* TODO(player-surface): restore the docked "Full Mode" button when the follow-up UX is re-approved. */}
-            {/* {canOpenFullFromDocked && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleExpandToFull}
-                data-player-full-open-trigger="docked-expand"
-                className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                aria-label={t('ariaOpenQueue')}
-              >
-                <Maximize2 size={20} />
-              </Button>
-            )} */}
-            <Button
-              ref={dockedMinimizeButtonRef}
-              variant="ghost"
-              size="icon"
-              onClick={toMini}
-              className="h-8 w-8 text-muted-foreground hover:text-foreground"
-              aria-label={t('ariaMinimize')}
-            >
-              <ChevronDown size={24} />
-            </Button>
-          </div>
-        </div>
-      ) : (
-        hasActiveTrack && (
-          <div className="absolute top-6 end-10 z-full-player pointer-events-auto">
-            <Button
-              ref={fullMinimizeButtonRef}
-              variant="ghost"
-              size="icon"
-              onClick={handleExit}
-              className="bg-background/80 backdrop-blur-sm shadow-sm"
-              aria-label={t('ariaMinimize')}
-            >
-              <Minimize2 size={20} />
-            </Button>
-          </div>
-        )
-      )}
+
+      <PlayerSurfaceHeader
+        isDocked={isDocked}
+        hasActiveTrack={hasActiveTrack}
+        audioTitle={audioTitle}
+        onMinimize={toMini}
+        onExit={handleExit}
+      />
 
       {/* 2. Central Content Area (Persistent ReadingContent) */}
       <div className="flex-1 flex overflow-hidden relative pointer-events-auto">
-        {/* Full mode desktop artwork */}
-        {isFull && hasActiveTrack && isDesktop && (
-          <div className="w-96 hidden xl:flex flex-col items-center justify-center p-12 bg-muted/30 border-e border-border/50">
-            <div className="relative mb-10">
-              <div className="absolute inset-2 shadow-2xl shadow-black/20 rounded-2xl pointer-events-none" />
-              <motion.div
-                layoutId={isDesktop ? `artwork-${activeEpisodeId}-player` : undefined}
-                transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                animate={isVisible ? undefined : false}
-                className={cn(
-                  'relative w-80 h-80 rounded-2xl overflow-hidden bg-white transition-shadow duration-500',
-                  'ring-1 ring-inset ring-foreground/10',
-                  !coverArtUrl && 'bg-card'
-                )}
-              >
-                {coverArtUrl ? (
-                  <>
-                    <img
-                      src={effectiveCoverArtUrl || undefined}
-                      alt="Art"
-                      className="absolute inset-0 w-full h-full max-w-none block object-cover"
-                    />
-                    <div className="absolute inset-0 rounded-2xl ring-1 ring-inset ring-foreground/10 pointer-events-none" />
-                  </>
-                ) : (
-                  <div className="w-full h-full bg-muted flex items-center justify-center text-muted-foreground/30">
-                    <span className="text-4xl font-serif">Readio</span>
-                  </div>
-                )}
-              </motion.div>
-            </div>
-            <div className="text-center space-y-3 max-w-xs flex flex-col items-center">
-              <div className="flex items-center gap-2 justify-center w-full">
-                <h2 className="text-3xl font-bold text-foreground tracking-tight leading-tight truncate">
-                  {audioTitle || t('untitled')}
-                </h2>
-                <DownloadedBadge audioUrl={audioUrl} className="flex-shrink-0" />
-              </div>
-            </div>
-          </div>
+        {isFull && hasActiveTrack && (
+          <PlayerSurfaceArtwork
+            isDesktop={isDesktop}
+            isVisible={isVisible}
+            activeEpisodeId={activeEpisodeId}
+            coverArtUrl={coverArtUrl}
+            effectiveCoverArtUrl={effectiveCoverArtUrl}
+            audioTitle={audioTitle}
+            audioUrl={audioUrl}
+          />
         )}
 
         {/* Main Transcript/Content Column */}
@@ -547,41 +422,6 @@ export function PlayerSurfaceFrame({ mode }: { mode: Exclude<SurfaceMode, 'mini'
             </div>
           ) : (
             <>
-              {/* Mobile Header (Full mode only) */}
-              {isFull && !isDesktop && (
-                <div className="xl:hidden p-8 pb-0 text-center mb-8">
-                  <div className="relative mb-6">
-                    <div className="absolute inset-1 shadow-lg shadow-black/10 rounded-xl pointer-events-none" />
-                    <motion.div
-                      layoutId={!isDesktop ? `artwork-${activeEpisodeId}-player` : undefined}
-                      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-                      animate={isVisible ? undefined : false}
-                      className={cn(
-                        'relative w-48 h-48 mx-auto rounded-xl overflow-hidden bg-white ring-1 ring-inset ring-foreground/10',
-                        !coverArtUrl && 'bg-muted'
-                      )}
-                    >
-                      {coverArtUrl && (
-                        <>
-                          <img
-                            src={effectiveCoverArtUrl || undefined}
-                            className="absolute inset-0 w-full h-full max-w-none block object-cover"
-                            alt=""
-                          />
-                          <div className="absolute inset-0 rounded-xl ring-1 ring-inset ring-foreground/10 pointer-events-none" />
-                        </>
-                      )}
-                    </motion.div>
-                  </div>
-                  <div className="flex items-center gap-2 justify-center mb-1">
-                    <h2 className="text-2xl font-bold text-foreground truncate max-w-[85%]">
-                      {audioTitle || t('untitled')}
-                    </h2>
-                    <DownloadedBadge audioUrl={audioUrl} className="flex-shrink-0" />
-                  </div>
-                </div>
-              )}
-
               {/* PERSISTENT ReadingContent Instance */}
               <Suspense fallback={<ReadingContentFallback />}>
                 <ReadingContent
@@ -606,76 +446,21 @@ export function PlayerSurfaceFrame({ mode }: { mode: Exclude<SurfaceMode, 'mini'
 
       {/* 3. Full Player Controls Footer */}
       {isFull && hasActiveTrack && (
-        <div className="absolute bottom-0 start-0 end-0 bg-background/60 backdrop-blur-xl backdrop-saturate-150 border-t border-border/50 px-8 py-6 pointer-events-auto">
-          <div className="max-w-4xl mx-auto">
-            <FullPlayerSeekBar ariaLabel={t('ariaPlaybackProgress')} />
-            <div className="flex items-center justify-between">
-              {/* Left: Playback Speed */}
-              <div className="w-1/3 flex items-center justify-start">
-                <PlaybackSpeedButton
-                  playbackRate={playbackRate}
-                  onCycleRate={handlePlaybackRateClick}
-                  className="text-xs font-bold tracking-widest uppercase"
-                  ariaLabel={t('ariaPlaybackSpeed')}
-                />
-              </div>
-
-              {/* Center: Playback Controls */}
-              <div className="flex items-center gap-10">
-                <TransportSkipButton
-                  direction="back"
-                  onClick={handleSkipBack}
-                  className="h-12 w-12"
-                  ariaLabel={t('skipBack10s')}
-                  title={t('skipBack10s')}
-                  iconSize={28}
-                  iconStrokeWidth={1}
-                />
-                <TransportPlayPauseButton
-                  isPlaying={isPlaying}
-                  isLoading={status === 'loading'}
-                  disabled={status === 'loading' || !audioLoaded}
-                  onToggle={togglePlayPause}
-                  className="w-16 h-16 rounded-full shadow-xl shadow-muted/50"
-                  ariaLabel={isPlaying ? t('ariaPause') : t('ariaPlay')}
-                  iconSize={28}
-                  playClassName="ms-1"
-                  loadingClassName={cn(styles.animationPaused)}
-                />
-                <TransportSkipButton
-                  direction="forward"
-                  onClick={handleSkipForward}
-                  className="h-12 w-12"
-                  ariaLabel={t('skipForward10s')}
-                  title={t('skipForward10s')}
-                  iconSize={28}
-                  iconStrokeWidth={1}
-                />
-              </div>
-
-              {/* Right: Settings & Timer */}
-              <div className="w-1/3 flex items-center justify-end gap-2">
-                <PlayerDownloadAction />
-                <ShareButton title={audioTitle} url={window.location.href} />
-                <SleepTimerButton onOpenChange={setIsSleepTimerOpen} />
-                <Popover open={isPlayerSettingsOpen} onOpenChange={setIsPlayerSettingsOpen}>
-                  <PopoverTrigger asChild>
-                    <Button variant="ghost" size="icon" aria-label={t('ariaSettings')}>
-                      <Settings2 size={20} strokeWidth={1.5} />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent
-                    side="top"
-                    align="end"
-                    {...{ [PLAYER_OWNED_OVERLAY_ATTR]: 'true' }}
-                  >
-                    <ReadingBgControl />
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </div>
-          </div>
-        </div>
+        <PlayerSurfaceFooter
+          audioTitle={audioTitle}
+          audioLoaded={audioLoaded}
+          isPlaying={isPlaying}
+          status={status}
+          playbackRate={playbackRate}
+          togglePlayPause={togglePlayPause}
+          handleSkipBack={handleSkipBack}
+          handleSkipForward={handleSkipForward}
+          handlePlaybackRateClick={handlePlaybackRateClick}
+          isPlayerSettingsOpen={isPlayerSettingsOpen}
+          setIsPlayerSettingsOpen={setIsPlayerSettingsOpen}
+          setIsSleepTimerOpen={setIsSleepTimerOpen}
+          PLAYER_OWNED_OVERLAY_ATTR={PLAYER_OWNED_OVERLAY_ATTR}
+        />
       )}
     </motion.div>
   )

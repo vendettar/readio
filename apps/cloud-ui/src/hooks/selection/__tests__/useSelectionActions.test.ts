@@ -3,6 +3,7 @@
 
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { FetchError, NetworkError } from '../../../lib/fetchUtils'
 import * as settings from '../../../lib/schemas/settings'
 import type { DictEntry, SelectionState } from '../../../lib/selection'
 import * as selection from '../../../lib/selection'
@@ -404,7 +405,11 @@ describe('useSelectionActions - semantics and race prevention', () => {
     }
     const { result } = renderHook(() => useSelectionActions(state, setState))
 
-    vi.mocked(selection.fetchDefinition).mockRejectedValueOnce(new Error('Word not found'))
+    vi.mocked(selection.fetchDefinition).mockRejectedValueOnce(
+      new FetchError('Word not found', 'https://english.example/api/hello', 404, 'direct', {
+        code: 'not_found',
+      })
+    )
     await act(async () => {
       await result.current.lookupWord(
         'Hello',
@@ -418,7 +423,7 @@ describe('useSelectionActions - semantics and race prevention', () => {
       result.current.closeLookup({ surfaceId: 1, surface: 'lookup' })
     })
 
-    vi.mocked(selection.fetchDefinition).mockRejectedValueOnce(new Error('Network failed'))
+    vi.mocked(selection.fetchDefinition).mockRejectedValueOnce(new NetworkError('Network failed'))
     await act(async () => {
       await result.current.lookupWord(
         'Hello',
@@ -433,6 +438,55 @@ describe('useSelectionActions - semantics and race prevention', () => {
     })
 
     expect(applyLookupHighlightForWordMock).not.toHaveBeenCalled()
+  })
+
+  it('maps structured dictionary fetch errors onto preserved selection UX states', async () => {
+    const setState = vi.fn()
+    const state: SelectionState = {
+      surface: { type: 'none' },
+      lookupLoading: false,
+      lookupErrorKey: null,
+      lookupResult: null,
+    }
+    const { result } = renderHook(() => useSelectionActions(state, setState))
+
+    vi.mocked(selection.fetchDefinition).mockRejectedValueOnce(
+      new FetchError('Word not found', 'https://english.example/api/hello', 404, 'direct', {
+        code: 'not_found',
+      })
+    )
+
+    await act(async () => {
+      await result.current.lookupWord(
+        'Hello',
+        100,
+        100,
+        { left: 90, top: 90, width: 20, height: 20 } as DOMRect,
+        { ownerCueKey: 'cue1', ownerCueStartMs: 0, ownerKind: 'word' }
+      )
+    })
+
+    const notFoundUpdater = setState.mock.calls[setState.mock.calls.length - 1]?.[0] as (
+      prev: SelectionState
+    ) => SelectionState
+    expect(notFoundUpdater(state).lookupErrorKey).toBe('lookupNotFound')
+
+    vi.mocked(selection.fetchDefinition).mockRejectedValueOnce(new NetworkError('Network failed'))
+
+    await act(async () => {
+      await result.current.lookupWord(
+        'Hello',
+        100,
+        100,
+        { left: 90, top: 90, width: 20, height: 20 } as DOMRect,
+        { ownerCueKey: 'cue2', ownerCueStartMs: 0, ownerKind: 'word' }
+      )
+    })
+
+    const networkUpdater = setState.mock.calls[setState.mock.calls.length - 1]?.[0] as (
+      prev: SelectionState
+    ) => SelectionState
+    expect(networkUpdater(state).lookupErrorKey).toBe('errorNetwork')
   })
 
   it('resolves normalized configured dictionary languages via availability mapping', async () => {

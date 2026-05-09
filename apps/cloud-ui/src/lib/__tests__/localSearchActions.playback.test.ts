@@ -8,6 +8,7 @@ const toDockedMock = vi.fn()
 const toMiniMock = vi.fn()
 const playFavoriteWithDepsMock = vi.fn()
 const playHistorySessionWithDepsMock = vi.fn()
+const restoreLocalHistoryPlaybackMock = vi.fn()
 let playbackEpoch = 0
 
 vi.mock('../../store/playerSurfaceStore', () => ({
@@ -25,6 +26,10 @@ vi.mock('../player/remotePlayback', () => ({
   playHistorySessionWithDeps: (...args: unknown[]) => playHistorySessionWithDepsMock(...args),
   bumpPlaybackEpoch: () => ++playbackEpoch,
   getPlaybackEpoch: () => playbackEpoch,
+}))
+
+vi.mock('../player/localHistoryPlayback', () => ({
+  restoreLocalHistoryPlayback: (...args: unknown[]) => restoreLocalHistoryPlaybackMock(...args),
 }))
 
 vi.mock('../logger', () => ({
@@ -61,10 +66,11 @@ describe('localSearchActions remote playback delegation', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     playbackEpoch = 0
-    playHistorySessionWithDepsMock.mockReturnValue(true)
+    playHistorySessionWithDepsMock.mockResolvedValue({ started: true, reason: 'started' })
+    restoreLocalHistoryPlaybackMock.mockResolvedValue({ started: true, reason: 'started' })
   })
 
-  it('delegates favorite fallback playback to shared remotePlayback helper', async () => {
+  it('fails closed for favorite when canonical identity is missing', async () => {
     const deps = createDeps()
     const result = {
       type: 'favorite',
@@ -92,15 +98,11 @@ describe('localSearchActions remote playback delegation', () => {
 
     await executeLocalSearchAction(result, deps)
 
-    expect(playFavoriteWithDepsMock).toHaveBeenCalledTimes(1)
-    expect(setPlayableContextMock).toHaveBeenCalledWith(true)
-    expect(toDockedMock).toHaveBeenCalledTimes(1)
+    expect(playFavoriteWithDepsMock).not.toHaveBeenCalled()
+    expect(deps.navigate).not.toHaveBeenCalled()
+    expect(setPlayableContextMock).not.toHaveBeenCalled()
+    expect(toDockedMock).not.toHaveBeenCalled()
     expect(toMiniMock).not.toHaveBeenCalled()
-    expect(playFavoriteWithDepsMock).toHaveBeenCalledWith(
-      { setAudioUrl: deps.setAudioUrl, play: deps.play, pause: deps.pause },
-      result.data,
-      { countryAtSave: 'us' }
-    )
   })
 
   it('delegates history remote fallback playback to shared helper', async () => {
@@ -141,9 +143,6 @@ describe('localSearchActions remote playback delegation', () => {
     await executeLocalSearchAction(result, deps)
 
     expect(playHistorySessionWithDepsMock).toHaveBeenCalledTimes(1)
-    expect(setPlayableContextMock).toHaveBeenCalledWith(true)
-    expect(toDockedMock).toHaveBeenCalledTimes(1)
-    expect(toMiniMock).not.toHaveBeenCalled()
     expect(playHistorySessionWithDepsMock).toHaveBeenCalledWith(
       expect.objectContaining({
         setAudioUrl: deps.setAudioUrl,
@@ -154,5 +153,81 @@ describe('localSearchActions remote playback delegation', () => {
       }),
       result.data
     )
+    expect(setPlayableContextMock).toHaveBeenCalledWith(true)
+    expect(toDockedMock).toHaveBeenCalledTimes(1)
+    expect(toMiniMock).not.toHaveBeenCalled()
+  })
+
+  it('does not open surface when shared remote history helper does not start playback', async () => {
+    playHistorySessionWithDepsMock.mockResolvedValue({ started: false, reason: 'stale' })
+    const deps = createDeps()
+    const result = {
+      type: 'history',
+      id: 'history-2',
+      title: 'History Episode',
+      subtitle: 'Podcast',
+      badges: ['history'],
+      data: {
+        id: 'session-2',
+        source: 'explore',
+        title: 'History Episode',
+        createdAt: Date.now(),
+        lastPlayedAt: Date.now(),
+        sizeBytes: 0,
+        durationSeconds: 30,
+        audioId: null,
+        subtitleId: null,
+        hasAudioBlob: false,
+        progress: 0,
+        audioFilename: '',
+        subtitleFilename: '',
+        audioUrl: 'https://example.com/history-2.mp3',
+        artworkUrl: 'https://example.com/history-2.jpg',
+        showTitle: 'History Podcast',
+        podcastItunesId: '',
+        episodeGuid: '',
+        countryAtSave: 'us',
+      },
+    } as unknown as LocalSearchResult
+
+    await executeLocalSearchAction(result, deps)
+
+    expect(playHistorySessionWithDepsMock).toHaveBeenCalledTimes(1)
+    expect(setPlayableContextMock).not.toHaveBeenCalled()
+    expect(toDockedMock).not.toHaveBeenCalled()
+    expect(toMiniMock).not.toHaveBeenCalled()
+  })
+
+  it('does not navigate away when local history restore is superseded as stale', async () => {
+    restoreLocalHistoryPlaybackMock.mockResolvedValue({ started: false, reason: 'stale' })
+    const deps = createDeps()
+    const result = {
+      type: 'history',
+      id: 'history-local-stale',
+      title: 'Local Session',
+      subtitle: 'Files',
+      badges: ['history', 'file'],
+      data: {
+        id: 'session-local-1',
+        source: 'local',
+        title: 'Local Session',
+        createdAt: Date.now(),
+        lastPlayedAt: Date.now(),
+        sizeBytes: 0,
+        durationSeconds: 30,
+        audioId: 'blob-1',
+        subtitleId: 'subtitle-1',
+        hasAudioBlob: true,
+        progress: 0,
+        audioFilename: 'local.mp3',
+        subtitleFilename: '',
+        localTrackId: 'local-track-1',
+      },
+    } as unknown as LocalSearchResult
+
+    await executeLocalSearchAction(result, deps)
+
+    expect(restoreLocalHistoryPlaybackMock).toHaveBeenCalledTimes(1)
+    expect(deps.navigate).not.toHaveBeenCalled()
   })
 })

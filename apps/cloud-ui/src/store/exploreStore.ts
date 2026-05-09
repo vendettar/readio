@@ -4,12 +4,7 @@ import type { FavoriteEpisodeInput, FavoritePodcastInput } from '../lib/db/types
 import type { Favorite, Subscription } from '../lib/dexieDb'
 import type { Podcast } from '../lib/discovery'
 import { abortRequestsWithPrefix } from '../lib/requestManager'
-import {
-  __testOnlyResetExploreCountryState,
-  getInitialExploreCountry,
-  hydrateExploreCountry,
-  persistExploreCountrySelection,
-} from './exploreStoreCountry'
+import { createExploreCountryController, getInitialExploreCountry } from './exploreStoreCountry'
 import { createExploreFavoriteActions } from './exploreStoreFavorites'
 import { createExploreSubscriptionActions } from './exploreStoreSubscriptions'
 
@@ -52,9 +47,9 @@ interface ExploreState {
   isFavorited: (podcastItunesId: string, episodeGuid: string) => boolean
 }
 
-/** Test-only helper to reset module-scoped in-flight state between specs. */
+/** Test-only helper to reset store-adjacent async coordination state between specs. */
 export function __testOnlyResetExploreStoreFlags(): void {
-  __testOnlyResetExploreCountryState()
+  exploreCountryController.resetForTests()
   abortRequestsWithPrefix('subscribe:')
   abortRequestsWithPrefix('unsubscribe:')
   abortRequestsWithPrefix('favorite:')
@@ -72,6 +67,11 @@ export function __testOnlyResetExploreStoreFlags(): void {
  *   - Settings (country): IDB
  */
 
+const exploreCountryController = createExploreCountryController({
+  getState: () => ({ country: useExploreStore.getState().country }),
+  setState: (partial) => useExploreStore.setState(partial),
+})
+
 export const useExploreStore = create<ExploreState>((set, get) => ({
   // Initial state
   country: getInitialExploreCountry(),
@@ -79,19 +79,8 @@ export const useExploreStore = create<ExploreState>((set, get) => ({
   subscriptionsLoaded: false,
   favorites: [],
   favoritesLoaded: false,
-  hydrateCountry: () =>
-    hydrateExploreCountry({
-      getState: () => ({ country: get().country }),
-      setState: (partial) => set(partial),
-    }),
-  setCountry: (country) =>
-    persistExploreCountrySelection(
-      {
-        getState: () => ({ country: get().country }),
-        setState: (partial) => set(partial),
-      },
-      country
-    ),
+  hydrateCountry: () => exploreCountryController.hydrateCountry(),
+  setCountry: (country) => exploreCountryController.setCountry(country),
   ...createExploreSubscriptionActions(set, get),
   ...createExploreFavoriteActions(set, get),
 }))

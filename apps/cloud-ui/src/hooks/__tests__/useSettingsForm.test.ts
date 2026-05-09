@@ -25,13 +25,15 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: vi.fn() },
 }))
 
-vi.mock('../../lib/db/credentialsRepository', () => ({
-  TRANSLATE_CREDENTIAL_KEY: 'provider_translate_key',
-  ASR_CREDENTIAL_KEY: 'provider_asr_key',
-  getCredentialWriteEpoch: () => 0,
-  getAllCredentials: () => getAllCredentialsMock(),
-  setCredentials: (entries: Record<string, string>, expectedEpoch?: number) =>
-    setCredentialsMock(entries, expectedEpoch),
+vi.mock('../../lib/repositories/CredentialsRepository', () => ({
+  CredentialsRepository: {
+    ASR_CREDENTIAL_KEY: 'provider_asr_key',
+    TRANSLATE_CREDENTIAL_KEY: 'provider_translate_key',
+    getWriteEpoch: () => 0,
+    getAll: () => getAllCredentialsMock(),
+    setMany: (entries: Record<string, string>, expectedEpoch?: number) =>
+      setCredentialsMock(entries, expectedEpoch),
+  },
 }))
 
 vi.mock('../../lib/schemas/settings', async (importOriginal) => {
@@ -162,6 +164,31 @@ describe('useSettingsForm', () => {
     expect(toastErrorKeyMock).toHaveBeenCalledWith('settingsNotSaved')
   })
 
+  it('aborts field blur save if wipeAll happens while validation is pending', async () => {
+    const { result } = renderHook(() => useSettingsForm())
+    await waitFor(() => {
+      expect(result.current.credentialsLoaded).toBe(true)
+    })
+
+    act(() => {
+      result.current.form.setValue('translateKey', 'sk-stale')
+      result.current.form.setValue('asrKey', VALID_GROQ_KEY)
+    })
+
+    vi.spyOn(result.current.form, 'trigger').mockImplementation(async () => {
+      getSettingsWriteEpochMock.mockReturnValue(11)
+      return true
+    })
+
+    await act(async () => {
+      await result.current.handleFieldBlur()
+    })
+
+    expect(toastErrorKeyMock).toHaveBeenCalledWith('settingsNotSaved')
+    expect(setCredentialsMock).not.toHaveBeenCalled()
+    expect(localStorage.getItem(SETTINGS_STORAGE_KEY)).toBeNull()
+  })
+
   it('persists ASR provider-only draft on ASR blur without forcing model-required validation', async () => {
     const { result } = renderHook(() => useSettingsForm())
     await waitFor(() => {
@@ -245,6 +272,49 @@ describe('useSettingsForm', () => {
     )
     expect(setCredentialsMock).toHaveBeenLastCalledWith(
       {
+        provider_asr_key: VALID_GROQ_KEY,
+      },
+      0
+    )
+  })
+
+  it('keeps full save and ASR draft credential persistence scoped differently', async () => {
+    const { result } = renderHook(() => useSettingsForm())
+    await waitFor(() => {
+      expect(result.current.credentialsLoaded).toBe(true)
+    })
+
+    act(() => {
+      result.current.form.setValue('asrProvider', 'groq')
+      result.current.form.setValue('asrModel', 'whisper-large-v3-turbo')
+      result.current.form.setValue('asrKey', VALID_GROQ_KEY)
+      result.current.form.setValue('translateKey', 'invalid-translate-key')
+    })
+
+    await act(async () => {
+      await result.current.handleAsrFieldBlur()
+    })
+
+    expect(setCredentialsMock).toHaveBeenNthCalledWith(
+      1,
+      {
+        provider_asr_key: VALID_GROQ_KEY,
+      },
+      0
+    )
+
+    act(() => {
+      result.current.form.setValue('translateKey', 'sk-valid-translate')
+    })
+
+    await act(async () => {
+      await result.current.onSubmit()
+    })
+
+    expect(setCredentialsMock).toHaveBeenNthCalledWith(
+      2,
+      {
+        provider_translate_key: 'sk-valid-translate',
         provider_asr_key: VALID_GROQ_KEY,
       },
       0

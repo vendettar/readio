@@ -22,8 +22,8 @@ This makes the system fragile even when full-line overlay hit targets are remove
 
 Current code reality that `138a` must explicitly resolve:
 
-- `apps/lite/src/components/Transcript/Word.tsx` still owns pointerdown/click/context-menu behavior locally.
-- `apps/lite/src/hooks/selection/useSelectionEvents.ts` already contains a pointer-state machine for drag/selection semantics.
+- `apps/cloud-ui/src/components/Transcript/Word.tsx` still owns pointerdown/click/context-menu behavior locally.
+- `apps/cloud-ui/src/hooks/selection/useSelectionEvents.ts` already contains a pointer-state machine for drag/selection semantics.
 - `138a` must collapse this split authority into one deferred-intent model where click-vs-drag is decided after release, not partly in the word token and partly in the global selection hook.
 
 ## Required Product Outcome
@@ -50,18 +50,18 @@ If touch behavior needs a distinct contract or browser-specific fallback policy,
 
 ## Read First (Required)
 
-- `apps/docs/content/docs/apps/lite/handoff/features/transcript-reading.mdx`
-- `apps/docs/content/docs/apps/lite/handoff/features/transcript-reading.zh.mdx`
-- `apps/docs/content/docs/apps/lite/coding-standards/index.mdx`
-- `apps/lite/src/components/Transcript/TranscriptView.tsx`
-- `apps/lite/src/components/Transcript/SubtitleLine.tsx`
-- `apps/lite/src/components/Transcript/Word.tsx`
-- `apps/lite/src/hooks/useSelection.ts`
-- `apps/lite/src/hooks/selection/useSelectionEvents.ts`
-- `apps/lite/src/hooks/selection/useSelectionActions.ts`
-- `apps/lite/src/lib/selection/domUtils.ts`
-- `apps/lite/src/components/Transcript/__tests__/TranscriptView.word-interactions.test.tsx`
-- `apps/lite/src/components/Transcript/__tests__/SubtitleLine.i18n-tokenization.test.tsx`
+- `apps/docs/content/docs/apps/cloud/frontend/transcript-reading.mdx`
+- `apps/docs/content/docs/apps/cloud/frontend/transcript-reading.zh.mdx`
+- `apps/docs/content/docs/apps/cloud/handoff/standards.mdx`
+- `apps/cloud-ui/src/components/Transcript/TranscriptView.tsx`
+- `apps/cloud-ui/src/components/Transcript/SubtitleLine.tsx`
+- `apps/cloud-ui/src/components/Transcript/Word.tsx`
+- `apps/cloud-ui/src/hooks/useSelection.ts`
+- `apps/cloud-ui/src/hooks/selection/useSelectionEvents.ts`
+- `apps/cloud-ui/src/hooks/selection/useSelectionActions.ts`
+- `apps/cloud-ui/src/lib/selection/domUtils.ts`
+- `apps/cloud-ui/src/components/Transcript/__tests__/TranscriptView.word-interactions.test.tsx`
+- `apps/cloud-ui/src/components/Transcript/__tests__/SubtitleLine.i18n-tokenization.test.tsx`
 
 ## Scope Scan (Architecture-Level)
 
@@ -188,8 +188,8 @@ If `Word.tsx` remains a `button` or other direct control host after `138a`, the 
 
 Must update only the relevant handoff docs:
 
-- `apps/docs/content/docs/apps/lite/handoff/features/transcript-reading.mdx`
-- `apps/docs/content/docs/apps/lite/handoff/features/transcript-reading.zh.mdx`
+- `apps/docs/content/docs/apps/cloud/frontend/transcript-reading.mdx`
+- `apps/docs/content/docs/apps/cloud/frontend/transcript-reading.zh.mdx`
 
 Docs must state:
 
@@ -241,13 +241,13 @@ The first set of regression tests in `138a` must fail against the pre-refactor i
 ## Reviewer Evidence Surface
 
 ### Changed-Zone Files (Must Review)
-- `apps/lite/src/components/Transcript/Word.tsx`
-- `apps/lite/src/components/Transcript/SubtitleLine.tsx`
-- `apps/lite/src/hooks/selection/useSelectionEvents.ts`
+- `apps/cloud-ui/src/components/Transcript/Word.tsx`
+- `apps/cloud-ui/src/components/Transcript/SubtitleLine.tsx`
+- `apps/cloud-ui/src/hooks/selection/useSelectionEvents.ts`
 - transcript interaction tests touched by `138a`
 
 ### Adjacent Critical Files (Spot Check)
-- `apps/lite/src/hooks/useSelection.ts`
-- `apps/lite/src/hooks/selection/useSelectionActions.ts`
-- `apps/docs/content/docs/apps/lite/handoff/features/transcript-reading.mdx`
-- `apps/docs/content/docs/apps/lite/handoff/features/transcript-reading.zh.mdx`
+- `apps/cloud-ui/src/hooks/useSelection.ts`
+- `apps/cloud-ui/src/hooks/selection/useSelectionActions.ts`
+- `apps/docs/content/docs/apps/cloud/frontend/transcript-reading.mdx`
+- `apps/docs/content/docs/apps/cloud/frontend/transcript-reading.zh.mdx`

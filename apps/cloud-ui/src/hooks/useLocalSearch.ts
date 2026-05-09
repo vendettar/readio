@@ -12,6 +12,7 @@ import { formatFileSize } from '../lib/formatters'
 import { loadLocalSearchDbSnapshot } from '../lib/localSearchService'
 import { logError } from '../lib/logger'
 import { useExploreStore } from '../store/exploreStore'
+import { useDebouncedValue } from './useDebouncedValue'
 
 // ========== Types ==========
 
@@ -61,17 +62,6 @@ function buildCanonicalEpisodeResultKey(
   const normalizedEpisodeGuid = episodeGuid?.trim() ?? ''
   if (!normalizedPodcastItunesId || !normalizedEpisodeGuid) return null
   return `canonical:${normalizedPodcastItunesId}:${normalizedEpisodeGuid}`
-}
-
-function useDebouncedValue<T>(value: T, delayMs: number) {
-  const [debouncedValue, setDebouncedValue] = useState(value)
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedValue(value), delayMs)
-    return () => clearTimeout(timer)
-  }, [value, delayMs])
-
-  return debouncedValue
 }
 
 export function useLocalSearch(

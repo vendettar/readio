@@ -27,7 +27,6 @@ export function getEditorPickRouteState(state: unknown): EditorPickRouteState | 
   if (!state || typeof state !== 'object') return null
   const inputState = state as {
     editorPickSnapshot?: unknown
-    episodeSnapshot?: unknown
   }
   const snapshot = inputState.editorPickSnapshot
 
@@ -49,9 +48,8 @@ export function getEditorPickRouteState(state: unknown): EditorPickRouteState | 
     return null
   }
 
-  const { episodeSnapshot: _legacyEpisodeSnapshot, ...restState } = state as Record<string, unknown>
   return {
-    ...restState,
+    ...(state as Record<string, unknown>),
     editorPickSnapshot,
   }
 }

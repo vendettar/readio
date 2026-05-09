@@ -121,7 +121,13 @@ describe('selection api dictionary transport', () => {
 
     const { fetchDefinition } = await import('../selection/api')
 
-    await expect(fetchDefinition('Hello')).rejects.toThrow('upstream boom')
+    await expect(fetchDefinition('Hello')).rejects.toMatchObject({
+      name: 'FetchError',
+      message: 'upstream boom',
+      status: 503,
+      source: 'direct',
+      url: 'https://english.example/api/hello',
+    })
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(fetchMock.mock.calls[0]?.[0]).toBe('https://english.example/api/hello')
   })
@@ -155,7 +161,14 @@ describe('selection api dictionary transport', () => {
     }))
 
     const { fetchDefinition } = await import('../selection/api')
-    await expect(fetchDefinition('Hello')).rejects.toThrow('Word not found')
+    await expect(fetchDefinition('Hello')).rejects.toMatchObject({
+      name: 'FetchError',
+      message: 'Word not found',
+      status: 404,
+      source: 'direct',
+      code: 'not_found',
+      url: 'https://english.example/api/hello',
+    })
   })
 
   it('does not collapse /api/proxy 4xx errors into Word not found', async () => {
@@ -185,7 +198,13 @@ describe('selection api dictionary transport', () => {
     }))
 
     const { fetchDefinition } = await import('../selection/api')
-    await expect(fetchDefinition('Hello')).rejects.toThrow('proxy authentication failed')
+    await expect(fetchDefinition('Hello')).rejects.toMatchObject({
+      name: 'FetchError',
+      message: 'proxy authentication failed',
+      status: 401,
+      source: 'cloudBackend',
+      url: 'https://english.example/api/hello',
+    })
   })
 
   it('does not collapse /api/proxy 404 responses without dictionaryapi.dev not-found payload into Word not found', async () => {
@@ -215,6 +234,12 @@ describe('selection api dictionary transport', () => {
     }))
 
     const { fetchDefinition } = await import('../selection/api')
-    await expect(fetchDefinition('Hello')).rejects.toThrow('proxy route missing')
+    await expect(fetchDefinition('Hello')).rejects.toMatchObject({
+      name: 'FetchError',
+      message: 'proxy route missing',
+      status: 404,
+      source: 'cloudBackend',
+      url: 'https://english.example/api/hello',
+    })
   })
 })

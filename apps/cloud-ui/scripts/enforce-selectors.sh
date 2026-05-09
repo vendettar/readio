@@ -6,13 +6,23 @@ set -euo pipefail
 
 echo "🔍 Checking for direct store subscriptions (missing selectors)..."
 
-# Scan for useXStore() without arguments using ripgrep (rg)
-# We exclude matches in __tests__
-# Ensure any rg error (exit 2) makes the script exit non-zero via 'set -e'.
-# Handle exit 1 (no matches) gracefully by checking the output.
-# We pipe to grep to filter out comment-only lines.
-# Since rg -n outputs 'file:line:content', we match the end of the prefix.
-VIOLATIONS=$(rg -n --type-add 'web:*.{ts,tsx}' -t web -g '!**/__tests__/**' 'use(Player|Explore|Files|History|Search)Store\(\)' src | grep -vE ':[0-9]+:[[:space:]]*//' || true)
+# Discover active Zustand store hooks from source ownership rather than
+# maintaining a stale hardcoded subset in this guard script.
+STORE_HOOK_PATTERN=$(
+  rg -o --no-filename 'export const (use[A-Za-z0-9]+Store) = create' src/store src/lib/downloadProgressTracking.ts \
+    | sed -E 's/export const (use[A-Za-z0-9]+Store) = create/\1/' \
+    | sort -u \
+    | paste -sd '|' -
+)
+
+if [ -z "$STORE_HOOK_PATTERN" ]; then
+  echo "❌ Error: No Zustand store hooks were discovered for selector enforcement."
+  exit 1
+fi
+
+# Scan for useXStore() without arguments using ripgrep (rg).
+# We exclude tests and comment-only lines.
+VIOLATIONS=$(rg -n --type-add 'web:*.{ts,tsx}' -t web -g '!**/__tests__/**' "\\b(${STORE_HOOK_PATTERN})\\(\\)" src | grep -vE ':[0-9]+:[[:space:]]*//' || true)
 
 if [ -n "$VIOLATIONS" ]; then
   echo "❌ Error: Direct store subscription detected (missing selector)."

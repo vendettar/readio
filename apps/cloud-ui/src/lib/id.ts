@@ -56,6 +56,12 @@ export function createSessionId(): string {
  */
 export const createToastId = createShortId
 
+/**
+ * Generate a standard request ID for API tracing.
+ * Uses UUID v4 format.
+ */
+export const generateRequestId = createId
+
 let idCounter = 0
 function nextCounterValue(): number {
   idCounter = (idCounter + 1) % 1_000_000_000

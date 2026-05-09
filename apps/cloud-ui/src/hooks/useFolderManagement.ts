@@ -7,16 +7,11 @@ import { toast } from '../lib/toast'
 import { useOnClickOutside } from './useOnClickOutside'
 
 interface UseFolderManagementOptions {
-  setCurrentFolderId: (id: string | null) => void
   onComplete: () => Promise<void>
   folders?: FileFolder[]
 }
 
-export function useFolderManagement({
-  setCurrentFolderId,
-  onComplete,
-  folders = [],
-}: UseFolderManagementOptions) {
+export function useFolderManagement({ onComplete, folders = [] }: UseFolderManagementOptions) {
   const [isNamingFolder, setIsNamingFolder] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
   const namingInputRef = useRef<HTMLInputElement>(null)
@@ -35,9 +30,8 @@ export function useFolderManagement({
   }, isNamingFolder)
 
   const handleCreateFolder = useCallback(() => {
-    setCurrentFolderId(null)
     setIsNamingFolder(true)
-  }, [setCurrentFolderId])
+  }, [])
 
   const [isLoading, setIsLoading] = useState(false)
 

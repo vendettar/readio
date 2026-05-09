@@ -49,6 +49,26 @@ describe('ExploreStore', () => {
       expect(useExploreStore.getState().country).toBe('jp')
     })
 
+    it('coalesces concurrent hydrateCountry calls into a single settings read', async () => {
+      let resolveSetting: ((value: string) => void) | undefined
+      const settingGate = new Promise<string>((resolve) => {
+        resolveSetting = resolve
+      })
+
+      const getSettingSpy = vi
+        .spyOn(SettingsRepository, 'getSetting')
+        .mockImplementation(() => settingGate)
+
+      const firstHydration = useExploreStore.getState().hydrateCountry()
+      const secondHydration = useExploreStore.getState().hydrateCountry()
+
+      resolveSetting?.('JP')
+      await Promise.all([firstHydration, secondHydration])
+
+      expect(getSettingSpy).toHaveBeenCalledTimes(1)
+      expect(useExploreStore.getState().country).toBe('jp')
+    })
+
     it('keeps manual selection when delayed hydration resolves later', async () => {
       let resolveSetting: ((value: string) => void) | undefined
       const settingGate = new Promise<string>((resolve) => {

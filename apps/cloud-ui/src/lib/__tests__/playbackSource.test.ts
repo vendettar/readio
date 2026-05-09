@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { findDownloadedTrackMock, dbAudioBlobsGetMock, logErrorMock } = vi.hoisted(() => ({
+const { findDownloadedTrackMock, dbGetAudioBlobMock, logErrorMock } = vi.hoisted(() => ({
   findDownloadedTrackMock: vi.fn(),
-  dbAudioBlobsGetMock: vi.fn(),
+  dbGetAudioBlobMock: vi.fn(),
   logErrorMock: vi.fn(),
 }))
 
@@ -15,10 +15,9 @@ vi.mock('../downloadService', async (importActual) => {
 })
 
 vi.mock('../dexieDb', () => ({
-  db: {
-    audioBlobs: {
-      get: (...args: unknown[]) => dbAudioBlobsGetMock(...args),
-    },
+  db: {},
+  DB: {
+    getAudioBlob: (...args: unknown[]) => dbGetAudioBlobMock(...args),
   },
 }))
 
@@ -26,14 +25,15 @@ vi.mock('../logger', () => ({
   logError: (...args: unknown[]) => logErrorMock(...args),
 }))
 
-import { resolvePlaybackSource } from '../player/playbackSource'
+import { __resetPlaybackSourceCache, resolvePlaybackSource } from '../player/playbackSource'
 
 describe('playbackSource', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     findDownloadedTrackMock.mockReset()
-    dbAudioBlobsGetMock.mockReset()
+    dbGetAudioBlobMock.mockReset()
     logErrorMock.mockReset()
+    __resetPlaybackSourceCache()
   })
 
   it('unwraps tracking URLs when no local blob is available', async () => {
@@ -52,7 +52,7 @@ describe('playbackSource', () => {
       id: 'track-2',
       audioId: 'missing-audio',
     })
-    dbAudioBlobsGetMock.mockResolvedValueOnce(undefined)
+    dbGetAudioBlobMock.mockResolvedValueOnce(undefined)
 
     const resolved = await resolvePlaybackSource('https://example.com/missing.mp3')
 

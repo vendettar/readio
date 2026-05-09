@@ -12,6 +12,7 @@
 - **Abuse Before Theory**: Prioritize issues that create a real exploit path, open relay, resource abuse, or secret exposure over generic checklist items.
 - **Evidence Form Required**: If a security conclusion depends on a runtime boundary (`/api/proxy`, `/env.js`, ASR relay, upload handler, CD deployment, VPS contract), cite at least one concrete evidence source: handler logic, targeted test, route contract, workflow step, config file, or deployment doc. Do not rely on “looks risky” reasoning alone.
 - **Path Style Rule**: Use repo-relative paths for repository content in reviews, docs, and instructions. Do not write local absolute filesystem paths for in-repo files.
+- **Steady-State Writing Rule**: When updating security-facing docs or instruction text, describe the current system boundary directly: what it is and how it works now. Do not center the writing on what it migrated from unless the file is explicitly audit/history/rationale scoped.
 
 ## [Role Definition]
 

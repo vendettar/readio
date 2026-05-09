@@ -1,5 +1,5 @@
 import { DndContext, DragOverlay } from '@dnd-kit/core'
-import { Home, Plus, Upload } from 'lucide-react'
+import { Plus, Upload } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { FileDragPreview } from '../../components/Files/FileDragPreview'
@@ -7,7 +7,6 @@ import { FileDropZone } from '../../components/Files/FileDropZone'
 import { FilesLoadingSkeletons } from '../../components/Files/FilesLoadingSkeletons'
 import { FoldersGridSection } from '../../components/Files/FoldersGridSection'
 import { TracksListSection } from '../../components/Files/TracksListSection'
-import type { ViewDensity } from '../../components/Files/types'
 import { ViewControlsBar } from '../../components/Files/ViewControlsBar'
 import { PageHeader, PageShell } from '../../components/layout'
 import { Button } from '../../components/ui/button'
@@ -17,6 +16,7 @@ import { useFilePlayback } from '../../hooks/useFilePlayback'
 import { useFileProcessing } from '../../hooks/useFileProcessing'
 import { useFilesData } from '../../hooks/useFilesData'
 import { useFolderManagement } from '../../hooks/useFolderManagement'
+import { useViewDensity } from '../../hooks/useViewDensity'
 import { snapCenterCursor } from '../../lib/dnd/modifiers'
 import { getDragPreviewWidthClass } from '../../lib/dnd/previewSizing'
 import { logError, warn as logWarn } from '../../lib/logger'
@@ -30,56 +30,21 @@ import { useFilesStore } from '../../store/filesStore'
 
 export default function FilesIndexPage() {
   const { t } = useTranslation()
+  const currentFolderId = null
 
-  const {
-    folders,
-    tracks,
-    subtitles,
-    currentFolder,
-    currentFolderId,
-    setCurrentFolderId,
-    folderCounts,
-    loadData,
-    status,
-  } = useFilesData()
+  const { folders, tracks, subtitles, folderCounts, loadData, status } = useFilesData(null)
 
   useEffect(() => {
     void loadData()
   }, [loadData])
 
-  const getSetting = useFilesStore((s) => s.getSetting)
-  const setSetting = useFilesStore((s) => s.setSetting)
   const getArtworkBlob = useFilesStore((s) => s.getAudioBlob)
   const updateFolder = useFilesStore((s) => s.updateFolder)
   const updateFileTrack = useFilesStore((s) => s.updateFileTrack)
   const deleteFileTrack = useFilesStore((s) => s.deleteFileTrack)
   const deleteFileSubtitle = useFilesStore((s) => s.deleteFileSubtitle)
 
-  const [density, setDensity] = useState<ViewDensity>('comfortable')
-
-  const loadDensity = useCallback(async () => {
-    const saved = await getSetting('files.viewDensity')
-    if (saved === 'compact') setDensity('compact')
-  }, [getSetting])
-
-  useEffect(() => {
-    const raf = window.requestAnimationFrame(() => {
-      void loadDensity()
-    })
-    return () => window.cancelAnimationFrame(raf)
-  }, [loadDensity])
-
-  const handleDensityChange = useCallback(
-    async (value: ViewDensity) => {
-      setDensity(value)
-      try {
-        await setSetting('files.viewDensity', value)
-      } catch (err) {
-        logWarn('[Files] Failed to persist density setting', err)
-      }
-    },
-    [setSetting]
-  )
+  const { density, handleDensityChange } = useViewDensity('files.viewDensity')
 
   const { handleDroppedFiles, handleAudioInputChange, handleSubtitleInputChange } =
     useFileProcessing({
@@ -109,7 +74,6 @@ export default function FilesIndexPage() {
     handleConfirmNewFolder,
     executeDeleteFolder,
   } = useFolderManagement({
-    setCurrentFolderId,
     onComplete: loadData,
     folders: folders || [],
   })
@@ -187,21 +151,19 @@ export default function FilesIndexPage() {
       <FileDropZone onFilesAccepted={handleDroppedFiles} className="min-h-full">
         <PageShell contentClassName="pb-32">
           <PageHeader
-            title={currentFolder?.name || t('filesTitle')}
-            subtitle={currentFolderId === null ? t('filesSubtitle') : undefined}
+            title={t('filesTitle')}
+            subtitle={t('filesSubtitle')}
             actions={
               <>
-                {currentFolderId === null && (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={handleCreateFolder}
-                    className="gap-2"
-                  >
-                    <Plus size={18} />
-                    <span>{t('filesNewFolder')}</span>
-                  </Button>
-                )}
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={handleCreateFolder}
+                  className="gap-2"
+                >
+                  <Plus size={18} />
+                  <span>{t('filesNewFolder')}</span>
+                </Button>
                 <Button
                   type="button"
                   data-testid="add-audio-btn"
@@ -235,50 +197,36 @@ export default function FilesIndexPage() {
           />
 
           <div className="space-y-8 pb-20">
-            {isInitialLoading && <FilesLoadingSkeletons isRoot={currentFolderId === null} />}
+            {isInitialLoading && <FilesLoadingSkeletons isRoot />}
 
-            {!isInitialLoading &&
-              currentFolderId === null &&
-              (folders?.length || isNamingFolder) && (
-                <FoldersGridSection
-                  folders={folders}
-                  folderCounts={folderCounts}
-                  density={density}
-                  isNamingFolder={isNamingFolder}
-                  newFolderName={newFolderName}
-                  setNewFolderName={setNewFolderName}
-                  namingInputRef={namingInputRef}
-                  namingContainerRef={namingContainerRef}
-                  onConfirmNewFolder={handleConfirmNewFolder}
-                  onCancelNamingFolder={() => setIsNamingFolder(false)}
-                  onPinFolder={async (folderId) => {
-                    await updateFolder(folderId, { pinnedAt: Date.now() })
-                    await loadData()
-                  }}
-                  onUnpinFolder={async (folderId) => {
-                    await updateFolder(folderId, { pinnedAt: undefined })
-                    await loadData()
-                  }}
-                  onRenameFolder={async (folderId, newName) => {
-                    await updateFolder(folderId, { name: newName })
-                    await loadData()
-                  }}
-                  onDeleteFolder={executeDeleteFolder}
-                  isDragging={isDragging}
-                  hasActiveDragItem={Boolean(activeDragItem)}
-                />
-              )}
-
-            {!isInitialLoading && currentFolderId !== null && (
-              <Button
-                type="button"
-                variant="ghost"
-                className="p-4 rounded-xl border border-dashed border-border text-muted-foreground flex items-center justify-center gap-2 hover:bg-muted hover:border-muted-foreground/30 transition-colors"
-                onClick={() => setCurrentFolderId(null)}
-              >
-                <Home size={18} />
-                <span className="font-medium">{t('filesBackToRoot')}</span>
-              </Button>
+            {!isInitialLoading && (folders?.length || isNamingFolder) && (
+              <FoldersGridSection
+                folders={folders}
+                folderCounts={folderCounts}
+                density={density}
+                isNamingFolder={isNamingFolder}
+                newFolderName={newFolderName}
+                setNewFolderName={setNewFolderName}
+                namingInputRef={namingInputRef}
+                namingContainerRef={namingContainerRef}
+                onConfirmNewFolder={handleConfirmNewFolder}
+                onCancelNamingFolder={() => setIsNamingFolder(false)}
+                onPinFolder={async (folderId) => {
+                  await updateFolder(folderId, { pinnedAt: Date.now() })
+                  await loadData()
+                }}
+                onUnpinFolder={async (folderId) => {
+                  await updateFolder(folderId, { pinnedAt: undefined })
+                  await loadData()
+                }}
+                onRenameFolder={async (folderId, newName) => {
+                  await updateFolder(folderId, { name: newName })
+                  await loadData()
+                }}
+                onDeleteFolder={executeDeleteFolder}
+                isDragging={isDragging}
+                hasActiveDragItem={Boolean(activeDragItem)}
+              />
             )}
 
             {!isInitialLoading && (

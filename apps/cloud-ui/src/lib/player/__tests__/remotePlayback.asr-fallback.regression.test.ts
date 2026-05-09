@@ -22,9 +22,11 @@ vi.mock('../../remoteTranscript', () => ({
   getValidTranscriptUrl: (url: string | null | undefined) => url || null,
 }))
 
-vi.mock('../../db/credentialsRepository', () => ({
-  getCredential: vi.fn().mockResolvedValue('fake-api-key-value'),
-  getAsrCredentialKey: () => 'provider_asr_key',
+vi.mock('../../repositories/CredentialsRepository', () => ({
+  CredentialsRepository: {
+    get: vi.fn().mockResolvedValue('fake-api-key-value'),
+    getAsrCredentialKey: () => 'provider_asr_key',
+  },
 }))
 
 describe('remotePlayback ASR-Fallback Regression', () => {

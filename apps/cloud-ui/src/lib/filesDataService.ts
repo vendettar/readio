@@ -9,18 +9,14 @@ export interface FilesDataSnapshot {
   folderCounts: Record<string, number>
 }
 
-export async function loadFilesDataSnapshot(
-  currentFolderId: string | null
-): Promise<FilesDataSnapshot> {
+export async function loadFilesDataSnapshot(folderId: string | null): Promise<FilesDataSnapshot> {
   const folders = await FilesRepository.getAllFolders()
-  const tracks = await FilesRepository.getFileTracksInFolder(currentFolderId)
+  const tracks = await FilesRepository.getFileTracksInFolder(folderId)
 
   const [subtitlesByTrack, currentFolder, folderCounts] = await Promise.all([
     Promise.all(tracks.map((track) => FilesRepository.getFileSubtitlesForTrack(track.id))),
-    currentFolderId !== null
-      ? FilesRepository.getFolder(currentFolderId)
-      : Promise.resolve(undefined),
-    currentFolderId === null && folders.length > 0
+    folderId !== null ? FilesRepository.getFolder(folderId) : Promise.resolve(undefined),
+    folderId === null && folders.length > 0
       ? Promise.all(
           folders.map(async (folder) => [
             folder.id,

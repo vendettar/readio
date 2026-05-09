@@ -1,7 +1,7 @@
 // src/hooks/useFilesData.ts
 // Event-driven data loading hook with status tracking and request guard
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import type { FileFolder, FileSubtitle, FileTrack } from '../lib/dexieDb'
 import { loadFilesDataSnapshot } from '../lib/filesDataService'
 import { logError } from '../lib/logger'
@@ -18,15 +18,12 @@ interface FilesData {
 }
 
 export interface UseFilesDataReturn extends FilesData {
-  currentFolderId: string | null
-  setCurrentFolderId: (id: string | null) => void
   status: LoadStatus
   error: Error | null
   loadData: () => Promise<void>
 }
 
-export function useFilesData(): UseFilesDataReturn {
-  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null)
+export function useFilesData(folderId: string | null): UseFilesDataReturn {
   const [data, setData] = useState<FilesData>({
     folders: [],
     tracks: [],
@@ -40,12 +37,6 @@ export function useFilesData(): UseFilesDataReturn {
   // Guard: request ID counter to prevent stale updates
   const requestIdRef = useRef(0)
 
-  // Store currentFolderId in a ref for stable access in loadData
-  const currentFolderIdRef = useRef(currentFolderId)
-  useEffect(() => {
-    currentFolderIdRef.current = currentFolderId
-  }, [currentFolderId])
-
   const loadData = useCallback(async () => {
     // Increment request ID to invalidate any pending request
     requestIdRef.current += 1
@@ -55,7 +46,7 @@ export function useFilesData(): UseFilesDataReturn {
     setError(null)
 
     try {
-      const snapshot = await loadFilesDataSnapshot(currentFolderIdRef.current)
+      const snapshot = await loadFilesDataSnapshot(folderId)
 
       if (thisRequestId !== requestIdRef.current) {
         return
@@ -78,17 +69,10 @@ export function useFilesData(): UseFilesDataReturn {
       setError(error)
       setStatus('error')
     }
-  }, [])
-
-  // Custom setCurrentFolderId that also triggers loadData
-  const handleSetCurrentFolderId = useCallback((id: string | null) => {
-    setCurrentFolderId(id)
-  }, [])
+  }, [folderId])
 
   return {
     ...data,
-    currentFolderId,
-    setCurrentFolderId: handleSetCurrentFolderId,
     status,
     error,
     loadData,

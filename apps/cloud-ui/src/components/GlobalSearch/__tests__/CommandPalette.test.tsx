@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import type React from 'react'
+import React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { makeSearchPodcast } from '../../../lib/discovery/__tests__/fixtures'
 import { buildEpisodeCompactKey } from '../../../lib/discovery/editorPicks'
@@ -216,6 +216,8 @@ vi.mock('../../ui/popover', () => {
 })
 
 vi.mock('../../ui/command', () => {
+  const CommandSelectionContext = React.createContext<((value: string) => void) | null>(null)
+
   const Command = ({
     value,
     onValueChange,
@@ -225,16 +227,31 @@ vi.mock('../../ui/command', () => {
     onValueChange?: (value: string) => void
     children: React.ReactNode
   }) => (
-    <div data-testid="command-root" data-selected-value={value ?? ''}>
-      <button
-        type="button"
-        data-testid="pick-custom"
-        onClick={() => onValueChange?.('picked-value')}
-      >
-        pick
-      </button>
-      {children}
-    </div>
+    <CommandSelectionContext.Provider value={onValueChange ?? null}>
+      <div data-testid="command-root" data-selected-value={value ?? ''}>
+        <button
+          type="button"
+          data-testid="pick-custom"
+          onClick={() => onValueChange?.('picked-value')}
+        >
+          pick
+        </button>
+        <button
+          type="button"
+          data-testid="trigger-enter"
+          onClick={(event) => {
+            const root = event.currentTarget.parentElement
+            const selectedItem = root?.querySelector<HTMLElement>(
+              `[data-command-item-value="${value ?? ''}"]`
+            )
+            selectedItem?.click()
+          }}
+        >
+          enter
+        </button>
+        {children}
+      </div>
+    </CommandSelectionContext.Provider>
   )
 
   const CommandInput = ({
@@ -276,11 +293,25 @@ vi.mock('../../ui/command', () => {
       children?: React.ReactNode
       value?: string
       onSelect?: () => void
-    }) => (
-      <button type="button" data-command-item-value={value} onClick={onSelect}>
-        {children}
-      </button>
-    ),
+    }) => {
+      const setSelectedValue = React.useContext(CommandSelectionContext)
+
+      return (
+        <button
+          type="button"
+          cmdk-item=""
+          data-command-item-value={value}
+          onMouseEnter={() => {
+            if (value) {
+              setSelectedValue?.(value)
+            }
+          }}
+          onClick={onSelect}
+        >
+          {children}
+        </button>
+      )
+    },
     CommandList: ({ children, id }: { children: React.ReactNode; id?: string }) => (
       <div id={id}>{children}</div>
     ),
@@ -385,6 +416,92 @@ describe('CommandPalette', () => {
 
     fireEvent.mouseLeave(screen.getByTestId('popover-mouseleave-region'))
     expect(commandRoot.getAttribute('data-selected-value')).toBe('search-global-dummy-abc')
+  })
+
+  it('keeps default selection stable when query goes non-empty -> empty -> non-empty', async () => {
+    render(<CommandPalette />)
+
+    act(() => {
+      useSearchStore.setState({
+        query: 'abc',
+        isOverlayOpen: true,
+      })
+    })
+
+    const commandRoot = screen.getByTestId('command-root')
+    expect(commandRoot.getAttribute('data-selected-value')).toBe('search-global-dummy-abc')
+
+    fireEvent.click(screen.getByTestId('pick-custom'))
+    expect(commandRoot.getAttribute('data-selected-value')).toBe('picked-value')
+
+    act(() => {
+      useSearchStore.setState({ query: '' })
+    })
+
+    await waitFor(() => {
+      expect(commandRoot.getAttribute('data-selected-value')).toBe('')
+    })
+
+    act(() => {
+      useSearchStore.setState({ query: 'abc' })
+    })
+
+    await waitFor(() => {
+      expect(commandRoot.getAttribute('data-selected-value')).toBe('search-global-dummy-abc')
+    })
+  })
+
+  it('keeps Enter behavior distinct between default dummy action and a real result item', async () => {
+    mockGlobalSearchState.localSection = makeSection([
+      {
+        ...priorLocalResult,
+        title: 'Local Session',
+        data: {
+          ...priorLocalResult.data,
+          title: 'Local Session',
+        },
+      },
+    ])
+
+    act(() => {
+      useSearchStore.setState({
+        query: 'local',
+        isOverlayOpen: true,
+      })
+    })
+
+    render(<CommandPalette />)
+
+    fireEvent.click(screen.getByTestId('trigger-enter'))
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith({
+        to: '/search',
+        search: { q: 'local' },
+      })
+    })
+    expect(executeLocalSearchActionMock).not.toHaveBeenCalled()
+    expect(useSearchStore.getState().isOverlayOpen).toBe(false)
+
+    navigateMock.mockClear()
+
+    act(() => {
+      useSearchStore.setState({ isOverlayOpen: true })
+    })
+
+    const localItem = document.querySelector(
+      '[data-command-item-value="local-history-local-1"]'
+    ) as HTMLButtonElement | null
+    expect(localItem).toBeTruthy()
+
+    fireEvent.mouseEnter(localItem as HTMLButtonElement)
+    fireEvent.click(screen.getByTestId('trigger-enter'))
+
+    await waitFor(() => {
+      expect(executeLocalSearchActionMock).toHaveBeenCalledTimes(1)
+    })
+    expect(navigateMock).not.toHaveBeenCalled()
+    expect(useSearchStore.getState().isOverlayOpen).toBe(false)
   })
 
   it('opens from store state and closes via popover outside interaction path', () => {
@@ -536,6 +653,38 @@ describe('CommandPalette', () => {
           country: 'us',
           id: '7',
           episodeKey: buildEpisodeCompactKey('75f3241b-439d-4786-8968-07e05e548074'),
+        },
+      })
+    })
+    expect(useSearchStore.getState().isOverlayOpen).toBe(false)
+  })
+
+  it('navigates to podcast detail when selecting a podcast result', async () => {
+    mockGlobalSearchState.podcastSection = makeSection([
+      makeSearchPodcast({
+        podcastItunesId: '42',
+        title: 'Podcast Result',
+        author: 'Host Name',
+      }),
+    ])
+
+    act(() => {
+      useSearchStore.setState({
+        query: 'podcast',
+        isOverlayOpen: true,
+      })
+    })
+
+    render(<CommandPalette />)
+
+    fireEvent.click(screen.getByText('Podcast Result'))
+
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith({
+        to: '/podcast/$country/$id',
+        params: {
+          country: 'us',
+          id: '42',
         },
       })
     })

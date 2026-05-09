@@ -1,6 +1,6 @@
 # Readio Monorepo
 
-**Readio** is a modern, web application for audio playback and language learning. This repository is a monorepo containing multiple applications and shared packages.
+**Readio** is a modern web application for audio playback and language learning. This repository is a monorepo containing multiple applications.
 
 ## 🏗️ Monorepo Structure
 
@@ -9,10 +9,6 @@
   - `cloud-ui`: (@readio/cloud-ui) The React + Vite frontend application.
   - `docs`: The documentation site built with Fumadocs (Next.js).
   - `native`: Scaffold directory for the planned native app.
-- **packages/**
-  - `core`: (@readio/core) Shared business logic, Zod schemas, and types.
-  - `ui`: Placeholder directory for shared UI components.
-  - `config`: Placeholder directory for shared engineering configurations.
 
 ## 🚀 Getting Started
 

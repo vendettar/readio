@@ -74,7 +74,7 @@ createRoot(document.getElementById('root')!).render(
     <QueryClientProvider client={queryClient}>
       <RootErrorBoundary>
         <TooltipProvider>
-          <RouterProvider router={router} />
+          <RouterProvider router={router} context={{ queryClient }} />
         </TooltipProvider>
       </RootErrorBoundary>
     </QueryClientProvider>

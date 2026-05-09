@@ -1,13 +1,10 @@
 import { CircleArrowDown, Download } from 'lucide-react'
 import { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
+import { executeEpisodeDownload } from '@/lib/executeEpisodeDownload'
 import { cn } from '@/lib/utils'
 import { type EpisodeStatus, useEpisodeStatus } from '../../hooks/useEpisodeStatus'
-import {
-  buildDownloadJobOptionsFromEpisodeProps,
-  downloadEpisode,
-  type EpisodeDownloadProps,
-} from '../../lib/downloadService'
+import type { EpisodeDownloadProps } from '../../lib/downloadService'
 import { Button } from '../ui/button'
 import { CircularProgress } from '../ui/circular-progress'
 
@@ -44,26 +41,22 @@ export function DownloadEpisodeButton({
   const status = episodeStatus ?? ownStatus
 
   const handleDownload = useCallback(() => {
-    if (status.downloadStatus === 'downloaded' || status.downloadStatus === 'downloading') return
-
-    const downloadOptions = buildDownloadJobOptionsFromEpisodeProps({
-      audioUrl,
-      episodeTitle,
-      episodeDescription,
-      showTitle,
-      artworkUrl,
-      transcriptUrl,
-      countryAtSave,
-      podcastItunesId,
-      episodeGuid,
-      durationSeconds,
+    executeEpisodeDownload({
+      episode: {
+        audioUrl,
+        episodeTitle,
+        episodeDescription,
+        showTitle,
+        artworkUrl,
+        transcriptUrl,
+        countryAtSave,
+        podcastItunesId,
+        episodeGuid,
+        durationSeconds,
+      },
+      downloadStatus: status.downloadStatus,
+      refresh: status.refresh,
     })
-    if (!downloadOptions) return
-
-    void (async () => {
-      await downloadEpisode(downloadOptions)
-      status.refresh()
-    })()
   }, [
     audioUrl,
     episodeTitle,

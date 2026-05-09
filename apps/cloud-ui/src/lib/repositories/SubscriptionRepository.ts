@@ -1,5 +1,6 @@
-import type { Subscription } from '../dexieDb'
-import { buildSubscriptionRecord, DB, db, normalizeSubscriptionRecord } from '../dexieDb'
+import { buildSubscriptionRecord, normalizeSubscriptionRecord } from '../db/recordNormalizers'
+import type { Subscription } from '../db/types'
+import { DB, db } from '../dexieDb'
 
 export const SubscriptionRepository = {
   getAllSubscriptions(): Promise<Subscription[]> {
