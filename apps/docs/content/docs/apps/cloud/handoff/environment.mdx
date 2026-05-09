@@ -54,13 +54,20 @@ Cloud currently keeps Workbox/PWA disabled unless a later instruction explicitly
 
 ## 6. Log Access Contract
 
-Cloud API logs remain stdout logs produced by Go `slog` and Docker's configured json-file logging driver.
+Cloud API logs remain stdout logs produced by Go `slog` and Docker's configured json-file logging driver. `/admin/logs` remains available and memory-only.
 
-- 00A does not ship logs to Grafana Loki and does not install Grafana Alloy or another host log shipping agent.
-- `/admin/logs` remains the same-origin, memory-only operator log surface.
+- 00C can ship sanitized application logs to Grafana Loki directly from `apps/cloud-api` without Grafana Alloy, Promtail, Docker log drivers, systemd journal reading, Docker container log reading, or another host log shipping agent.
+- Loki shipping is disabled unless `READIO_GRAFANA_LOKI_URL`, `READIO_GRAFANA_LOKI_USER`, and `READIO_GRAFANA_LOKI_TOKEN` are all configured in the backend container.
+- `READIO_GRAFANA_LOKI_URL` and `READIO_GRAFANA_LOKI_USER` are GitHub environment variables; `READIO_GRAFANA_LOKI_TOKEN` is a GitHub secret.
+- Loki `env` labels are derived from backend `READIO_DEPLOY_ENV` first, then `VITE_GRAFANA_FARO_ENV` if unset. Values normalize to `production`, `preproduction`, or `unknown`.
+- Optional backend-only knobs are `READIO_LOKI_LOG_LEVEL`, `READIO_LOKI_BATCH_SIZE`, `READIO_LOKI_FLUSH_INTERVAL_SECONDS`, and `READIO_LOKI_QUEUE_SIZE`.
+- These Loki variables must stay out of `/env.js`, browser runtime config, and browser env allowlists.
+- `/admin/logs` remains the same-origin, memory-only operator log surface. Loki is the durable remote application log surface when enabled.
 - Docker logs remain available through `make logs-pre`, `make logs-prod`, or direct Docker operations on the VPS.
-- Do not add an app-side Go Loki client unless a later instruction explicitly changes the log shipping boundary.
-- If log shipping is added later, labels must remain low-cardinality and must not include full URLs, route params, user input, raw errors, request IDs, headers, cookies, tokens, audio bytes, transcript text, or local paths.
+- 00B metrics and 00C logs are separate pipelines. OTLP metrics use `READIO_GRAFANA_OTLP_*`; Loki logs use `READIO_GRAFANA_LOKI_*`.
+- Loki labels are exactly `service`, `env`, and `level`. Labels must not include request IDs, routes, upstream hosts, podcast IDs, episode IDs, GUIDs, search terms, user IDs, file paths, raw errors, IP addresses, user agents, tokens, API keys, cookies, or headers.
+- Log lines may include sanitized fields such as timestamp, level, message, normalized route, status, elapsed milliseconds, error class, and request ID.
+- The Loki queue is bounded and non-blocking for request paths. If the queue is full or the Loki endpoint fails, logs are dropped locally and requests continue. Shutdown performs a best-effort flush.
 
 ## 7. Faro Browser RUM Contract
 

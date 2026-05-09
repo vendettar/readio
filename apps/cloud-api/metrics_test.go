@@ -45,7 +45,6 @@ func TestInitObservabilityNoopWhenPartialEnv(t *testing.T) {
 func TestCloudMuxDoesNotRegisterMetricsRoute(t *testing.T) {
 	mux := newCloudMux(http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler())
 
-
 	rr := newTestRecorder()
 	req := newTestRequest(http.MethodGet, "/metrics", nil)
 	mux.ServeHTTP(rr, req)
@@ -55,7 +54,6 @@ func TestCloudMuxDoesNotRegisterMetricsRoute(t *testing.T) {
 		t.Fatalf("/metrics returned 200; it should not be a registered route")
 	}
 }
-
 
 func TestOTLPEnvVarsAbsentFromBrowserEnvAllowlist(t *testing.T) {
 	data, err := os.ReadFile("browser-env-allowlist.json")
@@ -80,6 +78,57 @@ func TestOTLPEnvVarsAbsentFromBrowserEnvAllowlist(t *testing.T) {
 		for _, f := range forbidden {
 			if key == f {
 				t.Fatalf("%s must not be in browserEnvAllowlist", f)
+			}
+		}
+	}
+}
+
+func TestLokiEnvVarsAbsentFromBrowserRuntime(t *testing.T) {
+	t.Setenv(lokiURLEnv, "https://logs-prod.grafana.net/loki/api/v1/push")
+	t.Setenv(lokiUserEnv, "grafana-user")
+	t.Setenv(lokiTokenEnv, "grafana-token")
+	t.Setenv(lokiLogLevelEnv, "debug")
+	t.Setenv(lokiBatchSizeEnv, "10")
+	t.Setenv(lokiFlushIntervalEnv, "2")
+	t.Setenv(lokiQueueSizeEnv, "20")
+
+	forbidden := []string{
+		lokiURLEnv,
+		lokiUserEnv,
+		lokiTokenEnv,
+		lokiLogLevelEnv,
+		lokiBatchSizeEnv,
+		lokiFlushIntervalEnv,
+		lokiQueueSizeEnv,
+	}
+
+	payload := buildBrowserRuntimeEnv(newTestRequest(http.MethodGet, browserConfigRoute, nil))
+	for _, key := range forbidden {
+		if _, ok := payload[key]; ok {
+			t.Fatalf("%s must not be emitted in browser runtime config", key)
+		}
+	}
+
+	data, err := os.ReadFile("browser-env-allowlist.json")
+	if err != nil {
+		t.Fatalf("read allowlist artifact: %v", err)
+	}
+	var artifact []string
+	if err := json.Unmarshal(data, &artifact); err != nil {
+		t.Fatalf("unmarshal allowlist artifact: %v", err)
+	}
+
+	for _, key := range browserEnvAllowlist {
+		for _, forbiddenKey := range forbidden {
+			if key == forbiddenKey {
+				t.Fatalf("%s must not be in browserEnvAllowlist", forbiddenKey)
+			}
+		}
+	}
+	for _, key := range artifact {
+		for _, forbiddenKey := range forbidden {
+			if key == forbiddenKey {
+				t.Fatalf("%s must not be browser-visible", forbiddenKey)
 			}
 		}
 	}

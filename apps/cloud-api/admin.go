@@ -181,57 +181,47 @@ func flattenAttrsRecursive(prefix string, attrs []slog.Attr, out map[string]stri
 
 type adminSlogHandler struct {
 	slog.Handler
-	buffer *adminRingBuffer
+	buffer      *adminRingBuffer
+	lokiShipper lokiQueue
+	attrs       []slog.Attr
+	groups      []string
 }
 
 func (h *adminSlogHandler) Handle(ctx context.Context, r slog.Record) error {
-	flat := flattenRecordAttrs(r)
-	entry := adminLogEntry{
-		Ts:    r.Time,
-		Level: r.Level.String(),
-		Msg:   r.Message,
-		Attrs: flat,
+	entry, ok := h.adminLogEntryFromRecord(r)
+	if !ok {
+		return h.delegate().Handle(ctx, r)
 	}
-
-	// Promote canonical fields to top-level, remove from attrs.
-	if route, ok := flat["route"]; ok {
-		entry.Route = route
-		delete(flat, "route")
-		if strings.HasPrefix(route, "/admin/") {
-			return h.delegate().Handle(ctx, r)
-		}
+	if h.buffer != nil {
+		h.buffer.push(entry)
 	}
-	if ec, ok := flat["error_class"]; ok {
-		entry.ErrorClass = ec
-		delete(flat, "error_class")
+	if h.lokiShipper != nil {
+		_ = h.lokiShipper.Enqueue(entry)
 	}
-	if uk, ok := flat["upstream_kind"]; ok {
-		entry.UpstreamKind = uk
-		delete(flat, "upstream_kind")
-	}
-	if uh, ok := flat["upstream_host"]; ok {
-		entry.UpstreamHost = uh
-		delete(flat, "upstream_host")
-	}
-	if ems, ok := flat["elapsed_ms"]; ok {
-		if v, err := strconv.ParseFloat(ems, 64); err == nil {
-			entry.ElapsedMs = v
-		}
-		delete(flat, "elapsed_ms")
-	}
-	if st, ok := flat["status"]; ok {
-		if v, err := strconv.Atoi(st); err == nil {
-			entry.Status = v
-		}
-		delete(flat, "status")
-	}
-
-	if len(flat) == 0 {
-		entry.Attrs = nil
-	}
-
-	h.buffer.push(entry)
 	return h.delegate().Handle(ctx, r)
+}
+
+func (h *adminSlogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	derivedAttrs := cloneSlogAttrs(h.attrs)
+	derivedAttrs = append(derivedAttrs, groupSlogAttrs(h.groups, attrs)...)
+	return &adminSlogHandler{
+		Handler:     h.delegate().WithAttrs(attrs),
+		buffer:      h.buffer,
+		lokiShipper: h.lokiShipper,
+		attrs:       derivedAttrs,
+		groups:      cloneStrings(h.groups),
+	}
+}
+
+func (h *adminSlogHandler) WithGroup(name string) slog.Handler {
+	derivedGroups := append(cloneStrings(h.groups), name)
+	return &adminSlogHandler{
+		Handler:     h.delegate().WithGroup(name),
+		buffer:      h.buffer,
+		lokiShipper: h.lokiShipper,
+		attrs:       cloneSlogAttrs(h.attrs),
+		groups:      derivedGroups,
+	}
 }
 
 func (h *adminSlogHandler) delegate() slog.Handler {
@@ -264,15 +254,113 @@ func flattenRecordAttrs(r slog.Record) map[string]string {
 		attrs = append(attrs, a)
 		return true
 	})
+	return flattenAttrs(attrs)
+}
+
+func (h *adminSlogHandler) adminLogEntryFromRecord(r slog.Record) (adminLogEntry, bool) {
+	attrs := cloneSlogAttrs(h.attrs)
+	recordAttrs := make([]slog.Attr, 0)
+	r.Attrs(func(a slog.Attr) bool {
+		recordAttrs = append(recordAttrs, a)
+		return true
+	})
+	attrs = append(attrs, groupSlogAttrs(h.groups, recordAttrs)...)
+	return adminLogEntryFromRecordAttrs(r, attrs)
+}
+
+func adminLogEntryFromRecord(r slog.Record) (adminLogEntry, bool) {
+	attrs := make([]slog.Attr, 0)
+	r.Attrs(func(a slog.Attr) bool {
+		attrs = append(attrs, a)
+		return true
+	})
+	return adminLogEntryFromRecordAttrs(r, attrs)
+}
+
+func adminLogEntryFromRecordAttrs(r slog.Record, attrs []slog.Attr) (adminLogEntry, bool) {
+	flat := flattenAttrs(attrs)
+	entry := adminLogEntry{
+		Ts:    r.Time,
+		Level: r.Level.String(),
+		Msg:   r.Message,
+		Attrs: flat,
+	}
+
+	// Promote canonical fields to top-level, remove from attrs.
+	if route, ok := flat["route"]; ok {
+		entry.Route = route
+		delete(flat, "route")
+		if strings.HasPrefix(route, "/admin/") {
+			return adminLogEntry{}, false
+		}
+	}
+	if ec, ok := flat["error_class"]; ok {
+		entry.ErrorClass = ec
+		delete(flat, "error_class")
+	}
+	if uk, ok := flat["upstream_kind"]; ok {
+		entry.UpstreamKind = uk
+		delete(flat, "upstream_kind")
+	}
+	if uh, ok := flat["upstream_host"]; ok {
+		entry.UpstreamHost = uh
+		delete(flat, "upstream_host")
+	}
+	if ems, ok := flat["elapsed_ms"]; ok {
+		if v, err := strconv.ParseFloat(ems, 64); err == nil {
+			entry.ElapsedMs = v
+		}
+		delete(flat, "elapsed_ms")
+	}
+	if st, ok := flat["status"]; ok {
+		if v, err := strconv.Atoi(st); err == nil {
+			entry.Status = v
+		}
+		delete(flat, "status")
+	}
+
+	if len(flat) == 0 {
+		entry.Attrs = nil
+	}
+
+	return entry, true
+}
+
+func cloneSlogAttrs(attrs []slog.Attr) []slog.Attr {
 	if len(attrs) == 0 {
 		return nil
 	}
-	flat := make(map[string]string, minInt(len(attrs), maxAdminLogAttrs))
-	flattenAttrsRecursive("", attrs, flat)
-	if len(flat) == 0 {
+	out := make([]slog.Attr, len(attrs))
+	copy(out, attrs)
+	return out
+}
+
+func cloneStrings(values []string) []string {
+	if len(values) == 0 {
 		return nil
 	}
-	return flat
+	out := make([]string, len(values))
+	copy(out, values)
+	return out
+}
+
+func groupSlogAttrs(groups []string, attrs []slog.Attr) []slog.Attr {
+	if len(groups) == 0 || len(attrs) == 0 {
+		return cloneSlogAttrs(attrs)
+	}
+	grouped := cloneSlogAttrs(attrs)
+	for i := len(groups) - 1; i >= 0; i-- {
+		grouped = []slog.Attr{slog.Group(groups[i], attrsToAny(grouped)...)}
+	}
+	return grouped
+}
+
+func attrsToAny(attrs []slog.Attr) []any {
+	out := make([]any, len(attrs))
+	for i := range attrs {
+		out[i] = attrs[i]
+	}
+	return out
 }
 
 func minInt(a, b int) int {
@@ -297,9 +385,19 @@ type adminHandler struct {
 	start  time.Time
 }
 
-func setupAdminHandler(mux *http.ServeMux) *adminHandler {
+func setupAdminHandler(mux *http.ServeMux, lokiShippers ...lokiQueue) *adminHandler {
+	var lokiShipper lokiQueue
+	if len(lokiShippers) > 0 {
+		lokiShipper = lokiShippers[0]
+	}
 	token := strings.TrimSpace(os.Getenv(adminTokenEnv))
 	if token == "" {
+		if lokiShipper != nil {
+			slog.SetDefault(slog.New(&adminSlogHandler{
+				Handler:     slog.Default().Handler(),
+				lokiShipper: lokiShipper,
+			}))
+		}
 		// Register 404 handlers so /admin/* doesn't fall through to SPA fallback.
 		mux.HandleFunc("/admin/", func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Cache-Control", "no-store")
@@ -313,8 +411,9 @@ func setupAdminHandler(mux *http.ServeMux) *adminHandler {
 	buffer := newAdminRingBuffer(capacity)
 
 	handler := &adminSlogHandler{
-		Handler: slog.Default().Handler(),
-		buffer:  buffer,
+		Handler:     slog.Default().Handler(),
+		buffer:      buffer,
+		lokiShipper: lokiShipper,
 	}
 	slog.SetDefault(slog.New(handler))
 

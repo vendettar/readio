@@ -258,6 +258,18 @@ func runCloudServer(parent context.Context) error {
 		}
 	}()
 
+	lokiShipper, err := initLokiShipper()
+	if err != nil {
+		return fmt.Errorf("unable to initialize Loki log shipping: %w", err)
+	}
+	defer func() {
+		flushCtx, flushCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer flushCancel()
+		if flushErr := lokiShipper.Shutdown(flushCtx); flushErr != nil {
+			slog.Warn("loki shutdown failed", "error", flushErr)
+		}
+	}()
+
 	proxy := cloudNewProxyService()
 	asrRelay := cloudNewASRRelayService()
 	discovery := newDiscoveryService()
@@ -266,7 +278,7 @@ func runCloudServer(parent context.Context) error {
 
 	mux := newCloudMux(proxy, asrRelay, discovery)
 
-	_ = setupAdminHandler(mux)
+	_ = setupAdminHandler(mux, lokiShipper)
 
 	server := &http.Server{
 		Addr:              addr,

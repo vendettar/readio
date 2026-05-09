@@ -32,6 +32,7 @@ description: 基于 Docker 的云端 CI/CD 运维手册。
 | `PODCAST_INDEX_API_KEY` | PodcastIndex API Key |
 | `PODCAST_INDEX_API_SECRET` | PodcastIndex API Secret |
 | `READIO_GRAFANA_OTLP_TOKEN` | Grafana OTLP 上报 Token |
+| `READIO_GRAFANA_LOKI_TOKEN` | 可选 Grafana Cloud Logs Token。只有同时配置它、`READIO_GRAFANA_LOKI_URL` 和 `READIO_GRAFANA_LOKI_USER` 时，Loki 日志投递才会启用。 |
 | `READIO_ASR_RELAY_PUBLIC_TOKEN` | 浏览器 / 运行时读取的 ASR relay public token |
 | `READIO_ASR_WORKER_SHARED_SECRET` | `cloud-api` 与 Cloudflare ASR Worker 之间的共享密钥 |
 | `CLOUDFLARE_API_TOKEN` | Cloudflare Pages 部署 workflow 使用的 API Token |
@@ -46,6 +47,13 @@ description: 基于 Docker 的云端 CI/CD 运维手册。
 | `READIO_PROXY_ALLOWED_ORIGINS` | 代理允许的跨域来源 |
 | `READIO_GRAFANA_OTLP_ENDPOINT` | Grafana OTLP 上报地址 |
 | `READIO_GRAFANA_OTLP_INSTANCE_ID` | 与上报 token 配套的 Grafana OTLP instance ID |
+| `READIO_DEPLOY_ENV` | 后端部署环境，用于 host metrics 和 Loki labels；workflow 设置为 `preproduction` 或 `production` |
+| `READIO_GRAFANA_LOKI_URL` | 可选 Grafana Cloud Loki push endpoint，通常以 `/loki/api/v1/push` 结尾 |
+| `READIO_GRAFANA_LOKI_USER` | 可选 Grafana Cloud Logs user / instance ID |
+| `READIO_LOKI_LOG_LEVEL` | 可选后端 Loki 最低日志级别：`debug`、`info`、`warn` 或 `error`；默认 `info` |
+| `READIO_LOKI_BATCH_SIZE` | 可选后端 Loki batch size |
+| `READIO_LOKI_FLUSH_INTERVAL_SECONDS` | 可选后端 Loki flush interval |
+| `READIO_LOKI_QUEUE_SIZE` | 可选后端有界 Loki queue size |
 | `READIO_TRUSTED_PROXY_CIDRS` | 信任的代理 IP (用于获取真实 IP) |
 | `READIO_ASR_WORKER_BASE_URL` | Cloudflare ASR Worker 的基础 URL |
 | `READIO_EN_DICTIONARY_API_URL` | 通过 `/env.js` 暴露给浏览器的英文词典 API 地址 |
@@ -96,12 +104,16 @@ VPS 必须能够拉取 `ghcr.io/${owner}/readio-cloud-api-pre` 和 `ghcr.io/${ow
 - **可观测性**：
   - 此部署不安装 Grafana Alloy、node_exporter、本地 Prometheus 或 Loki agent。
   - 配置 `READIO_GRAFANA_OTLP_ENDPOINT`、`READIO_GRAFANA_OTLP_INSTANCE_ID` 和 `READIO_GRAFANA_OTLP_TOKEN` 后，`apps/cloud-api` 会通过 OTLP 向 Grafana Cloud 推送应用指标和应用侧采集的主机关键指标。
-  - 主机日志不会投递到 Grafana；日志界面仍是 `/admin/logs` 和 Docker logs。
+  - 同时配置 `READIO_GRAFANA_LOKI_URL`、`READIO_GRAFANA_LOKI_USER` 和 `READIO_GRAFANA_LOKI_TOKEN` 后，`apps/cloud-api` 可以直接把脱敏后的应用日志推送到 Grafana Cloud Logs/Loki。这是应用侧 push 路径，不是 Alloy、Promtail、Docker log driver 或主机日志 agent。
+  - 00B 指标与 00C 日志是两条独立 pipeline：OTLP 指标使用 OTLP endpoint/instance/token，Loki 日志使用 Loki URL/user/token。
+  - Loki `env` label 优先来自后端 `READIO_DEPLOY_ENV`，未设置时回退到 `VITE_GRAFANA_FARO_ENV`。取值会规范化为 `production`、`preproduction` 或 `unknown`。
+  - `/admin/logs` 仍是 same-origin、memory-only 的运维日志界面。启用 Loki 后，Loki 是持久化远端应用日志界面。
+  - 主机日志不会投递到 Grafana；Docker logs 仍可通过 `make logs-pre`、`make logs-prod` 或直接 Docker 操作查看。
   - 主机指标是 `apps/cloud-api` 内部采集的 best-effort 信号，不是 node_exporter 的完整替代。
   - 主机指标采集默认 `READIO_HOST_METRICS_INTERVAL_SECONDS=60`。
   - 主机指标名称包括 `readio_cloud_process_goroutines`、`readio_cloud_process_heap_alloc_bytes`、`readio_cloud_process_memory_sys_bytes`、`readio_cloud_process_uptime_seconds`、`readio_cloud_sqlite_db_size_bytes`、`readio_cloud_sqlite_wal_size_bytes`、`readio_cloud_data_filesystem_free_bytes`、`readio_cloud_data_filesystem_total_bytes` 和 `readio_cloud_transcript_assets_size_bytes`。
-  - `/admin/logs` 仍是 same-origin、memory-only 的运维日志界面。
-  - Docker logs 仍可通过 `make logs-pre`、`make logs-prod` 或直接 Docker 操作查看。
+  - Loki 投递使用有界队列，并且不会阻塞请求路径。队列满或 Loki 不可用时会本地丢弃日志，请求继续执行；服务关闭时会进行 best-effort flush。
+  - Loki labels 只允许 `service`、`env` 和 `level`；高基数字段不得进入 labels。
 
 ## 5. 运维常用命令
 

@@ -5,7 +5,7 @@ description: Guide for obtaining credentials for Readio Cloud observability.
 
 # Grafana Cloud Integration
 
-Readio Cloud uses a Zero-Agent OTLP push architecture for metrics and logs, and Grafana Faro for frontend RUM.
+Readio Cloud uses zero-agent application-side push paths for backend metrics and logs, plus Grafana Faro for frontend RUM. It does not install Grafana Alloy, Promtail, node_exporter, Docker log drivers, or system log agents.
 
 ## 1. Backend Metrics (OTLP Push)
 
@@ -20,10 +20,10 @@ The backend service pushes metrics directly to Grafana Cloud via OTLP HTTP. **No
    - **Username / Instance ID**: A numeric ID.
    - **Password / API Token**: Click "Generate now" to create a token (requires `MetricsPublisher` permission).
 
-### Required GitHub Secrets:
-- `READIO_GRAFANA_OTLP_ENDPOINT`
-- `READIO_GRAFANA_OTLP_INSTANCE_ID`
-- `READIO_GRAFANA_OTLP_TOKEN`
+### Required GitHub configuration:
+- Variable: `READIO_GRAFANA_OTLP_ENDPOINT`
+- Variable: `READIO_GRAFANA_OTLP_INSTANCE_ID`
+- Secret: `READIO_GRAFANA_OTLP_TOKEN`
 
 
 ---
@@ -45,6 +45,66 @@ The frontend monitoring reports data directly from the user's browser to the Gra
 
 ---
 
-## 3. Verifying Data
+## 3. Backend Logs (Loki Push)
+
+The backend can push sanitized application logs directly to Grafana Cloud Logs/Loki. This is separate from the OTLP metrics pipeline and is disabled unless all three required Loki values are configured.
+
+### Required GitHub configuration:
+- Variable: `READIO_GRAFANA_LOKI_URL`: Loki push endpoint, usually ending in `/loki/api/v1/push`.
+- Variable: `READIO_GRAFANA_LOKI_USER`: Grafana Cloud Logs user / instance ID.
+- Secret: `READIO_GRAFANA_LOKI_TOKEN`: Grafana Cloud Logs token.
+
+Optional backend-only values are `READIO_LOKI_LOG_LEVEL`, `READIO_LOKI_BATCH_SIZE`, `READIO_LOKI_FLUSH_INTERVAL_SECONDS`, and `READIO_LOKI_QUEUE_SIZE`.
+
+Loki labels are exactly `service`, `env`, and `level`. Request IDs, routes, upstream hosts, user input, URLs, headers, cookies, tokens, local paths, and raw errors must not be labels.
+
+## 4. Grafana Log Queries
+
+Grafana Explore queries:
+
+```logql
+{service="readio-cloud", env="preproduction"}
+```
+
+```logql
+{service="readio-cloud", env="preproduction", level="error"}
+```
+
+```logql
+{service="readio-cloud", env="production"}
+```
+
+```logql
+{service="readio-cloud", env="production", level="error"}
+```
+
+Logs panel query:
+
+```logql
+{service="readio-cloud", env="$env"} | json
+```
+
+Sustained-error alert query:
+
+```logql
+sum(count_over_time({service="readio-cloud", env="production", level="error"}[5m])) > 0
+```
+
+Tune alert thresholds after baseline production traffic and expected error volume are known.
+
+## 5. Live Acceptance Checklist
+
+Real Grafana Cloud verification requires deploy credentials and Grafana access. If those are unavailable during implementation, operators should complete this checklist before final production acceptance:
+
+1. Deploy to preproduction with Loki env configured.
+2. Generate one info log and one warning/error log through normal Cloud API traffic.
+3. In Grafana Explore, query `{service="readio-cloud", env="preproduction"}`.
+4. Query `{service="readio-cloud", env="preproduction", level="error"}`.
+5. Confirm logs arrive within the configured flush interval.
+6. Confirm sanitized log lines do not contain secrets, full Referer queries, local file paths, transcript text, or authorization headers.
+7. Confirm metrics from 00B still arrive after enabling log shipping.
+
+## 6. Verifying Data
 - **Metrics**: Search for `readio_cloud_http_request_duration_seconds` in Grafana Explore.
+- **Logs**: Use the Loki queries above in Grafana Explore.
 - **RUM**: View user session data in the Grafana Frontend dashboard.
