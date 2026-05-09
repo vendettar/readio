@@ -26,7 +26,6 @@ const (
 	otlpDefaultPushInterval  = 30 * time.Second
 )
 
-
 var (
 	cloudHTTPRequestDuration     metric.Float64Histogram
 	cloudUpstreamRequestDuration metric.Float64Histogram
@@ -134,6 +133,10 @@ func createInstruments(meter metric.Meter) error {
 		return err
 	}
 
+	if err := createHostMetricInstruments(meter); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -193,15 +196,7 @@ func recordASRRelayMetric(provider string, mode string, status int, errorClass s
 }
 
 func resolveOTLPPushInterval() time.Duration {
-	raw := strings.TrimSpace(os.Getenv(otlpPushIntervalEnv))
-	if raw == "" {
-		return otlpDefaultPushInterval
-	}
-	v, err := time.ParseDuration(raw + "s")
-	if err != nil || v <= 0 {
-		return otlpDefaultPushInterval
-	}
-	return v
+	return envDurationSecondsOrDefault(otlpPushIntervalEnv, otlpDefaultPushInterval)
 }
 
 // --- Label mappers (closed enums, preventing high-cardinality leaks) ---

@@ -783,13 +783,6 @@ func normalizePodcastIndexEpisodeType(raw *string) string {
 	}
 }
 
-func normalizeOptionalTrimmedString(raw *string) string {
-	if raw == nil {
-		return ""
-	}
-	return strings.TrimSpace(*raw)
-}
-
 func normalizeOptionalHTTPURL(raw *string) string {
 	if raw == nil {
 		return ""

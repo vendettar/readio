@@ -1,7 +1,6 @@
 package main
 
 import (
-
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -21,7 +20,7 @@ import (
 	"time"
 )
 
-
+const testProxyAllowedOrigin = "https://app.readio.test"
 
 func TestProxyRequestSummaryEmitsCanonicalUpstreamFields(t *testing.T) {
 	rb := newAdminRingBuffer(10)
@@ -175,7 +174,6 @@ func TestCloudMuxServesDynamicJSONConfig(t *testing.T) {
 	}
 }
 
-
 func TestBrowserEnvAllowlistFaroKeysArePublicOnly(t *testing.T) {
 	wantFaroKeys := []string{
 		"VITE_GRAFANA_FARO_URL",
@@ -242,8 +240,6 @@ func TestBrowserEnvAllowlistMatchesArtifact(t *testing.T) {
 		}
 	}
 }
-
-
 
 func TestResolveCloudDBPathUsesEnvOverride(t *testing.T) {
 	want := filepath.Join(t.TempDir(), "cloud.db")
@@ -391,6 +387,33 @@ func TestProxyServiceRateLimiterDisableWhenBurstZero(t *testing.T) {
 		if !proxy.limiter.allow("198.51.100.10") {
 			t.Fatalf("request %d should pass when burst=0 (disabled)", i+1)
 		}
+	}
+}
+
+func TestWriteProxyErrorUsesExplicitCode(t *testing.T) {
+	rr := httptest.NewRecorder()
+
+	writeProxyError(rr, http.StatusBadGateway, "PROXY_DIAL_FAILED", "upstream request failed", "")
+
+	assertProxyErrorPayload(t, rr.Body, "PROXY_DIAL_FAILED")
+}
+
+func TestConfigParsingLogsInvalidEnv(t *testing.T) {
+	var logs strings.Builder
+	oldLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelWarn})))
+	t.Cleanup(func() {
+		slog.SetDefault(oldLogger)
+	})
+
+	t.Setenv(proxyRateLimitBurstEnv, "not-an-int")
+	got := resolveProxyRateLimitBurst()
+
+	if got != proxyRateLimitBurst {
+		t.Fatalf("burst = %d, want %d", got, proxyRateLimitBurst)
+	}
+	if !strings.Contains(logs.String(), proxyRateLimitBurstEnv) {
+		t.Fatalf("invalid env parse was not logged: %s", logs.String())
 	}
 }
 
@@ -749,6 +772,9 @@ func TestRunCloudServerInitializesSQLiteAndShutsDownOnCancellation(t *testing.T)
 			timeout:   100 * time.Millisecond,
 			userAgent: proxyBrowserLikeUserAgent,
 			bodyLimit: proxyBodyLimit,
+			allowedOrigins: []string{
+				testProxyAllowedOrigin,
+			},
 		}
 	}
 	cloudListenAndServe = func(ctx context.Context, server *http.Server) error {
@@ -798,7 +824,6 @@ func TestRunCloudServerInitializesSQLiteAndShutsDownOnCancellation(t *testing.T)
 	if rr.Code != http.StatusNotFound {
 		t.Fatalf("unknown status = %d, want %d", rr.Code, http.StatusNotFound)
 	}
-
 
 	rr = httptest.NewRecorder()
 	req = newProxyJSONRequest(t, http.MethodGet, "https://feeds.example.com/feed.xml", nil)
@@ -1147,7 +1172,7 @@ func TestProxyDirectGetRouteForAudioFallback(t *testing.T) {
 			"If-Range":      []string{`"etag123"`},
 			"Authorization": []string{"Bearer should-not-forward"},
 		})
-		req.Header.Set("Referer", "http://"+req.Host+"/player")
+		req.Header.Set("Referer", testProxyAllowedOrigin+"/player")
 		req.RemoteAddr = "198.51.100.10:12345"
 		proxy.ServeHTTP(rr, req)
 
@@ -1266,6 +1291,27 @@ func TestProxyDirectGetRouteForAudioFallback(t *testing.T) {
 		}
 	})
 
+	t.Run("GET query request does not trust bare host for same-origin fallback", func(t *testing.T) {
+		upstreamCalled := false
+		proxy, _ := newMediaProxyTestService(t, func(_ http.ResponseWriter, _ *http.Request) {
+			upstreamCalled = true
+		}, testPublicLookupIP)
+		proxy.allowedOrigins = nil
+
+		rr := httptest.NewRecorder()
+		req := newProxyQueryRequest(t, "http://feeds.example.com/audio.mp3", nil)
+		req.RemoteAddr = "198.51.100.10:12345"
+		req.Header.Set("Referer", "http://"+req.Host+"/player")
+		proxy.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusForbidden {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusForbidden)
+		}
+		if upstreamCalled {
+			t.Fatal("upstream called for bare-host same-origin fallback")
+		}
+	})
+
 	t.Run("GET query request allows same-origin referer for audio fallback", func(t *testing.T) {
 		proxy, _ := newMediaProxyTestService(t, func(w http.ResponseWriter, r *http.Request) {
 			if got := r.Header.Get("Range"); got != "bytes=0-10" {
@@ -1280,7 +1326,7 @@ func TestProxyDirectGetRouteForAudioFallback(t *testing.T) {
 			"Range": []string{"bytes=0-10"},
 		})
 		req.RemoteAddr = "198.51.100.10:12345"
-		req.Header.Set("Referer", "http://"+req.Host+"/player")
+		req.Header.Set("Referer", testProxyAllowedOrigin+"/player")
 		proxy.ServeHTTP(rr, req)
 
 		if rr.Code != http.StatusPartialContent {
@@ -1546,6 +1592,26 @@ func TestProxyServiceMediaFallbackContract(t *testing.T) {
 			t.Fatal("expected duplicate range validation error")
 		}
 	})
+
+	t.Run("POST request rejects missing origin", func(t *testing.T) {
+		upstreamCalled := false
+		proxy, _ := newMediaProxyTestService(t, func(_ http.ResponseWriter, _ *http.Request) {
+			upstreamCalled = true
+		}, testPublicLookupIP)
+
+		rr := httptest.NewRecorder()
+		req := newProxyJSONRequest(t, http.MethodGet, "http://feeds.example.com/audio.mp3", nil)
+		req.Header.Del("Origin")
+		req.RemoteAddr = "198.51.100.10:12345"
+		proxy.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusForbidden {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusForbidden)
+		}
+		if upstreamCalled {
+			t.Fatal("upstream called for missing-origin programmable proxy request")
+		}
+	})
 }
 
 func testPublicLookupIP(_ context.Context, _ string) ([]net.IPAddr, error) {
@@ -1596,10 +1662,11 @@ func newMediaProxyTestService(
 			var d net.Dialer
 			return d.DialContext(ctx, network, backend.Listener.Addr().String())
 		},
-		limiter:   newRateLimiter(5, time.Minute, func() time.Time { return time.Unix(0, 0) }),
-		timeout:   200 * time.Millisecond,
-		userAgent: proxyBrowserLikeUserAgent,
-		bodyLimit: proxyBodyLimit,
+		limiter:        newRateLimiter(5, time.Minute, func() time.Time { return time.Unix(0, 0) }),
+		timeout:        200 * time.Millisecond,
+		userAgent:      proxyBrowserLikeUserAgent,
+		bodyLimit:      proxyBodyLimit,
+		allowedOrigins: []string{testProxyAllowedOrigin},
 	}
 
 	return proxy, &dialedAddress
@@ -1621,6 +1688,7 @@ func newProxyJSONRequest(t *testing.T, method, targetURL string, headers map[str
 
 	req := httptest.NewRequest(http.MethodPost, "/api/proxy", strings.NewReader(string(body)))
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Origin", testProxyAllowedOrigin)
 	return req
 }
 

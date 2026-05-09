@@ -1992,17 +1992,6 @@ func jsonResponse(status int, body string) *http.Response {
 	}
 }
 
-func textResponse(status int, body string, contentType string) *http.Response {
-	return &http.Response{
-		StatusCode: status,
-		Header: http.Header{
-			"Content-Type": []string{contentType},
-		},
-		Body:    io.NopCloser(strings.NewReader(body)),
-		Request: httptest.NewRequest(http.MethodGet, "https://example.com", nil),
-	}
-}
-
 func decodeResponseJSON(t *testing.T, body interface{ String() string }, dest any) {
 	t.Helper()
 	if err := json.Unmarshal([]byte(body.String()), dest); err != nil {
@@ -2015,6 +2004,24 @@ func TestDecodeDiscoveryJSONRejectsOversizedBodies(t *testing.T) {
 	err := decodeDiscoveryJSON(strings.NewReader(`{"a":"`+strings.Repeat("x", 32)+`"}`), 8, &payload)
 	if !errors.Is(err, errDiscoveryTooLarge) {
 		t.Fatalf("error = %v, want errDiscoveryTooLarge", err)
+	}
+}
+
+func TestDecodeDiscoveryJSONRejectsTrailingData(t *testing.T) {
+	var payload map[string]any
+	err := decodeDiscoveryJSON(strings.NewReader(`{"results":[]} {"extra":true}`), 1024, &payload)
+	if !errors.Is(err, errDiscoveryDecode) {
+		t.Fatalf("error = %v, want errDiscoveryDecode", err)
+	}
+}
+
+func TestNewDiscoveryServiceUsesDiscoveryAllowedOrigins(t *testing.T) {
+	t.Setenv(proxyAllowedOriginsEnv, "https://proxy.example")
+	t.Setenv(discoveryAllowedOriginsEnv, "https://discovery.example")
+
+	service := newDiscoveryService()
+	if len(service.allowedOrigins) != 1 || service.allowedOrigins[0] != "https://discovery.example" {
+		t.Fatalf("allowedOrigins = %#v, want discovery-specific origin", service.allowedOrigins)
 	}
 }
 

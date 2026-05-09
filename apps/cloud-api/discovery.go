@@ -58,6 +58,7 @@ const (
 	discoveryPodcastIndexRateLimitWindow                 = time.Minute
 	discoveryPodcastIndexRateLimitBurstEnv               = "READIO_DISCOVERY_PODCAST_INDEX_RATE_LIMIT_BURST"
 	discoveryPodcastIndexRateLimitWindowMsEnv            = "READIO_DISCOVERY_PODCAST_INDEX_RATE_LIMIT_WINDOW_MS"
+	discoveryAllowedOriginsEnv                           = "READIO_DISCOVERY_ALLOWED_ORIGINS"
 )
 
 func discoveryPodcastByItunesIDFromPath(requestPath string) (string, bool) {
@@ -321,7 +322,6 @@ type discoveryService struct {
 	userAgent           string
 	bodyLimit           int64
 	lookupIP            func(context.Context, string) ([]net.IPAddr, error)
-	dialContext         func(context.Context, string, string) (net.Conn, error)
 	searchLimiter       *rateLimiter
 	topLimiter          *rateLimiter
 	podcastIndexLimiter *rateLimiter
@@ -331,7 +331,6 @@ type discoveryService struct {
 	podcastIndexConfig  podcastIndexConfig
 	allowedOrigins      []string
 }
-
 
 type discoveryParamError struct {
 	code    string
@@ -463,81 +462,52 @@ func newDiscoveryService() *discoveryService {
 		trustedProxies:      loadTrustedProxySet(slog.Default()),
 		cache:               newDiscoveryCache(discoveryCacheMaxKeys),
 		podcastIndexConfig:  getPodcastIndexConfig(),
-		allowedOrigins:      resolveProxyAllowedOrigins(), // Re-use the same allowed origins
+		allowedOrigins:      resolveDiscoveryAllowedOrigins(),
 	}
 }
 
+func resolveDiscoveryAllowedOrigins() []string {
+	raw := strings.TrimSpace(os.Getenv(discoveryAllowedOriginsEnv))
+	if raw == "" {
+		return nil
+	}
+
+	var origins []string
+	for _, part := range strings.Split(raw, ",") {
+		candidate := strings.TrimSpace(part)
+		if candidate == "" || !strings.Contains(candidate, "://") {
+			continue
+		}
+		origins = append(origins, candidate)
+	}
+	if len(origins) == 0 {
+		return nil
+	}
+	return origins
+}
 
 func resolveDiscoverySearchRateLimitBurst() int {
-	raw := strings.TrimSpace(os.Getenv(discoverySearchRateLimitBurstEnv))
-	if raw == "" {
-		return discoverySearchRateLimitBurst
-	}
-	value, err := strconv.Atoi(raw)
-	if err != nil {
-		return discoverySearchRateLimitBurst
-	}
-	return value
+	return envIntOrDefault(discoverySearchRateLimitBurstEnv, discoverySearchRateLimitBurst, true)
 }
 
 func resolveDiscoverySearchRateLimitWindow() time.Duration {
-	raw := strings.TrimSpace(os.Getenv(discoverySearchRateLimitWindowMsEnv))
-	if raw == "" {
-		return discoverySearchRateLimitWindow
-	}
-	value, err := strconv.Atoi(raw)
-	if err != nil || value <= 0 {
-		return discoverySearchRateLimitWindow
-	}
-	return time.Duration(value) * time.Millisecond
+	return envDurationMillisOrDefault(discoverySearchRateLimitWindowMsEnv, discoverySearchRateLimitWindow)
 }
 
 func resolveDiscoveryTopRateLimitBurst() int {
-	raw := strings.TrimSpace(os.Getenv(discoveryTopRateLimitBurstEnv))
-	if raw == "" {
-		return discoveryTopRateLimitBurst
-	}
-	value, err := strconv.Atoi(raw)
-	if err != nil {
-		return discoveryTopRateLimitBurst
-	}
-	return value
+	return envIntOrDefault(discoveryTopRateLimitBurstEnv, discoveryTopRateLimitBurst, true)
 }
 
 func resolveDiscoveryTopRateLimitWindow() time.Duration {
-	raw := strings.TrimSpace(os.Getenv(discoveryTopRateLimitWindowMsEnv))
-	if raw == "" {
-		return discoveryTopRateLimitWindow
-	}
-	value, err := strconv.Atoi(raw)
-	if err != nil || value <= 0 {
-		return discoveryTopRateLimitWindow
-	}
-	return time.Duration(value) * time.Millisecond
+	return envDurationMillisOrDefault(discoveryTopRateLimitWindowMsEnv, discoveryTopRateLimitWindow)
 }
 
 func resolveDiscoveryPodcastIndexRateLimitBurst() int {
-	raw := strings.TrimSpace(os.Getenv(discoveryPodcastIndexRateLimitBurstEnv))
-	if raw == "" {
-		return discoveryPodcastIndexRateLimitBurst
-	}
-	value, err := strconv.Atoi(raw)
-	if err != nil {
-		return discoveryPodcastIndexRateLimitBurst
-	}
-	return value
+	return envIntOrDefault(discoveryPodcastIndexRateLimitBurstEnv, discoveryPodcastIndexRateLimitBurst, true)
 }
 
 func resolveDiscoveryPodcastIndexRateLimitWindow() time.Duration {
-	raw := strings.TrimSpace(os.Getenv(discoveryPodcastIndexRateLimitWindowMsEnv))
-	if raw == "" {
-		return discoveryPodcastIndexRateLimitWindow
-	}
-	value, err := strconv.Atoi(raw)
-	if err != nil || value <= 0 {
-		return discoveryPodcastIndexRateLimitWindow
-	}
-	return time.Duration(value) * time.Millisecond
+	return envDurationMillisOrDefault(discoveryPodcastIndexRateLimitWindowMsEnv, discoveryPodcastIndexRateLimitWindow)
 }
 
 func (s *discoveryService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -843,21 +813,6 @@ func parseDiscoveryLimit(values url.Values, key string, fallback, maxLimit int) 
 	return value, nil
 }
 
-func parseDiscoveryPositiveInteger(values url.Values, key string) (*int, error) {
-	raw := strings.TrimSpace(values.Get(key))
-	if raw == "" {
-		return nil, nil
-	}
-	value, err := strconv.Atoi(raw)
-	if err != nil || value <= 0 {
-		return nil, &discoveryParamError{
-			code:    "INVALID_" + strings.ToUpper(key),
-			message: fmt.Sprintf("%s must be a positive integer", key),
-		}
-	}
-	return &value, nil
-}
-
 func writeDiscoveryJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(status)
@@ -984,16 +939,6 @@ func asOptionalInt64(value any) *int64 {
 	}
 }
 
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		trimmed := strings.TrimSpace(value)
-		if trimmed != "" {
-			return trimmed
-		}
-	}
-	return ""
-}
-
 func (s *discoveryService) fetchJSON(ctx context.Context, requestURL string, dest any) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
@@ -1050,6 +995,10 @@ func decodeDiscoveryJSON(body io.Reader, limit int64, dest any) error {
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.UseNumber()
 	if err := decoder.Decode(dest); err != nil {
+		return errDiscoveryDecode
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); err != io.EOF {
 		return errDiscoveryDecode
 	}
 

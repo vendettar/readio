@@ -259,6 +259,41 @@ func TestAdminDisabledWhenTokenEmpty(t *testing.T) {
 	}
 }
 
+func TestSetupAdminHandlerProtectsRegisteredRoutes(t *testing.T) {
+	t.Setenv(adminTokenEnv, "prod-secret")
+	oldLogger := slog.Default()
+	t.Cleanup(func() {
+		slog.SetDefault(oldLogger)
+	})
+
+	mux := http.NewServeMux()
+	h := setupAdminHandler(mux)
+	if h == nil {
+		t.Fatal("expected admin handler when token is configured")
+	}
+
+	t.Run("registered route rejects missing auth", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/admin/health", nil)
+		rr := httptest.NewRecorder()
+		mux.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusUnauthorized {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusUnauthorized)
+		}
+	})
+
+	t.Run("registered route allows valid auth", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/admin/health", nil)
+		req.Header.Set("Authorization", "Bearer prod-secret")
+		rr := httptest.NewRecorder()
+		mux.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusOK {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
+		}
+	})
+}
+
 func TestSensitiveKeyRedaction(t *testing.T) {
 	tests := []struct {
 		key       string

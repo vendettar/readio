@@ -4,7 +4,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
@@ -39,6 +38,7 @@ const asrRelayBodyLimit = 20 << 20
 const asrRelayRequestTimeout = 60 * time.Second
 const asrRelayRateLimitWindow = time.Minute
 const asrRelayRateLimitBurst = 60
+const asrRelayStatusBodyReadLimit = 4096
 
 type asrRelayProviderConfig struct {
 	id             string
@@ -54,7 +54,8 @@ type asrRelayRequestPayload struct {
 	Provider      string
 	Model         string
 	APIKey        string
-	AudioBytes    []byte
+	AudioReader   io.ReadCloser
+	AudioSize     int64
 	AudioMimeType string
 }
 
@@ -420,10 +421,10 @@ func (s *asrRelayService) logOriginAuthorizationFailure(r *http.Request, code st
 		"code", code,
 		"remote_addr", r.RemoteAddr,
 		"host", r.Host,
-		"origin", strings.TrimSpace(r.Header.Get("Origin")),
-		"referer", strings.TrimSpace(r.Header.Get("Referer")),
+		"origin", sanitizedURLForLog(r.Header.Get("Origin")),
+		"referer", sanitizedURLForLog(r.Header.Get("Referer")),
 		"x_forwarded_proto", strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")),
-		"x_forwarded_for", strings.TrimSpace(r.Header.Get("X-Forwarded-For")),
+		"x_forwarded_for_present", strings.TrimSpace(r.Header.Get("X-Forwarded-For")) != "",
 		"x_real_ip", strings.TrimSpace(r.Header.Get("X-Real-IP")),
 		"trusted_proxy_match", trustedProxyMatch,
 		"loopback_peer", loopbackPeer,
@@ -433,6 +434,18 @@ func (s *asrRelayService) logOriginAuthorizationFailure(r *http.Request, code st
 		"request_context_ok", requestContextOK,
 		"remote_addr_split_ok", splitOK,
 	)
+}
+
+func sanitizedURLForLog(raw string) string {
+	value := strings.TrimSpace(raw)
+	if value == "" {
+		return ""
+	}
+	parsed, err := url.Parse(value)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return "invalid"
+	}
+	return parsed.Scheme + "://" + parsed.Host
 }
 
 // normalizeHostPort returns (hostname, effectivePort) from a host:port string.
@@ -489,7 +502,6 @@ func (s *asrRelayService) isAllowedOrigin(r *http.Request) bool {
 	return isSameOrigin(parsed.Scheme, parsed.Host, requestScheme, requestHost)
 }
 
-
 func resolveASRRelayAllowedOrigins() []string {
 	raw := strings.TrimSpace(os.Getenv(asrRelayAllowedOriginsEnv))
 	if raw == "" {
@@ -514,29 +526,12 @@ func resolveASRRelayAllowedOrigins() []string {
 	return origins
 }
 
-
 func resolveASRRelayRateLimitBurst() int {
-	raw := strings.TrimSpace(os.Getenv(asrRelayRateLimitBurstEnv))
-	if raw == "" {
-		return asrRelayRateLimitBurst
-	}
-	value, err := strconv.Atoi(raw)
-	if err != nil {
-		return asrRelayRateLimitBurst
-	}
-	return value
+	return envIntOrDefault(asrRelayRateLimitBurstEnv, asrRelayRateLimitBurst, true)
 }
 
 func resolveASRRelayRateLimitWindow() time.Duration {
-	raw := strings.TrimSpace(os.Getenv(asrRelayRateLimitWindowMsEnv))
-	if raw == "" {
-		return asrRelayRateLimitWindow
-	}
-	value, err := strconv.Atoi(raw)
-	if err != nil || value <= 0 {
-		return asrRelayRateLimitWindow
-	}
-	return time.Duration(value) * time.Millisecond
+	return envDurationMillisOrDefault(asrRelayRateLimitWindowMsEnv, asrRelayRateLimitWindow)
 }
 
 func (s *asrRelayService) decodeMultipartRelayPayload(
@@ -552,8 +547,10 @@ func (s *asrRelayService) decodeMultipartRelayPayload(
 		}
 	}
 
+	// Limit memory usage for multipart parsing to 2MB. Larger files go to disk.
+	const memoryLimit = 2 << 20
 	r.Body = http.MaxBytesReader(w, r.Body, s.bodyLimit)
-	if err := r.ParseMultipartForm(s.bodyLimit); err != nil {
+	if err := r.ParseMultipartForm(memoryLimit); err != nil {
 		var maxBytesErr *http.MaxBytesError
 		if errors.As(err, &maxBytesErr) {
 			return nil, &asrRelayErrorPayload{
@@ -568,34 +565,57 @@ func (s *asrRelayService) decodeMultipartRelayPayload(
 			Message: "invalid relay request payload",
 		}
 	}
-	defer func() {
+
+	file, header, err := r.FormFile("audio")
+	if err != nil {
 		if r.MultipartForm != nil {
 			_ = r.MultipartForm.RemoveAll()
 		}
-	}()
-
-	file, _, err := r.FormFile("audio")
-	if err != nil {
 		return nil, &asrRelayErrorPayload{
 			Status:  http.StatusBadRequest,
 			Code:    "ASR_INVALID_PAYLOAD",
 			Message: "missing audio payload",
 		}
 	}
-	defer func() { _ = file.Close() }()
-
-	audioBytes, err := io.ReadAll(file)
-	if err != nil || len(audioBytes) == 0 {
+	if header.Size <= 0 {
+		_ = file.Close()
+		if r.MultipartForm != nil {
+			_ = r.MultipartForm.RemoveAll()
+		}
 		return nil, ErrASRInvalidAudio
+	}
+
+	// Wrap file and form in a custom ReadCloser to ensure cleanup
+	reader := &asrMultipartReadCloser{
+		File: file,
+		form: r.MultipartForm,
 	}
 
 	return &asrRelayRequestPayload{
 		Provider:      r.FormValue("provider"),
 		Model:         r.FormValue("model"),
 		APIKey:        r.FormValue("apiKey"),
-		AudioBytes:    audioBytes,
+		AudioReader:   reader,
+		AudioSize:     header.Size,
 		AudioMimeType: r.FormValue("audioMimeType"),
 	}, nil
+}
+
+type asrMultipartReadCloser struct {
+	multipart.File
+	form *multipart.Form
+}
+
+func (m *asrMultipartReadCloser) Close() error {
+	fileErr := m.File.Close()
+	var formErr error
+	if m.form != nil {
+		formErr = m.form.RemoveAll()
+	}
+	if fileErr != nil {
+		return fileErr
+	}
+	return formErr
 }
 
 func decodeStrictJSON[T any](body []byte, out *T) error {
@@ -612,6 +632,11 @@ func decodeStrictJSON[T any](body []byte, out *T) error {
 }
 
 func (s *asrRelayService) transcribe(ctx context.Context, payload asrRelayRequestPayload) (*asrRelayResponsePayload, *asrRelayErrorPayload) {
+	if payload.AudioReader == nil {
+		return nil, ErrASRInvalidAudio
+	}
+	defer func() { _ = payload.AudioReader.Close() }()
+
 	provider, ok := s.providers[strings.ToLower(strings.TrimSpace(payload.Provider))]
 	if !ok {
 		return nil, ErrASRUnsupportedProvider
@@ -630,11 +655,6 @@ func (s *asrRelayService) transcribe(ctx context.Context, payload asrRelayReques
 		return nil, ErrASRMissingAPIKey
 	}
 
-	audioBytes := payload.AudioBytes
-	if len(audioBytes) == 0 {
-		return nil, ErrASRInvalidAudio
-	}
-
 	audioMimeType := strings.TrimSpace(payload.AudioMimeType)
 	if audioMimeType == "" {
 		audioMimeType = "audio/mpeg"
@@ -646,7 +666,7 @@ func (s *asrRelayService) transcribe(ctx context.Context, payload asrRelayReques
 	}
 
 	logger := slog.Default()
-	logger.Info("asr relay request", "provider", provider.id, "model", model, "audioBytes", len(audioBytes), "transport", transportMode)
+	logger.Info("asr relay request", "provider", provider.id, "model", model, "audioSize", payload.AudioSize, "transport", transportMode)
 
 	client := s.client
 	if client == nil {
@@ -664,7 +684,7 @@ func (s *asrRelayService) transcribe(ctx context.Context, payload asrRelayReques
 	// Worker transport: only Groq transcription submit.
 	if transportMode == "worker" {
 		start := time.Now()
-		result, relayErr, hopError := s.transcribeViaWorker(reqCtx, client, provider, model, apiKey, audioBytes, audioMimeType)
+		result, relayErr, hopError := s.transcribeViaWorker(reqCtx, client, provider, model, apiKey, payload.AudioReader, audioMimeType)
 		duration := time.Since(start)
 		if relayErr != nil {
 			if hopError {
@@ -673,10 +693,16 @@ func (s *asrRelayService) transcribe(ctx context.Context, payload asrRelayReques
 				logger.Warn("asr worker hop failed, falling back to direct",
 					"provider", provider.id, "duration_ms", duration.Milliseconds(),
 					"status", relayErr.Status, "code", relayErr.Code)
+
+				// Reset reader for retry if it supports seeking
+				if seeker, ok := payload.AudioReader.(io.Seeker); ok {
+					if _, err := seeker.Seek(0, io.SeekStart); err != nil {
+						logger.Error("failed to seek audio reader for retry", "error", err)
+						return nil, relayErr
+					}
+				}
 			} else {
 				// Groq upstream error transparently forwarded by Worker.
-				// Do NOT retry via direct — same Groq error would recur,
-				// wasting rate-limit budget and duplicating paid upstream work.
 				logger.Warn("asr worker transport returned upstream error",
 					"provider", provider.id, "duration_ms", duration.Milliseconds(),
 					"status", relayErr.Status, "code", relayErr.Code)
@@ -692,7 +718,7 @@ func (s *asrRelayService) transcribe(ctx context.Context, payload asrRelayReques
 	switch provider.transport {
 	case "openai-compatible":
 		start := time.Now()
-		result, relayErr := s.transcribeOpenAICompatible(reqCtx, client, provider, model, apiKey, audioBytes, audioMimeType)
+		result, relayErr := s.transcribeOpenAICompatible(reqCtx, client, provider, model, apiKey, payload.AudioReader, audioMimeType)
 		duration := time.Since(start)
 		if relayErr != nil {
 			logger.Warn("asr direct transport failed",
@@ -704,11 +730,11 @@ func (s *asrRelayService) transcribe(ctx context.Context, payload asrRelayReques
 		}
 		return result, relayErr
 	case "qwen-chat-completions":
-		return s.transcribeQwen(reqCtx, client, provider, model, apiKey, audioBytes, audioMimeType)
+		return s.transcribeQwen(reqCtx, client, provider, model, apiKey, payload.AudioReader, audioMimeType)
 	case "deepgram-native":
-		return s.transcribeDeepgram(reqCtx, client, provider, model, apiKey, audioBytes, audioMimeType)
+		return s.transcribeDeepgram(reqCtx, client, provider, model, apiKey, payload.AudioReader, audioMimeType)
 	case "volcengine-asr":
-		return s.transcribeVolcengine(reqCtx, client, provider, model, apiKey, audioBytes, audioMimeType)
+		return s.transcribeVolcengine(reqCtx, client, provider, model, apiKey, payload.AudioReader, audioMimeType)
 	default:
 		return nil, ErrASRUnsupportedTransport
 	}
@@ -735,32 +761,38 @@ func (s *asrRelayService) transcribeViaWorker(
 	provider asrRelayProviderConfig,
 	model string,
 	apiKey string,
-	audioBytes []byte,
+	audioReader io.Reader,
 	audioMimeType string,
 ) (*asrRelayResponsePayload, *asrRelayErrorPayload, bool) {
-	// Build the same multipart body that transcribeOpenAICompatible builds.
-	var body bytes.Buffer
-	writer := multipart.NewWriter(&body)
-	fileName := relayAudioUploadFileName(audioMimeType)
-	part, err := writer.CreateFormFile("file", fileName)
-	if err != nil {
-		return nil, asrRelayInternalError("failed to build worker transcription request"), true
-	}
-	if _, err := part.Write(audioBytes); err != nil {
-		return nil, asrRelayInternalError("failed to build worker transcription request"), true
-	}
-	_ = writer.WriteField("model", model)
-	_ = writer.WriteField("response_format", provider.responseFormat)
-	_ = writer.WriteField("temperature", "0")
-	_ = writer.WriteField("timestamp_granularities[]", "segment")
-	_ = writer.WriteField("timestamp_granularities[]", "word")
-	if err := writer.Close(); err != nil {
-		return nil, asrRelayInternalError("failed to build worker transcription request"), true
-	}
+	pr, pw := io.Pipe()
+	writer := multipart.NewWriter(pw)
+
+	go func() {
+		var err error
+		defer func() {
+			_ = writer.Close()
+			_ = pw.CloseWithError(err)
+		}()
+
+		// Build the same multipart body that transcribeOpenAICompatible builds.
+		fileName := relayAudioUploadFileName(audioMimeType)
+		part, err := writer.CreateFormFile("file", fileName)
+		if err != nil {
+			return
+		}
+		if _, err = io.Copy(part, audioReader); err != nil {
+			return
+		}
+		_ = writer.WriteField("model", model)
+		_ = writer.WriteField("response_format", provider.responseFormat)
+		_ = writer.WriteField("temperature", "0")
+		_ = writer.WriteField("timestamp_granularities[]", "segment")
+		_ = writer.WriteField("timestamp_granularities[]", "word")
+	}()
 
 	workerURL := strings.TrimRight(s.workerBaseURL, "/") + asrWorkerGroqRoute
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, workerURL, &body)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, workerURL, pr)
 	if err != nil {
 		return nil, asrRelayInternalError("failed to create worker request"), true
 	}
@@ -869,29 +901,35 @@ func (s *asrRelayService) transcribeOpenAICompatible(
 	provider asrRelayProviderConfig,
 	model string,
 	apiKey string,
-	audioBytes []byte,
+	audioReader io.Reader,
 	audioMimeType string,
 ) (*asrRelayResponsePayload, *asrRelayErrorPayload) {
-	var body bytes.Buffer
-	writer := multipart.NewWriter(&body)
-	fileName := relayAudioUploadFileName(audioMimeType)
-	part, err := writer.CreateFormFile("file", fileName)
-	if err != nil {
-		return nil, asrRelayInternalError("failed to build transcription request")
-	}
-	if _, err := part.Write(audioBytes); err != nil {
-		return nil, asrRelayInternalError("failed to build transcription request")
-	}
-	_ = writer.WriteField("model", model)
-	_ = writer.WriteField("response_format", provider.responseFormat)
-	_ = writer.WriteField("temperature", "0")
-	_ = writer.WriteField("timestamp_granularities[]", "segment")
-	_ = writer.WriteField("timestamp_granularities[]", "word")
-	if err := writer.Close(); err != nil {
-		return nil, asrRelayInternalError("failed to build transcription request")
-	}
+	pr, pw := io.Pipe()
+	writer := multipart.NewWriter(pw)
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, provider.transcribeURL, &body)
+	go func() {
+		var err error
+		defer func() {
+			_ = writer.Close()
+			_ = pw.CloseWithError(err)
+		}()
+
+		fileName := relayAudioUploadFileName(audioMimeType)
+		part, err := writer.CreateFormFile("file", fileName)
+		if err != nil {
+			return
+		}
+		if _, err = io.Copy(part, audioReader); err != nil {
+			return
+		}
+		_ = writer.WriteField("model", model)
+		_ = writer.WriteField("response_format", provider.responseFormat)
+		_ = writer.WriteField("temperature", "0")
+		_ = writer.WriteField("timestamp_granularities[]", "segment")
+		_ = writer.WriteField("timestamp_granularities[]", "word")
+	}()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, provider.transcribeURL, pr)
 	if err != nil {
 		return nil, asrRelayInternalError("failed to create upstream request")
 	}
@@ -913,9 +951,14 @@ func (s *asrRelayService) transcribeQwen(
 	provider asrRelayProviderConfig,
 	model string,
 	apiKey string,
-	audioBytes []byte,
+	audioReader io.Reader,
 	audioMimeType string,
 ) (*asrRelayResponsePayload, *asrRelayErrorPayload) {
+	audioBytes, err := io.ReadAll(audioReader)
+	if err != nil {
+		return nil, ErrASRInvalidAudio
+	}
+
 	dataURI := "data:" + audioMimeType + ";base64," + base64.StdEncoding.EncodeToString(audioBytes)
 	body := map[string]any{
 		"model": model,
@@ -959,7 +1002,7 @@ func (s *asrRelayService) transcribeDeepgram(
 	provider asrRelayProviderConfig,
 	model string,
 	apiKey string,
-	audioBytes []byte,
+	audioReader io.Reader,
 	audioMimeType string,
 ) (*asrRelayResponsePayload, *asrRelayErrorPayload) {
 	u, err := url.Parse(provider.transcribeURL)
@@ -974,7 +1017,7 @@ func (s *asrRelayService) transcribeDeepgram(
 	q.Set("diarize", "false")
 	u.RawQuery = q.Encode()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), bytes.NewReader(audioBytes))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), audioReader)
 	if err != nil {
 		return nil, asrRelayInternalError("failed to create upstream request")
 	}
@@ -996,9 +1039,14 @@ func (s *asrRelayService) transcribeVolcengine(
 	provider asrRelayProviderConfig,
 	model string,
 	apiKey string,
-	audioBytes []byte,
+	audioReader io.Reader,
 	_ string,
 ) (*asrRelayResponsePayload, *asrRelayErrorPayload) {
+	audioBytes, err := io.ReadAll(audioReader)
+	if err != nil {
+		return nil, ErrASRInvalidAudio
+	}
+
 	appID, accessToken, err := parseVolcengineRelayCredentials(apiKey)
 	if err != nil {
 		return nil, &asrRelayErrorPayload{Status: http.StatusUnauthorized, Code: "ASR_UNAUTHORIZED", Message: err.Error()}
@@ -1017,7 +1065,7 @@ func (s *asrRelayService) transcribeVolcengine(
 	req.Header.Set("X-Api-App-Key", appID)
 	req.Header.Set("X-Api-Access-Key", accessToken)
 	req.Header.Set("X-Api-Resource-Id", "volc.bigasr.auc_turbo")
-	req.Header.Set("X-Api-Request-Id", newRelayRequestID())
+	req.Header.Set("X-Api-Request-Id", generateRequestID())
 	req.Header.Set("X-Api-Sequence", "-1")
 	req.Header.Set("Content-Type", "application/json")
 
@@ -1117,7 +1165,7 @@ func (s *asrRelayService) verifyVolcengine(
 	req.Header.Set("X-Api-App-Key", appID)
 	req.Header.Set("X-Api-Access-Key", accessToken)
 	req.Header.Set("X-Api-Resource-Id", "volc.bigasr.auc_turbo")
-	req.Header.Set("X-Api-Request-Id", newRelayRequestID())
+	req.Header.Set("X-Api-Request-Id", generateRequestID())
 	req.Header.Set("X-Api-Sequence", "-1")
 
 	resp, err := client.Do(req)
@@ -1463,15 +1511,14 @@ func asrRelayStatusToError(resp *http.Response) *asrRelayErrorPayload {
 		}
 	}
 
-	errMsg := base.Message
-	if body, err := io.ReadAll(resp.Body); err == nil && len(body) > 0 {
-		errMsg = fmt.Sprintf("%s (HTTP %d): %s", base.Message, resp.StatusCode, string(body))
+	if resp.Body != nil {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, asrRelayStatusBodyReadLimit))
 	}
 
 	payload := &asrRelayErrorPayload{
 		Status:  base.Status,
 		Code:    base.Code,
-		Message: errMsg,
+		Message: base.Message,
 	}
 
 	if retryAfterMs != nil && *retryAfterMs > 0 {
@@ -1531,14 +1578,6 @@ func parseVolcengineRelayCredentials(apiKey string) (string, string, error) {
 		return "", "", fmt.Errorf("volcengine API key must be in the format %q", "appId:accessToken")
 	}
 	return appID, accessToken, nil
-}
-
-func newRelayRequestID() string {
-	var buf [8]byte
-	if _, err := rand.Read(buf[:]); err == nil {
-		return fmt.Sprintf("relay-%x", buf[:])
-	}
-	return fmt.Sprintf("relay-%d", time.Now().UnixNano())
 }
 
 func jsonRequest(ctx context.Context, method, target string, body any) (*http.Request, error) {

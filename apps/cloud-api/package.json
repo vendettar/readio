@@ -3,7 +3,8 @@
   "private": true,
   "scripts": {
     "dev": "go run .",
-    "build": "go build -o /tmp/readio-cloud .",
-    "lint": "golangci-lint run"
+    "build": "GOCACHE=/tmp/readio-go-cache go build -o /tmp/readio-cloud .",
+    "lint": "GOCACHE=/tmp/readio-go-cache GOLANGCI_LINT_CACHE=/tmp/readio-golangci-lint-cache golangci-lint run",
+    "vet": "GOCACHE=/tmp/readio-go-cache go vet ./..."
   }
 }

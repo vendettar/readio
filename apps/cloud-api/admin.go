@@ -4,10 +4,12 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
+	"io"
 	"log/slog"
 	"math"
 	"net/http"
 	"os"
+	"reflect"
 	"runtime"
 	"runtime/debug"
 	"sort"
@@ -196,7 +198,7 @@ func (h *adminSlogHandler) Handle(ctx context.Context, r slog.Record) error {
 		entry.Route = route
 		delete(flat, "route")
 		if strings.HasPrefix(route, "/admin/") {
-			return h.Handler.Handle(ctx, r)
+			return h.delegate().Handle(ctx, r)
 		}
 	}
 	if ec, ok := flat["error_class"]; ok {
@@ -229,7 +231,31 @@ func (h *adminSlogHandler) Handle(ctx context.Context, r slog.Record) error {
 	}
 
 	h.buffer.push(entry)
-	return h.Handler.Handle(ctx, r)
+	return h.delegate().Handle(ctx, r)
+}
+
+func (h *adminSlogHandler) delegate() slog.Handler {
+	handler := h.Handler
+	for {
+		nested, ok := handler.(*adminSlogHandler)
+		if !ok {
+			if isSlogDefaultBridgeHandler(handler) {
+				return slog.NewTextHandler(io.Discard, nil)
+			}
+			return handler
+		}
+		if nested == h || nested.Handler == nil {
+			return slog.NewTextHandler(io.Discard, nil)
+		}
+		handler = nested.Handler
+	}
+}
+
+func isSlogDefaultBridgeHandler(handler slog.Handler) bool {
+	if handler == nil {
+		return false
+	}
+	return strings.Contains(reflect.TypeOf(handler).String(), "defaultHandler")
 }
 
 func flattenRecordAttrs(r slog.Record) map[string]string {
@@ -257,12 +283,9 @@ func minInt(a, b int) int {
 }
 
 func resolveAdminLogBuffer() int {
-	raw := strings.TrimSpace(os.Getenv(adminLogBufferEnv))
-	if raw == "" {
-		return defaultAdminLogBuffer
-	}
-	v, err := strconv.Atoi(raw)
-	if err != nil || v < minAdminLogBuffer || v > maxAdminLogBuffer {
+	v := envIntOrDefault(adminLogBufferEnv, defaultAdminLogBuffer, false)
+	if v < minAdminLogBuffer || v > maxAdminLogBuffer {
+		slog.Warn("admin log buffer outside allowed range; using default", "env", adminLogBufferEnv)
 		return defaultAdminLogBuffer
 	}
 	return v
@@ -301,10 +324,10 @@ func setupAdminHandler(mux *http.ServeMux) *adminHandler {
 		start:  time.Now(),
 	}
 
-	mux.HandleFunc("/admin/logs", h.handleAdminLogs)
-	mux.HandleFunc("/admin/logs/clear", h.handleAdminLogsClear)
-	mux.HandleFunc("/admin/health", h.handleAdminHealth)
-	mux.HandleFunc("/admin/metrics/summary", h.handleAdminMetricsSummary)
+	mux.HandleFunc("/admin/logs", h.authMiddleware(h.handleAdminLogs))
+	mux.HandleFunc("/admin/logs/clear", h.authMiddleware(h.handleAdminLogsClear))
+	mux.HandleFunc("/admin/health", h.authMiddleware(h.handleAdminHealth))
+	mux.HandleFunc("/admin/metrics/summary", h.authMiddleware(h.handleAdminMetricsSummary))
 
 	return h
 }
@@ -316,12 +339,12 @@ func (h *adminHandler) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 
 		auth := r.Header.Get("Authorization")
 		if !strings.HasPrefix(auth, "Bearer ") {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			writeAdminError(w, http.StatusUnauthorized, "ADMIN_UNAUTHORIZED", "unauthorized")
 			return
 		}
 		token := strings.TrimPrefix(auth, "Bearer ")
 		if subtle.ConstantTimeCompare([]byte(token), []byte(h.token)) != 1 {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			writeAdminError(w, http.StatusUnauthorized, "ADMIN_UNAUTHORIZED", "unauthorized")
 			return
 		}
 		next(w, r)
@@ -379,7 +402,7 @@ func (h *adminHandler) handleAdminLogs(w http.ResponseWriter, r *http.Request) {
 
 func (h *adminHandler) handleAdminLogsClear(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost && r.Method != http.MethodDelete {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		writeAdminError(w, http.StatusMethodNotAllowed, "ADMIN_METHOD_NOT_ALLOWED", "method not allowed")
 		return
 	}
 	h.buffer.clear()
@@ -404,6 +427,16 @@ func (h *adminHandler) handleAdminHealth(w http.ResponseWriter, _ *http.Request)
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func writeAdminError(w http.ResponseWriter, status int, code string, message string) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"code":    code,
+		"message": message,
+		"status":  status,
+	})
 }
 
 func (h *adminHandler) handleAdminMetricsSummary(w http.ResponseWriter, _ *http.Request) {

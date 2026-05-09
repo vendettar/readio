@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"mime/multipart"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -72,6 +73,38 @@ func TestASRRelayRouteOwnershipAndContracts(t *testing.T) {
 
 		if rr.Code != http.StatusRequestEntityTooLarge {
 			t.Fatalf("status = %d, want %d", rr.Code, http.StatusRequestEntityTooLarge)
+		}
+	})
+
+	t.Run("rejects empty audio before contacting upstream", func(t *testing.T) {
+		backendCalls := 0
+		backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			backendCalls++
+			w.WriteHeader(http.StatusInternalServerError)
+		}))
+		t.Cleanup(backend.Close)
+
+		relay := newASRRelayService()
+		provider := relay.providers["groq"]
+		provider.transcribeURL = backend.URL + "/openai/v1/audio/transcriptions"
+		relay.providers["groq"] = provider
+
+		rr := httptest.NewRecorder()
+		req := newMultipartASRRelayRequest(t, multipartASRRelayRequestPayload{
+			Provider:      "groq",
+			Model:         "whisper-large-v3",
+			APIKey:        "groq-key",
+			AudioBytes:    []byte{},
+			AudioMimeType: "audio/mpeg",
+		})
+		relay.ServeHTTP(rr, req)
+
+		if rr.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, want %d", rr.Code, http.StatusBadRequest)
+		}
+		expectRelayErrorCode(t, rr.Body.Bytes(), "ASR_INVALID_PAYLOAD")
+		if backendCalls != 0 {
+			t.Fatalf("backend calls = %d, want 0", backendCalls)
 		}
 	})
 
@@ -374,7 +407,6 @@ func TestASRRelayRouteOwnershipAndContracts(t *testing.T) {
 			"https://www.readio.top",
 		}
 
-
 		rr := httptest.NewRecorder()
 		req := newMultipartASRRelayRequest(t, multipartASRRelayRequestPayload{
 			Provider:      "groq",
@@ -397,7 +429,6 @@ func TestASRRelayRouteOwnershipAndContracts(t *testing.T) {
 		relay.allowedOrigins = []string{
 			"https://www.readio.top",
 		}
-
 
 		rr := httptest.NewRecorder()
 		req := newMultipartASRRelayRequest(t, multipartASRRelayRequestPayload{
@@ -1144,8 +1175,10 @@ func newMultipartASRRelayRequest(t *testing.T, payload multipartASRRelayRequestP
 
 	req := httptest.NewRequest(http.MethodPost, asrRelayRoute, bytes.NewReader(body.Bytes()))
 	req.Header.Set("Content-Type", writer.FormDataContentType())
-	req.RemoteAddr = "198.51.100.10:12345"
 	req.Header.Set("Origin", "http://example.com")
+	req.Header.Set("X-Forwarded-Proto", "http")
+	req.Header.Set("X-Forwarded-Host", "example.com")
+	req.RemoteAddr = "127.0.0.1:12345"
 	return req
 }
 
@@ -1159,8 +1192,10 @@ func newASRVerifyRequest(t *testing.T, payload asrVerifyRequestPayload) *http.Re
 
 	req := httptest.NewRequest(http.MethodPost, asrVerifyRoute, bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	req.RemoteAddr = "198.51.100.10:12345"
 	req.Header.Set("Origin", "http://example.com")
+	req.Header.Set("X-Forwarded-Proto", "http")
+	req.Header.Set("X-Forwarded-Host", "example.com")
+	req.RemoteAddr = "127.0.0.1:12345"
 	return req
 }
 
@@ -1270,11 +1305,16 @@ func TestIsSameOrigin(t *testing.T) {
 }
 
 func TestASRRelaySameOriginFallback(t *testing.T) {
-	t.Run("origin with default https port matches request host with :443", func(t *testing.T) {
-		relay := newASRRelayService()
-		relay.allowedOrigins = nil // same-origin fallback
+	trustedLoopback := trustedProxySet{
+		nets: []*net.IPNet{mustParseCIDRForASRTest(t, "127.0.0.1/32")},
+	}
 
-		rr := httptest.NewRecorder()
+	t.Run("origin with trusted forwarded https host matches", func(t *testing.T) {
+		relay := &asrRelayService{
+			allowedOrigins: nil,
+			trustedProxies: trustedLoopback,
+		}
+
 		req := newMultipartASRRelayRequest(t, multipartASRRelayRequestPayload{
 			Provider:      "groq",
 			Model:         "whisper-large-v3",
@@ -1283,20 +1323,21 @@ func TestASRRelaySameOriginFallback(t *testing.T) {
 			AudioMimeType: "audio/mpeg",
 		})
 		req.Header.Set("Origin", "https://www.readio.top")
-		req.Host = "www.readio.top:443"
-		req.TLS = &tls.ConnectionState{} // signal https scheme for request
-		relay.ServeHTTP(rr, req)
+		req.RemoteAddr = "127.0.0.1:9999"
+		req.Header.Set("X-Forwarded-Proto", "https")
+		req.Header.Set("X-Forwarded-Host", "www.readio.top")
 
-		if rr.Code == http.StatusForbidden {
-			t.Fatalf("expected non-forbidden status, got %d", rr.Code)
+		if !relay.isAllowedOrigin(req) {
+			t.Fatal("expected origin to be allowed")
 		}
 	})
 
-	t.Run("http origin matches localhost with explicit :80", func(t *testing.T) {
-		relay := newASRRelayService()
-		relay.allowedOrigins = nil
+	t.Run("http origin matches trusted forwarded localhost with explicit :80", func(t *testing.T) {
+		relay := &asrRelayService{
+			allowedOrigins: nil,
+			trustedProxies: trustedLoopback,
+		}
 
-		rr := httptest.NewRecorder()
 		req := newMultipartASRRelayRequest(t, multipartASRRelayRequestPayload{
 			Provider:      "groq",
 			Model:         "whisper-large-v3",
@@ -1305,19 +1346,21 @@ func TestASRRelaySameOriginFallback(t *testing.T) {
 			AudioMimeType: "audio/mpeg",
 		})
 		req.Header.Set("Origin", "http://localhost")
-		req.Host = "localhost:80"
-		relay.ServeHTTP(rr, req)
+		req.RemoteAddr = "127.0.0.1:9999"
+		req.Header.Set("X-Forwarded-Proto", "http")
+		req.Header.Set("X-Forwarded-Host", "localhost:80")
 
-		if rr.Code == http.StatusForbidden {
-			t.Fatalf("expected non-forbidden status, got %d", rr.Code)
+		if !relay.isAllowedOrigin(req) {
+			t.Fatal("expected origin to be allowed")
 		}
 	})
 
-	t.Run("explicit non-default port matches exactly", func(t *testing.T) {
-		relay := newASRRelayService()
-		relay.allowedOrigins = nil
+	t.Run("explicit non-default trusted forwarded port matches exactly", func(t *testing.T) {
+		relay := &asrRelayService{
+			allowedOrigins: nil,
+			trustedProxies: trustedLoopback,
+		}
 
-		rr := httptest.NewRecorder()
 		req := newMultipartASRRelayRequest(t, multipartASRRelayRequestPayload{
 			Provider:      "groq",
 			Model:         "whisper-large-v3",
@@ -1326,20 +1369,37 @@ func TestASRRelaySameOriginFallback(t *testing.T) {
 			AudioMimeType: "audio/mpeg",
 		})
 		req.Header.Set("Origin", "https://example.com:8443")
-		req.Host = "example.com:8443"
-		req.TLS = &tls.ConnectionState{} // signal https scheme for request
-		relay.ServeHTTP(rr, req)
+		req.RemoteAddr = "127.0.0.1:9999"
+		req.Header.Set("X-Forwarded-Proto", "https")
+		req.Header.Set("X-Forwarded-Host", "example.com:8443")
 
-		if rr.Code == http.StatusForbidden {
-			t.Fatalf("expected non-forbidden status, got %d", rr.Code)
+		if !relay.isAllowedOrigin(req) {
+			t.Fatal("expected origin to be allowed")
+		}
+	})
+
+	t.Run("bare request host is no longer trusted for same-origin fallback", func(t *testing.T) {
+		relay := &asrRelayService{allowedOrigins: nil}
+
+		req := newMultipartASRRelayRequest(t, multipartASRRelayRequestPayload{
+			Provider:      "groq",
+			Model:         "whisper-large-v3",
+			APIKey:        "groq-key",
+			AudioBytes:    []byte("test-audio"),
+			AudioMimeType: "audio/mpeg",
+		})
+		req.Header.Set("Origin", "https://www.readio.top")
+		req.Host = "www.readio.top"
+		req.TLS = &tls.ConnectionState{}
+
+		if relay.isAllowedOrigin(req) {
+			t.Fatal("expected bare request host to be rejected")
 		}
 	})
 
 	t.Run("different host still rejects", func(t *testing.T) {
-		relay := newASRRelayService()
-		relay.allowedOrigins = nil
+		relay := &asrRelayService{allowedOrigins: nil}
 
-		rr := httptest.NewRecorder()
 		req := newMultipartASRRelayRequest(t, multipartASRRelayRequestPayload{
 			Provider:      "groq",
 			Model:         "whisper-large-v3",
@@ -1350,19 +1410,15 @@ func TestASRRelaySameOriginFallback(t *testing.T) {
 		req.Header.Set("Origin", "https://evil.com")
 		req.Host = "www.readio.top"
 		req.Header.Set("X-Forwarded-Proto", "https")
-		relay.ServeHTTP(rr, req)
 
-		if rr.Code != http.StatusForbidden {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusForbidden)
+		if relay.isAllowedOrigin(req) {
+			t.Fatal("expected different host to be rejected")
 		}
-		expectRelayErrorCode(t, rr.Body.Bytes(), "ASR_ORIGIN_NOT_ALLOWED")
 	})
 
 	t.Run("https origin rejects request on non-default port 8080", func(t *testing.T) {
-		relay := newASRRelayService()
-		relay.allowedOrigins = nil
+		relay := &asrRelayService{allowedOrigins: nil}
 
-		rr := httptest.NewRecorder()
 		req := newMultipartASRRelayRequest(t, multipartASRRelayRequestPayload{
 			Provider:      "groq",
 			Model:         "whisper-large-v3",
@@ -1373,22 +1429,17 @@ func TestASRRelaySameOriginFallback(t *testing.T) {
 		req.Header.Set("Origin", "https://www.readio.top")
 		req.Host = "www.readio.top:8080"
 		req.Header.Set("X-Forwarded-Proto", "https")
-		relay.ServeHTTP(rr, req)
 
-		if rr.Code != http.StatusForbidden {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusForbidden)
+		if relay.isAllowedOrigin(req) {
+			t.Fatal("expected non-default mismatched port to be rejected")
 		}
-		expectRelayErrorCode(t, rr.Body.Bytes(), "ASR_ORIGIN_NOT_ALLOWED")
 	})
 
 	t.Run("explicit allowlist still works unchanged", func(t *testing.T) {
-		relay := newASRRelayService()
-		relay.allowedOrigins = []string{
+		relay := &asrRelayService{allowedOrigins: []string{
 			"https://www.readio.top",
-		}
+		}}
 
-
-		rr := httptest.NewRecorder()
 		req := newMultipartASRRelayRequest(t, multipartASRRelayRequestPayload{
 			Provider:      "groq",
 			Model:         "whisper-large-v3",
@@ -1399,20 +1450,15 @@ func TestASRRelaySameOriginFallback(t *testing.T) {
 		req.Header.Set("Origin", "https://www.readio.top")
 		req.Host = "www.readio.top:443"
 		req.Header.Set("X-Forwarded-Proto", "https")
-		relay.ServeHTTP(rr, req)
 
-		// With explicit allowlist, origin is checked against the map directly
-		// Origin "https://www.readio.top" should match the allowlist entry
-		if rr.Code == http.StatusForbidden {
-			t.Fatalf("expected non-forbidden status, got %d", rr.Code)
+		if !relay.isAllowedOrigin(req) {
+			t.Fatal("expected explicit allowlist origin to be allowed")
 		}
 	})
 
 	t.Run("untrusted peer cannot spoof scheme via X-Forwarded-Proto", func(t *testing.T) {
-		relay := newASRRelayService()
-		relay.allowedOrigins = nil // same-origin fallback
+		relay := &asrRelayService{allowedOrigins: nil}
 
-		rr := httptest.NewRecorder()
 		req := newMultipartASRRelayRequest(t, multipartASRRelayRequestPayload{
 			Provider:      "groq",
 			Model:         "whisper-large-v3",
@@ -1425,10 +1471,101 @@ func TestASRRelaySameOriginFallback(t *testing.T) {
 		req.Host = "www.readio.top"
 		req.Header.Set("X-Forwarded-Proto", "https") // attacker-supplied
 		// RemoteAddr is untrusted (default httptest value), so X-Forwarded-Proto must be ignored
-		relay.ServeHTTP(rr, req)
 
-		if rr.Code != http.StatusForbidden {
-			t.Fatalf("expected forbidden (scheme mismatch), got %d", rr.Code)
+		if relay.isAllowedOrigin(req) {
+			t.Fatal("expected untrusted forwarded proto spoof to be rejected")
 		}
 	})
+}
+
+func TestASRRelayStatusToErrorDoesNotLeakProviderBody(t *testing.T) {
+	body := &countingReadCloser{
+		data: []byte(strings.Repeat("provider-internal-error\n", 512)),
+	}
+	resp := &http.Response{
+		StatusCode: http.StatusTooManyRequests,
+		Header: http.Header{
+			"Retry-After": []string{"120"},
+		},
+		Body: body,
+	}
+
+	payload := asrRelayStatusToError(resp)
+
+	if payload.Code != ErrASRProviderRateLimited.Code {
+		t.Fatalf("code = %q, want %q", payload.Code, ErrASRProviderRateLimited.Code)
+	}
+	if payload.Message != ErrASRProviderRateLimited.Message {
+		t.Fatalf("message = %q, want %q", payload.Message, ErrASRProviderRateLimited.Message)
+	}
+	if strings.Contains(payload.Message, "provider-internal-error") {
+		t.Fatalf("message leaked provider body: %q", payload.Message)
+	}
+	if payload.RetryAfterMs == nil || *payload.RetryAfterMs != 120000 {
+		t.Fatalf("retry_after_ms = %v, want %d", payload.RetryAfterMs, 120000)
+	}
+	if body.totalRead > asrRelayStatusBodyReadLimit {
+		t.Fatalf("read bytes = %d, want <= %d", body.totalRead, asrRelayStatusBodyReadLimit)
+	}
+}
+
+func TestASROriginAuthorizationLogSanitizesReferer(t *testing.T) {
+	var logs strings.Builder
+	oldLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelWarn})))
+	t.Cleanup(func() {
+		slog.SetDefault(oldLogger)
+	})
+
+	relay := newASRRelayService()
+	relay.allowedOrigins = []string{"https://app.example"}
+	req := newMultipartASRRelayRequest(t, multipartASRRelayRequestPayload{
+		Provider:      "groq",
+		Model:         "whisper-large-v3",
+		APIKey:        "key",
+		AudioBytes:    []byte("test-audio"),
+		AudioMimeType: "audio/mpeg",
+	})
+	req.Header.Set("Origin", "https://evil.example")
+	req.Header.Set("Referer", "https://evil.example/player?token=secret-token&episode=abc")
+
+	_ = relay.originAuthorizationError(req)
+
+	got := logs.String()
+	if strings.Contains(got, "secret-token") || strings.Contains(got, "episode=abc") || strings.Contains(got, "/player") {
+		t.Fatalf("origin auth log leaked full referer: %s", got)
+	}
+	if !strings.Contains(got, "referer=https://evil.example") {
+		t.Fatalf("origin auth log missing sanitized referer origin: %s", got)
+	}
+}
+
+func mustParseCIDRForASRTest(t *testing.T, raw string) *net.IPNet {
+	t.Helper()
+
+	_, network, err := net.ParseCIDR(raw)
+	if err != nil {
+		t.Fatalf("parse cidr %q: %v", raw, err)
+	}
+	return network
+}
+
+type countingReadCloser struct {
+	data      []byte
+	offset    int
+	totalRead int
+}
+
+func (r *countingReadCloser) Read(p []byte) (int, error) {
+	if r.offset >= len(r.data) {
+		return 0, io.EOF
+	}
+	n := copy(p, r.data[r.offset:])
+	r.offset += n
+	r.totalRead += n
+	return n, nil
+}
+
+func (r *countingReadCloser) Close() error {
+	return nil
 }

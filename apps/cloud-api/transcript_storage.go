@@ -33,7 +33,6 @@ const podcastTranscriptEpisodeKeyHashHexChars = 12
 const podcastTranscriptULIDEncodedChars = 26
 
 const podcastTranscriptSourceKindBuiltinASR = "builtin_asr"
-const podcastTranscriptSourceKindBYOKASR = "byok_asr"
 const podcastTranscriptSourceKindUpload = "upload"
 
 var (
@@ -76,6 +75,14 @@ type reusablePodcastTranscriptLookup struct {
 	EnclosureURL string
 }
 
+type preparedPodcastTranscriptLookup struct {
+	itunesID    string
+	episodeGUID string
+	episodeKey  string
+	sourceKind  string
+	metadata    *podcastTranscriptMetadata
+}
+
 func resolvePodcastTranscriptRoot() (string, error) {
 	root := strings.TrimSpace(os.Getenv(podcastTranscriptRootEnv))
 	if root == "" {
@@ -111,27 +118,7 @@ func storePodcastTranscriptAsset(
 		return nil, err
 	}
 
-	itunesID := strings.TrimSpace(input.ItunesID)
-	if itunesID == "" {
-		return nil, errors.New("itunes_id is required for shared transcript assets")
-	}
-
-	episodeGUID := normalizeEpisodeIdentity(input.EpisodeGUID)
-	if episodeGUID == "" {
-		return nil, errors.New("episode_guid is required for shared transcript assets")
-	}
-
-	episodeKey, err := derivePodcastTranscriptEpisodeKey(episodeGUID)
-	if err != nil {
-		return nil, err
-	}
-
-	sourceKind, err := normalizePodcastTranscriptSourceKind(input.SourceKind)
-	if err != nil {
-		return nil, err
-	}
-
-	metadata, err := normalizePodcastTranscriptMetadata(input.Provider, input.Model, input.EnclosureURL)
+	prepared, err := preparePodcastTranscriptLookup(input.ItunesID, input.EpisodeGUID, input.SourceKind, input.Provider, input.Model, input.EnclosureURL)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +134,7 @@ func storePodcastTranscriptAsset(
 	}
 
 	fileName := buildPodcastTranscriptFileName(transcriptKey, input.EpisodeTitle)
-	filePath, err := buildPodcastTranscriptAssetPath(transcriptRoot, itunesID, episodeKey, fileName)
+	filePath, err := buildPodcastTranscriptAssetPath(transcriptRoot, prepared.itunesID, prepared.episodeKey, fileName)
 	if err != nil {
 		return nil, err
 	}
@@ -164,14 +151,14 @@ func storePodcastTranscriptAsset(
 
 	asset := &podcastTranscriptAsset{
 		TranscriptKey:          transcriptKey,
-		ItunesID:               itunesID,
-		EpisodeKey:             episodeKey,
-		EpisodeGUID:            episodeGUID,
+		ItunesID:               prepared.itunesID,
+		EpisodeKey:             prepared.episodeKey,
+		EpisodeGUID:            prepared.episodeGUID,
 		EpisodeTitle:           strings.TrimSpace(input.EpisodeTitle),
-		SourceKind:             sourceKind,
-		Provider:               metadata.provider,
-		Model:                  metadata.model,
-		AudioSourceFingerprint: metadata.audioSourceFingerprint,
+		SourceKind:             prepared.sourceKind,
+		Provider:               prepared.metadata.provider,
+		Model:                  prepared.metadata.model,
+		AudioSourceFingerprint: prepared.metadata.audioSourceFingerprint,
 		FileName:               fileName,
 		FileSizeBytes:          fileSizeBytes,
 		CreatedAt:              formatPodcastTranscriptCreatedAt(now),
@@ -281,27 +268,7 @@ func listReusablePodcastTranscriptAssets(
 	db *sql.DB,
 	lookup reusablePodcastTranscriptLookup,
 ) ([]podcastTranscriptAsset, error) {
-	itunesID := strings.TrimSpace(lookup.ItunesID)
-	if itunesID == "" {
-		return nil, errors.New("itunes_id is required for shared transcript assets")
-	}
-
-	episodeGUID := normalizeEpisodeIdentity(lookup.EpisodeGUID)
-	if episodeGUID == "" {
-		return nil, errors.New("episode_guid is required for shared transcript assets")
-	}
-
-	episodeKey, err := derivePodcastTranscriptEpisodeKey(episodeGUID)
-	if err != nil {
-		return nil, err
-	}
-
-	sourceKind, err := normalizePodcastTranscriptSourceKind(lookup.SourceKind)
-	if err != nil {
-		return nil, err
-	}
-
-	metadata, err := normalizePodcastTranscriptMetadata(lookup.Provider, lookup.Model, lookup.EnclosureURL)
+	prepared, err := preparePodcastTranscriptLookup(lookup.ItunesID, lookup.EpisodeGUID, lookup.SourceKind, lookup.Provider, lookup.Model, lookup.EnclosureURL)
 	if err != nil {
 		return nil, err
 	}
@@ -329,16 +296,16 @@ func listReusablePodcastTranscriptAssets(
 		  AND ((? IS NULL AND provider IS NULL) OR provider = ?)
 		  AND ((? IS NULL AND model IS NULL) OR model = ?)
 		  AND ((? IS NULL AND audio_source_fingerprint IS NULL) OR audio_source_fingerprint = ?)
-		ORDER BY created_at ASC, transcript_key ASC`,
-		itunesID,
-		episodeKey,
-		sourceKind,
-		nullIfEmpty(metadata.provider),
-		metadata.provider,
-		nullIfEmpty(metadata.model),
-		metadata.model,
-		nullIfEmpty(metadata.audioSourceFingerprint),
-		metadata.audioSourceFingerprint,
+			ORDER BY created_at ASC, transcript_key ASC`,
+		prepared.itunesID,
+		prepared.episodeKey,
+		prepared.sourceKind,
+		nullIfEmpty(prepared.metadata.provider),
+		prepared.metadata.provider,
+		nullIfEmpty(prepared.metadata.model),
+		prepared.metadata.model,
+		nullIfEmpty(prepared.metadata.audioSourceFingerprint),
+		prepared.metadata.audioSourceFingerprint,
 	)
 	if err != nil {
 		return nil, err
@@ -371,6 +338,48 @@ func listReusablePodcastTranscriptAssets(
 	}
 
 	return assets, nil
+}
+
+func preparePodcastTranscriptLookup(
+	itunesID string,
+	episodeGUID string,
+	sourceKind string,
+	provider string,
+	model string,
+	enclosureURL string,
+) (*preparedPodcastTranscriptLookup, error) {
+	normalizedItunesID := strings.TrimSpace(itunesID)
+	if normalizedItunesID == "" {
+		return nil, errors.New("itunes_id is required for shared transcript assets")
+	}
+
+	normalizedEpisodeGUID := normalizeEpisodeIdentity(episodeGUID)
+	if normalizedEpisodeGUID == "" {
+		return nil, errors.New("episode_guid is required for shared transcript assets")
+	}
+
+	normalizedEpisodeKey, err := derivePodcastTranscriptEpisodeKey(normalizedEpisodeGUID)
+	if err != nil {
+		return nil, err
+	}
+
+	normalizedSourceKind, err := normalizePodcastTranscriptSourceKind(sourceKind)
+	if err != nil {
+		return nil, err
+	}
+
+	metadata, err := normalizePodcastTranscriptMetadata(provider, model, enclosureURL)
+	if err != nil {
+		return nil, err
+	}
+
+	return &preparedPodcastTranscriptLookup{
+		itunesID:    normalizedItunesID,
+		episodeGUID: normalizedEpisodeGUID,
+		episodeKey:  normalizedEpisodeKey,
+		sourceKind:  normalizedSourceKind,
+		metadata:    metadata,
+	}, nil
 }
 
 func derivePodcastTranscriptEpisodeKey(episodeGUID string) (string, error) {

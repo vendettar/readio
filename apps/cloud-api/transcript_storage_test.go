@@ -234,6 +234,49 @@ func TestReusablePodcastTranscriptLookupKeepsDuplicateClassifierMatches(t *testi
 	}
 }
 
+func TestReusablePodcastTranscriptLookupMatchesStoredAssetAcrossSharedNormalizationPath(t *testing.T) {
+	db, root := openTranscriptStorageTestDB(t)
+
+	asset, err := storePodcastTranscriptAsset(context.Background(), db, root, createPodcastTranscriptAssetInput{
+		ItunesID:     " 1539020158 ",
+		EpisodeGUID:  " CD068FD1-8D6C-41ED-AACC-9ABF882E1CF3 ",
+		EpisodeTitle: "Bear Brook",
+		SourceKind:   "  " + podcastTranscriptSourceKindBuiltinASR + "  ",
+		Provider:     " cloudflare ",
+		Model:        " @cf/openai/whisper-large-v3-turbo ",
+		EnclosureURL: " HTTPS://EXAMPLE.com/audio.mp3?x=1#fragment ",
+		Payload:      firstPayloadFixture(60),
+		Now:          time.Date(2026, 4, 30, 8, 0, 0, 0, time.UTC),
+	})
+	if err != nil {
+		t.Fatalf("storePodcastTranscriptAsset: %v", err)
+	}
+
+	matches, err := listReusablePodcastTranscriptAssets(context.Background(), db, reusablePodcastTranscriptLookup{
+		ItunesID:     "1539020158",
+		EpisodeGUID:  "cd068fd1-8d6c-41ed-aacc-9abf882e1cf3",
+		SourceKind:   podcastTranscriptSourceKindBuiltinASR,
+		Provider:     "cloudflare",
+		Model:        "@cf/openai/whisper-large-v3-turbo",
+		EnclosureURL: "https://example.com/audio.mp3?x=1",
+	})
+	if err != nil {
+		t.Fatalf("listReusablePodcastTranscriptAssets: %v", err)
+	}
+	if len(matches) != 1 {
+		t.Fatalf("match count = %d, want 1", len(matches))
+	}
+	if matches[0].TranscriptKey != asset.TranscriptKey {
+		t.Fatalf("match transcript_key = %q, want %q", matches[0].TranscriptKey, asset.TranscriptKey)
+	}
+	if matches[0].EpisodeGUID != "cd068fd1-8d6c-41ed-aacc-9abf882e1cf3" {
+		t.Fatalf("match episode_guid = %q, want normalized lowercase guid", matches[0].EpisodeGUID)
+	}
+	if matches[0].AudioSourceFingerprint != "sha256:acc06e0e036c639b3891b901" {
+		t.Fatalf("match audio_source_fingerprint = %q, want normalized fingerprint", matches[0].AudioSourceFingerprint)
+	}
+}
+
 func TestStorePodcastTranscriptAssetRejectsMissingCanonicalIdentity(t *testing.T) {
 	db, root := openTranscriptStorageTestDB(t)
 
