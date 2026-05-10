@@ -28,6 +28,7 @@ const adminTimestampFormatter = new Intl.DateTimeFormat('en-CA', {
   minute: '2-digit',
   second: '2-digit',
   hour12: false,
+  timeZone: 'Asia/Shanghai',
   timeZoneName: 'short',
 })
 

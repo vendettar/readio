@@ -248,15 +248,6 @@ func isSlogDefaultBridgeHandler(handler slog.Handler) bool {
 	return strings.Contains(reflect.TypeOf(handler).String(), "defaultHandler")
 }
 
-func flattenRecordAttrs(r slog.Record) map[string]string {
-	attrs := make([]slog.Attr, 0)
-	r.Attrs(func(a slog.Attr) bool {
-		attrs = append(attrs, a)
-		return true
-	})
-	return flattenAttrs(attrs)
-}
-
 func (h *adminSlogHandler) adminLogEntryFromRecord(r slog.Record) (adminLogEntry, bool) {
 	attrs := cloneSlogAttrs(h.attrs)
 	recordAttrs := make([]slog.Attr, 0)
@@ -265,15 +256,6 @@ func (h *adminSlogHandler) adminLogEntryFromRecord(r slog.Record) (adminLogEntry
 		return true
 	})
 	attrs = append(attrs, groupSlogAttrs(h.groups, recordAttrs)...)
-	return adminLogEntryFromRecordAttrs(r, attrs)
-}
-
-func adminLogEntryFromRecord(r slog.Record) (adminLogEntry, bool) {
-	attrs := make([]slog.Attr, 0)
-	r.Attrs(func(a slog.Attr) bool {
-		attrs = append(attrs, a)
-		return true
-	})
 	return adminLogEntryFromRecordAttrs(r, attrs)
 }
 

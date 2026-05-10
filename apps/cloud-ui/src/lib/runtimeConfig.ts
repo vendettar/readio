@@ -6,6 +6,7 @@ import { type AppConfig, AppConfigSchema, ENV_MAP } from './runtimeConfig.schema
 declare global {
   interface Window {
     __READIO_ENV__?: {
+      VITE_API_BASE_URL?: string
       READIO_APP_NAME?: string
       READIO_APP_VERSION?: string
       READIO_NETWORK_PROXY_URL?: string
