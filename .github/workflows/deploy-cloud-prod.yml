@@ -1,6 +1,18 @@
 name: Deploy Cloud (Production)
 
 on:
+  push:
+    branches:
+      - release
+    paths:
+      - 'apps/cloud-api/**'
+      - 'infra/**'
+      - 'Makefile'
+      - 'docker-compose.readio.yml'
+      - 'scripts/nginx-readio-cloud.conf'
+      - 'scripts/readio-cloud-prune-images.sh'
+      - '.github/workflows/deploy-cloud-prod.yml'
+      - '.github/workflows/_deploy-cloud-base.yml'
   workflow_dispatch:
     inputs:
       confirm:
@@ -18,12 +30,13 @@ permissions:
 
 jobs:
   call-deploy:
+    if: github.ref == 'refs/heads/release'
     uses: ./.github/workflows/_deploy-cloud-base.yml
     with:
       environment: cloud-production
       deploy_env: production
       image_tag_suffix: prod
-      require_main_branch: true
-      confirm_required: true
+      require_main_branch: false
+      confirm_required: ${{ github.event_name == 'workflow_dispatch' }}
       confirm_input: ${{ github.event.inputs.confirm }}
     secrets: inherit

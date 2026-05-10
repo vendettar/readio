@@ -19,7 +19,7 @@ The system uses a backend-driven asynchronous configuration mechanism:
 
 ## 2. GitHub Configuration
 
-Create three environments in GitHub **Settings -> Environments**: `cloud-production`, `cloud-preproduction`, and `cloud-ui-production`.
+Create two environments in GitHub **Settings -> Environments**: `cloud-production` and `cloud-preproduction`.
 
 ### 2.1 Secrets
 
@@ -37,7 +37,6 @@ Create three environments in GitHub **Settings -> Environments**: `cloud-product
 | `READIO_GRAFANA_LOKI_TOKEN` | Optional Grafana Cloud Logs token. Loki log shipping stays disabled unless this token, `READIO_GRAFANA_LOKI_URL`, and `READIO_GRAFANA_LOKI_USER` are all configured. |
 | `READIO_ASR_RELAY_PUBLIC_TOKEN` | Public relay token consumed by browser/runtime config |
 | `READIO_ASR_WORKER_SHARED_SECRET` | Shared secret between `cloud-api` and the ASR Worker |
-| `CLOUDFLARE_API_TOKEN` | API token used by the Cloudflare Pages deploy workflow |
 
 ### 2.2 Variables
 
@@ -59,15 +58,20 @@ Create three environments in GitHub **Settings -> Environments**: `cloud-product
 | `READIO_ASR_WORKER_BASE_URL` | Base URL of the Cloudflare Worker ASR proxy |
 | `READIO_EN_DICTIONARY_API_URL` | Browser-public English dictionary API endpoint emitted through `/env.js` |
 | `READIO_EN_DICTIONARY_API_TRANSPORT` | Browser-public English dictionary transport emitted through `/env.js` |
-| `VITE_GRAFANA_FARO_URL` | Browser-public Grafana Faro collector URL required by the deploy contract |
-| `VITE_GRAFANA_FARO_APP_NAME` | Browser-public Faro application name |
-| `VITE_GRAFANA_FARO_ENV` | Browser-public Faro environment name |
-| `VITE_GRAFANA_FARO_SAMPLE_RATE` | Browser-public Faro sample rate |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare account ID for the Pages project |
-| `CLOUDFLARE_PAGES_PROJECT_NAME` | Cloudflare Pages project name for `apps/cloud-ui` |
-| `CLOUD_UI_VITE_API_BASE_URL` | Public API base URL baked into the `cloud-ui` production build |
 
-## 3. VPS Prerequisites
+## 3. Cloudflare Pages Configuration
+
+The frontend UI (`cloud-ui`) is deployed natively by Cloudflare Pages. Frontend environment variables must be configured directly in the Cloudflare Pages dashboard under **Settings -> Environment variables** for each respective project (`readio-pre` and `readio-prod`).
+
+| Name | Description |
+| :--- | :--- |
+| `VITE_API_BASE_URL` | Public API base URL baked into the `cloud-ui` production build. Set to `https://api-pre.readio.top` for pre-production and `https://api.readio.top` for production. |
+| `VITE_GRAFANA_FARO_URL` | Browser-public Grafana Faro collector URL. |
+| `VITE_GRAFANA_FARO_APP_NAME` | Browser-public Faro application name. |
+| `VITE_GRAFANA_FARO_ENV` | Browser-public Faro environment name (e.g., `preproduction` or `production`). |
+| `VITE_GRAFANA_FARO_SAMPLE_RATE` | Browser-public Faro sample rate. |
+
+## 4. VPS Prerequisites
 
 1. **Dependencies**: Provision Docker Engine, Docker Compose V2, Nginx, the deploy user, and data directories with `infra/ansible/vps_optimize.yml`.
 2. **Directories**: The VPS must already contain `/etc/readio/pre/data` and `/etc/readio/prod/data` with deploy-user compatible ownership.
@@ -75,9 +79,11 @@ Create three environments in GitHub **Settings -> Environments**: `cloud-product
 4. **Registry Access**: The VPS must be able to pull `ghcr.io/${owner}/readio-cloud-api-pre` and `ghcr.io/${owner}/readio-cloud-api-prod`. Keep both packages public, or pre-configure `docker login ghcr.io` on the server.
 5. **Cleanup**: Ensure ports 8080 (Prod) / 8079 (Pre) are not occupied.
 
-## 4. CI/CD & Release
+## 5. CI/CD & Release
 
-- **Frontend / Cloudflare Pages**: `deploy-cloud-ui-pages.yml` builds `apps/cloud-ui` and deploys `apps/cloud-ui/dist` to Cloudflare Pages by manual dispatch from `main`.
+- **Frontend / Cloudflare Pages**:
+    - **Pre-production (`readio-pre`)**: Connected to the `main` branch. Deploys automatically whenever code is merged into `main`.
+    - **Production (`readio-prod`)**: Controlled via Cloudflare's **"Production branch"** settings. For manual-only control, set the production branch to a dedicated `release` branch or use the "Promote to Production" manual override in the Cloudflare dashboard.
 - **Frontend routing**: `apps/cloud-ui/public/_redirects` is committed with `/* /index.html 200`, so direct deep links such as podcast and episode detail routes resolve correctly on Pages.
 - **Pre-production API**: `deploy-cloud-preprod.yml` is triggered automatically on push to `main`, and may also be run manually.
 - **Production API**: `deploy-cloud-prod.yml` is triggered manually via the GitHub Actions `Run workflow` button, and the workflow only deploys when the selected ref is `main`.
@@ -106,7 +112,7 @@ Create three environments in GitHub **Settings -> Environments**: `cloud-product
   - Loki shipping is bounded and non-blocking for request paths. If the queue is full or Loki is unavailable, logs are dropped locally and requests continue; shutdown performs a best-effort flush.
   - Loki labels are limited to `service`, `env`, and `level`; high-cardinality values stay out of labels.
 
-## 5. Operations
+## 6. Operations
 
 - **Validate preproduction config**: `make check-env-pre`
 - **Validate production config**: `make check-env-prod`
@@ -123,7 +129,7 @@ Create three environments in GitHub **Settings -> Environments**: `cloud-product
 - **Production DB path**: `/etc/readio/prod/data/readio.db`
 - **Cleanup**: Use `make prune-images-pre` and `make prune-images-prod` to remove old Readio API images without touching Docker volumes or unrelated workload images.
 
-## 6. Rollback
+## 7. Rollback
 
 1. Identify the previous GHCR image tag from GitHub Actions or GHCR package history.
 2. Re-run the relevant Makefile deployment target with the previous `IMAGE_TAG`.
