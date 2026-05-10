@@ -1,7 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { extractRetryAfterMs } from '../../asr/providers/openaiCompatible'
 
 describe('ASR Rate Limit Parser', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('parses Retry-After headers in seconds', () => {
     const headers = new Headers({ 'retry-after': '45' })
     const response = new Response(null, { status: 429, headers })
@@ -12,13 +16,15 @@ describe('ASR Rate Limit Parser', () => {
   })
 
   it('parses Retry-After headers in HTTP-Date', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-01-01T00:00:00.000Z'))
+
     const future = new Date(Date.now() + 10000).toUTCString()
     const headers = new Headers({ 'retry-after': future })
     const response = new Response(null, { status: 429, headers })
 
     const result = extractRetryAfterMs(response, 'Rate limited')
-    expect(result.retryAfterMs).toBeGreaterThan(9000)
-    expect(result.retryAfterMs).toBeLessThanOrEqual(10000)
+    expect(result.retryAfterMs).toBe(10000)
     expect(result.rateLimitKind).toBe('generic')
   })
 
