@@ -515,11 +515,23 @@ func (s *discoveryService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// CORS Authorization
 	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	var isAllowedOrigin bool
 	if origin != "" {
 		if match, ok := matchOrigin(s.allowedOrigins, origin); ok {
+			isAllowedOrigin = true
 			w.Header().Set("Access-Control-Allow-Origin", match)
 			w.Header().Set("Vary", "Origin")
 		}
+	}
+
+	if r.Method == http.MethodOptions {
+		if isAllowedOrigin {
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept")
+			w.Header().Set("Access-Control-Max-Age", "86400")
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
 	}
 
 	cleanedPath := path.Clean(r.URL.Path)

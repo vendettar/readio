@@ -432,7 +432,17 @@ func (h *adminHandler) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+func writeAdminMethodNotAllowed(w http.ResponseWriter, allow string) {
+	w.Header().Set("Allow", allow)
+	writeAdminError(w, http.StatusMethodNotAllowed, "ADMIN_METHOD_NOT_ALLOWED", "method not allowed")
+}
+
 func (h *adminHandler) handleAdminLogs(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeAdminMethodNotAllowed(w, http.MethodGet)
+		return
+	}
+
 	q := r.URL.Query()
 	levelFilter := strings.ToLower(strings.TrimSpace(q.Get("level")))
 	routeFilter := strings.TrimSpace(q.Get("route"))
@@ -482,15 +492,20 @@ func (h *adminHandler) handleAdminLogs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *adminHandler) handleAdminLogsClear(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost && r.Method != http.MethodDelete {
-		writeAdminError(w, http.StatusMethodNotAllowed, "ADMIN_METHOD_NOT_ALLOWED", "method not allowed")
+	if r.Method != http.MethodPost {
+		writeAdminMethodNotAllowed(w, http.MethodPost)
 		return
 	}
 	h.buffer.clear()
 	w.WriteHeader(http.StatusOK)
 }
 
-func (h *adminHandler) handleAdminHealth(w http.ResponseWriter, _ *http.Request) {
+func (h *adminHandler) handleAdminHealth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeAdminMethodNotAllowed(w, http.MethodGet)
+		return
+	}
+
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)
 
@@ -520,7 +535,12 @@ func writeAdminError(w http.ResponseWriter, status int, code string, message str
 	})
 }
 
-func (h *adminHandler) handleAdminMetricsSummary(w http.ResponseWriter, _ *http.Request) {
+func (h *adminHandler) handleAdminMetricsSummary(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeAdminMethodNotAllowed(w, http.MethodGet)
+		return
+	}
+
 	entries := h.buffer.snapshot()
 
 	type routeStats struct {

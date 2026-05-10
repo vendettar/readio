@@ -91,8 +91,56 @@ describe('cloudApi discovery error mapping', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       'https://api-pre.readio.top/api/v1/discovery/top-podcasts?country=us',
-      expect.objectContaining({ method: 'GET' })
+      expect.objectContaining({
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+        },
+      })
     )
+  })
+
+  it('keeps discovery GET requests simple by omitting content-type', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await fetchTopPodcasts('us')
+
+    const [, options] = fetchMock.mock.calls[0] ?? []
+    expect(options).toMatchObject({
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+      },
+    })
+    expect((options as RequestInit).headers).not.toHaveProperty('Content-Type')
+  })
+
+  it('sends JSON content-type for discovery POST requests with a body', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await getPodcastIndexPodcastsBatchByGuid(['guid-1'])
+
+    const [, options] = fetchMock.mock.calls[0] ?? []
+    expect(options).toMatchObject({
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(['guid-1']),
+    })
   })
 
   it('falls back to generic FetchError when a non-2xx discovery response is not the standard error payload', async () => {

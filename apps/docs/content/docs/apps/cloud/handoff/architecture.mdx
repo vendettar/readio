@@ -7,7 +7,11 @@ title: Core Architecture
 Cloud is a split application:
 
 - `apps/cloud-ui`: React 19 + TypeScript frontend.
-- `apps/cloud-api`: Go backend serving the built frontend and same-origin APIs.
+- `apps/cloud-api`: Go backend owning API routes and SQLite.
+
+Production deploys `apps/cloud-ui` to Cloudflare Pages on `www.readio.top` / `readio.top`
+and `apps/cloud-api` to the VPS behind `api.readio.top`. Colocated deployments may still
+serve the built frontend from the Go backend, but that is not the production contract.
 
 ## 2. Frontend Structure
 
@@ -22,7 +26,8 @@ The frontend still follows the former Lite layering:
 
 ## 3. Ownership Boundaries
 
-- Discovery/search/feed API ownership is backend-first and same-origin.
+- Discovery/search/feed API ownership is backend-first. Production reaches those routes through
+  the configured API base URL; colocated deployments may reach them same-origin.
 - Browser-local playback, downloads, transcripts, favorites, subscriptions, and settings remain frontend-owned.
 - Frontend persistence stays browser-local; Cloud does not imply server-side sync.
 

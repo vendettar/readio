@@ -273,6 +273,28 @@ func (s *asrRelayService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		)
 	}()
 
+	// CORS Authorization
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	var isAllowedOrigin bool
+	if origin != "" {
+		if match, ok := matchOrigin(s.allowedOrigins, origin); ok {
+			isAllowedOrigin = true
+			w.Header().Set("Access-Control-Allow-Origin", match)
+			w.Header().Set("Vary", "Origin")
+		}
+	}
+
+	if r.Method == http.MethodOptions {
+		httpStatus = http.StatusNoContent
+		if isAllowedOrigin {
+			w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept, "+asrRelayPublicTokenHeader)
+			w.Header().Set("Access-Control-Max-Age", "86400")
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
 	if r.Method != http.MethodPost {
 		httpStatus = http.StatusMethodNotAllowed
 		errClass = "invalid_method"

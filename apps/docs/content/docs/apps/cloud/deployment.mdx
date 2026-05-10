@@ -30,7 +30,7 @@ Create two environments in GitHub **Settings -> Environments**: `cloud-productio
 | `CLOUD_SSH_USER` | Login username used by the deploy workflow |
 | `CLOUD_SSH_PRIVATE_KEY` | SSH private key for that user |
 | `CLOUD_SSH_KNOWN_HOSTS` | Pinned SSH host key entry used by Docker Context with strict host checking |
-| `READIO_ADMIN_TOKEN` | Bearer Token for Admin UI |
+| `READIO_ADMIN_TOKEN` | Bearer token for backend `/admin/*` endpoints. The production Cloudflare Pages `/ops` route does not use this token. |
 | `PODCAST_INDEX_API_KEY` | PodcastIndex API Key |
 | `PODCAST_INDEX_API_SECRET` | PodcastIndex API Secret |
 | `READIO_GRAFANA_OTLP_TOKEN` | Grafana OTLP Push Token |
@@ -79,14 +79,22 @@ The frontend UI (`cloud-ui`) is deployed natively by Cloudflare Pages. Frontend 
 4. **Registry Access**: The VPS must be able to pull `ghcr.io/${owner}/readio-cloud-api-pre` and `ghcr.io/${owner}/readio-cloud-api-prod`. Keep both packages public, or pre-configure `docker login ghcr.io` on the server.
 5. **Cleanup**: Ensure ports 8080 (Prod) / 8079 (Pre) are not occupied.
 
-## 5. CI/CD & Release
+## 5. CI/CD & Release Architecture
 
-- **Frontend / Cloudflare Pages**:
-    - **Pre-production (`readio-pre`)**: Connected to the `main` branch. Deploys automatically whenever code is merged into `main`.
-    - **Production (`readio-prod`)**: Controlled via Cloudflare's **"Production branch"** settings. For manual-only control, set the production branch to a dedicated `release` branch or use the "Promote to Production" manual override in the Cloudflare dashboard.
+The project follows a strict branch-to-environment deployment model. Frontend deployments are automatically triggered by branch updates; backend deployments are automatically triggered when backend/deploy paths change on the matching branch.
+
+### Pre-production (`main` branch)
+The `main` branch is the integration branch and deploys to the **Pre-production** environment.
+- **Frontend (`readio-pre`)**: Automatically built and deployed by Cloudflare Pages whenever a commit is pushed or merged into `main`.
+- **Backend API**: GitHub Action `deploy-cloud-preprod.yml` is triggered automatically when backend/deploy paths change on `main`, deploying the backend container to the VPS `preproduction` environment.
+
+### Production (`release` branch)
+The `release` branch is strictly reserved for the **Production** environment. Commits from `main` should be rebased and pushed into `release` when ready.
+- **Frontend (`readio-prod`)**: Automatically built and deployed by Cloudflare Pages whenever a commit is pushed to `release` (configured as the "Production branch" in Cloudflare settings).
+- **Backend API**: GitHub Action `deploy-cloud-prod.yml` is triggered automatically when backend/deploy paths change on `release`, deploying the backend container to the VPS `production` environment. It can also be run manually via the Actions UI, but is guarded to only execute if the selected branch is `release`.
+
+### Deployment Details
 - **Frontend routing**: `apps/cloud-ui/public/_redirects` is committed with `/* /index.html 200`, so direct deep links such as podcast and episode detail routes resolve correctly on Pages.
-- **Pre-production API**: `deploy-cloud-preprod.yml` is triggered automatically on push to `main`, and may also be run manually.
-- **Production API**: `deploy-cloud-prod.yml` is triggered manually via the GitHub Actions `Run workflow` button, and the workflow only deploys when the selected ref is `main`.
 - **Repo-owned deploy commands**: the root `Makefile` owns the Docker Context command surface for API deploys and operations.
 - **Remote execution**: deployment uses Docker Context over SSH. The workflows configure SSH non-interactively with `CLOUD_SSH_PRIVATE_KEY` and pinned `CLOUD_SSH_KNOWN_HOSTS`, then run `make context-setup` and the relevant deploy target.
 - **Runtime environment**: CI no longer writes or mutates plaintext env files on the VPS. `docker-compose.readio.yml` lists required environment variables explicitly and Compose interpolates them from the workflow or local shell environment.
@@ -104,7 +112,7 @@ The frontend UI (`cloud-ui`) is deployed natively by Cloudflare Pages. Frontend 
   - `apps/cloud-api` can push sanitized application logs directly to Grafana Cloud Logs/Loki when `READIO_GRAFANA_LOKI_URL`, `READIO_GRAFANA_LOKI_USER`, and `READIO_GRAFANA_LOKI_TOKEN` are all configured. This is an application-side push path, not Alloy, Promtail, a Docker log driver, or a host log agent.
   - 00B metrics and 00C logs are separate pipelines: OTLP metrics use the OTLP endpoint/instance/token, while Loki logs use the Loki URL/user/token.
   - Loki `env` labels come from backend `READIO_DEPLOY_ENV` first, then fall back to `VITE_GRAFANA_FARO_ENV` if unset. Values normalize to `production`, `preproduction`, or `unknown`.
-  - `/admin/logs` remains a same-origin, memory-only operator log surface. Loki is the durable remote application log surface when enabled.
+  - `/admin/*` remains a same-origin, memory-backed operator surface on the backend. Loki is the durable remote application log surface when enabled.
   - Host logs are not shipped to Grafana. Docker logs remain available through `make logs-pre`, `make logs-prod`, or direct Docker operations.
   - Host metrics are best-effort app-owned signals collected inside `apps/cloud-api`, not a replacement for node_exporter.
   - Host metric collection defaults to `READIO_HOST_METRICS_INTERVAL_SECONDS=60`.

@@ -5,11 +5,11 @@ title: Environment & Deployment
 ## 1. Runtime Split
 
 - `apps/cloud-ui` is built as a static frontend bundle.
-- `apps/cloud-api` serves the bundle and owns same-origin API routes.
+- `apps/cloud-api` owns backend API routes and may also serve the colocated bundle in same-origin deployments.
 
 ## 2. Frontend Runtime Config
 
-Cloud frontend runtime config is emitted by the backend through `/env.js`.
+Cloud frontend runtime config is fetched from `GET /api/v1/config`; colocated backend deployments may also emit browser-public values through `/env.js`.
 
 - Browser-public values must stay on the explicit allowlist.
 - Real upstream secrets must not be exposed through browser runtime config.
@@ -17,7 +17,7 @@ Cloud frontend runtime config is emitted by the backend through `/env.js`.
 
 ## 3. Discovery/Media Contract
 
-- Discovery/search/feed requests are same-origin through Cloud backend routes.
+- Discovery/search/feed requests target Cloud backend routes, whether they are reached same-origin or via `VITE_API_BASE_URL` in decoupled deployments.
 - Browser media remains direct-first where the current Cloud contract allows it.
 - Backend fallback/proxy behavior is documented separately in handoff audit docs.
 
@@ -62,7 +62,7 @@ Cloud API logs remain stdout logs produced by Go `slog` and Docker's configured 
 - Loki `env` labels are derived from backend `READIO_DEPLOY_ENV` first, then `VITE_GRAFANA_FARO_ENV` if unset. Values normalize to `production`, `preproduction`, or `unknown`.
 - Optional backend-only knobs are `READIO_LOKI_LOG_LEVEL`, `READIO_LOKI_BATCH_SIZE`, `READIO_LOKI_FLUSH_INTERVAL_SECONDS`, and `READIO_LOKI_QUEUE_SIZE`.
 - These Loki variables must stay out of `/env.js`, browser runtime config, and browser env allowlists.
-- `/admin/logs` remains the same-origin, memory-only operator log surface. Loki is the durable remote application log surface when enabled.
+- `/admin/logs` remains a same-origin, memory-only operator log surface on the backend. Loki is the durable remote application log surface when enabled.
 - Docker logs remain available through `make logs-pre`, `make logs-prod`, or direct Docker operations on the VPS.
 - 00B metrics and 00C logs are separate pipelines. OTLP metrics use `READIO_GRAFANA_OTLP_*`; Loki logs use `READIO_GRAFANA_LOKI_*`.
 - Loki labels are exactly `service`, `env`, and `level`. Labels must not include request IDs, routes, upstream hosts, podcast IDs, episode IDs, GUIDs, search terms, user IDs, file paths, raw errors, IP addresses, user agents, tokens, API keys, cookies, or headers.
@@ -86,10 +86,10 @@ Grafana Cloud observability is app-owned OTLP metrics plus optional browser Faro
 
 - Do not install Grafana Alloy, node_exporter, local Prometheus, Loki agents, or any other persistent observability agent as part of 00A.
 - Process/runtime, data filesystem, SQLite DB/WAL size, and configured transcript asset directory size are collected inside `apps/cloud-api` on a bounded interval. They are best-effort app-owned signals, not a full node_exporter replacement.
-- `/admin/*` and `/ops` should not be publicly exposed without outer restrictions such as Cloudflare, nginx, VPN, or IP allowlists.
+- `/admin/*` should not be publicly exposed without outer restrictions such as Cloudflare, nginx, VPN, or IP allowlists. In production Cloudflare Pages deployments, `/ops` is a Grafana entry point and must not read `/admin/*` from the browser.
 - Expected dashboards for 00A can cover upstream latency by provider/route, upstream errors by provider/error class, ASR relay request/error rates, and Faro crash/schema diagnostic rates.
 - Cost controls require conservative Faro sampling, low-cardinality labels, and no raw log fields promoted to labels.
-- Rollback clears Faro public config and/or unsets OTLP runtime variables while leaving `/ops` and `/admin/*` intact.
+- Rollback clears Faro public config and/or unsets OTLP runtime variables while leaving the backend `/admin/*` surface intact.
 
 ## 9. Deployment Docs
 

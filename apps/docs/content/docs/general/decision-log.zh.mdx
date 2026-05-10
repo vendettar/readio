@@ -951,7 +951,7 @@ description: 架构决策与其背后的理由。
 - **理由**：
   - 将 scrape 与 Grafana credentials 留在 Alloy 中，可以避免 `apps/cloud-api` 的启动与请求处理耦合到 Grafana Cloud 可用性。
   - 本机或 internal scrape path 让应用只负责暴露安全的 process/runtime metrics，由主机 agent 负责传输、重试与远端凭证。
-  - 该方案保留 `/ops` 与 `/admin/*` 作为轻量 same-origin 运维入口，不改变它们的契约。
+  - `/admin/*` 保持为后端 same-origin 运维 surface。在前后端解耦的生产部署中，`/ops` 是 Grafana 入口，不再是浏览器直连 `/admin/*` 的客户端。
 - **实施**：
   - Metrics foundation 与测试：`apps/cloud-api/metrics.go`、`apps/cloud-api/metrics_test.go`、`apps/cloud-api/main.go`。
   - 运行时契约：`apps/docs/content/docs/apps/cloud/deployment.zh.mdx`。

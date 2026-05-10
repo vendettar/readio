@@ -380,6 +380,52 @@ func TestInvalidLogBufferFallback(t *testing.T) {
 	}
 }
 
+func TestAdminLogsClearRequiresPost(t *testing.T) {
+	h := &adminHandler{token: "tok", buffer: newAdminRingBuffer(10), start: time.Now()}
+
+	req := httptest.NewRequest(http.MethodDelete, "/admin/logs/clear", nil)
+	req.Header.Set("Authorization", "Bearer tok")
+	rr := httptest.NewRecorder()
+	h.authMiddleware(h.handleAdminLogsClear)(rr, req)
+
+	if rr.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusMethodNotAllowed)
+	}
+	if got := rr.Header().Get("Allow"); got != http.MethodPost {
+		t.Fatalf("allow = %q, want %q", got, http.MethodPost)
+	}
+}
+
+func TestAdminReadRoutesRequireGet(t *testing.T) {
+	h := &adminHandler{token: "tok", buffer: newAdminRingBuffer(10), start: time.Now()}
+
+	tests := []struct {
+		name    string
+		path    string
+		handler http.HandlerFunc
+	}{
+		{name: "logs", path: "/admin/logs", handler: h.handleAdminLogs},
+		{name: "health", path: "/admin/health", handler: h.handleAdminHealth},
+		{name: "metrics", path: "/admin/metrics/summary", handler: h.handleAdminMetricsSummary},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, tt.path, nil)
+			req.Header.Set("Authorization", "Bearer tok")
+			rr := httptest.NewRecorder()
+			h.authMiddleware(tt.handler)(rr, req)
+
+			if rr.Code != http.StatusMethodNotAllowed {
+				t.Fatalf("status = %d, want %d", rr.Code, http.StatusMethodNotAllowed)
+			}
+			if got := rr.Header().Get("Allow"); got != http.MethodGet {
+				t.Fatalf("allow = %q, want %q", got, http.MethodGet)
+			}
+		})
+	}
+}
+
 func TestCacheControlNoStore(t *testing.T) {
 	rb := newAdminRingBuffer(10)
 	h := &adminHandler{token: "tok", buffer: rb, start: time.Now()}

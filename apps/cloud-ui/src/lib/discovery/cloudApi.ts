@@ -125,12 +125,15 @@ async function executeDiscoveryRequest<T>(
     method,
     headers: {
       Accept: 'application/json',
-      'Content-Type': 'application/json',
     },
     signal,
   }
 
   if (method === 'POST' && body) {
+    fetchOptions.headers = {
+      ...fetchOptions.headers,
+      'Content-Type': 'application/json',
+    }
     fetchOptions.body = JSON.stringify(body)
   }
 

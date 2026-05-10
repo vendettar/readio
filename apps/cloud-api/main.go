@@ -48,6 +48,7 @@ const proxyRateLimitWindowMsEnv = "READIO_PROXY_RATE_LIMIT_WINDOW_MS"
 const proxyAllowedOriginsEnv = "READIO_PROXY_ALLOWED_ORIGINS"
 const proxyRoute = "/api/proxy"
 const proxyMaxRedirects = 20
+const proxyAuthHeader = "X-Proxy-Token"
 const cloudDBEnv = "READIO_CLOUD_DB_PATH"
 const defaultRuntimeAppName = "Readio"
 const defaultRuntimeAppVersion = "1.0.0"
@@ -92,6 +93,19 @@ var proxyAllowedRequestHeaders = map[string]struct{}{
 	"if-range":          {},
 	"pragma":            {},
 	"range":             {},
+}
+
+var proxyAllowedCORSRequestHeaders = []string{
+	"Content-Type",
+	"Accept",
+	proxyAuthHeader,
+	"Range",
+	"If-Range",
+	"If-None-Match",
+	"If-Modified-Since",
+	"Cache-Control",
+	"Pragma",
+	"Accept-Language",
 }
 
 var proxyAllowedResponseHeaders = []string{
@@ -455,6 +469,22 @@ func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		)
 	}()
 
+	// CORS Preflight
+	if r.Method == http.MethodOptions {
+		httpStatus = http.StatusNoContent
+		allowedOrigin, originErr := p.authorizeOrigin(r)
+		if originErr == nil && allowedOrigin != "" {
+			w.Header().Set("Access-Control-Allow-Origin", allowedOrigin)
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", strings.Join(proxyAllowedCORSRequestHeaders, ", "))
+			w.Header().Set("Access-Control-Max-Age", "86400")
+			w.Header().Set("Vary", "Origin")
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	allowedOrigin = p.corsAllowedOrigin(r)
+
 	spec, pErr := p.parseProxyRequest(w, r)
 	if pErr != nil {
 		httpStatus = http.StatusBadRequest
@@ -558,6 +588,30 @@ func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		slog.Warn("proxy body copy failed", "error", err, "target_host", spec.targetURL.Host)
 		return
 	}
+}
+
+func (p *proxyService) corsAllowedOrigin(r *http.Request) string {
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	if origin == "" {
+		return ""
+	}
+
+	if len(p.allowedOrigins) > 0 {
+		if match, ok := matchOrigin(p.allowedOrigins, origin); ok {
+			return match
+		}
+		return ""
+	}
+
+	requestScheme, requestHost, ok := proxyRequestOriginContext(r, p.trustedProxies)
+	if !ok {
+		return ""
+	}
+	parsed, err := url.Parse(origin)
+	if err != nil || !isSameOrigin(parsed.Scheme, parsed.Host, requestScheme, requestHost) {
+		return ""
+	}
+	return origin
 }
 
 func (p *proxyService) parseProxyRequest(_ http.ResponseWriter, r *http.Request) (*proxyRequestSpec, error) {

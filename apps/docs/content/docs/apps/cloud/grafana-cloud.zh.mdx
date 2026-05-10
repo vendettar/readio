@@ -60,6 +60,10 @@ Loki labels 只能是 `service`、`env` 和 `level`。Request ID、route、upstr
 
 ## 4. Grafana 日志查询
 
+生产日志查看由 Grafana Cloud Logs/Loki 承担。Cloudflare Pages 上的 `/ops`
+路由只是 Grafana 入口，不再由浏览器读取 `/admin/*` 内存日志端点。后端
+`/admin/logs` 仍保留给同源部署、SSH tunnel，或未来受保护的 ops 反代。
+
 Grafana Explore 查询：
 
 ```logql

@@ -1355,6 +1355,31 @@ func TestProxyDirectGetRouteForAudioFallback(t *testing.T) {
 	})
 }
 
+func TestProxyParseErrorsKeepAllowedOriginCORS(t *testing.T) {
+	upstreamCalled := false
+	proxy, _ := newMediaProxyTestService(t, func(_ http.ResponseWriter, _ *http.Request) {
+		upstreamCalled = true
+	}, testPublicLookupIP)
+
+	rr := httptest.NewRecorder()
+	req := newProxyJSONRequest(t, http.MethodGet, "http://feeds.example.com/audio.mp3", map[string]string{
+		"Authorization": "Bearer should-fail",
+	})
+	req.RemoteAddr = "198.51.100.10:12345"
+	proxy.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rr.Code, http.StatusBadRequest)
+	}
+	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != testProxyAllowedOrigin {
+		t.Fatalf("allow-origin = %q, want %q", got, testProxyAllowedOrigin)
+	}
+	assertProxyErrorPayload(t, rr.Body, "PROXY_UNSUPPORTED_HEADER")
+	if upstreamCalled {
+		t.Fatal("upstream called for invalid proxy headers")
+	}
+}
+
 func TestProxyServiceMediaFallbackContract(t *testing.T) {
 	t.Run("post head request preserves sizing headers and omits body", func(t *testing.T) {
 		proxy, dialedAddress := newMediaProxyTestService(t, func(w http.ResponseWriter, r *http.Request) {

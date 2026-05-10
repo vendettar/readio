@@ -4,7 +4,9 @@ description: Documentation for the Readio Cloud application and backend architec
 ---
 
 Cloud consists of `apps/cloud-ui` and `apps/cloud-api`.
-`apps/cloud-ui` is the Cloud UI build, and `apps/cloud-api` is the Go service that serves that build, boots SQLite, and owns the backend same-origin networking used by discovery surfaces, including search, top, Editor's Picks batch lookup, podcast lookup, and PI episode-list lookup.
+`apps/cloud-ui` is the Cloud UI build, deployed to Cloudflare Pages for production.
+`apps/cloud-api` is the Go service deployed on the VPS behind `api.readio.top`; it boots SQLite and owns the backend API routes used by discovery surfaces, including search, top, Editor's Picks batch lookup, podcast lookup, and PI episode-list lookup.
+Colocated deployments may still serve the built UI from `apps/cloud-api`, but production treats frontend and backend as separate origins.
 
 ## Runtime Config Ownership
 
@@ -12,7 +14,7 @@ Cloud production runtime config ownership is split into three buckets:
 
 1. **Server-owned runtime config**: Values that stay in backend runtime environment (VPS env/systemd env files). These include service listen address, static asset location, database path, and backend abuse-control settings (`PORT`, `READIO_CLOUD_UI_DIST_DIR`, `READIO_CLOUD_DB_PATH`, `READIO_ASR_ALLOWED_ORIGINS`, `READIO_ASR_RATE_LIMIT_BURST`, `READIO_ASR_RATE_LIMIT_WINDOW_MS`).
 
-2. **Browser-public runtime config**: Values emitted by `apps/cloud-api` via `/env.js` using an explicit allowlist. Cloud does **not** use `apps/cloud-ui/public/env.js` or `dist/env.js` as runtime truth. The backend serves `/env.js` dynamically with only browser-safe fields. Browser-public fields include app name/version, same-origin backend URLs, ASR relay token (abuse-control only, not a secret), ASR provider/model defaults, feature toggles, and UI defaults.
+2. **Browser-public runtime config**: Values fetched by the frontend from `GET /api/v1/config` in production, with colocated backend deployments also able to emit `/env.js` from an explicit allowlist. Cloud does **not** use `apps/cloud-ui/public/env.js` or `dist/env.js` as runtime truth. Browser-public fields include app name/version, backend URLs, ASR relay token (abuse-control only, not a secret), ASR provider/model defaults, feature toggles, and UI defaults.
 
 3. **Browser-local/user-local config**: Values that remain browser-owned and are not part of backend runtime (`READIO_ASR_API_KEY`, `READIO_OPENAI_API_KEY`, IndexedDB/Dexie persistence, playback/session state).
 
@@ -20,7 +22,7 @@ See `handoff/runtime-config-ownership-audit.md` for the full audit and `handoff/
 
 Cloud Settings does not include the `CORS Proxy` block.
 Cloud media stays browser-direct first when available, then falls back through `apps/cloud-api` only for approved failure classes; that fallback is pass-through and non-caching, and browser-local media artifacts stay browser-local.
-Cloud ASR provider transcription goes through a dedicated same-origin relay in `apps/cloud-api`; provider credentials remain user-owned and browser-supplied per request, and the backend must treat them as transient request data only.
+Cloud ASR provider transcription goes through a dedicated relay in `apps/cloud-api`; provider credentials remain user-owned and browser-supplied per request, and the backend must treat them as transient request data only.
 Cloud ASR provider verification/readiness checks remain browser-direct.
 Cloud keeps Workbox/PWA disabled.
 

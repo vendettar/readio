@@ -60,6 +60,11 @@ Loki labels are exactly `service`, `env`, and `level`. Request IDs, routes, upst
 
 ## 4. Grafana Log Queries
 
+Production log inspection is owned by Grafana Cloud Logs/Loki. The Cloudflare Pages `/ops`
+route is only a Grafana entry point and does not read `/admin/*` memory log endpoints from
+the browser. The backend `/admin/logs` endpoint remains available for same-origin deployments,
+SSH tunnels, or a future protected ops reverse proxy.
+
 Grafana Explore queries:
 
 ```logql

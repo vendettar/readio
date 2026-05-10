@@ -61,24 +61,41 @@ interface LogFilters {
   limit?: number
 }
 
-async function adminFetch<T>(
-  token: string,
-  path: string,
-  schema: z.ZodSchema<T>,
-  params?: Record<string, string>
-): Promise<T> {
+function buildAdminURL(path: string, params?: Record<string, string>): URL {
   const url = new URL(path, window.location.origin)
   if (params) {
     Object.entries(params).forEach(([k, v]) => {
       if (v) url.searchParams.set(k, v)
     })
   }
+  return url
+}
+
+async function adminRequest(
+  token: string,
+  path: string,
+  init: RequestInit = {},
+  params?: Record<string, string>
+): Promise<Response> {
+  const url = buildAdminURL(path, params)
+  const headers = new Headers(init.headers)
+  headers.set('Authorization', `Bearer ${token}`)
   const res = await fetch(url.toString(), {
-    headers: { Authorization: `Bearer ${token}` },
+    ...init,
+    headers,
   })
   if (res.status === 401) throw new Error('UNAUTHORIZED')
   if (!res.ok) throw new Error(`Admin API error: ${res.status}`)
+  return res
+}
 
+async function adminFetch<T>(
+  token: string,
+  path: string,
+  schema: z.ZodSchema<T>,
+  params?: Record<string, string>
+): Promise<T> {
+  const res = await adminRequest(token, path, {}, params)
   const data = await res.json()
   return schema.parse(data)
 }
@@ -104,11 +121,7 @@ export async function fetchAdminMetricsSummary(token: string): Promise<AdminMetr
 }
 
 export async function clearAdminLogs(token: string): Promise<void> {
-  const url = new URL(`${ADMIN_BASE}/logs/clear`, window.location.origin)
-  const res = await fetch(url.toString(), {
+  await adminRequest(token, `${ADMIN_BASE}/logs/clear`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${token}` },
   })
-  if (res.status === 401) throw new Error('UNAUTHORIZED')
-  if (!res.ok) throw new Error(`Admin API error: ${res.status}`)
 }

@@ -1094,7 +1094,7 @@ description: Architecture decisions and rationale.
 - **Rationale**:
   - Keeping scrape and Grafana credentials in Alloy avoids coupling `apps/cloud-api` startup and request handling to Grafana Cloud availability.
   - A local or internal scrape path keeps the application focused on exposing safe process/runtime metrics while the host agent owns transport, retry, and remote credentials.
-  - This preserves `/ops` and `/admin/*` as the lightweight same-origin operator surface without changing their contracts.
+  - `/admin/*` remains the backend same-origin operator surface. In the decoupled production deployment, `/ops` is a Grafana entry point rather than a browser client for `/admin/*`.
 - **Implementation**:
   - Metrics foundation and tests: `apps/cloud-api/metrics.go`, `apps/cloud-api/metrics_test.go`, `apps/cloud-api/main.go`.
   - Runtime contract: `apps/docs/content/docs/apps/cloud/deployment.mdx`.
