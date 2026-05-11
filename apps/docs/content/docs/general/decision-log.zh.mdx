@@ -943,16 +943,16 @@ description: 架构决策与其背后的理由。
   - 同步 Cloud discovery handoff、deployment、error-code、database 与 roadmap 文档，明确 route 已退役，并把旧的 feed transport 字段移出当前 repo-owned 契约。
   - 该切片由指令 024 的 route-retirement 合同与文档同步负责。
 
-## D125 — 通过 Alloy Scrape 接入 Grafana Cloud Metrics [已实施]
+## D125 — Grafana Cloud OTLP Push 与 Loki 日志上报 [已实施]
 - **决策**：
-  - `apps/cloud-api` 暴露受保护的 Prometheus-compatible `/metrics` endpoint，供主机侧 Grafana Alloy 抓取。
-  - Grafana Cloud metrics ingestion 由 Alloy 拥有，不在应用内实现 Prometheus remote write。
-  - `/metrics` 属于后端运维 surface，由 `READIO_METRICS_TOKEN` 保护，不得通过 `/env.js` 下发。
+  - `apps/cloud-api` 通过 OTLP HTTP 直接向 Grafana Cloud 推送指标。
+  - `apps/cloud-api` 通过 Loki Push API 直接向 Grafana Cloud Loki 推送脱敏日志。
+  - 可观测性接入采用应用侧驱动（Push 模式），不依赖主机侧 Agent 或抓取端点。
 - **理由**：
-  - 将 scrape 与 Grafana credentials 留在 Alloy 中，可以避免 `apps/cloud-api` 的启动与请求处理耦合到 Grafana Cloud 可用性。
-  - 本机或 internal scrape path 让应用只负责暴露安全的 process/runtime metrics，由主机 agent 负责传输、重试与远端凭证。
-  - `/admin/*` 保持为后端 same-origin 运维 surface。在前后端解耦的生产部署中，`/ops` 是 Grafana 入口，不再是浏览器直连 `/admin/*` 的客户端。
+  - 应用侧 Push 简化了基础设施需求，无需在主机安装或维护 Agent（如 Alloy 或 Promtail）。
+  - 可观测性配置集中于应用运行时与 CI/CD 环境。
+  - 直接上报脱敏日志可确保数据隐私并降低本地 I/O 开销。
 - **实施**：
-  - Metrics foundation 与测试：`apps/cloud-api/metrics.go`、`apps/cloud-api/metrics_test.go`、`apps/cloud-api/main.go`。
-  - 运行时契约：`apps/docs/content/docs/apps/cloud/deployment.zh.mdx`。
-  - 指令 014c。
+  - OTLP 指标：`apps/cloud-api/metrics.go`、`apps/cloud-api/main.go`。
+  - Loki Push：`apps/cloud-api/loki.go`、`apps/cloud-api/main.go`。
+  - 指令 014g、014c。

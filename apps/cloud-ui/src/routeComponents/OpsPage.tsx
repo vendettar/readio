@@ -11,7 +11,7 @@ function resolveOpsEnv(): string {
   return env || 'production'
 }
 
-export default function AdminLogsPage() {
+export default function OpsPage() {
   const config = getAppConfig()
   const opsEnv = resolveOpsEnv()
   const backendOrigin = config.API_BASE_URL || 'the configured Cloud API backend'

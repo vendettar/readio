@@ -1,8 +1,8 @@
 import { render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import AdminLogsPage from '@/routeComponents/AdminLogsPage'
+import OpsPage from '@/routeComponents/OpsPage'
 
-describe('AdminLogsPage', () => {
+describe('OpsPage', () => {
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn())
     window.__READIO_ENV__ = {
@@ -17,7 +17,7 @@ describe('AdminLogsPage', () => {
   })
 
   it('renders a Grafana logs entry instead of an admin token client', () => {
-    render(<AdminLogsPage />)
+    render(<OpsPage />)
 
     expect(screen.getByRole('heading', { name: 'Production logs moved' })).not.toBeNull()
     expect(screen.getByText('{service="readio-cloud", env="preproduction"}')).not.toBeNull()
