@@ -37,9 +37,7 @@ jobs:
       environment: cloud-preproduction
       deploy_env: preproduction
       image_tag_suffix: pre
-      # TODO: If preproduction should only deploy from merged PRs on main,
-      # change this to true so manual dispatches from feature branches are blocked too.
-      require_main_branch: false
+      require_main_branch: true
       confirm_required: ${{ github.event_name == 'workflow_dispatch' }}
       confirm_input: ${{ github.event.inputs.confirm }}
     secrets: inherit

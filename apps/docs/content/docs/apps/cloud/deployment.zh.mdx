@@ -97,13 +97,83 @@ VPS 必须能够拉取 `ghcr.io/${owner}/readio-cloud-api-pre` 和 `ghcr.io/${ow
 
 ### 预发环境 (`main` 分支)
 `main` 分支作为集成主干，自动部署至**预发环境**（Pre-production）。
-- **前端 (`readio-pre`)**：连接到 `main` 分支。每当有代码提交或合并进 `main` 时，Cloudflare Pages 会自动触发构建和部署。
-- **后端 API**：GitHub Action `deploy-cloud-preprod.yml` 在 `main` 分支的 backend/deploy 相关路径变更时自动触发，将后端容器部署至 VPS 的 `preproduction` 环境。
+- **触发**：每当有代码提交或 PR 合并进 `main` 时触发。
+- **前端 (`readio-pre`)**：Cloudflare Pages 自动监听 `main` 分支进行构建。
+- **后端 API**：GitHub Action `deploy-cloud-preprod.yml` 自动运行，部署至 VPS 的 `preproduction` 容器。
+- **目的**：用于开发者自测、全链路观测验证（Tracing/Logging）。
 
-### 生产环境 (`release` 分支)
-`release` 分支专用于**生产环境**（Production）。只有在预发环境验证完毕后，才应将 `main` 的代码 rebase 并 push 进 `release` 分支。
-- **前端 (`readio-prod`)**：每当有代码 push 到 `release` 分支时，Cloudflare Pages（已在后台将其设为 "Production branch"）会自动触发生产环境部署。
-- **后端 API**：GitHub Action `deploy-cloud-prod.yml` 在 `release` 分支的 backend/deploy 相关路径变更时自动触发，将后端容器部署至 VPS 的 `production` 环境。该 Action 也支持在控制台手动运行，但已增加安全校验，仅允许选择 `release` 分支执行。
+### 生产环境 (`release` 分支与 Tag)
+生产环境采用严格的 **“Tag 触发”** 模式，确保每一份上线代码都有版本标记。
+- **触发**：仅在推送以 `v` 开头的 Git Tag（如 `v1.2.3`）时触发。**直接合并 PR 到 `release` 不会触发部署。**
+- **前端 (`readio-prod`)**：Cloudflare Pages 连接到 `release` 分支，随分支更新自动发布。
+- **后端 API**：GitHub Action `deploy-cloud-prod.yml` 监听 Tag 事件，构建镜像并部署至 VPS 的 `production` 容器。
+
+### 触发场景对照表
+
+| 触发方式 | Branch Guard | 构建镜像 | VERSION | 备注 |
+| :--- | :--- | :--- | :--- | :--- |
+| `git push tag v1.2.3`（在 `release` 分支）| ✅ 通过 | ✅ 构建 | `v1.2.3` | 正常发布 |
+| `git push tag v1.2.3`（在 feature 分支）| ❌ 拦截报错 | — | — | |
+| `workflow_dispatch` 从 `release`，填 `image_tag: v1.2.1` | ✅ 通过 | ⏭ 跳过 | `v1.2.1` | 回滚 |
+| `workflow_dispatch` 从 `release`，`image_tag` 留空 | ✅ 通过 | ✅ 构建 | 短 SHA | 紧急热修复，输出 warning，事后须补打 tag |
+| `workflow_dispatch` 从其他分支 | ❌ 拦截报错 | — | — | |
+| 预发：PR 合并到 `main` | ✅ 通过 | ✅ 构建 | 短 SHA | |
+| 预发：`workflow_dispatch` 从 `main` | ✅ 通过 | ✅ 构建 | 短 SHA | |
+| 预发：`workflow_dispatch` 从 feature 分支 | ❌ 直接跳过 | — | — | |
+
+### 生产发布 SOP (Standard Operating Procedure)
+
+为了保证生产环境的绝对稳定，发布必须严格遵守以下步骤：
+
+#### 1. 正常发布 (Regular Release)
+1.  **验证**：确保功能已合并至 `main` 并在预发环境（Preprod）通过验证。
+2.  **晋升**：提交并合并 **PR (main -> release)**。
+3.  **打标**：进入 GitHub **Releases** 页面，点击 **Draft a new release**。
+4.  **配置**：
+    -   **Target**: 选择 `release` 分支。
+    -   **Tag**: 输入新版本号（如 `v1.2.0`）。
+5.  **发布**：点击 **Publish**。Action 将自动构建镜像并部署。
+
+#### 2. 紧急回滚 (Emergency Rollback)
+1.  **进入 Actions**：在 GitHub 仓库点击 **Actions** 标签页。
+2.  **选择任务**：在左侧列表中点击 **Deploy Cloud (Production)**。
+3.  **触发**：点击 **Run workflow**，选择 `release` 分支。
+4.  **填写版本**：在 **`image_tag`** 字段输入上一个稳定版本号（如 `v1.2.1`）。构建步骤会被跳过，直接拉取已有镜像部署。
+5.  **确认**：在 `confirm` 输入框填入 `deploy`，点击 **Run**。
+
+#### 3. 紧急热修复部署 (Emergency Hotfix Deploy / Break-glass)
+
+仅在修复必须立即上线、来不及走正常 tag 发布流程时使用。
+
+1. **进入 Actions**：在 GitHub Actions 页面选择 **Deploy Cloud (Production)**。
+2. **触发**：点击 **Run workflow**，选择 `release` 分支。
+3. **`image_tag` 留空**：从当前 `release` HEAD 构建短 SHA 镜像，run log 会输出 warning 提示。
+4. **确认**：在 `confirm` 字段填入 `deploy`，点击 **Run**。
+5. **事后必须补打 tag**：修复验证通过后，立即创建正式版本号（如 `v1.2.1`），恢复正常发布线。
+
+#### 5. 紧急修复 (Hotfix)
+1.  **切分支**：基于 `release` 分支创建 `hotfix/*` 分支。
+2.  **修复**：在 hotfix 分支上进行修复并提交。
+3.  **合并**：将 hotfix 分支合并回 `release`。
+4.  **发布**：重复“正常发布”中的打标步骤，发布补丁版本（如 `v1.2.1`）。
+5.  **回流**：**必须**在本地切回 `main` 分支，使用 `git cherry-pick [Hotfix_SHA]` 将修复同步回主干。
+为了保持代码库的整洁和可维护性，必须遵守以下流程：
+
+1. **线性历史 (Linear History)**：
+   - 禁止在 `main` 或 `release` 分支上使用 `git merge`（产生合并节点）。
+   - 所有的功能开发应在 `feature/*` 分支进行，通过 **Rebase** 保持基线领先，并使用 GitHub 的 **Squash and merge** 或 **Rebase and merge** 合入主干。
+
+2. **晋升流程 (Environment Promotion)**：
+   - 代码在 `main` 环境验证无误后，提交 **PR (main -> release)**。
+   - 合并该 PR，此时 `release` 代码与 `main` 同步。
+
+3. **打标发布 (Tagging)**：
+   - 在 GitHub UI 的 **Releases** 页面，基于 `release` 分支创建一个新的 Release。
+   - 填写版本号（如 `v1.1.0`），点击 Publish。这会触发生产环境的正式部署。
+
+4. **紧急修复 (Hotfix & Back-porting)**：
+   - 若生产环境发现 Bug，应基于 `release` 分支创建 hotfix 分支。
+   - 修复并合并回 `release` 后，立即通过 **`git cherry-pick`** 将该提交同步回 `main` 分支，确保主干不丢失修复。
 
 ### 部署细节
 - **前端路由**：仓库已提交 `apps/cloud-ui/public/_redirects`，内容为 `/* /index.html 200`，因此节目页、单集详情页这类深链在 Pages 上不会 404。
@@ -111,8 +181,10 @@ VPS 必须能够拉取 `ghcr.io/${owner}/readio-cloud-api-pre` 和 `ghcr.io/${ow
 - **远程执行**：部署使用 Docker Context over SSH。workflow 使用 `CLOUD_SSH_PRIVATE_KEY` 和固定的 `CLOUD_SSH_KNOWN_HOSTS` 非交互配置 SSH，然后执行 `make context-setup` 与对应部署目标。
 - **运行时环境**：CI 不再在 VPS 上写入或修改明文 env 文件。`docker-compose.readio.yml` 显式列出必需环境变量，由 Compose 从 workflow 或本地 shell 环境中插值。
 - **密钥边界**：容器环境变量仍处在 Docker 管理员边界内；它们不是 memory-only，Docker 管理员或 Docker daemon metadata 可能看到这些值。
-- **镜像清理**：每次部署后，VPS 会保留当前运行中容器正在使用的镜像，以及最近 5 个后端镜像 tag；更早的本地镜像会自动删除。
-- **GHCR 清理**：后端镜像只使用部署对应的 `sha8` 作为 tag。测试和生产分别使用独立的 GHCR package：`readio-cloud-api-pre` 与 `readio-cloud-api-prod`。每个 package 都会独立保留最近 10 个后端镜像版本。
+- **镜像清理**：每次部署后，VPS 会保留当前运行中容器正在使用的镜像，以及最近 10 个后端镜像 tag；更早的本地镜像会自动删除。
+- **镜像 tag 规则**：正常生产发布使用 Git 版本号作为 tag（如 `readio-cloud-api-prod:v1.2.3`）；预发镜像使用短 commit SHA（如 `readio-cloud-api-pre:a1b2c3d4`）。紧急热修复从 `release` 分支 `workflow_dispatch` 触发时可能构建短 SHA 镜像，事后必须立即打版本号 tag 恢复正常发布线。
+- **自动化冒烟测试**：每个部署 job 都会执行自动化的冒烟测试。它通过探测 `GET /api/v1/config` 并验证其返回状态码和响应时间来确保新版本已成功启动并可对外服务。如果探测失败，部署将被标记为失败，并跳过后续的镜像清理步骤，以保留回滚现场。
+- **GHCR 清理**：测试和生产分别使用独立的 GHCR package：`readio-cloud-api-pre` 与 `readio-cloud-api-prod`。每个 package 都会独立保留最近 10 个后端镜像版本。
 - **目录隔离**：
   - preproduction 使用 `/etc/readio/pre`，compose project 名为 `readio-pre`
   - production 使用 `/etc/readio/prod`，compose project 名为 `readio-prod`
@@ -152,9 +224,17 @@ VPS 必须能够拉取 `ghcr.io/${owner}/readio-cloud-api-pre` 和 `ghcr.io/${ow
 - **测试环境数据库**：`/etc/readio/pre/data/readio.db`
 - **生产环境数据库**：`/etc/readio/prod/data/readio.db`
 
-## 7. 回滚
+## 7. 回滚 (Rollback)
 
-1. 从 GitHub Actions 或 GHCR package 历史中找到上一个镜像 tag。
-2. 使用旧的 `IMAGE_TAG` 重新执行对应 Makefile 部署目标。
-3. 回滚时不要删除 `/etc/readio/pre/data` 或 `/etc/readio/prod/data`。
-4. 常规回滚流程不要执行破坏性的 Docker volume 清理。
+得益于 Tag 机制，回滚快速且安全——无需重新构建镜像。
+
+1. **镜像 Tag 回滚（推荐）**：
+   - 进入 GitHub Actions 页面，选择 **Deploy Cloud (Production)**。
+   - 点击 **Run workflow**，选择 `release` 分支。
+   - 在 **`image_tag`** 字段输入上一个稳定版本号（如 `v1.0.9`）。
+   - 在 `confirm` 字段填入 `deploy`，点击 **Run**。
+   - 构建步骤会被完全跳过，直接拉取已有镜像部署，速度更快。
+
+2. **代码回滚 (Revert PR)**：
+   - 如果需要永久回退代码，在 GitHub PR 页面点击 **Revert**，这会产生一个反向修改的 PR。
+   - 合并该 PR 后，按照正常的发布流程重新打标上线。

@@ -24,6 +24,15 @@ on:
         required: false
         type: string
         default: ""
+      require_release_branch:
+        required: false
+        type: boolean
+        default: false
+      image_tag:
+        required: false
+        type: string
+        default: ""
+
 
 jobs:
   deploy:
@@ -34,10 +43,56 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # Fetch all history for branch containment check
 
-      - name: Get Short SHA
-        id: slug
-        run: echo "sha8=$(echo ${GITHUB_SHA} | cut -c1-8)" >> $GITHUB_OUTPUT
+      - name: Branch Guard
+        if: inputs.require_release_branch == true
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "Checking if tag ${{ github.ref_name }} is on 'release' branch..."
+            CONTAINED=$(git branch -r --contains "${{ github.sha }}" | grep "origin/release" || true)
+            if [ -z "$CONTAINED" ]; then
+              echo "::error::Deployment blocked! Tag ${{ github.ref_name }} is NOT on the 'release' branch."
+              exit 1
+            fi
+            echo "Branch check passed: tag ${{ github.ref_name }} is on 'release' branch."
+          else
+            echo "Checking if workflow_dispatch is triggered from 'release' branch..."
+            if [[ "${{ github.ref }}" != "refs/heads/release" ]]; then
+              echo "::error::Deployment blocked! workflow_dispatch must be triggered from the 'release' branch, got '${{ github.ref_name }}'."
+              exit 1
+            fi
+            echo "Branch check passed: triggered from 'release' branch."
+          fi
+
+      - name: Get Version
+        id: meta
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          INPUT_IMAGE_TAG: ${{ inputs.image_tag }}
+        run: |
+          if [ -n "${INPUT_IMAGE_TAG}" ]; then
+            # Validate image_tag format: must be vX.Y.Z (with optional suffix)
+            if ! [[ "${INPUT_IMAGE_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+              echo "::error::image_tag '${INPUT_IMAGE_TAG}' is not a valid version tag. Must match vX.Y.Z (e.g. v1.2.3)."
+              exit 1
+            fi
+            # Rollback: use the explicitly specified image tag, skip build
+            VERSION="${INPUT_IMAGE_TAG}"
+            IS_ROLLBACK="true"
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION="${REF_NAME}"
+            IS_ROLLBACK="false"
+          else
+            # Emergency hotfix: workflow_dispatch with empty image_tag builds a short-SHA image.
+            # This is a break-glass path. Create a proper version tag after validation.
+            echo "::warning::Building short-SHA image from release branch. This is an emergency deploy — create a version tag after validation to restore the normal release line."
+            VERSION=$(echo "${GITHUB_SHA}" | cut -c1-8)
+            IS_ROLLBACK="false"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "is_rollback=${IS_ROLLBACK}" >> $GITHUB_OUTPUT
 
       - name: Log in to the Container registry
         uses: docker/login-action@v4
@@ -50,11 +105,12 @@ jobs:
         uses: docker/setup-buildx-action@v4
 
       - name: Build and push Docker image
+        if: steps.meta.outputs.is_rollback != 'true'
         uses: docker/build-push-action@v7
         with:
           context: ./apps/cloud-api
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/readio-cloud-api-${{ inputs.image_tag_suffix }}:${{ steps.slug.outputs.sha8 }}
+          tags: ghcr.io/${{ github.repository_owner }}/readio-cloud-api-${{ inputs.image_tag_suffix }}:${{ steps.meta.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -104,7 +160,7 @@ jobs:
           CLOUD_SSH_PORT: ${{ secrets.CLOUD_SSH_PORT }}
           CLOUD_SSH_USER: ${{ secrets.CLOUD_SSH_USER }}
           REPO_OWNER: ${{ github.repository_owner }}
-          IMAGE_TAG: ${{ steps.slug.outputs.sha8 }}
+          IMAGE_TAG: ${{ steps.meta.outputs.version }}
           READIO_ADMIN_TOKEN: ${{ secrets.READIO_ADMIN_TOKEN }}
           PODCAST_INDEX_API_KEY: ${{ secrets.PODCAST_INDEX_API_KEY }}
           PODCAST_INDEX_API_SECRET: ${{ secrets.PODCAST_INDEX_API_SECRET }}
@@ -137,6 +193,7 @@ jobs:
           READIO_SUDO_COMMAND_ALLOWLIST: ${{ vars.READIO_SUDO_COMMAND_ALLOWLIST }}
           READIO_TRACING_ENABLED: ${{ vars.READIO_TRACING_ENABLED }}
           READIO_TRACING_SAMPLE_RATIO: ${{ vars.READIO_TRACING_SAMPLE_RATIO }}
+          READIO_HOST_METRICS_INTERVAL_SECONDS: ${{ vars.READIO_HOST_METRICS_INTERVAL_SECONDS }}
         run: |
           set -euo pipefail
           make context-setup
@@ -148,7 +205,16 @@ jobs:
             make prune-images-pre
           fi
 
+      - name: Smoke Test
+        if: vars.READIO_SMOKE_TEST_URL != ''
+        run: |
+          echo "Probing endpoint: ${{ vars.READIO_SMOKE_TEST_URL }}"
+          # No sleep needed as Makefile uses 'docker compose up -d --wait'
+          # --retry-all-errors ensures we retry on 502/503 during startup
+          curl --fail --retry 5 --retry-all-errors --retry-delay 5 --max-time 10 "${{ vars.READIO_SMOKE_TEST_URL }}"
+
       - name: Cleanup old GHCR package versions
+        if: success() && steps.meta.outputs.is_rollback != 'true'
         uses: actions/delete-package-versions@v5
         with:
           package-name: 'readio-cloud-api-${{ inputs.image_tag_suffix }}'
