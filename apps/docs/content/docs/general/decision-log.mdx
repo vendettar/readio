@@ -1086,16 +1086,16 @@ description: Architecture decisions and rationale.
   - Frontend: `apps/cloud-ui/src/lib/discovery/discoveryCache.ts` refactored to maintenance-only.
   - Backend: `apps/cloud-api/discovery_apple.go` uses `getWithGracefulDegradation`.
 
-## D125 — Grafana Cloud Metrics via Alloy Scrape [Implemented]
+## D125 — Grafana Cloud OTLP Push & Loki Logging [Implemented]
 - **Decision**:
-  - `apps/cloud-api` exposes a protected Prometheus-compatible `/metrics` endpoint for host-side Grafana Alloy scraping.
-  - Grafana Cloud metrics ingestion is owned by Alloy, not by app-side Prometheus remote write.
-  - `/metrics` is backend-only operational surface area, protected by `READIO_METRICS_TOKEN`, and must not be emitted through `/env.js`.
+  - `apps/cloud-api` pushes metrics directly to Grafana Cloud via OTLP HTTP.
+  - `apps/cloud-api` pushes sanitized logs directly to Grafana Cloud Loki via the Loki Push API.
+  - Observability ingestion is application-driven (push-based) without host-side agents or scrape endpoints.
 - **Rationale**:
-  - Keeping scrape and Grafana credentials in Alloy avoids coupling `apps/cloud-api` startup and request handling to Grafana Cloud availability.
-  - A local or internal scrape path keeps the application focused on exposing safe process/runtime metrics while the host agent owns transport, retry, and remote credentials.
-  - `/admin/*` remains the backend same-origin operator surface. In the decoupled production deployment, `/ops` is a Grafana entry point rather than a browser client for `/admin/*`.
+  - Application-side push simplifies infrastructure by removing the need for host-side agents (like Alloy or Promtail).
+  - Centralizes observability configuration within the application and CI/CD environment.
+  - Direct shipping of sanitized logs ensures data privacy and reduces local I/O.
 - **Implementation**:
-  - Metrics foundation and tests: `apps/cloud-api/metrics.go`, `apps/cloud-api/metrics_test.go`, `apps/cloud-api/main.go`.
-  - Runtime contract: `apps/docs/content/docs/apps/cloud/deployment.mdx`.
-  - Instruction 014c.
+  - OTLP Metrics: `apps/cloud-api/metrics.go`, `apps/cloud-api/main.go`.
+  - Loki Push: `apps/cloud-api/loki.go`, `apps/cloud-api/main.go`.
+  - Instruction 014g, 014c.

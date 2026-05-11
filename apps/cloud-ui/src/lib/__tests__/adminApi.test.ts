@@ -1,9 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../runtimeConfig', () => ({
-  buildBackendURL: (pathname: string) => `https://api.example.test${pathname}`,
-}))
-
 describe('adminApi', () => {
   beforeEach(() => {
     vi.resetModules()

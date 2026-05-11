@@ -5,11 +5,11 @@ description: Guide for obtaining credentials for Readio Cloud observability.
 
 # Grafana Cloud Integration
 
-Readio Cloud uses zero-agent application-side push paths for backend metrics and logs, plus Grafana Faro for frontend RUM. It does not install Grafana Alloy, Promtail, node_exporter, Docker log drivers, or system log agents.
+Readio Cloud uses application-side push paths for backend metrics and logs, plus Grafana Faro for frontend RUM.
 
 ## 1. Backend Metrics (OTLP Push)
 
-The backend service pushes metrics directly to Grafana Cloud via OTLP HTTP. **No local Alloy/Agent installation is required.**
+The backend service pushes metrics directly to Grafana Cloud via OTLP HTTP.
 
 ### Steps to obtain credentials:
 1. Log in to your [Grafana Cloud](https://grafana.com/products/cloud/) account.
@@ -38,16 +38,17 @@ The frontend monitoring reports data directly from the user's browser to the Gra
 3. Set App Name to `readio-cloud`.
 4. After creation, go to the "Instrumentation" tab to find the **URL** (Collector URL).
 
-### Required GitHub Secrets:
-- `VITE_GRAFANA_FARO_URL`: e.g., `https://faro-collector-prod-xxx.grafana.net/collect/xxx`
-- `VITE_GRAFANA_FARO_APP_NAME`: `readio-cloud`
-- `VITE_GRAFANA_FARO_ENV`: `production` or `preproduction`
+### Required GitHub configuration:
+- Variable: `VITE_GRAFANA_FARO_URL`: e.g., `https://faro-collector-prod-xxx.grafana.net/collect/xxx`
+- Variable: `VITE_GRAFANA_FARO_APP_NAME`: `readio-cloud`
+- Variable: `VITE_GRAFANA_FARO_ENV`: `production` or `preproduction`
+- Variable: `VITE_GRAFANA_FARO_SAMPLE_RATE`: e.g., `1.0` or `0.1`
 
 ---
 
 ## 3. Backend Logs (Loki Push)
 
-The backend can push sanitized application logs directly to Grafana Cloud Logs/Loki. This is separate from the OTLP metrics pipeline and is disabled unless all three required Loki values are configured.
+The backend pushes sanitized application logs directly to Grafana Cloud Logs/Loki. This pipeline is enabled when all three required Loki values are configured.
 
 ### Required GitHub configuration:
 - Variable: `READIO_GRAFANA_LOKI_URL`: Loki push endpoint, usually ending in `/loki/api/v1/push`.

@@ -1,3 +1,13 @@
+/**
+ * @DORMANT
+ * This file contains the legacy/dormant admin client for same-origin deployments,
+ * SSH tunnels, or future protected reverse proxies.
+ *
+ * In the standard Cloud architecture, observability is handled via Grafana
+ * (see /ops route and grafana-cloud.mdx), and this client is not currently
+ * used by production Cloud-UI components.
+ */
+
 import { z } from 'zod'
 
 const ADMIN_BASE = '/admin'

@@ -5,11 +5,11 @@ description: 获取 Readio Cloud 可观测性凭证的指南。
 
 # Grafana Cloud 集成
 
-Readio Cloud 使用零 Agent 的应用侧 push 路径处理后端指标和日志，并使用 Grafana Faro 处理前端 RUM。部署不会安装 Grafana Alloy、Promtail、node_exporter、Docker log driver 或系统日志 agent。
+Readio Cloud 使用应用侧 Push 路径处理后端指标和日志，并使用 Grafana Faro 处理前端 RUM。
 
 ## 1. 后端指标 (OTLP Push)
 
-后端服务通过 OTLP HTTP 协议直接向 Grafana Cloud 推送指标。**无需在本机安装 Alloy/Agent。**
+后端服务通过 OTLP HTTP 协议直接向 Grafana Cloud 推送指标。
 
 ### 获取凭证步骤：
 1. 登录 [Grafana Cloud](https://grafana.com/products/cloud/) 控制台。
@@ -17,8 +17,8 @@ Readio Cloud 使用零 Agent 的应用侧 push 路径处理后端指标和日志
 3. 搜索并选择 **OpenTelemetry**。
 4. 在配置页面中找到以下信息：
    - **Endpoint**: 类似 `https://otlp-gateway-prod-xxx.grafana.net/otlp`。
-   - **Username / Instance ID**: 一个数字 ID。
-   - **Password / API Token**: 点击 "Generate now" 生成一个 Token（需要 `MetricsPublisher` 权限）。
+   - **Username / Instance ID**: 一个数字 ID（注意：**必须**使用 OpenTelemetry 磁贴详情中的 Username，通常与 Prometheus ID 不同）。
+   - **Password / API Token**: 点击 "Generate now" 生成一个 Token（推荐使用 Cloud Access Policy 类型的 Token，并具备 `metrics:write` 权限）。
 
 ### 需要配置到 GitHub 的变量：
 - Variable: `READIO_GRAFANA_OTLP_ENDPOINT`
@@ -38,16 +38,20 @@ Readio Cloud 使用零 Agent 的应用侧 push 路径处理后端指标和日志
 3. App Name 填 `readio-cloud`。
 4. 创建后，在 "Instrumentation" 标签页找到 **URL** (Collector URL)。
 
-### 需要配置到 GitHub Secrets 的变量：
-- `VITE_GRAFANA_FARO_URL`: 类似 `https://faro-collector-prod-xxx.grafana.net/collect/xxx`
-- `VITE_GRAFANA_FARO_APP_NAME`: `readio-cloud`
-- `VITE_GRAFANA_FARO_ENV`: `production` 或 `preproduction`
+### 变量配置说明：
+
+**架构注记**：得益于 Readio 的动态配置系统，以下变量**只需**配置在 GitHub Actions/VPS 环境变量中，由后端通过 `/api/v1/config` 接口下发。Cloudflare Pages 侧**不需要**重复配置这些变量（只需保留 `VITE_API_BASE_URL` 即可）。
+
+- Variable: `VITE_GRAFANA_FARO_URL`: 类似 `https://faro-collector-prod-xxx.grafana.net/collect/xxx`
+- Variable: `VITE_GRAFANA_FARO_APP_NAME`: `readio-cloud`
+- Variable: `VITE_GRAFANA_FARO_ENV`: `production` 或 `preproduction`
+- Variable: `VITE_GRAFANA_FARO_SAMPLE_RATE`: 比如 `1.0` 或 `0.1`
 
 ---
 
 ## 3. 后端日志 (Loki Push)
 
-后端可以把脱敏后的应用日志直接推送到 Grafana Cloud Logs/Loki。这条 pipeline 与 OTLP 指标独立，并且只有三个必需 Loki 值全部配置后才会启用。
+后端直接将脱敏后的应用日志推送到 Grafana Cloud Logs/Loki。当三个必需 Loki 值全部配置后，该流水线即启用。
 
 ### 需要配置到 GitHub 的变量：
 - Variable: `READIO_GRAFANA_LOKI_URL`：Loki push endpoint，通常以 `/loki/api/v1/push` 结尾。
