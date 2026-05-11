@@ -88,13 +88,85 @@ The project follows a strict branch-to-environment deployment model. Frontend de
 
 ### Pre-production (`main` branch)
 The `main` branch is the integration branch and deploys to the **Pre-production** environment.
-- **Frontend (`readio-pre`)**: Automatically built and deployed by Cloudflare Pages whenever a commit is pushed or merged into `main`.
-- **Backend API**: GitHub Action `deploy-cloud-preprod.yml` is triggered automatically when backend/deploy paths change on `main`, deploying the backend container to the VPS `preproduction` environment.
+- **Trigger**: Automatically triggered by any push or PR merge into `main`.
+- **Frontend (`readio-pre`)**: Cloudflare Pages monitors the `main` branch for automatic builds.
+- **Backend API**: GitHub Action `deploy-cloud-preprod.yml` runs automatically, deploying to the VPS `preproduction` container.
+- **Purpose**: Used for developer self-testing and full-stack observability validation (Tracing/Logging).
 
-### Production (`release` branch)
-The `release` branch is strictly reserved for the **Production** environment. Commits from `main` should be rebased and pushed into `release` when ready.
-- **Frontend (`readio-prod`)**: Automatically built and deployed by Cloudflare Pages whenever a commit is pushed to `release` (configured as the "Production branch" in Cloudflare settings).
-- **Backend API**: GitHub Action `deploy-cloud-prod.yml` is triggered automatically when backend/deploy paths change on `release`, deploying the backend container to the VPS `production` environment. It can also be run manually via the Actions UI, but is guarded to only execute if the selected branch is `release`.
+### Production (`release` branch & Tags)
+Production environment follows a strict **"Tag-triggered"** model to ensure every release is versioned and immutable.
+- **Trigger**: Only triggered when a Git Tag starting with `v` (e.g., `v1.2.3`) is pushed. **Merging a PR into `release` does NOT trigger a deployment.**
+- **Frontend (`readio-prod`)**: Cloudflare Pages is connected to the `release` branch and deploys automatically upon branch updates.
+- **Backend API**: GitHub Action `deploy-cloud-prod.yml` listens for Tag events to build the image and deploy to the VPS `production` container.
+
+### Trigger Behavior Reference
+
+| Trigger | Branch Guard | Build Image | `VERSION` | Notes |
+| :--- | :--- | :--- | :--- | :--- |
+| `git push tag v1.2.3` (on `release`) | ✅ Pass | ✅ Build | `v1.2.3` | Normal release |
+| `git push tag v1.2.3` (on feature branch) | ❌ Blocked | — | — | |
+| `workflow_dispatch` from `release`, `image_tag: v1.2.1` | ✅ Pass | ⏭ Skipped | `v1.2.1` | Rollback |
+| `workflow_dispatch` from `release`, `image_tag` empty | ✅ Pass | ✅ Build | short SHA | Emergency hotfix — warning emitted; create a version tag after validation |
+| `workflow_dispatch` from any other branch | ❌ Blocked | — | — | |
+| Preprod: PR merged into `main` | ✅ Pass | ✅ Build | short SHA | |
+| Preprod: `workflow_dispatch` from `main` | ✅ Pass | ✅ Build | short SHA | |
+| Preprod: `workflow_dispatch` from feature branch | ❌ Blocked | — | — | |
+
+### Production SOP (Standard Operating Procedure)
+
+To maintain absolute production stability, all deployments must strictly follow these procedures:
+
+#### 1. Regular Release
+1.  **Validation**: Ensure features are merged into `main` and verified in the Pre-production environment.
+2.  **Promotion**: Submit and merge a **PR (main -> release)**.
+3.  **Tagging**: Go to the GitHub **Releases** page and click **Draft a new release**.
+4.  **Configuration**:
+    -   **Target**: Select the `release` branch.
+    -   **Tag**: Enter the new version (e.g., `v1.2.0`).
+5.  **Publish**: Click **Publish**. The Action will automatically build and deploy the image.
+
+#### 2. Emergency Rollback
+1.  **Actions**: Click the **Actions** tab in the GitHub repository.
+2.  **Workflow**: Select **Deploy Cloud (Production)** from the left sidebar.
+3.  **Trigger**: Click **Run workflow**, select the `release` branch.
+4.  **Image Tag**: Enter the previous stable version (e.g. `v1.2.1`) in the `image_tag` field. The build step is skipped; the existing image is pulled directly.
+5.  **Confirm**: Type `deploy` in the `confirm` input and click **Run**.
+
+#### 3. Emergency Hotfix Deploy (Break-glass)
+
+Use this path only when a critical fix must reach production immediately and there is no time to go through the normal tag release process.
+
+1. **Actions**: Navigate to **Deploy Cloud (Production)** in the GitHub Actions tab.
+2. **Trigger**: Click **Run workflow**, select the `release` branch.
+3. **Leave `image_tag` empty**: builds from the current `release` HEAD as a short-SHA image. A warning is emitted in the run log.
+4. **Confirm**: Type `deploy` in the `confirm` field and click **Run**.
+5. **Follow up**: After the fix is validated, create a proper version tag (e.g. `v1.2.1`) immediately to restore the normal release line.
+
+#### 4. Hotfix
+1.  **Branching**: Create a `hotfix/*` branch based on `release`.
+2.  **Fixing**: Commit the necessary fixes to the hotfix branch.
+3.  **Merging**: Merge the hotfix branch back into `release`.
+4.  **Release**: Repeat the tagging steps from "Regular Release" to deploy a patch version (e.g., `v1.2.1`).
+5.  **Back-porting**: **You MUST** switch to the `main` branch locally and use `git cherry-pick [Hotfix_SHA]` to sync the fix back to the integration trunk.
+
+### Professional Release Workflow
+To maintain a clean and maintainable codebase, the following workflow is mandatory:
+
+1. **Linear History**:
+   - Avoid `git merge` on `main` or `release` branches (to prevent merge commits).
+   - All feature development happens on `feature/*` branches. Keep branches up-to-date via **Rebase** and merge into main using GitHub's **Squash and merge** or **Rebase and merge**.
+
+2. **Environment Promotion**:
+   - Once code is validated in `main`, submit a **PR (main -> release)**.
+   - Merge the PR to sync the `release` branch with `main`.
+
+3. **Tag-based Release**:
+   - Go to the **Releases** page in the GitHub UI and draft a new release targeting the `release` branch.
+   - Enter a version tag (e.g., `v1.1.0`) and click **Publish**. This initiates the official production deployment.
+
+4. **Hotfixes & Back-porting**:
+   - If a bug is found in production, create a hotfix branch based on `release`.
+   - After fixing and merging back into `release`, immediately **`cherry-pick`** the fix into the `main` branch to ensure the fix is not lost in future updates.
 
 ### Deployment Details
 - **Frontend routing**: `apps/cloud-ui/public/_redirects` is committed with `/* /index.html 200`, so direct deep links such as podcast and episode detail routes resolve correctly on Pages.
@@ -102,8 +174,10 @@ The `release` branch is strictly reserved for the **Production** environment. Co
 - **Remote execution**: deployment uses Docker Context over SSH. The workflows configure SSH non-interactively with `CLOUD_SSH_PRIVATE_KEY` and pinned `CLOUD_SSH_KNOWN_HOSTS`, then run `make context-setup` and the relevant deploy target.
 - **Runtime environment**: CI no longer writes or mutates plaintext env files on the VPS. `docker-compose.readio.yml` lists required environment variables explicitly and Compose interpolates them from the workflow or local shell environment.
 - **Secret boundary**: container environment values remain inside the Docker administrator boundary; they are not memory-only and can be visible to Docker administrators or Docker daemon metadata.
-- **Image Management**: After each deploy, the VPS keeps the images currently used by running containers plus the latest 5 backend image tags; older local images are removed automatically.
-- **GHCR Retention**: Backend images are tagged only with the deployment `sha8`. Preproduction and production use separate GHCR packages: `readio-cloud-api-pre` and `readio-cloud-api-prod`. Each package keeps its latest 10 backend image versions independently.
+- **Image Management**: After each deploy, the VPS keeps the images currently used by running containers plus the latest 10 backend image tags; older local images are removed automatically.
+- **Image Tagging**: Normal production releases use Git version tags (e.g. `readio-cloud-api-prod:v1.2.3`); preproduction images are tagged with the short commit SHA (e.g. `readio-cloud-api-pre:a1b2c3d4`). Emergency manual deploys from `release` may build a short-SHA image and must be followed by a version tag release to restore the normal release line.
+- **Automated Smoke Testing**: Every deployment job executes an automated smoke test. It verifies that the new version has successfully started and is serving traffic by probing `GET /api/v1/config` and validating its return status and response time. If probing fails, the deployment is marked as failed, and the subsequent image cleanup step is skipped to preserve the rollback state.
+- **GHCR Retention**: Preproduction and production use separate GHCR packages: `readio-cloud-api-pre` and `readio-cloud-api-prod`. Each package keeps its latest 10 backend image versions independently.
 - **Deployment isolation**:
   - preproduction runs under `/etc/readio/pre` with compose project `readio-pre`
   - production runs under `/etc/readio/prod` with compose project `readio-prod`
@@ -146,7 +220,15 @@ The `release` branch is strictly reserved for the **Production** environment. Co
 
 ## 7. Rollback
 
-1. Identify the previous GHCR image tag from GitHub Actions or GHCR package history.
-2. Re-run the relevant Makefile deployment target with the previous `IMAGE_TAG`.
-3. Never delete `/etc/readio/pre/data` or `/etc/readio/prod/data` during rollback.
-4. Do not run destructive Docker volume cleanup as part of normal rollback.
+Thanks to the tagging mechanism, rollbacks are fast and safe — no rebuild required.
+
+1. **Image Tag Rollback (Recommended)**:
+   - Navigate to the **Deploy Cloud (Production)** workflow in the GitHub Actions tab.
+   - Click **Run workflow**, select the `release` branch.
+   - Enter the previous stable version (e.g. `v1.0.9`) in the **`image_tag`** field.
+   - Type `deploy` in the `confirm` field and click **Run**.
+   - The build step is skipped entirely; the existing image is pulled and deployed directly.
+
+2. **Code Reversion (Revert PR)**:
+   - If a permanent code rollback is required, use the **Revert** button on the GitHub PR page.
+   - After merging the revert PR, follow the normal tagging process to deploy the corrected state.

@@ -10,6 +10,7 @@ services:
     environment:
       # Server non-secret runtime variables.
       PORT: ${APP_PORT:?APP_PORT is required}
+      READIO_APP_VERSION: ${IMAGE_TAG:?IMAGE_TAG is required}
       READIO_CLOUD_DB_PATH: /app/data/readio.db
       READIO_ASR_ALLOWED_ORIGINS: ${READIO_ASR_ALLOWED_ORIGINS:?READIO_ASR_ALLOWED_ORIGINS is required}
       READIO_DISCOVERY_ALLOWED_ORIGINS: ${READIO_DISCOVERY_ALLOWED_ORIGINS:?READIO_DISCOVERY_ALLOWED_ORIGINS is required}

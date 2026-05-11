@@ -1,7 +1,7 @@
 import type { Faro } from '@grafana/faro-web-sdk'
 import {
+  getWebInstrumentations,
   initializeFaro as initializeGrafanaFaro,
-  WebVitalsInstrumentation,
 } from '@grafana/faro-web-sdk'
 import { setErrorReporter } from './errorReporter'
 import { logError } from './logger'
@@ -67,9 +67,8 @@ export function initializeFaro(
         version: sanitizeValue(config.APP_VERSION),
         environment: sanitizeValue(config.GRAFANA_FARO_ENV),
       },
-      instrumentations: [new WebVitalsInstrumentation()],
+      instrumentations: getWebInstrumentations(),
       preventGlobalExposure: true,
-      sessionTracking: { enabled: false },
       trackResources: false,
       beforeSend: (item) => sanitizeTransportItem(item),
     })

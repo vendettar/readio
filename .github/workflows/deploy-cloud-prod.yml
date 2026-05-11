@@ -1,25 +1,20 @@
 name: Deploy Cloud (Production)
 
 on:
-  pull_request:
-    branches:
-      - release
-    types: [closed]
-    paths:
-      - 'apps/cloud-api/**'
-      - 'infra/**'
-      - 'Makefile'
-      - 'docker-compose.readio.yml'
-      - 'scripts/nginx-readio-cloud.conf'
-      - 'scripts/readio-cloud-prune-images.sh'
-      - '.github/workflows/deploy-cloud-prod.yml'
-      - '.github/workflows/_deploy-cloud-base.yml'
+  push:
+    tags:
+      - 'v*'
   workflow_dispatch:
     inputs:
       confirm:
         description: 'Type "deploy" to confirm production deployment'
         required: true
         default: ''
+      image_tag:
+        description: 'Version tag to roll back to (e.g. v1.2.1). Must be an existing prod image tag. Leave empty to build from current ref.'
+        required: false
+        default: ''
+
 
 concurrency:
   group: deploy-cloud-prod
@@ -31,7 +26,9 @@ permissions:
 
 jobs:
   call-deploy:
-    if: (github.event_name == 'pull_request' && github.event.pull_request.merged == true) || github.event_name == 'workflow_dispatch'
+    if: |
+      (github.event_name == 'push' && contains(github.ref, 'refs/tags/v')) ||
+      (github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/_deploy-cloud-base.yml
     with:
       environment: cloud-production
@@ -40,4 +37,6 @@ jobs:
       require_main_branch: false
       confirm_required: ${{ github.event_name == 'workflow_dispatch' }}
       confirm_input: ${{ github.event.inputs.confirm }}
+      require_release_branch: true
+      image_tag: ${{ github.event.inputs.image_tag }}
     secrets: inherit

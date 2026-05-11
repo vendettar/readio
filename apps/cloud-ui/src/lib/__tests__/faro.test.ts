@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { Faro } from '@grafana/faro-web-sdk'
+import { getWebInstrumentations } from '@grafana/faro-web-sdk'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { reportError } from '../errorReporter'
 import {
@@ -81,6 +82,41 @@ describe('faro', () => {
         init
       )
     ).not.toThrow()
+  })
+
+  it('uses Grafana web instrumentations and does not disable session tracking', () => {
+    const faro = mockFaro()
+    let receivedConfig:
+      | {
+          instrumentations: Array<{ name: string }>
+        }
+      | undefined
+    const init = vi.fn((config: unknown) => {
+      receivedConfig = config as {
+        instrumentations: Array<{ name: string }>
+      }
+      return faro
+    })
+
+    initializeFaro(
+      {
+        ...baseConfig,
+        GRAFANA_FARO_URL: 'https://faro.example.com/collect',
+        GRAFANA_FARO_SAMPLE_RATE: 1,
+      },
+      init
+    )
+
+    expect(init).toHaveBeenCalledTimes(1)
+    if (!receivedConfig) {
+      throw new Error('expected Faro initializer to be called')
+    }
+    const initArg = receivedConfig
+    expect(initArg.instrumentations).toHaveLength(getWebInstrumentations().length)
+    expect(initArg.instrumentations.map((i: { name: string }) => i.name)).toEqual(
+      getWebInstrumentations().map((i) => i.name)
+    )
+    expect(initArg).not.toHaveProperty('sessionTracking')
   })
 
   it('redacts sensitive and high-volume text before export', () => {
