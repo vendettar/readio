@@ -17,6 +17,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
 const adminTokenEnv = "READIO_ADMIN_TOKEN"
@@ -31,16 +33,22 @@ const adminMaxLimit = 500
 const p95Quantile = 0.95
 
 type adminLogEntry struct {
-	Ts           time.Time         `json:"ts"`
-	Level        string            `json:"level"`
-	Msg          string            `json:"msg"`
-	Route        string            `json:"route,omitempty"`
-	UpstreamKind string            `json:"upstream_kind,omitempty"`
-	UpstreamHost string            `json:"upstream_host,omitempty"`
-	ElapsedMs    float64           `json:"elapsed_ms,omitempty"`
-	ErrorClass   string            `json:"error_class,omitempty"`
-	Status       int               `json:"status,omitempty"`
-	Attrs        map[string]string `json:"attrs,omitempty"`
+	Ts           time.Time `json:"ts"`
+	Level        string    `json:"level"`
+	Msg          string    `json:"msg"`
+	Route        string    `json:"route,omitempty"`
+	UpstreamKind string    `json:"upstream_kind,omitempty"`
+	UpstreamHost string    `json:"upstream_host,omitempty"`
+	ElapsedMs    float64   `json:"elapsed_ms,omitempty"`
+	ErrorClass   string    `json:"error_class,omitempty"`
+	Status       int       `json:"status,omitempty"`
+	// TraceID / SpanID are populated when the slog record was emitted with a
+	// context.Context carrying a valid OpenTelemetry span. They are sent as
+	// Loki payload fields (not stream labels) and are never returned in
+	// public API responses; request_id remains the user-facing identifier.
+	TraceID string            `json:"trace_id,omitempty"`
+	SpanID  string            `json:"span_id,omitempty"`
+	Attrs   map[string]string `json:"attrs,omitempty"`
 }
 
 type adminRingBuffer struct {
@@ -191,6 +199,10 @@ func (h *adminSlogHandler) Handle(ctx context.Context, r slog.Record) error {
 	entry, ok := h.adminLogEntryFromRecord(r)
 	if !ok {
 		return h.delegate().Handle(ctx, r)
+	}
+	if span := trace.SpanContextFromContext(ctx); span.IsValid() {
+		entry.TraceID = span.TraceID().String()
+		entry.SpanID = span.SpanID().String()
 	}
 	if h.buffer != nil {
 		h.buffer.push(entry)

@@ -357,20 +357,20 @@ func (s *discoveryService) handlePodcastIndexPodcastsBatchByGUID(w http.Response
 	route := discoveryPodcastsBatchRoute
 
 	if r.Method != http.MethodPost {
-		writeDiscoveryErrorSpec(w, http.StatusMethodNotAllowed, discoveryErrSimpleMethodNotAllowed)
-		logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), errDiscoveryMethodNotAllowedError, CacheStatusMissError)
+		writeDiscoveryErrorSpec(r, w, http.StatusMethodNotAllowed, discoveryErrSimpleMethodNotAllowed)
+		logDiscoveryRequest(r.Context(), route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), errDiscoveryMethodNotAllowedError, CacheStatusMissError)
 		return
 	}
 
 	if !s.allowPodcastIndexRequest(effectiveClientIP(r, s.trustedProxies)) {
-		writeDiscoveryErrorSpec(w, http.StatusTooManyRequests, discoveryErrRateLimited)
-		logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), errDiscoveryRateLimited, CacheStatusUncached)
+		writeDiscoveryErrorSpec(r, w, http.StatusTooManyRequests, discoveryErrRateLimited)
+		logDiscoveryRequest(r.Context(), route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), errDiscoveryRateLimited, CacheStatusUncached)
 		return
 	}
 
 	if r.ContentLength > podcastIndexMaxBatchBodySize {
-		writeDiscoveryErrorSpec(w, http.StatusRequestEntityTooLarge, discoveryErrBodyTooLarge)
-		logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), errors.New("body too large"), CacheStatusMissError)
+		writeDiscoveryErrorSpec(r, w, http.StatusRequestEntityTooLarge, discoveryErrBodyTooLarge)
+		logDiscoveryRequest(r.Context(), route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), errors.New("body too large"), CacheStatusMissError)
 		return
 	}
 
@@ -381,14 +381,14 @@ func (s *discoveryService) handlePodcastIndexPodcastsBatchByGUID(w http.Response
 
 	var input []string
 	if err := json.NewDecoder(bodyReader).Decode(&input); err != nil {
-		writeDiscoveryErrorSpec(w, http.StatusBadRequest, discoveryErrInvalidGuidBatch)
-		logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, CacheStatusMissError)
+		writeDiscoveryErrorSpec(r, w, http.StatusBadRequest, discoveryErrInvalidGuidBatch)
+		logDiscoveryRequest(r.Context(), route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, CacheStatusMissError)
 		return
 	}
 
 	if len(input) == 0 {
 		writeDiscoveryJSON(w, http.StatusOK, []piPodcastResponse{})
-		logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), nil, CacheStatusUncached)
+		logDiscoveryRequest(r.Context(), route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), nil, CacheStatusUncached)
 		return
 	}
 
@@ -397,8 +397,8 @@ func (s *discoveryService) handlePodcastIndexPodcastsBatchByGUID(w http.Response
 	for _, guid := range input {
 		normalizedGUID, err := normalizePodcastGUID(guid)
 		if err != nil {
-			writeDiscoveryMappedError(w, err)
-			logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, CacheStatusMissError)
+			writeDiscoveryMappedError(r, w, err)
+			logDiscoveryRequest(r.Context(), route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, CacheStatusMissError)
 			return
 		}
 		if _, dup := seen[normalizedGUID]; dup {
@@ -416,14 +416,14 @@ func (s *discoveryService) handlePodcastIndexPodcastsBatchByGUID(w http.Response
 		var configErr *discoveryProviderConfigError
 		if errors.As(err, &configErr) {
 			slog.Error("podcastindex guid batch unavailable", "error", err, "provider", configErr.provider)
-			writeDiscoveryErrorSpec(w, http.StatusServiceUnavailable, discoveryErrProviderNotConfigured)
-			logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, CacheStatusMissError)
+			writeDiscoveryErrorSpec(r, w, http.StatusServiceUnavailable, discoveryErrProviderNotConfigured)
+			logDiscoveryRequest(r.Context(), route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, CacheStatusMissError)
 			return
 		}
 
 		slog.Warn("podcastindex guid batch failed", "error", err)
-		writeDiscoveryMappedError(w, errors.Join(errDiscoveryUpstreamError, err))
-		logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, CacheStatusMissError)
+		writeDiscoveryMappedError(r, w, errors.Join(errDiscoveryUpstreamError, err))
+		logDiscoveryRequest(r.Context(), route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, CacheStatusMissError)
 		return
 	}
 
@@ -449,7 +449,7 @@ func (s *discoveryService) handlePodcastIndexPodcastsBatchByGUID(w http.Response
 	}
 
 	writeDiscoveryJSON(w, http.StatusOK, resp)
-	logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), nil, CacheStatusUncached)
+	logDiscoveryRequest(r.Context(), route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), nil, CacheStatusUncached)
 }
 
 func (s *discoveryService) handlePodcastIndexPodcastByItunesID(w http.ResponseWriter, r *http.Request) {
@@ -457,15 +457,16 @@ func (s *discoveryService) handlePodcastIndexPodcastByItunesID(w http.ResponseWr
 	route := discoveryPodcastByItunesIDRoutePattern
 
 	if !s.allowPodcastIndexRequest(effectiveClientIP(r, s.trustedProxies)) {
-		writeDiscoveryErrorSpec(w, http.StatusTooManyRequests, discoveryErrRateLimited)
-		logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), errDiscoveryRateLimited, CacheStatusUncached)
+		writeDiscoveryErrorSpec(r, w, http.StatusTooManyRequests, discoveryErrRateLimited)
+		logDiscoveryRequest(r.Context(), route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), errDiscoveryRateLimited, CacheStatusUncached)
 		return
 	}
 
 	rawPodcastItunesID, ok := discoveryPodcastByItunesIDFromPath(r.URL.Path)
 	if !ok {
-		writeDiscoveryErrorSpec(w, http.StatusNotFound, discoveryErrNotFound)
+		writeDiscoveryErrorSpec(r, w, http.StatusNotFound, discoveryErrNotFound)
 		logDiscoveryRequestWithStatus(
+			r.Context(),
 			route,
 			UpstreamKindPodcastIndex,
 			podcastIndexBaseURL,
@@ -479,8 +480,8 @@ func (s *discoveryService) handlePodcastIndexPodcastByItunesID(w http.ResponseWr
 
 	podcastItunesID, err := normalizeItunesID(rawPodcastItunesID)
 	if err != nil {
-		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, CacheStatusMissError)
+		writeDiscoveryMappedError(r, w, err)
+		logDiscoveryRequest(r.Context(), route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, CacheStatusMissError)
 		return
 	}
 
@@ -509,25 +510,25 @@ func (s *discoveryService) handlePodcastIndexPodcastByItunesID(w http.ResponseWr
 		var configErr *discoveryProviderConfigError
 		if errors.As(err, &configErr) {
 			slog.Error("podcastindex itunesId lookup unavailable", "error", err, "provider", configErr.provider)
-			writeDiscoveryErrorSpec(w, http.StatusServiceUnavailable, discoveryErrProviderNotConfigured)
-			logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, cacheStatus)
+			writeDiscoveryErrorSpec(r, w, http.StatusServiceUnavailable, discoveryErrProviderNotConfigured)
+			logDiscoveryRequest(r.Context(), route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, cacheStatus)
 			return
 		}
 
 		slog.Warn("podcastindex itunesId lookup failed", "error", err)
-		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, cacheStatus)
+		writeDiscoveryMappedError(r, w, err)
+		logDiscoveryRequest(r.Context(), route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, cacheStatus)
 		return
 	}
 
 	if data == nil {
 		writeDiscoveryJSON(w, http.StatusOK, nil)
-		logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), nil, cacheStatus)
+		logDiscoveryRequest(r.Context(), route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), nil, cacheStatus)
 		return
 	}
 
 	writeDiscoveryJSON(w, http.StatusOK, data)
-	logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), nil, cacheStatus)
+	logDiscoveryRequest(r.Context(), route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), nil, cacheStatus)
 }
 
 func (s *discoveryService) handlePodcastIndexPodcastEpisodesByItunesID(w http.ResponseWriter, r *http.Request) {
@@ -535,15 +536,16 @@ func (s *discoveryService) handlePodcastIndexPodcastEpisodesByItunesID(w http.Re
 	route := discoveryPodcastEpisodesByItunesIDRoutePattern
 
 	if !s.allowPodcastIndexRequest(effectiveClientIP(r, s.trustedProxies)) {
-		writeDiscoveryErrorSpec(w, http.StatusTooManyRequests, discoveryErrRateLimited)
-		logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), errDiscoveryRateLimited, CacheStatusUncached)
+		writeDiscoveryErrorSpec(r, w, http.StatusTooManyRequests, discoveryErrRateLimited)
+		logDiscoveryRequest(r.Context(), route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), errDiscoveryRateLimited, CacheStatusUncached)
 		return
 	}
 
 	rawPodcastItunesID, ok := discoveryPodcastEpisodesByItunesIDFromPath(r.URL.Path)
 	if !ok {
-		writeDiscoveryErrorSpec(w, http.StatusNotFound, discoveryErrNotFound)
+		writeDiscoveryErrorSpec(r, w, http.StatusNotFound, discoveryErrNotFound)
 		logDiscoveryRequestWithStatus(
+			r.Context(),
 			route,
 			UpstreamKindPodcastIndex,
 			podcastIndexBaseURL,
@@ -557,8 +559,8 @@ func (s *discoveryService) handlePodcastIndexPodcastEpisodesByItunesID(w http.Re
 
 	podcastItunesID, err := normalizeItunesID(rawPodcastItunesID)
 	if err != nil {
-		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, CacheStatusMissError)
+		writeDiscoveryMappedError(r, w, err)
+		logDiscoveryRequest(r.Context(), route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, CacheStatusMissError)
 		return
 	}
 
@@ -609,19 +611,19 @@ func (s *discoveryService) handlePodcastIndexPodcastEpisodesByItunesID(w http.Re
 		var configErr *discoveryProviderConfigError
 		if errors.As(err, &configErr) {
 			slog.Error("podcastindex itunesId episodes lookup unavailable", "error", err, "provider", configErr.provider)
-			writeDiscoveryErrorSpec(w, http.StatusServiceUnavailable, discoveryErrProviderNotConfigured)
-			logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, cacheStatus)
+			writeDiscoveryErrorSpec(r, w, http.StatusServiceUnavailable, discoveryErrProviderNotConfigured)
+			logDiscoveryRequest(r.Context(), route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, cacheStatus)
 			return
 		}
 
 		slog.Warn("podcastindex itunesId episodes lookup failed", "error", err)
-		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, cacheStatus)
+		writeDiscoveryMappedError(r, w, err)
+		logDiscoveryRequest(r.Context(), route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, cacheStatus)
 		return
 	}
 
 	writeDiscoveryJSON(w, http.StatusOK, data)
-	logDiscoveryRequest(route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), nil, cacheStatus)
+	logDiscoveryRequest(r.Context(), route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), nil, cacheStatus)
 }
 
 func mapPodcastIndexBatchFeedBridge(feed podcastIndexBatchFeed) (podcastIndexBatchFeedBridge, bool) {

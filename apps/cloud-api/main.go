@@ -284,6 +284,21 @@ func runCloudServer(parent context.Context) error {
 		}
 	}()
 
+	shutdownTracing, err := initTracing(parent)
+	if err != nil {
+		return fmt.Errorf("unable to initialize tracing: %w", err)
+	}
+	// Trace flush runs before the Loki and metrics flushes thanks to LIFO
+	// defer ordering, so spans land in Tempo before correlated log lines and
+	// metric points are pushed.
+	defer func() {
+		flushCtx, flushCancel := context.WithTimeout(context.Background(), tracingShutdownFlushTimeout)
+		defer flushCancel()
+		if flushErr := shutdownTracing(flushCtx); flushErr != nil {
+			slog.Warn("tracing shutdown failed", "error", flushErr)
+		}
+	}()
+
 	proxy := cloudNewProxyService()
 	asrRelay := cloudNewASRRelayService()
 	discovery := newDiscoveryService()
@@ -296,7 +311,7 @@ func runCloudServer(parent context.Context) error {
 
 	server := &http.Server{
 		Addr:              addr,
-		Handler:           mux,
+		Handler:           wrapInboundHandler(mux),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
@@ -459,7 +474,7 @@ func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if attemptedUpstream && upstreamKind != "" {
 			recordUpstreamMetric(upstreamKind, "proxy/media", httpStatus, errClass, CacheStatusUncached, elapsed)
 		}
-		slog.Info("proxy request",
+		slog.InfoContext(r.Context(), "proxy request",
 			"route", "proxy/media",
 			"upstream_kind", upstreamKind,
 			"upstream_host", upstreamHost,
@@ -494,7 +509,7 @@ func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			httpStatus = proxyErr.status
 			errClass = classifyProxyParseError(proxyErr)
 		}
-		p.respondProxyError(w, pErr, allowedOrigin)
+		p.respondProxyError(r.Context(), w, pErr, allowedOrigin)
 		return
 	}
 	upstreamKind = "proxy"
@@ -505,14 +520,14 @@ func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if originErr != nil {
 		httpStatus = http.StatusForbidden
 		errClass = "origin_not_allowed"
-		p.respondProxyError(w, originErr, allowedOrigin)
+		p.respondProxyError(r.Context(), w, originErr, allowedOrigin)
 		return
 	}
 
 	if !p.allowRequest(effectiveClientIP(r, p.trustedProxies)) {
 		httpStatus = http.StatusTooManyRequests
 		errClass = "rate_limit"
-		writeProxyError(w, http.StatusTooManyRequests, "PROXY_RATE_LIMIT_EXCEEDED", "rate limit exceeded", allowedOrigin)
+		writeProxyError(r.Context(), w, http.StatusTooManyRequests, "PROXY_RATE_LIMIT_EXCEEDED", "rate limit exceeded", allowedOrigin)
 		return
 	}
 
@@ -523,7 +538,7 @@ func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		httpStatus = http.StatusBadGateway
 		errClass = "ssrf"
-		p.respondProxyError(w, err, allowedOrigin)
+		p.respondProxyError(r.Context(), w, err, allowedOrigin)
 		return
 	}
 
@@ -536,7 +551,7 @@ func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		httpStatus = http.StatusBadGateway
 		errClass = "create_request"
-		writeProxyError(w, http.StatusBadGateway, "PROXY_CREATE_REQUEST_FAILED", "unable to create upstream request", allowedOrigin)
+		writeProxyError(r.Context(), w, http.StatusBadGateway, "PROXY_CREATE_REQUEST_FAILED", "unable to create upstream request", allowedOrigin)
 		return
 	}
 
@@ -552,7 +567,7 @@ func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if ctx.Err() != nil || errors.Is(err, context.DeadlineExceeded) {
 			httpStatus = http.StatusGatewayTimeout
 			errClass = "timeout"
-			writeProxyError(w, http.StatusGatewayTimeout, "PROXY_UPSTREAM_TIMEOUT", "upstream request timed out", allowedOrigin)
+			writeProxyError(r.Context(), w, http.StatusGatewayTimeout, "PROXY_UPSTREAM_TIMEOUT", "upstream request timed out", allowedOrigin)
 			return
 		}
 
@@ -560,13 +575,13 @@ func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if errors.As(err, &proxyErr) {
 			httpStatus = proxyErr.status
 			errClass = "upstream"
-			writeProxyError(w, proxyErr.status, proxyErr.code, proxyErr.message, allowedOrigin)
+			writeProxyError(r.Context(), w, proxyErr.status, proxyErr.code, proxyErr.message, allowedOrigin)
 			return
 		}
 
 		httpStatus = http.StatusBadGateway
 		errClass = "upstream"
-		writeProxyError(w, http.StatusBadGateway, "PROXY_UPSTREAM_FAILED", "upstream request failed", allowedOrigin)
+		writeProxyError(r.Context(), w, http.StatusBadGateway, "PROXY_UPSTREAM_FAILED", "upstream request failed", allowedOrigin)
 		return
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -582,10 +597,10 @@ func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	if _, err := io.Copy(w, resp.Body); err != nil {
 		if ctx.Err() != nil {
-			slog.Warn("proxy body copy interrupted", "error", err, "target_host", spec.targetURL.Host)
+			slog.WarnContext(ctx, "proxy body copy interrupted", "error", err, "target_host", spec.targetURL.Host)
 			return
 		}
-		slog.Warn("proxy body copy failed", "error", err, "target_host", spec.targetURL.Host)
+		slog.WarnContext(ctx, "proxy body copy failed", "error", err, "target_host", spec.targetURL.Host)
 		return
 	}
 }
@@ -721,17 +736,17 @@ func (p *proxyService) parseProxyRequest(_ http.ResponseWriter, r *http.Request)
 	}
 }
 
-func (p *proxyService) respondProxyError(w http.ResponseWriter, err error, allowedOrigin string) {
+func (p *proxyService) respondProxyError(ctx context.Context, w http.ResponseWriter, err error, allowedOrigin string) {
 	var proxyErr *proxyError
 	if errors.As(err, &proxyErr) {
 		if proxyErr.status == http.StatusMethodNotAllowed {
 			w.Header().Set("Allow", "GET, POST")
 		}
-		writeProxyError(w, proxyErr.status, proxyErr.code, proxyErr.message, allowedOrigin)
+		writeProxyError(ctx, w, proxyErr.status, proxyErr.code, proxyErr.message, allowedOrigin)
 		return
 	}
 
-	writeProxyError(w, http.StatusBadGateway, "PROXY_UPSTREAM_FAILED", err.Error(), allowedOrigin)
+	writeProxyError(ctx, w, http.StatusBadGateway, "PROXY_UPSTREAM_FAILED", err.Error(), allowedOrigin)
 }
 
 func classifyProxyParseError(err *proxyError) string {
@@ -1246,7 +1261,7 @@ func generateRequestID() string {
 	return fmt.Sprintf("fallback-%x", time.Now().UnixNano())
 }
 
-func writeProxyError(w http.ResponseWriter, status int, code string, message string, allowedOrigin string) {
+func writeProxyError(ctx context.Context, w http.ResponseWriter, status int, code string, message string, allowedOrigin string) {
 	if strings.TrimSpace(code) == "" {
 		code = "PROXY_UNKNOWN_ERROR"
 	}
@@ -1260,7 +1275,7 @@ func writeProxyError(w http.ResponseWriter, status int, code string, message str
 		"request_id": requestID,
 	}
 	_ = json.NewEncoder(w).Encode(payload)
-	slog.Info("proxy error response", "request_id", requestID, "code", code, "status", status)
+	slog.InfoContext(ctx, "proxy error response", "request_id", requestID, "code", code, "status", status)
 }
 
 func resolveCloudDBPath() (string, error) {

@@ -2,10 +2,8 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"log/slog"
-	"os"
 	"strings"
 	"time"
 
@@ -40,16 +38,19 @@ func init() {
 // observabilityShutdown cleanly flushes and stops the OTLP exporter.
 type observabilityShutdown func(context.Context) error
 
-// initObservability initializes OTLP metric push to Grafana Cloud.
-// When env vars are not configured, it installs no-op instruments so
-// recording functions never panic.
+// initObservability initializes OTLP metric push to Grafana Cloud through the
+// shared OTLP resolver. When OTLP env vars are absent it installs no-op
+// instruments so recording functions never panic. When env vars are partially
+// supplied or malformed it returns a fail-fast error so the operator notices
+// at startup rather than from repeated upstream 401 upload failures.
 func initObservability(ctx context.Context) (observabilityShutdown, error) {
-	endpoint := strings.TrimSpace(os.Getenv(grafanaOTLPEndpointEnv))
-	instanceID := strings.TrimSpace(os.Getenv(grafanaOTLPInstanceIDEnv))
-	token := strings.TrimSpace(os.Getenv(grafanaOTLPTokenEnv))
+	otlp, err := resolveOTLPConfig()
+	if err != nil {
+		return nil, fmt.Errorf("observability: %w", err)
+	}
 
-	if endpoint == "" || instanceID == "" || token == "" {
-		slog.Info("observability: OTLP push disabled (set READIO_GRAFANA_OTLP_ENDPOINT, READIO_GRAFANA_OTLP_INSTANCE_ID, READIO_GRAFANA_OTLP_TOKEN to enable)")
+	if !otlp.Enabled {
+		slog.Info("observability: OTLP push disabled (set READIO_GRAFANA_OTLP_ENDPOINT and either READIO_GRAFANA_OTLP_HEADERS or READIO_GRAFANA_OTLP_INSTANCE_ID+READIO_GRAFANA_OTLP_TOKEN to enable)")
 		initNoopMetrics()
 
 		return func(context.Context) error { return nil }, nil
@@ -65,13 +66,9 @@ func initObservability(ctx context.Context) (observabilityShutdown, error) {
 		return nil, fmt.Errorf("observability: create resource: %w", err)
 	}
 
-	auth := base64.StdEncoding.EncodeToString([]byte(instanceID + ":" + token))
-
 	exporter, err := otlpmetrichttp.New(ctx,
-		otlpmetrichttp.WithEndpointURL(strings.TrimRight(endpoint, "/")+"/v1/metrics"),
-		otlpmetrichttp.WithHeaders(map[string]string{
-			"Authorization": "Basic " + auth,
-		}),
+		otlpmetrichttp.WithEndpointURL(otlp.EndpointForSignal("/v1/metrics")),
+		otlpmetrichttp.WithHeaders(otlp.HeadersCopy()),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("observability: create metric exporter: %w", err)
@@ -89,7 +86,7 @@ func initObservability(ctx context.Context) (observabilityShutdown, error) {
 		return nil, fmt.Errorf("observability: create instruments: %w", err)
 	}
 
-	slog.Info("observability: OTLP push enabled", "endpoint", endpoint)
+	slog.Info("observability: OTLP push enabled", "endpoint", otlp.Endpoint)
 
 	return func(ctx context.Context) error {
 		return provider.Shutdown(ctx)

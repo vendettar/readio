@@ -46,7 +46,49 @@ The frontend monitoring reports data directly from the user's browser to the Gra
 
 ---
 
-## 3. Backend Logs (Loki Push)
+## 3. Backend Traces (Tempo / OTLP Push)
+
+Backend distributed tracing pushes spans directly to Grafana Cloud Tempo via OTLP HTTP. Tracing is disabled by default and shares the same OTLP endpoint and auth resolver as metrics.
+
+### Steps to enable:
+1. Obtain your OTLP endpoint and headers from the Grafana Cloud **OpenTelemetry** tile (same tile used for metrics).
+2. Ensure the access policy token has both `metrics:write` and `traces:write` scopes.
+3. Set `READIO_GRAFANA_OTLP_HEADERS` (preferred) or configure the `READIO_GRAFANA_OTLP_INSTANCE_ID` + `READIO_GRAFANA_OTLP_TOKEN` fallback.
+4. Set `READIO_TRACING_ENABLED=true` and optionally `READIO_TRACING_SAMPLE_RATIO` (defaults to `0.1`).
+
+**Important**: Use `READIO_TRACING_SAMPLE_RATIO=1.0` for initial preproduction validation, then reduce to ≤ 0.1 before production deploy.
+
+### Required GitHub configuration:
+- Variable: `READIO_GRAFANA_OTLP_ENDPOINT` *(required for both the preferred headers path and the legacy instance/token fallback)*
+- Secret: `READIO_GRAFANA_OTLP_HEADERS` *(preferred — copied verbatim from the OpenTelemetry tile)*
+- Variable: `READIO_TRACING_ENABLED` — `true` to enable, omit or `false` to disable
+- Variable: `READIO_TRACING_SAMPLE_RATIO` — decimal between `0.0` and `1.0`
+
+If using the legacy instance/token fallback instead of `READIO_GRAFANA_OTLP_HEADERS`:
+- Variable: `READIO_GRAFANA_OTLP_ENDPOINT`
+- Variable: `READIO_GRAFANA_OTLP_INSTANCE_ID`
+- Secret: `READIO_GRAFANA_OTLP_TOKEN`
+
+### Span naming and safety:
+- Inbound HTTP span names use route templates (e.g. `GET /api/v1/discovery/{feedURL}`) — never raw paths, GUIDs, podcast IDs, or query strings.
+- Span attributes do not include full URLs, query strings, Referer, raw IDs, search text, or user input.
+- PodcastIndex and Apple outbound calls may produce local child spans but do not propagate `traceparent` to third-party hosts.
+- Proxy/media upstreams are not instrumented and do not receive trace headers.
+- Frontend Grafana Faro (`VITE_GRAFANA_FARO_*`) is a separate RUM pipeline and is not connected to backend Tempo tracing.
+
+### Loki-to-Tempo navigation:
+Request logs shipped to Loki include `trace_id` and `span_id` as payload fields (not stream labels). To enable clickable Loki → Tempo links in Grafana Explore:
+1. Open Grafana → **Connections** → **Data Sources** → select your Loki data source.
+2. Under **Derived fields**, add a new field:
+   - **Name**: `trace_id`
+   - **Regex**: `"trace_id":"(\w+)"`
+   - **Query**: `${__value.raw}`
+   - **Internal link**: enable, and point to your Tempo data source.
+3. Save and verify by clicking a `trace_id` value in a Loki log line.
+
+---
+
+## 4. Backend Logs (Loki Push)
 
 The backend pushes sanitized application logs directly to Grafana Cloud Logs/Loki. This pipeline is enabled when all three required Loki values are configured.
 
@@ -59,7 +101,7 @@ Optional backend-only values are `READIO_LOKI_LOG_LEVEL`, `READIO_LOKI_BATCH_SIZ
 
 Loki labels are exactly `service`, `env`, and `level`. Request IDs, routes, upstream hosts, user input, URLs, headers, cookies, tokens, local paths, and raw errors must not be labels.
 
-## 4. Grafana Log Queries
+## 5. Grafana Log Queries
 
 Production log inspection is owned by Grafana Cloud Logs/Loki. The Cloudflare Pages `/ops`
 route is only a Grafana entry point and does not read `/admin/*` memory log endpoints from
@@ -98,10 +140,11 @@ sum(count_over_time({service="readio-cloud", env="production", level="error"}[5m
 
 Tune alert thresholds after baseline production traffic and expected error volume are known.
 
-## 5. Live Acceptance Checklist
+## 6. Live Acceptance Checklist
 
 Real Grafana Cloud verification requires deploy credentials and Grafana access. If those are unavailable during implementation, operators should complete this checklist before final production acceptance:
 
+**Logs (Loki):**
 1. Deploy to preproduction with Loki env configured.
 2. Generate one info log and one warning/error log through normal Cloud API traffic.
 3. In Grafana Explore, query `{service="readio-cloud", env="preproduction"}`.
@@ -110,7 +153,21 @@ Real Grafana Cloud verification requires deploy credentials and Grafana access. 
 6. Confirm sanitized log lines do not contain secrets, full Referer queries, local file paths, transcript text, or authorization headers.
 7. Confirm metrics from 00B still arrive after enabling log shipping.
 
-## 6. Verifying Data
+**Traces (Tempo):**
+8. Deploy to preproduction with `READIO_TRACING_ENABLED=true` and `READIO_TRACING_SAMPLE_RATIO=1.0`.
+9. Hit `/api/v1/config`, one discovery endpoint, and one ASR relay or verify endpoint.
+10. In Grafana Explore, query Tempo for `service.name="readio-cloud"` — confirm traces appear.
+11. Confirm inbound span names are route templates (e.g. `GET /api/v1/discovery/{feedURL}`), not raw paths.
+12. Confirm span attributes do not include full URLs, query strings, Referer, GUIDs, or user text.
+13. Open a Loki log line that contains `trace_id` — confirm a Tempo link appears (configure derived field if absent; see section 3).
+14. Trigger one controlled upstream-backed discovery route — confirm outbound child spans appear without unsafe attributes.
+15. Confirm PodcastIndex outbound requests do not carry `traceparent` (inspect outbound headers or Tempo waterfall).
+16. Confirm proxy/media upstreams are not present in the Tempo waterfall.
+17. Confirm API responses still include `request_id` and do not expose `trace_id`.
+18. Reduce `READIO_TRACING_SAMPLE_RATIO` to ≤ `0.1` before production deploy.
+
+## 7. Verifying Data
 - **Metrics**: Search for `readio_cloud_http_request_duration_seconds` in Grafana Explore.
+- **Traces**: In Grafana Explore, select the Tempo data source and search for `service.name="readio-cloud"`.
 - **Logs**: Use the Loki queries above in Grafana Explore.
 - **RUM**: View user session data in the Grafana Frontend dashboard.

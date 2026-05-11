@@ -393,7 +393,7 @@ func TestProxyServiceRateLimiterDisableWhenBurstZero(t *testing.T) {
 func TestWriteProxyErrorUsesExplicitCode(t *testing.T) {
 	rr := httptest.NewRecorder()
 
-	writeProxyError(rr, http.StatusBadGateway, "PROXY_DIAL_FAILED", "upstream request failed", "")
+	writeProxyError(context.Background(), rr, http.StatusBadGateway, "PROXY_DIAL_FAILED", "upstream request failed", "")
 
 	assertProxyErrorPayload(t, rr.Body, "PROXY_DIAL_FAILED")
 }

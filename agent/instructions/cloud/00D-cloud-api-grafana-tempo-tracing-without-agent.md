@@ -1,4 +1,13 @@
-# Instruction 00D — Cloud API Grafana Tempo Tracing Without Agent
+# Instruction 00D — Cloud API Grafana Tempo Tracing Without Agent [COMPLETED]
+
+<!--
+Reviewed by: Top (agent)
+Completed: 2026-05-11
+Commit: 762add94
+Phases: 00D0–00D6 all implemented. 40+ tests. Full suite green. gofmt clean.
+Security review: no secret/URL/query leakage in spans or logs. OTLP_HEADERS browser-excluded.
+-->
+
 
 ## Objective
 

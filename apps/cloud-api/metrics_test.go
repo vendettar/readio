@@ -11,6 +11,7 @@ import (
 
 func TestInitObservabilityNoopWhenEnvMissing(t *testing.T) {
 	t.Setenv(grafanaOTLPEndpointEnv, "")
+	t.Setenv(grafanaOTLPHeadersEnv, "")
 	t.Setenv(grafanaOTLPInstanceIDEnv, "")
 	t.Setenv(grafanaOTLPTokenEnv, "")
 
@@ -28,17 +29,27 @@ func TestInitObservabilityNoopWhenEnvMissing(t *testing.T) {
 	recordASRRelayMetric("groq", "direct", http.StatusOK, "none")
 }
 
-func TestInitObservabilityNoopWhenPartialEnv(t *testing.T) {
+// Partial OTLP configuration must fail fast so the operator notices at
+// startup rather than from repeated upstream 401 upload failures.
+func TestInitObservabilityFailsFastOnPartialEnv(t *testing.T) {
 	t.Setenv(grafanaOTLPEndpointEnv, "https://otlp-gateway.example.com/otlp")
+	t.Setenv(grafanaOTLPHeadersEnv, "")
 	t.Setenv(grafanaOTLPInstanceIDEnv, "")
 	t.Setenv(grafanaOTLPTokenEnv, "some-token")
 
-	shutdown, err := initObservability(context.Background())
-	if err != nil {
-		t.Fatalf("initObservability error: %v", err)
+	if _, err := initObservability(context.Background()); err == nil {
+		t.Fatalf("initObservability should fail when instance id is missing while token is set")
 	}
-	if err := shutdown(context.Background()); err != nil {
-		t.Fatalf("shutdown error: %v", err)
+}
+
+func TestInitObservabilityFailsFastOnMalformedHeaders(t *testing.T) {
+	t.Setenv(grafanaOTLPEndpointEnv, "https://otlp-gateway.example.com/otlp")
+	t.Setenv(grafanaOTLPHeadersEnv, "NotAllowed=value")
+	t.Setenv(grafanaOTLPInstanceIDEnv, "")
+	t.Setenv(grafanaOTLPTokenEnv, "")
+
+	if _, err := initObservability(context.Background()); err == nil {
+		t.Fatalf("initObservability should fail when OTLP headers carry disallowed entries")
 	}
 }
 
@@ -66,7 +77,12 @@ func TestOTLPEnvVarsAbsentFromBrowserEnvAllowlist(t *testing.T) {
 		t.Fatalf("unmarshal allowlist artifact: %v", err)
 	}
 
-	forbidden := []string{grafanaOTLPEndpointEnv, grafanaOTLPInstanceIDEnv, grafanaOTLPTokenEnv}
+	forbidden := []string{
+		grafanaOTLPEndpointEnv,
+		grafanaOTLPHeadersEnv,
+		grafanaOTLPInstanceIDEnv,
+		grafanaOTLPTokenEnv,
+	}
 	for _, key := range artifact {
 		for _, f := range forbidden {
 			if key == f {

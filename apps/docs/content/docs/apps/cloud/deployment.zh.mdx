@@ -31,7 +31,8 @@ description: 基于 Docker 的云端 CI/CD 运维手册。
 | `READIO_ADMIN_TOKEN` | 后端 `/admin/*` 端点的 Bearer Token。生产 Cloudflare Pages `/ops` 路由不使用这个 token。 |
 | `PODCAST_INDEX_API_KEY` | PodcastIndex API Key |
 | `PODCAST_INDEX_API_SECRET` | PodcastIndex API Secret |
-| `READIO_GRAFANA_OTLP_TOKEN` | Grafana OTLP 上报 Token |
+| `READIO_GRAFANA_OTLP_TOKEN` | Grafana OTLP 上报 Token（instance/token fallback 认证；优先级低于 `READIO_GRAFANA_OTLP_HEADERS`） |
+| `READIO_GRAFANA_OTLP_HEADERS` | 可选。首选的 header-based OTLP 认证，直接从 Grafana Cloud OpenTelemetry tile 复制（例如 `Authorization=Basic <base64>`）。设置后会对 metrics 和 traces 同时覆盖 `READIO_GRAFANA_OTLP_INSTANCE_ID` + `READIO_GRAFANA_OTLP_TOKEN`。禁止出现在 `/env.js`、浏览器白名单、日志或文档示例中（真实值）。 |
 | `READIO_GRAFANA_LOKI_TOKEN` | 可选 Grafana Cloud Logs Token。只有同时配置它、`READIO_GRAFANA_LOKI_URL` 和 `READIO_GRAFANA_LOKI_USER` 时，Loki 日志投递才会启用。 |
 | `READIO_ASR_RELAY_PUBLIC_TOKEN` | 浏览器 / 运行时读取的 ASR relay public token |
 | `READIO_ASR_WORKER_SHARED_SECRET` | `cloud-api` 与 Cloudflare ASR Worker 之间的共享密钥 |
@@ -57,6 +58,8 @@ description: 基于 Docker 的云端 CI/CD 运维手册。
 | `READIO_ASR_WORKER_BASE_URL` | Cloudflare ASR Worker 的基础 URL |
 | `READIO_EN_DICTIONARY_API_URL` | 通过 `/env.js` 暴露给浏览器的英文词典 API 地址 |
 | `READIO_EN_DICTIONARY_API_TRANSPORT` | 通过 `/env.js` 暴露给浏览器的英文词典传输契约 |
+| `READIO_TRACING_ENABLED` | 可选。设为 `true` 时通过 OTLP 向 Grafana Cloud Tempo 推送分布式追踪数据。默认禁用。需配置 OTLP endpoint 和认证（`READIO_GRAFANA_OTLP_HEADERS` 或 instance/token）。 |
+| `READIO_TRACING_SAMPLE_RATIO` | 可选。采样率，取值 `0.0`–`1.0`；默认 `0.1`（10%）。预发初始验证时使用 `1.0`，部署生产前降低采样率。 |
 
 ## 3. Cloudflare Pages 前端配置
 
@@ -117,9 +120,10 @@ VPS 必须能够拉取 `ghcr.io/${owner}/readio-cloud-api-pre` 和 `ghcr.io/${ow
   - `cloud-ui` 的生产发布与 VPS 解耦，不走 Docker Compose
 - **可观测性**：
   - 此部署不安装 Grafana Alloy、node_exporter、本地 Prometheus 或 Loki agent。
-  - 配置 `READIO_GRAFANA_OTLP_ENDPOINT`、`READIO_GRAFANA_OTLP_INSTANCE_ID` 和 `READIO_GRAFANA_OTLP_TOKEN` 后，`apps/cloud-api` 会通过 OTLP 向 Grafana Cloud 推送应用指标和应用侧采集的主机关键指标。
-  - 同时配置 `READIO_GRAFANA_LOKI_URL`、`READIO_GRAFANA_LOKI_USER` 和 `READIO_GRAFANA_LOKI_TOKEN` 后，`apps/cloud-api` 可以直接把脱敏后的应用日志推送到 Grafana Cloud Logs/Loki。这是应用侧 push 路径，不是 Alloy、Promtail、Docker log driver 或主机日志 agent。
-  - 00B 指标与 00C 日志是两条独立 pipeline：OTLP 指标使用 OTLP endpoint/instance/token，Loki 日志使用 Loki URL/user/token。
+  - 配置 `READIO_GRAFANA_OTLP_ENDPOINT` 和 OTLP 认证（`READIO_GRAFANA_OTLP_HEADERS` 或 `READIO_GRAFANA_OTLP_INSTANCE_ID` + `READIO_GRAFANA_OTLP_TOKEN`）后，`apps/cloud-api` 会通过 OTLP 向 Grafana Cloud 推送应用指标和主机关键指标。需要 `metrics:write` 权限。
+  - 设置 `READIO_TRACING_ENABLED=true` 并配置 OTLP endpoint 和认证后，`apps/cloud-api` 可通过 OTLP 直接向 Grafana Cloud Tempo 推送分布式追踪数据。metrics 和 traces 共用同一个 OTLP endpoint 和认证解析器，推荐使用 `READIO_GRAFANA_OTLP_HEADERS`。需要 `traces:write` 权限。默认禁用。
+  - 同时配置 `READIO_GRAFANA_LOKI_URL`、`READIO_GRAFANA_LOKI_USER` 和 `READIO_GRAFANA_LOKI_TOKEN` 后，`apps/cloud-api` 可以直接把脱敏后的应用日志推送到 Grafana Cloud Logs/Loki。这是应用侧 push 路径，不是 Alloy、Promtail、Docker log driver 或主机日志 agent。需要 `logs:write` 权限。
+  - metrics、traces 和 Loki 日志是三条独立 pipeline：OTLP metrics 和 OTLP traces 共用同一 endpoint 和认证解析器，Loki 日志使用独立的 Loki URL/user/token。
   - Loki `env` label 优先来自后端 `READIO_DEPLOY_ENV`，未设置时回退到 `VITE_GRAFANA_FARO_ENV`。取值会规范化为 `production`、`preproduction` 或 `unknown`。
   - `/admin/logs` 仍是 same-origin、memory-only 的运维日志界面。启用 Loki 后，Loki 是持久化远端应用日志界面。
   - 主机日志不会投递到 Grafana；Docker logs 仍可通过 `make logs-pre`、`make logs-prod` 或直接 Docker 操作查看。
@@ -128,6 +132,9 @@ VPS 必须能够拉取 `ghcr.io/${owner}/readio-cloud-api-pre` 和 `ghcr.io/${ow
   - 主机指标名称包括 `readio_cloud_process_goroutines`、`readio_cloud_process_heap_alloc_bytes`、`readio_cloud_process_memory_sys_bytes`、`readio_cloud_process_uptime_seconds`、`readio_cloud_sqlite_db_size_bytes`、`readio_cloud_sqlite_wal_size_bytes`、`readio_cloud_data_filesystem_free_bytes`、`readio_cloud_data_filesystem_total_bytes` 和 `readio_cloud_transcript_assets_size_bytes`。
   - Loki 投递使用有界队列，并且不会阻塞请求路径。队列满或 Loki 不可用时会本地丢弃日志，请求继续执行；服务关闭时会进行 best-effort flush。
   - Loki labels 只允许 `service`、`env` 和 `level`；高基数字段不得进入 labels。
+  - Loki 日志行在请求上下文存在活跃 span 时会包含 `trace_id` 和 `span_id` payload 字段（不是 stream label），用于在 Grafana 中从 Loki 跳转到 Tempo。若 Grafana 未自动建立 `trace_id` → Tempo 链接，需在 Loki 数据源中手动配置 derived field：字段名 `trace_id`、正则 `"trace_id":"(\w+)"`、指向 Tempo 数据源的内部链接。
+  - 前端 Grafana Faro RUM（`VITE_GRAFANA_FARO_*`）是独立 pipeline，与后端 Tempo 追踪互不关联。
+  - `trace_id` 不会作为 Loki stream label，也不会出现在公开或面向用户的 API 响应中。
 
 ## 6. 运维常用命令
 
