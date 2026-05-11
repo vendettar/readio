@@ -444,11 +444,18 @@ func newDiscoveryService() *discoveryService {
 		)
 	}
 	return &discoveryService{
+		// PodcastIndex and Apple iTunes Search/Charts both flow through this
+		// client. Both are tightly controlled upstreams with bounded URL
+		// shapes, so the transport is wrapped with the project's instrumented
+		// transport to produce local outbound spans. Trace propagation is
+		// disabled (false) so traceparent is never sent to these third-party
+		// hosts.
 		client: &http.Client{
 			Timeout: discoveryRequestTimeout,
 			CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
 				return http.ErrUseLastResponse
 			},
+			Transport: newInstrumentedTransport(http.DefaultTransport, false),
 		},
 		timeout:             discoveryRequestTimeout,
 		searchBaseURL:       discoverySearchBaseURL,
@@ -541,7 +548,7 @@ func (s *discoveryService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	allowedMethod := r.Method == http.MethodGet || (r.Method == http.MethodPost && cleanedPath == discoveryPodcastsBatchRoute)
 	if !allowedMethod {
 		w.Header().Set("Allow", strings.Join([]string{http.MethodGet, http.MethodPost}, ", "))
-		writeDiscoveryErrorSpec(w, http.StatusMethodNotAllowed, discoveryErrMethodNotAllowed)
+		writeDiscoveryErrorSpec(r, w, http.StatusMethodNotAllowed, discoveryErrMethodNotAllowed)
 		recordHTTPMetric(cleanedPath, http.StatusMethodNotAllowed, "invalid_method", time.Since(start))
 		return
 	}
@@ -566,16 +573,16 @@ func (s *discoveryService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			s.handlePodcastIndexPodcastByItunesID(w, r)
 			return
 		}
-		writeDiscoveryErrorSpec(w, http.StatusNotFound, discoveryErrNotFound)
+		writeDiscoveryErrorSpec(r, w, http.StatusNotFound, discoveryErrNotFound)
 		recordHTTPMetric(cleanedPath, http.StatusNotFound, "unknown", time.Since(start))
 	}
 }
 
-func logDiscoveryRequest(route, upstreamKind, upstreamHost string, elapsed time.Duration, err error, cacheStatus string) {
-	logDiscoveryRequestWithStatus(route, upstreamKind, upstreamHost, elapsed, err, cacheStatus, discoveryMetricStatus(err))
+func logDiscoveryRequest(ctx context.Context, route, upstreamKind, upstreamHost string, elapsed time.Duration, err error, cacheStatus string) {
+	logDiscoveryRequestWithStatus(ctx, route, upstreamKind, upstreamHost, elapsed, err, cacheStatus, discoveryMetricStatus(err))
 }
 
-func logDiscoveryRequestWithStatus(route, upstreamKind, upstreamHost string, elapsed time.Duration, err error, cacheStatus string, httpStatus int) {
+func logDiscoveryRequestWithStatus(ctx context.Context, route, upstreamKind, upstreamHost string, elapsed time.Duration, err error, cacheStatus string, httpStatus int) {
 	// Extract hostname if a full URL was passed.
 	if parsed, parseErr := url.Parse(upstreamHost); parseErr == nil && parsed.Host != "" {
 		upstreamHost = parsed.Host
@@ -612,9 +619,9 @@ func logDiscoveryRequestWithStatus(route, upstreamKind, upstreamHost string, ela
 	}
 
 	if elapsed >= discoverySlowRequestThreshold || err != nil {
-		slog.Warn("discovery request", attrs...)
+		slog.WarnContext(ctx, "discovery request", attrs...)
 	} else {
-		slog.Info("discovery request", attrs...)
+		slog.InfoContext(ctx, "discovery request", attrs...)
 	}
 }
 
@@ -831,56 +838,56 @@ func writeDiscoveryJSON(w http.ResponseWriter, status int, payload any) {
 	_ = json.NewEncoder(w).Encode(payload)
 }
 
-func writeDiscoveryError(w http.ResponseWriter, status int, code, message string) {
+func writeDiscoveryError(r *http.Request, w http.ResponseWriter, status int, code, message string) {
 	requestID := generateRequestID()
 	writeDiscoveryJSON(w, status, map[string]string{
 		"code":       code,
 		"message":    message,
 		"request_id": requestID,
 	})
-	slog.Warn("discovery error response", "request_id", requestID, "code", code, "status", status)
+	slog.WarnContext(r.Context(), "discovery error response", "request_id", requestID, "code", code, "status", status)
 }
 
-func writeDiscoveryErrorSpec(w http.ResponseWriter, status int, spec discoveryErrorSpec) {
-	writeDiscoveryError(w, status, spec.code, spec.message)
+func writeDiscoveryErrorSpec(r *http.Request, w http.ResponseWriter, status int, spec discoveryErrorSpec) {
+	writeDiscoveryError(r, w, status, spec.code, spec.message)
 }
 
-func writeDiscoveryMappedError(w http.ResponseWriter, err error) {
+func writeDiscoveryMappedError(r *http.Request, w http.ResponseWriter, err error) {
 	var paramErr *discoveryParamError
 	if errors.As(err, &paramErr) {
-		writeDiscoveryError(w, http.StatusBadRequest, paramErr.code, paramErr.message)
+		writeDiscoveryError(r, w, http.StatusBadRequest, paramErr.code, paramErr.message)
 		return
 	}
 
 	var statusErr *discoveryUpstreamStatusError
 	if errors.As(err, &statusErr) {
-		writeDiscoveryErrorSpec(w, http.StatusBadGateway, discoveryErrUpstreamInvalidResponseStatus)
+		writeDiscoveryErrorSpec(r, w, http.StatusBadGateway, discoveryErrUpstreamInvalidResponseStatus)
 		return
 	}
 
 	var piInvalidErr *podcastIndexInvalidResponseError
 	if errors.As(err, &piInvalidErr) {
-		writeDiscoveryErrorSpec(w, http.StatusBadGateway, discoveryErrUpstreamInvalidResponsePayload)
+		writeDiscoveryErrorSpec(r, w, http.StatusBadGateway, discoveryErrUpstreamInvalidResponsePayload)
 		return
 	}
 
 	switch {
 	case errors.Is(err, errDiscoveryTimeout):
-		writeDiscoveryErrorSpec(w, http.StatusGatewayTimeout, discoveryErrUpstreamTimeout)
+		writeDiscoveryErrorSpec(r, w, http.StatusGatewayTimeout, discoveryErrUpstreamTimeout)
 	case errors.Is(err, errDiscoveryTooLarge):
-		writeDiscoveryErrorSpec(w, http.StatusBadGateway, discoveryErrUpstreamTooLarge)
+		writeDiscoveryErrorSpec(r, w, http.StatusBadGateway, discoveryErrUpstreamTooLarge)
 	case errors.Is(err, errDiscoveryDecode):
-		writeDiscoveryErrorSpec(w, http.StatusBadGateway, discoveryErrInvalidUpstreamPayload)
+		writeDiscoveryErrorSpec(r, w, http.StatusBadGateway, discoveryErrInvalidUpstreamPayload)
 	default:
 		if err != nil && strings.Contains(err.Error(), "podcastindex: too many GUIDs") {
-			writeDiscoveryErrorSpec(w, http.StatusBadRequest, discoveryErrInvalidGuidBatchTooMany)
+			writeDiscoveryErrorSpec(r, w, http.StatusBadRequest, discoveryErrInvalidGuidBatchTooMany)
 			return
 		}
 		if err != nil && strings.Contains(err.Error(), "podcastindex: request body too large") {
-			writeDiscoveryErrorSpec(w, http.StatusBadRequest, discoveryErrInvalidGuidBatchTooLarge)
+			writeDiscoveryErrorSpec(r, w, http.StatusBadRequest, discoveryErrInvalidGuidBatchTooLarge)
 			return
 		}
-		writeDiscoveryErrorSpec(w, http.StatusBadGateway, discoveryErrUpstreamRequestFailed)
+		writeDiscoveryErrorSpec(r, w, http.StatusBadGateway, discoveryErrUpstreamRequestFailed)
 	}
 }
 

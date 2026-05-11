@@ -33,7 +33,8 @@ Create two environments in GitHub **Settings -> Environments**: `cloud-productio
 | `READIO_ADMIN_TOKEN` | Bearer token for backend `/admin/*` endpoints. The production Cloudflare Pages `/ops` route does not use this token. |
 | `PODCAST_INDEX_API_KEY` | PodcastIndex API Key |
 | `PODCAST_INDEX_API_SECRET` | PodcastIndex API Secret |
-| `READIO_GRAFANA_OTLP_TOKEN` | Grafana OTLP Push Token |
+| `READIO_GRAFANA_OTLP_TOKEN` | Grafana OTLP Push Token (instance/token fallback auth; takes lower precedence than `READIO_GRAFANA_OTLP_HEADERS`) |
+| `READIO_GRAFANA_OTLP_HEADERS` | Optional. Preferred header-based OTLP auth value copied verbatim from the Grafana Cloud OpenTelemetry tile (e.g. `Authorization=Basic <base64>`). When set, takes precedence over `READIO_GRAFANA_OTLP_INSTANCE_ID` + `READIO_GRAFANA_OTLP_TOKEN` for both metrics and traces. Must never appear in `/env.js`, browser allowlists, logs, or documentation examples with real values. |
 | `READIO_GRAFANA_LOKI_TOKEN` | Optional Grafana Cloud Logs token. Loki log shipping stays disabled unless this token, `READIO_GRAFANA_LOKI_URL`, and `READIO_GRAFANA_LOKI_USER` are all configured. |
 | `READIO_ASR_RELAY_PUBLIC_TOKEN` | Public relay token consumed by browser/runtime config |
 | `READIO_ASR_WORKER_SHARED_SECRET` | Shared secret between `cloud-api` and the ASR Worker |
@@ -58,6 +59,8 @@ Create two environments in GitHub **Settings -> Environments**: `cloud-productio
 | `READIO_ASR_WORKER_BASE_URL` | Base URL of the Cloudflare Worker ASR proxy |
 | `READIO_EN_DICTIONARY_API_URL` | Browser-public English dictionary API endpoint emitted through `/env.js` |
 | `READIO_EN_DICTIONARY_API_TRANSPORT` | Browser-public English dictionary transport emitted through `/env.js` |
+| `READIO_TRACING_ENABLED` | Optional. Set to `true` to enable distributed tracing export to Grafana Cloud Tempo via OTLP. Disabled by default. Requires a valid OTLP endpoint and auth (via `READIO_GRAFANA_OTLP_HEADERS` or the instance/token pair). |
+| `READIO_TRACING_SAMPLE_RATIO` | Optional. Decimal sampling rate between `0.0` and `1.0`; defaults to `0.1` (10 %). Use `1.0` for initial preproduction validation, then reduce before production deploy. |
 
 ## 3. Cloudflare Pages Configuration
 
@@ -108,9 +111,10 @@ The `release` branch is strictly reserved for the **Production** environment. Co
   - `cloud-ui` production deploy is isolated from the VPS workflows and does not use Docker Compose
 - **Observability**:
   - Grafana Alloy, node_exporter, local Prometheus, and Loki agents are not installed by this deployment.
-  - `apps/cloud-api` pushes application and app-owned host-critical metrics to Grafana Cloud through OTLP when `READIO_GRAFANA_OTLP_ENDPOINT`, `READIO_GRAFANA_OTLP_INSTANCE_ID`, and `READIO_GRAFANA_OTLP_TOKEN` are configured.
-  - `apps/cloud-api` can push sanitized application logs directly to Grafana Cloud Logs/Loki when `READIO_GRAFANA_LOKI_URL`, `READIO_GRAFANA_LOKI_USER`, and `READIO_GRAFANA_LOKI_TOKEN` are all configured. This is an application-side push path, not Alloy, Promtail, a Docker log driver, or a host log agent.
-  - 00B metrics and 00C logs are separate pipelines: OTLP metrics use the OTLP endpoint/instance/token, while Loki logs use the Loki URL/user/token.
+  - `apps/cloud-api` pushes application and app-owned host-critical metrics to Grafana Cloud through OTLP when `READIO_GRAFANA_OTLP_ENDPOINT` and OTLP auth (`READIO_GRAFANA_OTLP_HEADERS` or `READIO_GRAFANA_OTLP_INSTANCE_ID` + `READIO_GRAFANA_OTLP_TOKEN`) are configured. Requires `metrics:write` scope.
+  - `apps/cloud-api` can push distributed traces directly to Grafana Cloud Tempo via OTLP when `READIO_TRACING_ENABLED=true` and OTLP endpoint/auth are configured. The same OTLP endpoint and auth resolver is shared with metrics; `READIO_GRAFANA_OTLP_HEADERS` is the preferred auth path. Requires `traces:write` scope. Tracing is disabled by default.
+  - `apps/cloud-api` can push sanitized application logs directly to Grafana Cloud Logs/Loki when `READIO_GRAFANA_LOKI_URL`, `READIO_GRAFANA_LOKI_USER`, and `READIO_GRAFANA_LOKI_TOKEN` are all configured. This is an application-side push path, not Alloy, Promtail, a Docker log driver, or a host log agent. Requires `logs:write` scope.
+  - Metrics, traces, and Loki logs are three distinct pipelines: OTLP metrics and OTLP traces share the same endpoint and auth resolver, while Loki logs use the separate Loki URL/user/token.
   - Loki `env` labels come from backend `READIO_DEPLOY_ENV` first, then fall back to `VITE_GRAFANA_FARO_ENV` if unset. Values normalize to `production`, `preproduction`, or `unknown`.
   - `/admin/*` remains a same-origin, memory-backed operator surface on the backend. Loki is the durable remote application log surface when enabled.
   - Host logs are not shipped to Grafana. Docker logs remain available through `make logs-pre`, `make logs-prod`, or direct Docker operations.
@@ -119,6 +123,9 @@ The `release` branch is strictly reserved for the **Production** environment. Co
   - Host metric names include `readio_cloud_process_goroutines`, `readio_cloud_process_heap_alloc_bytes`, `readio_cloud_process_memory_sys_bytes`, `readio_cloud_process_uptime_seconds`, `readio_cloud_sqlite_db_size_bytes`, `readio_cloud_sqlite_wal_size_bytes`, `readio_cloud_data_filesystem_free_bytes`, `readio_cloud_data_filesystem_total_bytes`, and `readio_cloud_transcript_assets_size_bytes`.
   - Loki shipping is bounded and non-blocking for request paths. If the queue is full or Loki is unavailable, logs are dropped locally and requests continue; shutdown performs a best-effort flush.
   - Loki labels are limited to `service`, `env`, and `level`; high-cardinality values stay out of labels.
+  - Loki log lines include `trace_id` and `span_id` payload fields (not stream labels) when the request context carries an active trace span. This enables Loki-to-Tempo navigation in Grafana. If Grafana does not auto-link `trace_id` to Tempo, configure a derived field on the Loki data source: field name `trace_id`, regex `"trace_id":"(\w+)"`, internal link pointing to the Tempo data source with value `${__value.raw}`.
+  - Frontend Grafana Faro RUM is a separate pipeline (`VITE_GRAFANA_FARO_*`) and is not connected to backend Tempo tracing.
+  - `trace_id` is never a Loki stream label and is never returned in public or user-facing API responses.
 
 ## 6. Operations
 

@@ -146,7 +146,15 @@ var (
 )
 
 type asrRelayService struct {
-	client             *http.Client
+	// client targets third-party ASR provider endpoints directly (Groq,
+	// Cloudflare AI, etc.). It must NOT be tracing-instrumented, so the
+	// project never propagates traceparent to third-party providers and
+	// never records full upstream URLs as span attributes.
+	client *http.Client
+	// workerClient targets the first-party Readio ASR worker hop. The worker
+	// is repo-owned and bounded; outbound spans here may safely propagate
+	// W3C TraceContext to support end-to-end traces.
+	workerClient       *http.Client
 	timeout            time.Duration
 	bodyLimit          int64
 	providers          map[string]asrRelayProviderConfig
@@ -174,6 +182,7 @@ func newASRRelayService() *asrRelayService {
 
 	return &asrRelayService{
 		client:             &http.Client{},
+		workerClient:       newASRWorkerHTTPClient(),
 		timeout:            asrRelayRequestTimeout,
 		bodyLimit:          asrRelayBodyLimit,
 		providers:          defaultASRRelayProviders(),
@@ -263,7 +272,7 @@ func (s *asrRelayService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if route == "asr-relay/transcriptions" {
 			recordASRRelayMetric(metricProviderLabel, metricModeLabel, httpStatus, errClass)
 		}
-		slog.Info("asr-relay request",
+		slog.InfoContext(r.Context(), "asr-relay request",
 			"route", route,
 			"upstream_kind", upstreamKind,
 			"upstream_host", upstreamHost,
@@ -299,14 +308,14 @@ func (s *asrRelayService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		httpStatus = http.StatusMethodNotAllowed
 		errClass = "invalid_method"
 		route = "asr-relay"
-		writeASRRelayError(w, http.StatusMethodNotAllowed, "only POST is allowed", "ASR_INVALID_METHOD", nil)
+		writeASRRelayError(r.Context(), w, http.StatusMethodNotAllowed, "only POST is allowed", "ASR_INVALID_METHOD", nil)
 		return
 	}
 	if relayErr := s.authorizeRequest(r); relayErr != nil {
 		httpStatus = relayErr.Status
 		errClass = asrErrClass(relayErr.Code)
 		route = "asr-relay"
-		writeASRRelayError(w, relayErr.Status, relayErr.Message, relayErr.Code, relayErr.RetryAfterMs)
+		writeASRRelayError(r.Context(), w, relayErr.Status, relayErr.Message, relayErr.Code, relayErr.RetryAfterMs)
 		return
 	}
 
@@ -317,7 +326,7 @@ func (s *asrRelayService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if relayErr != nil {
 			httpStatus = relayErr.Status
 			errClass = asrErrClass(relayErr.Code)
-			writeASRRelayError(w, relayErr.Status, relayErr.Message, relayErr.Code, relayErr.RetryAfterMs)
+			writeASRRelayError(r.Context(), w, relayErr.Status, relayErr.Message, relayErr.Code, relayErr.RetryAfterMs)
 			return
 		}
 		metricProviderLabel = payload.Provider
@@ -327,7 +336,7 @@ func (s *asrRelayService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if relayErr != nil {
 			httpStatus = relayErr.Status
 			errClass = asrErrClass(relayErr.Code)
-			writeASRRelayError(w, relayErr.Status, relayErr.Message, relayErr.Code, relayErr.RetryAfterMs)
+			writeASRRelayError(r.Context(), w, relayErr.Status, relayErr.Message, relayErr.Code, relayErr.RetryAfterMs)
 			return
 		}
 		httpStatus = http.StatusOK
@@ -337,27 +346,27 @@ func (s *asrRelayService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if ct := strings.ToLower(strings.TrimSpace(r.Header.Get("Content-Type"))); ct == "" || !strings.HasPrefix(ct, "application/json") {
 			httpStatus = http.StatusBadRequest
 			errClass = "invalid_payload"
-			writeASRRelayError(w, http.StatusBadRequest, "content-type must be application/json", "ASR_INVALID_PAYLOAD", nil)
+			writeASRRelayError(r.Context(), w, http.StatusBadRequest, "content-type must be application/json", "ASR_INVALID_PAYLOAD", nil)
 			return
 		}
 		body, err := io.ReadAll(io.LimitReader(r.Body, s.bodyLimit+1))
 		if err != nil {
 			httpStatus = http.StatusBadRequest
 			errClass = "invalid_payload"
-			writeASRRelayError(w, http.StatusBadRequest, "invalid relay request payload", "ASR_INVALID_PAYLOAD", nil)
+			writeASRRelayError(r.Context(), w, http.StatusBadRequest, "invalid relay request payload", "ASR_INVALID_PAYLOAD", nil)
 			return
 		}
 		if int64(len(body)) > s.bodyLimit {
 			httpStatus = http.StatusRequestEntityTooLarge
 			errClass = "payload_too_large"
-			writeASRRelayError(w, http.StatusRequestEntityTooLarge, "relay request body too large", "ASR_PAYLOAD_TOO_LARGE", nil)
+			writeASRRelayError(r.Context(), w, http.StatusRequestEntityTooLarge, "relay request body too large", "ASR_PAYLOAD_TOO_LARGE", nil)
 			return
 		}
 		var payload asrVerifyRequestPayload
 		if err := decodeStrictJSON(body, &payload); err != nil {
 			httpStatus = http.StatusBadRequest
 			errClass = "invalid_payload"
-			writeASRRelayError(w, http.StatusBadRequest, "invalid relay request payload", "ASR_INVALID_PAYLOAD", nil)
+			writeASRRelayError(r.Context(), w, http.StatusBadRequest, "invalid relay request payload", "ASR_INVALID_PAYLOAD", nil)
 			return
 		}
 		upstreamKind, upstreamHost = s.asrRequestUpstream(payload.Provider, true)
@@ -365,13 +374,13 @@ func (s *asrRelayService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if relayErr != nil {
 			httpStatus = relayErr.Status
 			errClass = asrErrClass(relayErr.Code)
-			writeASRRelayError(w, relayErr.Status, relayErr.Message, relayErr.Code, relayErr.RetryAfterMs)
+			writeASRRelayError(r.Context(), w, relayErr.Status, relayErr.Message, relayErr.Code, relayErr.RetryAfterMs)
 			return
 		}
 		if !ok {
 			httpStatus = http.StatusUnauthorized
 			errClass = "unauthorized"
-			writeASRRelayError(w, http.StatusUnauthorized, "provider rejected credentials", "ASR_UNAUTHORIZED", nil)
+			writeASRRelayError(r.Context(), w, http.StatusUnauthorized, "provider rejected credentials", "ASR_UNAUTHORIZED", nil)
 			return
 		}
 		httpStatus = http.StatusOK
@@ -439,7 +448,7 @@ func (s *asrRelayService) logOriginAuthorizationFailure(r *http.Request, code st
 	trustedProxyMatch := peerIP != nil && s.trustedProxies.contains(peerIP)
 	loopbackPeer := peerIP != nil && peerIP.IsLoopback()
 
-	slog.Warn("asr relay origin authorization failed",
+	slog.WarnContext(r.Context(), "asr relay origin authorization failed",
 		"code", code,
 		"remote_addr", r.RemoteAddr,
 		"host", r.Host,
@@ -703,10 +712,17 @@ func (s *asrRelayService) transcribe(ctx context.Context, payload asrRelayReques
 	reqCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	// Worker transport: only Groq transcription submit.
+	// Worker transport: only Groq transcription submit. The worker hop is a
+	// first-party endpoint where outbound trace propagation is desired, so
+	// it uses workerClient (instrumented transport) instead of the direct
+	// third-party client.
 	if transportMode == "worker" {
+		workerClient := s.workerClient
+		if workerClient == nil {
+			workerClient = client
+		}
 		start := time.Now()
-		result, relayErr, hopError := s.transcribeViaWorker(reqCtx, client, provider, model, apiKey, payload.AudioReader, audioMimeType)
+		result, relayErr, hopError := s.transcribeViaWorker(reqCtx, workerClient, provider, model, apiKey, payload.AudioReader, audioMimeType)
 		duration := time.Since(start)
 		if relayErr != nil {
 			if hopError {
@@ -1615,7 +1631,7 @@ func jsonRequest(ctx context.Context, method, target string, body any) (*http.Re
 	return req, nil
 }
 
-func writeASRRelayError(w http.ResponseWriter, status int, message string, code string, retryAfterMs *int64) {
+func writeASRRelayError(ctx context.Context, w http.ResponseWriter, status int, message string, code string, retryAfterMs *int64) {
 	requestID := generateRequestID()
 	payload := asrRelayErrorPayload{
 		Status:    status,
@@ -1628,7 +1644,7 @@ func writeASRRelayError(w http.ResponseWriter, status int, message string, code 
 		w.Header().Set("Retry-After", strconv.FormatInt(*retryAfterMs/1000, 10))
 	}
 	writeJSON(w, status, payload)
-	slog.Info("asr relay error response", "request_id", requestID, "code", code, "status", status)
+	slog.InfoContext(ctx, "asr relay error response", "request_id", requestID, "code", code, "status", status)
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {
@@ -1681,4 +1697,16 @@ func hostFromURL(raw string) string {
 		return ""
 	}
 	return parsed.Host
+}
+
+// newASRWorkerHTTPClient returns an http.Client whose transport is wrapped
+// with the project's instrumented transport. Trace propagation is enabled
+// because the worker is a first-party Readio service. The base transport is
+// http.DefaultTransport so existing redirect/timeout behavior is preserved
+// (per-request timeouts continue to be applied via context.WithTimeout in the
+// caller, matching the direct client).
+func newASRWorkerHTTPClient() *http.Client {
+	return &http.Client{
+		Transport: newInstrumentedTransport(http.DefaultTransport, true),
+	}
 }

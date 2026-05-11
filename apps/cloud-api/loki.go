@@ -349,6 +349,12 @@ func lokiLogLine(entry adminLogEntry) map[string]any {
 	if requestID := sanitizedAttr(entry.Attrs, "request_id"); requestID != "" {
 		line["request_id"] = requestID
 	}
+	if entry.TraceID != "" {
+		line["trace_id"] = entry.TraceID
+	}
+	if entry.SpanID != "" {
+		line["span_id"] = entry.SpanID
+	}
 	return line
 }
 

@@ -503,3 +503,59 @@ func countLokiValues(payload lokiPushRequest) int {
 	}
 	return total
 }
+
+func TestLokiLogLineIncludesTraceFieldsWhenPresent(t *testing.T) {
+	entry := adminLogEntry{
+		Ts:      time.Unix(1700000000, 0).UTC(),
+		Level:   "INFO",
+		Msg:     "proxy request",
+		Route:   "proxy/media",
+		TraceID: "0123456789abcdef0123456789abcdef",
+		SpanID:  "fedcba9876543210",
+	}
+	line := lokiLogLine(entry)
+	if got := line["trace_id"]; got != entry.TraceID {
+		t.Fatalf("trace_id = %v want %s", got, entry.TraceID)
+	}
+	if got := line["span_id"]; got != entry.SpanID {
+		t.Fatalf("span_id = %v want %s", got, entry.SpanID)
+	}
+}
+
+func TestLokiLogLineOmitsTraceFieldsWhenAbsent(t *testing.T) {
+	entry := adminLogEntry{
+		Ts:    time.Unix(1700000000, 0).UTC(),
+		Level: "INFO",
+		Msg:   "startup log",
+	}
+	line := lokiLogLine(entry)
+	if _, ok := line["trace_id"]; ok {
+		t.Fatalf("trace_id must be omitted when SpanContext is absent")
+	}
+	if _, ok := line["span_id"]; ok {
+		t.Fatalf("span_id must be omitted when SpanContext is absent")
+	}
+}
+
+func TestLokiStreamLabelsDoNotIncludeTraceID(t *testing.T) {
+	cfg := lokiConfig{Env: "preproduction"}
+	entry := adminLogEntry{
+		Ts:      time.Unix(1700000000, 0).UTC(),
+		Level:   "INFO",
+		Msg:     "asr-relay request",
+		TraceID: "0123456789abcdef0123456789abcdef",
+		SpanID:  "fedcba9876543210",
+	}
+	payload, err := buildLokiPayload(cfg, []adminLogEntry{entry})
+	if err != nil {
+		t.Fatalf("buildLokiPayload: %v", err)
+	}
+	if len(payload.Streams) != 1 {
+		t.Fatalf("streams len = %d want 1", len(payload.Streams))
+	}
+	for k := range payload.Streams[0].Stream {
+		if k == "trace_id" || k == "span_id" {
+			t.Fatalf("%s must not be promoted to a Loki stream label", k)
+		}
+	}
+}

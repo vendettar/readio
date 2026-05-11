@@ -49,7 +49,49 @@ Readio Cloud 使用应用侧 Push 路径处理后端指标和日志，并使用 
 
 ---
 
-## 3. 后端日志 (Loki Push)
+## 3. 后端追踪 (Tempo / OTLP Push)
+
+后端分布式追踪通过 OTLP HTTP 协议直接向 Grafana Cloud Tempo 推送 span。追踪默认禁用，与 metrics 共用同一 OTLP endpoint 和认证解析器。
+
+### 启用步骤：
+1. 从 Grafana Cloud **OpenTelemetry** tile 获取 OTLP endpoint 和 headers（与 metrics 使用的同一个 tile）。
+2. 确保 access policy token 同时具备 `metrics:write` 和 `traces:write` 权限。
+3. 设置 `READIO_GRAFANA_OTLP_HEADERS`（推荐），或配置 `READIO_GRAFANA_OTLP_INSTANCE_ID` + `READIO_GRAFANA_OTLP_TOKEN` fallback。
+4. 设置 `READIO_TRACING_ENABLED=true`，可选配置 `READIO_TRACING_SAMPLE_RATIO`（默认 `0.1`）。
+
+**重要**：预发初始验证时使用 `READIO_TRACING_SAMPLE_RATIO=1.0`，部署生产前降低至 ≤ 0.1。
+
+### 需要配置到 GitHub 的变量：
+- Variable: `READIO_GRAFANA_OTLP_ENDPOINT` *(必需；无论使用推荐的 headers 路径还是 legacy instance/token fallback 都要配置)*
+- Secret: `READIO_GRAFANA_OTLP_HEADERS` *(推荐——从 OpenTelemetry tile 直接复制)*
+- Variable: `READIO_TRACING_ENABLED` — `true` 启用，省略或 `false` 禁用
+- Variable: `READIO_TRACING_SAMPLE_RATIO` — `0.0`–`1.0` 之间的小数
+
+如果使用 instance/token fallback 代替 `READIO_GRAFANA_OTLP_HEADERS`：
+- Variable: `READIO_GRAFANA_OTLP_ENDPOINT`
+- Variable: `READIO_GRAFANA_OTLP_INSTANCE_ID`
+- Secret: `READIO_GRAFANA_OTLP_TOKEN`
+
+### Span 命名与安全说明：
+- 入站 HTTP span 名称使用路由模板（如 `GET /api/v1/discovery/{feedURL}`），不包含原始路径、GUID、播客 ID 或 query string。
+- Span 属性不包含完整 URL、query string、Referer、原始 ID、搜索文本或用户输入。
+- PodcastIndex 和 Apple 出站请求可产生本地子 span，但不向第三方主机注入 `traceparent`。
+- 代理/媒体上游不被追踪，也不接收 trace headers。
+- 前端 Grafana Faro（`VITE_GRAFANA_FARO_*`）是独立 RUM pipeline，与后端 Tempo 追踪互不关联。
+
+### Loki 到 Tempo 导航：
+发送到 Loki 的请求日志在 payload 中包含 `trace_id` 和 `span_id` 字段（非 stream label）。如需在 Grafana Explore 中点击跳转：
+1. 打开 Grafana → **Connections** → **Data Sources** → 选择 Loki 数据源。
+2. 在 **Derived fields** 下新增字段：
+   - **Name**: `trace_id`
+   - **Regex**: `"trace_id":"(\w+)"`
+   - **Query**: `${__value.raw}`
+   - **Internal link**: 开启，指向 Tempo 数据源。
+3. 保存后，点击 Loki 日志行中的 `trace_id` 值验证跳转。
+
+---
+
+## 4. 后端日志 (Loki Push)
 
 后端直接将脱敏后的应用日志推送到 Grafana Cloud Logs/Loki。当三个必需 Loki 值全部配置后，该流水线即启用。
 
@@ -62,7 +104,7 @@ Readio Cloud 使用应用侧 Push 路径处理后端指标和日志，并使用 
 
 Loki labels 只能是 `service`、`env` 和 `level`。Request ID、route、upstream host、用户输入、URL、headers、cookies、tokens、本地路径和原始错误不得作为 labels。
 
-## 4. Grafana 日志查询
+## 5. Grafana 日志查询
 
 生产日志查看由 Grafana Cloud Logs/Loki 承担。Cloudflare Pages 上的 `/ops`
 路由只是 Grafana 入口，不再由浏览器读取 `/admin/*` 内存日志端点。后端
@@ -100,10 +142,11 @@ sum(count_over_time({service="readio-cloud", env="production", level="error"}[5m
 
 告警阈值应在掌握生产基线流量和预期错误量后再调优。
 
-## 5. 线上验收清单
+## 6. 线上验收清单
 
 真实 Grafana Cloud 验证需要部署凭证和 Grafana 访问权限。如果实现阶段无法访问这些资源，运维方应在生产最终验收前完成：
 
+**日志（Loki）：**
 1. 使用 Loki 环境变量部署到 preproduction。
 2. 通过正常 Cloud API 流量生成一条 info 日志和一条 warning/error 日志。
 3. 在 Grafana Explore 查询 `{service="readio-cloud", env="preproduction"}`。
@@ -112,7 +155,21 @@ sum(count_over_time({service="readio-cloud", env="production", level="error"}[5m
 6. 确认脱敏日志行不包含 secrets、完整 Referer query、本地文件路径、transcript text 或 authorization headers。
 7. 确认启用日志投递后，00B 指标仍正常到达。
 
-## 6. 验证数据流入
+**追踪（Tempo）：**
+8. 使用 `READIO_TRACING_ENABLED=true` 和 `READIO_TRACING_SAMPLE_RATIO=1.0` 部署到 preproduction。
+9. 访问 `/api/v1/config`、一个 discovery 端点和一个 ASR relay 或 verify 端点。
+10. 在 Grafana Explore 选择 Tempo 数据源，搜索 `service.name="readio-cloud"` — 确认 traces 出现。
+11. 确认入站 span 名称是路由模板（如 `GET /api/v1/discovery/{feedURL}`），而非原始路径。
+12. 确认 span 属性不包含完整 URL、query string、Referer、GUID 或用户文本。
+13. 打开包含 `trace_id` 的 Loki 日志行 — 确认 Tempo 链接出现（若缺失，配置 derived field，参见第 3 节）。
+14. 触发一个 discovery 路由 — 确认出站子 span 出现且无敏感属性。
+15. 确认 PodcastIndex 出站请求不携带 `traceparent`。
+16. 确认代理/媒体上游不出现在 Tempo waterfall 中。
+17. 确认 API 响应包含 `request_id`，不暴露 `trace_id`。
+18. 部署生产前将 `READIO_TRACING_SAMPLE_RATIO` 降至 ≤ `0.1`。
+
+## 7. 验证数据流入
 - **指标**: 在 Grafana Explore 中搜索 `readio_cloud_http_request_duration_seconds`。
+- **追踪**: 在 Grafana Explore 中选择 Tempo 数据源，搜索 `service.name="readio-cloud"`。
 - **日志**: 在 Grafana Explore 中使用上面的 Loki 查询。
 - **RUM**: 在 Grafana Frontend 页面查看用户会话数据。

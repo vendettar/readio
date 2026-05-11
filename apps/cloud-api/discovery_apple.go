@@ -294,21 +294,21 @@ func (s *discoveryService) handleTopPodcasts(w http.ResponseWriter, r *http.Requ
 	route := discoveryTopPodcastsRoute
 
 	if !s.allowTopRequest(effectiveClientIP(r, s.trustedProxies)) {
-		writeDiscoveryErrorSpec(w, http.StatusTooManyRequests, discoveryErrRateLimited)
-		logDiscoveryRequest(route, UpstreamKindAppleCharts, s.appleChartsBaseURL, time.Since(start), errDiscoveryRateLimited, CacheStatusUncached)
+		writeDiscoveryErrorSpec(r, w, http.StatusTooManyRequests, discoveryErrRateLimited)
+		logDiscoveryRequest(r.Context(), route, UpstreamKindAppleCharts, s.appleChartsBaseURL, time.Since(start), errDiscoveryRateLimited, CacheStatusUncached)
 		return
 	}
 
 	country, err := parseDiscoveryCountry(r.URL.Query())
 	if err != nil {
-		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, UpstreamKindAppleCharts, s.appleChartsBaseURL, time.Since(start), err, CacheStatusMissError)
+		writeDiscoveryMappedError(r, w, err)
+		logDiscoveryRequest(r.Context(), route, UpstreamKindAppleCharts, s.appleChartsBaseURL, time.Since(start), err, CacheStatusMissError)
 		return
 	}
 	limit, err := parseDiscoveryLimit(r.URL.Query(), "limit", defaultDiscoveryTopLimit, maxDiscoveryTopLimit)
 	if err != nil {
-		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, UpstreamKindAppleCharts, s.appleChartsBaseURL, time.Since(start), err, CacheStatusMissError)
+		writeDiscoveryMappedError(r, w, err)
+		logDiscoveryRequest(r.Context(), route, UpstreamKindAppleCharts, s.appleChartsBaseURL, time.Since(start), err, CacheStatusMissError)
 		return
 	}
 
@@ -344,13 +344,13 @@ func (s *discoveryService) handleTopPodcasts(w http.ResponseWriter, r *http.Requ
 
 	data, cacheStatus, err := getWithGracefulDegradation(s, ctx, cacheKey, discoveryCacheTTLTopPodcasts, fetch)
 	if err != nil {
-		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, UpstreamKindAppleCharts, s.appleChartsBaseURL, time.Since(start), err, cacheStatus)
+		writeDiscoveryMappedError(r, w, err)
+		logDiscoveryRequest(r.Context(), route, UpstreamKindAppleCharts, s.appleChartsBaseURL, time.Since(start), err, cacheStatus)
 		return
 	}
 
 	writeDiscoveryJSON(w, http.StatusOK, data)
-	logDiscoveryRequest(route, UpstreamKindAppleCharts, s.appleChartsBaseURL, time.Since(start), nil, cacheStatus)
+	logDiscoveryRequest(r.Context(), route, UpstreamKindAppleCharts, s.appleChartsBaseURL, time.Since(start), nil, cacheStatus)
 }
 
 func (s *discoveryService) handleTopEpisodes(w http.ResponseWriter, r *http.Request) {
@@ -358,21 +358,21 @@ func (s *discoveryService) handleTopEpisodes(w http.ResponseWriter, r *http.Requ
 	route := discoveryTopEpisodesRoute
 
 	if !s.allowTopRequest(effectiveClientIP(r, s.trustedProxies)) {
-		writeDiscoveryErrorSpec(w, http.StatusTooManyRequests, discoveryErrRateLimited)
-		logDiscoveryRequest(route, UpstreamKindAppleCharts, s.appleChartsBaseURL, time.Since(start), errDiscoveryRateLimited, CacheStatusUncached)
+		writeDiscoveryErrorSpec(r, w, http.StatusTooManyRequests, discoveryErrRateLimited)
+		logDiscoveryRequest(r.Context(), route, UpstreamKindAppleCharts, s.appleChartsBaseURL, time.Since(start), errDiscoveryRateLimited, CacheStatusUncached)
 		return
 	}
 
 	country, err := parseDiscoveryCountry(r.URL.Query())
 	if err != nil {
-		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, UpstreamKindAppleCharts, s.appleChartsBaseURL, time.Since(start), err, CacheStatusMissError)
+		writeDiscoveryMappedError(r, w, err)
+		logDiscoveryRequest(r.Context(), route, UpstreamKindAppleCharts, s.appleChartsBaseURL, time.Since(start), err, CacheStatusMissError)
 		return
 	}
 	limit, err := parseDiscoveryLimit(r.URL.Query(), "limit", defaultDiscoveryTopLimit, maxDiscoveryTopLimit)
 	if err != nil {
-		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, UpstreamKindAppleCharts, s.appleChartsBaseURL, time.Since(start), err, CacheStatusMissError)
+		writeDiscoveryMappedError(r, w, err)
+		logDiscoveryRequest(r.Context(), route, UpstreamKindAppleCharts, s.appleChartsBaseURL, time.Since(start), err, CacheStatusMissError)
 		return
 	}
 
@@ -408,13 +408,13 @@ func (s *discoveryService) handleTopEpisodes(w http.ResponseWriter, r *http.Requ
 
 	data, cacheStatus, err := getWithGracefulDegradation(s, ctx, cacheKey, discoveryCacheTTLTopEpisodes, fetch)
 	if err != nil {
-		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, UpstreamKindAppleCharts, s.appleChartsBaseURL, time.Since(start), err, cacheStatus)
+		writeDiscoveryMappedError(r, w, err)
+		logDiscoveryRequest(r.Context(), route, UpstreamKindAppleCharts, s.appleChartsBaseURL, time.Since(start), err, cacheStatus)
 		return
 	}
 
 	writeDiscoveryJSON(w, http.StatusOK, data)
-	logDiscoveryRequest(route, UpstreamKindAppleCharts, s.appleChartsBaseURL, time.Since(start), nil, cacheStatus)
+	logDiscoveryRequest(r.Context(), route, UpstreamKindAppleCharts, s.appleChartsBaseURL, time.Since(start), nil, cacheStatus)
 }
 
 func (s *discoveryService) handleSearchPodcasts(w http.ResponseWriter, r *http.Request) {
@@ -422,21 +422,21 @@ func (s *discoveryService) handleSearchPodcasts(w http.ResponseWriter, r *http.R
 	route := discoverySearchPodcastsRoute
 
 	if !s.allowSearchRequest(effectiveClientIP(r, s.trustedProxies)) {
-		writeDiscoveryErrorSpec(w, http.StatusTooManyRequests, discoveryErrRateLimited)
-		logDiscoveryRequest(route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), errDiscoveryRateLimited, CacheStatusUncached)
+		writeDiscoveryErrorSpec(r, w, http.StatusTooManyRequests, discoveryErrRateLimited)
+		logDiscoveryRequest(r.Context(), route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), errDiscoveryRateLimited, CacheStatusUncached)
 		return
 	}
 
 	term, err := parseDiscoveryTerm(r.URL.Query())
 	if err != nil {
-		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), err, CacheStatusUncached)
+		writeDiscoveryMappedError(r, w, err)
+		logDiscoveryRequest(r.Context(), route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), err, CacheStatusUncached)
 		return
 	}
 	country, err := parseDiscoveryCountry(r.URL.Query())
 	if err != nil {
-		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), err, CacheStatusUncached)
+		writeDiscoveryMappedError(r, w, err)
+		logDiscoveryRequest(r.Context(), route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), err, CacheStatusUncached)
 		return
 	}
 	limit, err := parseDiscoveryLimit(
@@ -446,8 +446,8 @@ func (s *discoveryService) handleSearchPodcasts(w http.ResponseWriter, r *http.R
 		maxDiscoverySearchLimit,
 	)
 	if err != nil {
-		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), err, CacheStatusUncached)
+		writeDiscoveryMappedError(r, w, err)
+		logDiscoveryRequest(r.Context(), route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), err, CacheStatusUncached)
 		return
 	}
 
@@ -458,8 +458,8 @@ func (s *discoveryService) handleSearchPodcasts(w http.ResponseWriter, r *http.R
 
 	var payload rawApplePodcastSearchResponse
 	if err := s.fetchJSON(ctx, upstreamURL, &payload); err != nil {
-		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), err, CacheStatusMissError)
+		writeDiscoveryMappedError(r, w, err)
+		logDiscoveryRequest(r.Context(), route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), err, CacheStatusMissError)
 		return
 	}
 
@@ -486,7 +486,7 @@ func (s *discoveryService) handleSearchPodcasts(w http.ResponseWriter, r *http.R
 	}
 
 	writeDiscoveryJSON(w, http.StatusOK, items)
-	logDiscoveryRequest(route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), nil, CacheStatusUncached)
+	logDiscoveryRequest(r.Context(), route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), nil, CacheStatusUncached)
 }
 
 func (s *discoveryService) handleSearchEpisodes(w http.ResponseWriter, r *http.Request) {
@@ -494,21 +494,21 @@ func (s *discoveryService) handleSearchEpisodes(w http.ResponseWriter, r *http.R
 	route := discoverySearchEpisodesRoute
 
 	if !s.allowSearchRequest(effectiveClientIP(r, s.trustedProxies)) {
-		writeDiscoveryErrorSpec(w, http.StatusTooManyRequests, discoveryErrRateLimited)
-		logDiscoveryRequest(route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), errDiscoveryRateLimited, CacheStatusUncached)
+		writeDiscoveryErrorSpec(r, w, http.StatusTooManyRequests, discoveryErrRateLimited)
+		logDiscoveryRequest(r.Context(), route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), errDiscoveryRateLimited, CacheStatusUncached)
 		return
 	}
 
 	term, err := parseDiscoveryTerm(r.URL.Query())
 	if err != nil {
-		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), err, CacheStatusUncached)
+		writeDiscoveryMappedError(r, w, err)
+		logDiscoveryRequest(r.Context(), route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), err, CacheStatusUncached)
 		return
 	}
 	country, err := parseDiscoveryCountry(r.URL.Query())
 	if err != nil {
-		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), err, CacheStatusUncached)
+		writeDiscoveryMappedError(r, w, err)
+		logDiscoveryRequest(r.Context(), route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), err, CacheStatusUncached)
 		return
 	}
 	limit, err := parseDiscoveryLimit(
@@ -518,8 +518,8 @@ func (s *discoveryService) handleSearchEpisodes(w http.ResponseWriter, r *http.R
 		maxDiscoverySearchLimit,
 	)
 	if err != nil {
-		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), err, CacheStatusUncached)
+		writeDiscoveryMappedError(r, w, err)
+		logDiscoveryRequest(r.Context(), route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), err, CacheStatusUncached)
 		return
 	}
 
@@ -530,8 +530,8 @@ func (s *discoveryService) handleSearchEpisodes(w http.ResponseWriter, r *http.R
 
 	var payload rawAppleEpisodeSearchResponse
 	if err := s.fetchJSON(ctx, upstreamURL, &payload); err != nil {
-		writeDiscoveryMappedError(w, err)
-		logDiscoveryRequest(route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), err, CacheStatusMissError)
+		writeDiscoveryMappedError(r, w, err)
+		logDiscoveryRequest(r.Context(), route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), err, CacheStatusMissError)
 		return
 	}
 
@@ -559,7 +559,7 @@ func (s *discoveryService) handleSearchEpisodes(w http.ResponseWriter, r *http.R
 	}
 
 	writeDiscoveryJSON(w, http.StatusOK, items)
-	logDiscoveryRequest(route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), nil, CacheStatusUncached)
+	logDiscoveryRequest(r.Context(), route, UpstreamKindAppleSearch, s.searchBaseURL, time.Since(start), nil, CacheStatusUncached)
 }
 
 func mapTopPodcast(item rawAppleTopPodcastItem) (topPodcastResponse, bool) {
