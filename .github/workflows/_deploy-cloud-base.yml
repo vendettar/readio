@@ -85,9 +85,11 @@ jobs:
             VERSION="${REF_NAME}"
             IS_ROLLBACK="false"
           else
-            # Emergency hotfix: workflow_dispatch with empty image_tag builds a short-SHA image.
-            # This is a break-glass path. Create a proper version tag after validation.
-            echo "::warning::Building short-SHA image from release branch. This is an emergency deploy — create a version tag after validation to restore the normal release line."
+            if [[ "${{ github.ref_name }}" == "release" ]]; then
+              echo "::warning::Building short-SHA image from release branch. This is an emergency deploy — create a version tag after validation to restore the normal release line."
+            else
+              echo "Building short-SHA image for ${{ github.ref_name }} branch."
+            fi
             VERSION=$(echo "${GITHUB_SHA}" | cut -c1-8)
             IS_ROLLBACK="false"
           fi
