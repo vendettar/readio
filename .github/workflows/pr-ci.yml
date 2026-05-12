@@ -8,8 +8,38 @@ permissions:
   contents: read
 
 jobs:
+  # ─── Change Detection ──────────────────────────────────────────────
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      ui: ${{ steps.filter.outputs.ui }}
+      api: ${{ steps.filter.outputs.api }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            ui:
+              - 'apps/cloud-ui/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'turbo.json'
+              - 'biome.json'
+              - 'Makefile'
+              - 'docker-compose.readio.yml'
+              - '.github/workflows/pr-ci.yml'
+            api:
+              - 'apps/cloud-api/**'
+              - 'Makefile'
+              - 'docker-compose.readio.yml'
+              - '.github/workflows/pr-ci.yml'
+
   # ─── Cloud UI ───────────────────────────────────────────────────────
   cloud-ui:
+    needs: changes
+    if: ${{ needs.changes.outputs.ui == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -69,6 +99,8 @@ jobs:
 
   # ─── Cloud API ──────────────────────────────────────────────────────
   cloud-api:
+    needs: changes
+    if: ${{ needs.changes.outputs.api == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -89,28 +121,3 @@ jobs:
       - name: Go Test
         working-directory: apps/cloud-api
         run: go test ./...
-
-#  # ─── apps/docs ───────────────────────────────────────────────────────
-#  docs:
-#    runs-on: ubuntu-latest
-#    steps:
-#      - name: Checkout
-#        uses: actions/checkout@v6
-#
-#      - name: Install pnpm
-#        uses: pnpm/action-setup@v5
-#
-#      - name: Set up Node.js
-#        uses: actions/setup-node@v6
-#        with:
-#          node-version: 24
-#          cache: 'pnpm'
-#
-#      - name: Install dependencies
-#        run: pnpm install --frozen-lockfile
-#
-#      - name: Typecheck (docs)
-#        run: pnpm -C apps/docs typecheck
-#
-#      - name: Build (docs)
-#        run: pnpm -C apps/docs build
