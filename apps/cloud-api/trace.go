@@ -69,7 +69,8 @@ func initTracing(ctx context.Context) (tracingShutdown, error) {
 		resource.WithAttributes(
 			semconv.ServiceName(tracingServiceName),
 			semconv.ServiceVersion(envOrDefault("READIO_APP_VERSION", defaultRuntimeAppVersion)),
-			attribute.String(tracingResourceEnvAttr, deployEnv),
+			attribute.String(tracingResourceEnvAttr, deployEnv), // Standard OTel attribute
+			attribute.String(unifiedEnvAttr, deployEnv),         // Redundant 'env' for Grafana variable unification
 		),
 	)
 	if err != nil {

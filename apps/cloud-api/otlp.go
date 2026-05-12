@@ -19,7 +19,10 @@ import (
 //
 // The endpoint env value must be the OTLP gateway base URL without a signal
 // path; callers append /v1/metrics or /v1/traces via EndpointForSignal.
-const grafanaOTLPHeadersEnv = "READIO_GRAFANA_OTLP_HEADERS"
+const (
+	grafanaOTLPHeadersEnv = "READIO_GRAFANA_OTLP_HEADERS"
+	unifiedEnvAttr        = "env"
+)
 
 // otlpAllowedAuthHeaders limits the header names READIO_GRAFANA_OTLP_HEADERS
 // may forward to the OTLP gateway. Unknown keys cause a configuration error
