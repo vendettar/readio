@@ -7,6 +7,11 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/sdk/metric"
+	"go.opentelemetry.io/otel/sdk/metric/metricdata"
+	"go.opentelemetry.io/otel/sdk/resource"
 )
 
 func TestInitObservabilityNoopWhenEnvMissing(t *testing.T) {
@@ -176,4 +181,56 @@ func mustNewRequest(method, target string) *http.Request {
 		panic(err)
 	}
 	return req
+}
+
+func TestMetricsCarryEnvAttribute(t *testing.T) {
+	// 1. Setup a test meter with a manual reader so we can inspect the recorded data.
+	reader := metric.NewManualReader()
+	res := resource.Empty()
+	provider := metric.NewMeterProvider(
+		metric.WithResource(res),
+		metric.WithReader(reader),
+	)
+	meter := provider.Meter("test")
+
+	// 2. Initialize the global instruments using the test meter.
+	if err := createInstruments(meter); err != nil {
+		t.Fatalf("failed to create instruments: %v", err)
+	}
+
+	// 3. Set a dummy global env attribute (as if initObservability ran).
+	expectedEnv := "production"
+	globalEnvAttribute = attribute.String(unifiedEnvAttr, expectedEnv)
+
+	// 4. Record a metric.
+	recordHTTPMetric("/api/test", http.StatusOK, "none", 100*time.Millisecond)
+
+	// 5. Collect the recorded metrics.
+	var rm metricdata.ResourceMetrics
+	if err := reader.Collect(context.Background(), &rm); err != nil {
+		t.Fatalf("failed to collect metrics: %v", err)
+	}
+
+	// 6. Verify the 'env' attribute is present in the recorded data.
+	foundEnv := false
+	for _, sm := range rm.ScopeMetrics {
+		for _, m := range sm.Metrics {
+			if m.Name == "readio_cloud_http_request_duration_seconds" {
+				// Histograms store points in their Data field.
+				if h, ok := m.Data.(metricdata.Histogram[float64]); ok {
+					for _, p := range h.DataPoints {
+						for _, attr := range p.Attributes.ToSlice() {
+							if attr.Key == attribute.Key(unifiedEnvAttr) && attr.Value.AsString() == expectedEnv {
+								foundEnv = true
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	if !foundEnv {
+		t.Errorf("expected metric to carry attribute env=%q, but it was not found", expectedEnv)
+	}
 }

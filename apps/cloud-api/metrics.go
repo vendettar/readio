@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 	"time"
 
@@ -29,6 +30,10 @@ var (
 	cloudUpstreamRequestDuration metric.Float64Histogram
 	cloudUpstreamErrors          metric.Int64Counter
 	cloudASRRelayRequests        metric.Int64Counter
+
+	// globalEnvAttribute is the cached environment tag (e.g. env="production")
+	// used for all application metrics.
+	globalEnvAttribute attribute.KeyValue
 )
 
 func init() {
@@ -56,10 +61,20 @@ func initObservability(ctx context.Context) (observabilityShutdown, error) {
 		return func(context.Context) error { return nil }, nil
 	}
 
+	deployEnv := strings.TrimSpace(os.Getenv("READIO_DEPLOY_ENV"))
+	if deployEnv == "" {
+		deployEnv = strings.TrimSpace(os.Getenv("VITE_GRAFANA_FARO_ENV"))
+	}
+	normalizedEnv := normalizeMetricEnv(deployEnv)
+
+	globalEnvAttribute = attribute.String(unifiedEnvAttr, normalizedEnv)
+
 	res, err := resource.New(ctx,
 		resource.WithAttributes(
 			semconv.ServiceName("readio-cloud"),
 			semconv.ServiceVersion(envOrDefault("READIO_APP_VERSION", defaultRuntimeAppVersion)),
+			semconv.DeploymentEnvironment(normalizedEnv), // Standard Otel attribute
+			attribute.String(unifiedEnvAttr, normalizedEnv), // Unified label for Grafana
 		),
 	)
 	if err != nil {
@@ -80,6 +95,7 @@ func initObservability(ctx context.Context) (observabilityShutdown, error) {
 			sdkmetric.WithInterval(resolveOTLPPushInterval()),
 		)),
 	)
+
 
 	meter := provider.Meter("readio-cloud")
 	if err := createInstruments(meter); err != nil {
@@ -148,6 +164,7 @@ func initNoopMetrics() {
 func recordHTTPMetric(route string, status int, errorClass string, elapsed time.Duration) {
 	cloudHTTPRequestDuration.Record(context.Background(), elapsed.Seconds(),
 		metric.WithAttributes(
+			globalEnvAttribute,
 			attribute.String("route", metricRoute(route)),
 			attribute.String("status_class", metricStatusClass(status)),
 			attribute.String("error_class", metricErrorClass(errorClass)),
@@ -162,6 +179,7 @@ func recordUpstreamMetric(provider string, route string, status int, errorClass 
 
 	cloudUpstreamRequestDuration.Record(context.Background(), elapsed.Seconds(),
 		metric.WithAttributes(
+			globalEnvAttribute,
 			attribute.String("provider", providerLabel),
 			attribute.String("route", routeLabel),
 			attribute.String("status_class", metricStatusClass(status)),
@@ -173,6 +191,7 @@ func recordUpstreamMetric(provider string, route string, status int, errorClass 
 	if errorClassLabel != "none" {
 		cloudUpstreamErrors.Add(context.Background(), 1,
 			metric.WithAttributes(
+				globalEnvAttribute,
 				attribute.String("provider", providerLabel),
 				attribute.String("route", routeLabel),
 				attribute.String("error_class", errorClassLabel),
@@ -184,6 +203,7 @@ func recordUpstreamMetric(provider string, route string, status int, errorClass 
 func recordASRRelayMetric(provider string, mode string, status int, errorClass string) {
 	cloudASRRelayRequests.Add(context.Background(), 1,
 		metric.WithAttributes(
+			globalEnvAttribute,
 			attribute.String("provider", metricProvider(provider)),
 			attribute.String("mode", metricASRModeValue(mode)),
 			attribute.String("status_class", metricStatusClass(status)),
