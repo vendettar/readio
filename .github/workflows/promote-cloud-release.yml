@@ -8,12 +8,12 @@ on:
         required: false
         default: ''
       create_tag:
-        description: 'Create and push a version tag after promoting release. This triggers production deploy.'
+        description: 'Create version tag (prepares for manual GitHub Release)'
         required: true
         type: boolean
-        default: false
+        default: true
       version:
-        description: 'Release tag, e.g. v1.2.3. Required only when create_tag is true.'
+        description: 'Release version (e.g. v1.2.3)'
         required: false
         default: ''
       confirm:
@@ -151,9 +151,9 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
           if [ "${CREATE_TAG}" = "true" ]; then
-            echo "Created tag ${VERSION}; production deploy will be triggered by the tag workflow."
+            echo "Created tag ${VERSION}; production deploy can now be triggered by creating a GitHub Release."
             echo "- Created tag: \`${VERSION}\`" >> "$GITHUB_STEP_SUMMARY"
-            echo "- Production deploy: triggered by tag workflow" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Production deploy: trigger by creating a Release in GitHub UI" >> "$GITHUB_STEP_SUMMARY"
           else
             echo "No tag was created; production deploy was not triggered."
             echo "- Created tag: none" >> "$GITHUB_STEP_SUMMARY"

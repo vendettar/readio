@@ -1,9 +1,8 @@
 name: Deploy Cloud (Production)
 
 on:
-  push:
-    tags:
-      - 'v*'
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       confirm:
@@ -27,7 +26,7 @@ permissions:
 jobs:
   call-deploy:
     if: |
-      (github.event_name == 'push' && contains(github.ref, 'refs/tags/v')) ||
+      (github.event_name == 'release' && github.event.action == 'published') ||
       (github.event_name == 'workflow_dispatch')
     uses: ./.github/workflows/_deploy-cloud-base.yml
     with:
