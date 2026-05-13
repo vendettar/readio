@@ -94,6 +94,8 @@ func initObservability(ctx context.Context) (observabilityShutdown, error) {
 		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(exporter,
 			sdkmetric.WithInterval(resolveOTLPPushInterval()),
 		)),
+		sdkmetric.WithView(durationHistogramView("readio_cloud_http_request_duration_seconds")),
+		sdkmetric.WithView(durationHistogramView("readio_cloud_upstream_request_duration_seconds")),
 	)
 
 
@@ -214,6 +216,33 @@ func recordASRRelayMetric(provider string, mode string, status int, errorClass s
 
 func resolveOTLPPushInterval() time.Duration {
 	return envDurationSecondsOrDefault(otlpPushIntervalEnv, otlpDefaultPushInterval)
+}
+
+// durationHistogramBuckets are the explicit bucket boundaries used for HTTP
+// and upstream duration histograms. The default OTel SDK buckets jump from
+// 2.5 s directly to 5.0 s, which causes histogram_quantile to always return
+// ~4.75 s for any P95 that falls in that range. These finer boundaries give
+// meaningful resolution between 50 ms and 10 s.
+var durationHistogramBuckets = []float64{
+	0.05, 0.1, 0.2, 0.3, 0.5,
+	0.75, 1.0, 1.5, 2.0, 3.0,
+	4.0, 5.0, 7.5, 10.0,
+}
+
+// durationHistogramView returns an sdkmetric.View that applies
+// durationHistogramBuckets to the named histogram instrument.
+func durationHistogramView(instrumentName string) sdkmetric.View {
+	return sdkmetric.NewView(
+		sdkmetric.Instrument{
+			Name: instrumentName,
+			Kind: sdkmetric.InstrumentKindHistogram,
+		},
+		sdkmetric.Stream{
+			Aggregation: sdkmetric.AggregationExplicitBucketHistogram{
+				Boundaries: durationHistogramBuckets,
+			},
+		},
+	)
 }
 
 // --- Label mappers (closed enums, preventing high-cardinality leaks) ---

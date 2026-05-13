@@ -183,6 +183,89 @@ func mustNewRequest(method, target string) *http.Request {
 	return req
 }
 
+// TestDurationHistogramBuckets verifies that durationHistogramBuckets is
+// strictly sorted, has no duplicates, starts above zero, and includes
+// boundaries that give meaningful resolution in the 1–5 s range where the
+// default OTel SDK buckets (2.5 s → 5.0 s) cause histogram_quantile to
+// collapse all P95 values to ~4.75 s.
+func TestDurationHistogramBuckets(t *testing.T) {
+	bs := durationHistogramBuckets
+	if len(bs) == 0 {
+		t.Fatal("durationHistogramBuckets must not be empty")
+	}
+	if bs[0] <= 0 {
+		t.Errorf("first bucket boundary must be > 0, got %v", bs[0])
+	}
+	for i := 1; i < len(bs); i++ {
+		if bs[i] <= bs[i-1] {
+			t.Errorf("bucket boundaries must be strictly increasing: bs[%d]=%v <= bs[%d]=%v", i, bs[i], i-1, bs[i-1])
+		}
+	}
+
+	// Must have at least one boundary between 1 s and 5 s (exclusive) so
+	// that P95 values in the 1–5 s range can be distinguished.
+	hasIntermediate := false
+	for _, b := range bs {
+		if b > 1.0 && b < 5.0 {
+			hasIntermediate = true
+			break
+		}
+	}
+	if !hasIntermediate {
+		t.Error("durationHistogramBuckets must contain at least one boundary strictly between 1 s and 5 s")
+	}
+}
+
+// TestDurationHistogramViewAppliesBuckets records a single observation and
+// confirms the collected histogram uses durationHistogramBuckets, not the
+// OTel SDK defaults.
+func TestDurationHistogramViewAppliesBuckets(t *testing.T) {
+	reader := metric.NewManualReader()
+	provider := metric.NewMeterProvider(
+		metric.WithResource(resource.Empty()),
+		metric.WithReader(reader),
+		metric.WithView(durationHistogramView("readio_cloud_http_request_duration_seconds")),
+	)
+	meter := provider.Meter("test")
+	if err := createInstruments(meter); err != nil {
+		t.Fatalf("createInstruments: %v", err)
+	}
+
+	globalEnvAttribute = attribute.String(unifiedEnvAttr, "test")
+	recordHTTPMetric("/api/test", http.StatusOK, "none", 3*time.Second)
+
+	var rm metricdata.ResourceMetrics
+	if err := reader.Collect(context.Background(), &rm); err != nil {
+		t.Fatalf("collect: %v", err)
+	}
+
+	for _, sm := range rm.ScopeMetrics {
+		for _, m := range sm.Metrics {
+			if m.Name != "readio_cloud_http_request_duration_seconds" {
+				continue
+			}
+			h, ok := m.Data.(metricdata.Histogram[float64])
+			if !ok {
+				t.Fatalf("expected Histogram data, got %T", m.Data)
+			}
+			if len(h.DataPoints) == 0 {
+				t.Fatal("no data points collected")
+			}
+			got := h.DataPoints[0].Bounds
+			if len(got) != len(durationHistogramBuckets) {
+				t.Fatalf("bucket count mismatch: want %d, got %d", len(durationHistogramBuckets), len(got))
+			}
+			for i, want := range durationHistogramBuckets {
+				if got[i] != want {
+					t.Errorf("bucket[%d]: want %v, got %v", i, want, got[i])
+				}
+			}
+			return
+		}
+	}
+	t.Fatal("readio_cloud_http_request_duration_seconds not found in collected metrics")
+}
+
 func TestMetricsCarryEnvAttribute(t *testing.T) {
 	// 1. Setup a test meter with a manual reader so we can inspect the recorded data.
 	reader := metric.NewManualReader()
