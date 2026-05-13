@@ -101,6 +101,7 @@ func TestProxyRequestSummaryUsesActualProxyErrorStatus(t *testing.T) {
 	}
 	if entry == nil {
 		t.Fatalf("proxy/media log entry not found in snapshot: %#v", snap)
+		return
 	}
 	if entry.Status != http.StatusMethodNotAllowed {
 		t.Fatalf("logged status = %d, want %d", entry.Status, http.StatusMethodNotAllowed)

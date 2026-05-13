@@ -12,6 +12,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"go.opentelemetry.io/otel/sdk/resource"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func TestInitObservabilityNoopWhenEnvMissing(t *testing.T) {
@@ -29,9 +30,9 @@ func TestInitObservabilityNoopWhenEnvMissing(t *testing.T) {
 	}
 
 	// Recording functions must not panic with noop instruments.
-	recordHTTPMetric("proxy/media", http.StatusOK, "none", time.Millisecond)
-	recordUpstreamMetric("proxy", "proxy/media", http.StatusOK, "none", CacheStatusUncached, time.Millisecond)
-	recordASRRelayMetric("groq", "direct", http.StatusOK, "none")
+	recordHTTPMetric(context.Background(), "proxy/media", http.StatusOK, "none", time.Millisecond)
+	recordUpstreamMetric(context.Background(), "proxy", "proxy/media", http.StatusOK, "none", CacheStatusUncached, time.Millisecond)
+	recordASRRelayMetric(context.Background(), "groq", "direct", http.StatusOK, "none")
 }
 
 // Partial OTLP configuration must fail fast so the operator notices at
@@ -232,7 +233,7 @@ func TestDurationHistogramViewAppliesBuckets(t *testing.T) {
 	}
 
 	globalEnvAttribute = attribute.String(unifiedEnvAttr, "test")
-	recordHTTPMetric("/api/test", http.StatusOK, "none", 3*time.Second)
+	recordHTTPMetric(context.Background(), "/api/test", http.StatusOK, "none", 3*time.Second)
 
 	var rm metricdata.ResourceMetrics
 	if err := reader.Collect(context.Background(), &rm); err != nil {
@@ -266,6 +267,108 @@ func TestDurationHistogramViewAppliesBuckets(t *testing.T) {
 	t.Fatal("readio_cloud_http_request_duration_seconds not found in collected metrics")
 }
 
+func TestRecordHTTPMetricUsesContextForExemplars(t *testing.T) {
+	reader := metric.NewManualReader()
+	provider := metric.NewMeterProvider(
+		metric.WithResource(resource.Empty()),
+		metric.WithReader(reader),
+		metric.WithView(durationHistogramView("readio_cloud_http_request_duration_seconds")),
+	)
+	meter := provider.Meter("test")
+	if err := createInstruments(meter); err != nil {
+		t.Fatalf("createInstruments: %v", err)
+	}
+
+	globalEnvAttribute = attribute.String(unifiedEnvAttr, "test")
+	traceID := trace.TraceID{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
+	spanID := trace.SpanID{1, 2, 3, 4, 5, 6, 7, 8}
+	spanContext := trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID:    traceID,
+		SpanID:     spanID,
+		TraceFlags: trace.FlagsSampled,
+	})
+	ctx := trace.ContextWithSpanContext(context.Background(), spanContext)
+
+	recordHTTPMetric(ctx, "/api/test", http.StatusOK, "none", 1500*time.Millisecond)
+
+	var rm metricdata.ResourceMetrics
+	if err := reader.Collect(context.Background(), &rm); err != nil {
+		t.Fatalf("collect: %v", err)
+	}
+
+	for _, sm := range rm.ScopeMetrics {
+		for _, m := range sm.Metrics {
+			if m.Name != "readio_cloud_http_request_duration_seconds" {
+				continue
+			}
+			h, ok := m.Data.(metricdata.Histogram[float64])
+			if !ok {
+				t.Fatalf("expected Histogram data, got %T", m.Data)
+			}
+			for _, p := range h.DataPoints {
+				for _, exemplar := range p.Exemplars {
+					if string(exemplar.TraceID) == string(traceID[:]) {
+						return
+					}
+				}
+			}
+			t.Fatal("expected histogram exemplar with request trace ID")
+		}
+	}
+	t.Fatal("readio_cloud_http_request_duration_seconds not found in collected metrics")
+}
+
+func TestRecordUpstreamMetricUsesContextForExemplars(t *testing.T) {
+	reader := metric.NewManualReader()
+	provider := metric.NewMeterProvider(
+		metric.WithResource(resource.Empty()),
+		metric.WithReader(reader),
+		metric.WithView(durationHistogramView("readio_cloud_upstream_request_duration_seconds")),
+	)
+	meter := provider.Meter("test")
+	if err := createInstruments(meter); err != nil {
+		t.Fatalf("createInstruments: %v", err)
+	}
+
+	globalEnvAttribute = attribute.String(unifiedEnvAttr, "test")
+	traceID := trace.TraceID{16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1}
+	spanID := trace.SpanID{8, 7, 6, 5, 4, 3, 2, 1}
+	spanContext := trace.NewSpanContext(trace.SpanContextConfig{
+		TraceID:    traceID,
+		SpanID:     spanID,
+		TraceFlags: trace.FlagsSampled,
+	})
+	ctx := trace.ContextWithSpanContext(context.Background(), spanContext)
+
+	recordUpstreamMetric(ctx, UpstreamKindPodcastIndex, discoverySearchPodcastsRoute, http.StatusOK, "none", "miss", 1250*time.Millisecond)
+
+	var rm metricdata.ResourceMetrics
+	if err := reader.Collect(context.Background(), &rm); err != nil {
+		t.Fatalf("collect: %v", err)
+	}
+
+	for _, sm := range rm.ScopeMetrics {
+		for _, m := range sm.Metrics {
+			if m.Name != "readio_cloud_upstream_request_duration_seconds" {
+				continue
+			}
+			h, ok := m.Data.(metricdata.Histogram[float64])
+			if !ok {
+				t.Fatalf("expected Histogram data, got %T", m.Data)
+			}
+			for _, p := range h.DataPoints {
+				for _, exemplar := range p.Exemplars {
+					if string(exemplar.TraceID) == string(traceID[:]) {
+						return
+					}
+				}
+			}
+			t.Fatal("expected upstream histogram exemplar with request trace ID")
+		}
+	}
+	t.Fatal("readio_cloud_upstream_request_duration_seconds not found in collected metrics")
+}
+
 func TestMetricsCarryEnvAttribute(t *testing.T) {
 	// 1. Setup a test meter with a manual reader so we can inspect the recorded data.
 	reader := metric.NewManualReader()
@@ -286,7 +389,7 @@ func TestMetricsCarryEnvAttribute(t *testing.T) {
 	globalEnvAttribute = attribute.String(unifiedEnvAttr, expectedEnv)
 
 	// 4. Record a metric.
-	recordHTTPMetric("/api/test", http.StatusOK, "none", 100*time.Millisecond)
+	recordHTTPMetric(context.Background(), "/api/test", http.StatusOK, "none", 100*time.Millisecond)
 
 	// 5. Collect the recorded metrics.
 	var rm metricdata.ResourceMetrics

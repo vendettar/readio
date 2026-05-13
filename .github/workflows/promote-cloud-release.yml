@@ -1,0 +1,161 @@
+name: Promote Cloud Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: 'Commit SHA to promote. Leave empty to use origin/main HEAD.'
+        required: false
+        default: ''
+      create_tag:
+        description: 'Create and push a version tag after promoting release. This triggers production deploy.'
+        required: true
+        type: boolean
+        default: false
+      version:
+        description: 'Release tag, e.g. v1.2.3. Required only when create_tag is true.'
+        required: false
+        default: ''
+      confirm:
+        description: 'Type "promote" to confirm release pointer promotion'
+        required: true
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: promote-cloud-release
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    if: github.event.inputs.confirm == 'promote'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Resolve and validate target
+        id: target
+        env:
+          INPUT_TARGET_SHA: ${{ github.event.inputs.target_sha }}
+        run: |
+          set -euo pipefail
+
+          git fetch origin \
+            '+refs/heads/main:refs/remotes/origin/main' \
+            '+refs/heads/release:refs/remotes/origin/release' \
+            --tags
+
+          if [ -n "${INPUT_TARGET_SHA}" ]; then
+            TARGET="${INPUT_TARGET_SHA}"
+          else
+            TARGET="$(git rev-parse origin/main)"
+          fi
+
+          git cat-file -e "${TARGET}^{commit}"
+
+          if ! git merge-base --is-ancestor "${TARGET}" origin/main; then
+            echo "::error::Target ${TARGET} is not contained in origin/main."
+            exit 1
+          fi
+
+          if ! git merge-base --is-ancestor origin/release "${TARGET}"; then
+            echo "::error::origin/release cannot fast-forward to ${TARGET}."
+            exit 1
+          fi
+
+          RELEASE_SHA="$(git rev-parse origin/release)"
+          echo "sha=${TARGET}" >> "$GITHUB_OUTPUT"
+          echo "release_sha=${RELEASE_SHA}" >> "$GITHUB_OUTPUT"
+          if [ "${TARGET}" = "${RELEASE_SHA}" ]; then
+            echo "already_at_target=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "already_at_target=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validate optional tag
+        if: github.event.inputs.create_tag == 'true'
+        env:
+          VERSION: ${{ github.event.inputs.version }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${VERSION}" ]; then
+            echo "::error::version is required when create_tag is true."
+            exit 1
+          fi
+
+          if ! [[ "${VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9]+)*$ ]]; then
+            echo "::error::Invalid version tag: ${VERSION}"
+            exit 1
+          fi
+
+          if git rev-parse -q --verify "refs/tags/${VERSION}" >/dev/null; then
+            echo "::error::Tag ${VERSION} already exists."
+            exit 1
+          fi
+
+      - name: Promote release pointer
+        env:
+          TARGET: ${{ steps.target.outputs.sha }}
+          ALREADY_AT_TARGET: ${{ steps.target.outputs.already_at_target }}
+          CREATE_TAG: ${{ github.event.inputs.create_tag }}
+          VERSION: ${{ github.event.inputs.version }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git checkout -B release "${TARGET}"
+
+          if [ "${CREATE_TAG}" = "true" ]; then
+            git tag -a "${VERSION}" -m "Promote ${VERSION}" "${TARGET}"
+            echo "Pushing release and ${VERSION} atomically..."
+            if ! git push --atomic origin release "${VERSION}"; then
+              echo "::error::Atomic push failed. Neither release nor ${VERSION} should have been updated. Check branch protection, tag permissions, and whether the tag was created concurrently."
+              exit 1
+            fi
+          elif [ "${ALREADY_AT_TARGET}" = "true" ]; then
+            echo "release is already at ${TARGET}; no push needed."
+          else
+            git push origin release
+          fi
+
+      - name: Promotion summary
+        env:
+          TARGET: ${{ steps.target.outputs.sha }}
+          PREVIOUS_RELEASE: ${{ steps.target.outputs.release_sha }}
+          ALREADY_AT_TARGET: ${{ steps.target.outputs.already_at_target }}
+          CREATE_TAG: ${{ github.event.inputs.create_tag }}
+          VERSION: ${{ github.event.inputs.version }}
+        run: |
+          set -euo pipefail
+
+          if [ "${ALREADY_AT_TARGET}" = "true" ]; then
+            echo "release already at ${TARGET}; no promotion needed."
+          else
+            echo "Promoted release from ${PREVIOUS_RELEASE} to ${TARGET}."
+          fi
+          {
+            echo "## Promote Cloud Release"
+            echo
+            echo "- Previous release: \`${PREVIOUS_RELEASE}\`"
+            echo "- Target: \`${TARGET}\`"
+            echo "- Already at target: \`${ALREADY_AT_TARGET}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "${CREATE_TAG}" = "true" ]; then
+            echo "Created tag ${VERSION}; production deploy will be triggered by the tag workflow."
+            echo "- Created tag: \`${VERSION}\`" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Production deploy: triggered by tag workflow" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No tag was created; production deploy was not triggered."
+            echo "- Created tag: none" >> "$GITHUB_STEP_SUMMARY"
+            echo "- Production deploy: not triggered" >> "$GITHUB_STEP_SUMMARY"
+          fi
