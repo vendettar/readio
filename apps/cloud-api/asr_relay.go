@@ -265,12 +265,12 @@ func (s *asrRelayService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	defer func() {
 		elapsed := time.Since(start)
-		recordHTTPMetric(route, httpStatus, errClass, elapsed)
+		recordHTTPMetric(r.Context(), route, httpStatus, errClass, elapsed)
 		if upstreamKind != "" {
-			recordUpstreamMetric(upstreamKind, route, httpStatus, errClass, CacheStatusUncached, elapsed)
+			recordUpstreamMetric(r.Context(), upstreamKind, route, httpStatus, errClass, CacheStatusUncached, elapsed)
 		}
 		if route == "asr-relay/transcriptions" {
-			recordASRRelayMetric(metricProviderLabel, metricModeLabel, httpStatus, errClass)
+			recordASRRelayMetric(r.Context(), metricProviderLabel, metricModeLabel, httpStatus, errClass)
 		}
 		slog.InfoContext(r.Context(), "asr-relay request",
 			"route", route,

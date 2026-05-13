@@ -470,9 +470,9 @@ func (p *proxyService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	defer func() {
 		elapsed := time.Since(start)
-		recordHTTPMetric("proxy/media", httpStatus, errClass, elapsed)
+		recordHTTPMetric(r.Context(), "proxy/media", httpStatus, errClass, elapsed)
 		if attemptedUpstream && upstreamKind != "" {
-			recordUpstreamMetric(upstreamKind, "proxy/media", httpStatus, errClass, CacheStatusUncached, elapsed)
+			recordUpstreamMetric(r.Context(), upstreamKind, "proxy/media", httpStatus, errClass, CacheStatusUncached, elapsed)
 		}
 		slog.InfoContext(r.Context(), "proxy request",
 			"route", "proxy/media",

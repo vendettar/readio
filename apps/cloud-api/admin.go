@@ -39,9 +39,13 @@ type adminLogEntry struct {
 	Route        string    `json:"route,omitempty"`
 	UpstreamKind string    `json:"upstream_kind,omitempty"`
 	UpstreamHost string    `json:"upstream_host,omitempty"`
-	ElapsedMs    float64   `json:"elapsed_ms,omitempty"`
-	ErrorClass   string    `json:"error_class,omitempty"`
-	Status       int       `json:"status,omitempty"`
+	// ElapsedMs is rendered as a JSON number (not a duration string) so that
+	// LogQL queries like `| json | elapsed_ms > 1000` work as numeric
+	// comparisons. The Grafana dashboard "Slow Requests" panel depends on
+	// this contract.
+	ElapsedMs  float64 `json:"elapsed_ms,omitempty"`
+	ErrorClass string  `json:"error_class,omitempty"`
+	Status     int     `json:"status,omitempty"`
 	// TraceID / SpanID are populated when the slog record was emitted with a
 	// context.Context carrying a valid OpenTelemetry span. They are sent as
 	// Loki payload fields (not stream labels) and are never returned in

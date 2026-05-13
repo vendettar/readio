@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -42,17 +43,17 @@ func TestRequestMetricLabelMappersUseClosedEnums(t *testing.T) {
 func TestRecordingFunctionsDoNotPanicWithNoopInstruments(t *testing.T) {
 	initNoopMetrics()
 
-	recordHTTPMetric("proxy/media", http.StatusOK, "none", 100*time.Millisecond)
-	recordHTTPMetric(discoverySearchPodcastsRoute, http.StatusBadRequest, "param_error", 5*time.Millisecond)
-	recordHTTPMetric("/unknown/route", http.StatusNotFound, "unknown", time.Millisecond)
+	recordHTTPMetric(context.Background(), "proxy/media", http.StatusOK, "none", 100*time.Millisecond)
+	recordHTTPMetric(context.Background(), discoverySearchPodcastsRoute, http.StatusBadRequest, "param_error", 5*time.Millisecond)
+	recordHTTPMetric(context.Background(), "/unknown/route", http.StatusNotFound, "unknown", time.Millisecond)
 
-	recordUpstreamMetric(UpstreamKindAppleSearch, discoverySearchPodcastsRoute, http.StatusOK, "none", CacheStatusFreshHit, 200*time.Millisecond)
-	recordUpstreamMetric(UpstreamKindPodcastIndex, discoveryPodcastsBatchRoute, http.StatusBadGateway, "upstream", CacheStatusMissError, time.Second)
-	recordUpstreamMetric("proxy", "proxy/media", http.StatusGatewayTimeout, "timeout", CacheStatusUncached, 10*time.Second)
+	recordUpstreamMetric(context.Background(), UpstreamKindAppleSearch, discoverySearchPodcastsRoute, http.StatusOK, "none", CacheStatusFreshHit, 200*time.Millisecond)
+	recordUpstreamMetric(context.Background(), UpstreamKindPodcastIndex, discoveryPodcastsBatchRoute, http.StatusBadGateway, "upstream", CacheStatusMissError, time.Second)
+	recordUpstreamMetric(context.Background(), "proxy", "proxy/media", http.StatusGatewayTimeout, "timeout", CacheStatusUncached, 10*time.Second)
 
-	recordASRRelayMetric("groq", "direct", http.StatusOK, "none")
-	recordASRRelayMetric("cloudflare", "builtin", http.StatusInternalServerError, "upstream")
-	recordASRRelayMetric("unknown-provider", "unknown", http.StatusBadRequest, "client_error")
+	recordASRRelayMetric(context.Background(), "groq", "direct", http.StatusOK, "none")
+	recordASRRelayMetric(context.Background(), "cloudflare", "builtin", http.StatusInternalServerError, "upstream")
+	recordASRRelayMetric(context.Background(), "unknown-provider", "unknown", http.StatusBadRequest, "client_error")
 }
 
 func TestRecordingFunctionsNormalizeLabelsThroughClosedEnums(t *testing.T) {
@@ -60,9 +61,9 @@ func TestRecordingFunctionsNormalizeLabelsThroughClosedEnums(t *testing.T) {
 
 	// These should all succeed without panic - the closed enum mappers
 	// convert any unexpected input to "unknown".
-	recordHTTPMetric("https://secret.example.com/api?key=secret", 999, "raw-tcp-error: connection refused to secret-host:5432", time.Millisecond)
-	recordUpstreamMetric("https://secret-upstream.example.com/api", "/api/v1/secret-route", 0, "raw dial error", "unexpected-cache-state", time.Millisecond)
-	recordASRRelayMetric("secret-provider-name", "secret-mode", 0, "secret-error-class")
+	recordHTTPMetric(context.Background(), "https://secret.example.com/api?key=secret", 999, "raw-tcp-error: connection refused to secret-host:5432", time.Millisecond)
+	recordUpstreamMetric(context.Background(), "https://secret-upstream.example.com/api", "/api/v1/secret-route", 0, "raw dial error", "unexpected-cache-state", time.Millisecond)
+	recordASRRelayMetric(context.Background(), "secret-provider-name", "secret-mode", 0, "secret-error-class")
 }
 
 func TestRequestMetricsKeepAdminSummaryContractIntact(t *testing.T) {
@@ -73,8 +74,8 @@ func TestRequestMetricsKeepAdminSummaryContractIntact(t *testing.T) {
 	rb.push(adminLogEntry{Ts: now, Level: "INFO", Msg: "ok", Route: "proxy/media", ElapsedMs: 10, ErrorClass: "none", Status: http.StatusOK})
 	rb.push(adminLogEntry{Ts: now, Level: "ERROR", Msg: "fail", Route: "proxy/media", ElapsedMs: 200, ErrorClass: "timeout", Status: http.StatusGatewayTimeout})
 
-	recordHTTPMetric("proxy/media", http.StatusOK, "none", time.Millisecond)
-	recordUpstreamMetric("proxy", "proxy/media", http.StatusGatewayTimeout, "timeout", CacheStatusUncached, time.Millisecond)
+	recordHTTPMetric(context.Background(), "proxy/media", http.StatusOK, "none", time.Millisecond)
+	recordUpstreamMetric(context.Background(), "proxy", "proxy/media", http.StatusGatewayTimeout, "timeout", CacheStatusUncached, time.Millisecond)
 
 	h := &adminHandler{token: "tok", buffer: rb, start: time.Now()}
 	req := httptest.NewRequest(http.MethodGet, "/admin/metrics/summary", nil)

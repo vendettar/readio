@@ -73,7 +73,7 @@ func initObservability(ctx context.Context) (observabilityShutdown, error) {
 		resource.WithAttributes(
 			semconv.ServiceName("readio-cloud"),
 			semconv.ServiceVersion(envOrDefault("READIO_APP_VERSION", defaultRuntimeAppVersion)),
-			semconv.DeploymentEnvironment(normalizedEnv), // Standard Otel attribute
+			semconv.DeploymentEnvironment(normalizedEnv),    // Standard Otel attribute
 			attribute.String(unifiedEnvAttr, normalizedEnv), // Unified label for Grafana
 		),
 	)
@@ -97,7 +97,6 @@ func initObservability(ctx context.Context) (observabilityShutdown, error) {
 		sdkmetric.WithView(durationHistogramView("readio_cloud_http_request_duration_seconds")),
 		sdkmetric.WithView(durationHistogramView("readio_cloud_upstream_request_duration_seconds")),
 	)
-
 
 	meter := provider.Meter("readio-cloud")
 	if err := createInstruments(meter); err != nil {
@@ -163,8 +162,8 @@ func initNoopMetrics() {
 	cloudASRRelayRequests, _ = meter.Int64Counter("noop")
 }
 
-func recordHTTPMetric(route string, status int, errorClass string, elapsed time.Duration) {
-	cloudHTTPRequestDuration.Record(context.Background(), elapsed.Seconds(),
+func recordHTTPMetric(ctx context.Context, route string, status int, errorClass string, elapsed time.Duration) {
+	cloudHTTPRequestDuration.Record(ctx, elapsed.Seconds(),
 		metric.WithAttributes(
 			globalEnvAttribute,
 			attribute.String("route", metricRoute(route)),
@@ -174,12 +173,12 @@ func recordHTTPMetric(route string, status int, errorClass string, elapsed time.
 	)
 }
 
-func recordUpstreamMetric(provider string, route string, status int, errorClass string, cacheStatus string, elapsed time.Duration) {
+func recordUpstreamMetric(ctx context.Context, provider string, route string, status int, errorClass string, cacheStatus string, elapsed time.Duration) {
 	providerLabel := metricProvider(provider)
 	routeLabel := metricRoute(route)
 	errorClassLabel := metricErrorClass(errorClass)
 
-	cloudUpstreamRequestDuration.Record(context.Background(), elapsed.Seconds(),
+	cloudUpstreamRequestDuration.Record(ctx, elapsed.Seconds(),
 		metric.WithAttributes(
 			globalEnvAttribute,
 			attribute.String("provider", providerLabel),
@@ -191,7 +190,7 @@ func recordUpstreamMetric(provider string, route string, status int, errorClass 
 	)
 
 	if errorClassLabel != "none" {
-		cloudUpstreamErrors.Add(context.Background(), 1,
+		cloudUpstreamErrors.Add(ctx, 1,
 			metric.WithAttributes(
 				globalEnvAttribute,
 				attribute.String("provider", providerLabel),
@@ -202,8 +201,8 @@ func recordUpstreamMetric(provider string, route string, status int, errorClass 
 	}
 }
 
-func recordASRRelayMetric(provider string, mode string, status int, errorClass string) {
-	cloudASRRelayRequests.Add(context.Background(), 1,
+func recordASRRelayMetric(ctx context.Context, provider string, mode string, status int, errorClass string) {
+	cloudASRRelayRequests.Add(ctx, 1,
 		metric.WithAttributes(
 			globalEnvAttribute,
 			attribute.String("provider", metricProvider(provider)),

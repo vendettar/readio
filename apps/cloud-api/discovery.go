@@ -549,7 +549,7 @@ func (s *discoveryService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if !allowedMethod {
 		w.Header().Set("Allow", strings.Join([]string{http.MethodGet, http.MethodPost}, ", "))
 		writeDiscoveryErrorSpec(r, w, http.StatusMethodNotAllowed, discoveryErrMethodNotAllowed)
-		recordHTTPMetric(cleanedPath, http.StatusMethodNotAllowed, "invalid_method", time.Since(start))
+		recordHTTPMetric(r.Context(), cleanedPath, http.StatusMethodNotAllowed, "invalid_method", time.Since(start))
 		return
 	}
 
@@ -574,7 +574,7 @@ func (s *discoveryService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		writeDiscoveryErrorSpec(r, w, http.StatusNotFound, discoveryErrNotFound)
-		recordHTTPMetric(cleanedPath, http.StatusNotFound, "unknown", time.Since(start))
+		recordHTTPMetric(r.Context(), cleanedPath, http.StatusNotFound, "unknown", time.Since(start))
 	}
 }
 
@@ -602,9 +602,9 @@ func logDiscoveryRequestWithStatus(ctx context.Context, route, upstreamKind, ups
 		}
 	}
 
-	recordHTTPMetric(route, httpStatus, errorClass, elapsed)
+	recordHTTPMetric(ctx, route, httpStatus, errorClass, elapsed)
 	if shouldRecordDiscoveryUpstreamMetric(route, upstreamKind, err, cacheStatus) {
-		recordUpstreamMetric(upstreamKind, route, httpStatus, errorClass, cacheStatus, elapsed)
+		recordUpstreamMetric(ctx, upstreamKind, route, httpStatus, errorClass, cacheStatus, elapsed)
 	}
 
 	attrs := []any{

@@ -63,6 +63,7 @@ func TestWrapInboundHandlerCreatesServerSpanWithRouteTemplate(t *testing.T) {
 	}
 	if server == nil {
 		t.Fatalf("expected a server span; got names=%v", spanNames(spans))
+		return
 	}
 
 	if want := "GET " + discoverySearchPodcastsRoute; server.Name != want {
