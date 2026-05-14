@@ -12,6 +12,11 @@ Deferred items:
 - GC rate
 - Heap idle or heap fragmentation views
 
+GC pause remains deferred because the current dashboard already has HTTP
+quantiles, CPU, heap allocation, memory, goroutines, upstream latency, and slow
+request logs. Add a GC pause panel only after there is evidence that P99 latency
+is not explained by upstream, CPU, memory, or request traces.
+
 When to implement:
 
 - The Cloud API exposes stable Go runtime metrics through the existing OTLP
