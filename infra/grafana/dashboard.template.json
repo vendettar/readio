@@ -132,13 +132,9 @@
                   "multiLane": false
                 },
                 "legend": {
-                  "calcs": [
-                    "mean",
-                    "max",
-                    "lastNotNull"
-                  ],
-                  "displayMode": "table",
-                  "placement": "bottom",
+                  "calcs": [],
+                  "displayMode": "list",
+                  "placement": "right",
                   "showLegend": true
                 },
                 "tooltip": {
@@ -555,7 +551,7 @@
         "spec": {
           "id": 14,
           "title": "Instance Uptime",
-          "description": "Process uptime in seconds",
+          "description": "Process uptime. Values below 5 minutes are highlighted as recent restarts; otherwise uptime is healthy.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -620,14 +616,10 @@
                     "steps": [
                       {
                         "value": 0,
-                        "color": "red"
-                      },
-                      {
-                        "value": 300,
                         "color": "yellow"
                       },
                       {
-                        "value": 3600,
+                        "value": 300,
                         "color": "green"
                       }
                     ]
@@ -693,14 +685,11 @@
                   "multiLane": false
                 },
                 "legend": {
-                  "calcs": [
-                    "mean",
-                    "max",
-                    "lastNotNull"
-                  ],
-                  "displayMode": "table",
-                  "placement": "bottom",
-                  "showLegend": true
+                  "calcs": [],
+                  "displayMode": "list",
+                  "placement": "right",
+                  "showLegend": true,
+                  "width": 240
                 },
                 "tooltip": {
                   "hideZeros": false,
@@ -788,7 +777,7 @@
                       },
                       "spec": {
                         "app": "grafana-assistant-app",
-                        "expr": "sum by (provider) (rate(readio_cloud_upstream_errors_total{env=\"$env\", service_version=~\"$service_version\"}[$__rate_interval])) or vector(0)",
+                        "expr": "sum by (provider) (rate(readio_cloud_upstream_errors_total{env=\"$env\", service_version=~\"$service_version\"}[$__rate_interval])) or on() label_replace(vector(0), \"provider\", \"none\", \"__name__\", \".*\")",
                         "instant": false,
                         "legendFormat": "errors/{{provider}}",
                         "queryType": "range",
@@ -876,7 +865,9 @@
                     },
                     "thresholdsStyle": {
                       "mode": "off"
-                    }
+                    },
+                    "axisSoftMin": 0,
+                    "axisSoftMax": 1
                   },
                   "unit": "reqps"
                 },
@@ -910,7 +901,7 @@
                       },
                       "spec": {
                         "app": "grafana-assistant-app",
-                        "expr": "sum by (provider, mode, status_class) (rate(readio_cloud_asr_relay_requests_total{env=\"$env\", service_version=~\"$service_version\"}[$__rate_interval])) or vector(0)",
+                        "expr": "sum by (provider, mode, status_class) (rate(readio_cloud_asr_relay_requests_total{env=\"$env\", service_version=~\"$service_version\"}[$__rate_interval])) or on() label_replace(label_replace(label_replace(vector(0), \"provider\", \"none\", \"__name__\", \".*\"), \"mode\", \"none\", \"__name__\", \".*\"), \"status_class\", \"none\", \"__name__\", \".*\")",
                         "instant": false,
                         "legendFormat": "{{provider}}/{{mode}}/{{status_class}}",
                         "queryType": "range",
@@ -998,7 +989,9 @@
                     },
                     "thresholdsStyle": {
                       "mode": "off"
-                    }
+                    },
+                    "axisSoftMin": 0,
+                    "axisSoftMax": 1
                   },
                   "unit": "reqps"
                 },
@@ -1288,7 +1281,7 @@
                         "app": "grafana-assistant-app",
                         "expr": "100 * readio_cloud_data_filesystem_free_bytes{env=\"$env\", service_version=~\"$service_version\"} / readio_cloud_data_filesystem_total_bytes{env=\"$env\", service_version=~\"$service_version\"}",
                         "instant": false,
-                        "legendFormat": "disk free %",
+                        "legendFormat": "{{service_version}}",
                         "queryType": "range",
                         "range": true
                       }
@@ -1335,13 +1328,21 @@
                     "mode": "absolute",
                     "steps": [
                       {
-                        "value": 0,
-                        "color": "green"
+                        "color": "red",
+                        "value": 0
+                      },
+                      {
+                        "color": "yellow",
+                        "value": 10
+                      },
+                      {
+                        "color": "green",
+                        "value": 20
                       }
                     ]
                   },
                   "color": {
-                    "mode": "palette-classic"
+                    "mode": "thresholds"
                   },
                   "custom": {
                     "axisBorderShow": false,
@@ -1376,7 +1377,8 @@
                     "thresholdsStyle": {
                       "mode": "off"
                     }
-                  }
+                  },
+                  "decimals": 2
                 },
                 "overrides": []
               }
@@ -1559,7 +1561,7 @@
         "spec": {
           "id": 22,
           "title": "Slow Requests (with Trace ID)",
-          "description": "Recent request logs slower than 1 second with trace_id for Loki-to-Tempo investigation. Requires the Loki data source trace_id derived field to link to Tempo. Note: the dashboard $service_version variable does not filter this panel — Loki stream labels are intentionally kept low-cardinality (service/env/level only).",
+          "description": "Recent request logs slower than 1 second with trace_id for Loki-to-Tempo investigation. No data means no requests slower than 1 second in the selected range. Requires the Loki data source trace_id derived field to link to Tempo. Note: the dashboard $service_version variable does not filter this panel — Loki stream labels are intentionally kept low-cardinality (service/env/level only).",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -1621,7 +1623,7 @@
         "spec": {
           "id": 23,
           "title": "CPU Usage",
-          "description": "Process CPU consumption in cores (1.0 = one full CPU core). Uses rate of cumulative CPU seconds (getrusage).",
+          "description": "Process CPU consumption as percentage. Uses rate of cumulative CPU seconds (getrusage) multiplied by 100.",
           "links": [],
           "data": {
             "kind": "QueryGroup",
@@ -1640,9 +1642,9 @@
                       },
                       "spec": {
                         "app": "grafana-assistant-app",
-                        "expr": "rate(readio_cloud_process_cpu_seconds_total{env=\"$env\", service_version=~\"$service_version\"}[$__rate_interval])",
+                        "expr": "rate(readio_cloud_process_cpu_seconds_total{env=\"$env\", service_version=~\"$service_version\"}[$__rate_interval]) * 100",
                         "instant": false,
-                        "legendFormat": "cpu cores",
+                        "legendFormat": "cpu %",
                         "queryType": "range",
                         "range": true,
                         "exemplar": false
@@ -1685,24 +1687,32 @@
               },
               "fieldConfig": {
                 "defaults": {
-                  "unit": "short",
+                  "unit": "percent",
                   "thresholds": {
                     "mode": "absolute",
                     "steps": [
                       {
-                        "value": 0,
-                        "color": "green"
+                        "color": "green",
+                        "value": 0
+                      },
+                      {
+                        "color": "yellow",
+                        "value": 70
+                      },
+                      {
+                        "color": "red",
+                        "value": 90
                       }
                     ]
                   },
                   "color": {
-                    "mode": "palette-classic"
+                    "mode": "thresholds"
                   },
                   "custom": {
                     "axisBorderShow": false,
                     "axisCenteredZero": false,
                     "axisColorMode": "text",
-                    "axisLabel": "cores",
+                    "axisLabel": "",
                     "axisPlacement": "auto",
                     "barAlignment": 0,
                     "barWidthFactor": 0.6,
@@ -2080,6 +2090,314 @@
             }
           }
         }
+      },
+      "panel-27": {
+        "kind": "Panel",
+        "spec": {
+          "id": 27,
+          "title": "Error Rate by Route",
+          "description": "5xx error ratio grouped by route. Use to identify endpoint-specific failures.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "type": "prometheus",
+                        "name": "REPLACE_WITH_PROMETHEUS_UID"
+                      },
+                      "spec": {
+                        "app": "grafana-assistant-app",
+                        "expr": "sum by(route) (rate(readio_cloud_http_request_duration_seconds_count{env=\"$env\", service_version=~\"$service_version\", status_class=\"5xx\"}[$__rate_interval])) / sum by(route) (rate(readio_cloud_http_request_duration_seconds_count{env=\"$env\", service_version=~\"$service_version\"}[$__rate_interval]))",
+                        "instant": false,
+                        "legendFormat": "{{route}}",
+                        "queryType": "range",
+                        "range": true,
+                        "exemplar": false
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "timeseries",
+            "version": "13.1.0-25668120414",
+            "spec": {
+              "options": {
+                "annotations": {
+                  "clustering": -1,
+                  "multiLane": false
+                },
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "right",
+                  "showLegend": true,
+                  "calcs": [],
+                  "width": 240
+                },
+                "tooltip": {
+                  "mode": "multi",
+                  "sort": "desc",
+                  "hideZeros": false
+                }
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "percentunit",
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": 0
+                      },
+                      {
+                        "color": "yellow",
+                        "value": 0.01
+                      },
+                      {
+                        "color": "red",
+                        "value": 0.05
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "palette-classic"
+                  },
+                  "custom": {
+                    "axisBorderShow": false,
+                    "axisCenteredZero": false,
+                    "axisColorMode": "text",
+                    "axisLabel": "",
+                    "axisPlacement": "auto",
+                    "barAlignment": 0,
+                    "barWidthFactor": 0.6,
+                    "drawStyle": "line",
+                    "fillOpacity": 10,
+                    "gradientMode": "opacity",
+                    "hideFrom": {
+                      "legend": false,
+                      "tooltip": false,
+                      "viz": false
+                    },
+                    "insertNulls": false,
+                    "lineInterpolation": "linear",
+                    "lineWidth": 2,
+                    "pointSize": 5,
+                    "scaleDistribution": {
+                      "type": "linear"
+                    },
+                    "showPoints": "auto",
+                    "showValues": false,
+                    "spanNulls": false,
+                    "stacking": {
+                      "group": "A",
+                      "mode": "none"
+                    },
+                    "thresholdsStyle": {
+                      "mode": "off"
+                    }
+                  },
+                  "links": []
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-29": {
+        "kind": "Panel",
+        "spec": {
+          "id": 29,
+          "title": "P99 Latency",
+          "description": "Overall 99th percentile HTTP request duration across routes.",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "type": "prometheus",
+                        "name": "REPLACE_WITH_PROMETHEUS_UID"
+                      },
+                      "spec": {
+                        "app": "grafana-assistant-app",
+                        "expr": "histogram_quantile(0.99, sum by(le) (rate(readio_cloud_http_request_duration_seconds_bucket{env=\"$env\", service_version=~\"$service_version\"}[$__rate_interval])))",
+                        "instant": true,
+                        "legendFormat": "p99 latency",
+                        "queryType": "instant",
+                        "range": false,
+                        "exemplar": false
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "13.1.0-25668120414",
+            "spec": {
+              "options": {
+                "colorMode": "background",
+                "graphMode": "area",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "textMode": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s",
+                  "min": 0,
+                  "max": 1,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "green",
+                        "value": 0
+                      },
+                      {
+                        "color": "yellow",
+                        "value": 0.5
+                      },
+                      {
+                        "color": "red",
+                        "value": 1
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "thresholds"
+                  },
+                  "links": []
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
+      },
+      "panel-28": {
+        "kind": "Panel",
+        "spec": {
+          "id": 28,
+          "title": "Total RPS",
+          "description": "当前总请求速率（所有状态码）",
+          "links": [],
+          "data": {
+            "kind": "QueryGroup",
+            "spec": {
+              "queries": [
+                {
+                  "kind": "PanelQuery",
+                  "spec": {
+                    "query": {
+                      "kind": "DataQuery",
+                      "group": "prometheus",
+                      "version": "v0",
+                      "datasource": {
+                        "type": "prometheus",
+                        "name": "REPLACE_WITH_PROMETHEUS_UID"
+                      },
+                      "spec": {
+                        "app": "grafana-assistant-app",
+                        "expr": "sum(rate(readio_cloud_http_request_duration_seconds_count{env=\"$env\", service_version=~\"$service_version\"}[$__rate_interval]))",
+                        "instant": true,
+                        "legendFormat": "rps",
+                        "queryType": "instant",
+                        "range": false,
+                        "exemplar": false
+                      }
+                    },
+                    "refId": "A",
+                    "hidden": false
+                  }
+                }
+              ],
+              "transformations": [],
+              "queryOptions": {}
+            }
+          },
+          "vizConfig": {
+            "kind": "VizConfig",
+            "group": "stat",
+            "version": "13.1.0-25668120414",
+            "spec": {
+              "options": {
+                "colorMode": "background",
+                "graphMode": "area",
+                "justifyMode": "auto",
+                "orientation": "auto",
+                "reduceOptions": {
+                  "calcs": [
+                    "lastNotNull"
+                  ],
+                  "fields": "",
+                  "values": false
+                },
+                "textMode": "auto"
+              },
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "reqps",
+                  "min": 0,
+                  "max": 1,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      {
+                        "color": "blue",
+                        "value": 0
+                      }
+                    ]
+                  },
+                  "color": {
+                    "mode": "fixed",
+                    "fixedColor": "blue"
+                  },
+                  "links": []
+                },
+                "overrides": []
+              }
+            }
+          }
+        }
       }
     },
     "layout": {
@@ -2100,9 +2418,9 @@
                     {
                       "kind": "GridLayoutItem",
                       "spec": {
-                        "x": 0,
+                        "x": 10,
                         "y": 0,
-                        "width": 8,
+                        "width": 5,
                         "height": 5,
                         "element": {
                           "kind": "ElementReference",
@@ -2113,9 +2431,9 @@
                     {
                       "kind": "GridLayoutItem",
                       "spec": {
-                        "x": 8,
+                        "x": 15,
                         "y": 0,
-                        "width": 8,
+                        "width": 5,
                         "height": 5,
                         "element": {
                           "kind": "ElementReference",
@@ -2126,13 +2444,39 @@
                     {
                       "kind": "GridLayoutItem",
                       "spec": {
-                        "x": 16,
+                        "x": 20,
                         "y": 0,
-                        "width": 8,
+                        "width": 4,
                         "height": 5,
                         "element": {
                           "kind": "ElementReference",
                           "name": "panel-14"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "x": 5,
+                        "y": 0,
+                        "width": 5,
+                        "height": 5,
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-29"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "x": 0,
+                        "y": 0,
+                        "width": 5,
+                        "height": 5,
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-28"
                         }
                       }
                     }
@@ -2157,7 +2501,7 @@
                       "spec": {
                         "x": 0,
                         "y": 0,
-                        "width": 8,
+                        "width": 24,
                         "height": 9,
                         "element": {
                           "kind": "ElementReference",
@@ -2168,10 +2512,10 @@
                     {
                       "kind": "GridLayoutItem",
                       "spec": {
-                        "x": 8,
-                        "y": 0,
+                        "x": 0,
+                        "y": 9,
                         "width": 8,
-                        "height": 9,
+                        "height": 8,
                         "element": {
                           "kind": "ElementReference",
                           "name": "panel-24"
@@ -2181,10 +2525,10 @@
                     {
                       "kind": "GridLayoutItem",
                       "spec": {
-                        "x": 16,
-                        "y": 0,
-                        "width": 8,
-                        "height": 9,
+                        "x": 8,
+                        "y": 9,
+                        "width": 16,
+                        "height": 8,
                         "element": {
                           "kind": "ElementReference",
                           "name": "panel-15"
@@ -2388,13 +2732,26 @@
                     {
                       "kind": "GridLayoutItem",
                       "spec": {
-                        "x": 0,
+                        "x": 12,
                         "y": 0,
-                        "width": 24,
+                        "width": 12,
                         "height": 12,
                         "element": {
                           "kind": "ElementReference",
                           "name": "panel-22"
+                        }
+                      }
+                    },
+                    {
+                      "kind": "GridLayoutItem",
+                      "spec": {
+                        "x": 0,
+                        "y": 0,
+                        "width": 12,
+                        "height": 12,
+                        "element": {
+                          "kind": "ElementReference",
+                          "name": "panel-27"
                         }
                       }
                     }
@@ -2475,9 +2832,7 @@
           "name": "service_version",
           "current": {
             "text": "All",
-            "value": [
-              "$__all"
-            ]
+            "value": "$__all"
           },
           "label": "Version",
           "hide": "dontHide",
@@ -2510,7 +2865,7 @@
           "regexApplyTo": "value",
           "sort": "alphabeticalCaseInsensitiveAsc",
           "options": [],
-          "multi": true,
+          "multi": false,
           "includeAll": true,
           "allowCustomValue": true
         }
