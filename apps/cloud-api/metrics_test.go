@@ -420,3 +420,43 @@ func TestMetricsCarryEnvAttribute(t *testing.T) {
 		t.Errorf("expected metric to carry attribute env=%q, but it was not found", expectedEnv)
 	}
 }
+
+func TestGetProcessCPUSecondsReturnsNonNegative(t *testing.T) {
+	cpu := getProcessCPUSeconds()
+	if cpu < 0 {
+		t.Errorf("getProcessCPUSeconds must not be negative, got %f", cpu)
+	}
+	// Positive-value check is best-effort: getrusage resolution is
+	// platform-dependent and the test process may have used sub-microsecond
+	// CPU time on some systems. We only guarantee non-negative.
+}
+
+func TestHostMetricsSnapshotIncludesCPUSeconds(t *testing.T) {
+	snapshot := collectHostMetricsSnapshot("", "", "test", hostMetricsSnapshot{}, time.Now())
+
+	if snapshot.cpuSecondsTotal < 0 {
+		t.Errorf("cpuSecondsTotal must not be negative, got %f", snapshot.cpuSecondsTotal)
+	}
+	// Positive-value check is best-effort (see TestGetProcessCPUSecondsReturnsNonNegative).
+}
+
+func TestNormalizeMetricEnv(t *testing.T) {
+	tests := []struct{ input, want string }{
+		{"prod", "production"},
+		{"production", "production"},
+		{"PRODUCTION", "production"},
+		{"pre", "preproduction"},
+		{"preprod", "preproduction"},
+		{"preproduction", "preproduction"},
+		{"staging", "preproduction"},
+		{"dev", "unknown"},
+		{"", "unknown"},
+		{"  ", "unknown"},
+	}
+	for _, tc := range tests {
+		got := normalizeMetricEnv(tc.input)
+		if got != tc.want {
+			t.Errorf("normalizeMetricEnv(%q) = %q, want %q", tc.input, got, tc.want)
+		}
+	}
+}

@@ -36,6 +36,7 @@ type hostMetricsSnapshot struct {
 	heapAllocBytes       int64
 	memorySysBytes       int64
 	uptimeSeconds        int64
+	cpuSecondsTotal      float64
 	sqliteDBSizeBytes    int64
 	sqliteWALSizeBytes   int64
 	dataFSFreeBytes      int64
@@ -83,6 +84,14 @@ func createHostMetricInstruments(meter metric.Meter) error {
 	uptime, err := meter.Int64ObservableGauge(
 		"readio_cloud_process_uptime_seconds",
 		metric.WithDescription("Process uptime in seconds."),
+		metric.WithUnit("s"),
+	)
+	if err != nil {
+		return err
+	}
+	cpuSeconds, err := meter.Float64ObservableCounter(
+		"readio_cloud_process_cpu_seconds_total",
+		metric.WithDescription("Total user and system CPU seconds consumed by this process."),
 		metric.WithUnit("s"),
 	)
 	if err != nil {
@@ -137,6 +146,7 @@ func createHostMetricInstruments(meter metric.Meter) error {
 		observer.ObserveInt64(heapAlloc, snapshot.heapAllocBytes, metric.WithAttributes(base...))
 		observer.ObserveInt64(memorySys, snapshot.memorySysBytes, metric.WithAttributes(base...))
 		observer.ObserveInt64(uptime, snapshot.uptimeSeconds, metric.WithAttributes(base...))
+		observer.ObserveFloat64(cpuSeconds, snapshot.cpuSecondsTotal, metric.WithAttributes(base...))
 		observer.ObserveInt64(dbSize, snapshot.sqliteDBSizeBytes, metric.WithAttributes(hostMetricPathAttributes(snapshot.env, hostMetricPathSQLite)...))
 		observer.ObserveInt64(walSize, snapshot.sqliteWALSizeBytes, metric.WithAttributes(hostMetricPathAttributes(snapshot.env, hostMetricPathSQLiteWAL)...))
 		observer.ObserveInt64(fsFree, snapshot.dataFSFreeBytes, metric.WithAttributes(hostMetricPathAttributes(snapshot.env, hostMetricPathData)...))
@@ -146,7 +156,7 @@ func createHostMetricInstruments(meter metric.Meter) error {
 		}
 		_ = ctx
 		return nil
-	}, goroutines, heapAlloc, memorySys, uptime, dbSize, walSize, fsFree, fsTotal, transcripts)
+	}, goroutines, heapAlloc, memorySys, uptime, cpuSeconds, dbSize, walSize, fsFree, fsTotal, transcripts)
 	return err
 }
 
@@ -193,6 +203,7 @@ func collectHostMetricsSnapshot(dbPath, transcriptDir, env string, previous host
 		heapAllocBytes:      safeUint64ToInt64(mem.HeapAlloc),
 		memorySysBytes:      safeUint64ToInt64(mem.Sys),
 		uptimeSeconds:       int64(now.Sub(processStartedAt).Seconds()),
+		cpuSecondsTotal:     getProcessCPUSeconds(),
 		sqliteDBSizeBytes:   fileSizeOrZero(dbPath),
 		sqliteWALSizeBytes:  fileSizeOrZero(dbPath + "-wal"),
 		transcriptSizeBytes: previous.transcriptSizeBytes,
@@ -291,6 +302,17 @@ func shouldSkipHostMetricDir(name string) bool {
 
 func resolveHostMetricsInterval() time.Duration {
 	return envDurationSecondsOrDefault(hostMetricsIntervalEnv, hostMetricsDefaultInterval)
+}
+
+// getProcessCPUSeconds returns the total user + system CPU seconds consumed
+// by this process using getrusage(2). It works on Linux and macOS.
+func getProcessCPUSeconds() float64 {
+	var rusage syscall.Rusage
+	if err := syscall.Getrusage(syscall.RUSAGE_SELF, &rusage); err != nil {
+		return 0
+	}
+	return float64(rusage.Utime.Sec) + float64(rusage.Utime.Usec)/1e6 +
+		float64(rusage.Stime.Sec) + float64(rusage.Stime.Usec)/1e6
 }
 
 func normalizeMetricEnv(env string) string {
