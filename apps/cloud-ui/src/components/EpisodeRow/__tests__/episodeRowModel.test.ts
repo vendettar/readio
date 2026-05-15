@@ -23,7 +23,7 @@ vi.mock('react-i18next', () => ({
 }))
 
 vi.mock('@/lib/htmlUtils', () => ({
-  stripHtml: (value: string) => `CLEAN(${value})`,
+  // Removed stripHtml mock as it is no longer used in episodeRowModel
 }))
 
 const t = ((key: string) => key) as never
@@ -63,7 +63,7 @@ describe('episodeRowModel', () => {
       episodeKey: expect.stringMatching(/^[A-Za-z0-9_-]{22}$/),
     })
     expect(model.subtitle).toBe('REL(2025-01-01)')
-    expect(model.description).toBe('CLEAN(<p>desc</p>)')
+    expect(model.description).toBe('<p>desc</p>')
     expect(model.meta).toBe('DUR(120)')
     expect(model.artworkFallbackSrc).toBe('https://example.com/cover-600.jpg')
     expect(model.downloadArgs).toEqual({
@@ -270,7 +270,7 @@ describe('episodeRowModel', () => {
     const model = fromSearchEpisode({ episode, routeCountry: 'us', language: 'en', t })
     expect(model.title).toBe('Search Episode')
     expect(model.subtitle).toBe('REL(2025-01-02) • Search Show')
-    expect(model.description).toBe('CLEAN(desc)')
+    expect(model.description).toBe('desc')
     expect(model.playAriaLabel).toBe('ariaPlayEpisode')
     expect(model.route).not.toBeNull()
     expect(model.route?.to).toBe('/podcast/$country/$id/$episodeKey')
@@ -334,7 +334,7 @@ describe('episodeRowModel', () => {
     expect(model.route?.params.id).toBe('fav-podcast')
     expect(model.subtitle).toBe('Fav Show • DATE(2025-02-01)')
     expect(model.artworkSrc).toBe('episode-art')
-    expect(model.description).toBe('CLEAN(Test description)')
+    expect(model.description).toBe('Test description')
     expect(model.downloadArgs).toEqual({
       episodeTitle: 'Fav Episode',
       showTitle: 'Fav Show',
@@ -370,7 +370,7 @@ describe('episodeRowModel', () => {
 
     expect(model.artworkSrc).toBe('episode-art')
     expect(model.artworkFallbackSrc).toBe('podcast-art')
-    expect(model.description).toBe('CLEAN()')
+    expect(model.description).toBe('')
   })
 
   it('maps history sessions using the persisted podcastItunesId only', () => {

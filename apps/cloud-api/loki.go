@@ -98,18 +98,28 @@ func resolveLokiConfig() lokiConfig {
 }
 
 func resolveLokiLevel() slog.Level {
-	switch strings.ToLower(strings.TrimSpace(os.Getenv(lokiLogLevelEnv))) {
+	return parseLogLevel(os.Getenv(lokiLogLevelEnv), slog.LevelInfo)
+}
+
+func resolveLogLevel() slog.Level {
+	return parseLogLevel(os.Getenv("READIO_LOG_LEVEL"), slog.LevelInfo)
+}
+
+func parseLogLevel(raw string, defaultLevel slog.Level) slog.Level {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "debug":
 		return slog.LevelDebug
-	case "", "info":
+	case "info":
 		return slog.LevelInfo
 	case "warn", "warning":
 		return slog.LevelWarn
 	case "error":
 		return slog.LevelError
+	case "":
+		return defaultLevel
 	default:
-		slog.Warn("invalid Loki log level; using default", "env", lokiLogLevelEnv)
-		return slog.LevelInfo
+		slog.Warn("invalid log level; using default", "level", raw)
+		return defaultLevel
 	}
 }
 

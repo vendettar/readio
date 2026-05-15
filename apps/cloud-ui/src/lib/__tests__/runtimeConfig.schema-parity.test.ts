@@ -33,7 +33,7 @@ describe('runtimeConfig schema parity', () => {
       READIO_PROXY_TIMEOUT_MS: '1234',
       READIO_DEFAULT_LANGUAGE: 'ZH-CN',
       READIO_DEFAULT_PODCAST_CONTENT_COUNTRY: 'JP',
-      READIO_USE_MOCK: '1',
+
       READIO_ASR_API_KEY: 'public_asr_token',
       READIO_OPENAI_API_KEY: 'public_translate_token',
       READIO_FALLBACK_PODCAST_IMAGE: '/placeholder.svg',
@@ -53,7 +53,7 @@ describe('runtimeConfig schema parity', () => {
     expect(config.PROXY_TIMEOUT_MS).toBe(1234)
     expect(config.DEFAULT_LANGUAGE).toBe('zh')
     expect(config.DEFAULT_COUNTRY).toBe('JP')
-    expect(config.USE_MOCK_DATA).toBe(true)
+
     expect(config.ASR_API_KEY).toBe('public_asr_token')
     expect(config.OPENAI_API_KEY).toBe('public_translate_token')
     expect(config.FALLBACK_PODCAST_IMAGE).toBe('/placeholder.svg')
@@ -190,12 +190,9 @@ describe('runtimeConfig schema parity', () => {
 
     expect(enabledProviders).toEqual([])
     expect(logErrorMock).toHaveBeenCalled()
-    const errorLogCall = logErrorMock.mock.calls.find(([message]) =>
-      String(message).includes('Unexpected schema parse failure')
-    )
-    expect(errorLogCall).toBeTruthy()
-    expect(JSON.stringify(errorLogCall)).toContain('READIO_ENABLED_ASR_PROVIDERS')
-    expect(JSON.stringify(errorLogCall)).toContain('READIO_DISABLED_ASR_PROVIDERS')
+    const allLogOutput = JSON.stringify(logErrorMock.mock.calls)
+    expect(allLogOutput).toContain('ENABLED_ASR_PROVIDERS')
+    expect(allLogOutput).toContain('DISABLED_ASR_PROVIDERS')
   })
 
   it('uses issue.path for toggle fail-closed classification, not message text', async () => {

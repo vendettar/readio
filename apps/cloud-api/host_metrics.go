@@ -321,6 +321,8 @@ func normalizeMetricEnv(env string) string {
 		return "production"
 	case "pre", "preprod", "preproduction", "staging":
 		return "preproduction"
+	case "dev", "develop":
+		return "develop"
 	default:
 		return "unknown"
 	}

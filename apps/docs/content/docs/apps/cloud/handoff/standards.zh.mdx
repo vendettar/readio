@@ -31,3 +31,9 @@ Cloud 前端继续保持这些既定基线：
 - transcript 选区/菜单语义
 - player control ARIA
 - overlay 的确定性关闭/escape 行为
+
+## 5. Debug 观测性标准 (Debug Observability)
+
+- **拒绝静默跳过 (No Silent Skips)**：任何丢弃数据或跳过循环的操作（例如映射循环中的 `continue`），必须在此之前调用 `slog.DebugContext(ctx, ...)` 明确记录跳过原因和条目标识符。严禁缺失如 `link` 等字段时无日志直接抛弃。
+- **上游交互透明化 (Upstream Transparency)**：所有向第三方发起的 HTTP 请求，必须在 DEBUG 级别使用 `slog.DebugContext(ctx, ...)` 记录外发请求 URL、响应状态码、响应体大小以及解析出的有效条目数（`count`）。
+- **统一键名 (Standardized Keys)**：日志记录强制使用标准键名：`error`, `guid`, `itunes_id`, `latency_ms`, `count`。

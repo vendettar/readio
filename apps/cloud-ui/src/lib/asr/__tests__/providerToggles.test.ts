@@ -19,7 +19,7 @@ describe('asr provider toggles resolver', () => {
         ENABLED_ASR_PROVIDERS: '',
         DISABLED_ASR_PROVIDERS: '',
       })
-    ).toEqual(['groq'])
+    ).toEqual([])
 
     expect(
       resolveEnabledAsrProviders({

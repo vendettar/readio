@@ -3,11 +3,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { ExpandableDescription } from '../expandable-description'
 
 describe('ExpandableDescription', () => {
-  it('renders plain mode using stripped content', () => {
+  it('renders content as sanitized HTML', () => {
     render(
       <ExpandableDescription
         content="<p>Hello <strong>World</strong></p>"
-        mode="plain"
         expanded={false}
         onExpandedChange={vi.fn()}
         showMoreLabel="Show more"
@@ -15,14 +14,15 @@ describe('ExpandableDescription', () => {
       />
     )
 
-    expect(screen.getByText('Hello World')).toBeTruthy()
+    // Using regex to match text that might be split across multiple nodes (<strong>)
+    expect(screen.getByText(/Hello/i)).toBeTruthy()
+    expect(screen.getByText(/World/i)).toBeTruthy()
   })
 
   it('renders html mode with sanitized markup', () => {
     render(
       <ExpandableDescription
         content="<p>Hello <strong>World</strong><script>alert(1)</script></p>"
-        mode="html"
         expanded
         onExpandedChange={vi.fn()}
         showMoreLabel="Show more"
@@ -40,7 +40,6 @@ describe('ExpandableDescription', () => {
     const { rerender } = render(
       <ExpandableDescription
         content={longContent}
-        mode="plain"
         expanded={false}
         onExpandedChange={onExpandedChange}
         showMoreLabel="Show more"
@@ -54,7 +53,6 @@ describe('ExpandableDescription', () => {
     rerender(
       <ExpandableDescription
         content={longContent}
-        mode="plain"
         expanded
         onExpandedChange={onExpandedChange}
         showMoreLabel="Show more"
@@ -72,7 +70,6 @@ describe('ExpandableDescription', () => {
     const { rerender } = render(
       <ExpandableDescription
         content={longContent}
-        mode="plain"
         expanded={false}
         onExpandedChange={onExpandedChange}
         showMoreLabel="Show more"
@@ -89,7 +86,6 @@ describe('ExpandableDescription', () => {
     rerender(
       <ExpandableDescription
         content={longContent}
-        mode="plain"
         expanded
         onExpandedChange={onExpandedChange}
         showMoreLabel="Show more"

@@ -533,4 +533,56 @@ func TestDiscoveryServicePodcastEpisodesByItunesID(t *testing.T) {
 			t.Fatalf("code = %q, want UPSTREAM_REQUEST_FAILED", payload["code"])
 		}
 	})
+	t.Run("handles missing or invalid link field by omitting it", func(t *testing.T) {
+		service := &discoveryService{
+			client: &http.Client{
+				Transport: discoveryRoundTripper(func(_ *http.Request) (*http.Response, error) {
+					return jsonResponse(http.StatusOK, `{
+						"status":"true",
+						"items":[
+							{
+								"id":1,
+								"title":"Invalid Link",
+								"link":"invalid-url",
+								"description":"desc",
+								"guid":"guid-1",
+								"datePublished":1546399813,
+								"enclosureUrl":"https://example.com/audio-1.mp3",
+								"enclosureLength":100,
+								"duration":54,
+								"explicit":0,
+								"image":"https://example.com/episode-1.jpg"
+							},
+							{
+								"id":2,
+								"title":"Missing Link",
+								"description":"desc",
+								"guid":"guid-2",
+								"datePublished":1546399814,
+								"enclosureUrl":"https://example.com/audio-2.mp3",
+								"enclosureLength":100,
+								"duration":54,
+								"explicit":0,
+								"image":"https://example.com/episode-2.jpg"
+							}
+						]
+					}`), nil
+				}),
+			},
+			timeout:            time.Second,
+			userAgent:          discoveryUserAgent,
+			bodyLimit:          discoveryBodyLimit,
+			cache:              newDiscoveryCache(0),
+			podcastIndexConfig: podcastIndexConfig{apiKey: "test-key", apiSecret: "test-secret", userAgent: "test"},
+		}
+
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, discoveryPodcastsRoute+"/123/episodes", nil)
+		service.ServeHTTP(rr, req)
+
+		body := rr.Body.String()
+		if strings.Contains(body, `"link"`) {
+			t.Fatalf("response should omit link field but got: %s", body)
+		}
+	})
 }

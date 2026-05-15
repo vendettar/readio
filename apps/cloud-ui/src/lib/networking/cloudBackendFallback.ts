@@ -1,5 +1,5 @@
 import { log } from '../logger'
-import { getAppConfig } from '../runtimeConfig'
+import { buildBackendURL, getAppConfig } from '../runtimeConfig'
 import { FetchError, isAbortLikeError, NetworkError, parseFetchedResponse } from './fetchErrors'
 import { createTimeoutController } from './timeouts'
 
@@ -156,8 +156,11 @@ async function fetchCloudBackendResponse(
     fetchImpl?: typeof fetch
   }
 ): Promise<Response> {
+  const config = getAppConfig()
+  const proxyBase = config.NETWORK_PROXY_URL || buildBackendURL('/api/proxy')
   const backendFetch = options.fetchImpl ?? fetch
-  return backendFetch('/api/proxy', {
+
+  return backendFetch(proxyBase, {
     signal: options.signal,
     credentials: 'omit',
     method: 'POST',

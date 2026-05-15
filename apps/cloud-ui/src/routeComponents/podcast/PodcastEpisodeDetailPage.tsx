@@ -345,7 +345,6 @@ export default function PodcastEpisodeDetailPage() {
             <div className="max-w-xl">
               <ExpandableDescription
                 content={contentSource}
-                mode="plain"
                 isExpandable={false}
                 collapsedLines={4}
                 expanded={isDescriptionExpanded}

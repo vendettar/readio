@@ -22,7 +22,7 @@ function parseProviderTokens(value: string | null | undefined): string[] {
 
 function isEnableAllToken(value: string | null | undefined): boolean {
   const normalized = normalizeToken(value ?? '')
-  return normalized === '' || normalized === '*' || normalized === 'all'
+  return normalized === '*' || normalized === 'all'
 }
 
 export const defaultAsrProvider = 'groq' as const

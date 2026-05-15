@@ -106,7 +106,7 @@ func TestNormalizeMetricEnvIsBounded(t *testing.T) {
 		"preprod":       "preproduction",
 		"preproduction": "preproduction",
 		"staging":       "preproduction",
-		"dev":           "unknown",
+		"dev":           "develop",
 		"anything":      "unknown",
 	}
 	for input, want := range cases {

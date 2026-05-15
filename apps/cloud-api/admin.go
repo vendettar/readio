@@ -207,6 +207,7 @@ func (h *adminSlogHandler) Handle(ctx context.Context, r slog.Record) error {
 	if span := trace.SpanContextFromContext(ctx); span.IsValid() {
 		entry.TraceID = span.TraceID().String()
 		entry.SpanID = span.SpanID().String()
+		r.AddAttrs(slog.String("trace_id", entry.TraceID))
 	}
 	if h.buffer != nil {
 		h.buffer.push(entry)

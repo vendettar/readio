@@ -1,4 +1,5 @@
 import type React from 'react'
+import { linkifyHtml, sanitizeHtml } from '@/lib/htmlUtils'
 import { cn } from '@/lib/utils'
 
 export interface BaseEpisodeRowProps {
@@ -113,14 +114,16 @@ export function BaseEpisodeRow({
             {description && (
               <div
                 className={cn(
-                  'text-xs text-muted-foreground/80 leading-snug font-light mb-1',
+                  'text-xs text-muted-foreground/80 leading-snug font-light mb-1 whitespace-pre-line',
                   descriptionLines === 1 && 'line-clamp-1',
                   descriptionLines === 2 && 'line-clamp-2',
                   descriptionLines === 3 && 'line-clamp-3'
                 )}
-              >
-                {description}
-              </div>
+                // biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized before render
+                dangerouslySetInnerHTML={{
+                  __html: linkifyHtml(sanitizeHtml(String(description))),
+                }}
+              />
             )}
 
             {/* Bottom Meta (if any, e.g. history playback progress) */}

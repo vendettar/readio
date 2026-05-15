@@ -534,7 +534,7 @@ func (s *discoveryService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodOptions {
 		if isAllowedOrigin {
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Accept, Authorization, traceparent")
 			w.Header().Set("Access-Control-Max-Age", "86400")
 		}
 		w.WriteHeader(http.StatusNoContent)
@@ -982,6 +982,7 @@ func (s *discoveryService) executeJSONRequest(req *http.Request, dest any) error
 		client = http.DefaultClient
 	}
 
+	start := time.Now()
 	resp, err := client.Do(req)
 	if err != nil {
 		if req.Context().Err() != nil || isDiscoveryTransportTimeout(err) {
@@ -992,12 +993,31 @@ func (s *discoveryService) executeJSONRequest(req *http.Request, dest any) error
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		slog.DebugContext(req.Context(), "upstream request completed",
+			slog.String("url", sanitizeURL(req.URL)),
+			slog.Int("status_code", resp.StatusCode),
+			slog.Int64("latency_ms", time.Since(start).Milliseconds()),
+		)
 		return &discoveryUpstreamStatusError{status: resp.StatusCode}
 	}
 
 	if err := decodeDiscoveryJSON(resp.Body, s.bodyLimit, dest); err != nil {
+		slog.DebugContext(req.Context(), "upstream request decode failed",
+			slog.String("url", sanitizeURL(req.URL)),
+			slog.Int("status_code", resp.StatusCode),
+			slog.Int64("content_length", resp.ContentLength),
+			slog.Int64("latency_ms", time.Since(start).Milliseconds()),
+			slog.Any("error", err),
+		)
 		return err
 	}
+
+	slog.DebugContext(req.Context(), "upstream request completed",
+		slog.String("url", sanitizeURL(req.URL)),
+		slog.Int("status_code", resp.StatusCode),
+		slog.Int64("content_length", resp.ContentLength),
+		slog.Int64("latency_ms", time.Since(start).Milliseconds()),
+	)
 
 	return nil
 }
@@ -1022,4 +1042,14 @@ func decodeDiscoveryJSON(body io.Reader, limit int64, dest any) error {
 	}
 
 	return nil
+}
+func sanitizeURL(u *url.URL) string {
+	if u == nil {
+		return ""
+	}
+	query := ""
+	if u.RawQuery != "" {
+		query = "?[REDACTED]"
+	}
+	return u.Scheme + "://" + u.Host + u.Path + query
 }
