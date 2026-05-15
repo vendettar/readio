@@ -31,3 +31,9 @@ Cloud frontend keeps the established baseline for:
 - transcript selection/menu semantics
 - player control ARIA
 - deterministic close/escape behavior for overlays
+
+## 5. Debug Observability
+
+- **No Silent Skips**: Any logic that discards data or skips iterations (e.g., `continue` in mapping loops) must be preceded by `slog.DebugContext(ctx, ...)` detailing the reason and item identifier. Dropping data silently due to missing fields (e.g. `link`) is strictly prohibited.
+- **Upstream Transparency**: All requests to third-party providers must log the outgoing URL, response status code, body size, and parsed item count (`count`) at the DEBUG level using `slog.DebugContext(ctx, ...)`.
+- **Standardized Keys**: Logging calls must strictly use unified keys: `error`, `guid`, `itunes_id`, `latency_ms`, `count`.

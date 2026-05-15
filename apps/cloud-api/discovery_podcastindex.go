@@ -176,7 +176,7 @@ type piEpisodeResponse struct {
 	FileSize      int64  `json:"fileSize"`
 	Duration      int64  `json:"duration"`
 	Explicit      bool   `json:"explicit"`
-	Link          string `json:"link"`
+	Link          string `json:"link,omitempty"`
 	SeasonNumber  *int64 `json:"seasonNumber,omitempty"`
 	EpisodeNumber *int64 `json:"episodeNumber,omitempty"`
 	EpisodeType   string `json:"episodeType,omitempty"`
@@ -299,6 +299,7 @@ func (s *discoveryService) fetchPodcastIndexEpisodesByItunesID(
 	q.Set("max", strconv.Itoa(maxEpisodes))
 	req.URL.RawQuery = q.Encode()
 
+	slog.DebugContext(ctx, "podcastindex: fetching episodes", "url", req.URL.String())
 	var result podcastIndexEpisodesResponse
 	if err := s.executeJSONRequest(req, &result); err != nil {
 		return nil, err
@@ -308,6 +309,7 @@ func (s *discoveryService) fetchPodcastIndexEpisodesByItunesID(
 		return nil, fmt.Errorf("podcastindex: upstream reports status=failed")
 	}
 
+	slog.DebugContext(ctx, "podcastindex: fetched episodes", "count", len(result.Items))
 	return result.Items, nil
 }
 
@@ -415,13 +417,13 @@ func (s *discoveryService) handlePodcastIndexPodcastsBatchByGUID(w http.Response
 	if err != nil {
 		var configErr *discoveryProviderConfigError
 		if errors.As(err, &configErr) {
-			slog.Error("podcastindex guid batch unavailable", "error", err, "provider", configErr.provider)
+			slog.ErrorContext(ctx, "podcastindex guid batch unavailable", "error", err, "provider", configErr.provider)
 			writeDiscoveryErrorSpec(r, w, http.StatusServiceUnavailable, discoveryErrProviderNotConfigured)
 			logDiscoveryRequest(r.Context(), route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, CacheStatusMissError)
 			return
 		}
 
-		slog.Warn("podcastindex guid batch failed", "error", err)
+		slog.WarnContext(ctx, "podcastindex guid batch failed", "error", err)
 		writeDiscoveryMappedError(r, w, errors.Join(errDiscoveryUpstreamError, err))
 		logDiscoveryRequest(r.Context(), route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, CacheStatusMissError)
 		return
@@ -429,7 +431,7 @@ func (s *discoveryService) handlePodcastIndexPodcastsBatchByGUID(w http.Response
 
 	bridges := make([]podcastIndexBatchFeedBridge, 0, len(feeds))
 	for _, feed := range feeds {
-		bridge, ok := mapPodcastIndexBatchFeedBridge(feed)
+		bridge, ok := mapPodcastIndexBatchFeedBridge(r.Context(), feed)
 		if !ok {
 			continue
 		}
@@ -498,7 +500,7 @@ func (s *discoveryService) handlePodcastIndexPodcastByItunesID(w http.ResponseWr
 		if feed == nil {
 			return nil, nil
 		}
-		mapped, ok := mapPodcastIndexPodcastToPIPodcast(*feed, podcastItunesID)
+		mapped, ok := mapPodcastIndexPodcastToPIPodcast(ctx, *feed, podcastItunesID)
 		if !ok {
 			return nil, nil
 		}
@@ -509,13 +511,13 @@ func (s *discoveryService) handlePodcastIndexPodcastByItunesID(w http.ResponseWr
 	if err != nil {
 		var configErr *discoveryProviderConfigError
 		if errors.As(err, &configErr) {
-			slog.Error("podcastindex itunesId lookup unavailable", "error", err, "provider", configErr.provider)
+			slog.ErrorContext(ctx, "podcastindex itunesId lookup unavailable", "error", err, "provider", configErr.provider)
 			writeDiscoveryErrorSpec(r, w, http.StatusServiceUnavailable, discoveryErrProviderNotConfigured)
-			logDiscoveryRequest(r.Context(), route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, cacheStatus)
+			logDiscoveryRequest(r.Context(), route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, CacheStatusMissError)
 			return
 		}
 
-		slog.Warn("podcastindex itunesId lookup failed", "error", err)
+		slog.WarnContext(ctx, "podcastindex itunesId lookup failed", "error", err)
 		writeDiscoveryMappedError(r, w, err)
 		logDiscoveryRequest(r.Context(), route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, cacheStatus)
 		return
@@ -578,7 +580,7 @@ func (s *discoveryService) handlePodcastIndexPodcastEpisodesByItunesID(w http.Re
 		episodes := make([]piEpisodeResponse, 0, len(items))
 		seenEpisodeGUIDs := make(map[string]struct{}, len(items))
 		for _, item := range items {
-			mapped, err := mapPodcastIndexEpisodeToPIEpisode(item)
+			mapped, err := mapPodcastIndexEpisodeToPIEpisode(ctx, item)
 			if err != nil {
 				if errors.Is(err, errSkipPodcastIndexEpisode) {
 					continue
@@ -610,13 +612,13 @@ func (s *discoveryService) handlePodcastIndexPodcastEpisodesByItunesID(w http.Re
 	if err != nil {
 		var configErr *discoveryProviderConfigError
 		if errors.As(err, &configErr) {
-			slog.Error("podcastindex itunesId episodes lookup unavailable", "error", err, "provider", configErr.provider)
+			slog.ErrorContext(ctx, "podcastindex itunesId episodes lookup unavailable", "error", err, "provider", configErr.provider)
 			writeDiscoveryErrorSpec(r, w, http.StatusServiceUnavailable, discoveryErrProviderNotConfigured)
-			logDiscoveryRequest(r.Context(), route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, cacheStatus)
+			logDiscoveryRequest(r.Context(), route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, CacheStatusMissError)
 			return
 		}
 
-		slog.Warn("podcastindex itunesId episodes lookup failed", "error", err)
+		slog.WarnContext(ctx, "podcastindex itunesId episodes lookup failed", "error", err)
 		writeDiscoveryMappedError(r, w, err)
 		logDiscoveryRequest(r.Context(), route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), err, cacheStatus)
 		return
@@ -626,13 +628,14 @@ func (s *discoveryService) handlePodcastIndexPodcastEpisodesByItunesID(w http.Re
 	logDiscoveryRequest(r.Context(), route, UpstreamKindPodcastIndex, podcastIndexBaseURL, time.Since(start), nil, cacheStatus)
 }
 
-func mapPodcastIndexBatchFeedBridge(feed podcastIndexBatchFeed) (podcastIndexBatchFeedBridge, bool) {
+func mapPodcastIndexBatchFeedBridge(ctx context.Context, feed podcastIndexBatchFeed) (podcastIndexBatchFeedBridge, bool) {
 	orderingGUID := strings.TrimSpace(feed.PodcastGUID)
 	if orderingGUID == "" {
 		return podcastIndexBatchFeedBridge{}, false
 	}
 
 	podcast, ok := mapPodcastIndexPodcastToPIPodcast(
+		ctx,
 		feed.podcastIndexPodcastFeed,
 		strconv.FormatInt(feed.ItunesID, 10),
 	)
@@ -646,8 +649,9 @@ func mapPodcastIndexBatchFeedBridge(feed podcastIndexBatchFeed) (podcastIndexBat
 	}, true
 }
 
-func mapPodcastIndexPodcastToPIPodcast(feed podcastIndexPodcastFeed, podcastItunesID string) (piPodcastResponse, bool) {
+func mapPodcastIndexPodcastToPIPodcast(ctx context.Context, feed podcastIndexPodcastFeed, podcastItunesID string) (piPodcastResponse, bool) {
 	if feed.Dead != 0 {
+		slog.DebugContext(ctx, "skipping podcast", "itunes_id", podcastItunesID, "reason", "feed is marked as dead")
 		return piPodcastResponse{}, false
 	}
 
@@ -660,6 +664,7 @@ func mapPodcastIndexPodcastToPIPodcast(feed podcastIndexPodcastFeed, podcastItun
 
 	artwork, ok := normalizeRequiredHTTPURL(artworkRaw)
 	if !ok {
+		slog.DebugContext(ctx, "skipping podcast", "itunes_id", podcastItunesID, "reason", "invalid artwork url")
 		return piPodcastResponse{}, false
 	}
 
@@ -679,6 +684,7 @@ func mapPodcastIndexPodcastToPIPodcast(feed podcastIndexPodcastFeed, podcastItun
 		itunesIDStr == "" ||
 		feed.LastUpdateTime == nil ||
 		feed.EpisodeCount == nil {
+		slog.DebugContext(ctx, "skipping podcast", "itunes_id", podcastItunesID, "reason", "missing required fields")
 		return piPodcastResponse{}, false
 	}
 
@@ -697,12 +703,13 @@ func mapPodcastIndexPodcastToPIPodcast(feed podcastIndexPodcastFeed, podcastItun
 
 var errSkipPodcastIndexEpisode = errors.New("skip podcastindex episode")
 
-func mapPodcastIndexEpisodeToPIEpisode(item podcastIndexEpisodeItem) (piEpisodeResponse, error) {
+func mapPodcastIndexEpisodeToPIEpisode(ctx context.Context, item podcastIndexEpisodeItem) (piEpisodeResponse, error) {
 	title := strings.TrimSpace(item.Title)
 	description := strings.TrimSpace(item.Description)
 	guid := strings.TrimSpace(item.GUID)
 	image := strings.TrimSpace(item.Image)
 	if title == "" || guid == "" || item.DatePublished <= 0 || item.Duration == nil || item.EnclosureLength == nil {
+		slog.DebugContext(ctx, "skipping episode", "guid", guid, "reason", "missing base fields")
 		return piEpisodeResponse{}, errSkipPodcastIndexEpisode
 	}
 
@@ -713,12 +720,10 @@ func mapPodcastIndexEpisodeToPIEpisode(item podcastIndexEpisodeItem) (piEpisodeR
 		}
 	}
 
-	link, ok := normalizeRequiredHTTPURL(item.Link)
-	if !ok {
-		return piEpisodeResponse{}, errSkipPodcastIndexEpisode
-	}
+	link, _ := normalizeRequiredHTTPURL(item.Link)
 	artworkURL, ok := normalizeRequiredHTTPURL(image)
 	if !ok {
+		slog.DebugContext(ctx, "skipping episode", "guid", guid, "reason", "invalid artwork url")
 		return piEpisodeResponse{}, errSkipPodcastIndexEpisode
 	}
 

@@ -1,13 +1,18 @@
 import { z } from 'zod'
 
-const HttpUrlSchema = z.url().refine((value) => {
-  try {
-    const parsed = new URL(value)
-    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
-  } catch {
-    return false
-  }
-}, 'Expected an http or https URL')
+const HttpUrlSchema = z.string().refine(
+  (value) => {
+    try {
+      const parsed = new URL(value)
+      return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+    } catch {
+      return false
+    }
+  },
+  { message: 'Invalid HTTP/HTTPS URL' }
+)
+
+const OptionalHttpUrlSchema = HttpUrlSchema.optional()
 
 const UtcRfc3339SecondSchema = z
   .string()
@@ -120,8 +125,8 @@ export const PIEpisodeSchema = z.object({
   episodeNumber: NonNegativeIntegerSchema.optional(),
   episodeType: z.enum(['full', 'trailer', 'bonus']).optional(),
   explicit: z.boolean(),
-  link: HttpUrlSchema,
-  transcriptUrl: HttpUrlSchema.optional(),
+  link: OptionalHttpUrlSchema,
+  transcriptUrl: OptionalHttpUrlSchema,
 })
 
 export const PodcastEpisodesSchema = z.object({

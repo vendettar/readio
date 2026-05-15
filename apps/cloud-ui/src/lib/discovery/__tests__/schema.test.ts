@@ -248,6 +248,23 @@ describe('discovery schema PI podcast contract', () => {
     ).toThrow()
   })
 
+  it('allows missing link field in PI episode contract', () => {
+    const episode = PIEpisodeSchema.parse({
+      guid: 'ep-1',
+      title: 'Episode 1',
+      description: 'Plain description',
+      audioUrl: 'https://example.com/audio.mp3',
+      pubDate: '2026-03-27T00:00:00Z',
+      artworkUrl: 'https://example.com/art.jpg',
+      fileSize: 1024,
+      duration: 54,
+      explicit: true,
+      // link missing
+    })
+
+    expect(episode.link).toBeUndefined()
+  })
+
   it('uses author for top-episode creator labels', () => {
     const episode = TopEpisodeSchema.parse({
       podcastItunesId: '123',

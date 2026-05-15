@@ -15,7 +15,6 @@ import {
   getCanonicalSearchEpisodeIdentity,
   toCanonicalSearchEpisodeRecord,
 } from '@/lib/discovery/searchEpisodeContract'
-import { stripHtml } from '@/lib/htmlUtils'
 import { buildSearchEpisodeRoute } from '@/lib/routes/episodeResolver'
 import {
   buildPodcastEpisodeRoute,
@@ -149,7 +148,7 @@ export function fromEpisode({
   return {
     title: episode.title,
     subtitle: formatRelativeTime(episode.pubDate, language),
-    description: stripHtml(episode.description),
+    description: episode.description,
     meta: formatDuration(episode.duration, t),
     artworkSrc: artworkUrl,
     artworkFallbackSrc: podcast.artwork,
@@ -193,7 +192,7 @@ export function fromSearchEpisode({
   return {
     title: canonicalEpisode.title,
     subtitle,
-    description: stripHtml(canonicalEpisode.description),
+    description: canonicalEpisode.description,
     meta: durationSeconds !== undefined ? formatDuration(durationSeconds, t) : undefined,
     artworkSrc: artwork,
     artworkFallbackSrc: artwork,
@@ -230,7 +229,7 @@ export function fromFavorite({ favorite, language, t }: FavoriteModelArgs): Epis
       favorite.podcastTitle,
       favorite.pubDate ? formatDateStandard(favorite.pubDate, language) : ''
     ),
-    description: stripHtml(favorite.description),
+    description: favorite.description,
     meta: favorite.durationSeconds ? formatDuration(favorite.durationSeconds, t) : undefined,
     artworkSrc,
     artworkFallbackSrc: favorite.artworkUrl,
@@ -271,7 +270,7 @@ export function fromPlaybackSession({
       session.showTitle,
       session.publishedAt ? formatDateStandard(session.publishedAt, language) : ''
     ),
-    description: stripHtml(session.description || ''),
+    description: session.description || '',
     meta: session.durationSeconds ? formatDuration(session.durationSeconds, t) : undefined,
     artworkSrc: session.artworkUrl,
     artworkFallbackSrc: session.artworkUrl,
@@ -332,7 +331,7 @@ export function fromPodcastDownload({
       download.sourcePodcastTitle,
       download.downloadedAt ? formatDateStandard(download.downloadedAt, language) : ''
     ),
-    description: stripHtml(download.sourceDescription || ''),
+    description: download.sourceDescription || '',
     meta: download.durationSeconds ? formatDuration(download.durationSeconds, t) : undefined,
     artworkSrc: download.sourceArtworkUrl,
     artworkFallbackSrc: download.sourceArtworkUrl,

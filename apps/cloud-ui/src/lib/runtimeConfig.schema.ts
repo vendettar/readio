@@ -5,26 +5,12 @@ import { DEFAULTS } from './runtimeConfig.defaults'
 
 function catchWithLog<T>(fieldName: string, fallbackValue: T) {
   return (ctx: { error: { issues: z.ZodIssue[] } }) => {
-    if (import.meta.env.DEV) {
+    if (import.meta.env.DEV || import.meta.env.MODE === 'test') {
       logError(`[runtimeConfig] Field "${fieldName}" validation failed:`, ctx.error.issues)
     }
     return fallbackValue
   }
 }
-
-const stringBoolean = z.preprocess((val) => {
-  if (typeof val === 'string') {
-    const lower = val.toLowerCase().trim()
-    if (lower === 'true' || lower === '1') return true
-    if (lower === 'false' || lower === '0') return false
-    return false
-  }
-  if (typeof val === 'number') {
-    if (val === 1) return true
-    return false
-  }
-  return val
-}, z.boolean())
 
 const UrlSchema = z.string().refine(
   (val) => {
@@ -83,7 +69,7 @@ function parseProviderToggleTokens(value: string): string[] {
 
 function isEnableAllProvidersToken(value: string): boolean {
   const normalized = normalizeProviderToggleToken(value)
-  return normalized === '' || normalized === '*' || normalized === 'all'
+  return normalized === '*' || normalized === 'all'
 }
 
 export const AppConfigSchema = z.object({
@@ -163,7 +149,8 @@ export const AppConfigSchema = z.object({
         })
       }
     })
-    .default(DEFAULTS.ENABLED_ASR_PROVIDERS),
+    .default(DEFAULTS.ENABLED_ASR_PROVIDERS)
+    .catch(catchWithLog('ENABLED_ASR_PROVIDERS', '')),
   DISABLED_ASR_PROVIDERS: z
     .string()
     .superRefine((val, ctx) => {
@@ -177,7 +164,8 @@ export const AppConfigSchema = z.object({
         })
       }
     })
-    .default(DEFAULTS.DISABLED_ASR_PROVIDERS),
+    .default(DEFAULTS.DISABLED_ASR_PROVIDERS)
+    .catch(catchWithLog('DISABLED_ASR_PROVIDERS', '')),
   PROXY_TIMEOUT_MS: z.coerce
     .number()
     .positive()
@@ -259,9 +247,7 @@ export const AppConfigSchema = z.object({
     .positive()
     .default(DEFAULTS.RECOMMENDED_TTL_MS)
     .catch(catchWithLog('RECOMMENDED_TTL_MS', DEFAULTS.RECOMMENDED_TTL_MS)),
-  USE_MOCK_DATA: stringBoolean
-    .default(DEFAULTS.USE_MOCK_DATA)
-    .catch(catchWithLog('USE_MOCK_DATA', DEFAULTS.USE_MOCK_DATA)),
+
   SEARCH_SUGGESTIONS_LIMIT: z.coerce
     .number()
     .positive()
@@ -320,7 +306,7 @@ export const ENV_MAP: Record<keyof AppConfig, string> = {
   FALLBACK_PODCAST_IMAGE: 'READIO_FALLBACK_PODCAST_IMAGE',
   CACHE_TTL_EPISODES_MS: 'READIO_CACHE_TTL_EPISODES_MS',
   RECOMMENDED_TTL_MS: 'READIO_RECOMMENDED_TTL_MS',
-  USE_MOCK_DATA: 'READIO_USE_MOCK',
+
   SEARCH_SUGGESTIONS_LIMIT: 'READIO_SEARCH_SUGGESTIONS_LIMIT',
   SEARCH_PODCASTS_LIMIT: 'READIO_SEARCH_PODCASTS_LIMIT',
   SEARCH_EPISODES_LIMIT: 'READIO_SEARCH_EPISODES_LIMIT',

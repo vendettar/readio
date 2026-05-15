@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -332,6 +333,8 @@ func (s *discoveryService) handleTopPodcasts(w http.ResponseWriter, r *http.Requ
 			mapped, ok := mapTopPodcast(item)
 			if ok {
 				items = append(items, mapped)
+			} else {
+				slog.DebugContext(ctx, "skipping top podcast", slog.String("reason", "mapping failed or missing required fields"), slog.Any("itunes_id", item.ID))
 			}
 		}
 
@@ -396,6 +399,8 @@ func (s *discoveryService) handleTopEpisodes(w http.ResponseWriter, r *http.Requ
 			mapped, ok := mapTopEpisode(item)
 			if ok {
 				items = append(items, mapped)
+			} else {
+				slog.DebugContext(ctx, "skipping top episode", slog.String("reason", "mapping failed or missing required fields"), slog.String("url", item.URL))
 			}
 		}
 
@@ -469,15 +474,18 @@ func (s *discoveryService) handleSearchPodcasts(w http.ResponseWriter, r *http.R
 
 	for _, item := range payload.Results {
 		if !isRelevantApplePodcastSearchItem(item, queryTokens) {
+			slog.DebugContext(ctx, "skipping podcast", slog.String("reason", "irrelevant search item"), slog.Any("itunes_id", item.CollectionID))
 			continue
 		}
 
 		mapped, ok := mapApplePodcastSearchItem(item)
 		if !ok {
+			slog.DebugContext(ctx, "skipping podcast", slog.String("reason", "mapping failed or missing required fields"), slog.Any("itunes_id", item.CollectionID))
 			continue
 		}
 
 		if _, dupe := seen[mapped.PodcastItunesID]; dupe {
+			slog.DebugContext(ctx, "skipping podcast", slog.String("reason", "duplicate itunes_id"), slog.String("itunes_id", mapped.PodcastItunesID))
 			continue
 		}
 		seen[mapped.PodcastItunesID] = struct{}{}
@@ -541,16 +549,19 @@ func (s *discoveryService) handleSearchEpisodes(w http.ResponseWriter, r *http.R
 
 	for _, item := range payload.Results {
 		if !isRelevantAppleEpisodeSearchItem(item, queryTokens) {
+			slog.DebugContext(ctx, "skipping episode", slog.String("reason", "irrelevant search item"), slog.String("guid", item.EpisodeGUID))
 			continue
 		}
 
 		mapped, ok := mapAppleEpisodeSearchItem(item)
 		if !ok {
+			slog.DebugContext(ctx, "skipping episode", slog.String("reason", "mapping failed or missing required fields"), slog.String("guid", item.EpisodeGUID))
 			continue
 		}
 
 		identityKey := mapped.PodcastItunesID + "::" + mapped.GUID
 		if _, dupe := seen[identityKey]; dupe {
+			slog.DebugContext(ctx, "skipping episode", slog.String("reason", "duplicate identity key"), slog.String("guid", mapped.GUID), slog.String("itunes_id", mapped.PodcastItunesID))
 			continue
 		}
 		seen[identityKey] = struct{}{}

@@ -3,9 +3,10 @@ import {
   getWebInstrumentations,
   initializeFaro as initializeGrafanaFaro,
 } from '@grafana/faro-web-sdk'
+import { TracingInstrumentation } from '@grafana/faro-web-tracing'
 import { setErrorReporter } from './errorReporter'
 import { logError } from './logger'
-import type { AppConfig } from './runtimeConfig'
+import { type AppConfig, getApiBaseUrl } from './runtimeConfig'
 
 type FaroConfig = Pick<
   AppConfig,
@@ -67,7 +68,24 @@ export function initializeFaro(
         version: sanitizeValue(config.APP_VERSION),
         environment: sanitizeValue(config.GRAFANA_FARO_ENV),
       },
-      instrumentations: getWebInstrumentations(),
+      instrumentations: [
+        ...getWebInstrumentations(),
+        ...(config.GRAFANA_FARO_URL.trim()
+          ? [
+              new TracingInstrumentation({
+                instrumentationOptions: {
+                  propagateTraceHeaderCorsUrls: (() => {
+                    const apiBase = getApiBaseUrl()
+                    if (!apiBase) return []
+                    // Escape regex special characters and anchor to start/origin boundaries
+                    const escaped = apiBase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+                    return [new RegExp(`^${escaped}(?:/|$)`)]
+                  })(),
+                },
+              }),
+            ]
+          : []),
+      ],
       preventGlobalExposure: true,
       trackResources: false,
       beforeSend: (item) => sanitizeTransportItem(item),

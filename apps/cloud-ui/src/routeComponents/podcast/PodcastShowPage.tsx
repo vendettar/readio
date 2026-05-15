@@ -189,7 +189,6 @@ export default function PodcastShowPage() {
                 <div className="mt-4">
                   <ExpandableDescription
                     content={rawDescription}
-                    mode="plain"
                     collapsedLines={3}
                     expanded={isDescriptionExpanded}
                     onExpandedChange={setIsDescriptionExpanded}

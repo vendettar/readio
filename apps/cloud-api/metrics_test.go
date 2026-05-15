@@ -449,7 +449,7 @@ func TestNormalizeMetricEnv(t *testing.T) {
 		{"preprod", "preproduction"},
 		{"preproduction", "preproduction"},
 		{"staging", "preproduction"},
-		{"dev", "unknown"},
+		{"dev", "develop"},
 		{"", "unknown"},
 		{"  ", "unknown"},
 	}

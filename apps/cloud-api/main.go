@@ -106,6 +106,7 @@ var proxyAllowedCORSRequestHeaders = []string{
 	"Cache-Control",
 	"Pragma",
 	"Accept-Language",
+	"traceparent",
 }
 
 var proxyAllowedResponseHeaders = []string{
@@ -229,7 +230,9 @@ func main() {
 		os.Exit(0)
 	}
 
-	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level: resolveLogLevel(),
+	}))
 	slog.SetDefault(logger)
 
 	if err := runCloudServer(context.Background()); err != nil {
@@ -377,7 +380,7 @@ func newCloudMux(proxy http.Handler, asrRelay http.Handler, discovery http.Handl
 // buildBrowserRuntimeEnv returns browser-safe runtime config.
 // Key set must match browserEnvAllowlist. Do not add keys here
 // without also adding them to the allowlist slice.
-func buildBrowserRuntimeEnv(r *http.Request) map[string]any {
+func buildBrowserRuntimeEnv(_ *http.Request) map[string]any {
 	return map[string]any{
 		"READIO_APP_NAME":    envOrDefault("READIO_APP_NAME", defaultRuntimeAppName),
 		"READIO_APP_VERSION": envOrDefault("READIO_APP_VERSION", defaultRuntimeAppVersion),

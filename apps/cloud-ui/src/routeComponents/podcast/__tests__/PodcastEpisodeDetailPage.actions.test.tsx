@@ -175,7 +175,8 @@ describe('PodcastEpisodeDetailPage action wiring', () => {
     expect(expandableDescriptionPropsSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         content: 'Line one\nLine two',
-        mode: 'plain',
+        showMoreLabel: 'showMore',
+        showLessLabel: 'showLess',
       })
     )
   })

@@ -32,8 +32,8 @@ func TestDiscoveryServicePreflightCORS(t *testing.T) {
 		if got := rr.Header().Get("Access-Control-Allow-Methods"); got != "GET, POST, OPTIONS" {
 			t.Fatalf("allow-methods = %q, want GET, POST, OPTIONS", got)
 		}
-		if got := rr.Header().Get("Access-Control-Allow-Headers"); got != "Content-Type, Accept" {
-			t.Fatalf("allow-headers = %q, want Content-Type, Accept", got)
+		if got := rr.Header().Get("Access-Control-Allow-Headers"); got != "Content-Type, Accept, Authorization, traceparent" {
+			t.Fatalf("allow-headers = %q, want Content-Type, Accept, Authorization, traceparent", got)
 		}
 		if got := rr.Header().Get("Access-Control-Max-Age"); got != "86400" {
 			t.Fatalf("max-age = %q, want 86400", got)
@@ -134,6 +134,7 @@ func TestProxyPreflightCORS(t *testing.T) {
 			"Cache-Control",
 			"Pragma",
 			"Accept-Language",
+			"traceparent",
 		})
 		assertAdminLogStatus(t, rb, "proxy/media", http.StatusNoContent)
 	})

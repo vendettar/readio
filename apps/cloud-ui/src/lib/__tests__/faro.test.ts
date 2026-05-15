@@ -10,8 +10,28 @@ import {
   resetFaroForTests,
   sanitizeValue,
 } from '../faro'
-import type { AppConfig } from '../runtimeConfig'
+import { type AppConfig, getApiBaseUrl } from '../runtimeConfig'
 import { DEFAULTS } from '../runtimeConfig.defaults'
+
+type RuntimeConfigModule = typeof import('../runtimeConfig')
+type FaroInitializer = NonNullable<Parameters<typeof initializeFaro>[1]>
+
+type TracingInstrumentationConfig = {
+  name: string
+  options: {
+    instrumentationOptions: {
+      propagateTraceHeaderCorsUrls: RegExp[]
+    }
+  }
+}
+
+vi.mock('../runtimeConfig', async (importOriginal) => {
+  const actual = await importOriginal<RuntimeConfigModule>()
+  return {
+    ...actual,
+    getApiBaseUrl: vi.fn(() => ''),
+  }
+})
 
 const baseConfig: Pick<
   AppConfig,
@@ -112,11 +132,48 @@ describe('faro', () => {
       throw new Error('expected Faro initializer to be called')
     }
     const initArg = receivedConfig
-    expect(initArg.instrumentations).toHaveLength(getWebInstrumentations().length)
-    expect(initArg.instrumentations.map((i: { name: string }) => i.name)).toEqual(
-      getWebInstrumentations().map((i) => i.name)
-    )
+    // We add 1 for our custom TracingInstrumentation when URL is set
+    expect(initArg.instrumentations).toHaveLength(getWebInstrumentations().length + 1)
+    const instrumentationNames = initArg.instrumentations.map((i: { name: string }) => i.name)
+    expect(instrumentationNames).toContain('@grafana/faro-web-tracing')
+    getWebInstrumentations().forEach((i) => {
+      expect(instrumentationNames).toContain(i.name)
+    })
     expect(initArg).not.toHaveProperty('sessionTracking')
+  })
+
+  it('correctly anchors tracing regex to prevent adjacent domain matching', () => {
+    const faro = mockFaro()
+    let tracingConfig: TracingInstrumentationConfig | undefined
+    const init: FaroInitializer = vi.fn((config) => {
+      const instrumentations = config.instrumentations as Array<{ name: string }> | undefined
+      tracingConfig = instrumentations?.find((i) => i.name === '@grafana/faro-web-tracing') as
+        | TracingInstrumentationConfig
+        | undefined
+      return faro
+    })
+
+    // Mock getApiBaseUrl to return a specific origin
+    vi.mocked(getApiBaseUrl).mockReturnValue('https://api.readio.top')
+
+    initializeFaro(
+      {
+        ...baseConfig,
+        GRAFANA_FARO_URL: 'https://faro.example.com/collect',
+        GRAFANA_FARO_SAMPLE_RATE: 1,
+      },
+      init
+    )
+
+    if (!tracingConfig) {
+      throw new Error('expected tracing instrumentation to be configured')
+    }
+    const regex = tracingConfig.options.instrumentationOptions.propagateTraceHeaderCorsUrls[0]
+    expect(regex.test('https://api.readio.top')).toBe(true)
+    expect(regex.test('https://api.readio.top/v1/search')).toBe(true)
+    // Negative cases: malicious adjacent domains should NOT match
+    expect(regex.test('https://api.readio.top.evil.com')).toBe(false)
+    expect(regex.test('https://api.readio.top.attacker.net/api')).toBe(false)
   })
 
   it('redacts sensitive and high-volume text before export', () => {

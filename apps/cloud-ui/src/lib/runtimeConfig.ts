@@ -23,7 +23,7 @@ declare global {
       READIO_ASR_MODEL?: string
       READIO_ENABLED_ASR_PROVIDERS?: string
       READIO_DISABLED_ASR_PROVIDERS?: string
-      READIO_USE_MOCK?: boolean | string
+
       READIO_PROXY_TIMEOUT_MS?: number | string
       READIO_DIRECT_TIMEOUT_MS?: number | string
       READIO_MAX_CONCURRENT_REQUESTS?: number | string
@@ -118,10 +118,6 @@ export function getAppConfig(): AppConfig {
     }
 
     rawConfig[key] = envValue
-  }
-
-  if (import.meta.env.VITE_USE_MOCK_DATA === 'true') {
-    rawConfig.USE_MOCK_DATA = true
   }
 
   try {

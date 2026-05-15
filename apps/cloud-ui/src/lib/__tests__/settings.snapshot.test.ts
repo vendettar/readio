@@ -16,6 +16,7 @@ describe('getSettingsSnapshot', () => {
     vi.spyOn(runtimeConfig, 'getAppConfig').mockReturnValue({
       ASR_PROVIDER: 'groq',
       ASR_MODEL: 'whisper-large-v3',
+      ENABLED_ASR_PROVIDERS: 'groq',
     } as runtimeConfig.AppConfig)
 
     vi.spyOn(storage, 'getJson').mockReturnValue(null)
@@ -33,6 +34,7 @@ describe('getSettingsSnapshot', () => {
     vi.spyOn(runtimeConfig, 'getAppConfig').mockReturnValue({
       ASR_PROVIDER: 'groq',
       ASR_MODEL: 'whisper-large-v3',
+      ENABLED_ASR_PROVIDERS: 'groq',
     } as runtimeConfig.AppConfig)
 
     // Groq is the only enabled provider in current rollout.
@@ -55,6 +57,7 @@ describe('getSettingsSnapshot', () => {
     vi.spyOn(runtimeConfig, 'getAppConfig').mockReturnValue({
       ASR_PROVIDER: 'groq',
       ASR_MODEL: 'whisper-large-v3',
+      ENABLED_ASR_PROVIDERS: 'groq',
     } as runtimeConfig.AppConfig)
 
     vi.spyOn(storage, 'getJson').mockReturnValue({
@@ -70,6 +73,7 @@ describe('getSettingsSnapshot', () => {
     vi.spyOn(runtimeConfig, 'getAppConfig').mockReturnValue({
       ASR_PROVIDER: 'groq',
       ASR_MODEL: 'whisper-large-v3',
+      ENABLED_ASR_PROVIDERS: 'groq',
     } as runtimeConfig.AppConfig)
 
     vi.spyOn(storage, 'getJson').mockReturnValue({
