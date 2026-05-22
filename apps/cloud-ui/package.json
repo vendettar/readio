@@ -74,7 +74,7 @@
     "tailwindcss-animate": "^1.0.7",
     "web-vitals": "^5.1.0",
     "workbox-window": "^7.4.0",
-    "zod": "^4.3.6",
+    "zod": "^4.4.3",
     "zustand": "^5.0.10"
   },
   "devDependencies": {
