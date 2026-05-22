@@ -35,7 +35,7 @@ describe('favoriteIdentity', () => {
           artworkUrl: '',
           episodeArtworkUrl: '',
           description: 'Test',
-          pubDate: '2025-02-01',
+          pubDate: 1738368000,
           durationSeconds: 0,
           addedAt: 1,
           podcastItunesId: '12345',

@@ -13,6 +13,7 @@ import type {
 } from './schema'
 import {
   EditorPickPodcastSchema,
+  PIEpisodeSchema,
   PIPodcastSchema,
   PodcastEpisodesSchema,
   SearchEpisodeSchema,
@@ -261,11 +262,38 @@ export function getPodcastIndexPodcastsBatchByGuid(
 
 export function fetchPodcastEpisodes(
   podcastItunesId: string,
-  signal?: AbortSignal
+  options: {
+    signal?: AbortSignal
+    limit?: number
+    offset?: number
+  } = {}
 ): Promise<PodcastEpisodes> {
+  const search = new URLSearchParams()
+  if (options.limit !== undefined) {
+    search.set('limit', String(options.limit))
+  }
+  if (options.offset !== undefined) {
+    search.set('offset', String(options.offset))
+  }
+
   return fetchDiscoveryJSON(
-    buildDiscoveryURL(DISCOVERY_ROUTE.podcastEpisodes(podcastItunesId), new URLSearchParams()),
+    buildDiscoveryURL(DISCOVERY_ROUTE.podcastEpisodes(podcastItunesId), search),
     (value) => PodcastEpisodesSchema.parse(value),
+    options.signal
+  )
+}
+
+export function fetchPodcastEpisodeDetail(
+  podcastItunesId: string,
+  episodeGuid: string,
+  signal?: AbortSignal
+) {
+  return fetchDiscoveryJSON(
+    buildDiscoveryURL(
+      DISCOVERY_ROUTE.podcastEpisodes(podcastItunesId),
+      new URLSearchParams({ episodeGuid })
+    ),
+    (value) => PIEpisodeSchema.parse(value),
     signal
   )
 }

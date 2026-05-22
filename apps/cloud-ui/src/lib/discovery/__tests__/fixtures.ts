@@ -59,7 +59,7 @@ export function makeEpisode(overrides: Partial<Episode> & { guid?: string } = {}
     title: 'Discovery Episode',
     description: 'Discovery episode description',
     audioUrl: 'https://example.com/discovery-audio.mp3',
-    pubDate: '2026-03-27T00:00:00Z',
+    pubDate: 1774569600,
     artworkUrl: 'https://example.com/discovery-episode-art.jpg',
     fileSize: 1024,
     duration: 1800,
@@ -72,6 +72,14 @@ export function makeEpisode(overrides: Partial<Episode> & { guid?: string } = {}
 export function makePodcastEpisodes(overrides: Partial<PodcastEpisodes> = {}): PodcastEpisodes {
   return {
     episodes: [makeEpisode()],
+    limit: 20,
+    offset: 0,
+    nextOffset: 20,
+    hasMore: true,
+    storedTotal: 1000,
+    isTruncated: true,
+    lastSuccessfulFetchAt: 1779062400,
+    nextRefreshAfter: 1779069600,
     ...overrides,
   }
 }

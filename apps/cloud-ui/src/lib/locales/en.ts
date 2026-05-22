@@ -121,7 +121,6 @@ const locale = {
   proxyTitle: 'Proxy',
   validationApiKeyPrefix: 'Must start with sk-',
   validationUrlInvalid: 'Must be a valid URL',
-  validationProxyAuthHeaderInvalid: 'Auth header must be "{{header}}"',
   placeholderApiKey: 'sk-...',
   settingsAsrVolcengineKeyPlaceholder: 'appId:accessToken',
   settingsAsrGroqKeyPlaceholder: 'gsk_...',

@@ -64,6 +64,7 @@ vi.mock('../../../store/exploreStore', () => ({
 vi.mock('../../../lib/dateUtils', () => ({
   formatDuration: () => '1:00',
   formatRelativeTime: () => '1d',
+  formatUnixSecondsRelativeTime: () => '1d',
 }))
 
 vi.mock('../../../lib/discovery', () => ({

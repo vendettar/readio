@@ -220,6 +220,7 @@ description: 架构决策与其背后的理由。
 
 ## D054 — Cloud Discovery PI 单集列表切换 [已实施]
 - **决策**: Cloud 的播客内容路由现在只允许通过按 `podcastItunesId` 键控的 PodcastIndex `episodes/byitunesid?max=1000` relay chain 渲染单集。
+- **当前状态**: 已被 D123A 覆盖。本决策仍然是移除 RSS/feed XML 页面渲染所有权的节点；当前活跃的单集渲染契约已经改为后端 SQLite retained snapshot、分页 DB-only 列表读取和直接单集详情查找。
 - **理由**: 移除 RSS feed XML 对页面渲染的所有权，让路由身份始终围绕 `podcastItunesId` + `episodeGuid` 保持一致，并把 1000 条 PI 单集列表明确成节目页 / 全部单集页 / 单集详情页的产品契约。
 - **实施**:
   - 新增 Cloud relay `GET /api/v1/discovery/podcasts/:itunesId/episodes`。
@@ -930,13 +931,26 @@ description: 架构决策与其背后的理由。
   - 前端：`apps/cloud-ui/src/lib/discovery/discoveryCache.ts` 重构为仅维护模式。
   - 后端：`apps/cloud-api/discovery_apple.go` 使用 `getWithGracefulDegradation`。
 
+## D123A — Cloud PI 单集列表 SQLite 分页 Snapshot [已实施]
+- **决策**：Cloud 页面渲染单集数据由后端 SQLite 有界 snapshot 拥有，并通过分页路由读取和直接 `episodeGuid` 详情查找暴露。
+- **理由**：后端拥有 snapshot 可以避免浏览器或进程内 full-list 所有权，让 deep-link hydration 与后端刷新状态一致，并通过 `storedTotal` 与 `isTruncated` 明确 retained window 的边界。
+- **实施**：
+  - 后端 SQLite 表为 `podcast_shows`、`podcast_episodes` 和 `podcast_cache_state`。
+  - `podcast_shows` 只保存节目级领域字段。
+  - `podcast_episodes` 通过 `COUNT(*)` 与 `ORDER BY published_at_unix DESC LIMIT 1` 分别作为 retained row count 和最新 retained 发布时间来源。
+  - `podcast_cache_state` 保存 freshness、backoff、truncation、approximate size、priority 与 last-access 元数据。
+  - stale 增量刷新只 upsert `since` 返回的行，对已返回 GUID 原地更新，在 SQLite 内裁剪溢出行，并用 `published_at_unix DESC, episode_guid ASC` 读取分页。
+  - retained snapshot 已存在后，分页单集列表读取是 DB-only，用户翻页时不得调用 PodcastIndex；cold miss 可以 bootstrap 有界 snapshot，并在当前请求持久化失败时用 in-memory snapshot 返回当前页。
+  - 节目详情负责 cold/stale 的 PodcastIndex 刷新；直接单集详情 hydration 只按 `podcastItunesId + episodeGuid` 查 DB，不触发 PodcastIndex。
+  - 前端 React Query cache key 为 `['podcast', 'detail', podcastId, country]`、`['podcast', 'episodes-pages', podcastId, country]` 和 `['podcast', 'episode-detail', podcastId, country, episodeGuid]`。
+
 ## D124 — Cloud Discovery Feed Route 退役
 - **决策**：
   - `/api/v1/discovery/feed` 已退役，不得再被文档描述为活跃的 Cloud route。
   - repo-owned 的 Cloud 运行时契约不再暴露或依赖旧的 feed transport 字段。
   - 旧的 feed-cache / feed-SQLite discovery 方向已退役，不能再作为当前部署或持久化契约对外描述。
 - **理由**：
-  - Cloud 页面渲染早已切换到 PodcastIndex `episodes/byitunesid?max=1000` relay chain，继续在测试与文档中保留 feed-route 契约只会制造过时 ownership 信号。
+  - Cloud 页面渲染已经不再使用 RSS/feed XML；D123A 已用后端 SQLite retained snapshot 覆盖更早的 `episodes/byitunesid?max=1000` full-list relay 模型。
   - repo-owned 前后端运行时都已不再依赖按 feed transport identity 获取 RSS，继续发布该 route 的 env / error / persistence 指引只会放大文档漂移。
 - **实施**：
   - 删除前端中 `/api/v1/discovery/feed` 的死测试常量。

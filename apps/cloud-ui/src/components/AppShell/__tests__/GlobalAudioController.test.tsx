@@ -59,8 +59,6 @@ describe('GlobalAudioController', () => {
     vi.useRealTimers()
     getNetworkProxyConfigMock.mockReturnValue({
       proxyUrl: '/api/proxy',
-      authHeader: '',
-      authValue: '',
     })
     buildProxyUrlMock.mockImplementation((proxyBase: string, audioUrl: string) => {
       return `${proxyBase}?url=${encodeURIComponent(audioUrl)}`

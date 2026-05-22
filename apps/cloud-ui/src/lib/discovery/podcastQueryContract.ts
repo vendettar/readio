@@ -1,21 +1,20 @@
 import { normalizeCountryParam } from '../routes/podcastRoutes'
 
-export const PODCAST_EPISODES_QUERY_FAMILY = 'pi-list'
-
-interface PodcastEpisodeListAuthorityKeyInput {
-  lastUpdateTime?: number
-  episodeCount?: number
-}
+export const PODCAST_EPISODES_PAGE_SIZE = 20
 
 export const PODCAST_QUERY_CACHE_POLICY = {
   podcastDetail: {
-    staleTime: 24 * 60 * 60 * 1000,
+    staleTime: 2 * 60 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
   },
   episodes: {
-    staleTime: 24 * 60 * 60 * 1000,
+    staleTime: 2 * 60 * 60 * 1000,
     gcTime: 24 * 60 * 60 * 1000,
   },
+} as const
+
+export const PODCAST_QUERY_REFETCH_POLICY = {
+  refetchOnReconnect: false,
 } as const
 
 function buildPodcastCountryToken(country: string | undefined) {
@@ -24,46 +23,28 @@ function buildPodcastCountryToken(country: string | undefined) {
 }
 
 export function buildPodcastDetailQueryKey(podcastId: string, country?: string) {
-  return [
-    'podcast',
-    'podcast-detail',
-    podcastId.trim(),
-    ...buildPodcastCountryToken(country),
-  ] as const
+  return ['podcast', 'detail', podcastId.trim(), ...buildPodcastCountryToken(country)] as const
 }
 
-export function buildPodcastEpisodesQueryKey(
+export function buildPodcastEpisodeDetailQueryKey(
   podcastId: string,
-  authority?: PodcastEpisodeListAuthorityKeyInput,
+  episodeGuid: string,
   country?: string
 ) {
   return [
-    ...buildPodcastEpisodesQueryPrefix(podcastId, country),
-    ...buildPodcastEpisodesAuthorityTokens(authority),
-  ] as const
-}
-
-export function buildPodcastEpisodesQueryPrefix(podcastId: string, country?: string) {
-  return [
     'podcast',
-    'episodes',
+    'episode-detail',
     podcastId.trim(),
     ...buildPodcastCountryToken(country),
-    PODCAST_EPISODES_QUERY_FAMILY,
+    episodeGuid.trim(),
   ] as const
 }
 
-export function buildPodcastEpisodesAuthorityTokens(
-  authority?: PodcastEpisodeListAuthorityKeyInput
-) {
-  const lastUpdateTimeToken =
-    typeof authority?.lastUpdateTime === 'number' && Number.isFinite(authority.lastUpdateTime)
-      ? authority.lastUpdateTime
-      : 'na'
-  const episodeCountToken =
-    typeof authority?.episodeCount === 'number' && Number.isFinite(authority.episodeCount)
-      ? authority.episodeCount
-      : 'na'
-
-  return [`lut-${lastUpdateTimeToken}`, `count-${episodeCountToken}`] as const
+export function buildPodcastEpisodesPagesQueryKey(podcastId: string, country?: string) {
+  return [
+    'podcast',
+    'episodes-pages',
+    podcastId.trim(),
+    ...buildPodcastCountryToken(country),
+  ] as const
 }

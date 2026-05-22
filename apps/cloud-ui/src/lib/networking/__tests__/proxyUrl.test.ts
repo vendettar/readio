@@ -33,8 +33,6 @@ describe('networking/proxyUrl', () => {
 
     expect(getNetworkProxyConfig()).toEqual({
       proxyUrl: 'https://custom.proxy',
-      authHeader: '',
-      authValue: '',
     })
   })
 
@@ -45,8 +43,6 @@ describe('networking/proxyUrl', () => {
 
     expect(getNetworkProxyConfig()).toEqual({
       proxyUrl: '',
-      authHeader: '',
-      authValue: '',
     })
   })
 })

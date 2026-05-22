@@ -21,7 +21,7 @@ describe('favoriteMappers', () => {
         audioUrl: 'https://example.com/audio.mp3',
         artworkUrl: 'https://example.com/episode.jpg',
         description: 'desc',
-        pubDate: '2025-01-01T00:00:00Z',
+        pubDate: 1735689600,
         duration: 54,
         transcriptUrl: 'https://example.com/transcript.vtt',
       })
@@ -40,7 +40,7 @@ describe('favoriteMappers', () => {
         description: 'desc',
         artworkUrl: 'https://example.com/episode.jpg',
         duration: 54,
-        pubDate: '2025-01-01T00:00:00Z',
+        pubDate: 1735689600,
         transcriptUrl: 'https://example.com/transcript.vtt',
       },
     })
@@ -79,7 +79,7 @@ describe('favoriteMappers', () => {
         description: 'desc',
         artworkUrl: 'https://example.com/search-episode.jpg',
         duration: 54,
-        pubDate: '2025-01-01T00:00:00Z',
+        pubDate: 1735689600,
       },
     })
   })
@@ -154,7 +154,7 @@ describe('favoriteMappers', () => {
       countryAtSave: 'us',
       episodeGuid: 'episode-guid-1',
       podcastItunesId: 'pod-1',
-      publishedAt: 1700000000000,
+      publishedAt: 1700000000,
     })
 
     expect(inputs).toEqual(

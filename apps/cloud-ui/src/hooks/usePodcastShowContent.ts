@@ -8,13 +8,16 @@ import {
 } from '@/lib/discovery/editorPicks'
 import { getDiscoveryArtworkUrl } from '@/lib/imageUtils'
 import { buildPodcastEpisodesRoute, normalizeCountryParam } from '@/lib/routes/podcastRoutes'
-import { usePodcastDetailAndEpisodes } from './usePodcastDetailAndEpisodes'
+import { usePodcastDetail } from './usePodcastDetail'
+import { usePodcastEpisodePages } from './usePodcastEpisodePages'
+
+const PODCAST_SHOW_EPISODE_PREVIEW_LIMIT = 8
 
 type EpisodesSectionState =
   | { status: 'loading' }
   | { status: 'error'; error: Error }
   | { status: 'empty' }
-  | { status: 'ready'; episodes: Episode[] }
+  | { status: 'ready'; episodes: Episode[]; hasMoreEpisodes: boolean }
 
 export interface ResolvedPodcastShowHeroContent {
   podcast: Podcast
@@ -47,12 +50,28 @@ export function usePodcastShowContent(
       ? getCachedEditorPickByItunesID(queryClient, normalizedRouteCountry, podcastItunesId)
       : undefined)
   const initialPodcast = snapshot ? mapEditorPickToPodcast(snapshot) : undefined
-  const { podcast, isLoadingPodcast, podcastError, episodeList, isLoadingEpisodes, episodesError } =
-    usePodcastDetailAndEpisodes({
-      podcastItunesId,
-      routeCountry,
-      initialPodcast,
-    })
+  const {
+    podcast,
+    isLoadingPodcast,
+    isFetchingPodcast,
+    podcastError,
+    normalizedRouteCountry: detailCountry,
+  } = usePodcastDetail({
+    podcastItunesId,
+    routeCountry,
+    initialPodcast,
+  })
+  const {
+    episodes,
+    isLoading: isLoadingEpisodes,
+    isFetching: isFetchingEpisodes,
+    error: episodesError,
+    hasNextPage,
+  } = usePodcastEpisodePages({
+    podcastItunesId,
+    routeCountry: detailCountry ?? undefined,
+    podcast: detailCountry ? podcast : null,
+  })
 
   const resolvedHeroContent = podcast
     ? {
@@ -68,13 +87,18 @@ export function usePodcastShowContent(
       }
     : null
 
-  const episodesSection: EpisodesSectionState = isLoadingEpisodes
-    ? { status: 'loading' }
-    : episodesError
-      ? { status: 'error', error: episodesError as Error }
-      : episodeList && episodeList.episodes.length > 0
-        ? { status: 'ready', episodes: episodeList.episodes }
-        : { status: 'empty' }
+  const episodesSection: EpisodesSectionState =
+    isLoadingPodcast || isFetchingPodcast || isLoadingEpisodes || isFetchingEpisodes
+      ? { status: 'loading' }
+      : episodesError
+        ? { status: 'error', error: episodesError as Error }
+        : episodes.length > 0
+          ? {
+              status: 'ready',
+              episodes: episodes.slice(0, PODCAST_SHOW_EPISODE_PREVIEW_LIMIT),
+              hasMoreEpisodes: episodes.length > PODCAST_SHOW_EPISODE_PREVIEW_LIMIT || hasNextPage,
+            }
+          : { status: 'empty' }
 
   return {
     resolvedHeroContent,

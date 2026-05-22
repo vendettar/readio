@@ -43,13 +43,8 @@ export interface LocalPlaybackPayload extends PlaybackPayload<LocalEpisodeMetada
 
 export type SessionPlaybackPayload = LocalPlaybackPayload | CanonicalRemotePlaybackPayload
 
-function normalizeTimestamp(value: string | number | null | undefined): number | undefined {
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : undefined
-  }
-  if (!value) return undefined
-  const parsed = new Date(value).getTime()
-  return Number.isFinite(parsed) ? parsed : undefined
+function normalizeUnixSeconds(value: number | null | undefined): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
 export function resolvePlaybackArtwork(source: string | undefined, size: number = 600): string {
@@ -71,7 +66,7 @@ export function mapEpisodeToPlaybackPayload(
       description: episode.description,
       showTitle: podcast.title,
       artworkUrl: artwork,
-      publishedAt: normalizeTimestamp(episode.pubDate),
+      publishedAt: normalizeUnixSeconds(episode.pubDate),
       durationSeconds: episode.duration,
       episodeGuid: episode.guid,
       podcastItunesId: podcast.podcastItunesId,
@@ -95,7 +90,7 @@ export function mapSearchEpisodeToPlaybackPayload(
       description: canonicalEpisode.description,
       showTitle: canonicalEpisode.showTitle,
       artworkUrl: artwork,
-      publishedAt: normalizeTimestamp(canonicalEpisode.pubDate),
+      publishedAt: normalizeUnixSeconds(canonicalEpisode.pubDate),
       durationSeconds: canonicalEpisode.durationSeconds,
       episodeGuid: canonicalEpisode.episodeGuid,
       podcastItunesId: canonicalEpisode.podcastItunesId,
@@ -115,7 +110,7 @@ export function mapFavoriteToPlaybackPayload(favorite: Favorite): CanonicalPlayb
       description: favorite.description,
       showTitle: favorite.podcastTitle,
       artworkUrl: artwork,
-      publishedAt: normalizeTimestamp(favorite.pubDate),
+      publishedAt: normalizeUnixSeconds(favorite.pubDate),
       durationSeconds: favorite.durationSeconds,
       episodeGuid: favorite.episodeGuid,
       podcastItunesId: favorite.podcastItunesId,
@@ -149,7 +144,7 @@ export function mapPlaybackSessionToEpisodeMetadata(
       description: session.description,
       showTitle: session.showTitle,
       artworkUrl: artworkOverride ?? session.artworkUrl,
-      publishedAt: normalizeTimestamp(session.publishedAt),
+      publishedAt: normalizeUnixSeconds(session.publishedAt),
       durationSeconds: session.durationSeconds,
       episodeGuid: session.episodeGuid,
       podcastItunesId: session.podcastItunesId,
@@ -167,7 +162,7 @@ export function mapPlaybackSessionToEpisodeMetadata(
     description: session.description,
     showTitle: session.showTitle,
     artworkUrl: artworkOverride ?? session.artworkUrl,
-    publishedAt: normalizeTimestamp(session.publishedAt),
+    publishedAt: normalizeUnixSeconds(session.publishedAt),
     durationSeconds: session.durationSeconds,
     transcriptUrl: session.transcriptUrl,
     originalAudioUrl: session.audioUrl,

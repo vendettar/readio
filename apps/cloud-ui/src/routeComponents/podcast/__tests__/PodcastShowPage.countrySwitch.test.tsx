@@ -100,7 +100,7 @@ describe('PodcastShowPage country switch cancellation', () => {
               title: `${country.toUpperCase()} Episode`,
               description: '',
               audioUrl: `https://example.com/${country}/audio.mp3`,
-              pubDate: '2025-01-01T00:00:00.000Z',
+              pubDate: 1735689600,
               artworkUrl: `https://example.com/${country}/episode.jpg`,
             }),
           ],

@@ -49,10 +49,11 @@ Use the Cloud handoff tree as the SSOT for app-level frontend/backend contracts:
 - `POST /api/proxy` remains the JS client proxy surface.
 - The POST request body uses the JSON proxy contract: `{ "url": "...", "method": "GET" | "HEAD", "headers"?: { ... } }`.
 - `GET /api/proxy?url=...` is supported only for the built-in same-origin native-audio fallback, with a narrow request-header allowlist (`Range`, `If-Range`, and related cache-safe media headers).
-- Runtime `READIO_NETWORK_PROXY_AUTH_HEADER` / `READIO_NETWORK_PROXY_AUTH_VALUE` remain browser-public configuration for authenticated JS proxy POST calls; they are not a secret store.
+- The Cloud media proxy is protected by origin allowlists, request validation, SSRF checks, and rate limits; it does not use browser-public proxy auth tokens.
 - The proxy validates the requested target before dialing and rejects private, loopback, link-local, or metadata-style destinations.
 - The request path is fail-closed: it uses a pinned validated target set and does not follow redirects into disallowed destinations.
 - The proxy uses a custom user agent, applies a bounded fetch timeout, and keeps a basic in-memory rate limit.
+- `/api/proxy` remains a public same-origin media egress relay, not a general outbound fetch API. Origin checks are browser abuse controls, not a secret boundary; every request must keep SSRF validation, rate limiting, and structured `slog` fields for `client_ip`, `origin`, `upstream_host`, status, and error class so Grafana can surface misuse.
 
 ## 4. SQLite Bootstrap Status
 

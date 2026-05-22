@@ -98,7 +98,7 @@ describe('PodcastShowPage editor pick path', () => {
                 title: 'PI Episode 1',
                 description: 'PI description',
                 audioUrl: 'https://example.com/audio-1.mp3',
-                pubDate: '2026-03-27T00:00:00Z',
+                pubDate: 1774569600,
                 artworkUrl: 'https://example.com/ep-1.jpg',
                 duration: 123,
               }),
@@ -126,7 +126,6 @@ describe('PodcastShowPage editor pick path', () => {
     expect(await screen.findByText('PI Episode 1')).not.toBeNull()
     expect(getPodcastEpisodesCacheEntries(harness.queryClient, '12345', 'us')).toEqual([
       expect.objectContaining({
-        authority: { lastUpdateTime: 1711497600, episodeCount: 2 },
         data: expect.objectContaining({
           episodes: [expect.objectContaining({ guid: 'pi-ep-1' })],
         }),
@@ -134,7 +133,7 @@ describe('PodcastShowPage editor pick path', () => {
     ])
   })
 
-  it('reuses one surviving PI episode-list entry when navigating from show page to see-all', async () => {
+  it('reuses the shared first page when navigating from show page to see-all under the paginated contract', async () => {
     const harness = createQueryClientHarness()
 
     const showRender = render(<PodcastShowPage />, { wrapper: harness.wrapper })

@@ -241,7 +241,7 @@ function makeSession(overrides: Partial<ExplorePlaybackSession> = {}): PlaybackS
     podcastItunesId: '123456789',
     episodeGuid: 'episode-guid-1',
     showTitle: 'Podcast',
-    publishedAt: new Date('2025-02-01T00:00:00Z').getTime(),
+    publishedAt: 1738368000,
     transcriptUrl: 'https://example.com/episode.srt',
     countryAtSave: 'us',
     ...overrides,

@@ -195,10 +195,10 @@ CREATE TABLE asr_aggregation_runs (
   episode_key TEXT NOT NULL,
   episode_guid TEXT NOT NULL,
   chunk_count INTEGER NOT NULL,
-  finalized_at TEXT,
+  finalized_at_unix INTEGER,
   transcript_key TEXT,
-  created_at TEXT NOT NULL,
-  expires_at TEXT NOT NULL
+  created_at_unix INTEGER NOT NULL,
+  expires_at_unix INTEGER NOT NULL
 );
 ```
 
@@ -209,7 +209,7 @@ Purpose:
 Required invariants:
 - `chunk_count` must be between `1` and `24`
 - `transcript_key` is nullable until finalization and required after successful finalization
-- `finalized_at` and `transcript_key` must appear together on successful completion
+- `finalized_at_unix` and `transcript_key` must appear together on successful completion
 
 ### 6.2 Aggregation chunk table
 
@@ -219,7 +219,7 @@ CREATE TABLE asr_aggregation_chunks (
   chunk_index INTEGER NOT NULL,
   payload_json TEXT NOT NULL,
   chunk_duration_seconds REAL,
-  created_at TEXT NOT NULL,
+  created_at_unix INTEGER NOT NULL,
   PRIMARY KEY (request_id, chunk_index)
 );
 
@@ -275,7 +275,7 @@ When all chunk rows exist for a run:
 1. backend merges chunk payloads into one canonical transcript payload
 2. backend calls `storePodcastTranscriptAsset(...)`
 3. backend stores the resulting `transcript_key` on the aggregation run
-4. backend marks `finalized_at`
+4. backend marks `finalized_at_unix`
 5. backend deletes intermediate chunk rows
 
 The final persisted shared asset must use:
@@ -305,7 +305,7 @@ If a reusable asset already exists:
 - include `transcriptKey`
 
 Deterministic reuse rule:
-- if multiple shared transcript assets exist for that episode, choose the newest asset by `created_at DESC, transcript_key DESC`
+- if multiple shared transcript assets exist for that episode, choose the newest asset by `created_at_unix DESC, transcript_key DESC`
 - this rule is owned by `023b2` and must not be left to worker discretion
 
 ## 11. Cleanup Contract
@@ -313,7 +313,7 @@ Deterministic reuse rule:
 Backend must clean unfinished BYOK aggregation state.
 
 Rules:
-- every aggregation run row gets an `expires_at`
+- every aggregation run row gets an `expires_at_unix`
 - unfinished runs older than the configured TTL are abandoned
 - cleanup removes unfinished chunk rows and the unfinished run row together
 - default TTL for this phase: 24 hours

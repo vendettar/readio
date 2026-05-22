@@ -47,7 +47,7 @@ These are the first external discovery APIs used directly by user-facing entry s
   - `shortDescription`
 - Next step:
   - When canonical podcast metadata is needed, continue to Podcast Index `podcasts/byitunesid`
-  - When page-rendering episode data is needed, continue to the Cloud PI episode-list relay backed by Podcast Index `episodes/byitunesid?max=1000`
+  - When page-rendering episode data is needed, read the Cloud SQLite retained snapshot. Paginated list reads are DB-only after a snapshot exists; a cold list miss may bootstrap the bounded snapshot. Direct episode detail is SQLite direct lookup and does not own cold or stale refresh.
 
 ### 1.3 Apple Top Podcasts
 
@@ -98,7 +98,7 @@ These are the first external discovery APIs used directly by user-facing entry s
   - editor-pick podcast rows in the narrowed Readio contract
 - Next step:
   - When the user opens a picked show, continue to show-page lookup using Podcast Index `podcasts/byitunesid`
-  - When the opened show later needs episode data, continue to the Cloud PI episode-list relay backed by Podcast Index `episodes/byitunesid?max=1000`
+  - When the opened show later needs episode data, continue to the Cloud SQLite retained snapshot route
 
 ## 2. Second Hop And Later Resolution
 
@@ -123,13 +123,15 @@ These APIs are used after a first-hop result, route, or previously cached data a
 - Produces:
   - canonical podcast contract used by show/detail flows
 
-### 2.2 Podcast Index Episodes By iTunes ID (via Cloud relay)
+### 2.2 Cloud SQLite Episode Snapshot
 
-- Upstream:
-  - Podcast Index `episodes/byitunesid?max=1000`
+- Route:
+  - Cloud `GET /api/v1/discovery/podcasts/:itunesId/episodes`
+- Refresh source:
+  - Podcast Index `episodes/byitunesid` through cold bootstrap and podcast detail refresh paths
 - Used for:
-  - show page episode list
-  - episodes page episode list
+  - show page episode preview from the retained snapshot
+  - episodes page DB-only pagination over the retained snapshot
   - direct-entry episode detail hydration
   - canonical page-rendering fields such as transcript, chapters, season/episode numbers, and plain-text description
 - Previous hop:
@@ -137,8 +139,13 @@ These APIs are used after a first-hop result, route, or previously cached data a
 - Depends on previous hop providing:
   - `podcastItunesId`
 - Produces:
-  - normalized PI-owned episode rows keyed by stable episode identity
-  - relay-owned rows expose `guid` and required `artworkUrl`; rows without a valid backend-normalized artwork URL are dropped
+  - normalized retained episode rows keyed by stable episode identity
+  - direct episode detail by `podcastItunesId + episodeGuid`
+  - rows expose `guid` and required `artworkUrl`; rows without a valid backend-normalized artwork URL are dropped
+- List-mode rule:
+  - `GET /episodes?limit=&offset=` is DB-only and must not call PodcastIndex when users flip pages
+- Detail-mode rule:
+  - `GET /episodes?episodeGuid=...` is a direct SQLite lookup by `podcastItunesId + episodeGuid` and must not trigger PodcastIndex freshness checks
 
 ### 2.3 Retired Discovery Feed Route
 
@@ -157,22 +164,22 @@ These APIs are used after a first-hop result, route, or previously cached data a
 - Step 2:
   - resolve canonical podcast metadata through Podcast Index `podcasts/byitunesid`
 - Step 3:
-  - read the shared frontend PI episode-list cache family when available, otherwise fetch the Cloud PI episode-list relay backed by `episodes/byitunesid?max=1000`
-  - match by stable episode identity
+  - ask the Cloud SQLite snapshot route for direct episode detail by `podcastItunesId + episodeGuid`
+  - episode detail does not refresh the snapshot; absence from the retained window resolves as deterministic `episodeNotFound`
 - Step 4:
-  - if the target `guid` is absent from that successful PI episode list, end in deterministic `episodeNotFound`
+  - if the target `guid` is absent from the retained snapshot, end in deterministic `episodeNotFound`
 
 ## 3. Surface Overview
 
 | Surface | First Hop | Second Hop | Later Resolution |
 |---|---|---|---|
-| Search podcasts | Apple Search Podcasts | Podcast Index `podcasts/byitunesid` when needed | PI episode-list relay when the user enters page-rendering routes |
-| Search episodes | Apple Search Episodes | Podcast Index `podcasts/byitunesid` when needed | PI episode-list relay for episode resolution |
-| Explore Top Shows | Apple Top Podcasts | Podcast Index `podcasts/byitunesid` after user enters a show | PI episode-list relay inside show/detail flow |
-| Explore Top Episodes | Apple Top Episodes | After click-through, continue from Podcast Index `podcasts/byitunesid` show context | PI episode-list relay inside later detail/resolution flow |
-| Explore Editor's Picks | Podcast Index `podcasts/batch/byguid` | Podcast Index `podcasts/byitunesid` after show entry | PI episode-list relay inside show/detail flow |
-| Show page | none | Podcast Index `podcasts/byitunesid` | PI episode-list relay |
-| Episode detail page | none | Podcast Index `podcasts/byitunesid` | PI episode-list relay |
+| Search podcasts | Apple Search Podcasts | Podcast Index `podcasts/byitunesid` when needed | Cloud SQLite retained snapshot when the user enters page-rendering routes |
+| Search episodes | Apple Search Episodes | Podcast Index `podcasts/byitunesid` when needed | Direct Cloud episode detail lookup for episode resolution |
+| Explore Top Shows | Apple Top Podcasts | Podcast Index `podcasts/byitunesid` after user enters a show | Cloud SQLite retained snapshot inside show/detail flow |
+| Explore Top Episodes | Apple Top Episodes | After click-through, continue from Podcast Index `podcasts/byitunesid` show context | Cloud SQLite retained snapshot inside later detail/resolution flow |
+| Explore Editor's Picks | Podcast Index `podcasts/batch/byguid` | Podcast Index `podcasts/byitunesid` after show entry | Cloud SQLite retained snapshot inside show/detail flow |
+| Show page | none | Podcast Index `podcasts/byitunesid` | Cloud SQLite retained snapshot |
+| Episode detail page | none | Podcast Index `podcasts/byitunesid` | Direct Cloud episode detail lookup |
 
 ## 4. Explicit Non-Usage
 

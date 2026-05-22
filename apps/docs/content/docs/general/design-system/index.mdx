@@ -107,3 +107,17 @@ To balance UX speed with safety across platforms, file validation follows a laye
 - **Web (Lite)**: Validate with MIME type + file extension only.
 - **Backend**: Perform content-based validation (magic number or full parse).
 - **Native**: Rely on decoder-driven validation or a light header check during import.
+
+---
+
+## Persistence Time Rule
+
+All persisted time fields in application databases are mandatory Unix-second integers.
+
+- Column names must use the `*_unix` suffix.
+- Column types must use `INTEGER`.
+- Persist only the raw timestamp value. Do not store parallel formatted strings such as RFC3339 text columns.
+- Backend API responses and non-UI frontend layers must pass time values through as Unix-second numbers. Do not format API payloads as RFC3339, ISO strings, locale strings, or timezone-specific text.
+- Any display formatting must happen only at the frontend UI rendering boundary.
+- External upstream time strings may be parsed at the integration boundary, but once data enters Readio's internal models, caches, stores, playback metadata, favorites, routes, or tests, episode publication times must remain Unix-second numbers.
+- New schemas must not introduce `created_at TEXT`, `updated_at TEXT`, `published_at TEXT`, or similar formatted time columns.

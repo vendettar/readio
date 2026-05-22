@@ -1,9 +1,10 @@
 import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 interface RouteGuardScriptModule {
-  findRouteGuardViolations: () => Array<{ file: string; pattern: string }>
+  findRouteGuardViolations: (targetRoot?: string) => Array<{ file: string; pattern: string }>
   ROUTE_GUARD_ALLOWLIST_PATTERNS: RegExp[]
   ROUTE_GUARD_INCLUDE_PATTERNS: RegExp[]
   ROUTE_GUARD_FORBIDDEN_PATTERNS: RegExp[]
@@ -101,9 +102,13 @@ describe('route guard script patterns', () => {
   })
 
   it('findRouteGuardViolations detects real forbidden usage in scanned targets', () => {
-    const tempFile = path.resolve(
-      process.cwd(),
-      `src/components/Explore/__routeGuard.semantic.fixture.${process.pid}.${Date.now()}.ts`
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'routeguards-test-'))
+    const exploreDir = path.join(tempDir, 'components', 'Explore')
+    fs.mkdirSync(exploreDir, { recursive: true })
+
+    const tempFile = path.join(
+      exploreDir,
+      `__routeGuard.semantic.fixture.${process.pid}.${Date.now()}.ts`
     )
     fs.writeFileSync(
       tempFile,
@@ -118,7 +123,7 @@ describe('route guard script patterns', () => {
     )
 
     try {
-      const violations = findRouteGuardViolations()
+      const violations = findRouteGuardViolations(tempDir)
       const fixtureViolations = violations.filter((violation) => violation.file === tempFile)
       expect(
         fixtureViolations.some((violation) => /location\\.state(\\?|\\.)/.test(violation.pattern))
@@ -144,7 +149,7 @@ describe('route guard script patterns', () => {
         )
       ).toBe(true)
     } finally {
-      fs.rmSync(tempFile, { force: true })
+      fs.rmSync(tempDir, { recursive: true, force: true })
     }
   })
 })

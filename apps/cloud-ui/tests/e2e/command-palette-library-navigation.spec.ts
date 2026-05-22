@@ -18,7 +18,7 @@ async function seedLibraryRecords(page: Page) {
       artworkUrl: 'https://example.com/favorite.jpg',
       episodeArtworkUrl: '',
       description: 'test',
-      pubDate: '2025-02-01',
+      pubDate: 1738368000,
       durationSeconds: 0,
       addedAt: Date.now(),
       countryAtSave: 'us',

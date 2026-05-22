@@ -220,13 +220,28 @@ description: Architecture decisions and rationale.
 
 ## D123 — Cloud PI Episode-List Single-Layer Cache [Implemented]
 - **Decision**: Cloud page-rendering episode data uses one authority-aware frontend PI episode-list key family per `podcastItunesId`; the separate duplicated canonical full-copy cache entry is removed.
-- **Rationale**: The upstream rendering contract is already one PI `episodes/byitunesid?max=1000` list, so frontend ownership should not keep two full 1000-item copies.
+- **Current status**: Superseded by D123A. The frontend no longer treats one full-copy `max=1000` TanStack entry as the steady-state owner for page rendering; show/list/detail routes read through paginated query families and direct episode-detail lookups backed by backend SQLite.
+- **Rationale**: This removed duplicate browser full-list ownership, but the final Cloud contract moved retained episode ownership into backend SQLite instead.
 - **Implementation**:
   - key-family prefix is `['podcast', 'episodes', podcastItunesId, 'pi-list', 'max-1000']`
   - warm bootstrap may scan the same-podcast key family and choose the freshest candidate
   - authority drift may reuse stale data only as `initialData`; it must still force an authoritative refetch
-  - successful refresh removes superseded same-podcast variants so steady state is one surviving full-copy PI episode-list entry per podcast
+  - successful refresh removed superseded same-podcast variants so the old browser-owned model retained one full-list entry per podcast before D123A superseded it
   - implemented by Instruction 023 in `apps/cloud-ui/src/lib/discovery/episodeCache.ts`, `podcastQueryContract.ts`, `queryCache.ts`, and their route consumers
+
+## D123A — Cloud PI Episode-List SQLite Paginated Snapshot [Implemented]
+- **Decision**: Cloud page-rendering episode data is now owned by backend SQLite bounded snapshots, exposed through paginated route reads and direct `episodeGuid` detail lookup.
+- **Rationale**: Backend-owned snapshots avoid process-memory full-list ownership, keep deep-link hydration consistent with backend refresh state, and make retained-window limits explicit through `storedTotal` and `isTruncated`.
+- **Implementation**:
+  - backend SQLite tables are `podcast_shows`, `podcast_episodes`, and `podcast_cache_state`
+  - `podcast_shows` holds show-level domain fields only
+  - `podcast_episodes` is authoritative for retained row count and latest retained publish time via `COUNT(*)` and latest-row selection with `ORDER BY published_at_unix DESC LIMIT 1`
+  - `podcast_cache_state` holds freshness, backoff, truncation, approximate size, priority, and last-access metadata
+  - stale incremental refresh upserts only returned `since` rows, updates returned existing GUIDs in place, prunes overflow rows in SQLite, and reads pages by `published_at_unix DESC, episode_guid ASC`
+  - paginated episode-list reads are DB-only once a retained snapshot exists and must not call PodcastIndex when users flip pages; cold misses may bootstrap a bounded snapshot and use that in-memory snapshot for the current response if persistence fails
+  - podcast detail owns cold/stale PodcastIndex refresh; direct episode-detail hydration is a DB lookup by `podcastItunesId + episodeGuid` and does not trigger PodcastIndex
+  - frontend list pages use paginated query families; direct canonical episode routes use episode-detail lookup instead of fetching a full first page just to find a GUID
+  - frontend React Query cache keys are `['podcast', 'detail', podcastId, country]`, `['podcast', 'episodes-pages', podcastId, country]`, and `['podcast', 'episode-detail', podcastId, country, episodeGuid]`
 
 ## D124 — Cloud Discovery Feed Route Retirement
 - **Decision**:
@@ -234,7 +249,7 @@ description: Architecture decisions and rationale.
   - Repo-owned Cloud runtime contracts no longer expose or depend on the legacy feed transport field.
   - The earlier feed-cache / feed-SQLite discovery direction is retired and must not be presented as the active deployment or persistence contract.
 - **Rationale**:
-  - Cloud page rendering already moved to the PodcastIndex `episodes/byitunesid?max=1000` relay chain, so keeping a feed-route contract in tests and docs creates stale ownership signals.
+  - Cloud page rendering no longer uses RSS/feed XML; D123A supersedes the earlier `episodes/byitunesid?max=1000` full-list relay model with backend SQLite retained snapshots.
   - Repo-owned frontend and backend runtime callers no longer depend on RSS-by-feed transport identity, so continuing to publish route/env/error/persistence guidance for it creates avoidable drift.
 - **Implementation**:
   - Removed the dead frontend discovery test constant for `/api/v1/discovery/feed`.
@@ -243,6 +258,7 @@ description: Architecture decisions and rationale.
 
 ## D054 — Cloud Discovery PI Episode List Cutover [Implemented]
 - **Decision**: Cloud podcast content routes now render episodes only from the PodcastIndex `episodes/byitunesid?max=1000` relay chain keyed by `podcastItunesId`.
+- **Current status**: Superseded by D123A. This decision remains the RSS/feed XML removal point, but the active episode rendering contract is now backend SQLite retained snapshots with paginated DB-only list reads and direct episode-detail lookup.
 - **Rationale**: Remove RSS feed XML as the page-rendering owner, keep route identity coherent around `podcastItunesId` + `episodeGuid`, and make the 1000-item PI episode list the explicit product contract for show / episodes / detail pages.
 - **Implementation**:
   - Added Cloud relay `GET /api/v1/discovery/podcasts/:itunesId/episodes`.

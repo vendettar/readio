@@ -27,7 +27,7 @@ describe('searchEpisodeContract', () => {
       artworkUrl: 'https://example.com/search-episode.jpg',
       audioUrl: 'https://example.com/audio.mp3',
       description: 'desc',
-      pubDate: '2025-01-01T00:00:00Z',
+      pubDate: 1735689600,
       durationSeconds: 54,
     })
   })

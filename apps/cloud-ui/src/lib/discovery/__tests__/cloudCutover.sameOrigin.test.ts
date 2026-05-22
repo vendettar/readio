@@ -7,6 +7,7 @@ import {
   makeEditorPickPodcast,
   makeMinimalPodcast,
   makePodcast,
+  makePodcastEpisodes,
   makeTopEpisode,
   makeTopPodcast,
 } from './fixtures'
@@ -193,6 +194,39 @@ describe('cloud discovery 005a same-origin cutover', () => {
     expect(podcast?.podcastItunesId).toBe('1200361736')
     expect(podcast?.lastUpdateTime).toBe(1613394044)
     expect(podcast?.podcastItunesId).toBe('1200361736')
+    expect(appleLookupHits).toBe(0)
+  })
+
+  it('uses same-origin paginated discovery endpoint for podcast episodes', async () => {
+    server.use(
+      http.get(
+        discoveryUrl(DISCOVERY_TEST_ROUTE.podcastEpisodesByItunesId('1200361736')),
+        ({ request }) => {
+          const url = new URL(request.url)
+          expect(url.searchParams.get('limit')).toBe('20')
+          expect(url.searchParams.get('offset')).toBe('40')
+
+          return HttpResponse.json(
+            makePodcastEpisodes({
+              limit: 20,
+              offset: 40,
+              nextOffset: 60,
+              hasMore: true,
+              storedTotal: 1000,
+              isTruncated: true,
+            })
+          )
+        }
+      )
+    )
+
+    const episodes = await discovery.fetchPodcastEpisodes('1200361736', {
+      limit: 20,
+      offset: 40,
+    })
+
+    expect(episodes.offset).toBe(40)
+    expect(episodes.hasMore).toBe(true)
     expect(appleLookupHits).toBe(0)
   })
 })

@@ -8,19 +8,13 @@ function normalizeCustomProxyUrl(url: string): string {
 
 export function getNetworkProxyConfig(): {
   proxyUrl: string
-  authHeader: string
-  authValue: string
 } {
   const config = getAppConfig()
 
   const proxyUrl = normalizeCustomProxyUrl(config.NETWORK_PROXY_URL || '')
-  const authHeader = String(config.NETWORK_PROXY_AUTH_HEADER || '').trim()
-  const authValue = String(config.NETWORK_PROXY_AUTH_VALUE || '').trim()
 
   return {
     proxyUrl,
-    authHeader,
-    authValue,
   }
 }
 

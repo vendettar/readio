@@ -44,7 +44,7 @@ interface PlaybackSessionBase {
 
   // Episode metadata for History display
   description?: string // Episode description
-  publishedAt?: number // Episode publishing date (timestamp)
+  publishedAt?: number // Episode publishing date (Unix epoch seconds)
   transcriptUrl?: string // Podcast transcript source URL (Podcasting 2.0)
 }
 
@@ -200,7 +200,7 @@ export interface Favorite {
   addedAt: number
   // Episode metadata
   description: string
-  pubDate: string // ISO date string
+  pubDate: number // Unix epoch seconds
   durationSeconds: number // Duration in seconds
   episodeArtworkUrl: string // Episode-specific artwork
   episodeGuid: string // Required canonical favorite identity component
@@ -221,7 +221,7 @@ export interface FavoriteEpisodeInput {
   description: string
   artworkUrl: string
   duration: number
-  pubDate: string
+  pubDate: number
   episodeGuid: string
   transcriptUrl?: string
 }

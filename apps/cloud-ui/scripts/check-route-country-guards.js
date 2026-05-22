@@ -46,16 +46,16 @@ export function shouldScanRouteGuardFile(scanPath) {
   return ROUTE_GUARD_INCLUDE_PATTERNS.some((pattern) => pattern.test(scanPath))
 }
 
-function walk(dir) {
+function walk(dir, targetRoot = root) {
   const out = []
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name)
     if (entry.isDirectory()) {
-      out.push(...walk(full))
+      out.push(...walk(full, targetRoot))
       continue
     }
     if (!/\.(ts|tsx)$/.test(entry.name)) continue
-    const relativeToRoot = path.relative(root, full).split(path.sep).join('/')
+    const relativeToRoot = path.relative(targetRoot, full).split(path.sep).join('/')
     const scanPath = `src/${relativeToRoot}`
     if (!shouldScanRouteGuardFile(scanPath)) continue
     out.push(full)
@@ -63,8 +63,8 @@ function walk(dir) {
   return out
 }
 
-export function findRouteGuardViolations() {
-  const files = walk(root)
+export function findRouteGuardViolations(targetRoot = root) {
+  const files = walk(targetRoot, targetRoot)
 
   const violations = []
   for (const file of files) {

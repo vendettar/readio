@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { buildPodcastEpisodesQueryKey } from '../podcastQueryContract'
+import { buildPodcastEpisodesPagesQueryKey } from '../podcastQueryContract'
 import {
   EditorPickPodcastSchema,
   PIEpisodeSchema,
   PIPodcastSchema,
+  PodcastEpisodesSchema,
   SearchEpisodeSchema,
   SearchPodcastSchema,
   TopEpisodeSchema,
 } from '../schema'
+import { makePodcastEpisodes } from './fixtures'
 
 describe('discovery schema PI podcast contract', () => {
   it('parses PI podcasts without feedUrl', () => {
@@ -43,25 +45,15 @@ describe('discovery schema PI podcast contract', () => {
   })
 
   it('builds podcast-keyed episode query keys for page rendering', () => {
-    expect(buildPodcastEpisodesQueryKey('123')).toEqual([
-      'podcast',
-      'episodes',
-      '123',
-      'pi-list',
-      'lut-na',
-      'count-na',
-    ])
+    expect(buildPodcastEpisodesPagesQueryKey('123')).toEqual(['podcast', 'episodes-pages', '123'])
   })
 
   it('builds country-scoped podcast episode query keys for page rendering when route authority exists', () => {
-    expect(buildPodcastEpisodesQueryKey('123', undefined, 'jp')).toEqual([
+    expect(buildPodcastEpisodesPagesQueryKey('123', 'jp')).toEqual([
       'podcast',
-      'episodes',
+      'episodes-pages',
       '123',
       'country-jp',
-      'pi-list',
-      'lut-na',
-      'count-na',
     ])
   })
 
@@ -113,7 +105,7 @@ describe('discovery schema PI podcast contract', () => {
       title: 'Episode 1',
       description: 'Plain description',
       audioUrl: 'https://example.com/audio.mp3',
-      pubDate: '2026-03-27T00:00:00Z',
+      pubDate: 1774569600,
       artworkUrl: 'https://example.com/art.jpg',
       duration: 54,
       explicit: false,
@@ -124,6 +116,7 @@ describe('discovery schema PI podcast contract', () => {
 
     expect(episode.duration).toBe(54)
     expect(episode.fileSize).toBe(1024)
+    expect(episode.pubDate).toBe(1774569600)
   })
 
   it('rejects page-rendering episodes when duration is missing', () => {
@@ -133,7 +126,7 @@ describe('discovery schema PI podcast contract', () => {
         title: 'Episode 1',
         description: 'Plain description',
         audioUrl: 'https://example.com/audio.mp3',
-        pubDate: '2026-03-27T00:00:00Z',
+        pubDate: 1774569600,
         artworkUrl: 'https://example.com/art.jpg',
         fileSize: 1024,
         explicit: false,
@@ -149,7 +142,7 @@ describe('discovery schema PI podcast contract', () => {
         title: 'Episode 1',
         description: 'Plain description',
         audioUrl: 'https://example.com/audio.mp3',
-        pubDate: '2026-03-27T00:00:00Z',
+        pubDate: 1774569600,
         artworkUrl: 'https://example.com/art.jpg',
         duration: 54,
         explicit: false,
@@ -165,7 +158,7 @@ describe('discovery schema PI podcast contract', () => {
         title: 'Episode 1',
         description: 'Plain description',
         audioUrl: 'https://example.com/audio.mp3',
-        pubDate: '2026-03-27T00:00:00Z',
+        pubDate: 1774569600,
         duration: 54,
         fileSize: 1024,
         explicit: false,
@@ -180,7 +173,7 @@ describe('discovery schema PI podcast contract', () => {
       title: 'Episode 1',
       description: 'Plain description',
       audioUrl: 'https://example.com/audio.mp3',
-      pubDate: '2026-03-27T00:00:00Z',
+      pubDate: 1774569600,
       artworkUrl: 'https://example.com/art.jpg',
       fileSize: 1024,
       duration: 54,
@@ -200,7 +193,7 @@ describe('discovery schema PI podcast contract', () => {
       title: 'Episode 1',
       description: 'Plain description',
       audioUrl: 'https://example.com/audio.mp3',
-      pubDate: '2026-03-27T00:00:00Z',
+      pubDate: 1774569600,
       artworkUrl: 'https://example.com/art.jpg',
       fileSize: 1024,
       duration: 54,
@@ -214,7 +207,7 @@ describe('discovery schema PI podcast contract', () => {
     expect(episode.episodeNumber).toBe(0)
   })
 
-  it('rejects millisecond PI pubDate values because the backend emits second-precision RFC3339', () => {
+  it('rejects RFC3339 string PI pubDate values at the schema boundary', () => {
     expect(() =>
       PIEpisodeSchema.parse({
         guid: 'ep-1',
@@ -231,6 +224,34 @@ describe('discovery schema PI podcast contract', () => {
     ).toThrow()
   })
 
+  it('rejects invalid numeric PI pubDate values', () => {
+    const baseEpisode = {
+      guid: 'ep-1',
+      title: 'Episode 1',
+      description: 'Plain description',
+      audioUrl: 'https://example.com/audio.mp3',
+      artworkUrl: 'https://example.com/art.jpg',
+      fileSize: 1024,
+      duration: 54,
+      explicit: true,
+      link: 'https://example.com/episode-1',
+    }
+
+    expect(() =>
+      PIEpisodeSchema.parse({
+        ...baseEpisode,
+        pubDate: -1,
+      })
+    ).toThrow()
+
+    expect(() =>
+      PIEpisodeSchema.parse({
+        ...baseEpisode,
+        pubDate: 1774569600.5,
+      })
+    ).toThrow()
+  })
+
   it('rejects non-http external urls in the PI page-rendering episode contract', () => {
     expect(() =>
       PIEpisodeSchema.parse({
@@ -238,7 +259,7 @@ describe('discovery schema PI podcast contract', () => {
         title: 'Episode 1',
         description: 'Plain description',
         audioUrl: 'https://example.com/audio.mp3',
-        pubDate: '2026-03-27T00:00:00Z',
+        pubDate: 1774569600,
         artworkUrl: 'https://example.com/art.jpg',
         fileSize: 1024,
         duration: 54,
@@ -254,7 +275,7 @@ describe('discovery schema PI podcast contract', () => {
       title: 'Episode 1',
       description: 'Plain description',
       audioUrl: 'https://example.com/audio.mp3',
-      pubDate: '2026-03-27T00:00:00Z',
+      pubDate: 1774569600,
       artworkUrl: 'https://example.com/art.jpg',
       fileSize: 1024,
       duration: 54,
@@ -263,6 +284,85 @@ describe('discovery schema PI podcast contract', () => {
     })
 
     expect(episode.link).toBeUndefined()
+  })
+
+  it('parses the active paginated SQLite episode-list contract', () => {
+    const paginated = PodcastEpisodesSchema.parse({
+      episodes: [
+        {
+          guid: 'ep-1',
+          title: 'Episode 1',
+          description: 'Plain description',
+          audioUrl: 'https://example.com/audio.mp3',
+          pubDate: 1774569600,
+          artworkUrl: 'https://example.com/art.jpg',
+          fileSize: 1024,
+          duration: 54,
+          explicit: false,
+          link: 'https://example.com/episode-1',
+        },
+      ],
+      limit: 20,
+      offset: 40,
+      nextOffset: 60,
+      hasMore: true,
+      storedTotal: 1000,
+      isTruncated: true,
+      lastSuccessfulFetchAt: 1779062400,
+      nextRefreshAfter: 1779069600,
+    })
+
+    expect(paginated).toMatchObject({
+      limit: 20,
+      offset: 40,
+      nextOffset: 60,
+      hasMore: true,
+      storedTotal: 1000,
+      isTruncated: true,
+      lastSuccessfulFetchAt: 1779062400,
+      nextRefreshAfter: 1779069600,
+    })
+  })
+
+  it('keeps the paginated episode-list schema strict about pagination metadata', () => {
+    expect(() =>
+      PodcastEpisodesSchema.parse({
+        episodes: [],
+        limit: 20,
+        offset: 0,
+        hasMore: false,
+        storedTotal: 0,
+        isTruncated: false,
+      })
+    ).toThrow()
+
+    expect(() =>
+      PodcastEpisodesSchema.parse(
+        makePodcastEpisodes({
+          limit: 0,
+        })
+      )
+    ).toThrow()
+  })
+
+  it('keeps snapshot metadata optional while validating Unix timestamp shape when present', () => {
+    const withoutSnapshotMetadata = PodcastEpisodesSchema.parse({
+      episodes: [],
+      limit: 20,
+      offset: 0,
+      nextOffset: 0,
+      hasMore: false,
+      storedTotal: 0,
+      isTruncated: false,
+    })
+
+    expect(withoutSnapshotMetadata.lastSuccessfulFetchAt).toBeUndefined()
+    expect(withoutSnapshotMetadata.nextRefreshAfter).toBeUndefined()
+    const invalidSnapshotMetadataPayload: unknown = {
+      ...makePodcastEpisodes(),
+      lastSuccessfulFetchAt: '2026-05-18T00:00:00Z',
+    }
+    expect(() => PodcastEpisodesSchema.parse(invalidSnapshotMetadataPayload)).toThrow()
   })
 
   it('uses author for top-episode creator labels', () => {

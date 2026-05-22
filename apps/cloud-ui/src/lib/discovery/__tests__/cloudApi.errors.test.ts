@@ -168,7 +168,7 @@ describe('cloudApi discovery error mapping', () => {
               guid: 'ep-1',
               title: 'Episode without audioUrl',
               description: 'desc',
-              pubDate: '2025-01-01T00:00:00Z',
+              pubDate: 1735689600,
               artworkUrl: 'https://example.com/art.jpg',
               duration: 54,
               explicit: false,

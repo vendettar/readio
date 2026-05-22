@@ -20,7 +20,8 @@ It must stay aligned with:
 
 - Page-rendering data ownership remains:
   - podcast metadata = `podcasts/byitunesid`
-  - episode list/detail = `episodes/byitunesid?max=1000`
+  - episode list cold bootstrap = `episodes/byitunesid?max=1000`
+  - episode detail = SQLite direct lookup by `podcastItunesId + episodeGuid`
 - RSS feed XML is out of scope for page rendering and out of scope for this cache.
 - Legacy feed transport metadata must not participate in the active cache contract.
 - Canonical cache identity is `podcastItunesId`.
@@ -28,6 +29,9 @@ It must stay aligned with:
 - The cache stores PI JSON-derived structured snapshots, not raw RSS and not raw XML.
 - The cache should prefer structured SQLite rows over a single opaque raw JSON blob.
 - The cache is bounded and recent-window-based, not a full podcast archive.
+- SQLite becomes the only cache layer for PI podcast detail and episode-list snapshots.
+- The existing in-memory TTL cache and its oversized-payload skip-cache policy are old behavior and should be removed for PI detail / episodes reads after the SQLite cutover lands.
+- This cache ownership change is scoped only to PodcastIndex podcast-detail and episode-list snapshots; other discovery in-memory cache users such as Apple top/search routes must remain unchanged unless a separate instruction explicitly changes them.
 - The fixed product window for page rendering remains `max=1000`.
 - Cold-open detail semantics remain unchanged:
   - resolve by `podcastItunesId`
@@ -46,6 +50,12 @@ Execute these child instructions in order:
 4. `001d-pi-route-read-path-and-sqlite-paging-cutover.md`
 5. `001e-pi-cache-budget-eviction-and-regression-coverage.md`
 
+Implementation note before execution:
+
+- the current `apps/cloud-api` startup path already opens SQLite and applies goose migrations before handlers are registered
+- the current `discoveryService` does not yet receive the runtime `*sql.DB` handle or a PI cache repository/store dependency
+- execution of this plan must therefore begin by extending discovery-service construction so the PI cache store can be injected explicitly instead of being created ad hoc inside route handlers
+
 ## 4. Global Boundaries
 
 - Do not fetch or parse RSS feed XML for cache population.
@@ -59,17 +69,37 @@ Execute these child instructions in order:
 
 ## 5. Target Architecture
 
-- `cloud_pi_podcasts`
+- `podcast_shows`
   - one row per `podcast_itunes_id`
-  - holds cached podcast detail derived from `podcasts/byitunesid`
-- `cloud_pi_episodes`
+  - holds only podcast domain/detail fields derived from `podcasts/byitunesid`
+- `podcast_episodes`
   - bounded episode rows for one `podcast_itunes_id`
   - ordered newest-first inside the stored window
+- `podcast_cache_state`
+  - one row per `podcast_itunes_id`
+  - holds refresh, backoff, eviction, truncation, and access metadata
 - request-time behavior
   - validate `podcastItunesId`
   - read fresh cached podcast detail / episode rows if available
   - otherwise refresh from PI through `singleflight`
   - serve pages from the structured snapshot
+
+Contract alignment:
+
+- podcast detail may remain logically compatible with the current `GET /api/v1/discovery/podcasts/:itunesId` response shape
+- episode-list reads no longer assume the old full-list response contract remains unchanged
+- the episode-list contract change is intentional and allowed because the product is still pre-launch; no backward-compatible legacy response layer is required
+- the SQLite cutover for `GET /api/v1/discovery/podcasts/:itunesId/episodes` is expected to land together with an explicit paginated HTTP contract
+- that paginated contract is defined by child Instruction `001d`, including request pagination params and snapshot metadata needed by the frontend
+- frontend discovery schema, query helpers, and page consumers must be updated in the same implementation wave as the backend route cutover instead of treating pagination as a later optional follow-up
+
+Current cache-ownership rule:
+
+- after this plan lands, PI podcast detail and episode-list caching must not use process-memory TTL entries at all
+- the shared `discoveryCache` type may continue to serve non-PI-detail/episodes routes such as Apple top/search; do not remove or disable it globally
+- remove only the PI detail / episodes memory TTL ownership, including keys such as `podcastindex-podcast-itunes:<id>` and `podcastindex-episodes-itunes:<id>`
+- freshness should be modeled by SQLite snapshot state such as `last_successful_fetch_at` / `refresh_not_before`
+- `singleflight` remains useful, but only for deduplicating concurrent refresh work against the SQLite-backed snapshot contract
 
 ## 6. Final Product Boundary
 

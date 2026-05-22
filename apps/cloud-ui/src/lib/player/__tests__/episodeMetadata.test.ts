@@ -20,7 +20,7 @@ function makeEpisode(overrides: Partial<Episode> & { guid?: string } = {}): Epis
     title: 'Test Episode',
     description: 'Test description',
     audioUrl: 'https://example.com/audio.mp3',
-    pubDate: '2024-01-01T00:00:00.000Z',
+    pubDate: 1704067200,
     duration: 120,
     explicit: false,
     link: 'https://example.com/episodes/test-ep',
@@ -50,7 +50,7 @@ describe('episodeMetadata mappers', () => {
       title: 'Episode',
       audioUrl: 'https://example.com/audio.mp3',
       description: 'desc',
-      pubDate: '2024-01-01T00:00:00.000Z',
+      pubDate: 1704067200,
       duration: 120,
       transcriptUrl: 'https://example.com/transcript.srt',
       artworkUrl: 'https://example.com/ep.jpg',
@@ -74,7 +74,7 @@ describe('episodeMetadata mappers', () => {
     expect(payload.metadata.durationSeconds).toBe(120)
     expect(payload.metadata.podcastItunesId).toBe('123')
     expect(payload.metadata.episodeGuid).toBe('feed-guid-1')
-    expect(payload.metadata.publishedAt).toBe(new Date('2024-01-01T00:00:00.000Z').getTime())
+    expect(payload.metadata.publishedAt).toBe(1704067200)
   })
 
   it('maps search episode payload with canonical episode identity', () => {
@@ -111,7 +111,7 @@ describe('episodeMetadata mappers', () => {
       episodeArtworkUrl: 'https://example.com/art.jpg',
       addedAt: Date.now(),
       description: 'Test description',
-      pubDate: '2025-02-01',
+      pubDate: 1738368000,
       durationSeconds: 180,
       podcastItunesId: 'pod-1',
       episodeGuid: 'favorite-guid-1',
@@ -181,7 +181,7 @@ describe('episodeMetadata mappers', () => {
       audioUrl: 'https://example.com/local.mp3',
       artworkUrl: 'https://example.com/default-art.jpg',
       showTitle: 'Podcast',
-      publishedAt: new Date('2024-06-01T00:00:00.000Z').getTime(),
+      publishedAt: 1717200000,
       transcriptUrl: 'https://example.com/local.srt',
     } as LocalPlaybackSession
 
@@ -195,7 +195,7 @@ describe('episodeMetadata mappers', () => {
     expect(metadata.countryAtSave).toBeUndefined()
     expect(metadata.podcastItunesId).toBeUndefined()
     expect(metadata.episodeGuid).toBeUndefined()
-    expect(metadata.publishedAt).toBe(new Date('2024-06-01T00:00:00.000Z').getTime())
+    expect(metadata.publishedAt).toBe(1717200000)
   })
 
   it('normalizes remote playback-session metadata into explicit canonical remote metadata', () => {

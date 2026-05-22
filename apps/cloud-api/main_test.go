@@ -18,25 +18,41 @@ import (
 	"testing"
 	"testing/fstest"
 	"time"
+
+	"github.com/stretchr/testify/require"
+	"readio-cloud/internal/admin"
+	"readio-cloud/internal/asr"
+	"readio-cloud/internal/discovery"
+	"readio-cloud/internal/httputil"
+	"readio-cloud/internal/podcastindex"
 )
+
+// newRateLimiter is a test helper that wraps httputil.NewRateLimiter.
+func newRateLimiter(limit int, window time.Duration, now func() time.Time) *httputil.RateLimiter {
+	return httputil.NewRateLimiter(limit, window, now)
+}
+
+func decodeResponseJSON(t *testing.T, body interface{ String() string }, dest any) {
+	t.Helper()
+	err := json.Unmarshal([]byte(body.String()), dest)
+	require.NoError(t, err)
+}
 
 const testProxyAllowedOrigin = "https://app.readio.test"
 
 func TestProxyRequestSummaryEmitsCanonicalUpstreamFields(t *testing.T) {
-	rb := newAdminRingBuffer(10)
+	rb := admin.NewAdminRingBuffer(10)
 	oldLogger := slog.Default()
-	slog.SetDefault(slog.New(&adminSlogHandler{
-		Handler: slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelInfo}),
-		buffer:  rb,
-	}))
+	slog.SetDefault(slog.New(admin.NewAdminSlogHandler(
+		slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelInfo}),
+		rb,
+	)))
 	t.Cleanup(func() {
 		slog.SetDefault(oldLogger)
 	})
 
 	proxy, _ := newMediaProxyTestService(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/audio.mp3" {
-			t.Fatalf("path = %q, want %q", r.URL.Path, "/audio.mp3")
-		}
+		require.Equal(t, "/audio.mp3", r.URL.Path)
 		w.Header().Set("Content-Type", "audio/mpeg")
 		_, _ = io.WriteString(w, "ok")
 	}), nil)
@@ -46,39 +62,25 @@ func TestProxyRequestSummaryEmitsCanonicalUpstreamFields(t *testing.T) {
 	rr := httptest.NewRecorder()
 	proxy.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
-	}
+	require.Equal(t, http.StatusOK, rr.Code)
 
-	snap := rb.snapshot()
-	if len(snap) != 1 {
-		t.Fatalf("snapshot len = %d, want 1", len(snap))
-	}
+	snap := rb.Snapshot()
+	require.Len(t, snap, 1)
 	entry := snap[0]
-	if entry.Route != "proxy/media" {
-		t.Fatalf("route = %q, want %q", entry.Route, "proxy/media")
-	}
-	if entry.UpstreamKind != "proxy" {
-		t.Fatalf("upstream_kind = %q, want %q", entry.UpstreamKind, "proxy")
-	}
-	if entry.UpstreamHost != "media.example.com" {
-		t.Fatalf("upstream_host = %q, want %q", entry.UpstreamHost, "media.example.com")
-	}
-	if entry.ErrorClass != "none" {
-		t.Fatalf("error_class = %q, want %q", entry.ErrorClass, "none")
-	}
-	if entry.Status != http.StatusOK {
-		t.Fatalf("status = %d, want %d", entry.Status, http.StatusOK)
-	}
+	require.Equal(t, "proxy/media", entry.Route)
+	require.Equal(t, "proxy", entry.UpstreamKind)
+	require.Equal(t, "media.example.com", entry.UpstreamHost)
+	require.Equal(t, "none", entry.ErrorClass)
+	require.Equal(t, http.StatusOK, entry.Status)
 }
 
 func TestProxyRequestSummaryUsesActualProxyErrorStatus(t *testing.T) {
-	rb := newAdminRingBuffer(10)
+	rb := admin.NewAdminRingBuffer(10)
 	oldLogger := slog.Default()
-	slog.SetDefault(slog.New(&adminSlogHandler{
-		Handler: slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelInfo}),
-		buffer:  rb,
-	}))
+	slog.SetDefault(slog.New(admin.NewAdminSlogHandler(
+		slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelInfo}),
+		rb,
+	)))
 	t.Cleanup(func() {
 		slog.SetDefault(oldLogger)
 	})
@@ -88,12 +90,10 @@ func TestProxyRequestSummaryUsesActualProxyErrorStatus(t *testing.T) {
 	rr := httptest.NewRecorder()
 	proxy.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusMethodNotAllowed {
-		t.Fatalf("status = %d, want %d", rr.Code, http.StatusMethodNotAllowed)
-	}
+	require.Equal(t, http.StatusMethodNotAllowed, rr.Code)
 
-	snap := rb.snapshot()
-	var entry *adminLogEntry
+	snap := rb.Snapshot()
+	var entry *admin.LogEntry
 	for i := range snap {
 		if snap[i].Route == "proxy/media" {
 			entry = &snap[i]
@@ -103,12 +103,8 @@ func TestProxyRequestSummaryUsesActualProxyErrorStatus(t *testing.T) {
 		t.Fatalf("proxy/media log entry not found in snapshot: %#v", snap)
 		return
 	}
-	if entry.Status != http.StatusMethodNotAllowed {
-		t.Fatalf("logged status = %d, want %d", entry.Status, http.StatusMethodNotAllowed)
-	}
-	if entry.ErrorClass != "invalid_method" {
-		t.Fatalf("error_class = %q, want %q", entry.ErrorClass, "invalid_method")
-	}
+	require.Equal(t, http.StatusMethodNotAllowed, entry.Status)
+	require.Equal(t, "invalid_method", entry.ErrorClass)
 }
 
 func assertProxyErrorPayload(t *testing.T, body interface{ String() string }, wantCode string) {
@@ -117,36 +113,28 @@ func assertProxyErrorPayload(t *testing.T, body interface{ String() string }, wa
 	var payload map[string]string
 	decodeResponseJSON(t, body, &payload)
 
-	if payload["code"] != wantCode {
-		t.Fatalf("code = %q, want %q", payload["code"], wantCode)
-	}
-	if strings.TrimSpace(payload["message"]) == "" {
-		t.Fatal("message is empty")
-	}
-	if strings.TrimSpace(payload["request_id"]) == "" {
-		t.Fatal("request_id is empty")
-	}
+	require.Equal(t, wantCode, payload["code"])
+	require.NotEqual(t, "", strings.TrimSpace(payload["message"]))
+	require.NotEqual(t, "", strings.TrimSpace(payload["request_id"]))
 }
 
 func TestCloudMuxServesDynamicJSONConfig(t *testing.T) {
 	t.Setenv("READIO_APP_NAME", "Readio Cloud")
 	t.Setenv("READIO_APP_VERSION", "2.0.0")
-	t.Setenv(asrRelayPublicTokenEnv, "relay-public-token")
+	t.Setenv(asr.RelayPublicTokenEnv, "relay-public-token")
 	t.Setenv("READIO_ASR_PROVIDER", "groq")
 	t.Setenv("READIO_ASR_MODEL", "whisper-large-v3")
 	t.Setenv("READIO_ENABLED_ASR_PROVIDERS", "groq")
 	t.Setenv("READIO_EN_DICTIONARY_API_TRANSPORT", "direct")
 	t.Setenv("READIO_DEFAULT_LANGUAGE", "zh")
-	t.Setenv("READIO_NETWORK_PROXY_AUTH_HEADER", "x-proxy-token")
-	t.Setenv("READIO_NETWORK_PROXY_AUTH_VALUE", "browser-public-proxy-token")
 	t.Setenv("VITE_GRAFANA_FARO_URL", "https://faro.example.com/collect")
 	t.Setenv("VITE_GRAFANA_FARO_APP_NAME", "readio-cloud")
 	t.Setenv("VITE_GRAFANA_FARO_ENV", "production")
 	t.Setenv("VITE_GRAFANA_FARO_SAMPLE_RATE", "0.25")
 	t.Setenv(cloudDBEnv, "/srv/readio/data/readio.db")
-	t.Setenv(asrRelayAllowedOriginsEnv, "https://readio.example")
-	t.Setenv(asrRelayRateLimitBurstEnv, "9")
-	t.Setenv(asrRelayRateLimitWindowMsEnv, "1500")
+	t.Setenv("ASR_RELAY_ALLOWED_ORIGINS", "https://readio.example")
+	t.Setenv("ASR_RELAY_RATE_LIMIT_BURST", "9")
+	t.Setenv("ASR_RELAY_RATE_LIMIT_WINDOW_MS", "1500")
 	t.Setenv("PORT", "8080")
 
 	mux := newCloudMux(http.NotFoundHandler(), http.NotFoundHandler(), http.NotFoundHandler())
@@ -155,24 +143,16 @@ func TestCloudMuxServesDynamicJSONConfig(t *testing.T) {
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusOK {
-		t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
-	}
-	if got := rr.Header().Get("Content-Type"); got != "application/json; charset=utf-8" {
-		t.Fatalf("content-type = %q, want %q", got, "application/json; charset=utf-8")
-	}
+	require.Equal(t, http.StatusOK, rr.Code)
+	got := rr.Header().Get("Content-Type")
+	require.Equal(t, "application/json; charset=utf-8", got)
 
 	var payload map[string]any
-	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
-		t.Fatalf("unmarshal env payload: %v", err)
-	}
+	err := json.Unmarshal(rr.Body.Bytes(), &payload)
+	require.NoError(t, err)
 
-	if payload["READIO_APP_NAME"] != "Readio Cloud" {
-		t.Fatalf("READIO_APP_NAME = %#v, want %#v", payload["READIO_APP_NAME"], "Readio Cloud")
-	}
-	if payload["READIO_ASR_RELAY_PUBLIC_TOKEN"] != "relay-public-token" {
-		t.Fatalf("READIO_ASR_RELAY_PUBLIC_TOKEN = %#v, want %#v", payload["READIO_ASR_RELAY_PUBLIC_TOKEN"], "relay-public-token")
-	}
+	require.Equal(t, "Readio Cloud", payload["READIO_APP_NAME"])
+	require.Equal(t, "relay-public-token", payload["READIO_ASR_RELAY_PUBLIC_TOKEN"])
 }
 
 func TestBrowserEnvAllowlistFaroKeysArePublicOnly(t *testing.T) {
@@ -190,13 +170,9 @@ func TestBrowserEnvAllowlistFaroKeysArePublicOnly(t *testing.T) {
 		}
 	}
 
-	if len(gotFaroKeys) != len(wantFaroKeys) {
-		t.Fatalf("Faro allowlist keys = %#v, want %#v", gotFaroKeys, wantFaroKeys)
-	}
+	require.Len(t, gotFaroKeys, len(wantFaroKeys))
 	for i := range wantFaroKeys {
-		if gotFaroKeys[i] != wantFaroKeys[i] {
-			t.Fatalf("Faro key[%d] = %q, want %q", i, gotFaroKeys[i], wantFaroKeys[i])
-		}
+		require.Equal(t, wantFaroKeys[i], gotFaroKeys[i])
 	}
 
 	forbiddenPatterns := []*regexp.Regexp{
@@ -222,23 +198,16 @@ func TestBrowserEnvAllowlistFaroKeysArePublicOnly(t *testing.T) {
 
 func TestBrowserEnvAllowlistMatchesArtifact(t *testing.T) {
 	data, err := os.ReadFile("browser-env-allowlist.json")
-	if err != nil {
-		t.Fatalf("read allowlist artifact: %v", err)
-	}
+	require.NoError(t, err)
 
 	var artifact []string
-	if err := json.Unmarshal(data, &artifact); err != nil {
-		t.Fatalf("unmarshal allowlist artifact: %v", err)
-	}
+	err = json.Unmarshal(data, &artifact)
+	require.NoError(t, err)
 
-	if len(artifact) != len(browserEnvAllowlist) {
-		t.Fatalf("allowlist length = %d, artifact length = %d", len(browserEnvAllowlist), len(artifact))
-	}
+	require.Len(t, artifact, len(browserEnvAllowlist))
 
 	for i := range browserEnvAllowlist {
-		if artifact[i] != browserEnvAllowlist[i] {
-			t.Fatalf("key[%d] = %q, artifact[%d] = %q — browser-env-allowlist.json must be updated to match browserEnvAllowlist", i, browserEnvAllowlist[i], i, artifact[i])
-		}
+		require.Equal(t, browserEnvAllowlist[i], artifact[i])
 	}
 }
 
@@ -247,36 +216,24 @@ func TestResolveCloudDBPathUsesEnvOverride(t *testing.T) {
 	t.Setenv(cloudDBEnv, want)
 
 	got, err := resolveCloudDBPath()
-	if err != nil {
-		t.Fatalf("resolve cloud db path: %v", err)
-	}
-	if got != want {
-		t.Fatalf("path = %q, want %q", got, want)
-	}
+	require.NoError(t, err)
+	require.Equal(t, want, got)
 }
 
 func TestResolveCloudDBPathRequiresExplicitEnv(t *testing.T) {
 	t.Setenv(cloudDBEnv, "")
 
 	_, err := resolveCloudDBPath()
-	if err == nil {
-		t.Fatal("resolve cloud db path unexpectedly succeeded without env")
-	}
-	if !strings.Contains(err.Error(), cloudDBEnv) {
-		t.Fatalf("resolve cloud db path error = %v, want mention of %s", err, cloudDBEnv)
-	}
+	require.NotNil(t, err)
+	require.Contains(t, err.Error(), cloudDBEnv)
 }
 
 func TestResolveCloudDBPathRejectsRelativePath(t *testing.T) {
 	t.Setenv(cloudDBEnv, filepath.Join("state", "cloud.db"))
 
 	_, err := resolveCloudDBPath()
-	if err == nil {
-		t.Fatal("resolve cloud db path unexpectedly succeeded with relative path")
-	}
-	if !strings.Contains(err.Error(), "absolute path") {
-		t.Fatalf("resolve cloud db path error = %v, want mention of absolute path", err)
-	}
+	require.NotNil(t, err)
+	require.Contains(t, err.Error(), "absolute path")
 }
 
 func TestResolveProxyRateLimitBurstEnvOverrides(t *testing.T) {
@@ -312,9 +269,7 @@ func TestResolveProxyRateLimitBurstEnvOverrides(t *testing.T) {
 			t.Setenv(proxyRateLimitBurstEnv, tc.envValue)
 
 			got := resolveProxyRateLimitBurst()
-			if got != tc.wantBurst {
-				t.Fatalf("burst = %d, want %d", got, tc.wantBurst)
-			}
+			require.Equal(t, tc.wantBurst, got)
 		})
 	}
 }
@@ -352,9 +307,7 @@ func TestResolveProxyRateLimitWindowEnvOverrides(t *testing.T) {
 			t.Setenv(proxyRateLimitWindowMsEnv, tc.envValue)
 
 			got := resolveProxyRateLimitWindow()
-			if got != tc.wantWindow {
-				t.Fatalf("window = %v, want %v", got, tc.wantWindow)
-			}
+			require.Equal(t, tc.wantWindow, got)
 		})
 	}
 }
@@ -363,31 +316,21 @@ func TestProxyServiceUsesConfiguredRateLimitBurst(t *testing.T) {
 	t.Setenv(proxyRateLimitBurstEnv, "2")
 
 	proxy := newProxyService()
-	if proxy.limiter == nil {
-		t.Fatal("limiter = nil, want non-nil")
-	}
+	require.NotNil(t, proxy.limiter)
 
-	if proxy.limiter.limit != 2 {
-		t.Fatalf("limiter.limit = %d, want 2", proxy.limiter.limit)
-	}
+	require.Equal(t, 2, proxy.limiter.Limit)
 }
 
 func TestProxyServiceRateLimiterDisableWhenBurstZero(t *testing.T) {
 	t.Setenv(proxyRateLimitBurstEnv, "0")
 
 	proxy := newProxyService()
-	if proxy.limiter == nil {
-		t.Fatal("limiter = nil, want non-nil")
-	}
+	require.NotNil(t, proxy.limiter)
 
-	if proxy.limiter.limit != 0 {
-		t.Fatalf("limiter.limit = %d, want 0", proxy.limiter.limit)
-	}
+	require.Equal(t, 0, proxy.limiter.Limit)
 
 	for i := 0; i < 100; i++ {
-		if !proxy.limiter.allow("198.51.100.10") {
-			t.Fatalf("request %d should pass when burst=0 (disabled)", i+1)
-		}
+		require.True(t, proxy.limiter.Allow("198.51.100.10"))
 	}
 }
 
@@ -410,47 +353,31 @@ func TestConfigParsingLogsInvalidEnv(t *testing.T) {
 	t.Setenv(proxyRateLimitBurstEnv, "not-an-int")
 	got := resolveProxyRateLimitBurst()
 
-	if got != proxyRateLimitBurst {
-		t.Fatalf("burst = %d, want %d", got, proxyRateLimitBurst)
-	}
-	if !strings.Contains(logs.String(), proxyRateLimitBurstEnv) {
-		t.Fatalf("invalid env parse was not logged: %s", logs.String())
-	}
+	require.Equal(t, proxyRateLimitBurst, got)
+	require.Contains(t, logs.String(), proxyRateLimitBurstEnv)
 }
 
 func TestProxyServiceRateLimiterDisableWhenBurstNegative(t *testing.T) {
 	t.Setenv(proxyRateLimitBurstEnv, "-5")
 
 	proxy := newProxyService()
-	if proxy.limiter == nil {
-		t.Fatal("limiter = nil, want non-nil")
-	}
+	require.NotNil(t, proxy.limiter)
 
-	if proxy.limiter.limit != -5 {
-		t.Fatalf("limiter.limit = %d, want -5 (disabled)", proxy.limiter.limit)
-	}
+	require.Equal(t, -5, proxy.limiter.Limit)
 
-	if !proxy.allowRequest("198.51.100.10") {
-		t.Fatal("expected request to pass when limit < 0 (disabled)")
-	}
+	require.True(t, proxy.allowRequest("198.51.100.10"))
 }
 
 func TestProxyServiceRateLimiterDisableWhenBurstMinusOne(t *testing.T) {
 	t.Setenv(proxyRateLimitBurstEnv, "-1")
 
 	proxy := newProxyService()
-	if proxy.limiter == nil {
-		t.Fatal("limiter = nil, want non-nil")
-	}
+	require.NotNil(t, proxy.limiter)
 
-	if proxy.limiter.limit != -1 {
-		t.Fatalf("limiter.limit = %d, want -1", proxy.limiter.limit)
-	}
+	require.Equal(t, -1, proxy.limiter.Limit)
 
 	for i := 0; i < 100; i++ {
-		if !proxy.limiter.allow("198.51.100.10") {
-			t.Fatalf("request %d should pass when burst=-1 (disabled)", i+1)
-		}
+		require.True(t, proxy.limiter.Allow("198.51.100.10"))
 	}
 }
 
@@ -458,19 +385,13 @@ func TestProxyServiceRateLimiterReenableWhenBurstOne(t *testing.T) {
 	t.Setenv(proxyRateLimitBurstEnv, "1")
 
 	proxy := newProxyService()
-	if proxy.limiter == nil {
-		t.Fatal("limiter = nil, want non-nil")
-	}
+	require.NotNil(t, proxy.limiter)
 
-	if proxy.limiter.limit != 1 {
-		t.Fatalf("limiter.limit = %d, want 1", proxy.limiter.limit)
-	}
+	require.Equal(t, 1, proxy.limiter.Limit)
 
-	if !proxy.limiter.allow("198.51.100.10") {
-		t.Fatal("expected first request to pass with burst=1")
-	}
+	require.True(t, proxy.limiter.Allow("198.51.100.10"))
 
-	if proxy.limiter.allow("198.51.100.10") {
+	if proxy.limiter.Allow("198.51.100.10") {
 		t.Fatal("expected second request to be rate limited with burst=1")
 	}
 }
@@ -479,13 +400,9 @@ func TestProxyServiceUsesConfiguredRateLimitWindow(t *testing.T) {
 	t.Setenv(proxyRateLimitWindowMsEnv, "5000")
 
 	proxy := newProxyService()
-	if proxy.limiter == nil {
-		t.Fatal("limiter = nil, want non-nil")
-	}
+	require.NotNil(t, proxy.limiter)
 
-	if proxy.limiter.window != 5*time.Second {
-		t.Fatalf("limiter.window = %v, want 5s", proxy.limiter.window)
-	}
+	require.Equal(t, 5*time.Second, proxy.limiter.Window)
 }
 
 func TestOpenCloudSQLiteFailsWhenParentDirMissing(t *testing.T) {
@@ -506,9 +423,7 @@ func TestOpenCloudSQLiteFailsWhenParentDirMissing(t *testing.T) {
 func TestCloudSQLiteDSNAppliesConnectionPragmasOnEveryConnection(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "cloud.db")
 	db, err := sql.Open("sqlite", buildCloudSQLiteDSN(dbPath))
-	if err != nil {
-		t.Fatalf("open sqlite with cloud dsn: %v", err)
-	}
+	require.NoError(t, err)
 	t.Cleanup(func() {
 		_ = db.Close()
 	})
@@ -518,15 +433,11 @@ func TestCloudSQLiteDSNAppliesConnectionPragmasOnEveryConnection(t *testing.T) {
 
 	ctx := context.Background()
 	conn1, err := db.Conn(ctx)
-	if err != nil {
-		t.Fatalf("open first sqlite conn: %v", err)
-	}
+	require.NoError(t, err)
 	defer func() { _ = conn1.Close() }()
 
 	conn2, err := db.Conn(ctx)
-	if err != nil {
-		t.Fatalf("open second sqlite conn: %v", err)
-	}
+	require.NoError(t, err)
 	defer func() { _ = conn2.Close() }()
 
 	assertCloudSQLiteConnectionPragmas(t, ctx, conn1)
@@ -540,16 +451,14 @@ func TestOpenCloudSQLiteInitializesPragmasAndRunsMigrations(t *testing.T) {
 
 	dbPath := filepath.Join(t.TempDir(), "cloud.db")
 	db, err := openCloudSQLite(context.Background(), dbPath)
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
+	require.NoError(t, err)
 	t.Cleanup(func() {
 		_ = db.Close()
 	})
 
-	if _, err := os.Stat(dbPath); err != nil {
-		t.Fatalf("stat db file: %v", err)
-	}
+	_, err = os.Stat(dbPath)
+
+	require.NoError(t, err)
 
 	assertCloudSQLitePragmas(t, context.Background(), db)
 
@@ -560,9 +469,7 @@ func TestOpenCloudSQLiteInitializesPragmasAndRunsMigrations(t *testing.T) {
 	).Scan(&gooseTableCount); err != nil {
 		t.Fatalf("query goose table: %v", err)
 	}
-	if gooseTableCount != 1 {
-		t.Fatalf("goose table count = %d, want %d", gooseTableCount, 1)
-	}
+	require.Equal(t, 1, gooseTableCount)
 }
 
 func TestOpenCloudSQLiteRunsMigrationsAfterPragmas(t *testing.T) {
@@ -577,9 +484,7 @@ func TestOpenCloudSQLiteRunsMigrationsAfterPragmas(t *testing.T) {
 	}
 
 	db, err := openCloudSQLite(context.Background(), filepath.Join(t.TempDir(), "cloud.db"))
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
+	require.NoError(t, err)
 	t.Cleanup(func() {
 		_ = db.Close()
 	})
@@ -589,9 +494,8 @@ func assertCloudSQLitePragmas(t *testing.T, ctx context.Context, db *sql.DB) {
 	t.Helper()
 
 	var journalMode string
-	if err := db.QueryRowContext(ctx, "PRAGMA journal_mode;").Scan(&journalMode); err != nil {
-		t.Fatalf("query journal_mode: %v", err)
-	}
+	err := db.QueryRowContext(ctx, "PRAGMA journal_mode;").Scan(&journalMode)
+	require.NoError(t, err)
 	if !strings.EqualFold(journalMode, "wal") {
 		t.Fatalf("journal_mode = %q, want %q", journalMode, "wal")
 	}
@@ -607,53 +511,38 @@ func assertCloudSQLiteConnectionPragmas(t *testing.T, ctx context.Context, query
 	t.Helper()
 
 	var synchronous int
-	if err := queryer.QueryRowContext(ctx, "PRAGMA synchronous;").Scan(&synchronous); err != nil {
-		t.Fatalf("query synchronous: %v", err)
-	}
-	if synchronous != 1 {
-		t.Fatalf("synchronous = %d, want %d", synchronous, 1)
-	}
+	err := queryer.QueryRowContext(ctx, "PRAGMA synchronous;").Scan(&synchronous)
+	require.NoError(t, err)
+	require.Equal(t, 1, synchronous)
 
 	var foreignKeys int
-	if err := queryer.QueryRowContext(ctx, "PRAGMA foreign_keys;").Scan(&foreignKeys); err != nil {
-		t.Fatalf("query foreign_keys: %v", err)
-	}
-	if foreignKeys != 1 {
-		t.Fatalf("foreign_keys = %d, want %d", foreignKeys, 1)
-	}
+	err = queryer.QueryRowContext(ctx, "PRAGMA foreign_keys;").Scan(&foreignKeys)
+	require.NoError(t, err)
+	require.Equal(t, 1, foreignKeys)
 
 	var busyTimeout int
-	if err := queryer.QueryRowContext(ctx, "PRAGMA busy_timeout;").Scan(&busyTimeout); err != nil {
-		t.Fatalf("query busy_timeout: %v", err)
-	}
-	if busyTimeout != 5000 {
-		t.Fatalf("busy_timeout = %d, want %d", busyTimeout, 5000)
-	}
+	err = queryer.QueryRowContext(ctx, "PRAGMA busy_timeout;").Scan(&busyTimeout)
+	require.NoError(t, err)
+	require.Equal(t, 5000, busyTimeout)
 }
 
 func TestOpenCloudSQLiteMigrationsAreIdempotentAcrossRestarts(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "cloud.db")
 
 	db1, err := openCloudSQLite(context.Background(), dbPath)
-	if err != nil {
-		t.Fatalf("first open sqlite: %v", err)
-	}
-	if err := db1.Close(); err != nil {
-		t.Fatalf("close first db: %v", err)
-	}
+	require.NoError(t, err)
+	err = db1.Close()
+	require.NoError(t, err)
 
 	db2, err := openCloudSQLite(context.Background(), dbPath)
-	if err != nil {
-		t.Fatalf("second open sqlite: %v", err)
-	}
+	require.NoError(t, err)
 	t.Cleanup(func() {
 		_ = db2.Close()
 	})
 
 	var version int64
-	if err := db2.QueryRowContext(context.Background(), "SELECT MAX(version_id) FROM goose_db_version;").Scan(&version); err != nil {
-		t.Fatalf("query goose version: %v", err)
-	}
+	err = db2.QueryRowContext(context.Background(), "SELECT MAX(version_id) FROM goose_db_version;").Scan(&version)
+	require.NoError(t, err)
 	if version < 1 {
 		t.Fatalf("goose version = %d, want >= 1", version)
 	}
@@ -662,26 +551,22 @@ func TestOpenCloudSQLiteMigrationsAreIdempotentAcrossRestarts(t *testing.T) {
 func TestRunCloudSQLiteMigrationsRetriesAfterFailedAttempt(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "cloud.db")
 	db, err := openCloudSQLite(context.Background(), dbPath)
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
+	require.NoError(t, err)
 	t.Cleanup(func() {
 		_ = db.Close()
 	})
 
 	badMigrations := fstest.MapFS{
-		"migrations/00003_create_retry_table.sql": &fstest.MapFile{
+		"migrations/00004_create_retry_table.sql": &fstest.MapFile{
 			Data: []byte("-- +goose Up\nCREATE TABLE retry_table (id INTEGER PRIMARY KEY);\n\n-- +goose Down\nDROP TABLE retry_table;\n"),
 		},
-		"migrations/00004_fail.sql": &fstest.MapFile{
+		"migrations/00005_fail.sql": &fstest.MapFile{
 			Data: []byte("-- +goose Up\nTHIS IS NOT VALID SQL;\n\n-- +goose Down\nSELECT 1;\n"),
 		},
 	}
 
 	err = runCloudSQLiteMigrationsFS(context.Background(), db, badMigrations, "migrations")
-	if err == nil {
-		t.Fatal("runCloudSQLiteMigrationsFS unexpectedly succeeded with failing migration")
-	}
+	require.NotNil(t, err)
 
 	var retryTableCount int
 	if err := db.QueryRowContext(
@@ -690,22 +575,20 @@ func TestRunCloudSQLiteMigrationsRetriesAfterFailedAttempt(t *testing.T) {
 	).Scan(&retryTableCount); err != nil {
 		t.Fatalf("query retry table after failed run: %v", err)
 	}
-	if retryTableCount != 1 {
-		t.Fatalf("retry table count after failed run = %d, want 1", retryTableCount)
-	}
+	require.Equal(t, 1, retryTableCount)
 
 	fixedMigrations := fstest.MapFS{
-		"migrations/00003_create_retry_table.sql": &fstest.MapFile{
+		"migrations/00004_create_retry_table.sql": &fstest.MapFile{
 			Data: []byte("-- +goose Up\nCREATE TABLE retry_table (id INTEGER PRIMARY KEY);\n\n-- +goose Down\nDROP TABLE retry_table;\n"),
 		},
-		"migrations/00004_create_retry_index.sql": &fstest.MapFile{
+		"migrations/00005_create_retry_index.sql": &fstest.MapFile{
 			Data: []byte("-- +goose Up\nCREATE INDEX retry_table_id_idx ON retry_table (id);\n\n-- +goose Down\nDROP INDEX retry_table_id_idx;\n"),
 		},
 	}
 
-	if err := runCloudSQLiteMigrationsFS(context.Background(), db, fixedMigrations, "migrations"); err != nil {
-		t.Fatalf("runCloudSQLiteMigrationsFS retry: %v", err)
-	}
+	err = runCloudSQLiteMigrationsFS(context.Background(), db, fixedMigrations, "migrations")
+
+	require.NoError(t, err)
 
 	var retryIndexCount int
 	if err := db.QueryRowContext(
@@ -714,17 +597,12 @@ func TestRunCloudSQLiteMigrationsRetriesAfterFailedAttempt(t *testing.T) {
 	).Scan(&retryIndexCount); err != nil {
 		t.Fatalf("query retry index after retry: %v", err)
 	}
-	if retryIndexCount != 1 {
-		t.Fatalf("retry index count after retry = %d, want 1", retryIndexCount)
-	}
+	require.Equal(t, 1, retryIndexCount)
 
 	var latestVersion int64
-	if err := db.QueryRowContext(context.Background(), "SELECT MAX(version_id) FROM goose_db_version;").Scan(&latestVersion); err != nil {
-		t.Fatalf("query goose version after retry: %v", err)
-	}
-	if latestVersion != 4 {
-		t.Fatalf("goose version after retry = %d, want 4", latestVersion)
-	}
+	err = db.QueryRowContext(context.Background(), "SELECT MAX(version_id) FROM goose_db_version;").Scan(&latestVersion)
+	require.NoError(t, err)
+	require.Equal(t, int64(5), latestVersion)
 }
 
 func TestRunCloudServerInitializesSQLiteAndShutsDownOnCancellation(t *testing.T) {
@@ -757,7 +635,7 @@ func TestRunCloudServerInitializesSQLiteAndShutsDownOnCancellation(t *testing.T)
 		openPath <- gotPath
 		return &testSQLiteHandle{closed: closed}, nil
 	}
-	cloudNewProxyService = func() *proxyService {
+	cloudNewProxyService = func() http.Handler {
 		return &proxyService{
 			client: &http.Client{
 				Transport: &proxyRoundTripper{
@@ -799,9 +677,7 @@ func TestRunCloudServerInitializesSQLiteAndShutsDownOnCancellation(t *testing.T)
 
 	select {
 	case gotPath := <-openPath:
-		if gotPath != dbPath {
-			t.Fatalf("db path = %q, want %q", gotPath, dbPath)
-		}
+		require.Equal(t, dbPath, gotPath)
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for sqlite open")
 	}
@@ -822,37 +698,25 @@ func TestRunCloudServerInitializesSQLiteAndShutsDownOnCancellation(t *testing.T)
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodGet, "/unknown", nil)
 	server.Handler.ServeHTTP(rr, req)
-	if rr.Code != http.StatusNotFound {
-		t.Fatalf("unknown status = %d, want %d", rr.Code, http.StatusNotFound)
-	}
+	require.Equal(t, http.StatusNotFound, rr.Code)
 
 	rr = httptest.NewRecorder()
 	req = newProxyJSONRequest(t, http.MethodGet, "https://feeds.example.com/feed.xml", nil)
 	server.Handler.ServeHTTP(rr, req)
-	if rr.Code != http.StatusOK {
-		t.Fatalf("proxy status = %d, want %d", rr.Code, http.StatusOK)
-	}
-	if rr.Body.String() != "<rss>ok</rss>" {
-		t.Fatalf("proxy body = %q, want %q", rr.Body.String(), "<rss>ok</rss>")
-	}
+	require.Equal(t, http.StatusOK, rr.Code)
+	require.Equal(t, "<rss>ok</rss>", rr.Body.String())
 
 	rr = httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodGet, "/healthz", nil)
 	server.Handler.ServeHTTP(rr, req)
-	if rr.Code != http.StatusOK {
-		t.Fatalf("health status = %d, want %d", rr.Code, http.StatusOK)
-	}
-	if rr.Body.String() != "ok" {
-		t.Fatalf("health body = %q, want %q", rr.Body.String(), "ok")
-	}
+	require.Equal(t, http.StatusOK, rr.Code)
+	require.Equal(t, "ok", rr.Body.String())
 
 	cancel()
 
 	select {
 	case err := <-done:
-		if err != nil {
-			t.Fatalf("runCloudServer returned error: %v", err)
-		}
+		require.NoError(t, err)
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for server shutdown")
 	}
@@ -867,6 +731,108 @@ func TestRunCloudServerInitializesSQLiteAndShutsDownOnCancellation(t *testing.T)
 	case <-closed:
 	case <-time.After(time.Second):
 		t.Fatal("timed out waiting for sqlite close")
+	}
+}
+
+func TestRunCloudServerInjectsPIEpisodeCacheStoreFromStartupDB(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "cloud.db")
+	t.Setenv(cloudDBEnv, dbPath)
+
+	origOpen := cloudOpenSQLite
+	origClose := cloudCloseSQLite
+	origNewDiscovery := cloudNewDiscoveryService
+	origListen := cloudListenAndServe
+	origShutdown := cloudShutdownServer
+	t.Cleanup(func() {
+		cloudOpenSQLite = origOpen
+		cloudCloseSQLite = origClose
+		cloudNewDiscoveryService = origNewDiscovery
+		cloudListenAndServe = origListen
+		cloudShutdownServer = origShutdown
+	})
+
+	openCount := 0
+	var openedDB *sql.DB
+	receivedStore := make(chan *podcastindex.PIEpisodeCacheStore, 1)
+	listenStarted := make(chan struct{})
+	shutdownCalled := make(chan struct{})
+
+	cloudOpenSQLite = func(ctx context.Context, gotPath string) (sqliteCloser, error) {
+		openCount++
+		db, err := openCloudSQLite(ctx, gotPath)
+		if err != nil {
+			return nil, err
+		}
+		openedDB = db
+		return db, nil
+	}
+	cloudCloseSQLite = func(db sqliteCloser) error {
+		return db.Close()
+	}
+	cloudNewDiscoveryService = func(store *podcastindex.PIEpisodeCacheStore) http.Handler {
+		receivedStore <- store
+		return discovery.NewDiscoveryService(store)
+	}
+	cloudListenAndServe = func(ctx context.Context, _ *http.Server) error {
+		close(listenStarted)
+		<-ctx.Done()
+		return http.ErrServerClosed
+	}
+	cloudShutdownServer = func(_ context.Context, _ *http.Server) error {
+		close(shutdownCalled)
+		return nil
+	}
+
+	parent, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		done <- runCloudServer(parent)
+	}()
+
+	var store *podcastindex.PIEpisodeCacheStore
+	select {
+	case store = <-receivedStore:
+	case <-time.After(time.Second):
+		cancel()
+		t.Fatal("timed out waiting for discovery service construction")
+	}
+	if store == nil {
+		cancel()
+		t.Fatal("PI episode cache store = nil, want injected store")
+	}
+	if openedDB == nil {
+		cancel()
+		t.Fatal("opened DB = nil, want startup-owned DB")
+	}
+	if store.DB() != openedDB {
+		cancel()
+		t.Fatal("PI episode cache store did not reuse startup-owned DB handle")
+	}
+	if openCount != 1 {
+		cancel()
+		t.Fatalf("sqlite open count = %d, want 1", openCount)
+	}
+
+	select {
+	case <-listenStarted:
+	case <-time.After(time.Second):
+		cancel()
+		t.Fatal("timed out waiting for server start")
+	}
+
+	cancel()
+
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for server shutdown")
+	}
+
+	select {
+	case <-shutdownCalled:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for shutdown")
 	}
 }
 
@@ -896,9 +862,7 @@ func TestRunCloudServerReturnsMigrationErrorBeforeListen(t *testing.T) {
 	if !errors.Is(err, migrationErr) {
 		t.Fatalf("runCloudServer error = %v, want %v", err, migrationErr)
 	}
-	if listenCalled {
-		t.Fatal("listen should not run when migrations fail")
-	}
+	require.False(t, listenCalled)
 }
 
 func TestRunCloudServerRequiresExplicitDBPath(t *testing.T) {
@@ -906,12 +870,8 @@ func TestRunCloudServerRequiresExplicitDBPath(t *testing.T) {
 	t.Setenv(cloudDBEnv, "")
 
 	err := runCloudServer(context.Background())
-	if err == nil {
-		t.Fatal("runCloudServer unexpectedly succeeded without READIO_CLOUD_DB_PATH")
-	}
-	if !strings.Contains(err.Error(), cloudDBEnv) {
-		t.Fatalf("runCloudServer error = %v, want mention of %s", err, cloudDBEnv)
-	}
+	require.NotNil(t, err)
+	require.Contains(t, err.Error(), cloudDBEnv)
 }
 
 func TestRunCloudServerRejectsRelativeDBPath(t *testing.T) {
@@ -919,12 +879,8 @@ func TestRunCloudServerRejectsRelativeDBPath(t *testing.T) {
 	t.Setenv(cloudDBEnv, filepath.Join("state", "cloud.db"))
 
 	err := runCloudServer(context.Background())
-	if err == nil {
-		t.Fatal("runCloudServer unexpectedly succeeded with relative READIO_CLOUD_DB_PATH")
-	}
-	if !strings.Contains(err.Error(), "absolute path") {
-		t.Fatalf("runCloudServer error = %v, want mention of absolute path", err)
-	}
+	require.NotNil(t, err)
+	require.Contains(t, err.Error(), "absolute path")
 }
 
 func TestRunCloudServerReturnsListenErrorWithoutBlocking(t *testing.T) {
@@ -953,7 +909,7 @@ func TestRunCloudServerReturnsListenErrorWithoutBlocking(t *testing.T) {
 	cloudOpenSQLite = func(_ context.Context, _ string) (sqliteCloser, error) {
 		return &testSQLiteHandle{closed: closed}, nil
 	}
-	cloudNewProxyService = func() *proxyService {
+	cloudNewProxyService = func() http.Handler {
 		return newProxyService()
 	}
 	cloudListenAndServe = func(_ context.Context, _ *http.Server) error {
@@ -978,9 +934,7 @@ func TestRunCloudServerReturnsListenErrorWithoutBlocking(t *testing.T) {
 		t.Fatal("timed out waiting for listen failure")
 	}
 
-	if shutdownCalled {
-		t.Fatal("shutdown should not run after immediate listen failure")
-	}
+	require.False(t, shutdownCalled)
 
 	select {
 	case <-closed:
@@ -995,32 +949,23 @@ func TestRateLimiterSweepsExpiredBuckets(t *testing.T) {
 		return now
 	})
 
-	if !limiter.allow("198.51.100.1") {
-		t.Fatal("expected first request to pass")
-	}
+	require.True(t, limiter.Allow("198.51.100.1"))
 
 	now = now.Add(2 * time.Minute)
 
-	if !limiter.allow("198.51.100.2") {
-		t.Fatal("expected second key request to pass")
-	}
+	require.True(t, limiter.Allow("198.51.100.2"))
 
-	if _, ok := limiter.hits["198.51.100.1"]; ok {
+	if limiter.HasKey("198.51.100.1") {
 		t.Fatal("expired key should have been swept")
 	}
-	if _, ok := limiter.hits["198.51.100.2"]; !ok {
-		t.Fatal("active key should remain present")
-	}
+	require.True(t, limiter.HasKey("198.51.100.2"))
 }
 func TestProxyGetRangeForwarding(t *testing.T) {
 	t.Run("POST proxy GET payload with Range header forwards Range to upstream", func(t *testing.T) {
 		proxy, dialedAddress := newMediaProxyTestService(t, func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodGet {
-				t.Fatalf("method = %q, want %q", r.Method, http.MethodGet)
-			}
-			if got := r.Header.Get("Range"); got != "bytes=0-1023" {
-				t.Fatalf("range = %q, want %q", got, "bytes=0-1023")
-			}
+			require.Equal(t, http.MethodGet, r.Method)
+			got := r.Header.Get("Range")
+			require.Equal(t, "bytes=0-1023", got)
 
 			w.Header().Set("Content-Type", "audio/mpeg")
 			w.Header().Set("Content-Range", "bytes 0-1023/2048")
@@ -1036,22 +981,15 @@ func TestProxyGetRangeForwarding(t *testing.T) {
 		req.RemoteAddr = "198.51.100.10:12345"
 		proxy.ServeHTTP(rr, req)
 
-		if rr.Code != http.StatusPartialContent {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusPartialContent)
-		}
-		if *dialedAddress != "203.0.113.10:80" {
-			t.Fatalf("dialed address = %q, want %q", *dialedAddress, "203.0.113.10:80")
-		}
-		if rr.Header().Get("Content-Range") != "bytes 0-1023/2048" {
-			t.Fatalf("content-range = %q, want %q", rr.Header().Get("Content-Range"), "bytes 0-1023/2048")
-		}
+		require.Equal(t, http.StatusPartialContent, rr.Code)
+		require.Equal(t, "203.0.113.10:80", *dialedAddress)
+		require.Equal(t, "bytes 0-1023/2048", rr.Header().Get("Content-Range"))
 	})
 
 	t.Run("POST proxy GET payload with If-Range header forwards If-Range to upstream", func(t *testing.T) {
 		proxy, _ := newMediaProxyTestService(t, func(w http.ResponseWriter, r *http.Request) {
-			if got := r.Header.Get("If-Range"); got != `"etag123"` {
-				t.Fatalf("if-range = %q, want %q", got, `"etag123"`)
-			}
+			got := r.Header.Get("If-Range")
+			require.Equal(t, `"etag123"`, got)
 
 			w.Header().Set("Content-Type", "audio/mpeg")
 			w.WriteHeader(http.StatusOK)
@@ -1064,19 +1002,15 @@ func TestProxyGetRangeForwarding(t *testing.T) {
 		req.RemoteAddr = "198.51.100.10:12345"
 		proxy.ServeHTTP(rr, req)
 
-		if rr.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
-		}
+		require.Equal(t, http.StatusOK, rr.Code)
 	})
 
 	t.Run("POST proxy GET payload with both Range and If-Range forwards both to upstream", func(t *testing.T) {
 		proxy, _ := newMediaProxyTestService(t, func(w http.ResponseWriter, r *http.Request) {
-			if got := r.Header.Get("Range"); got != "bytes=500-1000" {
-				t.Fatalf("range = %q, want %q", got, "bytes=500-1000")
-			}
-			if got := r.Header.Get("If-Range"); got != `"my-etag"` {
-				t.Fatalf("if-range = %q, want %q", got, `"my-etag"`)
-			}
+			gotRange := r.Header.Get("Range")
+			require.Equal(t, "bytes=500-1000", gotRange)
+			gotIfRange := r.Header.Get("If-Range")
+			require.Equal(t, `"my-etag"`, gotIfRange)
 
 			w.Header().Set("Content-Type", "audio/mpeg")
 			w.Header().Set("Content-Range", "bytes 500-1000/2048")
@@ -1091,9 +1025,7 @@ func TestProxyGetRangeForwarding(t *testing.T) {
 		req.RemoteAddr = "198.51.100.10:12345"
 		proxy.ServeHTTP(rr, req)
 
-		if rr.Code != http.StatusPartialContent {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusPartialContent)
-		}
+		require.Equal(t, http.StatusPartialContent, rr.Code)
 	})
 
 	t.Run("POST proxy GET payload with malformed Range returns 400", func(t *testing.T) {
@@ -1108,19 +1040,14 @@ func TestProxyGetRangeForwarding(t *testing.T) {
 		req.RemoteAddr = "198.51.100.10:12345"
 		proxy.ServeHTTP(rr, req)
 
-		if rr.Code != http.StatusBadRequest {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusBadRequest)
-		}
+		require.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
 	t.Run("POST proxy GET payload without Range header streams full response", func(t *testing.T) {
 		proxy, dialedAddress := newMediaProxyTestService(t, func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodGet {
-				t.Fatalf("method = %q, want %q", r.Method, http.MethodGet)
-			}
-			if got := r.Header.Get("Range"); got != "" {
-				t.Fatalf("range = %q, want empty", got)
-			}
+			require.Equal(t, http.MethodGet, r.Method)
+			got := r.Header.Get("Range")
+			require.Equal(t, "", got)
 
 			w.Header().Set("Content-Type", "audio/mpeg")
 			w.WriteHeader(http.StatusOK)
@@ -1132,33 +1059,22 @@ func TestProxyGetRangeForwarding(t *testing.T) {
 		req.RemoteAddr = "198.51.100.10:12345"
 		proxy.ServeHTTP(rr, req)
 
-		if rr.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
-		}
-		if *dialedAddress != "203.0.113.10:80" {
-			t.Fatalf("dialed address = %q, want %q", *dialedAddress, "203.0.113.10:80")
-		}
-		if rr.Body.String() != "full content" {
-			t.Fatalf("body = %q, want %q", rr.Body.String(), "full content")
-		}
+		require.Equal(t, http.StatusOK, rr.Code)
+		require.Equal(t, "203.0.113.10:80", *dialedAddress)
+		require.Equal(t, "full content", rr.Body.String())
 	})
 }
 
 func TestProxyDirectGetRouteForAudioFallback(t *testing.T) {
 	t.Run("GET query request forwards allowlisted media headers to upstream", func(t *testing.T) {
 		proxy, _ := newMediaProxyTestService(t, func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodGet {
-				t.Fatalf("method = %q, want %q", r.Method, http.MethodGet)
-			}
-			if got := r.Header.Get("Range"); got != "bytes=0-1023" {
-				t.Fatalf("range = %q, want %q", got, "bytes=0-1023")
-			}
-			if got := r.Header.Get("If-Range"); got != `"etag123"` {
-				t.Fatalf("if-range = %q, want %q", got, `"etag123"`)
-			}
-			if got := r.Header.Get("Authorization"); got != "" {
-				t.Fatalf("authorization = %q, want empty", got)
-			}
+			require.Equal(t, http.MethodGet, r.Method)
+			gotRange := r.Header.Get("Range")
+			require.Equal(t, "bytes=0-1023", gotRange)
+			gotIfRange := r.Header.Get("If-Range")
+			require.Equal(t, `"etag123"`, gotIfRange)
+			gotAuthorization := r.Header.Get("Authorization")
+			require.Equal(t, "", gotAuthorization)
 
 			w.Header().Set("Content-Type", "audio/mpeg")
 			w.Header().Set("Content-Range", "bytes 0-1023/2048")
@@ -1173,19 +1089,13 @@ func TestProxyDirectGetRouteForAudioFallback(t *testing.T) {
 			"If-Range":      []string{`"etag123"`},
 			"Authorization": []string{"Bearer should-not-forward"},
 		})
-		req.Header.Set("Referer", testProxyAllowedOrigin+"/player")
+		req.Header.Set("Origin", testProxyAllowedOrigin)
 		req.RemoteAddr = "198.51.100.10:12345"
 		proxy.ServeHTTP(rr, req)
 
-		if rr.Code != http.StatusPartialContent {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusPartialContent)
-		}
-		if rr.Header().Get("Content-Range") != "bytes 0-1023/2048" {
-			t.Fatalf("content-range = %q, want %q", rr.Header().Get("Content-Range"), "bytes 0-1023/2048")
-		}
-		if rr.Header().Get("Accept-Ranges") != "bytes" {
-			t.Fatalf("accept-ranges = %q, want %q", rr.Header().Get("Accept-Ranges"), "bytes")
-		}
+		require.Equal(t, http.StatusPartialContent, rr.Code)
+		require.Equal(t, "bytes 0-1023/2048", rr.Header().Get("Content-Range"))
+		require.Equal(t, "bytes", rr.Header().Get("Accept-Ranges"))
 	})
 
 	t.Run("GET query request rejects missing url and malformed range before upstream", func(t *testing.T) {
@@ -1200,12 +1110,8 @@ func TestProxyDirectGetRouteForAudioFallback(t *testing.T) {
 		req.RemoteAddr = "198.51.100.10:12345"
 		proxy.ServeHTTP(rr, req)
 
-		if rr.Code != http.StatusBadRequest {
-			t.Fatalf("missing url status = %d, want %d", rr.Code, http.StatusBadRequest)
-		}
-		if upstreamCalled {
-			t.Fatal("upstream called for missing url")
-		}
+		require.Equal(t, http.StatusBadRequest, rr.Code)
+		require.False(t, upstreamCalled)
 
 		rr = httptest.NewRecorder()
 		req = newProxyQueryRequest(t, "http://feeds.example.com/audio.mp3", http.Header{
@@ -1215,12 +1121,8 @@ func TestProxyDirectGetRouteForAudioFallback(t *testing.T) {
 		req.RemoteAddr = "198.51.100.10:12345"
 		proxy.ServeHTTP(rr, req)
 
-		if rr.Code != http.StatusBadRequest {
-			t.Fatalf("invalid range status = %d, want %d", rr.Code, http.StatusBadRequest)
-		}
-		if upstreamCalled {
-			t.Fatal("upstream called for invalid range")
-		}
+		require.Equal(t, http.StatusBadRequest, rr.Code)
+		require.False(t, upstreamCalled)
 
 		rr = httptest.NewRecorder()
 		req = newProxyQueryRequest(t, "http://feeds.example.com/audio.mp3", http.Header{
@@ -1230,12 +1132,8 @@ func TestProxyDirectGetRouteForAudioFallback(t *testing.T) {
 		req.RemoteAddr = "198.51.100.10:12345"
 		proxy.ServeHTTP(rr, req)
 
-		if rr.Code != http.StatusBadRequest {
-			t.Fatalf("duplicate range status = %d, want %d", rr.Code, http.StatusBadRequest)
-		}
-		if upstreamCalled {
-			t.Fatal("upstream called for duplicate range")
-		}
+		require.Equal(t, http.StatusBadRequest, rr.Code)
+		require.False(t, upstreamCalled)
 	})
 
 	t.Run("GET query request rejects duplicate Range headers before upstream", func(t *testing.T) {
@@ -1252,12 +1150,8 @@ func TestProxyDirectGetRouteForAudioFallback(t *testing.T) {
 		req.Header.Set("Referer", "http://"+req.Host+"/player")
 		proxy.ServeHTTP(rr, req)
 
-		if rr.Code != http.StatusBadRequest {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusBadRequest)
-		}
-		if upstreamCalled {
-			t.Fatal("upstream called for duplicate range")
-		}
+		require.Equal(t, http.StatusBadRequest, rr.Code)
+		require.False(t, upstreamCalled)
 	})
 
 	t.Run("GET query request rejects originless public relay usage without same-origin referer", func(t *testing.T) {
@@ -1271,12 +1165,8 @@ func TestProxyDirectGetRouteForAudioFallback(t *testing.T) {
 		req.RemoteAddr = "198.51.100.10:12345"
 		proxy.ServeHTTP(rr, req)
 
-		if rr.Code != http.StatusForbidden {
-			t.Fatalf("missing referer status = %d, want %d", rr.Code, http.StatusForbidden)
-		}
-		if upstreamCalled {
-			t.Fatal("upstream called for originless public relay request")
-		}
+		require.Equal(t, http.StatusForbidden, rr.Code)
+		require.False(t, upstreamCalled)
 
 		rr = httptest.NewRecorder()
 		req = newProxyQueryRequest(t, "http://feeds.example.com/audio.mp3", nil)
@@ -1284,18 +1174,16 @@ func TestProxyDirectGetRouteForAudioFallback(t *testing.T) {
 		req.Header.Set("Referer", "https://attacker.example/player")
 		proxy.ServeHTTP(rr, req)
 
-		if rr.Code != http.StatusForbidden {
-			t.Fatalf("cross-origin referer status = %d, want %d", rr.Code, http.StatusForbidden)
-		}
-		if upstreamCalled {
-			t.Fatal("upstream called for cross-origin referer")
-		}
+		require.Equal(t, http.StatusForbidden, rr.Code)
+		require.False(t, upstreamCalled)
 	})
 
-	t.Run("GET query request does not trust bare host for same-origin fallback", func(t *testing.T) {
+	t.Run("GET query request rejects originless same-origin referer fallback", func(t *testing.T) {
 		upstreamCalled := false
-		proxy, _ := newMediaProxyTestService(t, func(_ http.ResponseWriter, _ *http.Request) {
+		proxy, _ := newMediaProxyTestService(t, func(w http.ResponseWriter, _ *http.Request) {
 			upstreamCalled = true
+			w.Header().Set("Content-Type", "audio/mpeg")
+			w.WriteHeader(http.StatusOK)
 		}, testPublicLookupIP)
 		proxy.allowedOrigins = nil
 
@@ -1305,19 +1193,14 @@ func TestProxyDirectGetRouteForAudioFallback(t *testing.T) {
 		req.Header.Set("Referer", "http://"+req.Host+"/player")
 		proxy.ServeHTTP(rr, req)
 
-		if rr.Code != http.StatusForbidden {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusForbidden)
-		}
-		if upstreamCalled {
-			t.Fatal("upstream called for bare-host same-origin fallback")
-		}
+		require.Equal(t, http.StatusForbidden, rr.Code)
+		require.False(t, upstreamCalled)
 	})
 
-	t.Run("GET query request allows same-origin referer for audio fallback", func(t *testing.T) {
+	t.Run("GET query request allows configured origin for audio fallback", func(t *testing.T) {
 		proxy, _ := newMediaProxyTestService(t, func(w http.ResponseWriter, r *http.Request) {
-			if got := r.Header.Get("Range"); got != "bytes=0-10" {
-				t.Fatalf("range = %q, want %q", got, "bytes=0-10")
-			}
+			got := r.Header.Get("Range")
+			require.Equal(t, "bytes=0-10", got)
 			w.Header().Set("Content-Type", "audio/mpeg")
 			w.WriteHeader(http.StatusPartialContent)
 		}, testPublicLookupIP)
@@ -1327,12 +1210,10 @@ func TestProxyDirectGetRouteForAudioFallback(t *testing.T) {
 			"Range": []string{"bytes=0-10"},
 		})
 		req.RemoteAddr = "198.51.100.10:12345"
-		req.Header.Set("Referer", testProxyAllowedOrigin+"/player")
+		req.Header.Set("Origin", testProxyAllowedOrigin)
 		proxy.ServeHTTP(rr, req)
 
-		if rr.Code != http.StatusPartialContent {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusPartialContent)
-		}
+		require.Equal(t, http.StatusPartialContent, rr.Code)
 	})
 
 	t.Run("unsupported top-level method advertises GET and POST", func(t *testing.T) {
@@ -1341,18 +1222,12 @@ func TestProxyDirectGetRouteForAudioFallback(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPut, "/api/proxy", nil)
 		proxy.ServeHTTP(rr, req)
 
-		if rr.Code != http.StatusMethodNotAllowed {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusMethodNotAllowed)
-		}
-		if rr.Header().Get("Allow") != "GET, POST" {
-			t.Fatalf("allow = %q, want %q", rr.Header().Get("Allow"), "GET, POST")
-		}
+		require.Equal(t, http.StatusMethodNotAllowed, rr.Code)
+		require.Equal(t, "GET, POST", rr.Header().Get("Allow"))
 
 		var payload map[string]string
 		decodeResponseJSON(t, rr.Body, &payload)
-		if payload["message"] != "only GET and POST are allowed" {
-			t.Fatalf("message = %q, want %q", payload["message"], "only GET and POST are allowed")
-		}
+		require.Equal(t, "only GET and POST are allowed", payload["message"])
 	})
 }
 
@@ -1369,27 +1244,19 @@ func TestProxyParseErrorsKeepAllowedOriginCORS(t *testing.T) {
 	req.RemoteAddr = "198.51.100.10:12345"
 	proxy.ServeHTTP(rr, req)
 
-	if rr.Code != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d", rr.Code, http.StatusBadRequest)
-	}
-	if got := rr.Header().Get("Access-Control-Allow-Origin"); got != testProxyAllowedOrigin {
-		t.Fatalf("allow-origin = %q, want %q", got, testProxyAllowedOrigin)
-	}
+	require.Equal(t, http.StatusBadRequest, rr.Code)
+	got := rr.Header().Get("Access-Control-Allow-Origin")
+	require.Equal(t, testProxyAllowedOrigin, got)
 	assertProxyErrorPayload(t, rr.Body, "PROXY_UNSUPPORTED_HEADER")
-	if upstreamCalled {
-		t.Fatal("upstream called for invalid proxy headers")
-	}
+	require.False(t, upstreamCalled)
 }
 
 func TestProxyServiceMediaFallbackContract(t *testing.T) {
 	t.Run("post head request preserves sizing headers and omits body", func(t *testing.T) {
 		proxy, dialedAddress := newMediaProxyTestService(t, func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodHead {
-				t.Fatalf("method = %q, want %q", r.Method, http.MethodHead)
-			}
-			if got := r.Header.Get("User-Agent"); got != proxyBrowserLikeUserAgent {
-				t.Fatalf("user-agent = %q, want %q", got, proxyBrowserLikeUserAgent)
-			}
+			require.Equal(t, http.MethodHead, r.Method)
+			got := r.Header.Get("User-Agent")
+			require.Equal(t, proxyBrowserLikeUserAgent, got)
 
 			w.Header().Set("Content-Type", "audio/mpeg")
 			w.Header().Set("Content-Length", "12345")
@@ -1405,37 +1272,20 @@ func TestProxyServiceMediaFallbackContract(t *testing.T) {
 		req.RemoteAddr = "198.51.100.10:12345"
 		proxy.ServeHTTP(rr, req)
 
-		if rr.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
-		}
-		if *dialedAddress != "203.0.113.10:80" {
-			t.Fatalf("dialed address = %q, want %q", *dialedAddress, "203.0.113.10:80")
-		}
-		if rr.Body.Len() != 0 {
-			t.Fatalf("body length = %d, want %d", rr.Body.Len(), 0)
-		}
-		if rr.Header().Get("Content-Length") != "12345" {
-			t.Fatalf("content-length = %q, want %q", rr.Header().Get("Content-Length"), "12345")
-		}
-		if rr.Header().Get("Accept-Ranges") != "bytes" {
-			t.Fatalf("accept-ranges = %q, want %q", rr.Header().Get("Accept-Ranges"), "bytes")
-		}
-		if rr.Header().Get("ETag") != `"head-etag"` {
-			t.Fatalf("etag = %q, want %q", rr.Header().Get("ETag"), `"head-etag"`)
-		}
-		if rr.Header().Get("X-Blocked") != "" {
-			t.Fatalf("unexpected disallowed header passthrough: %q", rr.Header().Get("X-Blocked"))
-		}
+		require.Equal(t, http.StatusOK, rr.Code)
+		require.Equal(t, "203.0.113.10:80", *dialedAddress)
+		require.Equal(t, 0, rr.Body.Len())
+		require.Equal(t, "12345", rr.Header().Get("Content-Length"))
+		require.Equal(t, "bytes", rr.Header().Get("Accept-Ranges"))
+		require.Equal(t, `"head-etag"`, rr.Header().Get("ETag"))
+		require.Equal(t, "", rr.Header().Get("X-Blocked"))
 	})
 
 	t.Run("range get returns 206 and passes through media headers", func(t *testing.T) {
 		proxy, dialedAddress := newMediaProxyTestService(t, func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodGet {
-				t.Fatalf("method = %q, want %q", r.Method, http.MethodGet)
-			}
-			if got := r.Header.Get("Range"); got != "bytes=0-4" {
-				t.Fatalf("range = %q, want %q", got, "bytes=0-4")
-			}
+			require.Equal(t, http.MethodGet, r.Method)
+			got := r.Header.Get("Range")
+			require.Equal(t, "bytes=0-4", got)
 
 			w.Header().Set("Content-Type", "audio/mpeg")
 			w.Header().Set("Content-Length", "5")
@@ -1456,34 +1306,18 @@ func TestProxyServiceMediaFallbackContract(t *testing.T) {
 		req.RemoteAddr = "198.51.100.10:12345"
 		proxy.ServeHTTP(rr, req)
 
-		if rr.Code != http.StatusPartialContent {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusPartialContent)
-		}
-		if *dialedAddress != "203.0.113.10:80" {
-			t.Fatalf("dialed address = %q, want %q", *dialedAddress, "203.0.113.10:80")
-		}
-		if rr.Body.String() != "hello" {
-			t.Fatalf("body = %q, want %q", rr.Body.String(), "hello")
-		}
-		if rr.Header().Get("Content-Range") != "bytes 0-4/10" {
-			t.Fatalf("content-range = %q, want %q", rr.Header().Get("Content-Range"), "bytes 0-4/10")
-		}
-		if rr.Header().Get("Accept-Ranges") != "bytes" {
-			t.Fatalf("accept-ranges = %q, want %q", rr.Header().Get("Accept-Ranges"), "bytes")
-		}
-		if rr.Header().Get("Content-Length") != "" {
-			t.Fatalf("content-length = %q, want empty for streamed GET proxy response", rr.Header().Get("Content-Length"))
-		}
-		if rr.Header().Get("X-Blocked") != "" {
-			t.Fatalf("unexpected disallowed header passthrough: %q", rr.Header().Get("X-Blocked"))
-		}
+		require.Equal(t, http.StatusPartialContent, rr.Code)
+		require.Equal(t, "203.0.113.10:80", *dialedAddress)
+		require.Equal(t, "hello", rr.Body.String())
+		require.Equal(t, "bytes 0-4/10", rr.Header().Get("Content-Range"))
+		require.Equal(t, "bytes", rr.Header().Get("Accept-Ranges"))
+		require.Equal(t, "", rr.Header().Get("Content-Length"))
+		require.Equal(t, "", rr.Header().Get("X-Blocked"))
 	})
 
 	t.Run("full get omits content-length to avoid downstream length mismatches", func(t *testing.T) {
 		proxy, dialedAddress := newMediaProxyTestService(t, func(w http.ResponseWriter, r *http.Request) {
-			if r.Method != http.MethodGet {
-				t.Fatalf("method = %q, want %q", r.Method, http.MethodGet)
-			}
+			require.Equal(t, http.MethodGet, r.Method)
 
 			w.Header().Set("Content-Type", "audio/mpeg")
 			w.Header().Set("Content-Length", "56719585")
@@ -1497,28 +1331,17 @@ func TestProxyServiceMediaFallbackContract(t *testing.T) {
 		req.RemoteAddr = "198.51.100.10:12345"
 		proxy.ServeHTTP(rr, req)
 
-		if rr.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
-		}
-		if *dialedAddress != "203.0.113.10:80" {
-			t.Fatalf("dialed address = %q, want %q", *dialedAddress, "203.0.113.10:80")
-		}
-		if rr.Body.String() != "audio-bytes" {
-			t.Fatalf("body = %q, want %q", rr.Body.String(), "audio-bytes")
-		}
-		if rr.Header().Get("Content-Length") != "" {
-			t.Fatalf("content-length = %q, want empty for streamed GET proxy response", rr.Header().Get("Content-Length"))
-		}
-		if rr.Header().Get("Accept-Ranges") != "bytes" {
-			t.Fatalf("accept-ranges = %q, want %q", rr.Header().Get("Accept-Ranges"), "bytes")
-		}
+		require.Equal(t, http.StatusOK, rr.Code)
+		require.Equal(t, "203.0.113.10:80", *dialedAddress)
+		require.Equal(t, "audio-bytes", rr.Body.String())
+		require.Equal(t, "", rr.Header().Get("Content-Length"))
+		require.Equal(t, "bytes", rr.Header().Get("Accept-Ranges"))
 	})
 
 	t.Run("range 416 passes through without collapsing", func(t *testing.T) {
 		proxy, _ := newMediaProxyTestService(t, func(w http.ResponseWriter, r *http.Request) {
-			if got := r.Header.Get("Range"); got != "bytes=999-1000" {
-				t.Fatalf("range = %q, want %q", got, "bytes=999-1000")
-			}
+			got := r.Header.Get("Range")
+			require.Equal(t, "bytes=999-1000", got)
 
 			w.Header().Set("Content-Range", "bytes */10")
 			w.Header().Set("Content-Type", "audio/mpeg")
@@ -1532,12 +1355,8 @@ func TestProxyServiceMediaFallbackContract(t *testing.T) {
 		req.RemoteAddr = "198.51.100.10:12345"
 		proxy.ServeHTTP(rr, req)
 
-		if rr.Code != http.StatusRequestedRangeNotSatisfiable {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusRequestedRangeNotSatisfiable)
-		}
-		if rr.Header().Get("Content-Range") != "bytes */10" {
-			t.Fatalf("content-range = %q, want %q", rr.Header().Get("Content-Range"), "bytes */10")
-		}
+		require.Equal(t, http.StatusRequestedRangeNotSatisfiable, rr.Code)
+		require.Equal(t, "bytes */10", rr.Header().Get("Content-Range"))
 	})
 
 	t.Run("follows a public redirect chain", func(t *testing.T) {
@@ -1548,9 +1367,8 @@ func TestProxyServiceMediaFallbackContract(t *testing.T) {
 				w.Header().Set("Location", "http://other.example.com/final")
 				w.WriteHeader(http.StatusFound)
 			case "/final":
-				if got := r.Host; got != "other.example.com" {
-					t.Fatalf("host = %q, want %q", got, "other.example.com")
-				}
+				got := r.Host
+				require.Equal(t, "other.example.com", got)
 				_, _ = io.WriteString(w, "done")
 			default:
 				t.Fatalf("unexpected path %q", r.URL.Path)
@@ -1565,15 +1383,41 @@ func TestProxyServiceMediaFallbackContract(t *testing.T) {
 		req.RemoteAddr = "198.51.100.10:12345"
 		proxy.ServeHTTP(rr, req)
 
-		if rr.Code != http.StatusOK {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusOK)
-		}
-		if rr.Body.String() != "done" {
-			t.Fatalf("body = %q, want %q", rr.Body.String(), "done")
-		}
-		if lookupCalls < 2 {
-			t.Fatalf("lookup calls = %d, want at least %d", lookupCalls, 2)
-		}
+		require.Equal(t, http.StatusOK, rr.Code)
+		require.Equal(t, "done", rr.Body.String())
+		require.Equal(t, 2, lookupCalls)
+	})
+
+	t.Run("uses redirect addresses validated during redirect check", func(t *testing.T) {
+		redirectLookups := 0
+		proxy, _ := newMediaProxyTestService(t, func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/start":
+				w.Header().Set("Location", "http://other.example.com/final")
+				w.WriteHeader(http.StatusFound)
+			case "/final":
+				_, _ = io.WriteString(w, "done")
+			default:
+				t.Fatalf("unexpected path %q", r.URL.Path)
+			}
+		}, func(_ context.Context, host string) ([]net.IPAddr, error) {
+			if host == "other.example.com" {
+				redirectLookups++
+				if redirectLookups > 1 {
+					return []net.IPAddr{{IP: net.ParseIP("127.0.0.1")}}, nil
+				}
+			}
+			return []net.IPAddr{{IP: net.ParseIP("203.0.113.10")}}, nil
+		})
+
+		rr := httptest.NewRecorder()
+		req := newProxyJSONRequest(t, http.MethodGet, "http://feeds.example.com/start", nil)
+		req.RemoteAddr = "198.51.100.10:12345"
+		proxy.ServeHTTP(rr, req)
+
+		require.Equal(t, http.StatusOK, rr.Code)
+		require.Equal(t, "done", rr.Body.String())
+		require.Equal(t, 1, redirectLookups)
 	})
 
 	t.Run("rejects unsupported proxy methods and invalid range headers", func(t *testing.T) {
@@ -1585,9 +1429,7 @@ func TestProxyServiceMediaFallbackContract(t *testing.T) {
 		req := newProxyJSONRequest(t, http.MethodPut, "http://feeds.example.com/audio.mp3", nil)
 		req.RemoteAddr = "198.51.100.10:12345"
 		proxy.ServeHTTP(rr, req)
-		if rr.Code != http.StatusBadRequest {
-			t.Fatalf("method status = %d, want %d", rr.Code, http.StatusBadRequest)
-		}
+		require.Equal(t, http.StatusBadRequest, rr.Code)
 
 		rr = httptest.NewRecorder()
 		req = newProxyJSONRequest(t, http.MethodGet, "http://feeds.example.com/audio.mp3", map[string]string{
@@ -1595,9 +1437,7 @@ func TestProxyServiceMediaFallbackContract(t *testing.T) {
 		})
 		req.RemoteAddr = "198.51.100.10:12345"
 		proxy.ServeHTTP(rr, req)
-		if rr.Code != http.StatusBadRequest {
-			t.Fatalf("range status = %d, want %d", rr.Code, http.StatusBadRequest)
-		}
+		require.Equal(t, http.StatusBadRequest, rr.Code)
 
 		rr = httptest.NewRecorder()
 		req = newProxyJSONRequest(t, http.MethodGet, "http://feeds.example.com/audio.mp3", map[string]string{
@@ -1605,18 +1445,14 @@ func TestProxyServiceMediaFallbackContract(t *testing.T) {
 		})
 		req.RemoteAddr = "198.51.100.10:12345"
 		proxy.ServeHTTP(rr, req)
-		if rr.Code != http.StatusBadRequest {
-			t.Fatalf("header status = %d, want %d", rr.Code, http.StatusBadRequest)
-		}
+		require.Equal(t, http.StatusBadRequest, rr.Code)
 	})
 
 	t.Run("validator rejects duplicate range values", func(t *testing.T) {
 		_, err := validateProxyForwardHeaders(http.Header{
 			"Range": []string{"bytes=0-5", "bytes=10-20"},
 		})
-		if err == nil {
-			t.Fatal("expected duplicate range validation error")
-		}
+		require.NotNil(t, err)
 	})
 
 	t.Run("POST request rejects missing origin", func(t *testing.T) {
@@ -1631,12 +1467,8 @@ func TestProxyServiceMediaFallbackContract(t *testing.T) {
 		req.RemoteAddr = "198.51.100.10:12345"
 		proxy.ServeHTTP(rr, req)
 
-		if rr.Code != http.StatusForbidden {
-			t.Fatalf("status = %d, want %d", rr.Code, http.StatusForbidden)
-		}
-		if upstreamCalled {
-			t.Fatal("upstream called for missing-origin programmable proxy request")
-		}
+		require.Equal(t, http.StatusForbidden, rr.Code)
+		require.False(t, upstreamCalled)
 	})
 }
 
@@ -1650,20 +1482,14 @@ func TestValidateProxyForwardHeadersRejectsDuplicateRangeValues(t *testing.T) {
 	}
 
 	_, err := validateProxyForwardHeaders(headers)
-	if err == nil {
-		t.Fatal("expected duplicate range header to be rejected")
-	}
+	require.NotNil(t, err)
 
 	var proxyErr *proxyError
 	if !errors.As(err, &proxyErr) {
 		t.Fatalf("expected proxyError, got %T", err)
 	}
-	if proxyErr.status != http.StatusBadRequest {
-		t.Fatalf("status = %d, want %d", proxyErr.status, http.StatusBadRequest)
-	}
-	if proxyErr.message != "invalid range header" {
-		t.Fatalf("message = %q, want %q", proxyErr.message, "invalid range header")
-	}
+	require.Equal(t, http.StatusBadRequest, proxyErr.Status)
+	require.Equal(t, "invalid range header", proxyErr.Message)
 }
 
 func newMediaProxyTestService(
@@ -1708,9 +1534,7 @@ func newProxyJSONRequest(t *testing.T, method, targetURL string, headers map[str
 	}
 
 	body, err := json.Marshal(payload)
-	if err != nil {
-		t.Fatalf("marshal proxy payload: %v", err)
-	}
+	require.NoError(t, err)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/proxy", strings.NewReader(string(body)))
 	req.Header.Set("Content-Type", "application/json")

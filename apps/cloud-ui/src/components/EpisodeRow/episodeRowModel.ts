@@ -1,5 +1,10 @@
 import type { TFunction } from 'i18next'
-import { formatDateStandard, formatDuration, formatRelativeTime } from '@/lib/dateUtils'
+import {
+  formatDateStandard,
+  formatDuration,
+  formatUnixSecondsDateStandard,
+  formatUnixSecondsRelativeTime,
+} from '@/lib/dateUtils'
 import {
   type Favorite,
   isNavigableExplorePlaybackSession,
@@ -147,7 +152,7 @@ export function fromEpisode({
 
   return {
     title: episode.title,
-    subtitle: formatRelativeTime(episode.pubDate, language),
+    subtitle: formatUnixSecondsRelativeTime(episode.pubDate, language),
     description: episode.description,
     meta: formatDuration(episode.duration, t),
     artworkSrc: artworkUrl,
@@ -184,7 +189,7 @@ export function fromSearchEpisode({
   const route: EpisodeRowModelRoute | null = routeObject ? { ...routeObject } : null
   const artwork = canonicalEpisode.artworkUrl
   const subtitle = joinSubtitle(
-    formatRelativeTime(canonicalEpisode.pubDate, language),
+    formatUnixSecondsRelativeTime(canonicalEpisode.pubDate, language),
     canonicalEpisode.showTitle
   )
   const durationSeconds = canonicalEpisode.durationSeconds
@@ -227,7 +232,7 @@ export function fromFavorite({ favorite, language, t }: FavoriteModelArgs): Epis
     title: favorite.episodeTitle,
     subtitle: joinSubtitle(
       favorite.podcastTitle,
-      favorite.pubDate ? formatDateStandard(favorite.pubDate, language) : ''
+      formatUnixSecondsDateStandard(favorite.pubDate, language)
     ),
     description: favorite.description,
     meta: favorite.durationSeconds ? formatDuration(favorite.durationSeconds, t) : undefined,
@@ -268,7 +273,7 @@ export function fromPlaybackSession({
     title: session.title,
     subtitle: joinSubtitle(
       session.showTitle,
-      session.publishedAt ? formatDateStandard(session.publishedAt, language) : ''
+      session.publishedAt ? formatUnixSecondsDateStandard(session.publishedAt, language) : ''
     ),
     description: session.description || '',
     meta: session.durationSeconds ? formatDuration(session.durationSeconds, t) : undefined,

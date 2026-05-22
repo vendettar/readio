@@ -10,8 +10,6 @@ declare global {
       READIO_APP_NAME?: string
       READIO_APP_VERSION?: string
       READIO_NETWORK_PROXY_URL?: string
-      READIO_NETWORK_PROXY_AUTH_HEADER?: string
-      READIO_NETWORK_PROXY_AUTH_VALUE?: string
       VITE_GRAFANA_FARO_URL?: string
       VITE_GRAFANA_FARO_APP_NAME?: string
       VITE_GRAFANA_FARO_ENV?: string
@@ -135,27 +133,6 @@ export function getAppConfig(): AppConfig {
     }
 
     const config = sanitizeBrowserRuntimeSecrets(parsedConfig)
-
-    const hasProxyUrl = config.NETWORK_PROXY_URL.trim().length > 0
-
-    if (hasProxyUrl && config.NETWORK_PROXY_AUTH_HEADER && !config.NETWORK_PROXY_AUTH_VALUE) {
-      if (import.meta.env.DEV) {
-        logError(
-          '[runtimeConfig] NETWORK_PROXY_AUTH_HEADER is set but NETWORK_PROXY_AUTH_VALUE is missing. Auth will not work.'
-        )
-      }
-    }
-
-    if (
-      config.NETWORK_PROXY_AUTH_HEADER &&
-      config.NETWORK_PROXY_AUTH_HEADER.toLowerCase() !== 'x-proxy-token'
-    ) {
-      if (import.meta.env.DEV) {
-        logError(
-          '[runtimeConfig] Invalid NETWORK_PROXY_AUTH_HEADER. Use "x-proxy-token" to match worker proxy contract.'
-        )
-      }
-    }
 
     cachedConfig = config
     cachedFromRuntimeEnv = runtimeReady

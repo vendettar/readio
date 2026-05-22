@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import type { Episode, Podcast } from '@/lib/discovery'
-import { usePodcastDetailAndEpisodes } from './usePodcastDetailAndEpisodes'
+import { usePodcastDetail } from './usePodcastDetail'
+import { usePodcastEpisodePages } from './usePodcastEpisodePages'
 
 export const UNKNOWN_YEAR = -1
 
@@ -19,10 +20,17 @@ interface UsePodcastEpisodesContentResult {
   resolutionError: Error | null
   notFound: 'podcast' | null
   isEmpty: boolean
+  hasNextPage: boolean
+  isFetchingNextPage: boolean
+  fetchNextPage: () => void
 }
 
-function resolveEpisodeYear(pubDate: string): number {
-  const year = new Date(pubDate).getFullYear()
+function resolveEpisodeYear(pubDate: number): number {
+  if (!Number.isInteger(pubDate) || pubDate <= 0) {
+    return UNKNOWN_YEAR
+  }
+
+  const year = new Date(pubDate * 1000).getFullYear()
   return Number.isFinite(year) ? year : UNKNOWN_YEAR
 }
 
@@ -55,19 +63,27 @@ export function usePodcastEpisodesContent(
   podcastItunesId: string,
   routeCountry: string | undefined
 ): UsePodcastEpisodesContentResult {
-  const { podcast, isLoadingPodcast, podcastError, episodeList, isLoadingEpisodes, episodesError } =
-    usePodcastDetailAndEpisodes({
-      podcastItunesId,
-      routeCountry,
-    })
+  const { podcast, isLoadingPodcast, podcastError } = usePodcastDetail({
+    podcastItunesId,
+    routeCountry,
+  })
+  const {
+    episodes,
+    isLoading: isLoadingEpisodePages,
+    error: episodePagesError,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  } = usePodcastEpisodePages({
+    podcastItunesId,
+    routeCountry,
+    podcast,
+  })
 
-  const listRows = useMemo(
-    () => buildListRows(episodeList?.episodes ?? []),
-    [episodeList?.episodes]
-  )
-  const resolvedContent = podcast && episodeList ? { podcast, listRows } : null
-  const isLoading = isLoadingPodcast || isLoadingEpisodes
-  const resolutionError = podcastError ?? episodesError ?? null
+  const listRows = useMemo(() => buildListRows(episodes), [episodes])
+  const resolvedContent = podcast && !isLoadingEpisodePages ? { podcast, listRows } : null
+  const isLoading = isLoadingPodcast || isLoadingEpisodePages
+  const resolutionError = podcastError ?? (episodePagesError as Error | null) ?? null
   const notFound = !isLoading && !resolutionError && !podcast ? 'podcast' : null
 
   return {
@@ -76,5 +92,8 @@ export function usePodcastEpisodesContent(
     resolutionError,
     notFound,
     isEmpty: resolvedContent ? resolvedContent.listRows.length === 0 : false,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
   }
 }

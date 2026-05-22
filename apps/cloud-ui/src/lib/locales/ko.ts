@@ -134,7 +134,6 @@ const locale = {
   proxyTitle: '프록시',
   validationApiKeyPrefix: 'sk-로 시작해야 합니다',
   validationUrlInvalid: '유효한 URL을 입력하세요',
-  validationProxyAuthHeaderInvalid: '인증 헤더는 "{{header}}" 이어야 합니다',
   placeholderApiKey: 'sk-...',
   settingsAsrVolcengineKeyPlaceholder: 'appId:accessToken',
   settingsAsrGroqKeyPlaceholder: 'gsk_...',

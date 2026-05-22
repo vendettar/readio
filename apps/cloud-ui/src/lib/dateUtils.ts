@@ -10,14 +10,22 @@ import { formatRelativeTime as formatRelativeTimeIntl } from './relativeTime'
 
 const resolveLocale = (locale?: string) => locale ?? i18n.resolvedLanguage ?? i18n.language ?? 'en'
 
+export function dateFromUnixSeconds(value: number | null | undefined): Date | null {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value <= 0) {
+    return null
+  }
+  const date = new Date(value * 1000)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
 /**
  * Format a date as relative time (e.g., "3D AGO", "2H AGO")
  * Matches premium podcast styles. Uses Intl.RelativeTimeFormat.
  */
-export function formatRelativeTime(dateStr: string, locale?: string): string {
-  if (!dateStr) return ''
+export function formatRelativeTime(timestamp: string | Date, locale?: string): string {
+  if (!timestamp) return ''
 
-  const date = new Date(dateStr)
+  const date = new Date(timestamp)
   if (Number.isNaN(date.getTime())) return ''
 
   const now = new Date()
@@ -34,6 +42,11 @@ export function formatRelativeTime(dateStr: string, locale?: string): string {
 
   const relative = formatRelativeTimeIntl(date.getTime(), resolveLocale(locale))
   return relative ? relative.toUpperCase() : ''
+}
+
+export function formatUnixSecondsRelativeTime(timestamp: number, locale?: string): string {
+  const date = dateFromUnixSeconds(timestamp)
+  return date ? formatRelativeTime(date, locale) : ''
 }
 
 /**
@@ -63,6 +76,14 @@ export function formatDateStandard(
   locale?: string
 ): string {
   return formatDateStandardIntl(timestamp, resolveLocale(locale))
+}
+
+export function formatUnixSecondsDateStandard(
+  timestamp: number | null | undefined,
+  locale?: string
+): string {
+  const date = dateFromUnixSeconds(timestamp)
+  return date ? formatDateStandardIntl(date.getTime(), resolveLocale(locale)) : ''
 }
 
 /**

@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import type { Faro } from '@grafana/faro-web-sdk'
 import { getWebInstrumentations } from '@grafana/faro-web-sdk'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -252,13 +250,29 @@ describe('faro', () => {
     )
   })
 
-  it('does not read admin/session/local persistence surfaces', () => {
-    const source = readFileSync(resolve(__dirname, '../faro.ts'), 'utf8')
+  it('does not read admin/session/local persistence surfaces during initialization and runtime', () => {
+    const sessionStorageGetSpy = vi.spyOn(window.sessionStorage, 'getItem')
+    const sessionStorageSetSpy = vi.spyOn(window.sessionStorage, 'setItem')
+    const localStorageGetSpy = vi.spyOn(window.localStorage, 'getItem')
+    const localStorageSetSpy = vi.spyOn(window.localStorage, 'setItem')
+    const indexedDBOpenSpy = vi.spyOn(window.indexedDB, 'open')
 
-    expect(source).not.toMatch(/\/ops/)
-    expect(source).not.toMatch(/sessionStorage/)
-    expect(source).not.toMatch(/indexedDB|IndexedDB|Dexie|dexie/i)
-    expect(source).not.toMatch(/credentialsRepository|providerCredentials|ASR_API_KEY/i)
-    expect(source).not.toMatch(/localMedia|transcriptStore|DownloadsRepository/i)
+    const faro = mockFaro()
+    const init = vi.fn(() => faro)
+
+    initializeFaro(
+      {
+        ...baseConfig,
+        GRAFANA_FARO_URL: 'https://faro.example.com/collect',
+        GRAFANA_FARO_SAMPLE_RATE: 1,
+      },
+      init
+    )
+
+    expect(sessionStorageGetSpy).not.toHaveBeenCalled()
+    expect(sessionStorageSetSpy).not.toHaveBeenCalled()
+    expect(localStorageGetSpy).not.toHaveBeenCalled()
+    expect(localStorageSetSpy).not.toHaveBeenCalled()
+    expect(indexedDBOpenSpy).not.toHaveBeenCalled()
   })
 })

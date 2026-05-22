@@ -29,10 +29,10 @@ Cloud currently keeps Workbox/PWA disabled unless a later instruction explicitly
 
 `apps/cloud-api` pushes application and app-owned host-critical metrics directly to Grafana Cloud through OTLP when the Grafana environment variables are configured.
 
-- Required OTLP runtime config is `READIO_GRAFANA_OTLP_ENDPOINT`, `READIO_GRAFANA_OTLP_INSTANCE_ID`, and `READIO_GRAFANA_OTLP_TOKEN`.
+- Required OTLP runtime config is `READIO_GRAFANA_OTLP_ENDPOINT` plus auth. Prefer `READIO_GRAFANA_OTLP_HEADERS` copied from Grafana Cloud's OpenTelemetry tile; `READIO_GRAFANA_OTLP_INSTANCE_ID` plus `READIO_GRAFANA_OTLP_TOKEN` remains the fallback Basic Auth form.
 - Discovery CORS is owned by `READIO_DISCOVERY_ALLOWED_ORIGINS`; proxy CORS remains owned by `READIO_PROXY_ALLOWED_ORIGINS`.
 - Browser-public English dictionary config is deployed as `READIO_EN_DICTIONARY_API_URL` and `READIO_EN_DICTIONARY_API_TRANSPORT` and emitted only through backend-generated `/env.js`.
-- `READIO_GRAFANA_OTLP_TOKEN` is backend-only runtime config; keep it out of `/env.js` and browser allowlists.
+- `READIO_GRAFANA_OTLP_HEADERS`, `READIO_GRAFANA_OTLP_INSTANCE_ID`, and `READIO_GRAFANA_OTLP_TOKEN` are backend-only runtime config; keep them out of `/env.js` and browser allowlists.
 - The current 00A deployment does not expose a Prometheus scrape endpoint and does not install local Prometheus or Grafana Alloy.
 - Application metrics currently include:
   - `readio_cloud_http_request_duration_seconds`

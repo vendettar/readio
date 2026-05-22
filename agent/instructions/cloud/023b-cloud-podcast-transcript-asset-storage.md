@@ -228,7 +228,7 @@ CREATE TABLE podcast_transcript_assets (
   audio_source_fingerprint TEXT,
   file_name TEXT NOT NULL,
   file_size_bytes INTEGER NOT NULL,
-  created_at TEXT NOT NULL
+  created_at_unix INTEGER NOT NULL
 );
 
 CREATE INDEX idx_podcast_transcript_assets_episode
@@ -270,7 +270,7 @@ Column rationale:
 - persist format is fixed as `sha256:` + first 24 lowercase hex characters
 - `file_name`: actual stored file name such as `tr_...-bear-brook.json.gz`
 - `file_size_bytes`: compressed file size on disk
-- `created_at`: UTC instant in RFC3339 / `Z` form
+- `created_at_unix`: Unix epoch seconds
 
 Columns intentionally not included in `023b`:
 - no `content_hash`
@@ -367,7 +367,7 @@ Implementation following this document should report:
   - stored files use `transcriptKey-titleSlug.json.gz`
   - `titleSlug` remains readability-only, UTF-8-safe, and never participates in identity or runtime lookup
 - Transcript asset table shape:
-  - SQLite stores metadata only: `transcript_key`, canonical episode identifiers, classifier fields, `file_name`, size, and `created_at`
+  - SQLite stores metadata only: `transcript_key`, canonical episode identifiers, classifier fields, `file_name`, size, and `created_at_unix`
   - transcript JSON body stays on disk and the reuse lookup index remains non-unique
 - Canonical payload encoding:
   - stored payload is canonical relay-shaped `cues` JSON compressed as `json.gz`

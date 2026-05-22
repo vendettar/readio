@@ -24,30 +24,63 @@ title: 播客发现 (Explore)
 ## 3. 二跳所有权
 
 - 节目元数据：PodcastIndex `podcasts/byitunesid`
-- 页面渲染用 PI 单集列表 relay：Cloud relay `GET /api/v1/discovery/podcasts/:itunesId/episodes`
-- 页面渲染的上游事实来源：PodcastIndex `episodes/byitunesid?max=1000`
-- PI 页面渲染单集 relay 对外暴露 `guid`，并要求 `artworkUrl` 必须有效；如果后端无法从 episode/feed 产出合法 artwork URL，该行会被直接丢弃
+- 页面渲染单集路由：Cloud SQLite-backed `GET /api/v1/discovery/podcasts/:itunesId/episodes`
+- 上游刷新来源：PodcastIndex `episodes/byitunesid`，但只通过 cold bootstrap 和节目详情刷新路径触发。
+- Cloud 按 `podcastItunesId` 保存有界 SQLite snapshot；一旦 retained snapshot 已存在，分页单集列表读取就是 DB-only，绝不能在用户翻页时调用 PodcastIndex。
+- 页面渲染单集路由对外暴露 `guid`，并要求 `artworkUrl` 必须有效；如果后端无法从 episode/feed 产出合法 artwork URL，该行会被直接丢弃
 - 上游 PI 仍可能包含 feed URL，但 repo-owned 的 Cloud 运行时契约已经不再暴露或依赖它。
 - 页面渲染不得再使用 RSS feed XML，包括：
   - 节目页单集列表
   - 全部单集页单集列表
   - 单集详情 hydration
 
-## 4. 缓存模型
+## 4. 活跃契约：SQLite 分页单集列表
+
+不带 `episodeGuid` 的 `GET /api/v1/discovery/podcasts/:itunesId/episodes` 是基于 SQLite 的分页读取接口，只覆盖后端保留的本地产品窗口。接口接受 `limit` 和 `offset`，后端会先校验并封顶这些公开参数，再按稳定的 newest-first 顺序查询 SQLite。snapshot 已存在后，这个列表模式是 DB-only：用户翻页时不得触发 PodcastIndex 刷新。cold miss 可以先 bootstrap 有界 snapshot；如果当前请求的持久化失败，则可以从刚获取到的 in-memory snapshot 返回请求页。
+
+分页响应包含：
+
+- `episodes`
+- `limit`
+- `offset`
+- `nextOffset`
+- `hasMore`
+- `storedTotal`
+- `isTruncated`
+- `lastSuccessfulFetchAt`
+- `nextRefreshAfter`
+
+SQLite snapshot 是有界的本地产品窗口，不是完整历史归档。
+`storedTotal` 和深层 offset 只描述已保留的本地 snapshot window。
+`isTruncated` 表示存储窗口有界，可能不包含该节目的全部历史单集。
+
+SQLite 存储按 ownership 拆分：
+
+- `podcast_shows`：只保存节目级领域元数据
+- `podcast_episodes`：保留的单集行。`storedTotal` 从这张表的 `COUNT(*)` 派生，增量刷新通过 `ORDER BY published_at_unix DESC LIMIT 1` 选择最新保留行作为 `since`
+- `podcast_cache_state`：新鲜度、失败/退避、截断、近似体积、优先级和最近访问元数据
+
+stale 增量刷新只把 PodcastIndex `since` 响应里的行 upsert 到 `podcast_episodes`，并使用最新保留行的 `published_at_unix - 1` 作为 `since` 边界，避免上游同一秒发布的单集被永久跳过。对已返回的既有 GUID 原地更新，然后在 SQLite 内裁剪溢出行。读取使用 `published_at_unix DESC, episode_guid ASC` 提供稳定的最新优先分页。它不会为了 merge 而把整个保留窗口读进 Go 再整份重写。
+
+缓存元数据必须留在 `podcast_cache_state`，不能塞进 `podcast_shows`；保留单集数和最新保留发布时间也不能作为权威节目字段持久化。
+
+当查询中包含 `episodeGuid` 时，同一路由进入详情模式：`GET /api/v1/discovery/podcasts/:itunesId/episodes?episodeGuid=...` 只按 `podcastItunesId + episodeGuid` 做 SQLite 直接查找。单集详情不负责节目新鲜度，也不会在 cold 或 stale snapshot 上调用 PodcastIndex；如果目标 GUID 不在已保留窗口内，后端返回 `EPISODE_NOT_FOUND`，前端渲染 `episodeNotFound`。
+
+## 5. 缓存模型
 
 - 前端：TanStack Query 内存缓存
 - 后端：
   - top / lookup 路由：带优雅降级的 relay 内存缓存
-  - PI 单集列表 relay 路由：lookup cache 只允许有界写入；超大的 `max=1000` 单集列表会返回给调用方，但不会进入缓存
+  - PI 节目详情和单集列表路由：由 SQLite 有界 snapshot 所有；process-memory TTL cache 不再拥有这些路由读取
+  - PI SQLite snapshot 使用第一版运维保护上限：总节目数 5,000，总近似字节数 1 GiB
+  - PI 预算清理在 snapshot 写入后机会性执行；驱逐顺序依次为较低 `priority`、更旧 `last_accessed_at`、稳定 `podcastItunesId` 顺序，并且不会在该次清理中驱逐正在刷新的节目
   - 已不存在活跃的 Cloud feed 路由或 parsed-feed cache；`/api/v1/discovery/feed` 已退役
-  - PI 单集列表 relay cache key：canonical `podcastItunesId` 加权威 freshness markers
-  - 页面渲染所有权收敛为一组前端 PI 单集列表 key family：
-    - query-key prefix：`['podcast', 'episodes', podcastItunesId, 'pi-list', 'max-1000']`
-    - 在可用时再追加 `lastUpdateTime` / `episodeCount` authority tokens
-  - warm bootstrap 和单集详情查找都可以扫描同一播客下的 key family，选出最新的一条，只把它当作临时 `initialData`
-  - 如果 authority markers 漂移，旧列表仍可短暂参与首屏 bootstrap，但它属于 non-authoritative 数据，不能被信任为 exact episode resolution 的依据
-  - 成功刷新后，旧的同播客 authority 变体必须被删除；稳态下每个播客只保留一份完整 PI 单集列表
-  - 重复的 `guid` 会按确定性规则折叠，只保留 PI 单集列表中的第一条
+  - 页面渲染所有权使用前端分页列表 query family；深链单集详情使用直接的 episode-detail query
+  - 重复的 `guid` 会在存储 snapshot 中按确定性规则折叠
+- 前端 React Query keys：
+  - 节目详情：`['podcast', 'detail', podcastId, country]`
+  - 单集分页：`['podcast', 'episodes-pages', podcastId, country]`
+  - 单集详情：`['podcast', 'episode-detail', podcastId, country, episodeGuid]`
 - 旧 feed 字段说明：
   - 上游 feed 仍可能发布 feed transport metadata，但 repo-owned 的 Cloud 运行时契约不会暴露、持久化或以它作为 key
   - 文档不得再把旧的 feed transport metadata 描述成活跃 discovery fetch key、route authority 或后端 cache key

@@ -106,7 +106,7 @@ const favoriteSchema: z.ZodType<Favorite> = z
     artworkUrl: z.string(),
     addedAt: z.number(),
     description: z.string(),
-    pubDate: z.string(),
+    pubDate: z.number().int().nonnegative(),
     durationSeconds: z.number(),
     episodeArtworkUrl: z.string(),
     episodeGuid: z.string(),

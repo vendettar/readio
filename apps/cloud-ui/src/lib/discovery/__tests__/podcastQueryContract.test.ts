@@ -1,65 +1,44 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildPodcastDetailQueryKey,
-  buildPodcastEpisodesQueryKey,
-  buildPodcastEpisodesQueryPrefix,
-  PODCAST_EPISODES_QUERY_FAMILY,
+  buildPodcastEpisodeDetailQueryKey,
+  buildPodcastEpisodesPagesQueryKey,
 } from '../podcastQueryContract'
 
 describe('podcastQueryContract', () => {
-  it('keys page-rendering PI episode lists by trimmed podcastItunesId', () => {
-    expect(buildPodcastEpisodesQueryKey(' 123 ')).toEqual([
-      'podcast',
-      'episodes',
-      '123',
-      PODCAST_EPISODES_QUERY_FAMILY,
-      'lut-na',
-      'count-na',
-    ])
+  it('keys page-rendering episode pages by trimmed podcastItunesId', () => {
+    expect(buildPodcastEpisodesPagesQueryKey(' 123 ')).toEqual(['podcast', 'episodes-pages', '123'])
   })
 
-  it('adds route-country authority to page-rendering PI episode-list keys when present', () => {
-    expect(buildPodcastEpisodesQueryKey('123', undefined, 'jp')).toEqual([
+  it('adds route-country scope to page-rendering episode-page keys when present', () => {
+    expect(buildPodcastEpisodesPagesQueryKey('123', 'jp')).toEqual([
       'podcast',
-      'episodes',
+      'episodes-pages',
       '123',
       'country-jp',
-      PODCAST_EPISODES_QUERY_FAMILY,
-      'lut-na',
-      'count-na',
-    ])
-  })
-
-  it('keys page-rendering PI episode lists by authority markers when present', () => {
-    expect(buildPodcastEpisodesQueryKey('123', { lastUpdateTime: 42, episodeCount: 7 })).toEqual([
-      'podcast',
-      'episodes',
-      '123',
-      PODCAST_EPISODES_QUERY_FAMILY,
-      'lut-42',
-      'count-7',
-    ])
-  })
-
-  it('exposes a stable PI episode-list key prefix for same-podcast family scans', () => {
-    expect(buildPodcastEpisodesQueryPrefix(' 123 ')).toEqual([
-      'podcast',
-      'episodes',
-      '123',
-      PODCAST_EPISODES_QUERY_FAMILY,
     ])
   })
 
   it('keys podcast detail only by trimmed podcastItunesId', () => {
-    expect(buildPodcastDetailQueryKey(' 123 ')).toEqual(['podcast', 'podcast-detail', '123'])
+    expect(buildPodcastDetailQueryKey(' 123 ')).toEqual(['podcast', 'detail', '123'])
   })
 
-  it('adds route-country authority to podcast detail keys when present', () => {
+  it('adds route-country scope to podcast detail keys when present', () => {
     expect(buildPodcastDetailQueryKey('123', 'jp')).toEqual([
       'podcast',
-      'podcast-detail',
+      'detail',
       '123',
       'country-jp',
+    ])
+  })
+
+  it('keys episode detail without internal source-family tokens', () => {
+    expect(buildPodcastEpisodeDetailQueryKey(' 123 ', ' ep-1 ', 'jp')).toEqual([
+      'podcast',
+      'episode-detail',
+      '123',
+      'country-jp',
+      'ep-1',
     ])
   })
 })

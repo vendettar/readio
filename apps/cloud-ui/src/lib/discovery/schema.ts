@@ -14,14 +14,8 @@ const HttpUrlSchema = z.string().refine(
 
 const OptionalHttpUrlSchema = HttpUrlSchema.optional()
 
-const UtcRfc3339SecondSchema = z
-  .string()
-  .regex(
-    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/,
-    'Expected a UTC RFC3339 timestamp with second precision'
-  )
-
 const NonNegativeIntegerSchema = z.number().int().nonnegative()
+const PositiveIntegerSchema = z.number().int().positive()
 
 /**
  * Shared podcast fields across PI detail and editor-pick snapshot contracts.
@@ -117,7 +111,7 @@ export const PIEpisodeSchema = z.object({
   title: z.string().min(1),
   description: z.string(),
   audioUrl: HttpUrlSchema,
-  pubDate: UtcRfc3339SecondSchema,
+  pubDate: NonNegativeIntegerSchema,
   artworkUrl: HttpUrlSchema,
   fileSize: NonNegativeIntegerSchema,
   duration: NonNegativeIntegerSchema,
@@ -131,6 +125,14 @@ export const PIEpisodeSchema = z.object({
 
 export const PodcastEpisodesSchema = z.object({
   episodes: z.array(PIEpisodeSchema),
+  limit: PositiveIntegerSchema,
+  offset: NonNegativeIntegerSchema,
+  nextOffset: NonNegativeIntegerSchema,
+  hasMore: z.boolean(),
+  storedTotal: NonNegativeIntegerSchema,
+  isTruncated: z.boolean(),
+  lastSuccessfulFetchAt: NonNegativeIntegerSchema.optional(),
+  nextRefreshAfter: NonNegativeIntegerSchema.optional(),
 })
 
 export type TopPodcast = z.infer<typeof TopPodcastSchema>

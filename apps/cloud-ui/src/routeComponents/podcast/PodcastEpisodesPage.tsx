@@ -15,8 +15,16 @@ export default function PodcastEpisodesPage() {
   const id = String((params as { id?: string }).id ?? '')
   const [scrollContainer, setScrollContainer] = useState<HTMLDivElement | null>(null)
 
-  const { resolvedContent, isLoading, resolutionError, notFound, isEmpty } =
-    usePodcastEpisodesContent(id, routeCountry)
+  const {
+    resolvedContent,
+    isLoading,
+    resolutionError,
+    notFound,
+    isEmpty,
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+  } = usePodcastEpisodesContent(id, routeCountry)
 
   if (isLoading) {
     return (
@@ -106,6 +114,15 @@ export default function PodcastEpisodesPage() {
               data={listRows}
               customScrollParent={scrollContainer}
               computeItemKey={(_, item) => item.key}
+              endReached={fetchNextPage}
+              components={{
+                Footer: () =>
+                  isFetchingNextPage || hasNextPage ? (
+                    <div className="py-6 text-center text-sm text-muted-foreground">
+                      {isFetchingNextPage ? t('loadingEpisodes') : ''}
+                    </div>
+                  ) : null,
+              }}
               itemContent={(_, row) => {
                 if (row.type === 'year-header') {
                   return (

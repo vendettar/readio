@@ -24,30 +24,65 @@ title: Discovery & Explore
 ## 3. Second-Hop Ownership
 
 - Show metadata: PodcastIndex `podcasts/byitunesid`
-- Page-rendering PI episode list relay: Cloud relay `GET /api/v1/discovery/podcasts/:itunesId/episodes`
-- Upstream page-rendering source of truth: PodcastIndex `episodes/byitunesid?max=1000`
-- PI page-rendering episode relay emits `guid` and requires a valid `artworkUrl`; rows without valid episode/feed artwork are dropped at the backend boundary
+- Page-rendering episode route: Cloud SQLite-backed `GET /api/v1/discovery/podcasts/:itunesId/episodes`
+- Upstream refresh source: PodcastIndex `episodes/byitunesid`, but only through cold bootstrap and the podcast detail refresh path.
+- Cloud stores a bounded SQLite snapshot per `podcastItunesId`; once a retained snapshot exists, paginated episode-list reads are DB-only and never call PodcastIndex while users flip pages.
+- The page-rendering episode route emits `guid` and requires a valid `artworkUrl`; rows without valid episode/feed artwork are dropped at the backend boundary
 - Upstream PI may still contain a feed URL, but repo-owned Cloud runtime contracts do not expose or depend on it.
 - Page rendering must not use RSS feed XML for:
   - show page episode list
   - episodes page episode list
   - episode detail hydration
 
-## 4. Cache Model
+## 4. Active SQLite Paginated Episode List
+
+`GET /api/v1/discovery/podcasts/:itunesId/episodes` without `episodeGuid` is a paginated SQLite-backed read over the retained local product window. It accepts `limit` and `offset`; the backend validates and caps both public values before querying SQLite with stable newest-first ordering. This list mode is DB-only after the snapshot exists: flipping through pages must not trigger a PodcastIndex refresh. A cold miss may bootstrap the bounded snapshot first, and then return the requested page from that freshly fetched in-memory snapshot if persistence fails for the current request.
+
+The paginated response exposes:
+
+- `episodes`
+- `limit`
+- `offset`
+- `nextOffset`
+- `hasMore`
+- `storedTotal`
+- `isTruncated`
+- `lastSuccessfulFetchAt`
+- `nextRefreshAfter`
+
+The SQLite snapshot is a bounded local product window, not a full historical archive.
+`storedTotal` and deep offsets describe only the retained local snapshot window.
+`isTruncated` signals that the stored window is bounded and may not contain every historical episode.
+
+SQLite storage is split by ownership:
+
+- `podcast_shows`: show-level domain metadata only.
+- `podcast_episodes`: retained episode rows. `storedTotal` is derived from `COUNT(*)` over this table, and incremental refresh derives `since` from the latest retained row selected with `ORDER BY published_at_unix DESC LIMIT 1`.
+- `podcast_cache_state`: freshness, failure/backoff, truncation, approximate-size, priority, and last-access metadata.
+
+Stale incremental refresh normally upserts only the PodcastIndex `since` response rows into `podcast_episodes`, using the newest retained `published_at_unix - 1` as the `since` boundary so same-second upstream episodes are not skipped. Returned existing GUIDs are updated in place, then overflow rows are pruned in SQLite. Reads use `published_at_unix DESC, episode_guid ASC` for stable newest-first pagination. The refresh path does not load the whole retained episode window into Go just to merge and rewrite it.
+
+Cold misses still fetch a full bounded snapshot. After that, stale refreshes use PodcastIndex `since` incremental fetches plus SQLite upsert/prune semantics before normal DB-only reads resume.
+
+Cache metadata must stay out of `podcast_shows`; retained count and latest retained publish time must not be persisted as authoritative show fields.
+
+When `episodeGuid` is present, the same route runs detail mode: `GET /api/v1/discovery/podcasts/:itunesId/episodes?episodeGuid=...` resolves by direct SQLite lookup on `podcastItunesId + episodeGuid`. Episode detail does not own podcast freshness and does not call PodcastIndex on cold or stale snapshots; if the target GUID is absent from the retained window, the backend returns `EPISODE_NOT_FOUND` and the frontend renders `episodeNotFound`.
+
+## 5. Cache Model
 
 - Frontend: TanStack Query memory cache
 - Backend:
   - top / lookup routes: in-memory relay cache with graceful degradation
-  - PI episode list relay route: lookup cache with bounded admission; oversized `max=1000` episode lists are returned but not cached
+  - PI podcast detail and episode-list routes: SQLite-backed bounded snapshots; process-memory TTL cache does not own these route reads
+  - PI SQLite snapshots are capped by first-pass operational safeguards: 5,000 podcasts total and 1 GiB total approximate bytes
+  - PI budget cleanup runs opportunistically after snapshot writes; eviction prefers lower `priority`, then older `last_accessed_at`, then stable `podcastItunesId` order, and never evicts the podcast being refreshed in that cleanup pass
   - no active Cloud feed route or parsed-feed cache remains; `/api/v1/discovery/feed` is retired
-  - PI episode list relay cache key: canonical `podcastItunesId` plus authoritative freshness markers
-  - page-rendering ownership is a single frontend PI episode-list key family:
-    - query-key prefix: `['podcast', 'episodes', podcastItunesId, 'pi-list', 'max-1000']`
-    - authority tokens append `lastUpdateTime` / `episodeCount` when available
-  - warm bootstrap and detail lookup may scan that same-podcast key family, pick the freshest candidate, and reuse it only as temporary `initialData`
-  - if authority markers drift, the stale candidate may still bootstrap the page, but it is non-authoritative and must not be trusted for exact episode resolution
-  - after a successful refresh, superseded same-podcast authority variants are deleted so steady state is one surviving full-copy PI episode-list entry per podcast
-  - duplicate `guid` entries are collapsed deterministically by keeping the first PI episode-list occurrence
+  - page-rendering ownership uses paginated frontend query families for list pages and a direct episode-detail query for deep links
+  - duplicate `guid` entries are collapsed deterministically in the stored snapshot
+- Frontend React Query keys:
+  - podcast detail: `['podcast', 'detail', podcastId, country]`
+  - episode pages: `['podcast', 'episodes-pages', podcastId, country]`
+  - episode detail: `['podcast', 'episode-detail', podcastId, country, episodeGuid]`
 - Legacy feed-field note:
   - upstream feeds may still publish feed transport metadata, but repo-owned Cloud runtime contracts do not expose, persist, or key on it
   - legacy feed transport metadata must not be documented as an active discovery fetch key, route authority, or backend cache key

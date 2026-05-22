@@ -1,4 +1,5 @@
 import {
+  fetchPodcastEpisodeDetail as fetchCloudPodcastEpisodeDetail,
   fetchPodcastEpisodes as fetchCloudPodcastEpisodes,
   fetchTopEpisodes as fetchCloudTopEpisodes,
   fetchTopPodcasts as fetchCloudTopPodcasts,
@@ -37,8 +38,19 @@ const discovery = {
     return getCloudPodcastIndexPodcastsBatchByGuid(guids, signal)
   },
 
-  fetchPodcastEpisodes: (podcastItunesId: string, signal?: AbortSignal) => {
-    return fetchCloudPodcastEpisodes(podcastItunesId, signal)
+  fetchPodcastEpisodes: (
+    podcastItunesId: string,
+    options?: { signal?: AbortSignal; limit?: number; offset?: number }
+  ) => {
+    return fetchCloudPodcastEpisodes(podcastItunesId, options)
+  },
+
+  fetchPodcastEpisodeDetail: (
+    podcastItunesId: string,
+    episodeGuid: string,
+    signal?: AbortSignal
+  ) => {
+    return fetchCloudPodcastEpisodeDetail(podcastItunesId, episodeGuid, signal)
   },
 
   // Top charts (Apple first-hop via cloud relay)

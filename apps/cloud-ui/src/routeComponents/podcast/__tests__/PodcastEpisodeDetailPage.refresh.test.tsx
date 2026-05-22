@@ -104,7 +104,7 @@ describe('PodcastEpisodeDetailPage canonical refresh', () => {
       guid: 'a8343698-1dca-4c63-bb5d-3e2a61522c2a',
       title: 'Lindy West Thought She Couldn’t Handle Polyamory. She Was Wrong.',
       audioUrl: 'https://example.com/audio.mp3',
-      pubDate: '2025-01-01T00:00:00.000Z',
+      pubDate: 1735689600,
       duration: 1200,
       description: 'desc',
     })

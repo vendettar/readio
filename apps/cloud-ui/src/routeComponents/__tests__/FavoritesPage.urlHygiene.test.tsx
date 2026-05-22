@@ -34,7 +34,7 @@ vi.mock('../../store/exploreStore', () => ({
           episodeGuid: '75f3241b-439d-4786-8968-07e05e548074',
           episodeTitle: 'Episode Title',
           podcastTitle: 'Podcast',
-          pubDate: '2024-01-01',
+          pubDate: 1704067200,
           duration: 30,
           artworkUrl: '',
           countryAtSave: 'us',
