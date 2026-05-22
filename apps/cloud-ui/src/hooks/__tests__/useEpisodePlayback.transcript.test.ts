@@ -77,7 +77,7 @@ function makeFavorite(overrides: Partial<Favorite> = {}): Favorite {
     episodeArtworkUrl: 'https://example.com/ep-art.jpg',
     addedAt: Date.now(),
     description: 'Test description',
-    pubDate: '2025-02-01',
+    pubDate: 1738368000,
     durationSeconds: 180,
     transcriptUrl: 'https://example.com/fav.srt',
     podcastItunesId: '100',
@@ -115,7 +115,7 @@ Hello transcript
       audioUrl: 'https://example.com/ep-1.mp3',
       title: 'Episode 1',
       description: 'Desc',
-      pubDate: 'Mon, 01 Jan 2024 00:00:00 GMT',
+      pubDate: 1704067200,
       transcriptUrl: 'https://example.com/ep-1.srt',
     })
     const podcast = makePodcast()
@@ -156,7 +156,7 @@ Delayed transcript
       audioUrl: 'https://example.com/ep-2.mp3',
       title: 'Episode 2',
       description: 'Desc',
-      pubDate: 'Mon, 01 Jan 2024 00:00:00 GMT',
+      pubDate: 1704067200,
       transcriptUrl: 'https://example.com/ep-2.srt',
     })
 
@@ -209,7 +209,7 @@ Delayed transcript
       audioUrl: 'https://example.com/ep-loading.mp3',
       title: 'Loading Episode',
       description: 'Desc',
-      pubDate: 'Mon, 01 Jan 2024 00:00:00 GMT',
+      pubDate: 1704067200,
       transcriptUrl: 'https://example.com/ep-loading.srt',
     })
 
@@ -263,7 +263,7 @@ Delayed transcript
           audioUrl: 'https://example.com/old.mp3',
           title: 'Old',
           description: 'Old',
-          pubDate: 'Mon, 01 Jan 2024 00:00:00 GMT',
+          pubDate: 1704067200,
           transcriptUrl: 'https://example.com/old.srt',
         }),
         makePodcast(),
@@ -275,7 +275,7 @@ Delayed transcript
           audioUrl: 'https://example.com/new.mp3',
           title: 'New',
           description: 'New',
-          pubDate: 'Mon, 01 Jan 2024 00:00:00 GMT',
+          pubDate: 1704067200,
           transcriptUrl: 'https://example.com/new.srt',
         }),
         makePodcast(),
@@ -306,7 +306,7 @@ Delayed transcript
       audioUrl: 'https://example.com/ep-3.mp3',
       title: 'Episode 3',
       description: 'Desc',
-      pubDate: 'Mon, 01 Jan 2024 00:00:00 GMT',
+      pubDate: 1704067200,
       transcriptUrl: 'https://example.com/ep-3.srt',
     })
 
@@ -372,7 +372,7 @@ Learn all about this tick-borne disease in this classic episode.`)
       audioUrl: 'https://example.com/ep-omny.mp3',
       title: 'Episode Omny',
       description: 'Desc',
-      pubDate: 'Mon, 01 Jan 2024 00:00:00 GMT',
+      pubDate: 1704067200,
       transcriptUrl: 'https://api.omny.fm/transcript?format=TextWithTimestamps',
     })
 

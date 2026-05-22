@@ -1,6 +1,6 @@
 import type { QueryClient } from '@tanstack/react-query'
-import { describe, expect, it, vi } from 'vitest'
-import type { Episode, Podcast, PodcastEpisodes } from '@/lib/discovery'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import discovery, { type Episode, type Podcast, type PodcastEpisodes } from '@/lib/discovery'
 import {
   buildSearchEpisodeRoute,
   resolveEpisodeByTitle,
@@ -12,6 +12,10 @@ const MOCK_GUID = '766f112e-abcd-1234-5678-07e05e548074'
 type MockQueryClient = QueryClient & {
   fetchQuery: ReturnType<typeof vi.fn>
   getQueryData: ReturnType<typeof vi.fn>
+}
+
+function unixSeconds(date: Date): number {
+  return Math.floor(date.getTime() / 1000)
 }
 
 function createMockPodcast(overrides: Partial<Podcast> = {}): Podcast {
@@ -34,7 +38,7 @@ function createMockEpisode(overrides: Partial<Episode> & { guid?: string } = {})
     title: 'Episode 1: The Beginning',
     description: 'Description',
     audioUrl: 'https://example.com/ep1.mp3',
-    pubDate: new Date().toISOString(),
+    pubDate: unixSeconds(new Date()),
     guid: MOCK_GUID,
     duration: 60,
     explicit: false,
@@ -44,8 +48,39 @@ function createMockEpisode(overrides: Partial<Episode> & { guid?: string } = {})
 }
 
 function createMockPodcastEpisodes(episodes: Episode[]): PodcastEpisodes {
+  const result: PodcastEpisodes = {
+    episodes,
+    limit: 20,
+    offset: 0,
+    nextOffset: episodes.length,
+    hasMore: false,
+    storedTotal: episodes.length,
+    isTruncated: false,
+  }
+  vi.spyOn(discovery, 'fetchPodcastEpisodes').mockResolvedValue(result)
+  return result
+}
+
+function createMockPodcastEpisodePages(pages: PodcastEpisodes[]): void {
+  const fetchEpisodes = vi.spyOn(discovery, 'fetchPodcastEpisodes')
+  for (const page of pages) {
+    fetchEpisodes.mockResolvedValueOnce(page)
+  }
+}
+
+function createMockPodcastEpisodePage(
+  episodes: Episode[],
+  overrides: Partial<PodcastEpisodes> = {}
+): PodcastEpisodes {
   return {
     episodes,
+    limit: 20,
+    offset: 0,
+    nextOffset: episodes.length,
+    hasMore: false,
+    storedTotal: episodes.length,
+    isTruncated: false,
+    ...overrides,
   }
 }
 
@@ -55,6 +90,10 @@ function createMockQueryClient(): MockQueryClient {
     getQueryData: vi.fn(),
   } as unknown as MockQueryClient
 }
+
+afterEach(() => {
+  vi.restoreAllMocks()
+})
 
 describe('tryDirectEpisodeRoute', () => {
   it('returns episode route when episode has canonical guid', () => {
@@ -114,7 +153,7 @@ describe('resolveEpisodeByTitle - unique match', () => {
 
     vi.mocked(queryClient.fetchQuery).mockImplementation(
       async (options: { queryKey: readonly unknown[]; queryFn: () => Promise<unknown> }) => {
-        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'podcast-detail') {
+        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'detail') {
           return mockPodcast
         }
         if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'episodes') {
@@ -136,6 +175,11 @@ describe('resolveEpisodeByTitle - unique match', () => {
       expect(result.route.params.id).toBe('123456789')
       expect(result.route.params.country).toBe('us')
     }
+    expect(queryClient.fetchQuery).toHaveBeenCalledWith(
+      expect.objectContaining({
+        queryKey: ['podcast', 'detail', '123456789', 'country-us'],
+      })
+    )
   })
 
   it('resolves to show route when no titles match', async () => {
@@ -148,7 +192,7 @@ describe('resolveEpisodeByTitle - unique match', () => {
 
     vi.mocked(queryClient.fetchQuery).mockImplementation(
       async (options: { queryKey: readonly unknown[]; queryFn: () => Promise<unknown> }) => {
-        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'podcast-detail') {
+        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'detail') {
           return mockPodcast
         }
         if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'episodes') {
@@ -178,7 +222,7 @@ describe('resolveEpisodeByTitle - unique match', () => {
 
     vi.mocked(queryClient.fetchQuery).mockImplementation(
       async (options: { queryKey: readonly unknown[]; queryFn: () => Promise<unknown> }) => {
-        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'podcast-detail') {
+        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'detail') {
           return mockPodcast
         }
         if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'episodes') {
@@ -210,21 +254,21 @@ describe('resolveEpisodeByTitle - date cutoff', () => {
     const mockEpisodes = createMockPodcastEpisodes([
       createMockEpisode({
         title: 'Match',
-        pubDate: now.toISOString(),
+        pubDate: unixSeconds(now),
       }),
       createMockEpisode({
         title: 'Match', // Duplicate within cutoff (but the first one matches first)
-        pubDate: new Date(now.getTime() - 25 * 24 * 60 * 60 * 1000).toISOString(),
+        pubDate: unixSeconds(new Date(now.getTime() - 25 * 24 * 60 * 60 * 1000)),
       }),
       createMockEpisode({
         title: 'Match', // Third duplicate - should trigger ambiguity
-        pubDate: thirtyOneDaysAgo.toISOString(),
+        pubDate: unixSeconds(thirtyOneDaysAgo),
       }),
     ])
 
     vi.mocked(queryClient.fetchQuery).mockImplementation(
       async (options: { queryKey: readonly unknown[]; queryFn: () => Promise<unknown> }) => {
-        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'podcast-detail') {
+        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'detail') {
           return mockPodcast
         }
         if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'episodes') {
@@ -251,13 +295,13 @@ describe('resolveEpisodeByTitle - date cutoff', () => {
     const mockEpisodes = createMockPodcastEpisodes([
       createMockEpisode({
         title: 'Match',
-        pubDate: 'invalid-date',
+        pubDate: 0,
       }),
     ])
 
     vi.mocked(queryClient.fetchQuery).mockImplementation(
       async (options: { queryKey: readonly unknown[]; queryFn: () => Promise<unknown> }) => {
-        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'podcast-detail') {
+        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'detail') {
           return mockPodcast
         }
         if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'episodes') {
@@ -279,17 +323,116 @@ describe('resolveEpisodeByTitle - date cutoff', () => {
 })
 
 describe('resolveEpisodeByTitle - 60 episode cap', () => {
-  it('returns immediately when the PI episode list starts with a unique match', async () => {
+  it('scans paginated PI episode pages with a 20 item page size up to 60 total episodes', async () => {
     const queryClient = createMockQueryClient()
     const mockPodcast = createMockPodcast()
-    const mockEpisodes = createMockPodcastEpisodes([
-      createMockEpisode({ title: 'Match', pubDate: new Date().toISOString() }),
-      createMockEpisode({ title: 'Different', pubDate: new Date().toISOString() }),
+
+    const firstPage = createMockPodcastEpisodePage(
+      Array.from({ length: 20 }, (_, i) =>
+        createMockEpisode({
+          title: `Non-match-${i}`,
+          pubDate: unixSeconds(new Date()),
+        })
+      ),
+      { offset: 0, nextOffset: 20, hasMore: true, storedTotal: 61 }
+    )
+    const secondPage = createMockPodcastEpisodePage(
+      Array.from({ length: 20 }, (_, i) =>
+        createMockEpisode({
+          title: `Non-match-2-${i}`,
+          pubDate: unixSeconds(new Date()),
+        })
+      ),
+      { offset: 20, nextOffset: 40, hasMore: true, storedTotal: 61 }
+    )
+    const thirdPage = createMockPodcastEpisodePage(
+      Array.from({ length: 20 }, (_, i) =>
+        createMockEpisode({
+          title: i === 19 ? 'Match' : `Non-match-3-${i}`,
+          pubDate: unixSeconds(new Date()),
+        })
+      ),
+      { offset: 40, nextOffset: 60, hasMore: true, storedTotal: 61 }
+    )
+    createMockPodcastEpisodePages([firstPage, secondPage, thirdPage])
+
+    vi.mocked(queryClient.fetchQuery).mockImplementation(
+      async (options: { queryKey: readonly unknown[]; queryFn: () => Promise<unknown> }) => {
+        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'detail') {
+          return mockPodcast
+        }
+        throw new Error('Unexpected query')
+      }
+    )
+
+    const result = await resolveEpisodeByTitle({
+      queryClient,
+      country: 'us',
+      podcastItunesId: '123456789',
+      targetTitle: 'Match',
+    })
+
+    expect(result.type).toBe('episode')
+    expect(discovery.fetchPodcastEpisodes).toHaveBeenCalledTimes(3)
+    expect(discovery.fetchPodcastEpisodes).toHaveBeenNthCalledWith(
+      1,
+      '123456789',
+      expect.objectContaining({ limit: 20, offset: 0 })
+    )
+    expect(discovery.fetchPodcastEpisodes).toHaveBeenNthCalledWith(
+      2,
+      '123456789',
+      expect.objectContaining({ limit: 20, offset: 20 })
+    )
+    expect(discovery.fetchPodcastEpisodes).toHaveBeenNthCalledWith(
+      3,
+      '123456789',
+      expect.objectContaining({ limit: 20, offset: 40 })
+    )
+  })
+
+  it('stops paginated title scanning when the response has no next page', async () => {
+    const queryClient = createMockQueryClient()
+    const mockPodcast = createMockPodcast()
+    createMockPodcastEpisodePages([
+      createMockPodcastEpisodePage([createMockEpisode({ title: 'Non-match' })], {
+        offset: 0,
+        nextOffset: 1,
+        hasMore: false,
+      }),
     ])
 
     vi.mocked(queryClient.fetchQuery).mockImplementation(
       async (options: { queryKey: readonly unknown[]; queryFn: () => Promise<unknown> }) => {
-        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'podcast-detail') {
+        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'detail') {
+          return mockPodcast
+        }
+        throw new Error('Unexpected query')
+      }
+    )
+
+    const result = await resolveEpisodeByTitle({
+      queryClient,
+      country: 'us',
+      podcastItunesId: '123456789',
+      targetTitle: 'Match',
+    })
+
+    expect(result.type).toBe('show')
+    expect(discovery.fetchPodcastEpisodes).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns immediately when the PI episode list starts with a unique match', async () => {
+    const queryClient = createMockQueryClient()
+    const mockPodcast = createMockPodcast()
+    const mockEpisodes = createMockPodcastEpisodes([
+      createMockEpisode({ title: 'Match', pubDate: unixSeconds(new Date()) }),
+      createMockEpisode({ title: 'Different', pubDate: unixSeconds(new Date()) }),
+    ])
+
+    vi.mocked(queryClient.fetchQuery).mockImplementation(
+      async (options: { queryKey: readonly unknown[]; queryFn: () => Promise<unknown> }) => {
+        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'detail') {
           return mockPodcast
         }
         if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'episodes') {
@@ -307,7 +450,7 @@ describe('resolveEpisodeByTitle - 60 episode cap', () => {
     })
 
     expect(result.type).toBe('episode')
-    expect(queryClient.fetchQuery).toHaveBeenCalledTimes(2)
+    expect(queryClient.fetchQuery).toHaveBeenCalledTimes(1)
   })
 
   it('stops after scanning 60 episodes and returns the unique match', async () => {
@@ -317,19 +460,19 @@ describe('resolveEpisodeByTitle - 60 episode cap', () => {
     const firstTwentyEpisodes = Array.from({ length: 20 }, (_, i) =>
       createMockEpisode({
         title: `Non-match-${i}`,
-        pubDate: new Date().toISOString(),
+        pubDate: unixSeconds(new Date()),
       })
     )
     const secondTwentyEpisodes = Array.from({ length: 20 }, (_, i) =>
       createMockEpisode({
         title: `Non-match-2-${i}`,
-        pubDate: new Date().toISOString(),
+        pubDate: unixSeconds(new Date()),
       })
     )
     const thirdTwentyEpisodes = Array.from({ length: 20 }, (_, i) =>
       createMockEpisode({
         title: i === 19 ? 'Match' : `Non-match-3-${i}`,
-        pubDate: new Date().toISOString(),
+        pubDate: unixSeconds(new Date()),
       })
     )
     const mockEpisodes = createMockPodcastEpisodes([
@@ -340,7 +483,7 @@ describe('resolveEpisodeByTitle - 60 episode cap', () => {
 
     vi.mocked(queryClient.fetchQuery).mockImplementation(
       async (options: { queryKey: readonly unknown[]; queryFn: () => Promise<unknown> }) => {
-        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'podcast-detail') {
+        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'detail') {
           return mockPodcast
         }
         if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'episodes') {
@@ -358,7 +501,7 @@ describe('resolveEpisodeByTitle - 60 episode cap', () => {
     })
 
     expect(result.type).toBe('episode')
-    expect(queryClient.fetchQuery).toHaveBeenCalledTimes(2)
+    expect(queryClient.fetchQuery).toHaveBeenCalledTimes(1)
   })
 
   it('falls back to show after scanning 60 episodes without a match', async () => {
@@ -368,19 +511,19 @@ describe('resolveEpisodeByTitle - 60 episode cap', () => {
     const firstTwentyEpisodes = Array.from({ length: 20 }, (_, i) =>
       createMockEpisode({
         title: `Non-match-${i}`,
-        pubDate: new Date().toISOString(),
+        pubDate: unixSeconds(new Date()),
       })
     )
     const secondTwentyEpisodes = Array.from({ length: 20 }, (_, i) =>
       createMockEpisode({
         title: `Non-match-2-${i}`,
-        pubDate: new Date().toISOString(),
+        pubDate: unixSeconds(new Date()),
       })
     )
     const thirdTwentyEpisodes = Array.from({ length: 20 }, (_, i) =>
       createMockEpisode({
         title: `Non-match-3-${i}`,
-        pubDate: new Date().toISOString(),
+        pubDate: unixSeconds(new Date()),
       })
     )
     const mockEpisodes = createMockPodcastEpisodes([
@@ -391,7 +534,7 @@ describe('resolveEpisodeByTitle - 60 episode cap', () => {
 
     vi.mocked(queryClient.fetchQuery).mockImplementation(
       async (options: { queryKey: readonly unknown[]; queryFn: () => Promise<unknown> }) => {
-        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'podcast-detail') {
+        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'detail') {
           return mockPodcast
         }
         if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'episodes') {
@@ -409,20 +552,20 @@ describe('resolveEpisodeByTitle - 60 episode cap', () => {
     })
 
     expect(result.type).toBe('show')
-    expect(queryClient.fetchQuery).toHaveBeenCalledTimes(2)
+    expect(queryClient.fetchQuery).toHaveBeenCalledTimes(1)
   })
 
   it('falls back to show when duplicate title appears in the scanned PI episode list', async () => {
     const queryClient = createMockQueryClient()
     const mockPodcast = createMockPodcast()
     const mockEpisodes = createMockPodcastEpisodes([
-      createMockEpisode({ title: 'Match', pubDate: new Date().toISOString() }),
-      createMockEpisode({ title: 'Match', pubDate: new Date().toISOString() }),
+      createMockEpisode({ title: 'Match', pubDate: unixSeconds(new Date()) }),
+      createMockEpisode({ title: 'Match', pubDate: unixSeconds(new Date()) }),
     ])
 
     vi.mocked(queryClient.fetchQuery).mockImplementation(
       async (options: { queryKey: readonly unknown[]; queryFn: () => Promise<unknown> }) => {
-        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'podcast-detail') {
+        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'detail') {
           return mockPodcast
         }
         if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'episodes') {
@@ -440,7 +583,7 @@ describe('resolveEpisodeByTitle - 60 episode cap', () => {
     })
 
     expect(result.type).toBe('show')
-    expect(queryClient.fetchQuery).toHaveBeenCalledTimes(2)
+    expect(queryClient.fetchQuery).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -466,12 +609,13 @@ describe('resolveEpisodeByTitle - error handling', () => {
 
     vi.mocked(queryClient.fetchQuery).mockImplementation(
       async (options: { queryKey: readonly unknown[]; queryFn: () => Promise<unknown> }) => {
-        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'podcast-detail') {
+        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'detail') {
           return mockPodcast
         }
         throw new Error('Archive error')
       }
     )
+    vi.spyOn(discovery, 'fetchPodcastEpisodes').mockRejectedValue(new Error('Archive error'))
 
     const result = await resolveEpisodeByTitle({
       queryClient,
@@ -490,7 +634,7 @@ describe('resolveEpisodeByTitle - error handling', () => {
 
     vi.mocked(queryClient.fetchQuery).mockImplementation(
       async (options: { queryKey: readonly unknown[]; queryFn: () => Promise<unknown> }) => {
-        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'podcast-detail') {
+        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'detail') {
           return mockPodcast
         }
         if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'episodes') {
@@ -548,7 +692,7 @@ describe('resolveEpisodeByTitle - title normalization', () => {
 
     vi.mocked(queryClient.fetchQuery).mockImplementation(
       async (options: { queryKey: readonly unknown[]; queryFn: () => Promise<unknown> }) => {
-        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'podcast-detail') {
+        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'detail') {
           return mockPodcast
         }
         if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'episodes') {
@@ -576,7 +720,7 @@ describe('resolveEpisodeByTitle - title normalization', () => {
 
     vi.mocked(queryClient.fetchQuery).mockImplementation(
       async (options: { queryKey: readonly unknown[]; queryFn: () => Promise<unknown> }) => {
-        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'podcast-detail') {
+        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'detail') {
           return mockPodcast
         }
         if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'episodes') {
@@ -605,7 +749,7 @@ describe('contract/hygiene', () => {
 
     vi.mocked(queryClient.fetchQuery).mockImplementation(
       async (options: { queryKey: readonly unknown[]; queryFn: () => Promise<unknown> }) => {
-        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'podcast-detail') {
+        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'detail') {
           return mockPodcast
         }
         if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'episodes') {
@@ -635,7 +779,7 @@ describe('contract/hygiene', () => {
 
     vi.mocked(queryClient.fetchQuery).mockImplementation(
       async (options: { queryKey: readonly unknown[]; queryFn: () => Promise<unknown> }) => {
-        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'podcast-detail') {
+        if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'detail') {
           return mockPodcast
         }
         if (options.queryKey[0] === 'podcast' && options.queryKey[1] === 'episodes') {

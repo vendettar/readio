@@ -36,8 +36,8 @@ The Readio project demonstrates a high level of engineering discipline with robu
 
 ### 3.2 Browser-Visible Proxy Credentials
 - **Location:** `apps/cloud-api/browser-env-allowlist.json`
-- **Observation:** `READIO_NETWORK_PROXY_AUTH_VALUE` is exposed to the browser. While documentation claims this is "not a secret boundary" and intended for JS proxy calls, exposing authentication values in the browser runtime increases the risk of credential reuse and proxy abuse.
-- **Severity:** P2 (Information Disclosure)
+- **Status:** Resolved. The former browser-visible proxy credential env vars were removed from the browser runtime allowlist and Cloud deploy configuration. The Cloud media proxy now relies on origin allowlists, request validation, SSRF checks, and rate limits instead of browser-visible proxy credentials.
+- **Severity:** P2 (Information Disclosure, resolved)
 
 ### 3.3 Proxy Abuse Potential
 - **Location:** `apps/cloud-api/asr_relay.go` and `proxy.go`

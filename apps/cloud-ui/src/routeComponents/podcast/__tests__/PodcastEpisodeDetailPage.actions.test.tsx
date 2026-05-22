@@ -16,7 +16,7 @@ let resolvedEpisode: Episode = makeEpisode({
   guid: 'ep-1',
   title: 'Episode One',
   audioUrl: 'https://example.com/ep-1.mp3',
-  pubDate: '2024-01-01T00:00:00Z',
+  pubDate: 1704067200,
   duration: 1200,
   description: 'Episode description',
 })
@@ -100,7 +100,7 @@ describe('PodcastEpisodeDetailPage action wiring', () => {
       guid: 'ep-1',
       title: 'Episode One',
       audioUrl: 'https://example.com/ep-1.mp3',
-      pubDate: '2024-01-01T00:00:00Z',
+      pubDate: 1704067200,
       duration: 1200,
       description: 'Episode description',
     })
@@ -132,7 +132,7 @@ describe('PodcastEpisodeDetailPage action wiring', () => {
         description: 'Episode description',
         artworkUrl: resolvedEpisode.artworkUrl,
         duration: 1200,
-        pubDate: '2024-01-01T00:00:00Z',
+        pubDate: 1704067200,
         transcriptUrl: undefined,
       },
       undefined,
@@ -166,7 +166,7 @@ describe('PodcastEpisodeDetailPage action wiring', () => {
       guid: 'ep-plain',
       title: 'Plain Episode',
       audioUrl: 'https://example.com/plain.mp3',
-      pubDate: '2024-01-02T00:00:00Z',
+      pubDate: 1704153600,
       description: 'Line one\nLine two',
     })
 
@@ -186,7 +186,7 @@ describe('PodcastEpisodeDetailPage action wiring', () => {
       guid: 'ep-private',
       title: 'Private Episode',
       audioUrl: 'https://example.com/private.mp3',
-      pubDate: '2024-01-02T00:00:00Z',
+      pubDate: 1704153600,
       description: 'Private links',
       transcriptUrl: 'https://localhost:3000/transcript.vtt',
       link: 'http://127.0.0.1:8080/admin',
@@ -203,7 +203,7 @@ describe('PodcastEpisodeDetailPage action wiring', () => {
       guid: 'ep-zero-ordinal',
       title: 'Zero Ordinal Episode',
       audioUrl: 'https://example.com/zero.mp3',
-      pubDate: '2024-01-03T00:00:00Z',
+      pubDate: 1704240000,
       seasonNumber: 0,
       episodeNumber: 0,
     })

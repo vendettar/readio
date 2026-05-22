@@ -12,14 +12,13 @@ title: Episode Resolution Contract
 
 1. Decode compact key to stable episode identity
 2. Query PodcastIndex `podcasts/byitunesid`
-3. Check the frontend PI episode-list key family for that `podcastItunesId`
-4. Reuse the exact-authority entry when `lastUpdateTime` / `episodeCount` still match
-5. If exact authority is absent, bootstrap from the freshest same-podcast PI episode-list entry only as temporary non-authoritative `initialData`, then refetch the authoritative list
-6. Match by stable episode identity and, if absent from the refreshed successful PI episode list, end in `episodeNotFound`
+3. Ask the Cloud SQLite retained snapshot route for direct detail by `podcastItunesId + episodeGuid`
+4. Episode detail performs a direct SQLite lookup and does not own podcast snapshot freshness
+5. If the target `guid` is absent from the retained snapshot, end in `episodeNotFound`
 
 ## 3. Rule
 
-Cloud must keep episode detail resolution PI-episode-list-owned for page routes and must not reintroduce RSS fallback or Apple supplemental resolution as a normal path.
+Cloud must keep episode detail resolution owned by the SQLite retained snapshot route for page routes and must not reintroduce RSS fallback or Apple supplemental resolution as a normal path.
 
 ## 4. Entry-Point Strategy
 
@@ -32,10 +31,10 @@ Episode resolution is not the same for every discovery entry point.
 Rules:
 
 - `TopEpisode` first-hop payload must not be treated as canonical episode identity
-- the app may use `podcastItunesId` plus title to run a PI episode-list-backed resolver
+- the app may use `podcastItunesId` plus title to run a snapshot-backed resolver
 - the resolver budget is explicit:
   - stop when scanned episodes become older than `now - 30 days`
-  - stop after scanning 60 PI episode-list rows total
+  - stop after scanning 60 retained snapshot rows total
 - once that budget is exhausted, fall back to the canonical podcast show page
 - do not escalate from this budgeted resolver into any RSS/full-feed fetch
 
@@ -61,7 +60,7 @@ A cold-opened canonical episode URL follows the same canonical episode-detail hy
 That means:
 
 - the route itself is already canonical
-- the destination page must hydrate via PI lookup plus the shared PI episode-list cache contract
+- the destination page must hydrate via PI lookup plus the SQLite retained snapshot contract
 - this path is not subject to the `TopEpisode` 30-day / 60-episode resolver budget
 
 ## 5. Failure Policy
@@ -75,41 +74,40 @@ If the `TopEpisode` budgeted resolver cannot produce a unique high-confidence ep
 For `SearchEpisode` direct-route entries and cold canonical episode URLs, the destination episode page follows this policy:
 
 1. resolve canonical podcast metadata through `podcasts/byitunesid`
-2. check the shared frontend PI episode-list cache family first
-3. if the target episode is not present in an exact-authority PI episode-list entry, fetch `episodes/byitunesid?max=1000`, re-run stable-identity matching, and replace the cached PI episode list
-4. if the target episode is still absent from that successful PI episode list, render `episodeNotFound`
+2. request direct episode detail from the Cloud SQLite retained snapshot route using `podcastItunesId + episodeGuid`
+3. do not trigger PodcastIndex refresh from episode detail
+4. if the target episode is absent from that retained snapshot, render `episodeNotFound`
 
 This failure policy is intentionally different from `TopEpisode`.
 
 - `TopEpisode` is budget-limited before navigation
-- `SearchEpisode` and cold canonical episode URLs are canonical routes first, then hydrate, then render `episodeNotFound` if the approved 1000-item PI episode list does not contain the target GUID
+- `SearchEpisode` and cold canonical episode URLs are canonical routes first, then hydrate, then render `episodeNotFound` if the retained snapshot does not contain the target GUID after any required refresh
 
 ## 6. PI Episode List Cache Contract
 
-Episode resolution, show page bootstrap, and the episodes page all share one frontend PI episode-list key family for each `podcastItunesId`.
+Episode resolution, show page bootstrap, and the episodes page now converge on the backend SQLite paginated snapshot for each `podcastItunesId`.
 
 Rules:
 
-- the key-family prefix is `['podcast', 'episodes', podcastItunesId, 'pi-list', 'max-1000']`
-- freshness is PI-episode-list-level, not page-level
-- show page, episodes page, and episode detail must reuse the same PI episode-list semantics
-- the cache stores one normalized JSON PI episode list sourced from `episodes/byitunesid?max=1000`
-- duplicate `episodeGuid` entries are deduplicated deterministically by keeping the first PI episode-list occurrence
-- authoritative podcast markers (`lastUpdateTime`, `episodeCount`) may invalidate a seemingly fresh entry
-- stale data may be used only as bootstrap `initialData`; it must not suppress the authoritative refetch
-- when exact authority is missing, bootstrap may scan the same-podcast key family and pick the freshest candidate
-- authority-drift bootstrap is explicitly marked non-authoritative and must not satisfy exact episode resolution
-- once the authoritative refresh succeeds, superseded same-podcast key variants are removed so steady state is one surviving full-copy PI episode-list entry per podcast
+- the backend stores a bounded local snapshot in `podcast_shows`, `podcast_episodes`, and `podcast_cache_state`
+- freshness is snapshot-level and comes from backend SQLite state, not from a browser-owned full-copy cache
+- show page and episodes page use paginated episode-list queries over the retained snapshot window
+- canonical episode detail uses direct lookup by `podcastItunesId + episodeGuid`
+- the frontend episode-detail query key includes route country: `['podcast', 'episode-detail', podcastId, country, episodeGuid]`
+- duplicate `episodeGuid` entries are deduplicated deterministically in the stored snapshot
+- `storedTotal` is derived from `COUNT(*)` over `podcast_episodes`
+- incremental refresh derives `since` from the latest retained `podcast_episodes` row selected with `ORDER BY published_at_unix DESC LIMIT 1`
+- `isTruncated` means the retained snapshot window may not contain every historical episode
 
 Invalidation rules:
 
-- when authoritative podcast markers drift, the old PI episode-list entry must not be treated as fresh coverage
-- when the refreshed PI episode list returns a different head ordering or different membership, the old list must be replaced atomically
-- the app must not silently overwrite one podcast's PI episode list with another podcast's payload
+- stale or failed snapshot refresh state is represented by backend cache-status metadata
+- when backend refresh writes a new snapshot, the route response reflects the new retained window and metadata
+- the app must not silently overwrite one podcast's retained snapshot with another podcast's payload
 - invalid external URLs from the PI episode list must not survive into UI-openable actions
 
 Implication:
 
 - `TopEpisode` remains a budgeted pre-navigation resolver
 - `SearchEpisode` and cold canonical episode URLs remain canonical-route-first hydration flows
-- but all canonical page routes must converge on the same PI-owned episode-list cache contract once page hydration begins
+- but all canonical page routes must converge on the same SQLite-backed retained snapshot contract once page hydration begins

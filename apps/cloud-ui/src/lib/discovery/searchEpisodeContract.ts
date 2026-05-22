@@ -11,8 +11,16 @@ export interface CanonicalSearchEpisodeRecord extends CanonicalSearchEpisodeIden
   artworkUrl: string
   audioUrl: string
   description: string
-  pubDate: string
+  pubDate: number
   durationSeconds: number | undefined
+}
+
+function parseReleaseDateToUnixSeconds(releaseDate: string): number {
+  const milliseconds = Date.parse(releaseDate)
+  if (!Number.isFinite(milliseconds)) {
+    throw new Error('SearchEpisode releaseDate must be a valid timestamp')
+  }
+  return Math.floor(milliseconds / 1000)
 }
 
 export function getCanonicalSearchEpisodeIdentity(
@@ -34,7 +42,7 @@ export function toCanonicalSearchEpisodeRecord(
     artworkUrl: episode.artwork,
     audioUrl: episode.audioUrl,
     description: episode.shortDescription,
-    pubDate: episode.releaseDate,
+    pubDate: parseReleaseDateToUnixSeconds(episode.releaseDate),
     durationSeconds:
       typeof episode.trackTimeMillis === 'number'
         ? Math.round(episode.trackTimeMillis / 1000)

@@ -1,8 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getPodcastEpisodesCacheEntries } from '@/lib/discovery/episodeCache'
+import { FetchError } from '@/lib/fetchUtils'
 import { createTestQueryClient } from '../../../__tests__/queryClient'
 import discovery from '../index'
-import { ensurePodcastDetail, ensurePodcastEpisodes } from '../queryCache'
+import {
+  ensurePodcastDetail,
+  ensurePodcastEpisodeDetail,
+  ensurePodcastEpisodes,
+} from '../queryCache'
 import { makeEpisode, makePodcastEpisodes } from './fixtures'
 
 vi.mock('../index', async (importOriginal) => {
@@ -13,6 +18,7 @@ vi.mock('../index', async (importOriginal) => {
       ...actual.default,
       getPodcastIndexPodcastByItunesId: vi.fn(),
       fetchPodcastEpisodes: vi.fn(),
+      fetchPodcastEpisodeDetail: vi.fn(),
     },
   }
 })
@@ -62,7 +68,48 @@ describe('discovery query cache helpers', () => {
 
     expect(first).toEqual(second)
     expect(discovery.fetchPodcastEpisodes).toHaveBeenCalledTimes(1)
-    expect(discovery.fetchPodcastEpisodes).toHaveBeenCalledWith('123', expect.any(AbortSignal))
+    expect(discovery.fetchPodcastEpisodes).toHaveBeenCalledWith('123', {
+      signal: expect.any(AbortSignal),
+      limit: 20,
+      offset: 0,
+    })
+  })
+
+  it('normalizes podcast and episode ids before fetching episode detail', async () => {
+    const episode = makeEpisode({ guid: 'episode-guid' })
+    vi.mocked(discovery.fetchPodcastEpisodeDetail).mockResolvedValue(episode)
+
+    const result = await ensurePodcastEpisodeDetail(queryClient, ' 123 ', ' episode-guid ', {
+      country: 'US',
+    })
+
+    expect(result).toEqual(episode)
+    expect(discovery.fetchPodcastEpisodeDetail).toHaveBeenCalledWith(
+      '123',
+      'episode-guid',
+      expect.any(AbortSignal)
+    )
+  })
+
+  it('treats missing podcast episode detail as a cacheable null result', async () => {
+    vi.mocked(discovery.fetchPodcastEpisodeDetail).mockRejectedValue(
+      new FetchError(
+        'episode not found',
+        '/api/v1/discovery/podcasts/123/episodes',
+        404,
+        'direct',
+        {
+          code: 'EPISODE_NOT_FOUND',
+        }
+      )
+    )
+
+    const first = await ensurePodcastEpisodeDetail(queryClient, '123', 'missing-guid')
+    const second = await ensurePodcastEpisodeDetail(queryClient, '123', 'missing-guid')
+
+    expect(first).toBeNull()
+    expect(second).toBeNull()
+    expect(discovery.fetchPodcastEpisodeDetail).toHaveBeenCalledTimes(1)
   })
 
   it('writes podcast episode payloads into the single PI episode-list cache family', async () => {
@@ -83,7 +130,7 @@ describe('discovery query cache helpers', () => {
     ])
   })
 
-  it('refetches the fixed PI episode list when podcast detail authority markers drift', async () => {
+  it('reuses the fresh episode-pages cache without podcast freshness gates', async () => {
     vi.mocked(discovery.fetchPodcastEpisodes)
       .mockResolvedValueOnce(
         makePodcastEpisodes({
@@ -96,16 +143,12 @@ describe('discovery query cache helpers', () => {
         })
       )
 
-    await ensurePodcastEpisodes(queryClient, '123', {
-      authority: { lastUpdateTime: 1, episodeCount: 10 },
-    })
+    await ensurePodcastEpisodes(queryClient, '123')
 
-    const second = await ensurePodcastEpisodes(queryClient, '123', {
-      authority: { lastUpdateTime: 2, episodeCount: 10 },
-    })
+    const second = await ensurePodcastEpisodes(queryClient, '123')
 
-    expect(discovery.fetchPodcastEpisodes).toHaveBeenCalledTimes(2)
-    expect(second.episodes[0]?.title).toBe('Newer')
+    expect(discovery.fetchPodcastEpisodes).toHaveBeenCalledTimes(1)
+    expect(second.episodes[0]?.title).toBe('Older')
     expect(getPodcastEpisodesCacheEntries(queryClient, '123')).toHaveLength(1)
   })
 })

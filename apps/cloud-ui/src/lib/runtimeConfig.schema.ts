@@ -92,21 +92,6 @@ export const AppConfigSchema = z.object({
     ])
     .default(DEFAULTS.NETWORK_PROXY_URL)
     .catch(catchWithLog('NETWORK_PROXY_URL', DEFAULTS.NETWORK_PROXY_URL)),
-  NETWORK_PROXY_AUTH_HEADER: z
-    .string()
-    .refine(
-      (val) => {
-        if (!val) return true
-        return val.toLowerCase() === 'x-proxy-token'
-      },
-      { message: 'NETWORK_PROXY_AUTH_HEADER must be exactly "x-proxy-token"' }
-    )
-    .default(DEFAULTS.NETWORK_PROXY_AUTH_HEADER)
-    .catch(catchWithLog('NETWORK_PROXY_AUTH_HEADER', DEFAULTS.NETWORK_PROXY_AUTH_HEADER)),
-  NETWORK_PROXY_AUTH_VALUE: z
-    .string()
-    .default(DEFAULTS.NETWORK_PROXY_AUTH_VALUE)
-    .catch(catchWithLog('NETWORK_PROXY_AUTH_VALUE', DEFAULTS.NETWORK_PROXY_AUTH_VALUE)),
   GRAFANA_FARO_URL: z
     .union([z.literal(''), UrlSchema])
     .default(DEFAULTS.GRAFANA_FARO_URL)
@@ -273,8 +258,6 @@ export const ENV_MAP: Record<keyof AppConfig, string> = {
 
   APP_VERSION: 'READIO_APP_VERSION',
   NETWORK_PROXY_URL: 'READIO_NETWORK_PROXY_URL',
-  NETWORK_PROXY_AUTH_HEADER: 'READIO_NETWORK_PROXY_AUTH_HEADER',
-  NETWORK_PROXY_AUTH_VALUE: 'READIO_NETWORK_PROXY_AUTH_VALUE',
   GRAFANA_FARO_URL: 'VITE_GRAFANA_FARO_URL',
   GRAFANA_FARO_APP_NAME: 'VITE_GRAFANA_FARO_APP_NAME',
   GRAFANA_FARO_ENV: 'VITE_GRAFANA_FARO_ENV',

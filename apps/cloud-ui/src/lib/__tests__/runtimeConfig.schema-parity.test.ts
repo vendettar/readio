@@ -23,8 +23,6 @@ describe('runtimeConfig schema parity', () => {
   it('maps representative runtime env values with expected coercion', async () => {
     window.__READIO_ENV__ = {
       READIO_NETWORK_PROXY_URL: 'https://proxy.example.com',
-      READIO_NETWORK_PROXY_AUTH_HEADER: 'x-proxy-token',
-      READIO_NETWORK_PROXY_AUTH_VALUE: 'proxy-public-token',
       VITE_GRAFANA_FARO_URL: 'https://faro.example.com/collect',
       VITE_GRAFANA_FARO_APP_NAME: 'readio-cloud',
       VITE_GRAFANA_FARO_ENV: 'production',
@@ -43,8 +41,6 @@ describe('runtimeConfig schema parity', () => {
     const config = getAppConfig()
 
     expect(config.NETWORK_PROXY_URL).toBe('https://proxy.example.com')
-    expect(config.NETWORK_PROXY_AUTH_HEADER).toBe('x-proxy-token')
-    expect(config.NETWORK_PROXY_AUTH_VALUE).toBe('proxy-public-token')
     expect(config.GRAFANA_FARO_URL).toBe('https://faro.example.com/collect')
     expect(config.GRAFANA_FARO_APP_NAME).toBe('readio-cloud')
     expect(config.GRAFANA_FARO_ENV).toBe('production')
@@ -146,14 +142,12 @@ describe('runtimeConfig schema parity', () => {
 
   it('falls back to defaults on invalid values', async () => {
     window.__READIO_ENV__ = {
-      READIO_NETWORK_PROXY_AUTH_HEADER: 'authorization',
       READIO_MAX_CONCURRENT_REQUESTS: '-1',
     }
 
     const { getAppConfig, DEFAULTS } = await import('../runtimeConfig')
     const config = getAppConfig()
 
-    expect(config.NETWORK_PROXY_AUTH_HEADER).toBe(DEFAULTS.NETWORK_PROXY_AUTH_HEADER)
     expect(config.MAX_CONCURRENT_REQUESTS).toBe(DEFAULTS.MAX_CONCURRENT_REQUESTS)
   })
 
@@ -247,8 +241,6 @@ describe('runtimeConfig schema parity', () => {
     'READIO_DEFAULT_LANGUAGE',
     'READIO_FALLBACK_PODCAST_IMAGE',
     'READIO_NETWORK_PROXY_URL',
-    'READIO_NETWORK_PROXY_AUTH_HEADER',
-    'READIO_NETWORK_PROXY_AUTH_VALUE',
     'VITE_GRAFANA_FARO_URL',
     'VITE_GRAFANA_FARO_APP_NAME',
     'VITE_GRAFANA_FARO_ENV',

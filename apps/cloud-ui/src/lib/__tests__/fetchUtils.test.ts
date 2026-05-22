@@ -81,8 +81,6 @@ describe('fetchUtils: fetchWithFallback', () => {
     const customProxy = 'https://my-proxy.com'
     setupConfig({
       NETWORK_PROXY_URL: customProxy,
-      NETWORK_PROXY_AUTH_HEADER: 'x-proxy-token',
-      NETWORK_PROXY_AUTH_VALUE: 'test-token',
     })
 
     server.use(
@@ -92,7 +90,6 @@ describe('fetchUtils: fetchWithFallback', () => {
       http.post(customProxy, async ({ request }) => {
         const body = (await request.json()) as { url: string; method: string }
         expect(body).toEqual({ url, method: 'GET' })
-        expect(request.headers.get('x-proxy-token')).toBe('test-token')
         return new HttpResponse('<rss>Custom Success</rss>')
       })
     )
@@ -152,26 +149,6 @@ describe('fetchUtils: fetchWithFallback', () => {
     })) as Response
     const text = await result.text()
     expect(text).toBe('Forwarded Success')
-  })
-
-  it('skips invalid dynamic auth header when auth value exists but header name is empty', async () => {
-    const customProxy = 'https://my-proxy.com'
-    setupConfig({
-      NETWORK_PROXY_URL: customProxy,
-      NETWORK_PROXY_AUTH_HEADER: '',
-      NETWORK_PROXY_AUTH_VALUE: 'test-token',
-    })
-
-    server.use(
-      http.get(url, () => HttpResponse.error()),
-      http.post(customProxy, ({ request }) => {
-        expect(request.headers.get('x-proxy-token')).toBeNull()
-        return new HttpResponse('<rss>Custom Success</rss>')
-      })
-    )
-
-    const result = await fetchWithFallback(url)
-    expect(result).toBe('<rss>Custom Success</rss>')
   })
 
   it('Scenario 4: Abort signal stops the chain', async () => {
@@ -629,8 +606,6 @@ describe('fetchUtils: checkNetworkProxyHealth', () => {
     const myProxy = 'https://my-worker.io'
     setupConfig({
       NETWORK_PROXY_URL: myProxy,
-      NETWORK_PROXY_AUTH_HEADER: 'x-proxy-token',
-      NETWORK_PROXY_AUTH_VALUE: 'test-token',
     })
 
     server.use(
@@ -648,8 +623,7 @@ describe('fetchUtils: checkNetworkProxyHealth', () => {
     const formProxy = 'https://unsaved-proxy.example'
 
     server.use(
-      http.post(formProxy, ({ request }) => {
-        expect(request.headers.get('x-proxy-token')).toBe('preview-secret')
+      http.post(formProxy, () => {
         return new HttpResponse('OK')
       })
     )
@@ -657,8 +631,6 @@ describe('fetchUtils: checkNetworkProxyHealth', () => {
     const result = await checkNetworkProxyHealth({
       proxyConfig: {
         proxyUrl: formProxy,
-        authHeader: 'x-proxy-token',
-        authValue: 'preview-secret',
       },
     })
 

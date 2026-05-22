@@ -12,14 +12,13 @@ title: 单集解析契约
 
 1. 将 compact key 解码为稳定单集身份
 2. 请求 PodcastIndex `podcasts/byitunesid`
-3. 先检查该 `podcastItunesId` 对应的前端 PI 单集列表 key family
-4. 如果存在与权威 `lastUpdateTime` / `episodeCount` 完全匹配的条目，则直接复用
-5. 如果没有 exact-authority 命中，则可以从同播客 key family 里选出最新的一条作为临时的 non-authoritative `initialData`，同时继续发起 authoritative refetch
-6. 再按稳定单集身份匹配；如果刷新后的成功 PI 单集列表里没有目标 GUID，则结束于 `episodeNotFound`
+3. 向 Cloud SQLite retained snapshot 路由请求 `podcastItunesId + episodeGuid` 的直接详情
+4. 单集详情执行 SQLite 直接查找，不负责节目 snapshot 新鲜度
+5. 如果目标 `guid` 不在 retained snapshot 中，则结束于 `episodeNotFound`
 
 ## 3. 规则
 
-Cloud 必须保持单集详情解析由 PI 单集列表拥有，不得把 RSS fallback 或 Apple supplemental episode resolution 重新带回内容页主路径。
+Cloud 必须保持单集详情解析由 SQLite retained snapshot 路由拥有，不得把 RSS fallback 或 Apple supplemental episode resolution 重新带回内容页主路径。
 
 ## 4. 入口策略
 
@@ -32,10 +31,10 @@ Cloud 必须保持单集详情解析由 PI 单集列表拥有，不得把 RSS fa
 规则：
 
 - `TopEpisode` 的 first-hop payload 不能被当作 canonical 单集身份
-- 应用可以使用 `podcastItunesId + title` 运行一个基于 PI 单集列表的 resolver
+- 应用可以使用 `podcastItunesId + title` 运行一个基于 retained snapshot 的 resolver
 - 这个 resolver 的预算是显式的：
   - 当扫描到的单集早于 `now - 30 days` 时停止
-  - 总扫描量达到 60 条 PI 单集列表 row 时停止
+  - 总扫描量达到 60 条 retained snapshot row 时停止
 - 一旦预算耗尽，必须回退到 canonical 节目详情页
 - 不允许从这个预算型 resolver 再升级成任何 RSS / full feed 拉取
 
@@ -61,7 +60,7 @@ Cloud 必须保持单集详情解析由 PI 单集列表拥有，不得把 RSS fa
 也就是说：
 
 - 路由本身已经是 canonical
-- 目标页面必须继续通过 PI lookup 加共享 PI 单集列表 cache contract 完成 hydration
+- 目标页面必须继续通过 PI lookup 加 SQLite retained snapshot contract 完成 hydration
 - 这条路径不受 `TopEpisode` 的 `30 days / 60 episodes` resolver 预算约束
 
 ## 5. 失败策略
@@ -75,41 +74,40 @@ Cloud 必须保持单集详情解析由 PI 单集列表拥有，不得把 RSS fa
 对于 `SearchEpisode` 的 direct-route 入口以及冷 canonical 单集 URL，目标单集页遵循下面的失败策略：
 
 1. 先通过 `podcasts/byitunesid` 解析 canonical podcast metadata
-2. 先检查共享的前端 PI 单集列表 key family
-3. 如果目标单集不在 exact-authority 的 PI 单集列表条目中，则请求 `episodes/byitunesid?max=1000`，重新按稳定身份匹配，并替换缓存中的 PI 单集列表
-4. 如果成功返回的 PI 单集列表里仍然没有目标单集，则渲染 `episodeNotFound`
+2. 使用 `podcastItunesId + episodeGuid` 向 Cloud SQLite retained snapshot 路由请求直接单集详情
+3. 单集详情不触发 PodcastIndex refresh
+4. 如果 retained snapshot 里没有目标单集，则渲染 `episodeNotFound`
 
 这条失败策略与 `TopEpisode` 是故意不同的：
 
 - `TopEpisode` 是“导航前、预算型”的 resolver
-- `SearchEpisode` 与冷 canonical 单集 URL 是“先进入 canonical route，再 hydration，如果批准的 1000 条 PI 单集列表里没有目标 GUID，就渲染 `episodeNotFound`”
+- `SearchEpisode` 与冷 canonical 单集 URL 是“先进入 canonical route，再 hydration；如果必要刷新后的 retained snapshot 里没有目标 GUID，就渲染 `episodeNotFound`”
 
 ## 6. PI 单集列表 Cache 契约
 
-单集解析、节目详情页首屏以及全部单集页，共享同一组前端 PI 单集列表 key family；它们都归属于同一个 `podcastItunesId`。
+单集解析、节目详情页首屏以及全部单集页，现在都收敛到每个 `podcastItunesId` 对应的后端 SQLite 分页 snapshot。
 
 规则：
 
-- key-family prefix 固定为 `['podcast', 'episodes', podcastItunesId, 'pi-list', 'max-1000']`
-- freshness 是 PI-episode-list-level，不是 page-level
-- 节目详情页、全部单集页、单集详情页必须复用同一套 PI 单集列表语义
-- cache 里只存一份来自 `episodes/byitunesid?max=1000` 的规范化 JSON PI 单集列表
-- 重复的 `episodeGuid` 会按确定性规则去重，只保留 PI 单集列表中的第一条
-- canonical podcast 的权威 markers（`lastUpdateTime`、`episodeCount`）可以让看起来仍 fresh 的条目失效
-- stale 数据只允许作为 bootstrap `initialData` 使用，不能阻止后续的 authoritative refetch
-- 当 exact authority key 不存在时，可以扫描同播客 key family 并选择最新的一条做临时 bootstrap
-- authority drift 下的 bootstrap 会被显式标记为 non-authoritative，不能满足 exact episode resolution
-- authoritative refresh 成功后，旧的同播客 key 变体必须被删除；稳态下每个播客只保留一份完整 PI 单集列表
+- 后端把有界本地 snapshot 存在 `podcast_shows`、`podcast_episodes` 和 `podcast_cache_state`
+- freshness 来自后端 SQLite snapshot state，不再由浏览器 full-copy cache 决定
+- 节目详情页和全部单集页使用保留窗口上的分页单集列表 query
+- canonical 单集详情使用 `podcastItunesId + episodeGuid` 直接查找
+- 前端 episode-detail query key 必须包含路由国家：`['podcast', 'episode-detail', podcastId, country, episodeGuid]`
+- 重复的 `episodeGuid` 会在存储 snapshot 中按确定性规则去重
+- `storedTotal` 从 `podcast_episodes` 的 `COUNT(*)` 派生
+- 增量刷新通过 `podcast_episodes` 的 `ORDER BY published_at_unix DESC LIMIT 1` 选择最新保留行作为 `since`
+- `isTruncated` 表示保留的 snapshot window 可能不包含全部历史单集
 
 失效规则：
 
-- 当权威 podcast markers 漂移时，旧的 PI 单集列表条目不能再被视为 fresh coverage
-- 当刷新后的 PI 单集列表返回了不同的头部顺序或不同的成员集合时，旧列表必须整体原子替换
-- 应用不得把一个播客的 PI 单集列表静默覆盖到另一个播客的 `podcastItunesId` 下
+- stale 或失败的 snapshot 刷新状态由后端 cache-status 元数据表达
+- 当后端刷新写入新 snapshot 后，路由响应反映新的保留窗口和元数据
+- 应用不得把一个播客的 retained snapshot 静默覆盖到另一个播客的 `podcastItunesId` 下
 - 来自 PI 单集列表的无效外链不得流入 UI 的 external-open action
 
 这意味着：
 
 - `TopEpisode` 仍然是导航前的预算型 resolver
 - `SearchEpisode` 与冷 canonical 单集 URL 仍然是 canonical-route-first 的 hydration 流程
-- 但一旦进入页面 hydration，这几条 canonical route 都必须收敛到同一份 PI-owned 单集列表 cache contract
+- 但一旦进入页面 hydration，这几条 canonical route 都必须收敛到同一份 SQLite-backed retained snapshot contract

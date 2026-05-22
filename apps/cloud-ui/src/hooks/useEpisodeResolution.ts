@@ -1,4 +1,4 @@
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import type { Episode, Podcast } from '@/lib/discovery'
 import {
@@ -9,9 +9,15 @@ import {
   upsertEditorPickInCache,
 } from '@/lib/discovery/editorPicks'
 import { findEpisodeInPodcastEpisodesCache } from '@/lib/discovery/episodeCache'
+import {
+  buildPodcastEpisodeDetailQueryKey,
+  PODCAST_QUERY_CACHE_POLICY,
+  PODCAST_QUERY_REFETCH_POLICY,
+} from '@/lib/discovery/podcastQueryContract'
+import { fetchPodcastEpisodeDetailOrNull } from '@/lib/discovery/queryCache'
 import { compactKeyToEpisodeIdentity } from '@/lib/routes/compactKey'
 import { normalizeCountryParam } from '@/lib/routes/podcastRoutes'
-import { usePodcastDetailAndEpisodes } from './usePodcastDetailAndEpisodes'
+import { findBootstrapEpisode, usePodcastDetail } from './usePodcastDetail'
 
 export interface ResolvedEpisodeContent {
   podcast: Podcast
@@ -67,17 +73,7 @@ export function useEpisodeResolution(
     }
   }, [country, editorPickSnapshot, queryClient])
 
-  const {
-    podcast,
-    isLoadingPodcast,
-    podcastError,
-    episodeListAuthority,
-    episodesBootstrap,
-    episodeList,
-    isLoadingEpisodes,
-    isFetchingEpisodes,
-    episodesError,
-  } = usePodcastDetailAndEpisodes({
+  const { podcast, isLoadingPodcast, podcastError, episodesBootstrap } = usePodcastDetail({
     podcastItunesId: normalizedPodcastId,
     routeCountry,
     initialPodcast,
@@ -86,26 +82,44 @@ export function useEpisodeResolution(
     queryClient,
     normalizedPodcastId,
     targetEpisodeGuid,
-    episodeListAuthority,
     country
   )
-  const canTrustBootstrapEpisodeResolution = !episodesBootstrap || episodesBootstrap.isAuthoritative
+  const bootstrapEpisode = findBootstrapEpisode(episodesBootstrap, targetEpisodeGuid)
+  const shouldFetchEpisodeDetail = Boolean(
+    country && podcast && targetEpisodeGuid && !cachedEpisode && !bootstrapEpisode
+  )
+  const {
+    data: fetchedEpisode,
+    isLoading: isLoadingEpisodeDetail,
+    isFetching: isFetchingEpisodeDetail,
+    error: episodeDetailError,
+  } = useQuery<Episode | null>({
+    queryKey: buildPodcastEpisodeDetailQueryKey(
+      normalizedPodcastId,
+      targetEpisodeGuid,
+      country ?? undefined
+    ),
+    queryFn: ({ signal }) =>
+      fetchPodcastEpisodeDetailOrNull(normalizedPodcastId, targetEpisodeGuid, signal),
+    enabled: shouldFetchEpisodeDetail,
+    staleTime: PODCAST_QUERY_CACHE_POLICY.episodes.staleTime,
+    gcTime: PODCAST_QUERY_CACHE_POLICY.episodes.gcTime,
+    ...PODCAST_QUERY_REFETCH_POLICY,
+  })
 
-  const episode =
-    cachedEpisode ??
-    (canTrustBootstrapEpisodeResolution
-      ? episodeList?.episodes.find((candidate) => candidate.guid === targetEpisodeGuid)
-      : undefined)
+  const episode = cachedEpisode ?? bootstrapEpisode ?? fetchedEpisode ?? undefined
 
   const resolvedContent = podcast && episode ? { podcast, episode } : null
 
   const isLoading =
     !country ||
     isLoadingPodcast ||
-    (Boolean(targetEpisodeGuid) && !resolvedContent && (isLoadingEpisodes || isFetchingEpisodes))
+    (Boolean(targetEpisodeGuid) &&
+      !resolvedContent &&
+      (isLoadingEpisodeDetail || isFetchingEpisodeDetail))
   const resolutionError = resolveEpisodeResolutionError({
     podcastError,
-    episodesError: !episode ? episodesError : null,
+    episodesError: !episode ? ((episodeDetailError as Error | null) ?? null) : null,
   })
   const notFound =
     isLoading || resolutionError ? null : !podcast ? 'podcast' : !episode ? 'episode' : null

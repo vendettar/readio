@@ -93,7 +93,7 @@ describe('useLocalSearch subscription identity', () => {
         artworkUrl: 'https://example.com/podcast.jpg',
         episodeArtworkUrl: 'https://example.com/episode.jpg',
         description: 'desc',
-        pubDate: '2025-02-01',
+        pubDate: 1738368000,
         durationSeconds: 180,
         addedAt: 1,
         podcastItunesId: 'pod-1',

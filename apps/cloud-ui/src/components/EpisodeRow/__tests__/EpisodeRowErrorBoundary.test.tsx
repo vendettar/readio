@@ -23,6 +23,8 @@ vi.mock('react-i18next', () => ({
 // Mock format relative time to avoid i18n circular dependency issues in test environment
 vi.mock('../../../lib/dateUtils', () => ({
   formatRelativeTime: () => '2 DAYS AGO',
+  formatUnixSecondsRelativeTime: () => '2 DAYS AGO',
+  formatUnixSecondsDateStandard: () => 'DATE',
   formatDuration: () => '10 M',
 }))
 
@@ -91,10 +93,11 @@ const buildEpisode = (title: string, id: string): Episode =>
     description: 'Test Desc',
     duration: 60,
     explicit: false,
-    pubDate: new Date().toISOString(),
+    pubDate: Math.floor(Date.now() / 1000),
     audioUrl: `http://test.com/${id}.mp3`,
     link: `http://test.com/${id}`,
     artworkUrl: `http://test.com/${id}.jpg`,
+    fileSize: 1024,
   }) as Episode
 
 const mockPodcast: Podcast = {

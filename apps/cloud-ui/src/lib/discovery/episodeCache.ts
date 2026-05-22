@@ -1,81 +1,28 @@
-import type { QueryClient } from '@tanstack/react-query'
+import type { InfiniteData, QueryClient } from '@tanstack/react-query'
 import type { Episode, PodcastEpisodes } from './index'
 import {
-  buildPodcastEpisodesQueryKey,
-  buildPodcastEpisodesQueryPrefix,
+  buildPodcastEpisodesPagesQueryKey,
   PODCAST_QUERY_CACHE_POLICY,
 } from './podcastQueryContract'
-
-export interface PodcastEpisodeListAuthority {
-  lastUpdateTime?: number
-  episodeCount?: number
-}
 
 interface PodcastEpisodesCacheReadOptions {
   allowStale?: boolean
   now?: number
-  authority?: PodcastEpisodeListAuthority
 }
 
 export interface PodcastEpisodesBootstrapSnapshot {
   data: PodcastEpisodes
   updatedAt: number
-  isAuthoritative: boolean
 }
 
 export interface PodcastEpisodesCacheEntry {
-  queryKey: ReturnType<typeof buildPodcastEpisodesQueryKey>
+  queryKey: ReturnType<typeof buildPodcastEpisodesPagesQueryKey>
   data: PodcastEpisodes
   updatedAt: number
   staleAt: number
-  authority?: PodcastEpisodeListAuthority
 }
 
-function normalizeAuthority(
-  authority?: PodcastEpisodeListAuthority
-): PodcastEpisodeListAuthority | undefined {
-  if (!authority) {
-    return undefined
-  }
-
-  const normalized: PodcastEpisodeListAuthority = {}
-  if (typeof authority.lastUpdateTime === 'number' && Number.isFinite(authority.lastUpdateTime)) {
-    normalized.lastUpdateTime = authority.lastUpdateTime
-  }
-  if (typeof authority.episodeCount === 'number' && Number.isFinite(authority.episodeCount)) {
-    normalized.episodeCount = authority.episodeCount
-  }
-
-  return normalized.lastUpdateTime !== undefined || normalized.episodeCount !== undefined
-    ? normalized
-    : undefined
-}
-
-function matchesPodcastEpisodeListAuthority(
-  candidateAuthority: PodcastEpisodeListAuthority | undefined,
-  requestedAuthority?: PodcastEpisodeListAuthority
-): boolean {
-  const normalizedRequestedAuthority = normalizeAuthority(requestedAuthority)
-  if (!normalizedRequestedAuthority) {
-    return true
-  }
-
-  if (
-    normalizedRequestedAuthority.lastUpdateTime !== undefined &&
-    candidateAuthority?.lastUpdateTime !== normalizedRequestedAuthority.lastUpdateTime
-  ) {
-    return false
-  }
-
-  if (
-    normalizedRequestedAuthority.episodeCount !== undefined &&
-    candidateAuthority?.episodeCount !== normalizedRequestedAuthority.episodeCount
-  ) {
-    return false
-  }
-
-  return true
-}
+export type PodcastEpisodesInfiniteData = InfiniteData<PodcastEpisodes, number>
 
 function dedupeEpisodesByGuid(episodes: Episode[]): Episode[] {
   const seen = new Set<string>()
@@ -90,33 +37,6 @@ function dedupeEpisodesByGuid(episodes: Episode[]): Episode[] {
   return deduped
 }
 
-function parseAuthorityNumberToken(token: unknown, prefix: 'lut-' | 'count-'): number | undefined {
-  if (typeof token !== 'string' || !token.startsWith(prefix)) {
-    return undefined
-  }
-
-  const rawValue = token.slice(prefix.length)
-  if (rawValue === 'na') {
-    return undefined
-  }
-
-  const parsed = Number(rawValue)
-  return Number.isFinite(parsed) ? parsed : undefined
-}
-
-function parsePodcastEpisodesAuthorityFromQueryKey(
-  queryKey: readonly unknown[]
-): PodcastEpisodeListAuthority | undefined {
-  const lastUpdateToken = queryKey[queryKey.length - 2]
-  const episodeCountToken = queryKey[queryKey.length - 1]
-  const authority = normalizeAuthority({
-    lastUpdateTime: parseAuthorityNumberToken(lastUpdateToken, 'lut-'),
-    episodeCount: parseAuthorityNumberToken(episodeCountToken, 'count-'),
-  })
-
-  return authority
-}
-
 function isPodcastEpisodesCacheFresh(
   entry: Pick<PodcastEpisodesCacheEntry, 'staleAt'> | null | undefined,
   now = Date.now()
@@ -124,9 +44,61 @@ function isPodcastEpisodesCacheFresh(
   return Boolean(entry && entry.staleAt > now)
 }
 
+function isQueryStateInvalidated(state: unknown): boolean {
+  return Boolean(
+    state && typeof state === 'object' && (state as { isInvalidated?: boolean }).isInvalidated
+  )
+}
+
 function clonePodcastEpisodes(data: PodcastEpisodes): PodcastEpisodes {
   return {
     episodes: [...data.episodes],
+    limit: data.limit,
+    offset: data.offset,
+    nextOffset: data.nextOffset,
+    hasMore: data.hasMore,
+    storedTotal: data.storedTotal,
+    isTruncated: data.isTruncated,
+    lastSuccessfulFetchAt: data.lastSuccessfulFetchAt,
+    nextRefreshAfter: data.nextRefreshAfter,
+  }
+}
+
+function isInfinitePodcastEpisodesData(data: unknown): data is PodcastEpisodesInfiniteData {
+  return Boolean(
+    data && typeof data === 'object' && Array.isArray((data as { pages?: unknown }).pages)
+  )
+}
+
+function podcastEpisodesPagesFromQueryData(data: unknown): PodcastEpisodes[] {
+  if (isInfinitePodcastEpisodesData(data)) {
+    return data.pages
+  }
+  if (
+    data &&
+    typeof data === 'object' &&
+    Array.isArray((data as { episodes?: unknown }).episodes)
+  ) {
+    return [data as PodcastEpisodes]
+  }
+  return []
+}
+
+export function flattenPodcastEpisodePages(pages: PodcastEpisodes[]): PodcastEpisodes | undefined {
+  const firstPage = pages[0]
+  if (!firstPage) {
+    return undefined
+  }
+  const lastPage = pages[pages.length - 1] ?? firstPage
+  return {
+    ...firstPage,
+    episodes: dedupeEpisodesByGuid(pages.flatMap((page) => page.episodes)),
+    nextOffset: lastPage.nextOffset,
+    hasMore: lastPage.hasMore,
+    storedTotal: lastPage.storedTotal,
+    isTruncated: lastPage.isTruncated,
+    lastSuccessfulFetchAt: lastPage.lastSuccessfulFetchAt,
+    nextRefreshAfter: lastPage.nextRefreshAfter,
   }
 }
 
@@ -144,12 +116,17 @@ export function getPodcastEpisodesCacheEntries(
     return []
   }
 
-  const prefix = buildPodcastEpisodesQueryPrefix(normalizedPodcastItunesId, country)
+  // No country means "inspect every country-scoped cache entry for this podcast".
+  // Exact reads below intentionally keep "no country" as the unscoped cache key.
+  const prefix = buildPodcastEpisodesPagesQueryKey(normalizedPodcastItunesId, country)
   return queryClient
     .getQueryCache()
     .findAll({ queryKey: prefix, exact: false })
     .flatMap((query) => {
-      const data = query.state.data as PodcastEpisodes | undefined
+      if (isQueryStateInvalidated(query.state)) {
+        return []
+      }
+      const data = flattenPodcastEpisodePages(podcastEpisodesPagesFromQueryData(query.state.data))
       if (!data) {
         return []
       }
@@ -157,11 +134,10 @@ export function getPodcastEpisodesCacheEntries(
       const updatedAt = query.state.dataUpdatedAt
       return [
         {
-          queryKey: query.queryKey as ReturnType<typeof buildPodcastEpisodesQueryKey>,
+          queryKey: query.queryKey as ReturnType<typeof buildPodcastEpisodesPagesQueryKey>,
           data: clonePodcastEpisodes(data),
           updatedAt,
           staleAt: updatedAt + PODCAST_QUERY_CACHE_POLICY.episodes.staleTime,
-          authority: parsePodcastEpisodesAuthorityFromQueryKey(query.queryKey),
         } satisfies PodcastEpisodesCacheEntry,
       ]
     })
@@ -178,14 +154,16 @@ export function readPodcastEpisodesFromCache(
     return undefined
   }
 
-  const normalizedAuthority = normalizeAuthority(readOptions?.authority)
-  const queryKey = buildPodcastEpisodesQueryKey(
+  const queryKey = buildPodcastEpisodesPagesQueryKey(
     normalizedPodcastItunesId,
-    normalizedAuthority,
     readOptions?.country
   )
-  const data = queryClient.getQueryData(queryKey) as PodcastEpisodes | undefined
-  const updatedAt = queryClient.getQueryState(queryKey)?.dataUpdatedAt ?? 0
+  const queryState = queryClient.getQueryState(queryKey)
+  if (isQueryStateInvalidated(queryState)) {
+    return undefined
+  }
+  const data = flattenPodcastEpisodePages(podcastEpisodesPagesFromQueryData(queryState?.data))
+  const updatedAt = queryState?.dataUpdatedAt ?? 0
   if (!data) {
     return undefined
   }
@@ -195,7 +173,6 @@ export function readPodcastEpisodesFromCache(
     data,
     updatedAt,
     staleAt: updatedAt + PODCAST_QUERY_CACHE_POLICY.episodes.staleTime,
-    authority: normalizedAuthority,
   } satisfies PodcastEpisodesCacheEntry
 
   if (!readOptions?.allowStale && !isPodcastEpisodesCacheFresh(entry, readOptions?.now)) {
@@ -208,26 +185,23 @@ export function readPodcastEpisodesFromCache(
 export function getPodcastEpisodesBootstrapSnapshot(
   queryClient: QueryClient,
   podcastItunesId: string,
-  authority?: PodcastEpisodeListAuthority,
   country?: string
 ): PodcastEpisodesBootstrapSnapshot | undefined {
-  const entries = getPodcastEpisodesCacheEntries(queryClient, podcastItunesId, country)
+  const entries = getPodcastEpisodesCacheEntries(queryClient, podcastItunesId, country).filter(
+    (entry) => isPodcastEpisodesCacheFresh(entry)
+  )
   if (entries.length === 0) {
     return undefined
   }
 
-  const matchingEntries = entries.filter((entry) =>
-    matchesPodcastEpisodeListAuthority(entry.authority, authority)
-  )
-  const entry = (matchingEntries[0] ?? entries[0]) satisfies PodcastEpisodesCacheEntry
+  const entry = entries[0] satisfies PodcastEpisodesCacheEntry
   if (!entry) {
     return undefined
   }
 
   return {
     data: clonePodcastEpisodes(entry.data),
-    updatedAt: matchingEntries.length > 0 || !normalizeAuthority(authority) ? entry.updatedAt : 0,
-    isAuthoritative: matchingEntries.length > 0 || !normalizeAuthority(authority),
+    updatedAt: entry.updatedAt,
   }
 }
 
@@ -237,7 +211,6 @@ export function writePodcastEpisodesToCache(
   payload: PodcastEpisodes,
   options?: {
     now?: number
-    authority?: PodcastEpisodeListAuthority
     country?: string
   }
 ): PodcastEpisodes {
@@ -249,33 +222,29 @@ export function writePodcastEpisodesToCache(
   const now = options?.now ?? Date.now()
   const cachePayload: PodcastEpisodes = {
     episodes: dedupeEpisodesByGuid([...payload.episodes]),
+    limit: payload.limit,
+    offset: payload.offset,
+    nextOffset: payload.nextOffset,
+    hasMore: payload.hasMore,
+    storedTotal: payload.storedTotal,
+    isTruncated: payload.isTruncated,
+    lastSuccessfulFetchAt: payload.lastSuccessfulFetchAt,
+    nextRefreshAfter: payload.nextRefreshAfter,
   }
-  const normalizedAuthority = normalizeAuthority(options?.authority)
-  const queryKey = buildPodcastEpisodesQueryKey(
-    normalizedPodcastItunesId,
-    normalizedAuthority,
-    options?.country
-  )
+  const queryKey = buildPodcastEpisodesPagesQueryKey(normalizedPodcastItunesId, options?.country)
 
   queryClient.setQueryDefaults(queryKey, {
     gcTime: PODCAST_QUERY_CACHE_POLICY.episodes.gcTime,
   })
 
-  queryClient.setQueryData(queryKey, cachePayload, { updatedAt: now })
-
-  for (const entry of getPodcastEpisodesCacheEntries(
-    queryClient,
-    normalizedPodcastItunesId,
-    options?.country
-  )) {
-    if (
-      entry.queryKey.length === queryKey.length &&
-      entry.queryKey.every((part, index) => part === queryKey[index])
-    ) {
-      continue
-    }
-    queryClient.removeQueries({ queryKey: entry.queryKey, exact: true })
-  }
+  queryClient.setQueryData(
+    queryKey,
+    {
+      pages: [cachePayload],
+      pageParams: [cachePayload.offset],
+    } satisfies PodcastEpisodesInfiniteData,
+    { updatedAt: now }
+  )
 
   return cachePayload
 }
@@ -284,7 +253,6 @@ export function findEpisodeInPodcastEpisodesCache(
   queryClient: QueryClient,
   podcastItunesId: string,
   episodeGuid: string,
-  authority?: PodcastEpisodeListAuthority,
   country?: string
 ): Episode | undefined {
   const normalizedEpisodeGuid = episodeGuid.trim()
@@ -293,7 +261,6 @@ export function findEpisodeInPodcastEpisodesCache(
   }
 
   const exactEpisodeList = readPodcastEpisodesFromCache(queryClient, podcastItunesId, {
-    authority,
     country,
   })
 

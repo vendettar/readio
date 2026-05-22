@@ -164,7 +164,7 @@ vi.mock('../../store/historyStore', () => ({
           artworkUrl: 'https://example.com/art.jpg',
           localTrackId: 'track-1',
           showTitle: 'Podcast',
-          publishedAt: 1700000000000,
+          publishedAt: 1700000000,
           podcastItunesId: '123',
           countryAtSave: 'us',
           episodeGuid: 'guid-1',

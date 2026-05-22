@@ -40,7 +40,7 @@ title: Cloud ASR Relay 审计
 | 作为 ASR 输入的远程音频抓取 | `remoteTranscript.ts` 里的 `fetchRemoteAudioBlob` | Cloud media fallback 类 `ASR_AUDIO` | 是，先直连 | 是 | 否 | 是，fallback 时会用 | 不需要。现有 `/api/proxy` 的 media fallback 已足够 | 本地 blob 无效、track 切换后陈旧回包、显式 abort | 这是媒体抓取 fallback，不是 provider 提交。不要把它移动到新的 ASR relay。 |
 | 用于 transcript recovery 的远程 transcript 抓取 | `remoteTranscript.ts` 里的 `fetchTextWithFallback` | Cloud media fallback 类 `TRANSCRIPT` | 是，先直连 | 是 | 否 | 是，fallback 时会用 | 不需要。现有 `/api/proxy` 的 media fallback 已足够 | transcript 内容 malformed、track 切换后陈旧回包、显式 abort | 这是 recovery 抓取，不是 provider 转写。不要把它重分类成 provider transport。 |
 | provider 转写提交 | `transcribeAudioWithRetry` -> `transcribeViaCloudRelay` -> `POST /api/v1/asr/transcriptions` | 独立的同源 provider relay | 否 | 否 | 否 | 否 | 需要，且已完成 | 缺失 provider config、unsupported provider/model、unauthorized、payload too large、rate limited、service unavailable、client abort | 不要把 `/api/proxy` 扩展成通用 multipart POST 隧道。在这一阶段，provider credential 必须保持为浏览器按请求提供、后端瞬时使用且不持久化。 |
-| provider 验证 / readiness 请求 | `verifyOpenAiCompatibleKey`、`verifyQwenKey`、`verifyDeepgramKey`、`verifyVolcengineKey` | 浏览器直连 provider 检查；其中部分 provider 已使用 `fetchWithFallback` 的用户 proxy plumbing | 是 | 是（OpenAI-compatible / Deepgram / Qwen）；Volcengine 否 | 是，如果运行时里仍存在 dormant proxy plumbing | 否 | 当前 relay 切换不要求；除非后续指令明确扩展范围 | unauthorized、malformed provider key、unsupported provider、client abort | 在后续工作证明它也必须移动之前，先保持它与转写 relay 分离。 |
+| provider 验证 / readiness 请求 | `verifyAsrKey` -> `verifyAsrKeyViaCloudRelay` -> `POST /api/v1/asr/verify` | 已启用 provider 走同源 provider relay；后端当前只启用 Groq，qwen/deepgram/volcengine 会被明确拒绝为 unsupported | 否 | 否 | 否 | 否 | 是，但只用于 provider credential 验证；不得持久化 credential，也不得暴露 provider response body | unauthorized、unsupported provider、malformed payload、client abort、rate limited | 这条路径本质上是 credential-checking oracle，因此必须保持严格限流，永不记录 API key，并在 Grafana 中按 `client_ip`、`origin`、`provider`、status、error class 监控 `route=asr-relay/verify`。 |
 | 本地 `blob:` / 已下载 blob / Dexie-backed blob ASR 输入 | `fetchTrackAudioBlob`、本地播放/下载查找 | browser-local 输入准备 | 否 | 否 | 否 | 否 | 否 | 缺失本地 blob、缺失本地 track、陈旧完成 | 必须保持 browser-local，不能代理。 |
 | ASR ingestion 里的 tracking URL 解包路径 | `unwrapPodcastTrackingUrl` / `normalizeAsrAudioUrl` | 只是预处理 | 否 | 否 | 否 | 否 | 否 | 无。这不是 transport | 不要把 URL 规范化变成 transport fallback trigger。 |
 | ASR 流程中的 abort / stale-track-switch 边界 | `isTrackStillCurrent`、`inFlightAsrTasks`、`AbortController`、queued ASR tasks | UI state 边界 | 否 | 否 | 否 | 否 | 否 | stale completion、abort、latest-request-wins 保持 | 不要让 relay 工作或 provider fallback 绕过 track identity 检查。 |
@@ -49,7 +49,7 @@ title: Cloud ASR Relay 审计
 
 - Cloud 的 media fetch fallback 已经覆盖 ASR 相关的音频和 transcript 抓取类请求。
 - provider 转写提交的 CORS 缺口现在已经通过独立的同源 relay 关闭，而不是通过 `/api/proxy` 解决。
-- provider 验证 / readiness 仍然是 browser-direct，必须和转写 relay 分开，直到后续指令明确扩展范围。
+- provider 验证 / readiness 现在对已启用 provider 走同源 relay；非 Groq provider 仍保持 runtime disabled，并由后端明确拒绝，直到后续指令扩展支持范围。
 - 本地 blob / 已下载 blob 输入仍然是 browser-local，不能移动到后端存储。
 - provider credential 在这一阶段仍然由用户拥有并由浏览器按请求提供；后端 relay 只能把它当作瞬时请求数据处理。
 
@@ -60,4 +60,4 @@ title: Cloud ASR Relay 审计
 - `apps/cloud-ui/src/lib/asr/__tests__/backendRelay.test.ts`
 - `apps/cloud-ui/src/lib/asr/__tests__/index.deepgram-routing.test.ts`
 - `apps/cloud-ui/src/lib/asr/__tests__/index.providerToggleGuard.test.ts`
-- `apps/cloud-api/asr_relay_test.go`
+- `apps/cloud-api/internal/asr/asr_relay_test.go`

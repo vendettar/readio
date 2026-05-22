@@ -176,7 +176,7 @@ VPS 必须能够拉取 `ghcr.io/${owner}/readio-cloud-api-pre` 和 `ghcr.io/${ow
    - 修复并合并回 `release` 后，立即通过 **`git cherry-pick`** 将该提交同步回 `main` 分支，确保主干不丢失修复。
 
 ### 部署细节
-- **前端路由**：仓库已提交 `apps/cloud-ui/public/_redirects`，内容为 `/* /index.html 200`，因此节目页、单集详情页这类深链在 Pages 上不会 404。
+- **前端路由**：Cloudflare Pages 将 Cloud UI 作为 SPA 托管。只要构建产物没有根级 `404.html`，节目页、单集详情页这类深链会回退到 `index.html`，再由客户端路由解析。
 - **仓库部署命令**：根目录 `Makefile` 负责 API 部署和运维的 Docker Context 命令入口。
 - **远程执行**：部署使用 Docker Context over SSH。workflow 使用 `CLOUD_SSH_PRIVATE_KEY` 和固定的 `CLOUD_SSH_KNOWN_HOSTS` 非交互配置 SSH，然后执行 `make context-setup` 与对应部署目标。
 - **运行时环境**：CI 不再在 VPS 上写入或修改明文 env 文件。`docker-compose.readio.yml` 显式列出必需环境变量，由 Compose 从 workflow 或本地 shell 环境中插值。

@@ -48,10 +48,11 @@ Cloud handoff 树是应用级前后端契约的 SSOT：
 - `POST /api/proxy` 仍然是 JS 客户端使用的代理入口。
 - POST 请求体使用 JSON 代理契约：`{ "url": "...", "method": "GET" | "HEAD", "headers"?: { ... } }`。
 - `GET /api/proxy?url=...` 只用于内建的同源原生 audio fallback，只允许透传一小组媒体安全请求头（如 `Range`、`If-Range` 及相关 cache-safe header）。
-- 运行时 `READIO_NETWORK_PROXY_AUTH_HEADER` / `READIO_NETWORK_PROXY_AUTH_VALUE` 仍是给带认证的 JS proxy POST 调用使用的浏览器公开配置；它们不是秘密存储。
+- Cloud media proxy 依赖来源白名单、请求校验、SSRF 防护和限流；不再使用浏览器公开的 proxy auth token。
 - 代理在拨号前会校验目标地址，并拒绝私网、回环、链路本地或 metadata 风格目标。
 - 请求路径是 fail-closed 的：它使用已验证的固定目标集，并且不会通过重定向跳入不允许的目标。
 - 代理使用自定义 user agent，限制上游请求超时，并保留基础的内存限流。
+- `/api/proxy` 仍然是公开的同源媒体出口 relay，不是通用 outbound fetch API。Origin 检查只是浏览器滥用控制，不是 secret 边界；每个请求都必须保留 SSRF 校验、限流，并输出包含 `client_ip`、`origin`、`upstream_host`、status、error class 的结构化 `slog` 字段，方便 Grafana 发现滥用。
 
 ## 4. SQLite 启动状态
 

@@ -169,7 +169,7 @@ To maintain a clean and maintainable codebase, the following workflow is mandato
    - After fixing and merging back into `release`, immediately **`cherry-pick`** the fix into the `main` branch to ensure the fix is not lost in future updates.
 
 ### Deployment Details
-- **Frontend routing**: `apps/cloud-ui/public/_redirects` is committed with `/* /index.html 200`, so direct deep links such as podcast and episode detail routes resolve correctly on Pages.
+- **Frontend routing**: Cloudflare Pages serves the Cloud UI as an SPA. Without a root-level `404.html`, direct deep links such as podcast and episode detail routes fall back to `index.html` and are resolved by the client router.
 - **Repo-owned deploy commands**: the root `Makefile` owns the Docker Context command surface for API deploys and operations.
 - **Remote execution**: deployment uses Docker Context over SSH. The workflows configure SSH non-interactively with `CLOUD_SSH_PRIVATE_KEY` and pinned `CLOUD_SSH_KNOWN_HOSTS`, then run `make context-setup` and the relevant deploy target.
 - **Runtime environment**: CI no longer writes or mutates plaintext env files on the VPS. `docker-compose.readio.yml` lists required environment variables explicitly and Compose interpolates them from the workflow or local shell environment.

@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { ExpandableDescription } from '@/components/ui/expandable-description'
 import { useEpisodePlayback } from '@/hooks/useEpisodePlayback'
 import { useEpisodeResolution } from '@/hooks/useEpisodeResolution'
-import { formatDuration, formatRelativeTime } from '@/lib/dateUtils'
+import { formatDuration, formatUnixSecondsRelativeTime } from '@/lib/dateUtils'
 import { buildFavoriteKey } from '@/lib/db/favoriteIdentity'
 import { mapCanonicalEpisodeToFavoriteInputs } from '@/lib/db/favoriteMappers'
 import { getEditorPickRouteState } from '@/lib/discovery/editorPicks'
@@ -177,7 +177,7 @@ export default function PodcastEpisodeDetailPage() {
   const episodeExternalUrl = getValidExternalHttpUrl(episode.link)
 
   // Format metadata
-  const relativeTime = formatRelativeTime(episode.pubDate, language)
+  const relativeTime = formatUnixSecondsRelativeTime(episode.pubDate, language)
   const duration = formatDuration(episode.duration, t)
   const episodeLabel = formatEpisodeOrdinalLabel(episode.seasonNumber, episode.episodeNumber)
   const showRoute = buildPodcastShowRoute({

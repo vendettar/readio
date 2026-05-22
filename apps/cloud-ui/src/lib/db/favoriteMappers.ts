@@ -8,6 +8,10 @@ import type {
 } from './types'
 import { isNavigableExplorePlaybackSession } from './types'
 
+function unixSecondsFromMilliseconds(timestamp: number): number {
+  return Math.floor(timestamp / 1000)
+}
+
 function mapPodcastToFavoriteInput(
   podcast: Pick<Podcast, 'podcastItunesId' | 'title' | 'artwork'>
 ) {
@@ -83,7 +87,7 @@ export function mapPodcastDownloadToFavoriteInputs(
       description: track.sourceDescription,
       artworkUrl: track.sourceArtworkUrl,
       duration: track.durationSeconds ?? 0,
-      pubDate: new Date(track.downloadedAt).toISOString(),
+      pubDate: unixSecondsFromMilliseconds(track.downloadedAt),
       transcriptUrl: track.transcriptUrl,
     },
   }
@@ -113,7 +117,7 @@ export function mapPlaybackSessionToFavoriteInputs(
       description: session.description ?? '',
       artworkUrl: session.artworkUrl,
       duration: session.durationSeconds,
-      pubDate: session.publishedAt ? new Date(session.publishedAt).toISOString().split('T')[0] : '',
+      pubDate: session.publishedAt,
       transcriptUrl: session.transcriptUrl,
     },
   }

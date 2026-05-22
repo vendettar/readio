@@ -16,8 +16,13 @@
  */
 
 import type { QueryClient } from '@tanstack/react-query'
-import type { Episode, Podcast, SearchEpisode } from '@/lib/discovery'
-import { ensurePodcastDetail, ensurePodcastEpisodes } from '@/lib/discovery/queryCache'
+import discovery, {
+  type Episode,
+  type Podcast,
+  type PodcastEpisodes,
+  type SearchEpisode,
+} from '@/lib/discovery'
+import { ensurePodcastDetail } from '@/lib/discovery/queryCache'
 import { getCanonicalSearchEpisodeIdentity } from '@/lib/discovery/searchEpisodeContract'
 import { episodeIdentityToCompactKey } from '@/lib/routes/compactKey'
 import { normalizeEpisodeTitle } from '@/lib/routes/episodeTitleNormalization'
@@ -32,6 +37,8 @@ import {
 
 const DATE_CUTOFF_DAYS = 30
 const MAX_EPISODES_TO_SCAN = 60
+const EPISODE_SCAN_PAGE_SIZE = 20
+const MAX_EPISODE_SCAN_PAGES = 3
 
 export interface ResolveEpisodeByTitleOptions {
   queryClient: QueryClient
@@ -53,21 +60,16 @@ export interface ResolvedShowRoute {
 
 export type ResolvedRoute = ResolvedEpisodeRoute | ResolvedShowRoute
 
-function isWithinDateCutoff(pubDate: string | null | undefined): boolean {
-  if (!pubDate) {
-    return true // Cannot use this item to trigger cutoff
-  }
-
-  const parsed = new Date(pubDate)
-  if (Number.isNaN(parsed.getTime())) {
-    return true // Cannot parse date, don't trigger cutoff
+function isWithinDateCutoff(pubDate: number): boolean {
+  if (pubDate <= 0) {
+    return true
   }
 
   const cutoffDate = new Date()
   cutoffDate.setDate(cutoffDate.getDate() - DATE_CUTOFF_DAYS)
   cutoffDate.setHours(0, 0, 0, 0)
 
-  return parsed.getTime() >= cutoffDate.getTime()
+  return pubDate * 1000 >= cutoffDate.getTime()
 }
 
 function buildEpisodeRouteFromEpisode(
@@ -122,7 +124,7 @@ export async function resolveEpisodeByTitle(
   // Step 1: Get canonical podcast detail
   let podcast: Podcast | null
   try {
-    podcast = await ensurePodcastDetail(queryClient, podcastItunesId, signal)
+    podcast = await ensurePodcastDetail(queryClient, podcastItunesId, signal, normalizedCountry)
   } catch {
     return buildFallbackShowRoute(normalizedCountry, podcastItunesId)
   }
@@ -131,43 +133,58 @@ export async function resolveEpisodeByTitle(
     return buildFallbackShowRoute(normalizedCountry, podcastItunesId)
   }
 
-  let episodes: Episode[]
-  try {
-    episodes = (
-      await ensurePodcastEpisodes(queryClient, podcastItunesId, {
-        signal,
-        authority: {
-          lastUpdateTime: podcast.lastUpdateTime,
-          episodeCount: podcast.episodeCount,
-        },
-      })
-    ).episodes
-  } catch {
-    return buildFallbackShowRoute(normalizedCountry, podcastItunesId)
-  }
-
   let scannedCount = 0
   let matchedEpisode: Episode | null = null
+  let offset = 0
+  let pageCount = 0
+  let shouldStopScanning = false
 
-  for (const episode of episodes) {
-    if (scannedCount >= MAX_EPISODES_TO_SCAN) {
-      break
+  while (scannedCount < MAX_EPISODES_TO_SCAN && pageCount < MAX_EPISODE_SCAN_PAGES) {
+    let page: PodcastEpisodes
+    try {
+      page = await discovery.fetchPodcastEpisodes(podcastItunesId, {
+        signal,
+        limit: Math.min(EPISODE_SCAN_PAGE_SIZE, MAX_EPISODES_TO_SCAN - scannedCount),
+        offset,
+      })
+    } catch {
+      return buildFallbackShowRoute(normalizedCountry, podcastItunesId)
     }
+    pageCount++
 
-    const withinCutoff = isWithinDateCutoff(episode.pubDate)
-    scannedCount++
-
-    if (!withinCutoff) {
-      break
-    }
-
-    const episodeNormalizedTitle = normalizeEpisodeTitle(episode.title)
-    if (episodeNormalizedTitle === normalizedTargetTitle) {
-      if (matchedEpisode !== null) {
-        return buildFallbackShowRoute(normalizedCountry, podcastItunesId)
+    for (const episode of page.episodes) {
+      if (scannedCount >= MAX_EPISODES_TO_SCAN) {
+        shouldStopScanning = true
+        break
       }
-      matchedEpisode = episode
+
+      const withinCutoff = isWithinDateCutoff(episode.pubDate)
+      scannedCount++
+
+      if (!withinCutoff) {
+        shouldStopScanning = true
+        break
+      }
+
+      const episodeNormalizedTitle = normalizeEpisodeTitle(episode.title)
+      if (episodeNormalizedTitle === normalizedTargetTitle) {
+        if (matchedEpisode !== null) {
+          return buildFallbackShowRoute(normalizedCountry, podcastItunesId)
+        }
+        matchedEpisode = episode
+      }
     }
+
+    if (
+      shouldStopScanning ||
+      scannedCount >= MAX_EPISODES_TO_SCAN ||
+      !page.hasMore ||
+      page.nextOffset <= offset
+    ) {
+      break
+    }
+
+    offset = page.nextOffset
   }
 
   if (matchedEpisode) {
@@ -196,7 +213,7 @@ function buildFallbackShowRoute(
  * Rules (per 029 spec):
  * - Only for SearchEpisode (not generic episode rows or TopEpisode title resolution)
  * - Only when all required fields are valid: country, podcastItunesId, episodeGuid, compactKey
- * - MUST NOT trigger podcast-detail lookup
+ * - MUST NOT trigger detail lookup
  * - MUST NOT trigger feed-title resolution
  * - MUST NOT add route query hints
  */

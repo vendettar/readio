@@ -87,7 +87,7 @@ describe('localSearchActions remote playback delegation', () => {
         artworkUrl: 'https://example.com/art.jpg',
         episodeArtworkUrl: '',
         description: 'Test',
-        pubDate: '2025-02-01',
+        pubDate: 1738368000,
         durationSeconds: 0,
         addedAt: Date.now(),
         countryAtSave: 'us',

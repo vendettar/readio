@@ -30,7 +30,19 @@ Cloud 后端现在也拥有服务端 SQLite 持久化，用于后端治理的状
 当前和规划中的后端 SQLite 职责包括：
 
 - built-in ASR 的 quota / reservation / idempotency 状态
+- Cloud discovery 页面渲染使用的 PodcastIndex 派生节目与单集 snapshot：
+  - `podcast_shows`：节目/show 领域元数据
+  - `podcast_episodes`：有界保留的单集行，按稳定 newest-first 顺序排列
+  - `podcast_cache_state`：刷新、退避、截断、驱逐与访问元数据
+- podcast transcript asset 持久化暂搁到 migration `00004`；在它落地前，运行路径不得假设 `podcast_transcript_assets` 已存在，transcript asset storage gate 默认保持 disabled
 - 其他需要跨进程重启保留的后端运营状态
+
+Discovery snapshot 约束：
+
+- `podcast_shows` 不应保存刷新时间、失败计数、近似字节数、驱逐优先级等 cache-state 字段
+- `podcast_episodes` 是保留单集数量和最新保留发布时间的来源；路由总数使用 `COUNT(*)`，增量刷新通过 `ORDER BY published_at_unix DESC LIMIT 1` 选择最新保留行
+- `podcast_cache_state` 只拥有缓存元数据；它不是用户 library state，也不是完整历史归档契约
+- PodcastIndex cache SQL 通过 sqlc 从 `apps/cloud-api/internal/db/schema.sql` 和 `apps/cloud-api/internal/db/queries/pi_episode_cache.sql` 生成；在 `apps/cloud-api` 下运行 `go generate ./internal/db` 可重新生成。`apps/cloud-api/internal/podcastindex/cache_store.go` 保留事务编排，并把生成 row 映射回领域结构。
 
 已退役方向：
 
@@ -44,7 +56,8 @@ Cloud 后端现在也拥有服务端 SQLite 持久化，用于后端治理的状
 Cloud 中 discovery / search 前端已不再依赖长期持久化的 IndexedDB 缓存。
 
 - 前端 discovery 主要依赖 TanStack Query 内存缓存
-- 当前活跃的后端 discovery 路由只在适用时使用后端内存缓存；已退役的 feed 路由不会留下活跃的 SQLite discovery-cache 契约
+- 当前活跃的后端 discovery 路由只在适用时使用后端内存缓存；PodcastIndex 节目详情 / 单集列表读取使用上面的 SQLite snapshot 表
+- 已退役的 feed 路由不会留下活跃的 SQLite feed-cache 契约
 - `runtime_cache` 仍存在，但只服务于当前仍有 owner 的浏览器运行时缓存
 
 ## 5. 后端 SQLite 治理摘要

@@ -51,8 +51,6 @@ describe('useAudioProxyFallback', () => {
     vi.clearAllMocks()
     getNetworkProxyConfigMock.mockReturnValue({
       proxyUrl: '/api/proxy',
-      authHeader: '',
-      authValue: '',
     })
     buildProxyUrlMock.mockImplementation((proxyBase: string, audioUrl: string) => {
       return `${proxyBase}?url=${encodeURIComponent(audioUrl)}`
@@ -187,8 +185,6 @@ describe('useAudioProxyFallback', () => {
   it('no-ops when no proxy is configured', () => {
     getNetworkProxyConfigMock.mockReturnValue({
       proxyUrl: '',
-      authHeader: '',
-      authValue: '',
     })
     const loadSpy = vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {})
 
@@ -204,8 +200,6 @@ describe('useAudioProxyFallback', () => {
   it('skips fallback when the proxy URL is cross-origin', () => {
     getNetworkProxyConfigMock.mockReturnValue({
       proxyUrl: 'https://proxy.example.com',
-      authHeader: 'x-proxy-token',
-      authValue: 'secret',
     })
     const loadSpy = vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {})
 
@@ -221,8 +215,6 @@ describe('useAudioProxyFallback', () => {
   it('does not attempt audio fallback through an external proxy URL', () => {
     getNetworkProxyConfigMock.mockReturnValue({
       proxyUrl: 'https://worker.example/proxy',
-      authHeader: 'x-proxy-token',
-      authValue: 'secret',
     })
     const loadSpy = vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {})
 

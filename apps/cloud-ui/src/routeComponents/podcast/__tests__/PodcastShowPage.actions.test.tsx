@@ -11,6 +11,8 @@ const subscribeMock = vi.fn()
 const unsubscribeMock = vi.fn()
 const playEpisodeMock = vi.fn()
 let routeCountry = 'us'
+let detailIsFetching = false
+let episodePagesAreFetching = false
 
 const podcast = makePodcast({
   podcastItunesId: 'pod-1',
@@ -24,7 +26,7 @@ const episodeList = makePodcastEpisodes({
       guid: 'ep-1',
       title: 'Episode 1',
       audioUrl: 'https://example.com/ep-1.mp3',
-      pubDate: '2024-01-01T00:00:00.000Z',
+      pubDate: 1704067200,
       description: 'Episode 1 description',
     }),
   ],
@@ -44,20 +46,35 @@ vi.mock('@tanstack/react-router', () => ({
   useLocation: () => ({ state: null }),
 }))
 
-let queryCall = 0
+const useQueryMock = vi.fn()
+const useInfiniteQueryMock = vi.fn()
 vi.mock('@tanstack/react-query', () => ({
-  useQuery: () => {
-    queryCall += 1
-    if (queryCall === 1) {
-      return { data: podcast, isLoading: false, error: null }
-    }
-    return { data: episodeList, isLoading: false, error: null }
-  },
+  useQuery: (options: { queryKey: readonly unknown[] }) => useQueryMock(options),
+  useInfiniteQuery: (options: { queryKey: readonly unknown[] }) => useInfiniteQueryMock(options),
   useQueryClient: () => ({
     invalidateQueries: vi.fn(),
     getQueryData: vi.fn(),
+    getQueryState: vi.fn(),
   }),
 }))
+
+function mockPodcastShowQueries() {
+  useQueryMock.mockImplementation(({ queryKey }: { queryKey: readonly unknown[] }) => {
+    if (queryKey[1] === 'detail') {
+      return { data: podcast, isLoading: false, isFetching: detailIsFetching, error: null }
+    }
+    return { data: undefined, isLoading: false, isFetching: false, error: null }
+  })
+  useInfiniteQueryMock.mockReturnValue({
+    data: { pages: [episodeList], pageParams: [0] },
+    isLoading: false,
+    isFetching: episodePagesAreFetching,
+    error: null,
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    fetchNextPage: vi.fn(),
+  })
+}
 
 vi.mock('../../../hooks/useEpisodePlayback', () => ({
   useEpisodePlayback: () => ({
@@ -89,8 +106,12 @@ vi.mock('../../../lib/discovery', async (importOriginal) => {
 
 describe('PodcastShowPage action wiring', () => {
   beforeEach(() => {
-    queryCall = 0
+    useQueryMock.mockReset()
+    useInfiniteQueryMock.mockReset()
+    mockPodcastShowQueries()
     routeCountry = 'us'
+    detailIsFetching = false
+    episodePagesAreFetching = false
     subscribeMock.mockReset()
     unsubscribeMock.mockReset()
     playEpisodeMock.mockReset()
@@ -113,5 +134,13 @@ describe('PodcastShowPage action wiring', () => {
 
     expect(screen.queryByText('latestEpisode')).toBeNull()
     expect(playEpisodeMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps episode preview in loading state while detail refresh is checking for updates', async () => {
+    detailIsFetching = true
+    render(<PodcastShowPage />)
+
+    expect(screen.queryByText('latestEpisode')).toBeNull()
+    expect(screen.queryByText('Episode 1')).toBeNull()
   })
 })

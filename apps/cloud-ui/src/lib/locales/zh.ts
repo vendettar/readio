@@ -119,7 +119,6 @@ const locale = {
   proxyTitle: '代理',
   validationApiKeyPrefix: '必须以 sk- 开头',
   validationUrlInvalid: '请输入有效的 URL',
-  validationProxyAuthHeaderInvalid: '认证请求头必须为“{{header}}”',
   placeholderApiKey: 'sk-...',
   settingsAsrVolcengineKeyPlaceholder: 'appId:accessToken',
   settingsAsrGroqKeyPlaceholder: 'gsk_...',

@@ -81,17 +81,17 @@ describe('PodcastEpisodesPage editor pick path', () => {
               makeEpisode({
                 guid: 'pi-ep-1',
                 title: 'PI Episode 1',
-                pubDate: '2026-03-27T00:00:00Z',
+                pubDate: 1774569600,
               }),
               makeEpisode({
                 guid: 'pi-ep-2',
                 title: 'PI Episode 2',
-                pubDate: '2025-03-27T00:00:00Z',
+                pubDate: 1743033600,
               }),
               makeEpisode({
                 guid: 'pi-ep-3',
                 title: 'PI Episode 3',
-                pubDate: '2025-02-27T00:00:00Z',
+                pubDate: 1740614400,
               }),
             ],
           })
@@ -125,7 +125,7 @@ describe('PodcastEpisodesPage editor pick path', () => {
     expect(episodeListHits).toBe(1)
   })
 
-  it('reuses the PI episode-list cache family for warm see-all navigation', async () => {
+  it('reuses cached podcast metadata and the warm paginated episode page for see-all navigation', async () => {
     const podcast = makePodcast({
       podcastItunesId: '12345',
       title: 'Cached Podcast',
@@ -144,21 +144,17 @@ describe('PodcastEpisodesPage editor pick path', () => {
               makeEpisode({
                 guid: 'cached-ep-1',
                 title: 'Cached Episode 1',
-                pubDate: '2026-03-27T00:00:00Z',
+                pubDate: 1774569600,
               }),
               makeEpisode({
                 guid: 'cached-ep-2',
                 title: 'Cached Episode 2',
-                pubDate: '2025-03-27T00:00:00Z',
+                pubDate: 1743033600,
               }),
             ],
           }),
           {
             country: 'us',
-            authority: {
-              lastUpdateTime: podcast.lastUpdateTime,
-              episodeCount: podcast.episodeCount,
-            },
           }
         )
       },

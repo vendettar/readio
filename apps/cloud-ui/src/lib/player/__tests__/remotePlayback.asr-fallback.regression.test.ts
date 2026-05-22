@@ -48,7 +48,7 @@ describe('remotePlayback ASR-Fallback Regression', () => {
       audioUrl,
       title: 'Test',
       description: 'Desc',
-      pubDate: '2025-01-01T00:00:00.000Z',
+      pubDate: 1735689600,
       fileSize: 1024,
       duration: 60,
       explicit: false,

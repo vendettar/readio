@@ -29,6 +29,16 @@ export function normalizeRequiredText(value: string | null | undefined, fieldNam
   return normalized
 }
 
+export function normalizeRequiredUnixSeconds(
+  value: number | null | undefined,
+  fieldName: string
+): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) {
+    throw new Error(`[DB] ${fieldName} requires Unix epoch seconds`)
+  }
+  return value
+}
+
 export function buildSubscriptionRecord(data: Omit<Subscription, 'id'>): Subscription {
   return normalizeSubscriptionRecord(
     {
@@ -75,7 +85,7 @@ export function normalizeFavoriteRecord(record: Favorite, entityName: string): F
     podcastItunesId: normalizeRequiredText(record.podcastItunesId, `${entityName} podcastItunesId`),
     countryAtSave: normalizeRequiredCountryAtSave(record.countryAtSave, entityName),
     description: normalizedDescription,
-    pubDate: normalizeRequiredText(record.pubDate ?? '', `${entityName} pubDate`),
+    pubDate: normalizeRequiredUnixSeconds(record.pubDate, `${entityName} pubDate`),
     durationSeconds: record.durationSeconds ?? 0,
     episodeArtworkUrl: normalizedEpisodeArtworkUrl,
   }

@@ -30,7 +30,19 @@ Cloud backend now also owns server-side SQLite persistence for backend-governed 
 Current and planned backend-owned SQLite responsibilities include:
 
 - built-in ASR quota / reservation / idempotency state
+- PodcastIndex-derived podcast show and episode snapshots for Cloud discovery page rendering:
+  - `podcast_shows`: podcast/show domain metadata
+  - `podcast_episodes`: bounded retained episode rows, ordered by stable newest-first sort
+  - `podcast_cache_state`: refresh, backoff, truncation, eviction, and access metadata
+- podcast transcript asset persistence is deferred to migration `00004`; until that ships, runtime paths must not assume `podcast_transcript_assets` exists and the transcript asset storage gate remains disabled by default
 - other backend-owned operational state that must survive process restarts
+
+Discovery snapshot constraints:
+
+- `podcast_shows` must not store cache-state fields such as refresh timestamps, failure counters, byte estimates, or eviction priority.
+- `podcast_episodes` is the source for retained episode count and latest retained publish time; route totals use `COUNT(*)`, and incremental refresh selects the latest retained row with `ORDER BY published_at_unix DESC LIMIT 1`.
+- `podcast_cache_state` owns cache metadata only. It is not user library state and is not a full historical archive contract.
+- PodcastIndex cache SQL is generated with sqlc from `apps/cloud-api/internal/db/schema.sql` and `apps/cloud-api/internal/db/queries/pi_episode_cache.sql`; regenerate it with `go generate ./internal/db` from `apps/cloud-api`. `apps/cloud-api/internal/podcastindex/cache_store.go` keeps transaction orchestration and maps generated rows into domain structs.
 
 Retired direction:
 
@@ -44,7 +56,8 @@ This backend SQLite layer is not a generic replacement for browser-local user li
 Discovery/search frontend persistence is no longer modeled as a long-lived IndexedDB cache in Cloud.
 
 - frontend discovery relies on TanStack Query memory cache
-- active backend discovery routes rely on backend-managed in-memory cache where applicable; the retired feed route does not leave behind an active SQLite discovery-cache contract
+- active backend discovery routes rely on backend-managed in-memory cache where applicable; PodcastIndex podcast detail / episode-list reads use the SQLite snapshot tables above
+- the retired feed route does not leave behind an active SQLite feed-cache contract
 - `runtime_cache` still exists for remaining browser-local runtime caches that still have owners
 
 ## 5. Backend SQLite Governance Summary

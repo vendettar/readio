@@ -7,7 +7,10 @@ import {
   readPodcastEpisodesFromCache,
   writePodcastEpisodesToCache,
 } from '../episodeCache'
-import { buildPodcastEpisodesQueryKey, PODCAST_QUERY_CACHE_POLICY } from '../podcastQueryContract'
+import {
+  buildPodcastEpisodesPagesQueryKey,
+  PODCAST_QUERY_CACHE_POLICY,
+} from '../podcastQueryContract'
 import { makeEpisode, makePodcastEpisodes } from './fixtures'
 
 describe('podcast episode cache', () => {
@@ -16,7 +19,7 @@ describe('podcast episode cache', () => {
     vi.setSystemTime(new Date('2026-04-01T00:00:00.000Z'))
   })
 
-  it('stores one authority-aware PI episode-list payload for a podcast', () => {
+  it('stores one episode-page payload for a podcast', () => {
     const queryClient = createTestQueryClient()
 
     const written = writePodcastEpisodesToCache(
@@ -33,7 +36,7 @@ describe('podcast episode cache', () => {
     expect(written.episodes).toHaveLength(2)
     expect(getPodcastEpisodesCacheEntries(queryClient, '123')).toEqual([
       expect.objectContaining({
-        queryKey: buildPodcastEpisodesQueryKey('123'),
+        queryKey: buildPodcastEpisodesPagesQueryKey('123'),
         data: expect.objectContaining({
           episodes: [
             expect.objectContaining({ guid: 'ep-1' }),
@@ -64,7 +67,7 @@ describe('podcast episode cache', () => {
     expect(findEpisodeInPodcastEpisodesCache(queryClient, '123', '')).toBeUndefined()
   })
 
-  it('serves warm bootstrap snapshots from the PI episode-list family', () => {
+  it('serves warm bootstrap snapshots from the episode-pages family', () => {
     const queryClient = createTestQueryClient()
     writePodcastEpisodesToCache(
       queryClient,
@@ -75,57 +78,73 @@ describe('podcast episode cache', () => {
     )
 
     expect(getPodcastEpisodesBootstrapSnapshot(queryClient, '123')).toEqual({
-      data: {
+      data: expect.objectContaining({
         episodes: [expect.objectContaining({ guid: 'ep-1' })],
-      },
-      updatedAt: Date.now(),
-      isAuthoritative: true,
-    })
-  })
-
-  it('invalidates fresh reads when authoritative podcast markers drift', () => {
-    const queryClient = createTestQueryClient()
-    writePodcastEpisodesToCache(
-      queryClient,
-      '123',
-      makePodcastEpisodes({
-        episodes: [makeEpisode({ guid: 'ep-1' })],
+        limit: 20,
+        offset: 0,
+        nextOffset: 20,
+        hasMore: true,
+        storedTotal: 1000,
+        isTruncated: true,
       }),
-      {
-        authority: {
-          lastUpdateTime: 1,
-          episodeCount: 10,
-        },
-      }
-    )
-
-    expect(
-      readPodcastEpisodesFromCache(queryClient, '123', {
-        authority: { lastUpdateTime: 2, episodeCount: 10 },
-      })
-    ).toBeUndefined()
-    expect(getPodcastEpisodesBootstrapSnapshot(queryClient, '123')).toEqual({
-      data: {
-        episodes: [expect.objectContaining({ guid: 'ep-1' })],
-      },
       updatedAt: Date.now(),
-      isAuthoritative: true,
-    })
-    expect(
-      getPodcastEpisodesBootstrapSnapshot(queryClient, '123', {
-        lastUpdateTime: 1,
-        episodeCount: 11,
-      })
-    ).toEqual({
-      data: {
-        episodes: [expect.objectContaining({ guid: 'ep-1' })],
-      },
-      updatedAt: 0,
-      isAuthoritative: false,
     })
   })
 
-  it('does not treat stale episode cache as fresh exact-authority coverage', () => {
+  it('serves fresh same-podcast cache without podcast freshness gates', () => {
+    const queryClient = createTestQueryClient()
+    writePodcastEpisodesToCache(
+      queryClient,
+      '123',
+      makePodcastEpisodes({
+        episodes: [makeEpisode({ guid: 'ep-1' })],
+      })
+    )
+
+    expect(readPodcastEpisodesFromCache(queryClient, '123')).toEqual(
+      expect.objectContaining({
+        episodes: [expect.objectContaining({ guid: 'ep-1' })],
+      })
+    )
+    expect(getPodcastEpisodesBootstrapSnapshot(queryClient, '123')).toEqual({
+      data: expect.objectContaining({
+        episodes: [expect.objectContaining({ guid: 'ep-1' })],
+        limit: 20,
+        offset: 0,
+        nextOffset: 20,
+        hasMore: true,
+        storedTotal: 1000,
+        isTruncated: true,
+      }),
+      updatedAt: Date.now(),
+    })
+  })
+
+  it('distinguishes broad cache inspection from exact unscoped cache reads', () => {
+    const queryClient = createTestQueryClient()
+    writePodcastEpisodesToCache(
+      queryClient,
+      '123',
+      makePodcastEpisodes({
+        episodes: [makeEpisode({ guid: 'us-ep' })],
+      }),
+      { country: 'us' }
+    )
+
+    expect(getPodcastEpisodesCacheEntries(queryClient, '123')).toEqual([
+      expect.objectContaining({
+        queryKey: buildPodcastEpisodesPagesQueryKey('123', 'us'),
+      }),
+    ])
+    expect(readPodcastEpisodesFromCache(queryClient, '123')).toBeUndefined()
+    expect(readPodcastEpisodesFromCache(queryClient, '123', { country: 'us' })).toEqual(
+      expect.objectContaining({
+        episodes: [expect.objectContaining({ guid: 'us-ep' })],
+      })
+    )
+  })
+
+  it('does not treat stale episode cache as a fresh cache hit', () => {
     const queryClient = createTestQueryClient()
     writePodcastEpisodesToCache(
       queryClient,
@@ -141,7 +160,28 @@ describe('podcast episode cache', () => {
     expect(getPodcastEpisodesBootstrapSnapshot(queryClient, '123')).toBeUndefined()
   })
 
-  it('finds episodes by episodeGuid from the same PI episode-list source', () => {
+  it('does not serve invalidated episode page data as a fresh cache hit', async () => {
+    const queryClient = createTestQueryClient()
+    writePodcastEpisodesToCache(
+      queryClient,
+      '123',
+      makePodcastEpisodes({
+        episodes: [makeEpisode({ guid: 'stale-ep' })],
+      })
+    )
+
+    await queryClient.invalidateQueries({
+      queryKey: buildPodcastEpisodesPagesQueryKey('123'),
+      exact: true,
+      refetchType: 'none',
+    })
+
+    expect(readPodcastEpisodesFromCache(queryClient, '123')).toBeUndefined()
+    expect(getPodcastEpisodesBootstrapSnapshot(queryClient, '123')).toBeUndefined()
+    expect(findEpisodeInPodcastEpisodesCache(queryClient, '123', 'stale-ep')).toBeUndefined()
+  })
+
+  it('finds episodes by episodeGuid from the same episode-pages source', () => {
     const queryClient = createTestQueryClient()
     writePodcastEpisodesToCache(
       queryClient,
@@ -158,30 +198,6 @@ describe('podcast episode cache', () => {
       'Second Episode'
     )
     expect(findEpisodeInPodcastEpisodesCache(queryClient, '123', 'missing-guid')).toBeUndefined()
-  })
-
-  it('does not resolve an episode from a bootstrap snapshot when authority markers mismatch', () => {
-    const queryClient = createTestQueryClient()
-    writePodcastEpisodesToCache(
-      queryClient,
-      '123',
-      makePodcastEpisodes({
-        episodes: [makeEpisode({ guid: 'ep-1', title: 'Authority Scoped Episode' })],
-      }),
-      {
-        authority: {
-          lastUpdateTime: 1,
-          episodeCount: 10,
-        },
-      }
-    )
-
-    expect(
-      findEpisodeInPodcastEpisodesCache(queryClient, '123', 'ep-1', {
-        lastUpdateTime: 2,
-        episodeCount: 10,
-      })
-    ).toBeUndefined()
   })
 
   it('requires request-key ownership and deduplicates duplicate guid entries', () => {
@@ -211,7 +227,7 @@ describe('podcast episode cache', () => {
     expect(written.episodes).toEqual([expect.objectContaining({ title: 'First Title' })])
   })
 
-  it('removes superseded authority-key variants after a successful refresh', () => {
+  it('overwrites the same episode-pages cache after a successful refresh', () => {
     const queryClient = createTestQueryClient()
 
     writePodcastEpisodesToCache(
@@ -219,10 +235,7 @@ describe('podcast episode cache', () => {
       '123',
       makePodcastEpisodes({
         episodes: [makeEpisode({ guid: 'older-guid', title: 'Older' })],
-      }),
-      {
-        authority: { lastUpdateTime: 1, episodeCount: 10 },
-      }
+      })
     )
 
     vi.advanceTimersByTime(1_000)
@@ -232,18 +245,12 @@ describe('podcast episode cache', () => {
       '123',
       makePodcastEpisodes({
         episodes: [makeEpisode({ guid: 'newer-guid', title: 'Newer' })],
-      }),
-      {
-        authority: { lastUpdateTime: 2, episodeCount: 10 },
-      }
+      })
     )
 
     expect(getPodcastEpisodesCacheEntries(queryClient, '123')).toEqual([
       expect.objectContaining({
-        queryKey: buildPodcastEpisodesQueryKey('123', {
-          lastUpdateTime: 2,
-          episodeCount: 10,
-        }),
+        queryKey: buildPodcastEpisodesPagesQueryKey('123'),
         data: expect.objectContaining({
           episodes: [expect.objectContaining({ guid: 'newer-guid' })],
         }),

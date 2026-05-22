@@ -135,7 +135,6 @@ const locale = {
   proxyTitle: 'プロキシ',
   validationApiKeyPrefix: 'sk- で始まる必要があります',
   validationUrlInvalid: '有効な URL を入力してください',
-  validationProxyAuthHeaderInvalid: '認証ヘッダーは「{{header}}」である必要があります',
   placeholderApiKey: 'sk-...',
   settingsAsrVolcengineKeyPlaceholder: 'appId:accessToken',
   settingsAsrGroqKeyPlaceholder: 'gsk_...',

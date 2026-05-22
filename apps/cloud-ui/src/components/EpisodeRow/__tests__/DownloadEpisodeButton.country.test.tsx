@@ -144,20 +144,6 @@ describe('DownloadEpisodeButton remote contract', () => {
     )
   })
 
-  it('does not perform PI lookup before downloading', async () => {
-    render(<DownloadEpisodeButton {...requiredRemoteProps} />)
-
-    fireEvent.click(screen.getByRole('button', { name: 'downloadEpisode' }))
-
-    await waitFor(() => {
-      expect(downloadEpisodeMock).toHaveBeenCalledTimes(1)
-    })
-    expect(ensurePodcastDetail).not.toHaveBeenCalled()
-    expect(downloadEpisodeMock).toHaveBeenCalledWith(
-      expect.not.objectContaining({ feedUrl: expect.anything() })
-    )
-  })
-
   it('short-circuits when already downloading', () => {
     mockEpisodeStatus.downloadStatus = 'downloading'
     mockEpisodeStatus.progress = 42

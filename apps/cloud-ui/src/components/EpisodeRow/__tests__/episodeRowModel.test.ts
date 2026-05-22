@@ -12,6 +12,8 @@ vi.mock('@/lib/dateUtils', () => ({
   formatDateStandard: (value: string | number) => `DATE(${value})`,
   formatDuration: (seconds: number) => `DUR(${seconds})`,
   formatRelativeTime: (value: string) => `REL(${value})`,
+  formatUnixSecondsDateStandard: (value: number) => `DATE(${value * 1000})`,
+  formatUnixSecondsRelativeTime: (value: number) => `REL(${value * 1000})`,
 }))
 
 vi.mock('react-i18next', () => ({
@@ -46,7 +48,7 @@ describe('episodeRowModel', () => {
       title: 'Episode 1',
       description: '<p>desc</p>',
       audioUrl: 'https://example.com/audio.mp3',
-      pubDate: '2025-01-01',
+      pubDate: 1735689600,
       artworkUrl: 'https://example.com/episode-1.jpg',
       fileSize: 1024,
       duration: 120,
@@ -62,7 +64,7 @@ describe('episodeRowModel', () => {
       id: '7',
       episodeKey: expect.stringMatching(/^[A-Za-z0-9_-]{22}$/),
     })
-    expect(model.subtitle).toBe('REL(2025-01-01)')
+    expect(model.subtitle).toBe('REL(1735689600000)')
     expect(model.description).toBe('<p>desc</p>')
     expect(model.meta).toBe('DUR(120)')
     expect(model.artworkFallbackSrc).toBe('https://example.com/cover-600.jpg')
@@ -97,7 +99,7 @@ describe('episodeRowModel', () => {
       title: 'Episode 1',
       description: '<p>desc</p>',
       audioUrl: 'audio',
-      pubDate: '2025-01-01',
+      pubDate: 1735689600,
       artworkUrl: 'https://example.com/episode-2.jpg',
       fileSize: 1024,
       duration: 120,
@@ -127,7 +129,7 @@ describe('episodeRowModel', () => {
       title: 'Episode 1',
       description: '<p>desc</p>',
       audioUrl: 'https://example.com/audio.mp3',
-      pubDate: '2025-01-01',
+      pubDate: 1735689600,
       artworkUrl: 'https://example.com/episode-1.jpg',
       fileSize: 1024,
       duration: 120,
@@ -175,7 +177,7 @@ describe('episodeRowModel', () => {
       title: 'Episode 1',
       description: '<p>desc</p>',
       audioUrl: 'audio',
-      pubDate: '2025-01-01',
+      pubDate: 1735689600,
       artworkUrl: 'https://example.com/episode-3.jpg',
       fileSize: 1024,
       duration: 120,
@@ -234,7 +236,7 @@ describe('episodeRowModel', () => {
       title: 'Episode 1',
       description: '<p>desc</p>',
       audioUrl: 'audio',
-      pubDate: '2025-01-01',
+      pubDate: 1735689600,
       artworkUrl: 'https://example.com/episode-4.jpg',
       fileSize: 1024,
       duration: 120,
@@ -269,7 +271,7 @@ describe('episodeRowModel', () => {
 
     const model = fromSearchEpisode({ episode, routeCountry: 'us', language: 'en', t })
     expect(model.title).toBe('Search Episode')
-    expect(model.subtitle).toBe('REL(2025-01-02) • Search Show')
+    expect(model.subtitle).toBe('REL(1735776000000) • Search Show')
     expect(model.description).toBe('desc')
     expect(model.playAriaLabel).toBe('ariaPlayEpisode')
     expect(model.route).not.toBeNull()
@@ -300,6 +302,7 @@ describe('episodeRowModel', () => {
       audioUrl: 'audio',
       guid: 'search-guid-1',
       artwork: 'art-600',
+      releaseDate: '2025-01-02',
     } as SearchEpisode
 
     const model = fromSearchEpisode({ episode, language: 'en', t })
@@ -317,7 +320,7 @@ describe('episodeRowModel', () => {
       artworkUrl: 'podcast-art',
       episodeArtworkUrl: 'episode-art',
       addedAt: 1,
-      pubDate: '2025-02-01',
+      pubDate: 1738368000,
       durationSeconds: 180,
       description: 'Test description',
       podcastItunesId: 'fav-podcast',
@@ -332,7 +335,7 @@ describe('episodeRowModel', () => {
     })
 
     expect(model.route?.params.id).toBe('fav-podcast')
-    expect(model.subtitle).toBe('Fav Show • DATE(2025-02-01)')
+    expect(model.subtitle).toBe('Fav Show • DATE(1738368000000)')
     expect(model.artworkSrc).toBe('episode-art')
     expect(model.description).toBe('Test description')
     expect(model.downloadArgs).toEqual({
@@ -358,7 +361,7 @@ describe('episodeRowModel', () => {
       artworkUrl: 'podcast-art',
       episodeArtworkUrl: 'episode-art',
       addedAt: 1,
-      pubDate: '2025-02-01',
+      pubDate: 1738368000,
       durationSeconds: 180,
       description: '',
       podcastItunesId: 'fav-podcast',
@@ -409,7 +412,7 @@ describe('episodeRowModel', () => {
       id: 'session-podcast',
       episodeKey: expect.stringMatching(/^[A-Za-z0-9_-]{22}$/),
     })
-    expect(model.subtitle).toBe('History Show • DATE(123)')
+    expect(model.subtitle).toBe('History Show • DATE(123000)')
     expect(model.meta).toBe('DUR(240)')
     expect(model.downloadArgs).toEqual({
       episodeTitle: 'History Episode',

@@ -1,0 +1,668 @@
+package admin
+
+import (
+	"context"
+	"crypto/subtle"
+	"encoding/json"
+	"io"
+	"log/slog"
+	"math"
+	"net/http"
+	"os"
+	"reflect"
+	"runtime"
+	"runtime/debug"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"go.opentelemetry.io/otel/trace"
+)
+
+const adminTokenEnv = "READIO_ADMIN_TOKEN"
+const adminLogBufferEnv = "READIO_ADMIN_LOG_BUFFER"
+const defaultAdminLogBuffer = 2000
+const minAdminLogBuffer = 100
+const maxAdminLogBuffer = 10000
+const maxAdminLogAttrs = 32
+const maxAdminLogAttrValueLen = 512
+const adminDefaultLimit = 200
+const adminMaxLimit = 500
+const p95Quantile = 0.95
+
+type LogShipper interface {
+	Enqueue(LogEntry) bool
+}
+
+type LogEntry struct {
+	Ts           time.Time `json:"ts"`
+	Level        string    `json:"level"`
+	Msg          string    `json:"msg"`
+	Route        string    `json:"route,omitempty"`
+	UpstreamKind string    `json:"upstream_kind,omitempty"`
+	UpstreamHost string    `json:"upstream_host,omitempty"`
+	// ElapsedMs is rendered as a JSON number (not a duration string) so that
+	// LogQL queries like `| json | elapsed_ms > 1000` work as numeric
+	// comparisons. The Grafana dashboard "Slow Requests" panel depends on
+	// this contract.
+	ElapsedMs  float64 `json:"elapsed_ms,omitempty"`
+	ErrorClass string  `json:"error_class,omitempty"`
+	Status     int     `json:"status,omitempty"`
+	// TraceID / SpanID are populated when the slog record was emitted with a
+	// context.Context carrying a valid OpenTelemetry span. They are sent as
+	// Loki payload fields (not stream labels) and are never returned in
+	// public API responses; request_id remains the user-facing identifier.
+	TraceID string            `json:"trace_id,omitempty"`
+	SpanID  string            `json:"span_id,omitempty"`
+	Attrs   map[string]string `json:"attrs,omitempty"`
+}
+
+type AdminRingBuffer struct {
+	mu      sync.RWMutex
+	entries []LogEntry
+	cap     int
+	pos     int
+	count   int
+}
+
+func NewAdminRingBuffer(capacity int) *AdminRingBuffer {
+	return &AdminRingBuffer{
+		entries: make([]LogEntry, capacity),
+		cap:     capacity,
+	}
+}
+
+func (rb *AdminRingBuffer) push(entry LogEntry) {
+	rb.mu.Lock()
+	rb.entries[rb.pos] = entry
+	rb.pos = (rb.pos + 1) % rb.cap
+	rb.count++
+	rb.mu.Unlock()
+}
+
+// Push adds a log entry to the ring buffer. It is the exported equivalent of push
+// for use from external packages (e.g. main package tests).
+func (rb *AdminRingBuffer) Push(entry LogEntry) {
+	rb.push(entry)
+}
+
+func (rb *AdminRingBuffer) Snapshot() []LogEntry {
+	rb.mu.RLock()
+	defer rb.mu.RUnlock()
+
+	var out []LogEntry
+	if rb.count < rb.cap {
+		out = make([]LogEntry, rb.count)
+		copy(out, rb.entries[:rb.count])
+	} else {
+		out = make([]LogEntry, rb.cap)
+		copy(out, rb.entries[rb.pos:])
+		copy(out[rb.cap-rb.pos:], rb.entries[:rb.pos])
+	}
+	return out
+}
+
+func (rb *AdminRingBuffer) size() int {
+	rb.mu.RLock()
+	defer rb.mu.RUnlock()
+	if rb.count < rb.cap {
+		return rb.count
+	}
+	return rb.cap
+}
+
+func (rb *AdminRingBuffer) clear() {
+	rb.mu.Lock()
+	defer rb.mu.Unlock()
+	rb.count = 0
+	rb.pos = 0
+	for i := range rb.entries {
+		rb.entries[i] = LogEntry{}
+	}
+}
+
+var sensitivePatterns = []string{
+	"authorization",
+	"apikey",
+	"token",
+	"secret",
+	"cookie",
+	"setcookie",
+	"xreadiocloudsecret",
+	"xreadiorelaypublictoken",
+}
+
+func normalizeSensitiveKey(key string) string {
+	var b strings.Builder
+	b.Grow(len(key))
+	upper := false
+	for _, r := range key {
+		if r == '-' || r == '_' {
+			upper = true
+			continue
+		}
+		if r >= 'A' && r <= 'Z' {
+			b.WriteByte(byte(r) + ('a' - 'A'))
+			upper = false
+			continue
+		}
+		if upper && r >= 'a' && r <= 'z' {
+			b.WriteRune(r)
+			upper = false
+			continue
+		}
+		upper = false
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
+func isSensitiveKey(key string) bool {
+	normalized := normalizeSensitiveKey(key)
+	for _, p := range sensitivePatterns {
+		if strings.Contains(normalized, p) {
+			return true
+		}
+	}
+	return false
+}
+
+func flattenAttrs(attrs []slog.Attr) map[string]string {
+	flat := make(map[string]string, len(attrs))
+	flattenAttrsRecursive("", attrs, flat)
+	return flat
+}
+
+func flattenAttrsRecursive(prefix string, attrs []slog.Attr, out map[string]string) {
+	if len(out) >= maxAdminLogAttrs {
+		return
+	}
+	for _, a := range attrs {
+		if len(out) >= maxAdminLogAttrs {
+			return
+		}
+		key := a.Key
+		if prefix != "" {
+			key = prefix + "." + key
+		}
+		if a.Value.Kind() == slog.KindGroup {
+			flattenAttrsRecursive(key, a.Value.Group(), out)
+			continue
+		}
+		val := a.Value.String()
+		if isSensitiveKey(a.Key) || isSensitiveKey(key) {
+			val = "[REDACTED]"
+		} else if len(val) > maxAdminLogAttrValueLen {
+			val = val[:maxAdminLogAttrValueLen]
+		}
+		out[key] = val
+	}
+}
+
+type AdminSlogHandler struct {
+	slog.Handler
+	buffer      *AdminRingBuffer
+	lokiShipper LogShipper
+	attrs       []slog.Attr
+	groups      []string
+}
+
+// NewAdminSlogHandler constructs an AdminSlogHandler that writes log entries
+// to rb (in addition to delegating to inner). Either argument may be nil.
+func NewAdminSlogHandler(inner slog.Handler, rb *AdminRingBuffer) *AdminSlogHandler {
+	return &AdminSlogHandler{Handler: inner, buffer: rb}
+}
+
+func (h *AdminSlogHandler) Handle(ctx context.Context, r slog.Record) error {
+	entry, ok := h.LogEntryFromRecord(r)
+	if !ok {
+		return h.delegate().Handle(ctx, r)
+	}
+	if span := trace.SpanContextFromContext(ctx); span.IsValid() {
+		entry.TraceID = span.TraceID().String()
+		entry.SpanID = span.SpanID().String()
+		r.AddAttrs(slog.String("trace_id", entry.TraceID))
+	}
+	if h.buffer != nil {
+		h.buffer.push(entry)
+	}
+	if h.lokiShipper != nil {
+		_ = h.lokiShipper.Enqueue(entry)
+	}
+	return h.delegate().Handle(ctx, r)
+}
+
+func (h *AdminSlogHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	derivedAttrs := cloneSlogAttrs(h.attrs)
+	derivedAttrs = append(derivedAttrs, groupSlogAttrs(h.groups, attrs)...)
+	return &AdminSlogHandler{
+		Handler:     h.delegate().WithAttrs(attrs),
+		buffer:      h.buffer,
+		lokiShipper: h.lokiShipper,
+		attrs:       derivedAttrs,
+		groups:      cloneStrings(h.groups),
+	}
+}
+
+func (h *AdminSlogHandler) WithGroup(name string) slog.Handler {
+	derivedGroups := append(cloneStrings(h.groups), name)
+	return &AdminSlogHandler{
+		Handler:     h.delegate().WithGroup(name),
+		buffer:      h.buffer,
+		lokiShipper: h.lokiShipper,
+		attrs:       cloneSlogAttrs(h.attrs),
+		groups:      derivedGroups,
+	}
+}
+
+func (h *AdminSlogHandler) delegate() slog.Handler {
+	handler := h.Handler
+	for {
+		nested, ok := handler.(*AdminSlogHandler)
+		if !ok {
+			if isSlogDefaultBridgeHandler(handler) {
+				return slog.NewTextHandler(io.Discard, nil)
+			}
+			return handler
+		}
+		if nested == h || nested.Handler == nil {
+			return slog.NewTextHandler(io.Discard, nil)
+		}
+		handler = nested.Handler
+	}
+}
+
+func UnwrapHandler(h slog.Handler) slog.Handler {
+	if adminHandler, ok := h.(*AdminSlogHandler); ok {
+		return adminHandler.delegate()
+	}
+	return h
+}
+
+func isSlogDefaultBridgeHandler(handler slog.Handler) bool {
+	if handler == nil {
+		return false
+	}
+	return strings.Contains(reflect.TypeOf(handler).String(), "defaultHandler")
+}
+
+func (h *AdminSlogHandler) LogEntryFromRecord(r slog.Record) (LogEntry, bool) {
+	attrs := cloneSlogAttrs(h.attrs)
+	recordAttrs := make([]slog.Attr, 0)
+	r.Attrs(func(a slog.Attr) bool {
+		recordAttrs = append(recordAttrs, a)
+		return true
+	})
+	attrs = append(attrs, groupSlogAttrs(h.groups, recordAttrs)...)
+	return LogEntryFromRecordAttrs(r, attrs)
+}
+
+func LogEntryFromRecordAttrs(r slog.Record, attrs []slog.Attr) (LogEntry, bool) {
+	flat := flattenAttrs(attrs)
+	entry := LogEntry{
+		Ts:    r.Time,
+		Level: r.Level.String(),
+		Msg:   r.Message,
+		Attrs: flat,
+	}
+
+	// Promote canonical fields to top-level, remove from attrs.
+	if route, ok := flat["route"]; ok {
+		entry.Route = route
+		delete(flat, "route")
+		if strings.HasPrefix(route, "/admin/") {
+			return LogEntry{}, false
+		}
+	}
+	if ec, ok := flat["error_class"]; ok {
+		entry.ErrorClass = ec
+		delete(flat, "error_class")
+	}
+	if uk, ok := flat["upstream_kind"]; ok {
+		entry.UpstreamKind = uk
+		delete(flat, "upstream_kind")
+	}
+	if uh, ok := flat["upstream_host"]; ok {
+		entry.UpstreamHost = uh
+		delete(flat, "upstream_host")
+	}
+	if ems, ok := flat["elapsed_ms"]; ok {
+		if v, err := strconv.ParseFloat(ems, 64); err == nil {
+			entry.ElapsedMs = v
+		}
+		delete(flat, "elapsed_ms")
+	}
+	if st, ok := flat["status"]; ok {
+		if v, err := strconv.Atoi(st); err == nil {
+			entry.Status = v
+		}
+		delete(flat, "status")
+	}
+
+	if len(flat) == 0 {
+		entry.Attrs = nil
+	}
+
+	return entry, true
+}
+
+func cloneSlogAttrs(attrs []slog.Attr) []slog.Attr {
+	if len(attrs) == 0 {
+		return nil
+	}
+	out := make([]slog.Attr, len(attrs))
+	copy(out, attrs)
+	return out
+}
+
+func cloneStrings(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]string, len(values))
+	copy(out, values)
+	return out
+}
+
+func groupSlogAttrs(groups []string, attrs []slog.Attr) []slog.Attr {
+	if len(groups) == 0 || len(attrs) == 0 {
+		return cloneSlogAttrs(attrs)
+	}
+	grouped := cloneSlogAttrs(attrs)
+	for i := len(groups) - 1; i >= 0; i-- {
+		grouped = []slog.Attr{slog.Group(groups[i], attrsToAny(grouped)...)}
+	}
+	return grouped
+}
+
+func attrsToAny(attrs []slog.Attr) []any {
+	out := make([]any, len(attrs))
+	for i := range attrs {
+		out[i] = attrs[i]
+	}
+	return out
+}
+
+
+func envPositiveIntOrDefault(name string, fallback int) int {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return fallback
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 {
+		slog.Warn("invalid integer environment value; using default", "env", name)
+		return fallback
+	}
+	return value
+}
+
+func resolveAdminLogBuffer() int {
+	v := envPositiveIntOrDefault(adminLogBufferEnv, defaultAdminLogBuffer)
+	if v < minAdminLogBuffer || v > maxAdminLogBuffer {
+		slog.Warn("admin log buffer outside allowed range; using default", "env", adminLogBufferEnv)
+		return defaultAdminLogBuffer
+	}
+	return v
+}
+
+type Handler struct {
+	token  string
+	buffer *AdminRingBuffer
+	start  time.Time
+}
+
+// NewHandler creates an admin Handler for use in tests and external packages.
+func NewHandler(token string, buffer *AdminRingBuffer, start time.Time) *Handler {
+	return &Handler{token: token, buffer: buffer, start: start}
+}
+
+// AuthMiddleware is the exported alias for authMiddleware, for use from external packages.
+func (h *Handler) AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return h.authMiddleware(next)
+}
+
+// HandleAdminMetricsSummary is the exported alias for handleAdminMetricsSummary, for use from external packages.
+func (h *Handler) HandleAdminMetricsSummary(w http.ResponseWriter, r *http.Request) {
+	h.handleAdminMetricsSummary(w, r)
+}
+
+func SetupAdminHandler(mux *http.ServeMux, lokiShippers ...LogShipper) *Handler {
+	var lokiShipper LogShipper
+	if len(lokiShippers) > 0 {
+		lokiShipper = lokiShippers[0]
+	}
+	token := strings.TrimSpace(os.Getenv(adminTokenEnv))
+	if token == "" {
+		if lokiShipper != nil {
+			slog.SetDefault(slog.New(&AdminSlogHandler{
+				Handler:     slog.Default().Handler(),
+				lokiShipper: lokiShipper,
+			}))
+		}
+		// Register 404 handlers so /admin/* doesn't fall through to SPA fallback.
+		mux.HandleFunc("/admin/", func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Cache-Control", "no-store")
+			w.Header().Set("Pragma", "no-cache")
+			http.NotFound(w, nil)
+		})
+		return nil
+	}
+
+	capacity := resolveAdminLogBuffer()
+	buffer := NewAdminRingBuffer(capacity)
+
+	handler := &AdminSlogHandler{
+		Handler:     slog.Default().Handler(),
+		buffer:      buffer,
+		lokiShipper: lokiShipper,
+	}
+	slog.SetDefault(slog.New(handler))
+
+	h := &Handler{
+		token:  token,
+		buffer: buffer,
+		start:  time.Now(),
+	}
+
+	mux.HandleFunc("/admin/logs", h.authMiddleware(h.handleAdminLogs))
+	mux.HandleFunc("/admin/logs/clear", h.authMiddleware(h.handleAdminLogsClear))
+	mux.HandleFunc("/admin/health", h.authMiddleware(h.handleAdminHealth))
+	mux.HandleFunc("/admin/metrics/summary", h.authMiddleware(h.handleAdminMetricsSummary))
+
+	return h
+}
+
+func (h *Handler) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Pragma", "no-cache")
+
+		auth := r.Header.Get("Authorization")
+		if !strings.HasPrefix(auth, "Bearer ") {
+			writeAdminError(w, http.StatusUnauthorized, "ADMIN_UNAUTHORIZED", "unauthorized")
+			return
+		}
+		token := strings.TrimPrefix(auth, "Bearer ")
+		if subtle.ConstantTimeCompare([]byte(token), []byte(h.token)) != 1 {
+			writeAdminError(w, http.StatusUnauthorized, "ADMIN_UNAUTHORIZED", "unauthorized")
+			return
+		}
+		next(w, r)
+	}
+}
+
+func writeAdminMethodNotAllowed(w http.ResponseWriter, allow string) {
+	w.Header().Set("Allow", allow)
+	writeAdminError(w, http.StatusMethodNotAllowed, "ADMIN_METHOD_NOT_ALLOWED", "method not allowed")
+}
+
+func (h *Handler) handleAdminLogs(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeAdminMethodNotAllowed(w, http.MethodGet)
+		return
+	}
+
+	q := r.URL.Query()
+	levelFilter := strings.ToLower(strings.TrimSpace(q.Get("level")))
+	routeFilter := strings.TrimSpace(q.Get("route"))
+	errorClassFilter := strings.TrimSpace(q.Get("error_class"))
+
+	limit := adminDefaultLimit
+	if raw := strings.TrimSpace(q.Get("limit")); raw != "" {
+		if v, err := strconv.Atoi(raw); err == nil && v > 0 {
+			if v > adminMaxLimit {
+				limit = adminMaxLimit
+			} else {
+				limit = v
+			}
+		}
+	}
+
+	entries := h.buffer.Snapshot()
+
+	filtered := make([]LogEntry, 0, len(entries))
+	for _, e := range entries {
+		if levelFilter != "" && strings.ToLower(e.Level) != levelFilter {
+			continue
+		}
+		if routeFilter != "" && !strings.Contains(e.Route, routeFilter) {
+			continue
+		}
+		if errorClassFilter != "" && e.ErrorClass != errorClassFilter {
+			continue
+		}
+		filtered = append(filtered, e)
+	}
+
+	sort.Slice(filtered, func(i, j int) bool {
+		return filtered[i].Ts.After(filtered[j].Ts)
+	})
+
+	if len(filtered) > limit {
+		filtered = filtered[:limit]
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"entries":         filtered,
+		"total":           h.buffer.size(),
+		"buffer_capacity": h.buffer.cap,
+	})
+}
+
+func (h *Handler) handleAdminLogsClear(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeAdminMethodNotAllowed(w, http.MethodPost)
+		return
+	}
+	h.buffer.clear()
+	w.WriteHeader(http.StatusOK)
+}
+
+func (h *Handler) handleAdminHealth(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeAdminMethodNotAllowed(w, http.MethodGet)
+		return
+	}
+
+	var mem runtime.MemStats
+	runtime.ReadMemStats(&mem)
+
+	info, _ := debug.ReadBuildInfo()
+
+	resp := map[string]any{
+		"uptime_seconds":  int(time.Since(h.start).Seconds()),
+		"buffer_size":     h.buffer.size(),
+		"buffer_capacity": h.buffer.cap,
+		"go_version":      info.GoVersion,
+		"goroutines":      runtime.NumGoroutine(),
+		"memory_alloc_mb": mem.Alloc / 1024 / 1024,
+		"memory_sys_mb":   mem.Sys / 1024 / 1024,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func writeAdminError(w http.ResponseWriter, status int, code string, message string) {
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]any{
+		"code":    code,
+		"message": message,
+		"status":  status,
+	})
+}
+
+func (h *Handler) handleAdminMetricsSummary(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		writeAdminMethodNotAllowed(w, http.MethodGet)
+		return
+	}
+
+	entries := h.buffer.Snapshot()
+
+	type routeStats struct {
+		count      int
+		errorCount int
+		latencies  []float64
+	}
+
+	routes := make(map[string]*routeStats)
+	errorByClass := make(map[string]int)
+	totalRequests := 0
+
+	for _, e := range entries {
+		if e.Route == "" || strings.HasPrefix(e.Route, "/admin/") {
+			continue
+		}
+
+		totalRequests++
+
+		rs, exists := routes[e.Route]
+		if !exists {
+			rs = &routeStats{}
+			routes[e.Route] = rs
+		}
+		rs.count++
+
+		if e.ErrorClass != "" && e.ErrorClass != "none" {
+			rs.errorCount++
+			errorByClass[e.ErrorClass]++
+		}
+
+		if e.ElapsedMs > 0 {
+			rs.latencies = append(rs.latencies, e.ElapsedMs)
+		}
+	}
+
+	byRoute := make(map[string]map[string]any, len(routes))
+	for route, rs := range routes {
+		entry := map[string]any{
+			"count":  rs.count,
+			"errors": rs.errorCount,
+		}
+		if len(rs.latencies) > 0 {
+			sort.Float64s(rs.latencies)
+			idx := int(math.Ceil(p95Quantile*float64(len(rs.latencies)))) - 1
+			if idx < 0 {
+				idx = 0
+			}
+			entry["p95_ms"] = rs.latencies[idx]
+		}
+		byRoute[route] = entry
+	}
+
+	resp := map[string]any{
+		"uptime_seconds": int(time.Since(h.start).Seconds()),
+		"total_requests": totalRequests,
+		"by_route":       byRoute,
+		"by_error_class": errorByClass,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(resp)
+}

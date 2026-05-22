@@ -2,7 +2,6 @@ import { log } from '../logger'
 import { getAppConfig, isRuntimeConfigReady } from '../runtimeConfig'
 import { CircuitBreaker } from './circuitBreaker'
 import { FetchError, type FetchSource, NetworkError } from './fetchErrors'
-import { buildProxyAuthHeaders } from './proxyAuth'
 import { getNetworkProxyConfig } from './proxyUrl'
 import { createTimeoutController, sleepWithAbort } from './timeouts'
 
@@ -160,13 +159,11 @@ export async function fetchStandardWithFallback<T = string>(
     source: FetchSource,
     attemptSignal: AbortSignal
   ): Promise<T> => {
-    const proxyAuthHeaders = buildProxyAuthHeaders(getNetworkProxyConfig())
     const init: RequestInit = { signal: attemptSignal, credentials: 'omit' }
 
     init.method = 'POST'
     init.headers = {
       'Content-Type': 'application/json',
-      ...proxyAuthHeaders,
     }
     init.body = JSON.stringify({
       url,
@@ -196,12 +193,10 @@ export async function fetchStandardWithFallback<T = string>(
   }
 
   const runtimeConfigReady = isRuntimeConfigReady()
-  const { proxyUrl, authHeader, authValue } = getNetworkProxyConfig()
-  const isProxyConfigured = !!proxyUrl && runtimeConfigReady && (!authHeader || !!authValue)
+  const { proxyUrl } = getNetworkProxyConfig()
+  const isProxyConfigured = !!proxyUrl && runtimeConfigReady
   if (import.meta.env.DEV && proxyUrl && !isProxyConfigured) {
-    log(
-      `[fetchWithFallback] Skip custom proxy: runtimeReady=${runtimeConfigReady}, authHeaderSet=${!!authHeader}, authValueSet=${!!authValue}`
-    )
+    log(`[fetchWithFallback] Skip custom proxy: runtimeReady=${runtimeConfigReady}`)
   }
 
   type Attempt = {

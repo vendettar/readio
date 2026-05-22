@@ -6,7 +6,6 @@ import {
   fetchCloudBackendWithFallback,
 } from './networking/cloudBackendFallback'
 import { FetchError, isAbortLikeError, NetworkError } from './networking/fetchErrors'
-import { buildProxyAuthHeaders, type ProxyAuthConfig } from './networking/proxyAuth'
 import { buildProxyUrl, getNetworkProxyConfig } from './networking/proxyUrl'
 import { fetchStandardWithFallback } from './networking/standardFetchFallback'
 import { createTimeoutController } from './networking/timeouts'
@@ -24,14 +23,12 @@ export {
 }
 export type { CloudBackendFallbackClass }
 
-interface ProxyConfig extends ProxyAuthConfig {
+interface ProxyConfig {
   proxyUrl: string
 }
 
 interface ProxyConfigOverrides {
   proxyUrl?: string
-  authHeader?: string
-  authValue?: string
 }
 
 export type ProxyHealthResult =
@@ -62,25 +59,20 @@ function resolveProxyConfig(overrides?: ProxyConfigOverrides): ProxyConfig {
   const stored = getNetworkProxyConfig()
   return {
     proxyUrl: normalizeProxyUrl(overrides?.proxyUrl ?? stored.proxyUrl),
-    authHeader: String(overrides?.authHeader ?? stored.authHeader ?? '').trim(),
-    authValue: String(overrides?.authValue ?? stored.authValue ?? '').trim(),
   }
 }
 
 async function fetchViaProxy(
   proxyBase: string,
   targetUrl: string,
-  signal: AbortSignal,
-  authConfig?: ProxyAuthConfig
+  signal: AbortSignal
 ): Promise<{ status?: number }> {
-  const proxyAuthHeaders = buildProxyAuthHeaders(authConfig ?? getNetworkProxyConfig())
   const init: RequestInit = { signal, credentials: 'omit' }
 
   // Custom proxy: Always use POST JSON { url } contract (no GET fallback per 084)
   init.method = 'POST'
   init.headers = {
     'Content-Type': 'application/json',
-    ...proxyAuthHeaders,
   }
   init.body = JSON.stringify({ url: targetUrl, method: 'GET' })
 
@@ -102,7 +94,7 @@ export async function checkNetworkProxyHealth(options?: {
   signal?: AbortSignal
   proxyConfig?: ProxyConfigOverrides
 }): Promise<ProxyHealthResult> {
-  const { proxyUrl, authHeader, authValue } = resolveProxyConfig(options?.proxyConfig)
+  const { proxyUrl } = resolveProxyConfig(options?.proxyConfig)
   const targetUrl = options?.targetUrl || 'https://example.com/'
   const timeoutMs = options?.timeoutMs ?? DEFAULT_PROXY_HEALTH_CHECK_TIMEOUT_MS
   const at = Date.now()
@@ -122,10 +114,7 @@ export async function checkNetworkProxyHealth(options?: {
 
   const start = performance.now()
   try {
-    const result = await fetchViaProxy(proxyUrl, targetUrl, timeout.controller.signal, {
-      authHeader,
-      authValue,
-    })
+    const result = await fetchViaProxy(proxyUrl, targetUrl, timeout.controller.signal)
     const elapsedMs = Math.round(performance.now() - start)
 
     if (result.status && result.status >= 400) {

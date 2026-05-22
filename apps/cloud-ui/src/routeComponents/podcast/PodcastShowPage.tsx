@@ -234,7 +234,7 @@ export default function PodcastShowPage() {
         {/* Episodes Section */}
         <section>
           <div className="flex items-center justify-between mb-4">
-            {episodesSection.status === 'ready' && episodesSection.episodes.length > 8 ? (
+            {episodesSection.status === 'ready' && episodesSection.hasMoreEpisodes ? (
               <Button asChild variant="ghost" className="p-0 h-auto hover:bg-transparent">
                 {episodesRoute ? (
                   <Link
@@ -280,7 +280,7 @@ export default function PodcastShowPage() {
               ))}
 
               {/* See All Button - Only show if there are more than 8 episodes */}
-              {episodesSection.episodes.length > 8 && (
+              {episodesSection.hasMoreEpisodes && (
                 <div className="pt-2">
                   <Button
                     asChild
