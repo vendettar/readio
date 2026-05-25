@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"embed"
 	"encoding/json"
+	"errors"
 	"flag"
 
 	"fmt"
@@ -395,12 +396,33 @@ func runCloudSQLiteMigrationsFS(ctx context.Context, db *sql.DB, migrationFS fs.
 	if err := goose.SetDialect(cloudSQLiteMigrationDialect); err != nil {
 		return fmt.Errorf("set goose dialect: %w", err)
 	}
-
-	if err := goose.UpContext(ctx, db, migrationDir); err != nil {
-		return fmt.Errorf("apply goose migrations: %w", err)
+	checksums, err := prepareMigrationChecksumVerification(ctx, db, migrationFS, migrationDir)
+	if err != nil {
+		return fmt.Errorf("prepare migration checksum verification: %w", err)
 	}
 
-	return nil
+	for {
+		beforeVersion, err := goose.GetDBVersionContext(ctx, db)
+		if err != nil {
+			return fmt.Errorf("read goose migration version before migration: %w", err)
+		}
+		if err := goose.UpByOneContext(ctx, db, migrationDir); err != nil {
+			if errors.Is(err, goose.ErrNoNextVersion) {
+				return nil
+			}
+			return fmt.Errorf("apply goose migration after version %d: %w", beforeVersion, err)
+		}
+		afterVersion, err := goose.GetDBVersionContext(ctx, db)
+		if err != nil {
+			return fmt.Errorf("read goose migration version after migration: %w", err)
+		}
+		if afterVersion <= beforeVersion {
+			return fmt.Errorf("goose migration did not advance version: before=%d after=%d", beforeVersion, afterVersion)
+		}
+		if err := syncAppliedMigrationChecksum(ctx, db, afterVersion, checksums); err != nil {
+			return fmt.Errorf("sync migration checksum version %d: %w", afterVersion, err)
+		}
+	}
 }
 
 func resolvePort() (string, error) {

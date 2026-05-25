@@ -74,8 +74,10 @@ func TestLokiPayloadFormatAuthLabelsAndRedaction(t *testing.T) {
 		ErrorClass: "none",
 		Status:     http.StatusOK,
 		Attrs: map[string]string{
-			"apiKey":  "[REDACTED]",
-			"referer": "https://evil.example/player?token=secret",
+			"apiKey":      "[REDACTED]",
+			"referer":     "https://evil.example/player?token=secret",
+			"remote_addr": "203.0.113.9:443",
+			"error":       "query pi cache refresh state: SQL logic error: no such table: podcast_cache_state (1)",
 		},
 	}
 	require.True(t, shipper.Enqueue(entry))
@@ -100,8 +102,16 @@ func TestLokiPayloadFormatAuthLabelsAndRedaction(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "proxy request", line["msg"])
 	require.Equal(t, "proxy/media", line["route"])
+	require.Equal(t, "query pi cache refresh state: SQL logic error: no such table: podcast_cache_state (1)", line["error"])
 	if _, ok := line["apiKey"]; ok {
 		t.Fatal("sensitive attr should not be shipped as raw log field")
+	}
+	attrs, ok := line["attrs"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "https://evil.example", attrs["referer"])
+	require.Equal(t, "203.0.113.9:443", attrs["remote_addr"])
+	if _, ok := attrs["error"]; ok {
+		t.Fatal("error should be promoted to top-level field, not duplicated inside attrs")
 	}
 	if got := mustJSON(t, line); strings.Contains(got, "token=secret") || strings.Contains(got, "https://evil.example/player") {
 		t.Fatalf("full referer path/query leaked in line: %s", got)

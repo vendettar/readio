@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
@@ -30,6 +31,23 @@ import (
 // newRateLimiter is a test helper that wraps httputil.NewRateLimiter.
 func newRateLimiter(limit int, window time.Duration, now func() time.Time) *httputil.RateLimiter {
 	return httputil.NewRateLimiter(limit, window, now)
+}
+
+func combinedTestMigrationFS(t *testing.T, extras fstest.MapFS) fstest.MapFS {
+	t.Helper()
+	out := fstest.MapFS{}
+	for _, name := range []string{
+		"migrations/00001_bootstrap.sql",
+		"migrations/00002_pi_episode_json_cache.sql",
+	} {
+		body, err := fs.ReadFile(cloudSQLiteMigrations, name)
+		require.NoError(t, err)
+		out[name] = &fstest.MapFile{Data: body}
+	}
+	for name, file := range extras {
+		out[name] = file
+	}
+	return out
 }
 
 func decodeResponseJSON(t *testing.T, body interface{ String() string }, dest any) {
@@ -556,14 +574,14 @@ func TestRunCloudSQLiteMigrationsRetriesAfterFailedAttempt(t *testing.T) {
 		_ = db.Close()
 	})
 
-	badMigrations := fstest.MapFS{
+	badMigrations := combinedTestMigrationFS(t, fstest.MapFS{
 		"migrations/00004_create_retry_table.sql": &fstest.MapFile{
 			Data: []byte("-- +goose Up\nCREATE TABLE retry_table (id INTEGER PRIMARY KEY);\n\n-- +goose Down\nDROP TABLE retry_table;\n"),
 		},
 		"migrations/00005_fail.sql": &fstest.MapFile{
 			Data: []byte("-- +goose Up\nTHIS IS NOT VALID SQL;\n\n-- +goose Down\nSELECT 1;\n"),
 		},
-	}
+	})
 
 	err = runCloudSQLiteMigrationsFS(context.Background(), db, badMigrations, "migrations")
 	require.NotNil(t, err)
@@ -577,14 +595,22 @@ func TestRunCloudSQLiteMigrationsRetriesAfterFailedAttempt(t *testing.T) {
 	}
 	require.Equal(t, 1, retryTableCount)
 
-	fixedMigrations := fstest.MapFS{
+	var retryMigrationChecksumCount int
+	err = db.QueryRowContext(
+		context.Background(),
+		"SELECT COUNT(*) FROM "+migrationChecksumTable+" WHERE version = 4;",
+	).Scan(&retryMigrationChecksumCount)
+	require.NoError(t, err)
+	require.Equal(t, 1, retryMigrationChecksumCount)
+
+	fixedMigrations := combinedTestMigrationFS(t, fstest.MapFS{
 		"migrations/00004_create_retry_table.sql": &fstest.MapFile{
 			Data: []byte("-- +goose Up\nCREATE TABLE retry_table (id INTEGER PRIMARY KEY);\n\n-- +goose Down\nDROP TABLE retry_table;\n"),
 		},
 		"migrations/00005_create_retry_index.sql": &fstest.MapFile{
 			Data: []byte("-- +goose Up\nCREATE INDEX retry_table_id_idx ON retry_table (id);\n\n-- +goose Down\nDROP INDEX retry_table_id_idx;\n"),
 		},
-	}
+	})
 
 	err = runCloudSQLiteMigrationsFS(context.Background(), db, fixedMigrations, "migrations")
 
