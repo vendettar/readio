@@ -9,6 +9,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -397,6 +398,9 @@ func lokiLogLine(entry admin.LogEntry) map[string]any {
 	if entry.ErrorClass != "" {
 		line["error_class"] = entry.ErrorClass
 	}
+	if errorText := sanitizedAttr(entry.Attrs, "error"); errorText != "" {
+		line["error"] = errorText
+	}
 	if requestID := sanitizedAttr(entry.Attrs, "request_id"); requestID != "" {
 		line["request_id"] = requestID
 	}
@@ -405,6 +409,9 @@ func lokiLogLine(entry admin.LogEntry) map[string]any {
 	}
 	if entry.SpanID != "" {
 		line["span_id"] = entry.SpanID
+	}
+	if attrs := safeLokiAttrs(entry.Attrs); len(attrs) > 0 {
+		line["attrs"] = attrs
 	}
 	return line
 }
@@ -418,6 +425,59 @@ func sanitizedAttr(attrs map[string]string, key string) string {
 		return ""
 	}
 	return value
+}
+
+func safeLokiAttrs(attrs map[string]string) map[string]string {
+	if len(attrs) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(attrs))
+	for key, value := range attrs {
+		if omitTopLevelLokiAttr(key) {
+			continue
+		}
+		value = strings.TrimSpace(value)
+		if value == "" || value == "[REDACTED]" {
+			continue
+		}
+		if shouldSanitizeLokiURLAttr(key) {
+			value = sanitizeURLStringForLoki(value)
+			if value == "" || value == "invalid" {
+				continue
+			}
+		}
+		out[key] = value
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func omitTopLevelLokiAttr(key string) bool {
+	switch key {
+	case "request_id", "error", "trace_id", "span_id", "route", "status", "elapsed_ms", "error_class":
+		return true
+	default:
+		return false
+	}
+}
+
+func shouldSanitizeLokiURLAttr(key string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(key))
+	return strings.Contains(normalized, "referer") ||
+		strings.Contains(normalized, "origin") ||
+		normalized == "url" ||
+		strings.HasSuffix(normalized, "_url") ||
+		strings.HasSuffix(normalized, ".url")
+}
+
+func sanitizeURLStringForLoki(raw string) string {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return "invalid"
+	}
+	return parsed.Scheme + "://" + parsed.Host
 }
 
 func normalizeLokiLevel(level string) string {
