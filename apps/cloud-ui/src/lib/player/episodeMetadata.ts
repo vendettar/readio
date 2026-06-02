@@ -55,7 +55,7 @@ export function mapEpisodeToPlaybackPayload(
   episode: Episode,
   podcast: Podcast
 ): CanonicalPlaybackPayload {
-  const artwork = resolvePlaybackArtwork(episode.artworkUrl, 600)
+  const artwork = resolvePlaybackArtwork(episode.artworkUrl || podcast.artwork, 600)
 
   return {
     audioUrl: episode.audioUrl,
@@ -99,7 +99,7 @@ export function mapSearchEpisodeToPlaybackPayload(
 }
 
 export function mapFavoriteToPlaybackPayload(favorite: Favorite): CanonicalPlaybackPayload {
-  const artwork = resolvePlaybackArtwork(favorite.episodeArtworkUrl, 600)
+  const artwork = resolvePlaybackArtwork(favorite.episodeArtworkUrl || favorite.artworkUrl, 600)
 
   return {
     audioUrl: favorite.audioUrl,

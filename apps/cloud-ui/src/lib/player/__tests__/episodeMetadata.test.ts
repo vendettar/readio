@@ -77,6 +77,19 @@ describe('episodeMetadata mappers', () => {
     expect(payload.metadata.publishedAt).toBe(1704067200)
   })
 
+  it('maps PI episode payload with podcast artwork fallback when episode artwork is missing', () => {
+    const episode = makeEpisode({
+      artworkUrl: undefined,
+    })
+    const podcast = makePodcast({
+      artwork: 'https://example.com/podcast-fallback.jpg',
+    })
+
+    const payload = mapEpisodeToPlaybackPayload(episode, podcast)
+    expect(payload.artwork).toBe('https://example.com/podcast-fallback.jpg')
+    expect(payload.metadata.artworkUrl).toBe('https://example.com/podcast-fallback.jpg')
+  })
+
   it('maps search episode payload with canonical episode identity', () => {
     const episode: SearchEpisode = {
       audioUrl: 'https://example.com/search.mp3',
