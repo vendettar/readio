@@ -287,7 +287,7 @@ func mapPodcastIndexEpisodeToPIEpisode(ctx context.Context, item PodcastIndexEpi
 	}
 
 	link, _ := normalizeRequiredHTTPURL(item.Link)
-	artworkURL, ok := normalizeRequiredHTTPURL(image)
+	artworkURL, ok := normalizeOptionalEpisodeArtworkURL(image)
 	if !ok {
 		slog.DebugContext(ctx, "skipping episode", "guid", guid, "reason", "invalid artwork url")
 		return piEpisodeResponse{}, errSkipPodcastIndexEpisode
@@ -558,6 +558,15 @@ func normalizeOptionalHTTPURL(raw *string) string {
 	}
 
 	return normalized
+}
+
+func normalizeOptionalEpisodeArtworkURL(raw string) (string, bool) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return "", true
+	}
+
+	return normalizeRequiredHTTPURL(trimmed)
 }
 
 func normalizeRequiredHTTPURL(raw string) (string, bool) {

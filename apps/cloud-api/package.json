@@ -2,7 +2,7 @@
   "name": "@readio/cloud-api",
   "private": true,
   "scripts": {
-    "dev": "go run .",
+    "dev": "set -a && . ./.env && set +a && go run .",
     "build": "GOCACHE=/tmp/readio-go-cache go build -o /tmp/readio-cloud .",
     "lint": "GOCACHE=/tmp/readio-go-cache GOLANGCI_LINT_CACHE=/tmp/readio-golangci-lint-cache golangci-lint run",
     "vet": "GOCACHE=/tmp/readio-go-cache go vet ./..."

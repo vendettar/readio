@@ -210,14 +210,28 @@ func TestMapPodcastIndexSnapshotInvalidAudioAndArtworkSemantics(t *testing.T) {
 	now := time.Date(2026, 5, 18, 10, 0, 0, 0, time.UTC)
 	feed := piSnapshotPodcastFeedFixture("123", 2)
 	valid := piSnapshotEpisodeItemFixture("valid-guid", 2000)
+	missingArtwork := piSnapshotEpisodeItemFixture("missing-artwork-guid", 4000)
+	missingArtwork.Image = ""
+	blankArtwork := piSnapshotEpisodeItemFixture("blank-artwork-guid", 3500)
+	blankArtwork.Image = "   "
 	invalidArtwork := piSnapshotEpisodeItemFixture("invalid-artwork-guid", 3000)
 	invalidArtwork.Image = "javascript:alert(1)"
 
-	snapshot, err := MapPodcastIndexResponsesToPISnapshot(context.Background(), feed, "123", []PodcastIndexEpisodeItem{invalidArtwork, valid}, now, now.Add(2*time.Hour))
+	snapshot, err := MapPodcastIndexResponsesToPISnapshot(
+		context.Background(),
+		feed,
+		"123",
+		[]PodcastIndexEpisodeItem{missingArtwork, blankArtwork, invalidArtwork, valid},
+		now,
+		now.Add(2*time.Hour),
+	)
 	require.NoError(t, err)
-	if got := piSnapshotEpisodeGUIDs(snapshot.Episodes); !reflect.DeepEqual(got, []string{"valid-guid"}) {
-		t.Fatalf("episode GUIDs after invalid artwork = %#v, want valid only", got)
+	if got := piSnapshotEpisodeGUIDs(snapshot.Episodes); !reflect.DeepEqual(got, []string{"missing-artwork-guid", "blank-artwork-guid", "valid-guid"}) {
+		t.Fatalf("episode GUIDs after artwork normalization = %#v", got)
 	}
+	require.Equal(t, "", snapshot.Episodes[0].Image)
+	require.Equal(t, "", snapshot.Episodes[1].Image)
+	require.Equal(t, "https://example.com/art/valid-guid.jpg", snapshot.Episodes[2].Image)
 
 	invalidAudio := piSnapshotEpisodeItemFixture("invalid-audio-guid", 3000)
 	invalidAudio.EnclosureURL = "ftp://example.com/audio.mp3"

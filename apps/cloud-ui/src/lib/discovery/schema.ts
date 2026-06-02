@@ -112,7 +112,7 @@ export const PIEpisodeSchema = z.object({
   description: z.string(),
   audioUrl: HttpUrlSchema,
   pubDate: NonNegativeIntegerSchema,
-  artworkUrl: HttpUrlSchema,
+  artworkUrl: HttpUrlSchema.or(z.literal('')),
   fileSize: NonNegativeIntegerSchema,
   duration: NonNegativeIntegerSchema,
   seasonNumber: NonNegativeIntegerSchema.optional(),

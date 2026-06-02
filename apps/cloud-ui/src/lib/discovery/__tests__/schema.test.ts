@@ -167,6 +167,23 @@ describe('discovery schema PI podcast contract', () => {
     ).toThrow()
   })
 
+  it('allows empty string for artworkUrl in the canonical page contract', () => {
+    const episode = PIEpisodeSchema.parse({
+      guid: 'ep-1',
+      title: 'Episode 1',
+      description: 'Plain description',
+      audioUrl: 'https://example.com/audio.mp3',
+      pubDate: 1774569600,
+      artworkUrl: '',
+      fileSize: 1024,
+      duration: 54,
+      explicit: true,
+      link: 'https://example.com/episode-1',
+    })
+
+    expect(episode.artworkUrl).toBe('')
+  })
+
   it('keeps nullable PI optionals nullable in the canonical page contract', () => {
     const episode = PIEpisodeSchema.parse({
       guid: 'ep-1',
