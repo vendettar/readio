@@ -142,6 +142,16 @@ type podcastIndexBatchFeedBridge struct {
 	response     piPodcastResponse
 }
 
+type podcastIndexUpstreamClient struct {
+	service *discoveryService
+}
+
+var _ podcastindex.PodcastIndexClient = (*podcastIndexUpstreamClient)(nil)
+
+func newPodcastIndexUpstreamClient(service *discoveryService) *podcastIndexUpstreamClient {
+	return &podcastIndexUpstreamClient{service: service}
+}
+
 const podcastIndexGUIDMaxLength = 1024
 
 func normalizePositiveDecimalID(
@@ -199,13 +209,20 @@ func normalizePodcastGUID(input string) (string, error) {
 	return trimmed, nil
 }
 
-func (s *discoveryService) FetchPodcastIndexPodcastByItunesID(ctx context.Context, itunesID string) (*podcastindex.PodcastIndexPodcastFeed, error) {
+func (c *podcastIndexUpstreamClient) AllowPodcastIndexRequest(remoteAddr string) bool {
+	if c == nil {
+		return true
+	}
+	return c.service.allowPodcastIndexRequest(remoteAddr)
+}
+
+func (c *podcastIndexUpstreamClient) FetchPodcastIndexPodcastByItunesID(ctx context.Context, itunesID string) (*podcastindex.PodcastIndexPodcastFeed, error) {
 	normalizedItunesID, err := normalizeItunesID(itunesID)
 	if err != nil {
 		return nil, fmt.Errorf("podcastindex: invalid itunes id: %w", err)
 	}
 
-	req, err := s.buildPodcastIndexRequest(ctx, http.MethodGet, "/podcasts/byitunesid", nil)
+	req, err := c.service.buildPodcastIndexRequest(ctx, http.MethodGet, "/podcasts/byitunesid", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -218,7 +235,7 @@ func (s *discoveryService) FetchPodcastIndexPodcastByItunesID(ctx context.Contex
 		Status string                               `json:"status"`
 		Feed   podcastindex.PodcastIndexPodcastFeed `json:"feed"`
 	}
-	if err := s.executeJSONRequest(req, &result); err != nil {
+	if err := c.service.executeJSONRequest(req, &result); err != nil {
 		return nil, err
 	}
 
@@ -229,12 +246,12 @@ func (s *discoveryService) FetchPodcastIndexPodcastByItunesID(ctx context.Contex
 	return &result.Feed, nil
 }
 
-func (s *discoveryService) FetchPodcastIndexEpisodesByItunesID(
+func (c *podcastIndexUpstreamClient) FetchPodcastIndexEpisodesByItunesID(
 	ctx context.Context,
 	itunesID string,
 	maxEpisodes int,
 ) ([]podcastindex.PodcastIndexEpisodeItem, error) {
-	return s.FetchPodcastIndexEpisodesByItunesIDWithOptions(ctx, itunesID, podcastIndexEpisodesRequest{
+	return c.fetchPodcastIndexEpisodesByItunesIDWithOptions(ctx, itunesID, podcastIndexEpisodesRequest{
 		maxEpisodes: maxEpisodes,
 	})
 }
@@ -245,18 +262,18 @@ type podcastIndexEpisodesRequest struct {
 	useSince    bool
 }
 
-func (s *discoveryService) FetchPodcastIndexEpisodesByItunesIDSince(
+func (c *podcastIndexUpstreamClient) FetchPodcastIndexEpisodesByItunesIDSince(
 	ctx context.Context,
 	itunesID string,
 	sinceUnix int64,
 ) ([]podcastindex.PodcastIndexEpisodeItem, error) {
-	return s.FetchPodcastIndexEpisodesByItunesIDWithOptions(ctx, itunesID, podcastIndexEpisodesRequest{
+	return c.fetchPodcastIndexEpisodesByItunesIDWithOptions(ctx, itunesID, podcastIndexEpisodesRequest{
 		sinceUnix: sinceUnix,
 		useSince:  true,
 	})
 }
 
-func (s *discoveryService) FetchPodcastIndexEpisodesByItunesIDWithOptions(
+func (c *podcastIndexUpstreamClient) fetchPodcastIndexEpisodesByItunesIDWithOptions(
 	ctx context.Context,
 	itunesID string,
 	options podcastIndexEpisodesRequest,
@@ -266,7 +283,7 @@ func (s *discoveryService) FetchPodcastIndexEpisodesByItunesIDWithOptions(
 		return nil, fmt.Errorf("podcastindex: invalid itunes id: %w", err)
 	}
 
-	req, err := s.buildPodcastIndexRequest(ctx, http.MethodGet, "/episodes/byitunesid", nil)
+	req, err := c.service.buildPodcastIndexRequest(ctx, http.MethodGet, "/episodes/byitunesid", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -287,7 +304,7 @@ func (s *discoveryService) FetchPodcastIndexEpisodesByItunesIDWithOptions(
 		Status string                                 `json:"status"`
 		Items  []podcastindex.PodcastIndexEpisodeItem `json:"items"`
 	}
-	if err := s.executeJSONRequest(req, &result); err != nil {
+	if err := c.service.executeJSONRequest(req, &result); err != nil {
 		return nil, err
 	}
 
@@ -632,7 +649,7 @@ func (s *discoveryService) newPIEpisodeReadPathService() (*podcastindex.PIEpisod
 	if s.piEpisodeReadPath != nil {
 		return s.piEpisodeReadPath, nil
 	}
-	refresh := podcastindex.NewPIEpisodeRefreshService(s.piEpisodeCacheStore, s)
+	refresh := podcastindex.NewPIEpisodeRefreshService(s.piEpisodeCacheStore, newPodcastIndexUpstreamClient(s))
 	s.piEpisodeReadPath = podcastindex.NewPIEpisodeReadPathService(s.piEpisodeCacheStore, refresh)
 	return s.piEpisodeReadPath, nil
 }

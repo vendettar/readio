@@ -833,10 +833,6 @@ func (s *discoveryService) allowPodcastIndexRequest(remoteAddr string) bool {
 	return s.podcastIndexLimiter.Allow(remoteAddr)
 }
 
-func (s *discoveryService) AllowPodcastIndexRequest(remoteAddr string) bool {
-	return s.allowPodcastIndexRequest(remoteAddr)
-}
-
 func (s *discoveryService) allowPodcastIndexLocalReadRequest(remoteAddr string) bool {
 	if s == nil || s.podcastIndexLocalReadLimiter == nil {
 		return true

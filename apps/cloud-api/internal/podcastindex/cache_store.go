@@ -122,43 +122,30 @@ func (s *PIEpisodeCacheStore) GetPodcastSnapshot(ctx context.Context, podcastItu
 		return nil, err
 	}
 
-	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
-	if err != nil {
-		return nil, fmt.Errorf("begin pi cache snapshot read: %w", err)
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			_ = tx.Rollback()
+	var snapshot *PIEpisodeCacheSnapshot
+	err = s.withTx(ctx, &sql.TxOptions{ReadOnly: true}, "pi cache snapshot read", func(_ *sql.Tx, txq *cloudsqlc.Queries) error {
+		podcast, err := getPodcastRecordWithQueries(ctx, txq, podcastID)
+		if err != nil {
+			return err
 		}
-	}()
-	txq := s.queries.WithTx(tx)
+		if podcast == nil {
+			return nil
+		}
 
-	podcast, err := getPodcastRecordWithQueries(ctx, txq, podcastID)
+		episodes, err := listEpisodesWithQueries(ctx, txq, podcastID)
+		if err != nil {
+			return err
+		}
+		snapshot = &PIEpisodeCacheSnapshot{
+			Podcast:  *podcast,
+			Episodes: episodes,
+		}
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	if podcast == nil {
-		if err := tx.Commit(); err != nil {
-			return nil, fmt.Errorf("commit pi cache snapshot read: %w", err)
-		}
-		committed = true
-		return nil, nil
-	}
-
-	episodes, err := listEpisodesWithQueries(ctx, txq, podcastID)
-	if err != nil {
-		return nil, err
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("commit pi cache snapshot read: %w", err)
-	}
-	committed = true
-
-	return &PIEpisodeCacheSnapshot{
-		Podcast:  *podcast,
-		Episodes: episodes,
-	}, nil
+	return snapshot, nil
 }
 
 func (s *PIEpisodeCacheStore) GetPodcastMetadata(ctx context.Context, podcastItunesID string) (*PIEpisodeCachePodcastMetadata, error) {
@@ -190,55 +177,42 @@ func (s *PIEpisodeCacheStore) GetEpisodePage(ctx context.Context, podcastItunesI
 		return nil, err
 	}
 
-	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
-	if err != nil {
-		return nil, fmt.Errorf("begin pi cache episode page read: %w", err)
-	}
-	committed := false
-	defer func() {
-		if !committed {
-			_ = tx.Rollback()
+	var page *PIEpisodeCachePage
+	err = s.withTx(ctx, &sql.TxOptions{ReadOnly: true}, "pi cache episode page read", func(_ *sql.Tx, txq *cloudsqlc.Queries) error {
+		metadata, err := txq.GetPIEpisodePageMetadata(ctx, podcastID)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil
+			}
+			return fmt.Errorf("query pi cache episode page metadata: %w", err)
 		}
-	}()
-	txq := s.queries.WithTx(tx)
 
-	metadata, err := txq.GetPIEpisodePageMetadata(ctx, podcastID)
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return nil, nil
+		page = &PIEpisodeCachePage{
+			Limit:                 limit,
+			Offset:                offset,
+			TotalCount:            int(metadata.TotalCount),
+			IsTruncated:           metadata.IsTruncated != 0,
+			LastSuccessfulFetchAt: metadata.LastSuccessfulFetchAtUnix,
+			RefreshNotBefore:      metadata.RefreshNotBeforeUnix,
 		}
-		return nil, fmt.Errorf("query pi cache episode page metadata: %w", err)
-	}
-
-	page := &PIEpisodeCachePage{
-		Limit:                 limit,
-		Offset:                offset,
-		TotalCount:            int(metadata.TotalCount),
-		IsTruncated:           metadata.IsTruncated != 0,
-		LastSuccessfulFetchAt: metadata.LastSuccessfulFetchAtUnix,
-		RefreshNotBefore:      metadata.RefreshNotBeforeUnix,
-	}
-	if limit == 0 {
-		if err := tx.Commit(); err != nil {
-			return nil, fmt.Errorf("commit pi cache episode page read: %w", err)
+		if limit == 0 {
+			return nil
 		}
-		committed = true
-		return page, nil
-	}
 
-	rows, err := txq.ListPIEpisodesPage(ctx, cloudsqlc.ListPIEpisodesPageParams{
-		PodcastItunesID: podcastID,
-		Limit:           int64(limit),
-		Offset:          int64(offset),
+		rows, err := txq.ListPIEpisodesPage(ctx, cloudsqlc.ListPIEpisodesPageParams{
+			PodcastItunesID: podcastID,
+			Limit:           int64(limit),
+			Offset:          int64(offset),
+		})
+		if err != nil {
+			return fmt.Errorf("query pi cache episode page: %w", err)
+		}
+		page.Episodes = piEpisodeCacheEpisodesFromSQLC(rows)
+		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("query pi cache episode page: %w", err)
+		return nil, err
 	}
-	page.Episodes = piEpisodeCacheEpisodesFromSQLC(rows)
-	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("commit pi cache episode page read: %w", err)
-	}
-	committed = true
 	return page, nil
 }
 
@@ -333,54 +307,38 @@ func (s *PIEpisodeCacheStore) ReplacePodcastSnapshotTx(ctx context.Context, snap
 		}
 	}
 
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin pi cache snapshot replace: %w", err)
-	}
+	return s.withTx(ctx, nil, "pi cache snapshot replace", func(tx *sql.Tx, txq *cloudsqlc.Queries) error {
+		podcast := snapshot.Podcast
+		podcast.PodcastItunesID = podcastID
+		podcast.StoredEpisodeCount = len(snapshot.Episodes)
 
-	committed := false
-	defer func() {
-		if !committed {
-			_ = tx.Rollback()
+		if err := txq.UpsertPIPodcastShow(ctx, piEpisodeCachePodcastShowParams(podcast.PIEpisodeCachePodcastMetadata)); err != nil {
+			return fmt.Errorf("upsert pi cache podcast: %w", err)
 		}
-	}()
-	txq := s.queries.WithTx(tx)
 
-	podcast := snapshot.Podcast
-	podcast.PodcastItunesID = podcastID
-	podcast.StoredEpisodeCount = len(snapshot.Episodes)
-
-	if err := txq.UpsertPIPodcastShow(ctx, piEpisodeCachePodcastShowParams(podcast.PIEpisodeCachePodcastMetadata)); err != nil {
-		return fmt.Errorf("upsert pi cache podcast: %w", err)
-	}
-
-	if err := txq.DeletePIEpisodesForPodcast(ctx, podcastID); err != nil {
-		return fmt.Errorf("delete previous pi cache episodes: %w", err)
-	}
-
-	for _, episode := range snapshot.Episodes {
-		if err := txq.InsertPIEpisode(ctx, piEpisodeCacheInsertEpisodeParams(podcastID, episode)); err != nil {
-			return fmt.Errorf("insert pi cache episode %q: %w", episode.EpisodeGUID, err)
+		if err := txq.DeletePIEpisodesForPodcast(ctx, podcastID); err != nil {
+			return fmt.Errorf("delete previous pi cache episodes: %w", err)
 		}
-	}
 
-	if err := txq.UpsertPIFullCacheState(ctx, piEpisodeCacheFullStateParams(podcast)); err != nil {
-		return fmt.Errorf("upsert pi cache state: %w", err)
-	}
+		for _, episode := range snapshot.Episodes {
+			if err := txq.InsertPIEpisode(ctx, piEpisodeCacheInsertEpisodeParams(podcastID, episode)); err != nil {
+				return fmt.Errorf("insert pi cache episode %q: %w", episode.EpisodeGUID, err)
+			}
+		}
 
-	if _, err := evictPodcastsOverBudgetTx(ctx, tx, piEpisodeCacheDefaultMaxPodcasts, piEpisodeCacheDefaultMaxApproxBytes, podcastID); err != nil {
-		return err
-	}
+		if err := txq.UpsertPIFullCacheState(ctx, piEpisodeCacheFullStateParams(podcast)); err != nil {
+			return fmt.Errorf("upsert pi cache state: %w", err)
+		}
 
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit pi cache snapshot replace: %w", err)
-	}
-	committed = true
-	return nil
+		if _, err := evictPodcastsOverBudgetTx(ctx, tx, piEpisodeCacheDefaultMaxPodcasts, piEpisodeCacheDefaultMaxApproxBytes, podcastID); err != nil {
+			return err
+		}
+		return nil
+	})
 }
 
 type ApplyPodcastIncrementalRefreshParams struct {
-	Snapshot               PIPodcastSnapshot
+	Snapshot               PIEpisodeCacheSnapshot
 	WasPreviouslyTruncated bool
 }
 
@@ -389,13 +347,13 @@ func (s *PIEpisodeCacheStore) ApplyPodcastIncrementalRefreshTx(ctx context.Conte
 		return err
 	}
 
-	cacheSnapshot := params.Snapshot.toEpisodeCacheSnapshot()
-	podcastID, err := normalizePIEpisodeCacheRequired("podcast_itunes_id", cacheSnapshot.Podcast.PodcastItunesID)
+	snapshot := params.Snapshot
+	podcastID, err := normalizePIEpisodeCacheRequired("podcast_itunes_id", snapshot.Podcast.PodcastItunesID)
 	if err != nil {
 		return err
 	}
 
-	for _, episode := range cacheSnapshot.Episodes {
+	for _, episode := range snapshot.Episodes {
 		episodePodcastID, err := normalizePIEpisodeCacheRequired("episode podcast_itunes_id", episode.PodcastItunesID)
 		if err != nil {
 			return err
@@ -408,48 +366,32 @@ func (s *PIEpisodeCacheStore) ApplyPodcastIncrementalRefreshTx(ctx context.Conte
 		}
 	}
 
-	tx, err := s.db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin pi cache incremental refresh: %w", err)
-	}
+	return s.withTx(ctx, nil, "pi cache incremental refresh", func(tx *sql.Tx, txq *cloudsqlc.Queries) error {
+		podcast := snapshot.Podcast
+		podcast.PodcastItunesID = podcastID
 
-	committed := false
-	defer func() {
-		if !committed {
-			_ = tx.Rollback()
+		if err := txq.UpsertPIPodcastShow(ctx, piEpisodeCachePodcastShowParams(podcast.PIEpisodeCachePodcastMetadata)); err != nil {
+			return fmt.Errorf("upsert pi cache podcast: %w", err)
 		}
-	}()
-	txq := s.queries.WithTx(tx)
 
-	podcast := cacheSnapshot.Podcast
-	podcast.PodcastItunesID = podcastID
-
-	if err := txq.UpsertPIPodcastShow(ctx, piEpisodeCachePodcastShowParams(podcast.PIEpisodeCachePodcastMetadata)); err != nil {
-		return fmt.Errorf("upsert pi cache podcast: %w", err)
-	}
-
-	for _, episode := range cacheSnapshot.Episodes {
-		if err := txq.UpsertPIEpisode(ctx, piEpisodeCacheUpsertEpisodeParams(podcastID, episode)); err != nil {
-			return fmt.Errorf("upsert pi cache episode %q: %w", episode.EpisodeGUID, err)
+		for _, episode := range snapshot.Episodes {
+			if err := txq.UpsertPIEpisode(ctx, piEpisodeCacheUpsertEpisodeParams(podcastID, episode)); err != nil {
+				return fmt.Errorf("upsert pi cache episode %q: %w", episode.EpisodeGUID, err)
+			}
 		}
-	}
 
-	if err := prunePIEpisodeCacheRetentionTx(ctx, tx, podcastID, PISnapshotMaxEpisodesPerPodcast); err != nil {
-		return err
-	}
-	if err := upsertPIEpisodeCacheIncrementalStateTx(ctx, tx, podcast, params.WasPreviouslyTruncated); err != nil {
-		return err
-	}
+		if err := prunePIEpisodeCacheRetentionTx(ctx, tx, podcastID, PISnapshotMaxEpisodesPerPodcast); err != nil {
+			return err
+		}
+		if err := upsertPIEpisodeCacheIncrementalStateTx(ctx, tx, podcast, params.WasPreviouslyTruncated); err != nil {
+			return err
+		}
 
-	if _, err := evictPodcastsOverBudgetTx(ctx, tx, piEpisodeCacheDefaultMaxPodcasts, piEpisodeCacheDefaultMaxApproxBytes, podcastID); err != nil {
-		return err
-	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("commit pi cache incremental refresh: %w", err)
-	}
-	committed = true
-	return nil
+		if _, err := evictPodcastsOverBudgetTx(ctx, tx, piEpisodeCacheDefaultMaxPodcasts, piEpisodeCacheDefaultMaxApproxBytes, podcastID); err != nil {
+			return err
+		}
+		return nil
+	})
 }
 
 func (s *PIEpisodeCacheStore) MarkRefreshFailure(
@@ -508,10 +450,29 @@ func (s *PIEpisodeCacheStore) EvictPodcastsOverBudget(ctx context.Context, maxPo
 		return nil, nil
 	}
 
-	tx, err := s.db.BeginTx(ctx, nil)
+	var evicted []string
+	err := s.withTx(ctx, nil, "pi cache eviction", func(tx *sql.Tx, _ *cloudsqlc.Queries) error {
+		var err error
+		evicted, err = evictPodcastsOverBudgetTx(ctx, tx, maxPodcasts, maxApproxBytes, excludePodcastItunesID)
+		return err
+	})
 	if err != nil {
-		return nil, fmt.Errorf("begin pi cache eviction: %w", err)
+		return nil, err
 	}
+	return evicted, nil
+}
+
+func (s *PIEpisodeCacheStore) withTx(
+	ctx context.Context,
+	opts *sql.TxOptions,
+	operation string,
+	fn func(*sql.Tx, *cloudsqlc.Queries) error,
+) error {
+	tx, err := s.db.BeginTx(ctx, opts)
+	if err != nil {
+		return fmt.Errorf("begin %s: %w", operation, err)
+	}
+
 	committed := false
 	defer func() {
 		if !committed {
@@ -519,16 +480,14 @@ func (s *PIEpisodeCacheStore) EvictPodcastsOverBudget(ctx context.Context, maxPo
 		}
 	}()
 
-	evictParams, err := evictPodcastsOverBudgetTx(ctx, tx, maxPodcasts, maxApproxBytes, excludePodcastItunesID)
-	if err != nil {
-		return nil, err
+	if err := fn(tx, s.queries.WithTx(tx)); err != nil {
+		return err
 	}
-
 	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("commit pi cache eviction: %w", err)
+		return fmt.Errorf("commit %s: %w", operation, err)
 	}
 	committed = true
-	return evictParams, nil
+	return nil
 }
 
 func evictPodcastsOverBudgetTx(

@@ -2,7 +2,6 @@ package podcastindex
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -35,7 +34,7 @@ type PIEpisodeRefreshResult struct {
 
 type piEpisodeRefreshPayload struct {
 	Snapshot            *PIEpisodeCacheSnapshot
-	Incremental         *PIPodcastSnapshot
+	Incremental         *PIEpisodeCacheSnapshot
 	PreviouslyTruncated bool
 	RefreshNotBefore    time.Time
 }
@@ -265,13 +264,13 @@ func (s *PIEpisodeRefreshService) fetchAndBuildSnapshot(
 		return nil, err
 	}
 
+	cacheSnapshot := mapped.toEpisodeCacheSnapshot()
 	if state == nil {
-		cacheSnapshot := mapped.toEpisodeCacheSnapshot()
 		return &piEpisodeRefreshPayload{Snapshot: &cacheSnapshot, RefreshNotBefore: refreshNotBefore}, nil
 	}
 
 	return &piEpisodeRefreshPayload{
-		Incremental:         &mapped,
+		Incremental:         &cacheSnapshot,
 		PreviouslyTruncated: state.IsTruncated,
 		RefreshNotBefore:    refreshNotBefore,
 	}, nil
@@ -377,7 +376,7 @@ func piEpisodeRefreshFailureBackoff(failCount int) time.Duration {
 
 func mergePIEpisodeCacheSnapshot(
 	current *PIEpisodeCacheSnapshot,
-	incremental PIPodcastSnapshot,
+	incremental PIEpisodeCacheSnapshot,
 	now time.Time,
 	refreshNotBefore time.Time,
 ) PIEpisodeCacheSnapshot {
@@ -386,7 +385,7 @@ func mergePIEpisodeCacheSnapshot(
 	for _, episode := range current.Episodes {
 		byGUID[episode.EpisodeGUID] = episode
 	}
-	for _, episode := range incremental.toEpisodeCacheSnapshot().Episodes {
+	for _, episode := range incremental.Episodes {
 		if existing, exists := byGUID[episode.EpisodeGUID]; exists {
 			episode.CreatedAtUnix = existing.CreatedAtUnix
 		} else {
@@ -427,19 +426,19 @@ func mergePIEpisodeCacheSnapshot(
 	}
 
 	podcast := current.Podcast
-	podcast.Title = incremental.Title
-	podcast.Description = incremental.Description
-	podcast.Author = incremental.Author
-	podcast.Image = incremental.Image
-	podcast.FeedURL = incremental.FeedURL
-	podcast.Language = incremental.Language
-	podcast.CategoriesJSON = categoriesJSON(incremental.Categories)
-	podcast.EpisodeCountHint = incremental.EpisodeCountHint
-	podcast.FeedLastUpdateTimeUnix = incremental.FeedLastUpdateTimeUnix
+	podcast.Title = incremental.Podcast.Title
+	podcast.Description = incremental.Podcast.Description
+	podcast.Author = incremental.Podcast.Author
+	podcast.Image = incremental.Podcast.Image
+	podcast.FeedURL = incremental.Podcast.FeedURL
+	podcast.Language = incremental.Podcast.Language
+	podcast.CategoriesJSON = incremental.Podcast.CategoriesJSON
+	podcast.EpisodeCountHint = incremental.Podcast.EpisodeCountHint
+	podcast.FeedLastUpdateTimeUnix = incremental.Podcast.FeedLastUpdateTimeUnix
 	podcast.StoredEpisodeCount = len(episodes)
 	podcast.IsTruncated = clipped ||
 		current.Podcast.IsTruncated ||
-		(incremental.EpisodeCountHint > int64(len(episodes)))
+		(incremental.Podcast.EpisodeCountHint > int64(len(episodes)))
 	podcast.LastSuccessfulFetchAt = timestamp
 	podcast.LastAttemptedFetchAt = timestamp
 	podcast.RefreshNotBefore = UnixPISnapshotTime(refreshNotBefore)
@@ -453,17 +452,6 @@ func mergePIEpisodeCacheSnapshot(
 	}
 	merged.Podcast.ApproxBytes = estimatePIEpisodeCacheApproxBytes(merged)
 	return merged
-}
-
-func categoriesJSON(categories []string) string {
-	if len(categories) == 0 {
-		return ""
-	}
-	encoded, err := json.Marshal(categories)
-	if err != nil {
-		return ""
-	}
-	return string(encoded)
 }
 
 func estimatePIEpisodeCacheApproxBytes(snapshot PIEpisodeCacheSnapshot) int64 {

@@ -232,15 +232,16 @@ func TestPIEpisodeCacheStoreIncrementalApproxBytesCountsUTF8Bytes(t *testing.T) 
 		},
 	}
 
+	cacheSnapshot := snapshot.toEpisodeCacheSnapshot()
 	err := store.ApplyPodcastIncrementalRefreshTx(context.Background(), ApplyPodcastIncrementalRefreshParams{
-		Snapshot: snapshot,
+		Snapshot: cacheSnapshot,
 	})
 	require.NoError(t, err)
 
 	storedSnapshot, err := store.GetPodcastSnapshot(context.Background(), "unicode-show")
 	require.NoError(t, err)
 	require.NotNil(t, storedSnapshot, "snapshot = nil, want stored snapshot")
-	expectedApproxBytes := estimatePIEpisodeCacheApproxBytes(snapshot.toEpisodeCacheSnapshot())
+	expectedApproxBytes := estimatePIEpisodeCacheApproxBytes(cacheSnapshot)
 	require.Equal(t, expectedApproxBytes, storedSnapshot.Podcast.ApproxBytes)
 }
 

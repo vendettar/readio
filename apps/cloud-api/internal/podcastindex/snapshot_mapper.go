@@ -3,7 +3,6 @@ package podcastindex
 import (
 	"context"
 	"crypto/sha1"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -38,6 +37,9 @@ func (e *PodcastIndexInvalidResponseError) Error() string {
 	return e.Message
 }
 
+// PIPodcastSnapshot is the canonical normalized PodcastIndex model for the
+// episode cache. It intentionally excludes persistence row fields such as
+// created/updated timestamps while keeping bounded-window metadata.
 type PIPodcastSnapshot struct {
 	PodcastItunesID        string
 	Title                  string
@@ -57,6 +59,8 @@ type PIPodcastSnapshot struct {
 	Episodes               []PIEpisodeSnapshot
 }
 
+// PIEpisodeSnapshot is the normalized episode model produced from PodcastIndex
+// responses before persistence-specific cache fields are attached.
 type PIEpisodeSnapshot struct {
 	PodcastItunesID string
 	EpisodeGUID     string
@@ -452,71 +456,6 @@ func estimatePISnapshotApproxBytes(snapshot PIPodcastSnapshot) int64 {
 		size += int64(len(episode.EpisodeType) + len(episode.Link) + len(episode.TranscriptURL))
 	}
 	return size
-}
-
-func (s PIPodcastSnapshot) toEpisodeCacheSnapshot() PIEpisodeCacheSnapshot {
-	categoriesJSON := ""
-	if len(s.Categories) > 0 {
-		encoded, err := json.Marshal(s.Categories)
-		if err == nil {
-			categoriesJSON = string(encoded)
-		}
-	}
-
-	timestamp := UnixPISnapshotTime(s.LastSuccessfulFetchAt)
-	podcast := PIEpisodeCachePodcastRecord{
-		PIEpisodeCachePodcastMetadata: PIEpisodeCachePodcastMetadata{
-			PodcastItunesID:        s.PodcastItunesID,
-			Title:                  s.Title,
-			Description:            s.Description,
-			Author:                 s.Author,
-			Image:                  s.Image,
-			FeedURL:                s.FeedURL,
-			Language:               s.Language,
-			CategoriesJSON:         categoriesJSON,
-			EpisodeCountHint:       s.EpisodeCountHint,
-			FeedLastUpdateTimeUnix: s.FeedLastUpdateTimeUnix,
-			CreatedAtUnix:          timestamp,
-			UpdatedAtUnix:          timestamp,
-		},
-		PIEpisodeCachePodcastState: PIEpisodeCachePodcastState{
-			StoredEpisodeCount:    s.StoredEpisodeCount,
-			IsTruncated:           s.IsTruncated,
-			LastSuccessfulFetchAt: timestamp,
-			LastAttemptedFetchAt:  timestamp,
-			RefreshNotBefore:      UnixPISnapshotTime(s.RefreshNotBefore),
-			ApproxBytes:           s.ApproxBytes,
-			LastAccessedAt:        timestamp,
-		},
-	}
-
-	episodes := make([]PIEpisodeCacheEpisode, 0, len(s.Episodes))
-	for _, episode := range s.Episodes {
-		episodes = append(episodes, PIEpisodeCacheEpisode{
-			PodcastItunesID: episode.PodcastItunesID,
-			EpisodeGUID:     episode.EpisodeGUID,
-			Title:           episode.Title,
-			Description:     episode.Description,
-			EnclosureURL:    episode.EnclosureURL,
-			PublishedAtUnix: episode.PublishedAtUnix,
-			DurationSeconds: episode.DurationSeconds,
-			Image:           episode.Image,
-			EpisodeNumber:   cloneInt64Ptr(episode.EpisodeNumber),
-			SeasonNumber:    cloneInt64Ptr(episode.SeasonNumber),
-			EpisodeType:     episode.EpisodeType,
-			Explicit:        cloneBoolPtr(episode.Explicit),
-			Link:            episode.Link,
-			EnclosureLength: cloneInt64Ptr(episode.EnclosureLength),
-			TranscriptURL:   episode.TranscriptURL,
-			CreatedAtUnix:   timestamp,
-			UpdatedAtUnix:   timestamp,
-		})
-	}
-
-	return PIEpisodeCacheSnapshot{
-		Podcast:  podcast,
-		Episodes: episodes,
-	}
 }
 
 func UnixPISnapshotTime(value time.Time) int64 {
