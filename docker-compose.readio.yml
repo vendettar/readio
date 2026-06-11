@@ -4,7 +4,7 @@ services:
     container_name: ${CONTAINER_NAME:?CONTAINER_NAME is required}
     restart: always
     ports:
-      - "${HOST_PORT:?HOST_PORT is required}:${APP_PORT:?APP_PORT is required}"
+      - "127.0.0.1:${HOST_PORT:?HOST_PORT is required}:${APP_PORT:?APP_PORT is required}"
     volumes:
       - ${DATA_DIR:?DATA_DIR is required}:/app/data
     environment:

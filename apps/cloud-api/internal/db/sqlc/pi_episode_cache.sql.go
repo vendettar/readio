@@ -827,18 +827,17 @@ INSERT INTO podcast_cache_state (
   ?1,
   CASE
     WHEN CAST(?2 AS INTEGER) != 0 THEN 1
-    WHEN (SELECT COUNT(*) FROM podcast_episodes episodes WHERE episodes.podcast_itunes_id = ?1) >= CAST(?3 AS INTEGER) THEN 1
-    WHEN CAST(?4 AS INTEGER) > (SELECT COUNT(*) FROM podcast_episodes episodes WHERE episodes.podcast_itunes_id = ?1) THEN 1
+    WHEN CAST(?3 AS INTEGER) > (SELECT COUNT(*) FROM podcast_episodes episodes WHERE episodes.podcast_itunes_id = ?1) THEN 1
     ELSE 0
   END,
+  ?4,
   ?5,
   ?6,
-  ?7,
   0,
   NULL,
   0,
-  ?8,
-  ?9
+  ?7,
+  ?8
 )
 ON CONFLICT(podcast_itunes_id) DO UPDATE SET
   is_truncated = excluded.is_truncated,
@@ -854,7 +853,6 @@ ON CONFLICT(podcast_itunes_id) DO UPDATE SET
 type UpsertPIIncrementalCacheStateParams struct {
 	PodcastItunesID           string
 	PreviouslyTruncated       int64
-	MaxEpisodesPerPodcast     int64
 	EpisodeCountHint          int64
 	LastSuccessfulFetchAtUnix int64
 	LastAttemptedFetchAtUnix  int64
@@ -867,7 +865,6 @@ func (q *Queries) UpsertPIIncrementalCacheState(ctx context.Context, arg UpsertP
 	_, err := q.db.ExecContext(ctx, upsertPIIncrementalCacheState,
 		arg.PodcastItunesID,
 		arg.PreviouslyTruncated,
-		arg.MaxEpisodesPerPodcast,
 		arg.EpisodeCountHint,
 		arg.LastSuccessfulFetchAtUnix,
 		arg.LastAttemptedFetchAtUnix,

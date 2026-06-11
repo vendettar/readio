@@ -625,7 +625,6 @@ func upsertPIEpisodeCacheIncrementalStateTx(ctx context.Context, tx *sql.Tx, pod
 	if err := txq.UpsertPIIncrementalCacheState(ctx, cloudsqlc.UpsertPIIncrementalCacheStateParams{
 		PodcastItunesID:           podcastID,
 		PreviouslyTruncated:       int64(boolToSQLiteInt(previouslyTruncated)),
-		MaxEpisodesPerPodcast:     int64(PISnapshotMaxEpisodesPerPodcast),
 		EpisodeCountHint:          podcast.EpisodeCountHint,
 		LastSuccessfulFetchAtUnix: podcast.LastSuccessfulFetchAt,
 		LastAttemptedFetchAtUnix:  podcast.LastAttemptedFetchAt,

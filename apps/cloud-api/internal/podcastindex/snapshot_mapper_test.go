@@ -70,8 +70,8 @@ func TestMapPodcastIndexSnapshotTruncationEvidence(t *testing.T) {
 		episodeHint *int64
 		want        bool
 	}{
-		{name: "missing episode count is conservative", episodeHint: nil, want: true},
-		{name: "equal episode count is not truncated", episodeHint: int64Ptr(PISnapshotMaxEpisodesPerPodcast), want: true},
+		{name: "missing episode count is conservative", episodeHint: nil, want: false},
+		{name: "equal episode count is not truncated", episodeHint: int64Ptr(PISnapshotMaxEpisodesPerPodcast), want: false},
 		{name: "greater episode count truncates only when window is full", episodeHint: int64Ptr(PISnapshotMaxEpisodesPerPodcast + 1), want: true},
 	}
 
@@ -160,6 +160,36 @@ func TestMapPodcastIndexSnapshotDurationAndOptionalFields(t *testing.T) {
 	require.Equal(t, "trailer", episode.EpisodeType)
 	require.Equal(t, "https://example.com/transcript.vtt", episode.TranscriptURL)
 	require.Equal(t, "https://example.com/episode", episode.Link)
+
+	t.Run("nil duration is retained as unknown", func(t *testing.T) {
+		unknownDuration := piSnapshotEpisodeItemFixture("unknown-duration", 3000)
+		unknownDuration.Duration = nil
+
+		snapshot, err := MapPodcastIndexResponsesToPISnapshot(context.Background(), feed, "123", []PodcastIndexEpisodeItem{unknownDuration}, now, now.Add(2*time.Hour))
+		require.NoError(t, err)
+		require.Len(t, snapshot.Episodes, 1)
+		require.Equal(t, int64(0), snapshot.Episodes[0].DurationSeconds)
+	})
+
+	t.Run("negative duration is skipped", func(t *testing.T) {
+		negativeDuration := piSnapshotEpisodeItemFixture("negative-duration", 3000)
+		negativeDuration.Duration = int64Ptr(-1)
+
+		snapshot, err := MapPodcastIndexResponsesToPISnapshot(context.Background(), feed, "123", []PodcastIndexEpisodeItem{negativeDuration}, now, now.Add(2*time.Hour))
+		require.NoError(t, err)
+		require.Empty(t, snapshot.Episodes)
+	})
+
+	t.Run("non-positive enclosure length is skipped", func(t *testing.T) {
+		zeroLength := piSnapshotEpisodeItemFixture("zero-length", 3000)
+		zeroLength.EnclosureLength = int64Ptr(0)
+		negativeLength := piSnapshotEpisodeItemFixture("negative-length", 2000)
+		negativeLength.EnclosureLength = int64Ptr(-1)
+
+		snapshot, err := MapPodcastIndexResponsesToPISnapshot(context.Background(), feed, "123", []PodcastIndexEpisodeItem{zeroLength, negativeLength}, now, now.Add(2*time.Hour))
+		require.NoError(t, err)
+		require.Empty(t, snapshot.Episodes)
+	})
 }
 
 func TestMapPodcastIndexSnapshotDuplicateGUIDWinnerIsDeterministic(t *testing.T) {
@@ -240,6 +270,17 @@ func TestMapPodcastIndexSnapshotInvalidAudioAndArtworkSemantics(t *testing.T) {
 	if !errors.As(err, &invalidResponseErr) {
 		t.Fatalf("invalid required audio error = %T %v, want PodcastIndexInvalidResponseError", err, err)
 	}
+}
+
+func TestPIEpisodeGUIDLogHashDoesNotExposeRawGUID(t *testing.T) {
+	rawGUID := strings.Repeat("very-sensitive-guid-", 80)
+
+	got := piEpisodeGUIDLogHash(rawGUID)
+
+	require.Len(t, got, 12)
+	require.NotContains(t, rawGUID, got)
+	require.NotContains(t, got, "very-sensitive-guid")
+	require.Equal(t, "", piEpisodeGUIDLogHash(""))
 }
 
 func TestMapPodcastIndexSnapshotUsesRequestItunesIDWhenFeedItunesIDMissing(t *testing.T) {

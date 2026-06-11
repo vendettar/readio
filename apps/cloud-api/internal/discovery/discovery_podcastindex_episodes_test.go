@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -177,6 +178,7 @@ func TestDiscoveryServicePodcastEpisodesPaginatedSQLiteContract(t *testing.T) {
 	})
 
 	t.Run("podcast detail cold refresh logs refreshed cache status", func(t *testing.T) {
+		logs := captureDiscoveryTestLogs(t)
 		service, _ := newDiscoveryServiceWithPIEpisodeTestStore(t, func(req *http.Request) (*http.Response, error) {
 			switch req.URL.Path {
 			case "/api/1.0/podcasts/byitunesid":
@@ -193,6 +195,7 @@ func TestDiscoveryServicePodcastEpisodesPaginatedSQLiteContract(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, discoveryPodcastsRoute+"/123", nil)
 		service.ServeHTTP(rr, req)
 		require.Equal(t, http.StatusOK, rr.Code)
+		require.Contains(t, logs.cacheStatuses(), CacheStatusRefreshed)
 	})
 
 	t.Run("podcast detail refresh limiter is scoped by effective client IP", func(t *testing.T) {
@@ -226,11 +229,16 @@ func TestDiscoveryServicePodcastEpisodesPaginatedSQLiteContract(t *testing.T) {
 	})
 
 	t.Run("podcast detail stale fallback logs stale fallback cache status", func(t *testing.T) {
+		logs := captureDiscoveryTestLogs(t)
 		service, store := newDiscoveryServiceWithPIEpisodeTestStore(t, func(req *http.Request) (*http.Response, error) {
 			switch req.URL.Path {
 			case "/api/1.0/podcasts/byitunesid":
 				return jsonResponse(http.StatusOK, podcastIndexPodcastFixtureJSON("123")), nil
 			case "/api/1.0/episodes/byitunesid":
+				require.NotEmpty(t, req.URL.Query().Get("since"))
+				require.Equal(t, "100", req.URL.Query().Get("max"))
+				_, hasFulltext := req.URL.Query()["fulltext"]
+				require.True(t, hasFulltext)
 				return jsonResponse(http.StatusOK, `{"status":"ok","items":[]}`), nil
 			default:
 				t.Fatalf("unexpected upstream path %q", req.URL.Path)
@@ -246,6 +254,7 @@ func TestDiscoveryServicePodcastEpisodesPaginatedSQLiteContract(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, discoveryPodcastsRoute+"/123", nil)
 		service.ServeHTTP(rr, req)
 		require.Equal(t, http.StatusOK, rr.Code)
+		require.Contains(t, logs.cacheStatuses(), CacheStatusStaleFallback)
 	})
 
 	t.Run("cold page miss refreshes and returns requested page", func(t *testing.T) {
@@ -256,6 +265,8 @@ func TestDiscoveryServicePodcastEpisodesPaginatedSQLiteContract(t *testing.T) {
 			case "/api/1.0/podcasts/byitunesid":
 				return jsonResponse(http.StatusOK, podcastIndexPodcastFixtureJSON("123")), nil
 			case "/api/1.0/episodes/byitunesid":
+				_, hasFulltext := req.URL.Query()["fulltext"]
+				require.True(t, hasFulltext)
 				return jsonResponse(http.StatusOK, podcastIndexEpisodesFixtureJSON("ep-1", "ep-2", "ep-3")), nil
 			default:
 				t.Fatalf("unexpected upstream path %q", req.URL.Path)
@@ -623,4 +634,55 @@ func podcastIndexEpisodesFixtureJSON(guids ...string) string {
 	}
 	b.WriteString(`]}`)
 	return b.String()
+}
+
+type discoveryTestLogHandler struct {
+	mu      sync.Mutex
+	records []slog.Record
+}
+
+func captureDiscoveryTestLogs(t *testing.T) *discoveryTestLogHandler {
+	t.Helper()
+	handler := &discoveryTestLogHandler{}
+	previous := slog.Default()
+	slog.SetDefault(slog.New(handler))
+	t.Cleanup(func() {
+		slog.SetDefault(previous)
+	})
+	return handler
+}
+
+func (h *discoveryTestLogHandler) Enabled(context.Context, slog.Level) bool {
+	return true
+}
+
+func (h *discoveryTestLogHandler) Handle(_ context.Context, record slog.Record) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.records = append(h.records, record.Clone())
+	return nil
+}
+
+func (h *discoveryTestLogHandler) WithAttrs([]slog.Attr) slog.Handler {
+	return h
+}
+
+func (h *discoveryTestLogHandler) WithGroup(string) slog.Handler {
+	return h
+}
+
+func (h *discoveryTestLogHandler) cacheStatuses() []string {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	statuses := make([]string, 0, len(h.records))
+	for _, record := range h.records {
+		record.Attrs(func(attr slog.Attr) bool {
+			if attr.Key == "cache_status" {
+				statuses = append(statuses, attr.Value.String())
+			}
+			return true
+		})
+	}
+	return statuses
 }

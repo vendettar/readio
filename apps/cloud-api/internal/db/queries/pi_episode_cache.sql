@@ -281,7 +281,6 @@ INSERT INTO podcast_cache_state (
   sqlc.arg(podcast_itunes_id),
   CASE
     WHEN CAST(sqlc.arg(previously_truncated) AS INTEGER) != 0 THEN 1
-    WHEN (SELECT COUNT(*) FROM podcast_episodes episodes WHERE episodes.podcast_itunes_id = sqlc.arg(podcast_itunes_id)) >= CAST(sqlc.arg(max_episodes_per_podcast) AS INTEGER) THEN 1
     WHEN CAST(sqlc.arg(episode_count_hint) AS INTEGER) > (SELECT COUNT(*) FROM podcast_episodes episodes WHERE episodes.podcast_itunes_id = sqlc.arg(podcast_itunes_id)) THEN 1
     ELSE 0
   END,

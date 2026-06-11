@@ -2,6 +2,7 @@ package podcastindex
 
 import (
 	"context"
+	"crypto/sha1"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -177,7 +178,7 @@ func MapPodcastIndexResponsesToPISnapshot(
 
 	podcast.Episodes = episodes
 	podcast.StoredEpisodeCount = len(episodes)
-	podcast.IsTruncated = len(episodes) == PISnapshotMaxEpisodesPerPodcast ||
+	podcast.IsTruncated = len(normalizedEpisodes) > len(episodes) ||
 		(feed.EpisodeCount != nil && *feed.EpisodeCount > int64(len(episodes)))
 	podcast.ApproxBytes = estimatePISnapshotApproxBytes(podcast)
 
@@ -274,8 +275,8 @@ func mapPodcastIndexEpisodeToPIEpisode(ctx context.Context, item PodcastIndexEpi
 	description := strings.TrimSpace(item.Description)
 	guid := strings.TrimSpace(item.GUID)
 	image := strings.TrimSpace(item.Image)
-	if title == "" || guid == "" || item.DatePublished <= 0 || item.Duration == nil || item.EnclosureLength == nil {
-		slog.DebugContext(ctx, "skipping episode", "guid", guid, "reason", "missing base fields")
+	if title == "" || guid == "" || item.DatePublished <= 0 || item.EnclosureLength == nil {
+		slogSkipPodcastIndexEpisode(ctx, guid, "missing base fields")
 		return piEpisodeResponse{}, errSkipPodcastIndexEpisode
 	}
 
@@ -289,12 +290,23 @@ func mapPodcastIndexEpisodeToPIEpisode(ctx context.Context, item PodcastIndexEpi
 	link, _ := normalizeRequiredHTTPURL(item.Link)
 	artworkURL, ok := normalizeOptionalEpisodeArtworkURL(image)
 	if !ok {
-		slog.DebugContext(ctx, "skipping episode", "guid", guid, "reason", "invalid artwork url")
+		slogSkipPodcastIndexEpisode(ctx, guid, "invalid artwork url")
 		return piEpisodeResponse{}, errSkipPodcastIndexEpisode
 	}
 
-	duration := *item.Duration
+	var duration int64
+	if item.Duration != nil {
+		if *item.Duration < 0 {
+			slogSkipPodcastIndexEpisode(ctx, guid, "negative duration")
+			return piEpisodeResponse{}, errSkipPodcastIndexEpisode
+		}
+		duration = *item.Duration
+	}
 	fileSize := *item.EnclosureLength
+	if fileSize <= 0 {
+		slogSkipPodcastIndexEpisode(ctx, guid, "non-positive enclosure length")
+		return piEpisodeResponse{}, errSkipPodcastIndexEpisode
+	}
 
 	var seasonNumber *int64
 	if item.Season != nil && *item.Season >= 0 {
@@ -331,23 +343,23 @@ func mapPodcastIndexEpisodeToPIEpisode(ctx context.Context, item PodcastIndexEpi
 
 func boundPIEpisodeSnapshotResponse(ctx context.Context, response piEpisodeResponse) (piEpisodeResponse, bool) {
 	if !isBoundedPIString(response.GUID, PISnapshotMaxEpisodeGUIDBytes) {
-		slog.DebugContext(ctx, "skipping episode", "guid", response.GUID, "reason", "oversized guid")
+		slogSkipPodcastIndexEpisode(ctx, response.GUID, "oversized guid")
 		return piEpisodeResponse{}, false
 	}
 	if !isBoundedPIString(response.Title, PISnapshotMaxEpisodeTitleBytes) {
-		slog.DebugContext(ctx, "skipping episode", "guid", response.GUID, "reason", "oversized title")
+		slogSkipPodcastIndexEpisode(ctx, response.GUID, "oversized title")
 		return piEpisodeResponse{}, false
 	}
 	if !isBoundedPIString(response.Description, PISnapshotMaxEpisodeDescriptionBytes) {
-		slog.DebugContext(ctx, "skipping episode", "guid", response.GUID, "reason", "oversized description")
+		slogSkipPodcastIndexEpisode(ctx, response.GUID, "oversized description")
 		return piEpisodeResponse{}, false
 	}
 	if !isBoundedPIString(response.AudioURL, PISnapshotMaxURLBytes) {
-		slog.DebugContext(ctx, "skipping episode", "guid", response.GUID, "reason", "oversized audio url")
+		slogSkipPodcastIndexEpisode(ctx, response.GUID, "oversized audio url")
 		return piEpisodeResponse{}, false
 	}
 	if !isBoundedPIString(response.ArtworkURL, PISnapshotMaxURLBytes) {
-		slog.DebugContext(ctx, "skipping episode", "guid", response.GUID, "reason", "oversized artwork url")
+		slogSkipPodcastIndexEpisode(ctx, response.GUID, "oversized artwork url")
 		return piEpisodeResponse{}, false
 	}
 	if !isBoundedPIString(response.Link, PISnapshotMaxURLBytes) {
@@ -532,6 +544,22 @@ func cloneBoolPtr(value *bool) *bool {
 
 func slogSkipPodcastSnapshot(ctx context.Context, podcastItunesID string, reason string) {
 	slog.DebugContext(ctx, "skipping podcast snapshot", "itunes_id", podcastItunesID, "reason", reason)
+}
+
+func slogSkipPodcastIndexEpisode(ctx context.Context, guid string, reason string) {
+	slog.DebugContext(ctx, "skipping episode",
+		"guid_len", len(guid),
+		"guid_sha1", piEpisodeGUIDLogHash(guid),
+		"reason", reason,
+	)
+}
+
+func piEpisodeGUIDLogHash(guid string) string {
+	if guid == "" {
+		return ""
+	}
+	sum := sha1.Sum([]byte(guid))
+	return fmt.Sprintf("%x", sum)[:12]
 }
 
 func normalizePodcastIndexEpisodeType(raw *string) string {

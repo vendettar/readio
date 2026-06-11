@@ -72,7 +72,7 @@ func (c *mockPIRefreshTestDiscoveryClient) FetchPodcastIndexPodcastByItunesID(ct
 }
 
 func (c *mockPIRefreshTestDiscoveryClient) FetchPodcastIndexEpisodesByItunesID(ctx context.Context, itunesID string, maxEpisodes int) ([]PodcastIndexEpisodeItem, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("https://api.podcastindex.org/api/1.0/episodes/byitunesid?id=%s&max=%d", itunesID, maxEpisodes), nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("https://api.podcastindex.org/api/1.0/episodes/byitunesid?id=%s&max=%d&fulltext", itunesID, maxEpisodes), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +96,7 @@ func (c *mockPIRefreshTestDiscoveryClient) FetchPodcastIndexEpisodesByItunesID(c
 }
 
 func (c *mockPIRefreshTestDiscoveryClient) FetchPodcastIndexEpisodesByItunesIDSince(ctx context.Context, itunesID string, sinceUnix int64) ([]PodcastIndexEpisodeItem, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("https://api.podcastindex.org/api/1.0/episodes/byitunesid?id=%s&since=%d", itunesID, sinceUnix), nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("https://api.podcastindex.org/api/1.0/episodes/byitunesid?id=%s&since=%d&max=100&fulltext", itunesID, sinceUnix), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -174,6 +174,8 @@ func TestPIEpisodeRefreshServiceColdMissUsesMax1000AndPersistsSnapshotWithoutTra
 			return jsonResponse(http.StatusOK, piRefreshPodcastResponseJSON("123", 1)), nil
 		case "/api/1.0/episodes/byitunesid":
 			seenEpisodes = true
+			_, hasFulltext := req.URL.Query()["fulltext"]
+			require.True(t, hasFulltext)
 			gotID := req.URL.Query().Get("id")
 			require.Equal(t, "123", gotID)
 			gotMax := req.URL.Query().Get("max")
@@ -282,10 +284,12 @@ func TestPIEpisodeRefreshServiceStaleSnapshotUsesSinceFromNewestStoredEpisode(t 
 		case "/api/1.0/podcasts/byitunesid":
 			return jsonResponse(http.StatusOK, piRefreshPodcastResponseJSON("123", 3)), nil
 		case "/api/1.0/episodes/byitunesid":
+			_, hasFulltext := req.URL.Query()["fulltext"]
+			require.True(t, hasFulltext)
 			gotSince := req.URL.Query().Get("since")
 			require.Equal(t, "2999", gotSince)
 			gotMax := req.URL.Query().Get("max")
-			require.Equal(t, "", gotMax)
+			require.Equal(t, "100", gotMax)
 			return jsonResponse(http.StatusOK, piRefreshEpisodesResponseJSON(
 				piSnapshotEpisodeItemFixture("newer", 4000),
 			)), nil
@@ -875,7 +879,7 @@ func TestPIEpisodeRefreshServiceTruncationSemantics(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, result.Snapshot.Podcast.IsTruncated)
 
-	// Case 2: Stored snapshot that reaches exactly 1000 items is truncated even if episode count is missing
+	// Case 2: Stored snapshot that reaches exactly 1000 items is not truncated without overflow evidence
 	db2 := openPIEpisodeCacheTestDB(t)
 	store2 := NewPIEpisodeCacheStore(db2)
 	guids := make([]string, 0, PISnapshotMaxEpisodesPerPodcast)
@@ -907,7 +911,7 @@ func TestPIEpisodeRefreshServiceTruncationSemantics(t *testing.T) {
 	result2, err := service2.EnsureSnapshot(context.Background(), "456")
 	require.NoError(t, err)
 	require.Len(t, result2.Snapshot.Episodes, PISnapshotMaxEpisodesPerPodcast)
-	require.True(t, result2.Snapshot.Podcast.IsTruncated)
+	require.False(t, result2.Snapshot.Podcast.IsTruncated)
 }
 
 func assertNoTraceparentHeaders(t *testing.T, req *http.Request) {

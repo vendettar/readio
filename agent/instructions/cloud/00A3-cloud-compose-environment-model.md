@@ -1,4 +1,4 @@
-# Instruction 00A3 — Cloud Compose Environment Model
+# Instruction 00A3 — Cloud Compose Environment Model [COMPLETED]
 
 ## Objective
 

@@ -30,6 +30,7 @@ const (
 	podcastIndexMaxBatchGUIDs    = 100
 	podcastIndexMaxBatchBodySize = 10 * 1024
 	podcastIndexPageEpisodesMax  = 1000
+	podcastIndexSinceEpisodesMax = 100
 	podcastIndexEpisodePageSize  = 20
 	podcastIndexEpisodePageMax   = 100
 )
@@ -272,8 +273,10 @@ func (s *discoveryService) FetchPodcastIndexEpisodesByItunesIDWithOptions(
 
 	q := req.URL.Query()
 	q.Set("id", normalizedItunesID)
+	q["fulltext"] = []string{""}
 	if options.useSince {
 		q.Set("since", strconv.FormatInt(options.sinceUnix, 10))
+		q.Set("max", strconv.Itoa(podcastIndexSinceEpisodesMax))
 	} else {
 		q.Set("max", strconv.Itoa(options.maxEpisodes))
 	}
@@ -878,8 +881,6 @@ func mapPodcastIndexPodcastToPIPodcast(ctx context.Context, feed podcastindex.Po
 		Genres:          genres,
 	}, true
 }
-
-
 
 func normalizeRequiredHTTPURL(raw string) (string, bool) {
 	trimmed := strings.TrimSpace(raw)

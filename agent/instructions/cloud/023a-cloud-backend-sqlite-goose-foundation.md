@@ -284,3 +284,4 @@ Implementation following this document should report:
   - `go test ./...`
   - `git diff --check -- apps/cloud-api/main.go apps/cloud-api/main_test.go apps/cloud-api/go.mod apps/cloud-api/go.sum apps/docs/content/docs/apps/cloud/handoff/backend-sqlite-governance.mdx apps/docs/content/docs/apps/cloud/handoff/backend-sqlite-governance.zh.mdx apps/docs/content/docs/apps/cloud/deployment.mdx apps/docs/content/docs/apps/cloud/deployment.zh.mdx agent/instructions/cloud/023a-cloud-backend-sqlite-goose-foundation.md`
 - Date: 2026-04-29
+- Reviewed by: Codex (GPT-5), 2026-06-10

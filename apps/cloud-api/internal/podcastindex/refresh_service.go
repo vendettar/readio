@@ -439,7 +439,6 @@ func mergePIEpisodeCacheSnapshot(
 	podcast.StoredEpisodeCount = len(episodes)
 	podcast.IsTruncated = clipped ||
 		current.Podcast.IsTruncated ||
-		len(episodes) == PISnapshotMaxEpisodesPerPodcast ||
 		(incremental.EpisodeCountHint > int64(len(episodes)))
 	podcast.LastSuccessfulFetchAt = timestamp
 	podcast.LastAttemptedFetchAt = timestamp
