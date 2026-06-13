@@ -148,6 +148,7 @@ func TestSpanNameForRequestUsesRouteTemplates(t *testing.T) {
 		{asrVerifyRoute, "POST", "POST " + asrVerifyRoute},
 		{discoverySearchPodcastsRoute + "?q=secret", "GET", "GET " + discoverySearchPodcastsRoute},
 		{discoverySearchEpisodesRoute + "?q=user-text", "GET", "GET " + discoverySearchEpisodesRoute},
+		{discoverySearchCacheRoute + "?term=private", "GET", "GET " + discoverySearchCacheRoute},
 		{discoveryTopPodcastsRoute, "GET", "GET " + discoveryTopPodcastsRoute},
 		{discoveryTopEpisodesRoute, "GET", "GET " + discoveryTopEpisodesRoute},
 		{discoveryPodcastsBatchRoute, "POST", "POST " + discoveryPodcastsBatchRoute},
@@ -164,6 +165,7 @@ func TestSpanNameForRequestUsesRouteTemplates(t *testing.T) {
 			require.NotContains(t, got, "?")
 			require.NotContains(t, got, "secret")
 			require.NotContains(t, got, "user-text")
+			require.NotContains(t, got, "private")
 		})
 	}
 }

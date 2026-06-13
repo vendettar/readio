@@ -274,6 +274,8 @@ func canonicalInboundRoute(r *http.Request) string {
 		return discoverySearchPodcastsRoute
 	case discoverySearchEpisodesRoute:
 		return discoverySearchEpisodesRoute
+	case discoverySearchCacheRoute:
+		return discoverySearchCacheRoute
 	case discoveryTopPodcastsRoute:
 		return discoveryTopPodcastsRoute
 	case discoveryTopEpisodesRoute:

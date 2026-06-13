@@ -33,6 +33,7 @@ const (
 	discoveryRoutePrefix                                     = RoutePrefix
 	discoverySearchPodcastsRoute                             = "/api/v1/discovery/search/podcasts"
 	discoverySearchEpisodesRoute                             = "/api/v1/discovery/search/episodes"
+	discoverySearchCacheRoute                                = "/api/v1/discovery/search/cache"
 	discoveryTopPodcastsRoute                                = "/api/v1/discovery/top-podcasts"
 	discoveryTopEpisodesRoute                                = "/api/v1/discovery/top-episodes"
 	discoveryPodcastsRoute                                   = "/api/v1/discovery/podcasts"
@@ -51,6 +52,9 @@ const (
 	defaultDiscoveryEpisodeSearchLimit                       = 50
 	defaultDiscoveryTopLimit                                 = 25
 	maxDiscoverySearchLimit                                  = 200
+	defaultDiscoveryCacheSearchLimit                         = 5
+	maxDiscoveryCacheSearchLimit                             = 10
+	discoveryCacheSearchTimeout                              = 2 * time.Second
 	maxDiscoveryTopLimit                                     = 100
 	discoveryCacheMaxKeys                                    = 256
 	discoverySearchRateLimitBurst                            = 30
@@ -281,11 +285,12 @@ var (
 	errDiscoveryTooLarge       = errors.New("discovery upstream response too large")
 	errDiscoveryDecode         = errors.New("discovery upstream response invalid")
 
-	errDiscoveryUpstreamError         = errors.New("discovery upstream error")
-	errDiscoveryRateLimited           = errors.New("discovery request rate limited")
-	errDiscoveryHostUnresolvable      = errors.New("discovery host unresolvable")
-	errDiscoveryMethodNotAllowedError = errors.New("method not allowed")
-	discoveryStopWords                = map[string]struct{}{
+	errDiscoveryUpstreamError               = errors.New("discovery upstream error")
+	errDiscoveryRateLimited                 = errors.New("discovery request rate limited")
+	errDiscoveryHostUnresolvable            = errors.New("discovery host unresolvable")
+	errDiscoveryMethodNotAllowedError       = errors.New("method not allowed")
+	errDiscoveryCacheSearchUnavailableError = errors.New("cache search unavailable")
+	discoveryStopWords                      = map[string]struct{}{
 		"the": {}, "a": {}, "an": {}, "and": {}, "or": {}, "of": {}, "in": {}, "on": {},
 		"at": {}, "to": {}, "for": {}, "with": {}, "by": {}, "is": {}, "it": {}, "that": {},
 		"this": {}, "podcast": {}, "audio": {}, "episode": {}, "episodes": {},
@@ -418,6 +423,10 @@ var (
 	discoveryErrProviderNotConfigured = discoveryErrorSpec{
 		code:    "DISCOVERY_PROVIDER_NOT_CONFIGURED",
 		message: "podcastindex provider is not configured",
+	}
+	discoveryErrCacheSearchUnavailable = discoveryErrorSpec{
+		code:    "CACHE_SEARCH_UNAVAILABLE",
+		message: "cache search is unavailable",
 	}
 )
 
@@ -594,6 +603,8 @@ func (s *discoveryService) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		s.handleSearchPodcasts(w, r)
 	case discoverySearchEpisodesRoute:
 		s.handleSearchEpisodes(w, r)
+	case discoverySearchCacheRoute:
+		s.handleSearchCache(w, r)
 	case discoveryTopPodcastsRoute:
 		s.handleTopPodcasts(w, r)
 	case discoveryTopEpisodesRoute:
@@ -673,6 +684,9 @@ func discoveryMetricStatus(err error) int {
 
 	var configErr *discoveryProviderConfigError
 	if errors.As(err, &configErr) {
+		return http.StatusServiceUnavailable
+	}
+	if errors.Is(err, errDiscoveryCacheSearchUnavailableError) {
 		return http.StatusServiceUnavailable
 	}
 
@@ -765,6 +779,9 @@ func classifyDiscoveryError(err error) string {
 
 	if errors.Is(err, errDiscoveryTooLarge) || isDiscoveryBodyTooLargeError(err) {
 		return "too_large"
+	}
+	if errors.Is(err, errDiscoveryCacheSearchUnavailableError) {
+		return "service_unavailable"
 	}
 
 	if isDiscoveryRateLimitedError(err) {
@@ -923,7 +940,7 @@ func writeDiscoveryMappedError(r *http.Request, w http.ResponseWriter, err error
 	switch {
 	case isDiscoveryRateLimitedError(err):
 		writeDiscoveryErrorSpec(r, w, http.StatusTooManyRequests, discoveryErrRateLimited)
-	case errors.Is(err, errDiscoveryTimeout):
+	case errors.Is(err, errDiscoveryTimeout) || isDiscoveryTransportTimeout(err):
 		writeDiscoveryErrorSpec(r, w, http.StatusGatewayTimeout, discoveryErrUpstreamTimeout)
 	case errors.Is(err, errDiscoveryTooLarge):
 		writeDiscoveryErrorSpec(r, w, http.StatusBadGateway, discoveryErrUpstreamTooLarge)

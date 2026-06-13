@@ -14,7 +14,15 @@ Cloud search still has two user-facing surfaces:
 - First-hop search source: Apple Search
 - Detail/enrichment after click: PodcastIndex via `podcastItunesId`
 
-## 3. Interaction Contract
+## 3. Local Cache Search Boundary
+
+SQLite FTS5 is the lightweight local index layer for PodcastIndex cache search. It is appropriate for searching already-retained Cloud SQLite podcast and episode metadata, including titles, authors, descriptions, and categories, because that data is already local to `apps/cloud-api` and can be queried without adding a separate search service or calling an upstream provider.
+
+FTS5 cache search is not the global Readio search platform. It must not replace Apple Search as the external first-hop discovery source, and it must not expand by default into transcript search, ASR search, user library search, semantic search, or cross-domain ranking. Those areas need separate product and storage evaluation because they have different volume, tokenizer, lifecycle, privacy, and ranking requirements.
+
+The local cache route is useful only as a bounded discovery enhancement over cached public PodcastIndex metadata. It should keep strict public limits, avoid exposing cache state, and treat SQLite file size / FTS write amplification as operational signals rather than `podcast_cache_state.approx_bytes`.
+
+## 4. Interaction Contract
 
 - Search episode rows keep direct-play and detail-navigation separated
 - Offline/local library indicators remain frontend-owned

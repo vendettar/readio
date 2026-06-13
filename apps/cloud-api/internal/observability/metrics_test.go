@@ -106,6 +106,11 @@ func TestDurationHistogramBuckets(t *testing.T) {
 	assert.True(t, hasIntermediate)
 }
 
+func TestMetricRouteMapsDiscoverySearchCache(t *testing.T) {
+	require.Equal(t, "discovery/search/cache", metricRoute(discoverySearchCacheRoute))
+	require.Equal(t, "unknown", metricRoute(discoverySearchCacheRoute+"?term=private"))
+}
+
 // TestDurationHistogramViewAppliesBuckets records a single observation and
 // confirms the collected histogram uses durationHistogramBuckets, not the
 // OTel SDK defaults.

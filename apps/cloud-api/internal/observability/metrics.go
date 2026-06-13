@@ -40,6 +40,7 @@ const (
 
 	discoverySearchPodcastsRoute                   = "/api/v1/discovery/search/podcasts"
 	discoverySearchEpisodesRoute                   = "/api/v1/discovery/search/episodes"
+	discoverySearchCacheRoute                      = "/api/v1/discovery/search/cache"
 	discoveryTopPodcastsRoute                      = "/api/v1/discovery/top-podcasts"
 	discoveryTopEpisodesRoute                      = "/api/v1/discovery/top-episodes"
 	discoveryPodcastsBatchRoute                    = "/api/v1/discovery/podcasts/batch"
@@ -351,6 +352,8 @@ func metricRoute(route string) string {
 		return "discovery/search/podcasts"
 	case discoverySearchEpisodesRoute:
 		return "discovery/search/episodes"
+	case discoverySearchCacheRoute:
+		return "discovery/search/cache"
 	case discoveryTopPodcastsRoute:
 		return "discovery/top/podcasts"
 	case discoveryTopEpisodesRoute:

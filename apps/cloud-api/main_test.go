@@ -39,6 +39,7 @@ func combinedTestMigrationFS(t *testing.T, extras fstest.MapFS) fstest.MapFS {
 	for _, name := range []string{
 		"migrations/00001_bootstrap.sql",
 		"migrations/00002_pi_episode_json_cache.sql",
+		"migrations/00003_podcast_cache_fts5_backend_search.sql",
 	} {
 		body, err := fs.ReadFile(cloudSQLiteMigrations, name)
 		require.NoError(t, err)

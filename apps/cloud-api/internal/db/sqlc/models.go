@@ -41,6 +41,21 @@ type PodcastEpisode struct {
 	UpdatedAtUnix   int64
 }
 
+type PodcastEpisodesFt struct {
+	PodcastItunesID string
+	EpisodeGuid     string
+	Title           string
+	Description     string
+	PodcastTitle    string
+	PodcastAuthor   string
+}
+
+type PodcastEpisodesFtsIndex struct {
+	ID              int64
+	PodcastItunesID string
+	EpisodeGuid     string
+}
+
 type PodcastShow struct {
 	PodcastItunesID        string
 	Title                  string
@@ -54,4 +69,17 @@ type PodcastShow struct {
 	FeedLastUpdateTimeUnix int64
 	CreatedAtUnix          int64
 	UpdatedAtUnix          int64
+}
+
+type PodcastShowsFt struct {
+	PodcastItunesID string
+	Title           string
+	Author          string
+	Description     string
+	Categories      string
+}
+
+type PodcastShowsFtsIndex struct {
+	ID              int64
+	PodcastItunesID string
 }

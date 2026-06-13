@@ -14,7 +14,15 @@ Cloud 搜索仍有两个用户可见面：
 - 首跳搜索来源：Apple Search
 - 点击后的详情/富化：通过 `podcastItunesId` 进入 PodcastIndex
 
-## 3. 交互契约
+## 3. 本地缓存搜索边界
+
+SQLite FTS5 是 PodcastIndex cache search 的轻量本地索引层。它适合搜索已经保留在 Cloud SQLite 里的节目和单集元数据，包括标题、作者、描述和分类，因为这些数据已经归 `apps/cloud-api` 本地持有，不需要引入独立搜索服务，也不需要为缓存内搜索调用上游 provider。
+
+FTS5 cache search 不是 Readio 的全局搜索平台。它不能替代 Apple Search 作为外部首跳 discovery 来源，也不应默认扩大到 transcript 搜索、ASR 搜索、用户库搜索、语义搜索或跨域排序。这些方向的数据规模、分词、生命周期、隐私和排序要求都不同，必须单独做产品和存储评估。
+
+本地缓存路由只作为 cached public PodcastIndex metadata 上的有界 discovery 增强。它必须保持严格的公共请求限制，不暴露 cache state，并把 SQLite 文件体积 / FTS 写放大视为运维信号，而不是塞进 `podcast_cache_state.approx_bytes`。
+
+## 4. 交互契约
 
 - 搜索单集行继续保持“直接播放”和“详情跳转”分离
 - 离线/本地库状态仍由前端自己维护
