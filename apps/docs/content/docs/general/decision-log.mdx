@@ -1,14 +1,14 @@
 ---
-title: Decision Log
+title: Current Decisions
 ---
 
-# Decision Log
+# Current Decisions
 
-This log records only current effective decisions for the prototype. Superseded prototype steps are intentionally omitted.
+These are the active project decisions for the Readio Cloud prototype.
 
 ## D001 — Cloud is the active product surface
 
-`apps/cloud-ui` and `apps/cloud-api` are the active web product. Documentation must describe the current split frontend/backend implementation and must not present old early frontend-only bootstrap phases as active architecture.
+`apps/cloud-ui` and `apps/cloud-api` are the active web product. Documentation must describe this split frontend/backend implementation as the Cloud architecture.
 
 ## D002 — Frontend/backend ownership is explicit
 
@@ -28,7 +28,7 @@ Remote media remains browser-direct first. Backend fallback exists only for appr
 
 ## D006 — ASR transcription uses a backend relay
 
-Cloud provider transcription submission goes through `apps/cloud-api` where configured. Provider credentials remain user-owned and browser-supplied per request; server-side credential persistence is not part of the current contract.
+Cloud provider transcription submission goes through `apps/cloud-api`. Provider credentials remain user-owned and browser-supplied per request; server-side credential persistence is outside the Cloud contract.
 
 ## D007 — Runtime config is allowlisted
 
@@ -44,4 +44,4 @@ Browser-local library data is not recoverable from the backend unless a feature 
 
 ## D010 — Docs are final-state only
 
-Project docs must be concise, code-aligned, and final-state oriented. Use git history for superseded implementation steps instead of copying transition narratives into active documentation.
+Project docs must be concise, code-aligned, and final-state oriented. Implementation transition history belongs in git history, not active documentation.

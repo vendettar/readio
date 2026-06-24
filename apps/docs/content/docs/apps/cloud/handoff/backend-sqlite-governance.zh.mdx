@@ -6,7 +6,7 @@ title: 后端 SQLite 治理
 
 这篇文档记录 Cloud 后端长期有效的 SQLite 规则。
 
-这些规则不属于某一个单独功能，而是后端持久化的共享 contract，适用于 built-in ASR usage governance、feed snapshot storage 等 backend-owned state。
+这些规则不属于某一个单独功能，而是后端持久化的共享 contract，适用于 built-in ASR usage governance、PodcastIndex discovery snapshot、shared transcript asset metadata 等 backend-owned state。
 
 ## 2. Migration Contract
 
@@ -55,16 +55,16 @@ built-in ASR 的持久化属于 backend-owned operational state。
 - 面向部署级 quota window 的确定性 usage accounting
 - 对 abandoned 或 stale reservation 做清理时，要把它们转成 terminal released state，而不是永久保留为 in-flight
 
-built-in ASR 的 SQLite 存储不是 transcript archive。除非后续功能明确扩展，否则它不能宣称持久化 raw audio 或 transcript text。
+built-in ASR 的 SQLite 存储不是 transcript archive，也不负责持久化 raw audio 或 transcript text。
 
-共享 podcast transcript assets 现在采用独立的持久化 contract：
+共享 podcast transcript assets 采用独立的持久化 contract：
 
 - request/quota/idempotency ledger 继续与 transcript asset identity 分离
 - SQLite 对 transcript asset metadata、reuse lookup identity 和 file ownership metadata 负责 authoritative
 - canonical transcript payload 以压缩 `json.gz` 文件形式保存在 deployment-owned `PODCASR_TRANSCRIPTS_DIR`
-- first-release shared transcript assets 必须同时具备 `itunes_id` 与 `episode_guid`；没有 fallback identity path
+- shared transcript assets 必须同时具备 `itunes_id` 与 `episode_guid`；没有 fallback identity path
 - metadata 表只存 `file_name`，不存 relative path，也不把 transcript body inline 放进 SQLite
-- 这一阶段默认永久保留，不定义 automatic GC 或 TTL
+- 默认永久保留，不定义 automatic GC 或 TTL
 
 ## 6. Shared Transcript Asset 规则
 
@@ -75,27 +75,29 @@ built-in ASR 的 SQLite 存储不是 transcript archive。除非后续功能明�
 - SQLite 只存 asset metadata 与 lookup classifier，不存 canonical transcript JSON body
 - filesystem 存 canonical 的压缩 cue payload（`json.gz`）
 - runtime absolute file path 通过 `PODCASR_TRANSCRIPTS_DIR + "/" + itunes_id + "/" + episode_key + "/" + file_name` 推导
-- `episode_key` 必须直接由规范化后的 `episode_guid` 推导；这一阶段的规范化规则是先 trim 外层空白，再把整个 identity lowercase 后再 hash，不能依赖 frontend route encoding
-- `source_kind` 在这一阶段只是 backend 提供的 classifier metadata；SQLite 不负责校验枚举成员或基于 `source_kind` 的 nullability 业务规则
+- `episode_key` 必须直接由规范化后的 `episode_guid` 推导；规范化规则是先 trim 外层空白，再把整个 identity lowercase 后再 hash，不能依赖 frontend route encoding
+- `source_kind` 是 backend 提供的 classifier metadata；SQLite 不负责校验枚举成员或基于 `source_kind` 的 nullability 业务规则
 - reuse lookup 保持 non-unique；同一个 episode 可以为同一 classifier tuple 保留多个 transcript assets
 
-## 7. Feed 持久化规则
+## 7. PodcastIndex Snapshot 规则
 
-feed 持久化是后端 cache/snapshot 层，不是 canonical long-term archive。
+PodcastIndex discovery 持久化是后端 cache/snapshot 层，不是 canonical long-term archive，也不是 RSS feed XML parsing storage。
 
 它的 durable contract 包括：
 
-- feed-level metadata 加上有界 episode-window 存储
-- 持久化 parsed snapshot，而不是 raw XML
-- 在已存储 snapshot window 上做 paging
+- `podcast_shows` show metadata
+- 有界的 `podcast_episodes` rows，用于保留 episode window
+- `podcast_cache_state` freshness、backoff、truncation、eviction 与 access metadata
+- 在已保留的 PodcastIndex snapshot window 上做 paging
 - freshness 与 refresh 行为由后端策略明确拥有
 
 重要边界：
 
 - deep pagination 只保证访问已保留的 snapshot window
-- 除非真实存储 contract 支持完整历史，否则文档不能暗示 full historical feed coverage
+- 除非真实存储 contract 支持完整历史，否则文档不能暗示 full historical episode coverage
+- 文档不得把 `/api/v1/discovery/feed`、RSS feed parsing 或 feed-route cache state 描述为当前 backend SQLite 职责
 
-如果 response shape 没有把 retention boundary 暴露得很清楚，外围文档也必须明确说明：这个 route 分页的是 stored snapshot，不是理论上无限长的 feed 历史。
+如果 response shape 没有把 retention boundary 暴露得很清楚，外围文档也必须明确说明：这个 route 分页的是 stored PodcastIndex snapshot，不是理论上无限长的 episode 历史。
 
 ## 8. Schema 设计预期
 

@@ -2,39 +2,30 @@
 title: Monorepo 策略
 ---
 
-# Monorepo 策略与未来应用
+# Monorepo 策略
 
-Readio 正在从单一前端代码库演进为 Cloud 托管 Web App 加未来平台入口的形态。
-本文档概述 `apps/cloud-ui`、`apps/cloud-api` 的当前角色，以及 `apps/native` 的长期方向。
+Readio 是带 Go 后端的 Cloud Web App，并保留一个占位 native app surface。本文档定义各 workspace app 的当前角色。
 
 ## 1. 应用概览
 
-| 应用 | 路径 | 类型 | 状态 | 目标 |
-|---|---|---|---|---|
-| **Cloud UI** | `apps/cloud-ui` | SPA/Web App | 🟢 Live | 承载播放、discovery、library、files 与 settings 的主要前端表面。 |
-| **Cloud API** | `apps/cloud-api` | Go 后端 | 🟢 Live | 提供 `apps/cloud-ui/dist`、同源 relay/proxy/fallback 路由，以及 SQLite 启动。 |
-| **Native** | `apps/native` | Mobile | ⚪ 仅脚手架 | 通过 Capacitor 的 iOS/Android 包装器。 |
+| 应用 | 路径 | 类型 | 角色 |
+|---|---|---|---|
+| **Cloud UI** | `apps/cloud-ui` | SPA/Web App | 承载播放、discovery、library、files 与 settings 的主要前端表面。 |
+| **Cloud API** | `apps/cloud-api` | Go 后端 | 后端 API 路由、同源 relay、proxy/fallback 路由，以及 SQLite 启动。 |
+| **Native** | `apps/native` | Mobile | 占位 native app surface；实现前不记录产品契约。 |
 
 ---
 
 ## 2. Cloud 策略 (后端)
 
-**角色**: 可选增强。App 必须在没有它的情况下完美运行。
-
 ### 前后端拆分
-- **当前状态**: `apps/cloud-api` 是当前 Go `net/http` 后端，直接提供构建后的 `apps/cloud-ui/dist`，并拥有同源 backend relay。
-- **当前前端**: `apps/cloud-ui` 是当前 Web 前端，不再是“临时 旧前端产物”的描述。
-- **未来方向**: 如果 Cloud 后续演变为更完整的多用户 Web 产品，再引入新的共享包或新的前端拆分。现状文档必须只描述当前真实代码。
-
-### 计划功能 (P2/P3)
-- **数据同步**: 跨设备同步订阅和进度。
-- **AI 服务**: 服务端 Whisper (转录) 和 LLM (摘要)。
-- **社交**: 评论和“播客俱乐部”。
+- **后端**: `apps/cloud-api` 是 Go `net/http` 后端。它提供 API 路由、同源 backend relay，并可在共置部署中提供构建后的 `apps/cloud-ui/dist`。
+- **前端**: `apps/cloud-ui` 是活跃 Web 前端。
+- **共享包**: 只有当共享 presentation 或 domain package 真实存在于 workspace 后，才记录为契约。
 
 ### 技术栈
-- **框架**: 当前脚手架使用 Go `net/http`。
-- **数据库**: 当前脚手架使用 SQLite；PostgreSQL 仅保留为未来 SaaS 方向。
-- **认证**: JWT 认证仅保留为未来方向。
+- **框架**: Go `net/http`。
+- **数据库**: SQLite。
 
 ---
 
@@ -42,15 +33,9 @@ Readio 正在从单一前端代码库演进为 Cloud 托管 Web App 加未来平
 
 **角色**: 访问 PWA 无法触及的系统 API。
 
-### 计划功能 (P2)
-- **后台音频**: 原生 iOS/Android 音频会话处理。
-- **通知**: 新剧集的推送通知。
-- **小组件**: 主屏幕小组件。
-- **CarPlay / Auto**: 驾驶时的简化 UI。
-
 ### 技术栈
-- **框架**: 未来仍可采用 Capacitor 作为包装层。
-- **共享代码**: 当前不要假设不存在的共享包。
+- **框架**: 当前没有活跃 native runtime contract。
+- **共享代码**: 不要假设不存在的共享包。
 
 ---
 
@@ -73,7 +58,7 @@ Readio 正在从单一前端代码库演进为 Cloud 托管 Web App 加未来平
 
 ---
 
-## 6. 缓存策略 (Turborepo) [已实现]
+## 6. 缓存策略 (Turborepo)
 
 为了最大化构建性能并防止过时的输出：
 
@@ -84,9 +69,3 @@ Readio 正在从单一前端代码库演进为 Cloud 托管 Web App 加未来平
 - **不缓存任务**: `dev` 和 `format` 永远不缓存。
 
 **验证**: 运行 `pnpm build` 两次。第二次应显示 `>>> FULL TURBO`。
-
----
-
-## 计划中（待执行）
-
-- **架构图**：用 Mermaid 描绘 `apps/docs`、`apps/cloud-ui`、`apps/cloud-api`、`agent/instructions` 的关系。

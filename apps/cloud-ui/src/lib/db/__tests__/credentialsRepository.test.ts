@@ -71,10 +71,7 @@ describe('credentialsRepository', () => {
     await expect(getCredential(TRANSLATE_CREDENTIAL_KEY)).resolves.toBe('sk-db-openai')
   })
 
-  // TODO(runtimeConfig): re-enable when browser runtime secret sanitization
-  // also rejects Groq-style public env prefixes (for example `gsk_` / `gsk-`)
-  // in addition to the current OpenAI-style prefixes.
-  it.skip('ignores secret-like runtime defaults from browser runtime env', async () => {
+  it('ignores secret-like runtime defaults from browser runtime env', async () => {
     window.__READIO_ENV__ = {
       READIO_OPENAI_API_KEY: 'sk-secret-value',
       READIO_ASR_API_KEY: 'gsk_secret_value',

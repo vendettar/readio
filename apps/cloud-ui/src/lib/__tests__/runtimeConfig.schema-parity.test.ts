@@ -129,7 +129,7 @@ describe('runtimeConfig schema parity', () => {
 
   it('rejects known upstream secret key formats from browser runtime env', async () => {
     window.__READIO_ENV__ = {
-      READIO_ASR_API_KEY: 'sk-secret-like-value',
+      READIO_ASR_API_KEY: 'gsk_secret_like_value',
       READIO_OPENAI_API_KEY: 'sk-proj-secret-like-value',
     }
 

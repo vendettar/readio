@@ -7,7 +7,9 @@ title: 核心架构
 Cloud 现在是拆分式应用：
 
 - `apps/cloud-ui`：React 19 + TypeScript 前端
-- `apps/cloud-api`：Go 后端，负责提供前端构建产物与同源 API
+- `apps/cloud-api`：Go 后端，负责 API 路由与 SQLite
+
+生产环境将 `apps/cloud-ui` 部署到 Cloudflare Pages 的 `www.readio.top` / `readio.top`，并将 `apps/cloud-api` 部署到 `api.readio.top` 背后的 VPS。共置部署仍可以由 Go 后端提供构建后的前端，但这不是生产契约。
 
 ## 2. 前端结构
 
@@ -22,7 +24,7 @@ Cloud 现在是拆分式应用：
 
 ## 3. 所有权边界
 
-- discovery API 由后端同源承载，包括 search / top / Editor's Picks batch lookup / podcast lookup / PI episode-list lookup
+- discovery API 由后端优先拥有，包括 search、top、Editor's Picks batch lookup、podcast lookup 与 PI episode-list lookup。生产环境通过配置的 API base URL 访问；共置部署可以同源访问。
 - 浏览器本地 playback、downloads、transcripts、favorites、subscriptions、settings 仍由前端拥有
 - 前端持久化依旧是 browser-local；Cloud 不等于服务端同步
 

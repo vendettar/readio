@@ -147,15 +147,12 @@ These APIs are used after a first-hop result, route, or previously cached data a
 - Detail-mode rule:
   - `GET /episodes?episodeGuid=...` is a direct SQLite lookup by `podcastItunesId + episodeGuid` and must not trigger PodcastIndex freshness checks
 
-### 2.3 Retired Discovery Feed Route
+### 2.3 Discovery Feed XML Non-Goal
 
-- Status:
-  - `GET /api/v1/discovery/feed` is retired and must not be described as an active Cloud API
-- Active contract:
-  - repo-owned Cloud runtime contracts no longer expose or depend on the legacy feed transport field
-  - active Cloud page rendering and discovery routing do not fetch RSS by legacy feed transport identity
-- Implication:
-  - there is no active second-hop Cloud discovery API that parses RSS feed XML for show / episodes / detail rendering
+- `GET /api/v1/discovery/feed` is not part of the Cloud API surface.
+- Repo-owned Cloud runtime contracts do not expose or depend on feed transport fields.
+- Cloud page rendering and discovery routing do not fetch RSS by feed transport identity.
+- Cloud does not provide a second-hop discovery API that parses RSS feed XML for show, episode-list, or episode-detail rendering.
 
 ### 2.4 Episode Resolution Order
 
@@ -183,6 +180,6 @@ These APIs are used after a first-hop result, route, or previously cached data a
 
 ## 4. Explicit Non-Usage
 
-- Readio does not currently use Podcast Index `episodes/byguid` in the active discovery flow.
-- Readio still uses Podcast Index `podcasts/batch/byguid` for Editor's Picks.
-- Readio no longer treats `/api/v1/discovery/feed` as an active discovery route, and repo-owned Cloud runtime contracts no longer expose the legacy feed transport field.
+- Readio does not use Podcast Index `episodes/byguid` in the discovery flow.
+- Readio uses Podcast Index `podcasts/batch/byguid` for Editor's Picks.
+- Readio does not expose `/api/v1/discovery/feed` as a Cloud discovery route.

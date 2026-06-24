@@ -24,13 +24,13 @@ Cloud handoff 树是应用级前后端契约的 SSOT：
 
 - 将 `apps/cloud-ui` 构建为与 当前 Cloud 前端。
 - 由 `apps/cloud-api` 直接提供 `apps/cloud-ui/dist` 的构建产物。
-- 让 discovery、search、feed 流量通过 `apps/cloud-api` 以同源后端方式承载。
+- 让 discovery 流量通过 `apps/cloud-api` 后端承载，包括 search、top、Editor's Picks batch lookup、podcast lookup 与 PI episode-list lookup。
 - 在浏览器直连可用时优先使用浏览器直连；仅对已批准的媒体失败类由 `apps/cloud-api` 提供内建 fallback 代理。
 - 让浏览器本地的下载、本地 transcript 和其他 browser-owned 媒体产物继续留在浏览器本地；清除站点数据后仍会被移除。
 - 允许符合条件的 podcast episode 额外拥有 backend-owned、可共享复用的 transcript assets，并把它们保存在 deployment-owned 存储下。
 - 让 Cloud Settings 不包含 `CORS Proxy` 区块。
 - 让 Cloud ASR provider 转写通过 `apps/cloud-api` 里的独立同源 relay 提交，同时保持 provider credential 由用户拥有并由浏览器按请求提供。
-- 让 Cloud ASR provider 的验证 / readiness 保持 browser-direct。
+- 让已启用 Cloud ASR provider 的验证通过同一个 relay；未支持 provider 明确 fail closed。
 - 保持 Workbox/PWA 关闭。
 - 暴露 `/api/proxy` RSS 代理契约。
 - 使用 SQLite 作为 Cloud 后端的持久化基础，并保持生命周期清晰。
@@ -63,13 +63,13 @@ Cloud handoff 树是应用级前后端契约的 SSOT：
 
 ## 5. 边界
 
-- 应把 Cloud 描述为当前前后端产品表面。
-- 应把 discovery、search、feed 请求描述为由后端拥有的同源流量。
+- 应把 Cloud 描述为当前 Cloud 前端部署到 Cloudflare Pages、Go 后端部署到 VPS 的产品表面。
+- 应把 discovery 请求描述为后端拥有的流量，包括 search、top、Editor's Picks batch lookup、podcast lookup 与 PI episode-list lookup。
 - 应把 Cloud Settings 描述为不再包含 `CORS Proxy` 区块。
 - 应把 Cloud 媒体描述为浏览器直连优先，仅对已批准的失败类使用后端 fallback。
 - 应把 Cloud ASR provider 转写描述为通过独立后端路由拥有的同源 relay。
 - 应把 Cloud ASR 的 provider credential 描述为由用户拥有，并由浏览器按请求提供。
-- 应把 Cloud ASR provider 的验证 / readiness 描述为仍然是 browser-direct。
+- 应把 Cloud ASR provider 验证描述为已启用 provider 走 relay，未支持 provider 明确拒绝。
 - 应把后端媒体 fallback 描述为透传且不缓存。
 - 应把浏览器本地媒体产物描述为继续留在浏览器本地。
 - 应注明 Cloud 保持 Workbox/PWA 关闭。
@@ -81,30 +81,27 @@ Cloud handoff 树是应用级前后端契约的 SSOT：
 - 应明确说明 backend-owned shared podcast transcript assets 是一个面向符合条件 podcast episode 的窄范围持久化后端产物契约。
 - 未来 Cloud 演进应放在明确标记为 future direction 的文档里。
 
-## 6. 媒体 fallback 审计
+## 6. 媒体 fallback 契约
 
-- 006a 的媒体审计记录在 `media-fallback-audit.md`。
+- 媒体 fallback 契约记录在 `media-fallback-contract.mdx`。
 - 它分类了原生 audio、JS fetch 预取、`HEAD`、`GET`、`Range GET`、transcript 抓取、本地 `blob:` 播放，以及 tracking URL 解包行为。
-- 当前运行时契约保持浏览器直连优先，并仅对已批准的失败类使用窄而明确的后端 fallback，且为透传、不缓存。
-- 这一页只保留高层映射；实现细节放在审计子文档里。
+- 浏览器直连保持优先；后端 fallback 只覆盖已批准的失败类，且为窄范围、透传、不缓存。
 
-## 7. ASR Relay 审计
+## 7. ASR Relay 契约
 
-- 008a 的 ASR transport 审计记录在 `asr-relay-audit.md`。
+- ASR relay 契约记录在 `asr-relay-contract.mdx`。
 - 它把媒体抓取 fallback 与 provider 转写提交、provider 验证 / readiness 检查分开。
-- 当前 Cloud 契约已经把 provider 转写切到独立的同源 relay，而 provider 验证 / readiness 仍然保持 browser-direct。
+- provider 转写和已启用 provider 的验证走独立的同源 relay。
 - 浏览器本地 blob 与已下载 blob 仍然是 browser-local 输入；relay 不会把它们变成后端持久化对象。
-- 这一页只保留高层映射；实现细节放在审计子文档里。
 
-## 8. 运行时配置所有权审计
+## 8. 运行时配置所有权
 
-- 运行时配置所有权审计记录在 `runtime-config-ownership-audit.md`。
+- 运行时配置所有权记录在 `runtime-config-ownership.mdx`。
 - 它将配置分为三个所有权桶：服务端所有运行时环境、由后端 `/env.js` 发出的浏览器公开运行时配置，以及浏览器本地/用户本地配置。
 - 生产环境 Cloud `/env.js` 由 `apps/cloud-api` 通过显式 allowlist 生成，不是从进程环境变量转储。
 - `apps/cloud-ui/public/env.js` 仅面向开发/默认模板。
 - 服务端所有配置保留在 VPS 环境或 systemd 环境文件（例如 `/etc/readio/readio-cloud.env`）。
 - 浏览器公开字段（例如 `READIO_ASR_RELAY_PUBLIC_TOKEN`）不是密钥；它们是轻量级滥用控制 token。
-- 这一页只保留高层映射；实现细节放在审计子文档里。
 
 ## 9. 播放与 Transcript 契约
 
@@ -114,4 +111,3 @@ Cloud handoff 树是应用级前后端契约的 SSOT：
   - 当前没有显示 transcript 时，artwork CTA 应如何表现
   - `stream_without_transcript` 如何只影响展示，而不抹掉 transcript availability
   - local/downloaded transcript source 在 restore 与 pure listening 流程中应如何被视为 transcript available
-- 本页只保留高层映射；实现细节放在 handoff 子文档里。

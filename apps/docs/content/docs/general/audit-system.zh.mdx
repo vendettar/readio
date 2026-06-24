@@ -2,77 +2,84 @@
 title: 审计系统
 ---
 
-你现在处于**严格代码审计模式**。
+本文定义 Readio 代码与文档工作的默认审查姿态。它适用于用户请求 review、audit、improvement review、refactor review，或已完成工作需要二次审查的场景。
 
-绝色是审查和评估现有代码，
-**用于**实现功能或重写代码。
+## 1. 审查角色
 
-你必须严格执行项目设计系统
-前端代理规则作为最高优先级。
+Reviewer 评估已有变更。除非用户在审查后明确要求修复，否则不直接实现修复。
 
-此模式在用户请求以下内容时调用：
-- "code review", "audit", "improvement review", "refactor review"
-- 或者当一个实现任务标记为 "done" 并请求审查时。
+默认产出：
 
-范围规则 (关键):
-- 默认: 仅审计最近任务/提交范围中更改的内容。
-- 如果用户提供提交范围 (例如 `A..B`)，审计该确切范围。
-- 如果用户明确请求全库审计，你可以审计整个仓库。
-- 否则，审计最新的提交 (`git show --name-only -1`) 和任何未提交的更改。
+- 识别 correctness、architecture、security、performance、product、documentation 与 test 风险
+- 用具体文件、行号、命令或行为作为证据
+- 区分阻塞缺陷与可选改进
+- 避免提出与 changed surface 无关的猜测性未来工作
 
-生成文件规则:
-- 将生成的文件视为 *generated*，不要通过样式编辑。
-- 对于此仓库，`src/routeTree.gen.ts` 由 TanStack Router Vite 插件生成。
-  - 仅审计其正确性信号（例如由于配置错误导致的路由丢失），而不是格式。
+## 2. 范围选择
 
-审计优先级 (按顺序):
+- 如果用户提供 commit range，审查该确切范围。
+- 如果用户要求审查 staged files，审查 `git diff --staged`。
+- 如果用户要求审查当前 worktree，审查已跟踪的未提交变更和相关新文件。
+- 如果用户明确要求 full-repo audit，才扩展范围，并说明边界。
+- 否则默认审查最近任务/提交，以及理解它所需的直接相关文件。
 
-1. 设计系统合规性
-- 无发明的颜色、间距、排版或样式
-- 正确使用 Tailwind CSS 和 shadcn/ui
-- 无不必要的原始或全局 CSS
-- 任何违规必须明确标记为 **SYSTEM VIOLATION**
+使用能诚实回答问题的最小范围。只有证据表明变更跨越更宽边界时，才升级审查范围。
 
-2. 架构与结构稳健性
-- 清晰的组件职责
-- 适当的原子分离 (atoms → components → sections)
-- 无逻辑过重的 UI 组件
-- 无过早或过度的抽象
+## 3. Generated 与 Derived Files
 
-3. 代码质量与可维护性
-- 可读性和清晰度
-- 可避免的复杂性
-- 损害重用的重复
-- 可简化的 props 或状态
+- 将 generated files 视为 generated，避免在那里提出样式类问题。
+- 对于本仓库，TanStack Router 生成的文件，例如 `src/routeTree.gen.ts`，只检查正确性信号，例如源配置错误导致的路由缺失。
+- 生成的 SQL/client code 应优先通过其 source schema/query 文件审查，除非生成结果暴露真实不匹配。
 
-4. 性能与正确性 (仅当真实存在时)
-- 明显的重新渲染问题
-- 不正确的 effects 或依赖项
-- 仅限明确的 bug
-- 不要发明假设的性能问题
+## 4. 审查优先级
 
-改进规则:
-- 仅提出最小、有针对性的改进
-- 解释 WHY 和 WHAT，而不是如何重写一切
-- 除非明确请求，否则不要建议大型重构
-- 不要建议违反设计系统的样式更改
-- 尊重当前项目策略：首次发布心态，不需要客户端数据迁移。
+按严重度排序，而不是按个人偏好排序。
 
-输出格式 (强制):
+1. Correctness 与 data integrity：行为破坏、stale write、cancellation leak、持久化 ownership 错误、migration/schema 不一致。
+2. Security 与 privacy：凭据暴露、弱 secret 存储、不安全日志/telemetry、授权缺口。
+3. API 与 contract compatibility：response shape、error code、runtime config allowlist、route ownership、跨 app 契约。
+4. Architecture 与 maintainability：ownership 不清、path drift、不必要耦合、过宽抽象、过期文档。
+5. Performance 与 reliability：真实 render churn、无边界内存/任务、缺失 cleanup、retry/backoff 错误。
+6. UI、accessibility 与 design system：primitive/token 使用、keyboard/focus 行为、overlay 语义、loading/error 一致性。
+7. Test coverage：变更行为缺少 regression tests，尤其是 aborted/stale async path 和破坏性持久化流程。
+
+## 5. 问题格式
+
+保持问题简洁，并包含：
+
+- **Severity**：`P0` 数据丢失/安全事故级别，`P1` 阻塞性正确性/回归，`P2` 重要但有边界，`P3` 润色或可维护性。
+- **Title**：一个具体问题。
+- **Evidence**：file/line、diff hunk、命令输出或观测行为。
+- **Impact**：对用户、运维、贡献者或后续 agent 的影响。
+- **Fix direction**：最小可信修复方向。
+- **Verification**：能证明修复的测试、命令或人工检查。
+
+宁可保留一个强问题，也不要拆成多个重叠的弱问题。
+
+## 6. 审查节奏
+
+- 默认审查：changed diff、test gap 和一个相关风险区域。
+- Milestone review：architecture、product contract、non-functional risks 与文档一致性。
+- Full audit：仅在用户要求，或本地发现证明窄范围无法安全判断时执行。
+
+## 7. 输出形态
+
+先给 findings。若没有 findings，直接说明，并列出残余风险或未运行测试。
+
+推荐结构：
+
+## Findings
+- 按严重度排序，附 file/line 证据。
+
+## Open Questions
+- 仅保留影响正确性或审查信心的问题。
 
 ## Summary
-- 简短的总体评估
+- 简短说明审查范围和仍未验证的内容。
 
-## Critical Issues
-- 仅系统或正确性违规
+## 8. 审查边界
 
-## Improvement Suggestions
-- 可操作、最小、合理
-
-## Optional Refactors
-- 明确标记为非阻塞
-
-最终约束:
-- 除非明确指示，否则不要修改代码
-- 不要推测未来的功能
-- 一致性和系统完整性 > 聪明
+- 除非用户要求修复，否则审查期间不修改代码或文档。
+- 若定向修改足以消除风险，不要求大范围重写。
+- 不把 frontend-only 规则强行套用到 backend、docs 或 infrastructure，除非它们确实适用。
+- 尊重当前项目阶段：first-release 工作可以移除过期的客户端数据迁移义务，但仍必须保护当前用户数据与 credentials。

@@ -14,6 +14,23 @@ title: 音频引擎与同步
 - 进度与 session 持久化仍是 browser-local
 - MediaSession 集成与 autoplay-retry 行为仍属于播放契约的一部分
 
-## 3. Cloud 特有说明
+## 3. 下载与离线播放契约
+
+下载媒体属于浏览器本地数据。后端可以辅助解析或代理远程媒体，但除非未来后端功能明确声明对应存储契约，否则后端不是下载 blob 的 owner。
+
+- 已知大小的下载如果会超过浏览器本地容量限制，必须在下载开始前阻止。
+- 未知大小下载只允许当前下载尝试产生一次容忍性超限；一旦超过容量，后续下载必须被阻止，直到用户释放空间。
+- 当前契约不会为了新媒体自动驱逐用户下载。
+- 当上游大小未知时，下载进度百分比可以为 nullable。
+- 优先使用 stream-based response handling，避免大文件在持久化前被完整缓存在内存中。
+
+## 4. Object URL 与 Blob 生命周期
+
+- playback source owner 在 source 改变、组件 unmount 或当前播放路径不再拥有 blob 时，必须 revoke object URL。
+- source swap 后继续复用 stale object URL 是 bug，即使它在某个浏览器中看起来还能播放。
+- Orphan cleanup 只能删除未被 active playback、sessions、downloads、transcript artifacts 或 library records 引用的 blob。
+- 本地 `blob:` URL 是浏览器内部实现细节，不得作为可迁移 media URL 持久化，不得作为可恢复数据导出，也不得作为稳定标识发送给后端。
+
+## 5. Cloud 特有说明
 
 Cloud 继续使用相同的前端播放表面模型，但远程媒体 bootstrap / fallback 行为现在受 Cloud 后端契约约束，而不是浏览器直连所有权。

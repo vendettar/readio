@@ -14,6 +14,23 @@ title: Audio Engine & Sync
 - Progress/session persistence remains browser-local.
 - MediaSession integration and autoplay-retry behavior remain part of the playback contract.
 
-## 3. Cloud-Specific Note
+## 3. Download and Offline Playback Contract
+
+Downloaded media is browser-local. The backend may help resolve or proxy remote media, but it is not the owner of downloaded blobs unless a future backend feature explicitly defines that storage contract.
+
+- Known-size downloads that would exceed the configured browser-local capacity must be blocked before the download starts.
+- Unknown-size downloads may exceed capacity only for the active download attempt; once over capacity, future downloads are blocked until space is freed.
+- The current contract does not auto-evict user downloads to make room for new media.
+- Download progress may have a nullable percentage when the upstream size is unknown.
+- Stream-based response handling is preferred so large files are not buffered entirely before persistence.
+
+## 4. Object URL and Blob Lifecycle
+
+- Playback source owners must revoke object URLs when the source changes, the component unmounts, or the blob is no longer owned by that playback path.
+- Reusing a stale object URL after a source swap is a bug, even if playback appears to keep working in one browser.
+- Orphan cleanup may remove only blobs that are not referenced by active playback, sessions, downloads, transcript artifacts, or library records.
+- Local `blob:` URLs are browser-only implementation details and must not be persisted as portable media URLs, exported as recoverable data, or sent to the backend as stable identifiers.
+
+## 5. Cloud-Specific Note
 
 Cloud uses the same frontend playback surface model, but remote media bootstrap/fallback behavior is constrained by Cloud backend contracts rather than pure frontend fetch ownership.

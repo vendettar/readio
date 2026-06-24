@@ -1,0 +1,52 @@
+---
+title: Cloud 媒体 fallback 契约
+---
+
+# Cloud 媒体 fallback 契约
+
+## 范围
+本文定义 Cloud 播放、下载、transcript 抓取和本地媒体的 fallback 契约。
+
+契约区分：
+
+- 原生 `<audio src=...>` 传输
+- JS `fetch` 传输
+- `HEAD`
+- 普通 `GET`
+- `Range GET`
+- 本地 `blob:` 播放
+- tracking URL 解包预处理
+
+## 契约
+
+- 远程媒体默认 browser-direct。
+- 后端 fallback 是窄范围、pass-through、non-caching 的能力，只覆盖已批准的媒体失败类。
+- 原生 `<audio>` fallback 每个 track 最多做一次 same-origin proxied URL 重试。
+- JS `fetch` fallback 必须按请求类别隔离。`HEAD`、`GET`、`Range GET`、transcript text fetch 和 playback startup 不能合并成一个通用 retry path。
+- 本地 `blob:` 播放保持 browser-only，绝不代理。
+- 后端 fallback 不得引入服务端媒体持久化或隐藏媒体缓存。
+- fallback 完成回包在修改 playback、download 或 transcript state 前必须通过 latest-request-wins 检查。
+- 日志和指标必须标明 request class 与粗粒度 failure class，但不得记录 credential、request body、音频字节或 transcript text。
+
+## 分类矩阵
+
+| 请求类别 | 请求发起者 | 前端行为 | Cloud 行为 | 是否已用 `fetchWithFallback` | 用户可配 proxy fallback | Cloud backend fallback 是否应该存在 | 安全触发条件 | 不应 fallback 的原因 |
+|---|---|---|---|---|---|---|---|---|
+| 原生 `<audio>` 的远程播放 | `useAudioElementSync` 通过 `GlobalAudioController` 设定 `audio.src` | 浏览器直接加载；如果本地已有下载则用 `blob:` | 浏览器直连优先；如果当前 track 的直接媒体加载失败，则做一次 same-origin proxied URL 重试 | 否 | 否；fallback 只走内建同源 proxy 路由 | 是，但只能是显式的 proxied media URL 重试，不能变成通用 JS fetch fallback | 当前 track 的原生 audio 直接报错，且此前尚未尝试过 proxy 重试 | 原生 audio 不是 JS retry 目标；每个 track 只能做一次 proxy URL 重试，不能声称支持带认证的外部代理，也不能引入 backend 缓存 |
+| 使用 JS `fetch` + `Range` 的前台预取 | `useForegroundAudioPrefetch` -> `AudioPrefetchScheduler` | 直接 `fetch` 带 `Range`；没有 proxy fallback | 与前端行为一致 | 否 | 否 | 是，但只针对已批准的浏览器/CORS/network failure | 直接 `fetch` 因 CORS/network 失败，或上游不支持 partial-content 请求 | 这是优化项，不应让所有播放字节都走 backend |
+| `HEAD` 下载体积探测 | `downloadService.executeDownload` | `fetchWithFallback` 先直连 | 与前端行为一致 | 是 | 否 | 是 | 直接请求出现 network/CORS/timeout 或 direct 之后的 5xx | 只需保留 body cancel，不要做缓存 |
+| `GET` 下载音频流 | `downloadService.executeDownload` | `fetchWithFallback` 先直连；流式写入 IndexedDB | 与前端行为一致 | 是 | 否 | 是 | 直接请求出现 network/CORS/timeout 或 direct 之后的 5xx | 不要引入服务端持久化或缓存 |
+| 远程 transcript 抓取 | `fetchAndPersistRemoteTranscript` 通过 `fetchTextWithFallback` | direct-first 文本抓取，支持 fallback；抓取后缓存到本地 | 与前端行为一致 | 是 | 否 | 是 | 直接请求出现 network/CORS/timeout 或 direct 之后的 5xx | 解析失败要和 transport failure 分开，不要混在一起 |
+| 播放启动时触发的媒体抓取 | `remotePlayback` 在需要媒体字节时委派到 `downloadEpisode` / `fetchRemoteAudioBlob` | 启动本身主要是 source resolution；真正的媒体抓取继承 download/transcript 行为 | 与前端行为一致 | 取决于分支 | 与被委派的请求类一致 | 是，但只能通过被委派的请求类；startup 本身不是新传输类 | 被委派分支的 fallback trigger | 纯 source resolution 且不抓取字节的部分应保持 browser-local |
+| 本地 `blob:` 播放 | `playbackSource.resolvePlaybackSource` | 来自 IndexedDB 下载的本地 object URL | 与前端行为一致 | 否 | 否 | 否 | 无 | 必须保持 browser-only，不能代理 |
+| tracking URL 解包路径 | `playbackSource`、`downloadService`、`remoteTranscript` 里的 `unwrapPodcastTrackingUrl` | 只做规范化，不发网络请求 | 与前端行为一致 | 否 | 否 | 仅保留为预处理 | 不是 transport fallback trigger | 解包不是网络请求；它只是喂给后面的请求类，必须保持确定性 |
+
+## 验证目标
+
+- `apps/cloud-ui/src/lib/__tests__/audioPrefetch.test.ts`
+- `apps/cloud-ui/src/lib/__tests__/fetchUtils.test.ts`
+- `apps/cloud-ui/src/lib/__tests__/downloadService.regression.test.ts`
+- `apps/cloud-ui/src/lib/__tests__/remoteTranscript.test.ts`
+- `apps/cloud-ui/src/lib/player/__tests__/playbackSource.test.ts`
+- `apps/cloud-ui/src/lib/player/__tests__/remotePlayback.test.ts`
+- `apps/cloud-api` 的 handler 测试，用于覆盖 media proxy 的 `Range`、`206`、`416`、timeout 和 redirect 行为

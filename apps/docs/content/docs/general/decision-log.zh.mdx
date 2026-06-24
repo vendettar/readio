@@ -1,14 +1,14 @@
 ---
-title: 决策日志
+title: 当前决策
 ---
 
-# 决策日志
+# 当前决策
 
-本日志只记录当前仍然有效的原型决策。已经被后续实现覆盖的中间步骤不再保留。
+这些是 Readio Cloud 原型的当前项目决策。
 
 ## D001 — Cloud 是当前产品表面
 
-`apps/cloud-ui` 与 `apps/cloud-api` 是当前 Web 产品。文档必须描述当前前后端拆分实现，不能再把旧早期前端启动阶段描述成活跃架构。
+`apps/cloud-ui` 与 `apps/cloud-api` 是当前 Web 产品。文档必须把这套前后端拆分实现描述为 Cloud 架构。
 
 ## D002 — 前端/后端所有权必须明确
 
@@ -28,7 +28,7 @@ Podcast 单集列表页面渲染使用后端 SQLite retained snapshot。snapshot
 
 ## D006 — ASR transcription 使用后端 relay
 
-Cloud provider transcription submission 在配置后走 `apps/cloud-api`。Provider credentials 仍由用户拥有，并由浏览器随请求提供；当前契约不包含服务端持久化这些凭证。
+Cloud provider transcription submission 走 `apps/cloud-api`。Provider credentials 仍由用户拥有，并由浏览器随请求提供；服务端持久化这些凭证不属于 Cloud 契约。
 
 ## D007 — Runtime config 必须 allowlist
 
@@ -44,4 +44,4 @@ Cloud provider transcription submission 在配置后走 `apps/cloud-api`。Provi
 
 ## D010 — 文档只保留最终状态
 
-项目文档必须简洁、对齐代码、只描述当前最终契约。已经被覆盖的迁移过程留给 git history，不再复制到活跃文档。
+项目文档必须简洁、对齐代码、只描述当前最终契约。实现迁移历史留在 git history，不复制到活跃文档。

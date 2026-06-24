@@ -31,7 +31,7 @@ Use the Cloud handoff tree as the SSOT for app-level frontend/backend contracts:
 - Allow backend-owned shared podcast transcript assets for eligible podcast episodes to persist separately under deployment-owned storage.
 - Keep Cloud Settings free of the `CORS Proxy` block.
 - Route Cloud ASR provider transcription through a dedicated relay in `apps/cloud-api`, while keeping provider credentials user-owned and browser-supplied per request.
-- Keep Cloud ASR provider verification/readiness browser-direct.
+- Route Cloud ASR provider verification through the same relay for enabled providers; unsupported providers fail closed.
 - Keep Workbox/PWA disabled.
 - Provide the `/api/proxy` RSS proxy contract.
 - Use SQLite for the Cloud backend and keep the lifecycle explicit.
@@ -70,7 +70,7 @@ Use the Cloud handoff tree as the SSOT for app-level frontend/backend contracts:
 - Do describe Cloud media as browser-direct first, with backend fallback only for approved failure classes.
 - Do describe Cloud ASR provider transcription as relay-owned through a dedicated backend route.
 - Do describe provider credentials in Cloud ASR as user-owned and browser-supplied per request.
-- Do describe Cloud ASR provider verification/readiness as still browser-direct.
+- Do describe Cloud ASR provider verification as relay-owned for enabled providers, with unsupported providers rejected explicitly.
 - Do describe backend media fallback as pass-through and non-caching.
 - Do describe browser-local media artifacts as remaining browser-local.
 - Do note that Cloud keeps Workbox/PWA disabled.
@@ -82,30 +82,27 @@ Use the Cloud handoff tree as the SSOT for app-level frontend/backend contracts:
 - Do describe backend-owned shared podcast transcript assets as a narrow persistent backend artifact contract for eligible podcast episodes.
 - Keep future Cloud evolution in docs that are explicitly labeled as future direction.
 
-## 6. Media Fallback Audit
+## 6. Media Fallback Contract
 
-- The 006a media audit is recorded in `media-fallback-audit.md`.
+- `media-fallback-contract.mdx` records the media fallback contract.
 - It classifies native audio, JS fetch prefetch, `HEAD`, `GET`, `Range GET`, transcript fetch, local `blob:` playback, and tracking URL unwrap behavior.
-- The current runtime contract keeps direct browser transport first and backend fallback narrow, pass-through, and non-caching for approved failure classes.
-- Keep this entry high-level; implementation details belong in the audit sub-doc.
+- Direct browser transport stays first. Backend fallback is narrow, pass-through, and non-caching for approved failure classes.
 
-## 7. ASR Relay Audit
+## 7. ASR Relay Contract
 
-- The 008a ASR transport audit is recorded in `asr-relay-audit.md`.
+- `asr-relay-contract.mdx` records the ASR relay contract.
 - It separates media fetch fallback from provider transcription submission and provider verification/readiness checks.
-- The current Cloud contract now routes provider transcription through a dedicated same-origin relay, while provider verification/readiness stays browser-direct.
+- Provider transcription and enabled-provider verification route through a dedicated same-origin relay.
 - Browser-local blobs and downloaded blobs remain browser-local inputs; the relay does not move them into backend persistence.
-- Keep this entry high-level; implementation details belong in the audit sub-doc.
 
-## 8. Runtime Config Ownership Audit
+## 8. Runtime Config Ownership
 
-- The runtime config ownership audit is recorded in `runtime-config-ownership-audit.md`.
+- Runtime config ownership is recorded in `runtime-config-ownership.mdx`.
 - It classifies config into three ownership buckets: server-owned runtime env, browser-public runtime config fetched from `GET /api/v1/config` or emitted by colocated backend `/env.js`, and browser-local/user-local config.
 - Production Cloud runtime config is served by `apps/cloud-api` using an explicit allowlist, not dumped from process env.
 - `apps/cloud-ui/public/env.js` is dev/default-template oriented only.
 - Server-owned config stays in VPS env or systemd env files (e.g., `/etc/readio/readio-cloud.env`).
 - Browser-public fields (e.g., `READIO_ASR_RELAY_PUBLIC_TOKEN`) are not secrets; they are lightweight abuse-control tokens.
-- Keep this entry high-level; implementation details belong in the audit sub-doc.
 
 ## 9. Playback Transcript Contract
 
@@ -115,4 +112,3 @@ Use the Cloud handoff tree as the SSOT for app-level frontend/backend contracts:
   - how artwork CTA behaves when transcript content is not currently visible
   - how `stream_without_transcript` affects presentation without erasing transcript availability
   - how local/downloaded transcript sources must be treated during restore and pure-listening flows
-- Keep this entry high-level; implementation details belong in the handoff sub-doc.

@@ -4,7 +4,9 @@ description: Readio 云端应用及后端架构文档。
 ---
 
 Cloud 由 `apps/cloud-ui` 与 `apps/cloud-api` 组成。
-其中 `apps/cloud-ui` 是 Cloud 的前端构建产物，`apps/cloud-api` 则是负责提供该构建产物、启动 SQLite，并承载 discovery、search、feed 同源后端网络请求的 Go 服务。
+`apps/cloud-ui` 是 Cloud UI 构建产物，生产环境部署到 Cloudflare Pages。
+`apps/cloud-api` 是部署在 `api.readio.top` 背后 VPS 上的 Go 服务；它启动 SQLite，并承载 discovery 页面使用的后端 API，包括 search、top、Editor's Picks batch lookup、podcast lookup 与 PI episode-list lookup。
+同源/共置部署仍可以由 `apps/cloud-api` 提供构建后的 UI，但生产环境把前端和后端视为独立 origin。
 
 ## 运行时配置所有权
 
@@ -12,16 +14,16 @@ Cloud 生产环境运行时配置所有权分为三个桶：
 
 1. **服务端所有运行时配置**：保留在后端运行时环境（VPS env/systemd env 文件）中的值。包括服务监听地址、静态资源路径、数据库路径和后端滥用控制设置（`PORT`、`READIO_CLOUD_UI_DIST_DIR`、`READIO_CLOUD_DB_PATH`、`READIO_ASR_ALLOWED_ORIGINS`、`READIO_ASR_RATE_LIMIT_BURST`、`READIO_ASR_RATE_LIMIT_WINDOW_MS`）。
 
-2. **浏览器公开运行时配置**：由 `apps/cloud-api` 通过 `/env.js` 使用显式 allowlist 发出的值。Cloud **不**使用 `apps/cloud-ui/public/env.js` 或 `dist/env.js` 作为运行时基准。后端动态提供 `/env.js`，仅包含浏览器安全字段。浏览器公开字段包括应用名称/版本、同源后端 URL、ASR relay token（仅为滥用控制，非密钥）、ASR provider/model 默认值、功能开关和 UI 默认值。
+2. **浏览器公开运行时配置**：生产环境由前端通过 `GET /api/v1/config` 获取；共置后端部署也可以通过显式 allowlist 发出 `/env.js`。Cloud **不**使用 `apps/cloud-ui/public/env.js` 或 `dist/env.js` 作为运行时基准。浏览器公开字段包括应用名称/版本、后端 URL、ASR relay token（仅为滥用控制，非密钥）、ASR provider/model 默认值、功能开关和 UI 默认值。
 
 3. **浏览器本地/用户本地配置**：保留在浏览器端、不属于后端运行时的值（`READIO_ASR_API_KEY`、`READIO_OPENAI_API_KEY`、IndexedDB/Dexie 持久化、播放/会话状态）。
 
-完整审计见 `handoff/runtime-config-ownership-audit.md`，运行时配置所有权摘要见 `handoff/index.mdx` 第 8 节。
+运行时配置所有权细节见 `handoff/runtime-config-ownership.mdx`，摘要见 `handoff/index.mdx` 第 8 节。
 
 Cloud Settings 不包含 `CORS Proxy` 区块。
 Cloud 媒体在可用时仍然优先走浏览器直连，仅对已批准的失败类回退到 `apps/cloud-api`；该 fallback 为透传且不缓存，浏览器本地的媒体产物也仍然留在浏览器本地。
 Cloud ASR provider 转写通过 `apps/cloud-api` 里的独立同源 relay 提交；provider credential 仍然由用户拥有并由浏览器按请求提供，后端只能把它当作瞬时请求数据处理。
-Cloud ASR provider 的验证 / readiness 检查保持 browser-direct。
+已启用 Cloud ASR provider 的验证通过同一个 relay；未支持 provider 明确 fail closed，不回退到 browser-direct provider 调用。
 Cloud 保持 Workbox/PWA 关闭。
 
 当前后端契约与任务级边界请查看 `apps/docs/content/docs/apps/cloud/handoff/` 下的 Cloud handoff 文档。

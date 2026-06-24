@@ -14,6 +14,8 @@ jobs:
     outputs:
       ui: ${{ steps.filter.outputs.ui }}
       api: ${{ steps.filter.outputs.api }}
+      docs: ${{ steps.filter.outputs.docs }}
+      agent: ${{ steps.filter.outputs.agent }}
     steps:
       - uses: actions/checkout@v6
       - uses: dorny/paths-filter@v3
@@ -35,6 +37,59 @@ jobs:
               - 'Makefile'
               - 'docker-compose.readio.yml'
               - '.github/workflows/pr-ci.yml'
+            docs:
+              - 'apps/docs/**'
+              - 'package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'turbo.json'
+              - 'biome.json'
+              - '.github/workflows/pr-ci.yml'
+            agent:
+              - 'agent/**'
+              - '.github/workflows/pr-ci.yml'
+
+  # ─── Docs / Agent Instructions ─────────────────────────────────────
+  docs-agent:
+    needs: changes
+    if: ${{ needs.changes.outputs.docs == 'true' || needs.changes.outputs.agent == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Ensure ripgrep
+        run: |
+          if ! command -v rg >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y ripgrep
+          fi
+
+      - name: Repository Path Drift Guard
+        run: |
+          if rg -n '/Users/[^[:space:])]*readio' apps/docs/content/docs agent; then
+            echo "Found local absolute repository paths in docs or agent instructions."
+            exit 1
+          fi
+
+      - name: Install pnpm
+        if: ${{ needs.changes.outputs.docs == 'true' }}
+        uses: pnpm/action-setup@v5
+
+      - name: Set up Node.js
+        if: ${{ needs.changes.outputs.docs == 'true' }}
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        if: ${{ needs.changes.outputs.docs == 'true' }}
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck (Docs)
+        if: ${{ needs.changes.outputs.docs == 'true' }}
+        run: pnpm --filter docs typecheck
 
   # ─── Cloud UI ───────────────────────────────────────────────────────
   cloud-ui:

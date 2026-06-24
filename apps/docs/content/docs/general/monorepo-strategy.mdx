@@ -2,39 +2,30 @@
 title: Monorepo Strategy
 ---
 
-# Monorepo Strategy & Future Apps
+# Monorepo Strategy
 
-Readio is evolving from a single frontend codebase into a Cloud-hosted web app plus future platform surfaces.
-This document outlines the current role of `apps/cloud-ui`, `apps/cloud-api`, and the longer-term direction for `apps/native`.
+Readio is a Cloud-hosted web app with a Go backend and a placeholder native app surface. This document defines the current role of each workspace app.
 
 ## 1. Apps Overview
 
-| App | Path | Type | Status | Goal |
-|---|---|---|---|---|
-| **Cloud UI** | `apps/cloud-ui` | SPA/Web App | 🟢 Live | Main frontend surface for playback, discovery, library, files, and settings. |
-| **Cloud API** | `apps/cloud-api` | Go backend | 🟢 Live | Serve `apps/cloud-ui/dist`, own same-origin relays, proxy/fallback routes, and bootstrap SQLite. |
-| **Native** | `apps/native` | Mobile | ⚪ Scaffold only | iOS/Android wrapper via Flutter (planned). |
+| App | Path | Type | Role |
+|---|---|---|---|
+| **Cloud UI** | `apps/cloud-ui` | SPA/Web App | Main frontend surface for playback, discovery, library, files, and settings. |
+| **Cloud API** | `apps/cloud-api` | Go backend | Backend API routes, same-origin relays, proxy/fallback routes, and SQLite bootstrap. |
+| **Native** | `apps/native` | Mobile | Placeholder native app surface; no product contract is documented until implemented. |
 
 ---
 
 ## 2. Cloud Strategy (The Backend)
 
-**Role**: Optional enhancement. The app must work perfectly without it.
-
 ### Frontend/Backend Split
-- **Current State**: `apps/cloud-api` is the Go `net/http` backend. It directly serves the built `apps/cloud-ui/dist` output and owns same-origin backend relays.
-- **Current Frontend**: `apps/cloud-ui` is the active web frontend. It is no longer described as a temporary old frontend artifact.
-- **Future Direction**: If Cloud later grows into a broader multi-user web product, shared presentation logic may move into dedicated shared packages. Current docs must describe the code that exists today.
-
-### Planned Features (P2/P3)
-- **Data Sync**: Sync subscriptions and progress across devices.
-- **AI Services**: Server-side Whisper (Transcription) and LLM (Summary).
-- **Social**: Comments and "Podcast Clubs".
+- **Backend**: `apps/cloud-api` is the Go `net/http` backend. It serves API routes, owns same-origin backend relays, and may serve the built `apps/cloud-ui/dist` output in colocated deployments.
+- **Frontend**: `apps/cloud-ui` is the active web frontend.
+- **Shared packages**: shared presentation or domain packages are documented only after they exist in the workspace.
 
 ### Tech Stack
-- **Framework**: Go `net/http` for the current scaffold.
-- **Database**: SQLite for the current scaffold; PostgreSQL remains a future SaaS direction only.
-- **Auth**: JWT-based auth remains a future direction only.
+- **Framework**: Go `net/http`.
+- **Database**: SQLite.
 
 ---
 
@@ -42,14 +33,8 @@ This document outlines the current role of `apps/cloud-ui`, `apps/cloud-api`, an
 
 **Role**: Access system APIs that PWA cannot reach.
 
-### Planned Features (P2)
-- **Background Audio**: Native iOS/Android audio session handling.
-- **Notifications**: Push notifications for new episodes.
-- **Widgets**: Home screen widgets.
-- **CarPlay / Auto**: Simplified UI for driving.
-
 ### Tech Stack
-- **Framework**: Flutter-based shell remains a future direction.
+- **Framework**: no native runtime contract is active.
 - **Shared Code**: Shared package topology is intentionally minimal today; docs must not claim shared packages that no longer exist.
 
 
@@ -74,7 +59,7 @@ To prevent architectural drift and "Works on my machine" bugs, the entire monore
 
 ---
 
-## 6. Cache Policy (Turborepo) [Implemented]
+## 6. Cache Policy (Turborepo)
 
 To maximize build performance and prevent stale outputs:
 
@@ -85,9 +70,3 @@ To maximize build performance and prevent stale outputs:
 - **No-Cache Tasks**: `dev` and `format` are never cached.
 
 **Verification**: Run `pnpm build` twice. Second run should show `>>> FULL TURBO`.
-
----
-
-## Planned (Pending Execution)
-
-- **Architecture Map**: Mermaid diagram linking `apps/docs`, `apps/cloud-ui`, `apps/cloud-api`, and `agent/instructions`.

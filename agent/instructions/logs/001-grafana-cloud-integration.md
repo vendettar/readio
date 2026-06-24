@@ -51,7 +51,7 @@ Each instruction must be completed, reviewed, and integrated before the next one
 
 For each atomic instruction:
 
-1. Worker reads `agent/role-prompt/worker-role`, the instruction, and relevant docs.
+1. Worker reads `agent/role-prompt/worker-role.md`, the instruction, and relevant docs.
 2. Worker performs the required 8-scope pre-implementation scan.
 3. Worker writes tests before fixes for bugs and adds focused tests for new behavior.
 4. Security reviews any changed trust boundary, runtime config, telemetry export, or deployment surface.

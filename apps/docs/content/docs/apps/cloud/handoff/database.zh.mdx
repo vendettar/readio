@@ -23,18 +23,34 @@ Cloud 前端仍然通过 IndexedDB 和 localStorage 保存浏览器拥有的状�
 - Favorites、Subscriptions、History、下载音频、本地 transcript 产物仍然只存在于浏览器
 - 清除站点数据仍会删除它们
 
-## 3. 后端 SQLite 持久化
+## 3. Settings 与 Credentials 边界
+
+Settings 与 credentials 是两类不同数据。
+
+- 非敏感偏好可以在明确属于浏览器公开行为时进入 settings/localStorage。
+- Provider credentials 只能存在于浏览器本地 `credentials` 表，或当前 session 的 transient runtime memory。
+- Provider credentials 不得回退到 localStorage/sessionStorage。
+- 需要 credentials 时，如果 IndexedDB 不可用，功能必须显式失败，不能静默回退到弱存储。
+- Runtime environment defaults 可以预填内存值，但不得在没有用户明确保存的情况下创建持久化 credential row。
+
+Credential import/export/wipe 规则：
+
+- 用户数据导出不得包含 provider credentials。
+- 导入 settings 不得覆盖现有 credentials，除非导入格式明确声明 credential flow。
+- "Wipe all" 操作必须让正在进行的写入失效，或通过 sequence guard 防止 stale async work 重新创建已删除的 settings 或 credentials。
+
+## 4. 后端 SQLite 持久化
 
 Cloud 后端现在也拥有服务端 SQLite 持久化，用于后端治理的状态。
 
-当前和规划中的后端 SQLite 职责包括：
+后端 SQLite 职责包括：
 
 - built-in ASR 的 quota / reservation / idempotency 状态
 - Cloud discovery 页面渲染使用的 PodcastIndex 派生节目与单集 snapshot：
   - `podcast_shows`：节目/show 领域元数据
   - `podcast_episodes`：有界保留的单集行，按稳定 newest-first 顺序排列
   - `podcast_cache_state`：刷新、退避、截断、驱逐与访问元数据
-- podcast transcript asset 持久化暂搁到 migration `00004`；在它落地前，运行路径不得假设 `podcast_transcript_assets` 已存在，transcript asset storage gate 默认保持 disabled
+- 符合条件 podcast episode 的 shared podcast transcript asset metadata 与 file ownership
 - 其他需要跨进程重启保留的后端运营状态
 
 Discovery snapshot 约束：
@@ -44,23 +60,29 @@ Discovery snapshot 约束：
 - `podcast_cache_state` 只拥有缓存元数据；它不是用户 library state，也不是完整历史归档契约
 - PodcastIndex cache SQL 通过 sqlc 从 `apps/cloud-api/internal/db/schema.sql` 和 `apps/cloud-api/internal/db/queries/pi_episode_cache.sql` 生成；在 `apps/cloud-api` 下运行 `go generate ./internal/db` 可重新生成。`apps/cloud-api/internal/podcastindex/cache_store.go` 保留事务编排，并把生成 row 映射回领域结构。
 
-已退役方向：
+非目标：
 
-- 旧的 discovery feed snapshot / feed-episode retention 规划已随着 `/api/v1/discovery/feed` 一并退役
-- 文档不得再把 backend SQLite 描述成 discovery feed parsing 或 feed-route cache state 的当前 owner
+- backend SQLite 不负责 RSS feed XML parsing 或 feed-route cache state
+- `/api/v1/discovery/feed` 不属于活跃 Cloud API surface
 
 这层后端 SQLite 不是浏览器本地用户库数据的通用替代品。
 
-## 4. Runtime Cache 现状
+## 5. Runtime Cache 归属
 
-Cloud 中 discovery / search 前端已不再依赖长期持久化的 IndexedDB 缓存。
+Discovery / search 前端持久化使用内存型 server-state cache，而不是长期 browser-local discovery archive。
 
 - 前端 discovery 主要依赖 TanStack Query 内存缓存
 - 当前活跃的后端 discovery 路由只在适用时使用后端内存缓存；PodcastIndex 节目详情 / 单集列表读取使用上面的 SQLite snapshot 表
-- 已退役的 feed 路由不会留下活跃的 SQLite feed-cache 契约
 - `runtime_cache` 仍存在，但只服务于当前仍有 owner 的浏览器运行时缓存
 
-## 5. 后端 SQLite 治理摘要
+## 6. 浏览器本地一致性规则
+
+- 浏览器本地 repository 应拥有表访问、校验和写入顺序。
+- UI 组件必须调用 store/repository action，而不是直接写 IndexedDB。
+- 破坏性操作之后的异步写入，例如清空数据或擦除 credentials，必须通过 epoch/request sequence 或等价机制防止 stale write。
+- Download、transcript 与 playback 记录只能在拥有对应 blob 的浏览器内引用本地 blob。
+
+## 7. 后端 SQLite 治理摘要
 
 所有 Cloud 后端 SQLite 功能都必须遵循同一套规则：
 
@@ -73,7 +95,7 @@ Cloud 中 discovery / search 前端已不再依赖长期持久化的 IndexedDB �
 
 更细的后端规则见 [后端 SQLite 治理](/apps/cloud/handoff/backend-sqlite-governance)。
 
-## 6. 对 Cloud UI 仍然重要的前端表
+## 8. 对 Cloud UI 仍然重要的前端表
 
 - `sessions`
 - `audioBlobs`
@@ -88,11 +110,11 @@ Cloud 中 discovery / search 前端已不再依赖长期持久化的 IndexedDB �
 - `credentials`
 - `runtime_cache`
 
-## 7. 文档边界
+## 9. 文档边界
 
 Cloud 文档必须如实描述持久化 ownership：
 
 - 浏览器本地 library state 没有账号同步
 - 仅存在浏览器的数据没有服务端恢复能力
 - 除非具体功能明确声明，否则不能把 backend SQLite 描述成用户归档存储
-- repo-owned 的 Cloud 运行时契约不会按任何旧的 feed transport 字段持久化或建立 library state key
+- repo-owned 的 Cloud 运行时契约不会按 feed transport 字段持久化或建立 library state key

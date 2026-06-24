@@ -1,5 +1,7 @@
 import { ASR_PROVIDER_IDS, type ASRProvider } from './types'
 
+export const ACTIVE_ASR_PROVIDER_IDS = ['groq'] as const satisfies readonly ASRProvider[]
+
 type ProviderToggleConfigLike = {
   ENABLED_ASR_PROVIDERS?: string | null
   DISABLED_ASR_PROVIDERS?: string | null
@@ -50,9 +52,7 @@ export function resolveEnabledAsrProviders(configLike: ProviderToggleConfigLike)
     }
   }
 
-  const resolved = ASR_PROVIDER_IDS.filter((provider) => baseSet.has(provider))
-  // TODO: Temporarily block providers except Groq until they are fully stabilized.
-  return resolved.filter((p) => p === 'groq')
+  return ACTIVE_ASR_PROVIDER_IDS.filter((provider) => baseSet.has(provider))
 }
 
 export function isAsrProviderEnabled(

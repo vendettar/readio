@@ -1,7 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { isAsrProviderEnabled, resolveEnabledAsrProviders } from '../providerToggles'
+import {
+  ACTIVE_ASR_PROVIDER_IDS,
+  isAsrProviderEnabled,
+  resolveEnabledAsrProviders,
+} from '../providerToggles'
+import { ASR_PROVIDER_IDS } from '../types'
 
 describe('asr provider toggles resolver', () => {
+  it('keeps active providers explicit and within the known provider registry', () => {
+    expect(ACTIVE_ASR_PROVIDER_IDS).toEqual(['groq'])
+    expect(ACTIVE_ASR_PROVIDER_IDS.every((provider) => ASR_PROVIDER_IDS.includes(provider))).toBe(
+      true
+    )
+  })
+
   it('applies blacklist precedence over whitelist', () => {
     const enabled = resolveEnabledAsrProviders({
       ENABLED_ASR_PROVIDERS: 'groq,qwen',

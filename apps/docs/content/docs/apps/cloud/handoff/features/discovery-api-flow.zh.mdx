@@ -147,15 +147,12 @@ title: Discovery API 实际使用链路
 - 详情模式规则：
   - `GET /episodes?episodeGuid=...` 只按 `podcastItunesId + episodeGuid` 做 SQLite 直接查找，不触发 PodcastIndex 新鲜度检查
 
-### 2.3 已退役的 Discovery Feed Route
+### 2.3 Discovery Feed XML 非目标
 
-- 状态：
-  - `GET /api/v1/discovery/feed` 已退役，不得再被描述为活跃的 Cloud API
-- 当前契约：
-  - repo-owned 的 Cloud 运行时契约已不再暴露或依赖旧的 feed transport 字段
-  - 活跃的 Cloud 页面渲染与 discovery routing 不会再按旧的 feed transport identity 拉取 RSS
-- 影响：
-  - Cloud 当前不存在用于节目页 / 单集列表 / 单集详情渲染的 RSS feed XML 二跳 API
+- `GET /api/v1/discovery/feed` 不属于 Cloud API surface。
+- Repo-owned 的 Cloud 运行时契约不暴露、不依赖 feed transport 字段。
+- Cloud 页面渲染与 discovery routing 不按 feed transport identity 拉取 RSS。
+- Cloud 不提供用于节目页、单集列表或单集详情渲染的 RSS feed XML 二跳 API。
 
 ### 2.4 单集解析顺序
 
@@ -183,6 +180,6 @@ title: Discovery API 实际使用链路
 
 ## 4. 明确不使用
 
-- Readio 当前 active discovery flow 不使用 Podcast Index `episodes/byguid`
-- Readio 当前仍然使用 Podcast Index `podcasts/batch/byguid` 作为 Editor's Picks 的第一跳
-- Readio 不再把 `/api/v1/discovery/feed` 视为活跃 discovery route，而且 repo-owned 的 Cloud 运行时契约也不再暴露旧的 feed transport 字段
+- Readio discovery flow 不使用 Podcast Index `episodes/byguid`
+- Readio 使用 Podcast Index `podcasts/batch/byguid` 作为 Editor's Picks 的第一跳
+- Readio 不暴露 `/api/v1/discovery/feed` 作为 Cloud discovery route

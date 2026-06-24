@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { removeDownloadedTrack } from '../../downloadService'
+import { downloadEpisode, removeDownloadedTrack } from '../../downloadService'
 import {
   type CanonicalRemoteEpisodeMetadata,
   createCanonicalRemoteEpisodeMetadata,
@@ -25,6 +25,10 @@ vi.mock('../../downloadService', async (importOriginal) => {
 
 vi.mock('../playbackSource', () => ({
   resolvePlaybackSource: vi.fn(),
+}))
+
+vi.mock('../playerBlobUrls', () => ({
+  revokePlaybackBlobUrl: vi.fn(),
 }))
 
 vi.mock('../logger', () => ({
@@ -77,5 +81,46 @@ describe('remotePlayback Race Regression', () => {
 
     expect(result).toBeNull()
     expect(removeDownloadedTrack).not.toHaveBeenCalled()
+  })
+
+  it('releases resolved blob source when download resolution becomes stale before ownership transfer', async () => {
+    const { resolvePlaybackSource } = await import('../playbackSource')
+    const { revokePlaybackBlobUrl } = await import('../playerBlobUrls')
+
+    vi.mocked(downloadEpisode).mockResolvedValue({
+      ok: true,
+      trackId: 'track-123',
+    })
+    vi.mocked(resolvePlaybackSource).mockImplementation(async () => {
+      bumpPlaybackEpoch()
+      return {
+        url: 'blob:resolved-stale-audio',
+        trackId: 'track-123',
+        createdObjectUrl: true,
+      }
+    })
+
+    const payload = {
+      audioUrl: 'https://remote.com/audio.mp3',
+      title: 'Test',
+      artwork: '',
+      metadata: expectCanonicalRemoteMetadata(
+        createCanonicalRemoteEpisodeMetadata({
+          countryAtSave: 'us',
+          showTitle: 'Podcast',
+          artworkUrl: 'https://example.com/art.jpg',
+          episodeGuid: 'episode-guid-1',
+          podcastItunesId: 'podcast-1',
+        })
+      ),
+    }
+
+    const currentEpoch = getPlaybackEpoch()
+    const promise = downloadAndResolve(currentEpoch, payload, false)
+
+    const result = await promise
+
+    expect(result).toBeNull()
+    expect(revokePlaybackBlobUrl).toHaveBeenCalledWith('blob:resolved-stale-audio')
   })
 })

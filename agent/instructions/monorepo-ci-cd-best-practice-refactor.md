@@ -27,7 +27,7 @@
    - `apps/cloud-ui` 之前只在 Cloud CD 中 build，导致 deploy workflow 首次发现构建失败。
 
 2. **Cloud CD 仍然承担 build + deploy 双职责**
-   - 当前 `cd-cloud.yml` 同时做：
+   - 旧 Cloud deploy workflow 曾同时做：
      - `pnpm install`
      - `apps/cloud-ui build`
      - Linux Go binary build
@@ -52,20 +52,27 @@
 
 ### Existing workflows
 
-- `/Users/Leo_Qiu/Documents/dev/readio/.github/workflows/ci.yml`
-  - 当前主要是 Cloud UI checks + Cloud API Go lint
-  - 已补入 `apps/cloud-ui` typecheck/build
-  - 但还不是正式的 monorepo PR gate contract
+- `.github/workflows/pr-ci.yml`
+  - 当前是 PR gate contract，按变更范围分别验证 Cloud UI、Cloud API、Docs/Agent instructions
 
-- `/Users/Leo_Qiu/Documents/dev/readio/.github/workflows/cd-cloud.yml`
-  - 当前仍是 build + deploy 混合型 workflow
+- `.github/workflows/_deploy-cloud-base.yml`
+  - Cloud deploy reusable workflow，负责共享部署步骤
 
-- `/Users/Leo_Qiu/Documents/dev/readio/.github/workflows/cd-pages.yml`
-  - 当前独立负责 Cloud UI / Pages deploy
+- `.github/workflows/deploy-cloud-preprod.yml`
+  - Cloud preproduction deploy entry point
+
+- `.github/workflows/deploy-cloud-prod.yml`
+  - Cloud production deploy entry point
+
+- `.github/workflows/promote-cloud-release.yml`
+  - Cloud release promotion workflow
+
+- `.github/workflows/vps-bootstrap.yml`
+  - VPS bootstrap / operator setup workflow
 
 ### Existing root scripts
 
-- `/Users/Leo_Qiu/Documents/dev/readio/package.json`
+- `package.json`
   - `pnpm lint`
   - `pnpm typecheck`
   - `pnpm build`
@@ -164,7 +171,7 @@
 - `push` on `main`
 - optional manual `workflow_dispatch`
 
-### C. `deploy-cloud.yml`
+### C. `deploy-cloud-preprod.yml` / `deploy-cloud-prod.yml`
 
 职责：
 - 从 artifact 执行 Cloud deploy
@@ -300,7 +307,7 @@ workflow 必须按职责最小化 secrets / permissions：
 - `release-cloud-build.yml`
   - 默认不持有 deploy/restart secrets
   - 若确有 upload/release 所需 token，范围必须最小化
-- `deploy-cloud.yml`
+- `deploy-cloud-preprod.yml` / `deploy-cloud-prod.yml`
   - 才允许持有 publish / restart / smoke 所需 secrets
 
 不得把 production deploy capability 暴露给纯质量门 workflow。
@@ -458,7 +465,7 @@ workflow 重构必须允许小步切换，不允许一次性删光旧流程再�
 推荐策略：
 
 1. 先新增 release build workflow
-2. 保留旧 `cd-cloud.yml` 作为过渡
+2. 保留旧 Cloud deploy workflow 作为过渡
 3. 验证新 artifact contract 稳定后，再把旧 Cloud CD 收窄或替换
 
 若新流程不稳定，必须可回滚到：
@@ -542,10 +549,11 @@ Reviewer 必须重点检查：
 
 1. workflow 结构审查
 2. 明确审查以下 YAML changed zone：
-   - `.github/workflows/ci.yml`
+   - `.github/workflows/pr-ci.yml`
    - `.github/workflows/release-cloud-build.yml`（若新增）
-   - `.github/workflows/deploy-cloud.yml` / 旧 `cd-cloud.yml` 收窄结果
-   - `.github/workflows/cd-pages.yml`（若受影响）
+   - `.github/workflows/_deploy-cloud-base.yml`
+   - `.github/workflows/deploy-cloud-preprod.yml`
+   - `.github/workflows/deploy-cloud-prod.yml`
 3. 确认 PR CI 会在 deploy 之前发现：
    - `apps/cloud-ui` build failure
    - Go test failure
@@ -569,12 +577,12 @@ Reviewer 必须重点检查：
 ## Documentation
 
 - 如果最终改动落地到 Cloud deploy contract，更新：
-  - `/Users/Leo_Qiu/Documents/dev/readio/apps/docs/content/docs/apps/cloud/deployment.mdx`
-  - `/Users/Leo_Qiu/Documents/dev/readio/apps/docs/content/docs/apps/cloud/deployment.zh.mdx`
+  - `apps/docs/content/docs/apps/cloud/deployment.mdx`
+  - `apps/docs/content/docs/apps/cloud/deployment.zh.mdx`
 
 - 如果根级 CI policy 明显变化，更新：
-  - `/Users/Leo_Qiu/Documents/dev/readio/apps/docs/content/docs/general/decision-log.mdx`
-  - `/Users/Leo_Qiu/Documents/dev/readio/apps/docs/content/docs/general/decision-log.zh.mdx`
+  - `apps/docs/content/docs/general/decision-log.mdx`
+  - `apps/docs/content/docs/general/decision-log.zh.mdx`
 
 ## Completion
 

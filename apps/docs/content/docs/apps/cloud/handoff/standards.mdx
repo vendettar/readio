@@ -12,18 +12,43 @@ Cloud frontend keeps the main Cloud frontend engineering rules:
 - memoized list rendering for long library surfaces
 - no direct UI-to-DB writes outside the approved persistence boundaries
 
-## 2. Navigation Contract
+## 2. Async and State Integrity
+
+Async work must preserve both cancellation and ownership boundaries.
+
+- `AbortSignal` must be passed to the real network, stream, storage, or parser operation whenever the underlying API supports it.
+- Stale-result checks are still required, but they are not a substitute for cancelling expensive work.
+- Request IDs and latest-wins sequencing must be scoped by domain/key. A search request must not cancel or suppress an unrelated episode, transcript, playback, or settings request.
+- Concurrent loads for different entities must be independently cancellable.
+- Tests for async flows should cover the active path, aborted path, stale-result path, and at least one concurrent cross-key path when the feature can issue overlapping work.
+
+## 3. Navigation Contract
 
 - Title/artwork remain the primary navigation emitters for discovery/library rows.
 - Episode rows keep direct-play vs detail-navigation behavior separated.
 - Canonical podcast/episode routes must be generated from the current Cloud discovery identity contract.
 
-## 3. Persistence Boundary
+## 4. Persistence Boundary
 
 - Browser-local writes must continue to flow through store actions / repository helpers.
 - Components should consume types from shared DB/domain types, not invent local shapes.
 
-## 4. Accessibility Baseline
+## 5. Resource Lifecycle
+
+Browser-owned resources must have explicit release paths.
+
+- Object URLs must be revoked when a media/source owner swaps source, unmounts, or loses ownership of the blob.
+- Long-lived caches must distinguish referenced records from orphaned records before cleanup.
+- Cleanup jobs must be bounded and must not delete records that are still reachable from active playback, sessions, downloads, transcripts, or library state.
+
+## 6. UI and Interaction Governance
+
+- Build from existing primitives and semantic tokens before adding new UI structure.
+- Overlay, focus, keyboard, escape, and layering behavior are part of the component contract, not visual polish.
+- Loading, empty, error, disabled, and retry states should be consistent for equivalent workflows.
+- Do not redesign surfaces incidentally while fixing behavior; visual changes need the same owner and verification as functional changes.
+
+## 7. Accessibility Baseline
 
 Cloud frontend keeps the established baseline for:
 
@@ -32,7 +57,18 @@ Cloud frontend keeps the established baseline for:
 - player control ARIA
 - deterministic close/escape behavior for overlays
 
-## 5. Debug Observability
+## 8. Review and Verification Baseline
+
+Implementation reviews should focus on the changed surface by default and include:
+
+- the diff or commit range being reviewed
+- correctness and regression risks
+- missing tests or unverified edge cases
+- ownership/path drift, especially old lite paths or stale Cloud contracts
+
+Findings should include severity, evidence, impact, fix direction, and verification. Escalate to a wider architecture/security/performance review only when the changed surface crosses those boundaries.
+
+## 9. Debug Observability
 
 - **No Silent Skips**: Any logic that discards data or skips iterations (e.g., `continue` in mapping loops) must be preceded by `slog.DebugContext(ctx, ...)` detailing the reason and item identifier. Dropping data silently due to missing fields (e.g. `link`) is strictly prohibited.
 - **Upstream Transparency**: All requests to third-party providers must log the outgoing URL, response status code, body size, and parsed item count (`count`) at the DEBUG level using `slog.DebugContext(ctx, ...)`.

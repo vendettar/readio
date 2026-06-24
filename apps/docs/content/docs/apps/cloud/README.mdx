@@ -18,12 +18,12 @@ Cloud production runtime config ownership is split into three buckets:
 
 3. **Browser-local/user-local config**: Values that remain browser-owned and are not part of backend runtime (`READIO_ASR_API_KEY`, `READIO_OPENAI_API_KEY`, IndexedDB/Dexie persistence, playback/session state).
 
-See `handoff/runtime-config-ownership-audit.md` for the full audit and `handoff/index.mdx` Section 8 for the runtime config ownership summary.
+See `handoff/runtime-config-ownership.mdx` for runtime config ownership details and `handoff/index.mdx` Section 8 for the summary.
 
 Cloud Settings does not include the `CORS Proxy` block.
 Cloud media stays browser-direct first when available, then falls back through `apps/cloud-api` only for approved failure classes; that fallback is pass-through and non-caching, and browser-local media artifacts stay browser-local.
 Cloud ASR provider transcription goes through a dedicated relay in `apps/cloud-api`; provider credentials remain user-owned and browser-supplied per request, and the backend must treat them as transient request data only.
-Cloud ASR provider verification/readiness checks remain browser-direct.
+Cloud ASR provider verification uses the same relay for enabled providers; unsupported providers fail closed instead of falling back to browser-direct provider calls.
 Cloud keeps Workbox/PWA disabled.
 
 See the Cloud handoff docs under `apps/docs/content/docs/apps/cloud/handoff/` for the current backend contracts and task-level implementation boundaries.

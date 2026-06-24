@@ -23,18 +23,34 @@ Important constraint:
 - Favorites, subscriptions, history, downloaded tracks, and local transcript artifacts remain local to the browser.
 - Clearing site data still removes them.
 
-## 3. Backend SQLite Persistence
+## 3. Settings and Credentials Boundary
+
+Settings and credentials are separate data classes.
+
+- Non-sensitive preferences may live in settings/localStorage when they are explicitly browser-public behavior.
+- Provider credentials must live only in the browser-local `credentials` table or in transient runtime memory for the active session.
+- There must be no localStorage/sessionStorage fallback for provider credentials.
+- If IndexedDB is unavailable when credentials are required, the feature must fail explicitly instead of silently falling back to weaker storage.
+- Runtime environment defaults may prefill in-memory values, but they must not create persisted credential rows without an explicit user save.
+
+Credential import/export/wipe rules:
+
+- Exported user data must not include provider credentials.
+- Imported settings must not overwrite existing credentials unless the import format explicitly defines a credential flow.
+- "Wipe all" operations must invalidate or sequence-guard in-flight writes so stale async work cannot recreate deleted settings or credentials.
+
+## 4. Backend SQLite Persistence
 
 Cloud backend now also owns server-side SQLite persistence for backend-governed features.
 
-Current and planned backend-owned SQLite responsibilities include:
+Backend-owned SQLite responsibilities include:
 
 - built-in ASR quota / reservation / idempotency state
 - PodcastIndex-derived podcast show and episode snapshots for Cloud discovery page rendering:
   - `podcast_shows`: podcast/show domain metadata
   - `podcast_episodes`: bounded retained episode rows, ordered by stable newest-first sort
   - `podcast_cache_state`: refresh, backoff, truncation, eviction, and access metadata
-- podcast transcript asset persistence is deferred to migration `00004`; until that ships, runtime paths must not assume `podcast_transcript_assets` exists and the transcript asset storage gate remains disabled by default
+- shared podcast transcript asset metadata and file ownership for eligible podcast episodes
 - other backend-owned operational state that must survive process restarts
 
 Discovery snapshot constraints:
@@ -44,23 +60,29 @@ Discovery snapshot constraints:
 - `podcast_cache_state` owns cache metadata only. It is not user library state and is not a full historical archive contract.
 - PodcastIndex cache SQL is generated with sqlc from `apps/cloud-api/internal/db/schema.sql` and `apps/cloud-api/internal/db/queries/pi_episode_cache.sql`; regenerate it with `go generate ./internal/db` from `apps/cloud-api`. `apps/cloud-api/internal/podcastindex/cache_store.go` keeps transaction orchestration and maps generated rows into domain structs.
 
-Retired direction:
+Non-goals:
 
-- the old discovery feed snapshot / feed-episode retention plan is retired with `/api/v1/discovery/feed`
-- backend SQLite must not be documented as the active owner of discovery feed parsing or feed-route cache state
+- backend SQLite is not the owner of RSS feed XML parsing or feed-route cache state
+- `/api/v1/discovery/feed` is not part of the active Cloud API surface
 
 This backend SQLite layer is not a generic replacement for browser-local user library data.
 
-## 4. Runtime Cache Status
+## 5. Runtime Cache Ownership
 
-Discovery/search frontend persistence is no longer modeled as a long-lived IndexedDB cache in Cloud.
+Discovery/search frontend persistence uses memory-backed server-state caching rather than a long-lived browser-local discovery archive.
 
 - frontend discovery relies on TanStack Query memory cache
 - active backend discovery routes rely on backend-managed in-memory cache where applicable; PodcastIndex podcast detail / episode-list reads use the SQLite snapshot tables above
-- the retired feed route does not leave behind an active SQLite feed-cache contract
 - `runtime_cache` still exists for remaining browser-local runtime caches that still have owners
 
-## 5. Backend SQLite Governance Summary
+## 6. Browser-Local Consistency Rules
+
+- Browser-local repositories should own schema access, validation, and write ordering for their tables.
+- UI components must call store/repository actions instead of writing IndexedDB directly.
+- Async writes that follow a destructive action, such as clearing data or wiping credentials, must be guarded by an epoch/request sequence or equivalent stale-write protection.
+- Download, transcript, and playback records may reference local blobs only inside the browser that owns those blobs.
+
+## 7. Backend SQLite Governance Summary
 
 All backend SQLite features in Cloud must follow the same operational rules:
 
@@ -73,7 +95,7 @@ All backend SQLite features in Cloud must follow the same operational rules:
 
 The detailed backend rules live in [Backend SQLite Governance](/apps/cloud/handoff/backend-sqlite-governance).
 
-## 6. Key Frontend Tables Still Relevant to Cloud UI
+## 8. Key Frontend Tables Still Relevant to Cloud UI
 
 These browser-local tables still matter to Cloud UI behavior:
 
@@ -90,11 +112,11 @@ These browser-local tables still matter to Cloud UI behavior:
 - `credentials`
 - `runtime_cache`
 
-## 7. Documentation Boundary
+## 9. Documentation Boundary
 
 Cloud docs must describe persistence ownership honestly:
 
 - no account sync for browser-local library state
 - no server-backed recovery for browser-local-only data
 - no claim that backend SQLite is a user archive unless a feature explicitly defines that contract
-- repo-owned Cloud runtime contracts do not persist or key library state by any legacy feed transport field
+- repo-owned Cloud runtime contracts do not persist or key library state by feed transport fields

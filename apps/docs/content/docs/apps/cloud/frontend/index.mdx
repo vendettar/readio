@@ -11,8 +11,10 @@ Use `cloud/frontend` for browser-local UI behavior, persistence expectations, an
 
 ## Current Scope
 
-- `frontend/i18n.mdx`
-- `frontend/audio-engine.mdx`
-- `frontend/transcript-reading.mdx`
-- `frontend/files-management.mdx`
-- `frontend/settings.mdx`
+- `frontend/i18n.mdx`: browser language behavior.
+- `frontend/audio-engine.mdx`: playback, downloads, object URL, and local media lifecycle.
+- `frontend/transcript-reading.mdx`: transcript display and reading interactions.
+- `frontend/files-management.mdx`: browser-local file/library management surfaces.
+- `frontend/settings.mdx`: settings, local maintenance, export/import, and credential UI boundaries.
+
+Backend ownership, ASR relay behavior, runtime config, SQLite, and proxy contracts belong in `cloud/handoff`.

@@ -17,15 +17,24 @@ Cloud frontend runtime config is fetched from `GET /api/v1/config`; colocated ba
 
 ## 3. Discovery/Media Contract
 
-- Discovery/search/feed requests target Cloud backend routes, whether they are reached same-origin or via `VITE_API_BASE_URL` in decoupled deployments.
-- Browser media remains direct-first where the current Cloud contract allows it.
-- Backend fallback/proxy behavior is documented separately in handoff audit docs.
+- Discovery requests target Cloud backend routes, including search, top, Editor's Picks batch lookup, podcast lookup, and PI episode-list lookup. They are reached same-origin in colocated deployments or via `VITE_API_BASE_URL` in decoupled Cloudflare Pages deployments.
+- Browser media remains direct-first where the Cloud contract allows it.
+- Backend fallback/proxy behavior is documented in the media fallback and ASR relay contracts.
 
-## 4. PWA Status
+## 4. Proxy and Rate-Limit Contract
 
-Cloud currently keeps Workbox/PWA disabled unless a later instruction explicitly restores it.
+Proxy/fallback routes must fail with a stable public shape when capacity is exhausted.
 
-## 5. Application Metrics Contract
+- Rate-limited requests return HTTP `429` with JSON shaped as `{ "error": "rate_limited", "requestId": "..." }`.
+- A `Retry-After` header must be present when the server can provide a retry window.
+- Primary edge limits may be paired with an app-level burst guard, but the secondary guard must not block CORS `OPTIONS` preflight handling.
+- Rate-limit logs and metrics may use only redacted, hashed, low-cardinality advisory dimensions. They must not expose tokens, raw IP addresses, upstream secrets, request bodies, audio bytes, or transcript text.
+
+## 5. PWA Status
+
+Cloud keeps Workbox/PWA disabled.
+
+## 6. Application Metrics Contract
 
 `apps/cloud-api` pushes application and app-owned host-critical metrics directly to Grafana Cloud through OTLP when the Grafana environment variables are configured.
 
@@ -33,13 +42,13 @@ Cloud currently keeps Workbox/PWA disabled unless a later instruction explicitly
 - Discovery CORS is owned by `READIO_DISCOVERY_ALLOWED_ORIGINS`; proxy CORS remains owned by `READIO_PROXY_ALLOWED_ORIGINS`.
 - Browser-public English dictionary config is deployed as `READIO_EN_DICTIONARY_API_URL` and `READIO_EN_DICTIONARY_API_TRANSPORT` and emitted only through backend-generated `/env.js`.
 - `READIO_GRAFANA_OTLP_HEADERS`, `READIO_GRAFANA_OTLP_INSTANCE_ID`, and `READIO_GRAFANA_OTLP_TOKEN` are backend-only runtime config; keep them out of `/env.js` and browser allowlists.
-- The current 00A deployment does not expose a Prometheus scrape endpoint and does not install local Prometheus or Grafana Alloy.
-- Application metrics currently include:
+- Cloud does not expose a Prometheus scrape endpoint and does not install local Prometheus or Grafana Alloy.
+- Application metrics include:
   - `readio_cloud_http_request_duration_seconds`
   - `readio_cloud_upstream_request_duration_seconds`
   - `readio_cloud_upstream_errors_total`
   - `readio_cloud_asr_relay_requests_total`
-- App-owned host metrics currently include:
+- App-owned host metrics include:
   - `readio_cloud_process_goroutines`
   - `readio_cloud_process_heap_alloc_bytes`
   - `readio_cloud_process_memory_sys_bytes`
@@ -52,11 +61,11 @@ Cloud currently keeps Workbox/PWA disabled unless a later instruction explicitly
 - Metric labels use closed low-cardinality enums for `route`, `provider`, `status_class`, `error_class`, `cache_status`, and `mode`.
 - Metric labels must not include full URLs, query strings, route IDs, search terms, GUIDs, header names/values, raw errors, request/response bodies, audio bytes, or transcript text.
 
-## 6. Log Access Contract
+## 7. Log Access Contract
 
 Cloud API logs remain stdout logs produced by Go `slog` and Docker's configured json-file logging driver. `/admin/logs` remains available and memory-only.
 
-- 00C can ship sanitized application logs to Grafana Loki directly from `apps/cloud-api` without Grafana Alloy, Promtail, Docker log drivers, systemd journal reading, Docker container log reading, or another host log shipping agent.
+- `apps/cloud-api` can ship sanitized application logs directly to Grafana Loki without Grafana Alloy, Promtail, Docker log drivers, systemd journal reading, Docker container log reading, or another host log shipping agent.
 - Loki shipping is disabled unless `READIO_GRAFANA_LOKI_URL`, `READIO_GRAFANA_LOKI_USER`, and `READIO_GRAFANA_LOKI_TOKEN` are all configured in the backend container.
 - `READIO_GRAFANA_LOKI_URL` and `READIO_GRAFANA_LOKI_USER` are GitHub environment variables; `READIO_GRAFANA_LOKI_TOKEN` is a GitHub secret.
 - Loki `env` labels are derived from backend `READIO_DEPLOY_ENV` first, then `VITE_GRAFANA_FARO_ENV` if unset. Values normalize to `production`, `preproduction`, or `unknown`.
@@ -64,12 +73,12 @@ Cloud API logs remain stdout logs produced by Go `slog` and Docker's configured 
 - These Loki variables must stay out of `/env.js`, browser runtime config, and browser env allowlists.
 - `/admin/logs` remains a same-origin, memory-only operator log surface on the backend. Loki is the durable remote application log surface when enabled.
 - Docker logs remain available through `make logs-pre`, `make logs-prod`, or direct Docker operations on the VPS.
-- 00B metrics and 00C logs are separate pipelines. OTLP metrics use `READIO_GRAFANA_OTLP_*`; Loki logs use `READIO_GRAFANA_LOKI_*`.
+- Metrics and logs are separate pipelines. OTLP metrics use `READIO_GRAFANA_OTLP_*`; Loki logs use `READIO_GRAFANA_LOKI_*`.
 - Loki labels are exactly `service`, `env`, and `level`. Labels must not include request IDs, routes, upstream hosts, podcast IDs, episode IDs, GUIDs, search terms, user IDs, file paths, raw errors, IP addresses, user agents, tokens, API keys, cookies, or headers.
 - Log lines may include sanitized fields such as timestamp, level, message, normalized route, status, elapsed milliseconds, error class, and request ID.
 - The Loki queue is bounded and non-blocking for request paths. If the queue is full or the Loki endpoint fails, logs are dropped locally and requests continue. Shutdown performs a best-effort flush.
 
-## 7. Faro Browser RUM Contract
+## 8. Faro Browser RUM Contract
 
 Cloud UI Faro telemetry is optional and browser-public-config driven.
 
@@ -80,21 +89,21 @@ Cloud UI Faro telemetry is optional and browser-public-config driven.
 - Sanitized schema diagnostics may include only schema name, provider enum, route class, issue path, issue code, and coarse error class.
 - Faro initialization must fail open and never block app boot.
 
-## 8. Host Observability Boundary
+## 9. Host Observability Boundary
 
 Grafana Cloud observability is app-owned OTLP metrics plus optional browser Faro telemetry.
 
-- Do not install Grafana Alloy, node_exporter, local Prometheus, Loki agents, or any other persistent observability agent as part of 00A.
+- Do not install Grafana Alloy, node_exporter, local Prometheus, Loki agents, or any other persistent observability agent for the Cloud app contract.
 - Process/runtime, data filesystem, SQLite DB/WAL size, and configured transcript asset directory size are collected inside `apps/cloud-api` on a bounded interval. They are best-effort app-owned signals, not a full node_exporter replacement.
 - `/admin/*` should not be publicly exposed without outer restrictions such as Cloudflare, nginx, VPN, or IP allowlists. In production Cloudflare Pages deployments, `/ops` is a Grafana entry point and must not read `/admin/*` from the browser.
-- Expected dashboards for 00A can cover upstream latency by provider/route, upstream errors by provider/error class, ASR relay request/error rates, and Faro crash/schema diagnostic rates.
+- Expected dashboards can cover upstream latency by provider/route, upstream errors by provider/error class, ASR relay request/error rates, and Faro crash/schema diagnostic rates.
 - Cost controls require conservative Faro sampling, low-cardinality labels, and no raw log fields promoted to labels.
 - Rollback clears Faro public config and/or unsets OTLP runtime variables while leaving the backend `/admin/*` surface intact.
 
-## 9. Deployment Docs
+## 10. Deployment Docs
 
-Keep high-level deployment/runtime behavior here; operational audits stay in:
+Keep high-level deployment/runtime behavior here; detailed contracts live in:
 
-- `handoff/runtime-config-ownership-audit.md`
-- `handoff/media-fallback-audit.md`
-- `handoff/asr-relay-audit.md`
+- `handoff/runtime-config-ownership.mdx`
+- `handoff/media-fallback-contract.mdx`
+- `handoff/asr-relay-contract.mdx`

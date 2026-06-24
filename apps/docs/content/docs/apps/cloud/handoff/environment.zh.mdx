@@ -18,14 +18,23 @@ Cloud 前端运行时配置通过 `GET /api/v1/config` 获取；同源后端部�
 ## 3. Discovery / Media 契约
 
 - discovery 请求统一通过 Cloud 后端路由承载，包括 search / top / Editor's Picks batch lookup / podcast lookup / PI episode-list lookup；在解耦部署下由 `VITE_API_BASE_URL` 指向这些后端路由
-- 当前 Cloud 契约允许的情况下，媒体仍是浏览器直连优先
-- backend fallback / proxy 的细节记录在 handoff 审计文档里
+- Cloud 契约允许的情况下，媒体仍是浏览器直连优先
+- backend fallback / proxy 细节记录在媒体 fallback 与 ASR relay 契约里
 
-## 4. PWA 状态
+## 4. Proxy 与 Rate Limit 契约
 
-Cloud 当前默认保持 Workbox / PWA 关闭，除非后续指令明确恢复。
+Proxy/fallback 路由在容量耗尽时必须使用稳定的公开失败形态。
 
-## 5. 应用指标契约
+- 被限流的请求返回 HTTP `429`，JSON 形态为 `{ "error": "rate_limited", "requestId": "..." }`。
+- 服务器能提供重试窗口时，必须返回 `Retry-After` header。
+- Primary edge limit 可以搭配应用层 burst guard，但 secondary guard 不得阻断 CORS `OPTIONS` preflight。
+- Rate-limit 日志和指标只能使用脱敏、哈希、低基数的 advisory dimensions。不得暴露 token、原始 IP、上游 secret、请求 body、音频字节或 transcript 文本。
+
+## 5. PWA 状态
+
+Cloud 保持 Workbox / PWA 关闭。
+
+## 6. 应用指标契约
 
 配置 Grafana 环境变量后，`apps/cloud-api` 会通过 OTLP 直接向 Grafana Cloud 推送应用指标和应用侧采集的主机关键指标。
 
@@ -33,13 +42,13 @@ Cloud 当前默认保持 Workbox / PWA 关闭，除非后续指令明确恢复�
 - Discovery CORS 由 `READIO_DISCOVERY_ALLOWED_ORIGINS` 归属；proxy CORS 仍由 `READIO_PROXY_ALLOWED_ORIGINS` 归属。
 - 浏览器公开英文词典配置通过 `READIO_EN_DICTIONARY_API_URL` 与 `READIO_EN_DICTIONARY_API_TRANSPORT` 部署，并且只由后端生成的 `/env.js` 暴露。
 - `READIO_GRAFANA_OTLP_HEADERS`、`READIO_GRAFANA_OTLP_INSTANCE_ID` 和 `READIO_GRAFANA_OTLP_TOKEN` 都是仅后端的运行时配置；不得放入 `/env.js` 或浏览器 allowlist。
-- 当前 00A 部署不暴露 Prometheus scrape endpoint，也不安装本地 Prometheus 或 Grafana Alloy。
-- 当前应用指标包括：
+- Cloud 不暴露 Prometheus scrape endpoint，也不安装本地 Prometheus 或 Grafana Alloy。
+- 应用指标包括：
   - `readio_cloud_http_request_duration_seconds`
   - `readio_cloud_upstream_request_duration_seconds`
   - `readio_cloud_upstream_errors_total`
   - `readio_cloud_asr_relay_requests_total`
-- 当前应用侧主机指标包括：
+- 应用侧主机指标包括：
   - `readio_cloud_process_goroutines`
   - `readio_cloud_process_heap_alloc_bytes`
   - `readio_cloud_process_memory_sys_bytes`
@@ -52,11 +61,11 @@ Cloud 当前默认保持 Workbox / PWA 关闭，除非后续指令明确恢复�
 - Metric labels 使用封闭的低基数枚举：`route`、`provider`、`status_class`、`error_class`、`cache_status`、`mode`。
 - Metric labels 不得包含完整 URL、query string、route ID、搜索词、GUID、header 名称/值、原始错误、请求/响应 body、音频字节或 transcript 文本。
 
-## 6. 日志访问契约
+## 7. 日志访问契约
 
 Cloud API 日志继续由 Go `slog` 写入 stdout，并由 Docker 当前配置的 json-file logging driver 保存。`/admin/logs` 继续可用且只保存在内存中。
 
-- 00C 可以由 `apps/cloud-api` 直接把脱敏后的应用日志推送到 Grafana Loki，不安装 Grafana Alloy、Promtail、Docker log driver、systemd journal 读取器、Docker container log 读取器或其他主机日志 shipping agent。
+- `apps/cloud-api` 可以直接把脱敏后的应用日志推送到 Grafana Loki，不安装 Grafana Alloy、Promtail、Docker log driver、systemd journal 读取器、Docker container log 读取器或其他主机日志 shipping agent。
 - 只有同时配置后端容器内的 `READIO_GRAFANA_LOKI_URL`、`READIO_GRAFANA_LOKI_USER` 和 `READIO_GRAFANA_LOKI_TOKEN` 时，Loki 投递才会启用。
 - `READIO_GRAFANA_LOKI_URL` 和 `READIO_GRAFANA_LOKI_USER` 放在 GitHub environment variables；`READIO_GRAFANA_LOKI_TOKEN` 放在 GitHub secret。
 - Loki `env` label 优先来自后端 `READIO_DEPLOY_ENV`，未设置时回退到 `VITE_GRAFANA_FARO_ENV`。取值会规范化为 `production`、`preproduction` 或 `unknown`。
@@ -64,12 +73,12 @@ Cloud API 日志继续由 Go `slog` 写入 stdout，并由 Docker 当前配置�
 - 这些 Loki 变量不得进入 `/env.js`、浏览器运行时配置或浏览器 env allowlist。
 - `/admin/logs` 仍是后端上的 same-origin、memory-only 运维日志界面。启用 Loki 后，Loki 是持久化远端应用日志界面。
 - Docker logs 仍可通过 `make logs-pre`、`make logs-prod` 或 VPS 上的直接 Docker 操作查看。
-- 00B 指标与 00C 日志是两条独立 pipeline。OTLP 指标使用 `READIO_GRAFANA_OTLP_*`；Loki 日志使用 `READIO_GRAFANA_LOKI_*`。
+- 指标与日志是两条独立 pipeline。OTLP 指标使用 `READIO_GRAFANA_OTLP_*`；Loki 日志使用 `READIO_GRAFANA_LOKI_*`。
 - Loki labels 只能是 `service`、`env` 和 `level`。Labels 不得包含 request ID、route、upstream host、podcast ID、episode ID、GUID、搜索词、user ID、文件路径、原始错误、IP、user agent、token、API key、cookie 或 header。
 - 日志行可以包含脱敏后的 timestamp、level、message、规范化 route、status、elapsed milliseconds、error class 和 request ID。
 - Loki 队列是有界的，并且不阻塞请求路径。队列满或 Loki endpoint 失败时会本地丢弃日志，请求继续执行。服务关闭时会进行 best-effort flush。
 
-## 7. Faro 浏览器 RUM 契约
+## 8. Faro 浏览器 RUM 契约
 
 Cloud UI Faro telemetry 是可选能力，由浏览器公开配置驱动。
 
@@ -80,21 +89,21 @@ Cloud UI Faro telemetry 是可选能力，由浏览器公开配置驱动。
 - Sanitized schema diagnostics 只能包含 schema name、provider enum、route class、issue path、issue code 和粗粒度 error class。
 - Faro 初始化必须 fail-open，不能阻塞 app 启动。
 
-## 8. 主机可观测性边界
+## 9. 主机可观测性边界
 
 Grafana Cloud observability 由应用侧 OTLP 指标和可选的浏览器 Faro telemetry 组成。
 
-- 00A 不安装 Grafana Alloy、node_exporter、本地 Prometheus、Loki agent 或任何其他持久化观测 agent。
+- Cloud app 契约不安装 Grafana Alloy、node_exporter、本地 Prometheus、Loki agent 或任何其他持久化观测 agent。
 - Process/runtime、data filesystem、SQLite DB/WAL size 以及配置的 transcript asset directory size 都由 `apps/cloud-api` 在有界 interval 内采集。这些是 best-effort 的应用侧主机信号，不是完整的 node_exporter 替代。
 - `/admin/*` 不应在没有 Cloudflare、nginx、VPN 或 IP allowlist 等外围限制的情况下公开暴露。在生产 Cloudflare Pages 部署中，`/ops` 是 Grafana 入口，不得由浏览器读取 `/admin/*`。
-- 00A 阶段的预期 dashboard 可以覆盖按 provider/route 的 upstream latency、按 provider/error class 的 upstream errors、ASR relay request/error rates，以及 Faro crash/schema diagnostic rates。
+- 预期 dashboard 可以覆盖按 provider/route 的 upstream latency、按 provider/error class 的 upstream errors、ASR relay request/error rates，以及 Faro crash/schema diagnostic rates。
 - 成本控制要求保守的 Faro sampling、低基数 labels，并且不把 raw log fields 提升为 labels。
 - 回滚时清空 Faro public config 或取消 OTLP 运行时变量，同时保留后端 `/admin/*` surface。
 
-## 9. 部署文档边界
+## 10. 部署文档边界
 
-这里保留高层部署/运行时行为；具体审计文档位于：
+这里保留高层部署/运行时行为；详细契约位于：
 
-- `handoff/runtime-config-ownership-audit.md`
-- `handoff/media-fallback-audit.md`
-- `handoff/asr-relay-audit.md`
+- `handoff/runtime-config-ownership.mdx`
+- `handoff/media-fallback-contract.mdx`
+- `handoff/asr-relay-contract.mdx`

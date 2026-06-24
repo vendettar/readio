@@ -5,7 +5,7 @@ title: Discovery & Explore
 ## 1. Scope and Principles
 
 - Routes: `/explore`, `/podcast/$country/$id`, `/podcast/$country/$id/$episodeKey`.
-- Identifier contract: show routes use numeric `podcastItunesId`; episode routes use a compact key derived from stable episode identity. Canonical UUID identities retain the legacy 22-character `base64url` form, while non-UUID identities use the newer generic compact form.
+- Identifier contract: show routes use numeric `podcastItunesId`; episode routes use a compact key derived from stable episode identity. Canonical UUID identities use the 22-character `base64url` form, while non-UUID identities use the generic compact form.
 - Route country contract: for browser-local records that deep-link back into content routes (Favorites, History, Downloads, other library-origin surfaces), saved `countryAtSave` is part of route identity. Route generation must reuse the persisted `countryAtSave` and must not silently substitute the current global content region.
 - Hybrid boundary:
   - Search / Top Shows / Top Episodes first-hop: Apple
@@ -28,7 +28,7 @@ title: Discovery & Explore
 - Upstream refresh source: PodcastIndex `episodes/byitunesid`, but only through cold bootstrap and the podcast detail refresh path.
 - Cloud stores a bounded SQLite snapshot per `podcastItunesId`; once a retained snapshot exists, paginated episode-list reads are DB-only and never call PodcastIndex while users flip pages.
 - The page-rendering episode route emits `guid` and requires a valid `artworkUrl`; rows without valid episode/feed artwork are dropped at the backend boundary
-- Upstream PI may still contain a feed URL, but repo-owned Cloud runtime contracts do not expose or depend on it.
+- Upstream PI may contain a feed URL, but repo-owned Cloud runtime contracts do not expose or depend on feed transport fields.
 - Page rendering must not use RSS feed XML for:
   - show page episode list
   - episodes page episode list
@@ -74,16 +74,16 @@ When `episodeGuid` is present, the same route runs detail mode: `GET /api/v1/dis
 - Backend:
   - top / lookup routes: in-memory relay cache with graceful degradation
   - PI podcast detail and episode-list routes: SQLite-backed bounded snapshots; process-memory TTL cache does not own these route reads
-  - PI SQLite snapshots are capped by first-pass operational safeguards: 5,000 podcasts total and 1 GiB total approximate bytes
+  - PI SQLite snapshots are capped by operational safeguards: 5,000 podcasts total and 1 GiB total approximate bytes
   - PI budget cleanup runs opportunistically after snapshot writes; eviction prefers lower `priority`, then older `last_accessed_at`, then stable `podcastItunesId` order, and never evicts the podcast being refreshed in that cleanup pass
-  - no active Cloud feed route or parsed-feed cache remains; `/api/v1/discovery/feed` is retired
+  - no Cloud feed XML route or parsed-feed cache is part of the API surface
   - page-rendering ownership uses paginated frontend query families for list pages and a direct episode-detail query for deep links
   - duplicate `guid` entries are collapsed deterministically in the stored snapshot
 - Frontend React Query keys:
   - podcast detail: `['podcast', 'detail', podcastId, country]`
   - episode pages: `['podcast', 'episodes-pages', podcastId, country]`
   - episode detail: `['podcast', 'episode-detail', podcastId, country, episodeGuid]`
-- Legacy feed-field note:
-  - upstream feeds may still publish feed transport metadata, but repo-owned Cloud runtime contracts do not expose, persist, or key on it
-  - legacy feed transport metadata must not be documented as an active discovery fetch key, route authority, or backend cache key
-- No long-lived frontend discovery persistence in Cloud
+- Feed transport fields:
+  - upstream feeds may publish feed transport metadata, but repo-owned Cloud runtime contracts do not expose, persist, or key on it
+  - feed transport metadata must not be documented as a discovery fetch key, route authority, or backend cache key
+- Frontend discovery uses TanStack Query memory cache, not long-lived browser-local discovery persistence.

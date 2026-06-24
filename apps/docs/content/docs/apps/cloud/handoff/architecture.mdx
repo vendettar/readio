@@ -26,8 +26,7 @@ The frontend still follows the current Cloud frontend layering:
 
 ## 3. Ownership Boundaries
 
-- Discovery/search/feed API ownership is backend-first. Production reaches those routes through
-  the configured API base URL; colocated deployments may reach them same-origin.
+- Discovery API ownership is backend-first, including search, top, Editor's Picks batch lookup, podcast lookup, and PI episode-list lookup. Production reaches those routes through the configured API base URL; colocated deployments may reach them same-origin.
 - Browser-local playback, downloads, transcripts, favorites, subscriptions, and settings remain frontend-owned.
 - Frontend persistence stays browser-local; Cloud does not imply server-side sync.
 

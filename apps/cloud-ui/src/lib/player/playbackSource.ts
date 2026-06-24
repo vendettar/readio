@@ -6,9 +6,13 @@ import { PlaybackRepository } from '../repositories/PlaybackRepository'
 // Singleton check (Instruction 124) to avoid redundant Blob URL creation for repeats
 let lastResolved: { normalizedUrl: string; objectUrl: string } | null = null
 
-export async function resolvePlaybackSource(
-  sourceUrl: string
-): Promise<{ url: string; trackId?: string }> {
+export type PlaybackSourceResult = {
+  url: string
+  trackId?: string
+  createdObjectUrl?: boolean
+}
+
+export async function resolvePlaybackSource(sourceUrl: string): Promise<PlaybackSourceResult> {
   try {
     const normalizedUrl = normalizePodcastAudioUrl(sourceUrl)
     if (!normalizedUrl) return { url: unwrapPodcastTrackingUrl(sourceUrl) }
@@ -29,7 +33,7 @@ export async function resolvePlaybackSource(
     const objectUrl = URL.createObjectURL(audioBlobRecord.blob)
     lastResolved = { normalizedUrl, objectUrl }
 
-    return { url: objectUrl, trackId: track.id }
+    return { url: objectUrl, trackId: track.id, createdObjectUrl: true }
   } catch (error) {
     logError(
       '[playbackSource] Failed to resolve local playback source, falling back to remote url.',

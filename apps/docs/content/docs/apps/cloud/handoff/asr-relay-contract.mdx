@@ -1,0 +1,55 @@
+---
+title: Cloud ASR Relay Contract
+---
+
+# Cloud ASR Relay Contract
+
+## Scope
+This document defines the Cloud ASR transport contract.
+
+The contract separates:
+
+- media fetch fallback
+- provider transcription submission
+- provider verification / readiness checks
+- local blob and downloaded-blob input preparation
+
+## Contract
+
+- Provider transcription submission uses a dedicated same-origin relay.
+- Provider verification uses the same relay for enabled providers.
+- Unsupported or disabled providers fail closed and must not fall back to browser-direct provider transport.
+- ASR transcripts, local downloads, local blobs, and downloaded blobs remain browser-local.
+- The relay must not introduce server-side transcript persistence or hidden transcript cache state.
+- ASR input blobs are built from browser-local sources before transcription and sent as bounded request data.
+- Track switches, aborts, and stale completions must preserve latest-request-wins before writing transcript state.
+- Relay logs and metrics must not expose API keys, request bodies, audio bytes, transcript text, or provider response bodies.
+
+## Provider Activation Contract
+
+- Runtime provider toggles are fail-closed. A disabled or backend-unsupported provider must return an explicit unsupported/disabled failure and must not fall back to browser-direct provider transport.
+- Provider credentials remain transient request data. The relay must not persist API keys, echo them in errors, log them, or include them in telemetry labels.
+- Chunking, upload size, retry, and cancellation guards are part of the ASR contract. Large inputs must stay bounded, aborts must stop client work and best-effort server work, and late completions must still pass active-track checks before writing transcript state.
+- Relay logs may include route, provider enum, status, coarse error class, elapsed time, and request ID. They must not include audio bytes, transcript text, request bodies, provider response bodies, or raw credentials.
+
+## Classification Matrix
+
+| Request class | Request initiator | Cloud ownership | Browser direct still used | `fetchWithFallback` involved | User-configured proxy fallback | `/api/proxy` involved | Same-origin relay ownership required | Failure classes that must remain terminal | Non-goals |
+|---|---|---|---|---|---|---|---|---|---|
+| Remote audio fetch used as ASR input | `fetchRemoteAudioBlob` in `remoteTranscript.ts` | Cloud media fallback class `ASR_AUDIO` | Yes, direct first | Yes | No | Yes, on fallback | No. Existing media fallback through `/api/proxy` is sufficient for this class | Invalid local blob state, stale track switch, explicit abort | This is media-fetch fallback, not provider submission. Do not move it into a new ASR relay. |
+| Remote transcript fetch used for transcript recovery | `fetchTextWithFallback` in `remoteTranscript.ts` | Cloud media fallback class `TRANSCRIPT` | Yes, direct first | Yes | No | Yes, on fallback | No. Existing media fallback through `/api/proxy` is sufficient for this class | Malformed transcript content, stale track switch, explicit abort | This is recovery fetch, not provider transcription. Do not reclassify it as provider transport. |
+| Provider transcription submission | `transcribeAudioWithRetry` -> `transcribeViaCloudRelay` -> `POST /api/v1/asr/transcriptions` | Dedicated same-origin provider relay | No | No | No | No | Yes | Missing provider config, unsupported provider/model, unauthorized, payload too large, rate limited, service unavailable, client abort | Do not extend `/api/proxy` into a generic multipart POST tunnel. Keep provider credentials transient, browser-supplied, and non-persistent. |
+| Provider verification / readiness requests | `verifyAsrKey` -> `verifyAsrKeyViaCloudRelay` -> `POST /api/v1/asr/verify` | Same-origin provider relay for enabled providers; the backend currently enables Groq only and rejects qwen/deepgram/volcengine as unsupported | No | No | No | No | Yes, but only for provider credential verification; it must not persist credentials or expose provider response bodies | Unauthorized, unsupported provider, malformed payload, client abort, rate limited | This is a credential-checking oracle by design, so keep strict rate limits, never log API keys, and monitor `route=asr-relay/verify` in Grafana by `client_ip`, `origin`, `provider`, status, and error class. |
+| Local `blob:` / downloaded blob / Dexie-backed blob ASR input | `fetchTrackAudioBlob`, local playback/download lookups | Browser-local input prep | No | No | No | No | No | Missing local blob, missing local track, stale completion | Must remain browser-local and never be proxied. |
+| Tracking URL unwrap paths involved in ASR ingestion | `unwrapPodcastTrackingUrl` / `normalizeAsrAudioUrl` before fetch | Preprocessing only | No | No | No | No | No | None. This is not transport. | Do not turn URL normalization into a transport fallback trigger. |
+| Abort / stale-track-switch boundaries across the ASR flow | `isTrackStillCurrent`, `inFlightAsrTasks`, `AbortController`, queued ASR tasks | UI state boundary | No | No | No | No | No | Stale completion, abort, latest-request-wins preservation | Do not let relay work or provider fallback bypass track identity checks. |
+
+## Verification Targets
+
+- `apps/cloud-ui/src/lib/__tests__/remoteTranscript.asr.test.ts`
+- `apps/cloud-ui/src/lib/__tests__/remoteTranscript.localInputRelay.test.ts`
+- `apps/cloud-ui/src/lib/asr/__tests__/backendRelay.test.ts`
+- `apps/cloud-ui/src/lib/asr/__tests__/index.deepgram-routing.test.ts`
+- `apps/cloud-ui/src/lib/asr/__tests__/index.providerToggleGuard.test.ts`
+- `apps/cloud-api/internal/asr/asr_relay_test.go`
+- cancellation and stale-completion regression coverage for ASR track switches

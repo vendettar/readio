@@ -1,0 +1,52 @@
+---
+title: Cloud Media Fallback Contract
+---
+
+# Cloud Media Fallback Contract
+
+## Scope
+This document defines the Cloud media fallback contract for playback, downloads, transcript fetches, and local media.
+
+The contract distinguishes:
+
+- native `<audio src=...>` transport
+- JS `fetch` transport
+- `HEAD`
+- plain `GET`
+- `Range GET`
+- local `blob:` playback
+- tracking URL unwrap preprocessing
+
+## Contract
+
+- Browser-direct transport is the first choice for remote media.
+- Backend fallback is narrow, pass-through, non-caching, and limited to approved media failure classes.
+- Native `<audio>` fallback is bounded to one same-origin proxied URL retry per track.
+- JS `fetch` fallback stays request-class specific. `HEAD`, `GET`, `Range GET`, transcript text fetch, and playback startup must not collapse into one generic retry path.
+- Local `blob:` playback remains browser-only and must never be proxied.
+- Backend fallback must not introduce server-side media persistence or a hidden media cache.
+- Fallback completions must honor latest-request-wins checks before mutating playback, download, or transcript state.
+- Logs and metrics must identify the request class and coarse failure class without recording credentials, request bodies, audio bytes, or transcript text.
+
+## Classification Matrix
+
+| Request class | Request initiator | Frontend behavior | Cloud behavior | `fetchWithFallback` involved | User-configured proxy fallback | Cloud backend fallback should exist | Safe fallback trigger | Reasons not to fallback |
+|---|---|---|---|---|---|---|---|---|
+| Primary remote audio playback through native `<audio>` | `useAudioElementSync` via `GlobalAudioController` sets `audio.src` | Browser-direct media-element load; `blob:` when local download exists | Browser-direct first, then one same-origin proxied-URL retry if the direct media-element load errors | No | No; fallback uses only the built-in same-origin proxy route | Yes, but only as an explicit proxied media URL retry, not a generic JS fetch fallback | Direct native audio error on the current track before a proxy retry has already been attempted | Native audio transport is not a JS retry target; retries must stay bounded to one proxied URL attempt per track, must not claim support for authenticated external proxies, and must not introduce backend caching |
+| Foreground audio prefetch using JS `fetch` with `Range` | `useForegroundAudioPrefetch` -> `AudioPrefetchScheduler` | Direct `fetch` with `Range`; no proxy fallback | Same frontend behavior | No | No | Yes, but only for approved browser/CORS/network failures and only for this request class | Direct `fetch` fails with CORS/network failure or the upstream does not support the partial-content request | Prefetch is an optimization; it should not force all playback bytes through the backend |
+| Download sizing via `HEAD` | `downloadService.executeDownload` | `fetchWithFallback` direct-first | Same code path | Yes | No | Yes | Direct request fails with network/CORS/timeout or upstream 5xx after the direct attempt | None, beyond preserving body cancellation and not caching |
+| Download transfer via `GET` | `downloadService.executeDownload` | `fetchWithFallback` direct-first; stream to IndexedDB | Same frontend code path | Yes | No | Yes | Direct request fails with network/CORS/timeout or upstream 5xx after the direct attempt | Do not add server-side media persistence or caching |
+| Remote transcript fetch | `fetchAndPersistRemoteTranscript` via `fetchTextWithFallback` | Direct-first text fetch with fallback; transcript cached locally after fetch | Same frontend code path | Yes | No | Yes | Direct request fails with network/CORS/timeout or upstream 5xx after the direct attempt | Do not collapse parse failures into transport failures; keep parsing isolated |
+| Media fetches triggered during playback startup | `remotePlayback` delegates into `downloadEpisode` / `fetchRemoteAudioBlob` when the startup path needs media bytes | Startup itself is mostly source resolution; any actual media fetch inherits the download/transcript behavior | Same frontend behavior | Sometimes, depending on the startup branch | Same as the delegated class | Yes, but only through the delegated request class; startup itself is not a new transport | The delegated branch's fallback trigger | Plain source resolution that does not fetch bytes should stay browser-local |
+| Local `blob:` playback | `playbackSource.resolvePlaybackSource` | Browser-local object URL from IndexedDB download | Same frontend behavior | No | No | No | None | Must remain browser-only and never be proxied |
+| Tracking URL unwrap paths | `unwrapPodcastTrackingUrl` in `playbackSource`, `downloadService`, `remoteTranscript` | Canonicalization only; no network by itself | Same frontend behavior | No | No | Preserve as preprocessing only | Not a transport fallback trigger | Unwrapping is not a network request; it feeds the later request classes and must stay deterministic |
+
+## Verification Targets
+
+- `apps/cloud-ui/src/lib/__tests__/audioPrefetch.test.ts`
+- `apps/cloud-ui/src/lib/__tests__/fetchUtils.test.ts`
+- `apps/cloud-ui/src/lib/__tests__/downloadService.regression.test.ts`
+- `apps/cloud-ui/src/lib/__tests__/remoteTranscript.test.ts`
+- `apps/cloud-ui/src/lib/player/__tests__/playbackSource.test.ts`
+- `apps/cloud-ui/src/lib/player/__tests__/remotePlayback.test.ts`
+- `apps/cloud-api` handler tests for media proxy `Range`, `206`, `416`, timeout, and redirect behavior

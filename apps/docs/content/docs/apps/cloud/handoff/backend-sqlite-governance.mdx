@@ -6,7 +6,7 @@ title: Backend SQLite Governance
 
 This document records the long-lived SQLite rules for Cloud backend features.
 
-These rules are not tied to a single feature implementation. They are the shared persistence contract for backend-owned state such as ASR usage governance and feed snapshot storage.
+These rules are not tied to a single feature implementation. They are the shared persistence contract for backend-owned state such as ASR usage governance, PodcastIndex discovery snapshots, and shared transcript asset metadata.
 
 ## 2. Migration Contract
 
@@ -55,16 +55,16 @@ The durable contract includes:
 - deterministic usage accounting for the deployment-wide quota window
 - cleanup of abandoned or stale reservations by transitioning them to a terminal released state instead of leaving them indefinitely in-flight
 
-Built-in ASR SQLite storage is not a transcript archive. It must not claim ownership of raw audio or transcript text persistence unless a later feature explicitly adds that contract.
+Built-in ASR SQLite storage is not a transcript archive and does not own raw audio or transcript text persistence.
 
-Shared podcast transcript assets now use a separate persistence contract:
+Shared podcast transcript assets use a separate persistence contract:
 
 - the request/quota/idempotency ledger remains distinct from transcript asset identity
 - SQLite is authoritative for transcript asset metadata, reuse lookup identity, and file ownership metadata
 - the canonical transcript payload is a compressed `json.gz` file under deployment-owned `PODCASR_TRANSCRIPTS_DIR`
-- first-release shared transcript assets require both `itunes_id` and `episode_guid`; there is no fallback identity path
+- shared transcript assets require both `itunes_id` and `episode_guid`; there is no fallback identity path
 - the metadata table stores `file_name` only, not a relative path or inline transcript body
-- retention is permanent by default in this phase; no automatic GC or TTL is defined
+- retention is permanent by default; no automatic GC or TTL is defined
 
 ## 6. Shared Transcript Asset Rules
 
@@ -75,27 +75,29 @@ Rules:
 - SQLite stores asset metadata and lookup classifiers, not the canonical transcript JSON body
 - the filesystem stores the canonical compressed cue payload in `json.gz` form
 - runtime absolute file paths are derived from `PODCASR_TRANSCRIPTS_DIR + "/" + itunes_id + "/" + episode_key + "/" + file_name`
-- `episode_key` must derive directly from normalized `episode_guid`; normalization in this phase means trim outer whitespace and lowercase the full identity before hashing, without depending on frontend route encoding
-- `source_kind` is stored as backend-provided classifier metadata in this phase; SQLite does not enforce enum membership or source-kind-driven nullability rules
+- `episode_key` must derive directly from normalized `episode_guid`; normalization means trim outer whitespace and lowercase the full identity before hashing, without depending on frontend route encoding
+- `source_kind` is stored as backend-provided classifier metadata; SQLite does not enforce enum membership or source-kind-driven nullability rules
 - reuse lookup stays non-unique; one episode may retain multiple transcript assets for the same classifier tuple
 
-## 7. Feed Persistence Rules
+## 7. PodcastIndex Snapshot Rules
 
-Feed persistence is a backend cache/snapshot layer, not a canonical long-term archive.
+PodcastIndex discovery persistence is a backend cache/snapshot layer, not a canonical long-term archive and not RSS feed XML parsing storage.
 
 The durable contract includes:
 
-- feed-level metadata plus bounded episode-window storage
-- parsed snapshot storage, not raw XML persistence
-- paging over the stored snapshot window
+- `podcast_shows` show metadata
+- bounded `podcast_episodes` rows for retained episode windows
+- `podcast_cache_state` freshness, backoff, truncation, eviction, and access metadata
+- paging over the retained PodcastIndex snapshot window
 - explicit freshness and refresh behavior owned by backend policy
 
 Important boundary:
 
 - deep pagination only guarantees access to the retained snapshot window
-- docs must not imply full historical feed coverage unless the stored contract truly provides it
+- docs must not imply full historical episode coverage unless the stored contract truly provides it
+- docs must not describe `/api/v1/discovery/feed`, RSS feed parsing, or feed-route cache state as active backend SQLite responsibilities
 
-If response shapes do not expose retention boundaries clearly, surrounding docs must still state that the route pages over the stored snapshot, not over the infinite theoretical feed history.
+If response shapes do not expose retention boundaries clearly, surrounding docs must still state that the route pages over the stored PodcastIndex snapshot, not over an infinite theoretical episode history.
 
 ## 8. Schema Design Expectations
 

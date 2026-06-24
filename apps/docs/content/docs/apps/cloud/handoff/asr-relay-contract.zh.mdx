@@ -1,0 +1,55 @@
+---
+title: Cloud ASR Relay 契约
+---
+
+# Cloud ASR Relay 契约
+
+## 范围
+本文定义 Cloud ASR 传输契约。
+
+契约区分：
+
+- 媒体抓取 fallback
+- provider 转写提交
+- provider 验证 / readiness 检查
+- 本地 blob / 已下载 blob 的输入准备
+
+## 契约
+
+- Provider 转写提交使用独立的同源 relay。
+- 已启用 provider 的验证使用同一个 relay。
+- 未支持或被禁用的 provider 必须 fail closed，不得回退到 browser-direct provider transport。
+- ASR transcripts、本地下载、本地 blob 与已下载 blob 仍然属于浏览器本地。
+- Relay 不得引入服务端 transcript 持久化或隐藏 transcript cache state。
+- ASR 输入 blob 在转写前由浏览器本地来源构造，并作为有边界的请求数据发送。
+- Track switch、abort 与 stale completion 在写入 transcript state 前必须保持 latest-request-wins。
+- Relay 日志和指标不得暴露 API key、request body、音频字节、transcript text 或 provider response body。
+
+## Provider 启用契约
+
+- Runtime provider toggle 必须 fail closed。被禁用或后端不支持的 provider 必须返回明确的 unsupported/disabled 失败，不能回退到 browser-direct provider transport。
+- Provider credential 仍然是瞬时请求数据。Relay 不得持久化 API key，不得在 error 中回显，不得写入日志，也不得进入 telemetry label。
+- Chunking、upload size、retry 与 cancellation guard 都属于 ASR 契约。大输入必须有边界，abort 必须停止客户端工作并 best-effort 停止服务端工作，过晚完成的结果写入 transcript state 前仍必须通过 active-track 检查。
+- Relay 日志可以包含 route、provider enum、status、粗粒度 error class、elapsed time 与 request ID。不得包含音频字节、transcript text、request body、provider response body 或原始 credential。
+
+## 分类矩阵
+
+| 请求类别 | 请求发起者 | Cloud 归属 | 仍然 browser-direct 吗 | 是否使用 `fetchWithFallback` | 用户可配 proxy fallback | 是否涉及 `/api/proxy` | 是否需要 same-origin relay 归属 | 必须保持终止语义的失败类 | 非目标 |
+|---|---|---|---|---|---|---|---|---|---|
+| 作为 ASR 输入的远程音频抓取 | `remoteTranscript.ts` 里的 `fetchRemoteAudioBlob` | Cloud media fallback 类 `ASR_AUDIO` | 是，先直连 | 是 | 否 | 是，fallback 时会用 | 不需要。现有 `/api/proxy` 的 media fallback 已足够 | 本地 blob 无效、track 切换后陈旧回包、显式 abort | 这是媒体抓取 fallback，不是 provider 提交。不要把它移动到新的 ASR relay。 |
+| 用于 transcript recovery 的远程 transcript 抓取 | `remoteTranscript.ts` 里的 `fetchTextWithFallback` | Cloud media fallback 类 `TRANSCRIPT` | 是，先直连 | 是 | 否 | 是，fallback 时会用 | 不需要。现有 `/api/proxy` 的 media fallback 已足够 | transcript 内容 malformed、track 切换后陈旧回包、显式 abort | 这是 recovery 抓取，不是 provider 转写。不要把它重分类成 provider transport。 |
+| provider 转写提交 | `transcribeAudioWithRetry` -> `transcribeViaCloudRelay` -> `POST /api/v1/asr/transcriptions` | 独立的同源 provider relay | 否 | 否 | 否 | 否 | 是 | 缺失 provider config、unsupported provider/model、unauthorized、payload too large、rate limited、service unavailable、client abort | 不要把 `/api/proxy` 扩展成通用 multipart POST 隧道。Provider credential 必须保持为浏览器按请求提供、后端瞬时使用且不持久化。 |
+| provider 验证 / readiness 请求 | `verifyAsrKey` -> `verifyAsrKeyViaCloudRelay` -> `POST /api/v1/asr/verify` | 已启用 provider 走同源 provider relay；后端当前只启用 Groq，qwen/deepgram/volcengine 会被明确拒绝为 unsupported | 否 | 否 | 否 | 否 | 是，但只用于 provider credential 验证；不得持久化 credential，也不得暴露 provider response body | unauthorized、unsupported provider、malformed payload、client abort、rate limited | 这条路径本质上是 credential-checking oracle，因此必须保持严格限流，永不记录 API key，并在 Grafana 中按 `client_ip`、`origin`、`provider`、status、error class 监控 `route=asr-relay/verify`。 |
+| 本地 `blob:` / 已下载 blob / Dexie-backed blob ASR 输入 | `fetchTrackAudioBlob`、本地播放/下载查找 | browser-local 输入准备 | 否 | 否 | 否 | 否 | 否 | 缺失本地 blob、缺失本地 track、陈旧完成 | 必须保持 browser-local，不能代理。 |
+| ASR ingestion 里的 tracking URL 解包路径 | `unwrapPodcastTrackingUrl` / `normalizeAsrAudioUrl` | 只是预处理 | 否 | 否 | 否 | 否 | 否 | 无。这不是 transport | 不要把 URL 规范化变成 transport fallback trigger。 |
+| ASR 流程中的 abort / stale-track-switch 边界 | `isTrackStillCurrent`、`inFlightAsrTasks`、`AbortController`、queued ASR tasks | UI state 边界 | 否 | 否 | 否 | 否 | 否 | stale completion、abort、latest-request-wins 保持 | 不要让 relay 工作或 provider fallback 绕过 track identity 检查。 |
+
+## 验证目标
+
+- `apps/cloud-ui/src/lib/__tests__/remoteTranscript.asr.test.ts`
+- `apps/cloud-ui/src/lib/__tests__/remoteTranscript.localInputRelay.test.ts`
+- `apps/cloud-ui/src/lib/asr/__tests__/backendRelay.test.ts`
+- `apps/cloud-ui/src/lib/asr/__tests__/index.deepgram-routing.test.ts`
+- `apps/cloud-ui/src/lib/asr/__tests__/index.providerToggleGuard.test.ts`
+- `apps/cloud-api/internal/asr/asr_relay_test.go`
+- ASR track switch 的 cancellation 与 stale-completion regression 覆盖

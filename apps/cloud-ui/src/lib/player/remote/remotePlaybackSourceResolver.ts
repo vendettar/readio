@@ -14,6 +14,7 @@ import {
 } from '../playbackMetadata'
 import { PLAYBACK_REQUEST_MODE, type PlaybackRequestMode } from '../playbackMode'
 import { resolvePlaybackSource } from '../playbackSource'
+import { revokePlaybackBlobUrl } from '../playerBlobUrls'
 
 type RemoteStreamTargetCandidates = {
   sourceUrlNormalized?: string | null
@@ -23,6 +24,7 @@ type RemoteStreamTargetCandidates = {
 export type ResolvedPlaybackSource = {
   url: string
   trackId?: string
+  createdObjectUrl?: boolean
 }
 
 export type PlaybackSourceFailureReason = 'stale' | 'no_playable_source' | 'download_failed'
@@ -101,6 +103,7 @@ async function resolveSourceForPlaybackMode(
 ): Promise<PlaybackSourceResolution> {
   const resolved = await resolvePlaybackSource(input.audioUrl)
   if (input.isEpochStale(input.currentEpoch)) {
+    releaseUnownedPlaybackSource(resolved)
     return { ok: false, reason: 'stale' }
   }
 
@@ -139,7 +142,10 @@ export async function resolveDownloadedPlaybackSource(
   if (!result.ok) return null
 
   const newSource = await resolvePlaybackSource(input.payload.audioUrl)
-  if (input.currentEpoch !== input.getPlaybackEpoch()) return null
+  if (input.currentEpoch !== input.getPlaybackEpoch()) {
+    releaseUnownedPlaybackSource(newSource)
+    return null
+  }
 
   if (!newSource.url.startsWith('blob:') && newSource.trackId) {
     if (input.isRetry) {
@@ -165,6 +171,12 @@ export async function resolveDownloadedPlaybackSource(
   }
 
   return newSource
+}
+
+function releaseUnownedPlaybackSource(source: ResolvedPlaybackSource): void {
+  if (source.createdObjectUrl && source.url.startsWith('blob:')) {
+    revokePlaybackBlobUrl(source.url)
+  }
 }
 
 export async function resolvePlayableSourceForPlayback(input: ResolvePlayableSourceInput): Promise<

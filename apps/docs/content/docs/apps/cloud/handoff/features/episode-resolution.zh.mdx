@@ -5,7 +5,7 @@ title: 单集解析契约
 ## 1. 持久身份
 
 - 节目路由 SSOT：数值型 `podcastItunesId`
-- 单集路由 SSOT：基于稳定单集身份生成的 compact key。UUID 身份继续沿用旧的 22 字符 key，非 UUID 身份则使用通用 compact 形式。
+- 单集路由 SSOT：基于稳定单集身份生成的 compact key。UUID 身份使用 22 字符 key，非 UUID 身份使用通用 compact 形式。
 - 来自 Library 的深链还必须保留路由国家。如果 Favorites / History / Downloads / 本地持久化记录里带有 `countryAtSave`，解析时必须使用这个已保存的路由国家，而不是当前全局 content region。
 
 ## 2. 解析顺序
@@ -51,7 +51,7 @@ Cloud 必须保持单集详情解析由 SQLite retained snapshot 路由拥有，
 
 - 当 `podcastItunesId + episodeGuid + valid route country` 均存在时，允许直接构造 canonical 单集路由
 - 允许 direct route 的原因是：目标单集详情页仍然会继续执行 canonical hydration
-- `SearchEpisode` direct routing 不得追加旧的 feed-owned hint、`audioUrl`、`title`、`source` 等 query-hint 路由参数
+- `SearchEpisode` direct routing 不得追加 feed-owned hint、`audioUrl`、`title`、`source` 等 query-hint 路由参数
 
 ### 冷打开单集 URL
 
@@ -90,7 +90,7 @@ Cloud 必须保持单集详情解析由 SQLite retained snapshot 路由拥有，
 规则：
 
 - 后端把有界本地 snapshot 存在 `podcast_shows`、`podcast_episodes` 和 `podcast_cache_state`
-- freshness 来自后端 SQLite snapshot state，不再由浏览器 full-copy cache 决定
+- freshness 来自后端 SQLite snapshot state
 - 节目详情页和全部单集页使用保留窗口上的分页单集列表 query
 - canonical 单集详情使用 `podcastItunesId + episodeGuid` 直接查找
 - 前端 episode-detail query key 必须包含路由国家：`['podcast', 'episode-detail', podcastId, country, episodeGuid]`

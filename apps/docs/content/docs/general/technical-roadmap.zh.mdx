@@ -4,14 +4,13 @@ title: 技术路线图
 
 # 技术路线图
 
-本路线图只记录当前原型基线与近期工作，不再保留已被后续实现覆盖的中间阶段。
+本路线图记录当前原型基线与近期维护工作。
 
 ## 当前基线
 
 - 活跃前端：`apps/cloud-ui`，使用 React、Vite、TanStack Router/Query、Zustand、Dexie、i18n，并包含已测试的 UI flows。
 - 活跃后端：`apps/cloud-api`，使用 Go `net/http`、SQLite startup/migrations、discovery relay、ASR relay、media fallback、transcript asset metadata 与 observability。
 - 活跃文档：`apps/docs/content/docs`，尤其是 Cloud handoff 与 frontend contract 文档。
-- 活跃指令集：`agent/instructions/cloud/basic`。
 
 ## 已完成基线契约
 
@@ -37,4 +36,4 @@ title: 技术路线图
 - Native mobile app。
 - 当前前后端边界稳定后，再考虑更广泛的共享包。
 
-未来项只有在代码、测试与文档一致后才算实现。
+未来项只有在代码、测试与文档一致后才进入活跃契约。

@@ -5,7 +5,7 @@ title: Episode Resolution Contract
 ## 1. Durable Identity
 
 - Show route SSOT: numeric `podcastItunesId`
-- Episode route SSOT: compact key derived from stable episode identity. UUID identities keep the legacy 22-character key; non-UUID identities use the generic compact form.
+- Episode route SSOT: compact key derived from stable episode identity. UUID identities use the 22-character key; non-UUID identities use the generic compact form.
 - Library-origin deep links must also preserve route country. If a Favorites / History / Downloads / local persisted record carries `countryAtSave`, resolution must use that saved route country rather than the current global content region.
 
 ## 2. Resolution Order
@@ -51,7 +51,7 @@ Rules:
 
 - if `podcastItunesId + episodeGuid + valid route country` are present, the app may build the canonical episode route directly
 - this direct route is allowed because the destination episode page still performs canonical hydration
-- `SearchEpisode` direct routing must not add legacy query-hint route params such as feed-owned hints, `audioUrl`, `title`, or `source`
+- `SearchEpisode` direct routing must not add query-hint route params such as feed-owned hints, `audioUrl`, `title`, or `source`
 
 ### Cold Episode URL
 
@@ -90,7 +90,7 @@ Episode resolution, show page bootstrap, and the episodes page now converge on t
 Rules:
 
 - the backend stores a bounded local snapshot in `podcast_shows`, `podcast_episodes`, and `podcast_cache_state`
-- freshness is snapshot-level and comes from backend SQLite state, not from a browser-owned full-copy cache
+- freshness is snapshot-level and comes from backend SQLite state
 - show page and episodes page use paginated episode-list queries over the retained snapshot window
 - canonical episode detail uses direct lookup by `podcastItunesId + episodeGuid`
 - the frontend episode-detail query key includes route country: `['podcast', 'episode-detail', podcastId, country, episodeGuid]`
