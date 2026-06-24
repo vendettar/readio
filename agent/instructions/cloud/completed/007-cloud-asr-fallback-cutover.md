@@ -3,26 +3,26 @@
 ## Parent Baseline
 This instruction assumes the following are already complete:
 
-- `003-cloud-lite-full-clone-bootstrap.md`
+- `003-cloud-ui-bootstrap.md`
 - `005-cloud-networking-cutover.md`
 - `006-cloud-media-fallback-default-proxy.md`
 
 Cloud already owns discovery/search/feed networking, and Cloud media fallback already exists for the approved request classes from `006`. This instruction closes the remaining Cloud-specific ASR networking gap.
 
 ## Objective
-Remove the remaining Lite-style browser-direct CORS failure in Cloud ASR flows.
+Remove the remaining Cloud UI-style browser-direct CORS failure in Cloud ASR flows.
 
 After this instruction:
 
 - Cloud ASR-related remote requests no longer fail solely because the browser cannot access an upstream media/transcript host directly
 - Cloud uses the existing `/api/proxy` fallback path for approved ASR-related remote requests
-- Lite behavior remains unchanged
-- Cloud UI remains Lite-equivalent in product behavior
+- Cloud UI behavior remains unchanged
+- Cloud UI remains Cloud UI-equivalent in product behavior
 
 ## Problem Statement
 In the current Cloud app, clicking playback for a single episode can still lead to a browser-side CORS failure during the ASR path after download/playback state transitions.
 
-That means Cloud is still leaking a Lite-style browser networking constraint into a feature that should be backend-owned when direct browser access fails.
+That means Cloud is still leaking a Cloud UI-style browser networking constraint into a feature that should be backend-owned when direct browser access fails.
 
 The goal is not to redesign ASR transport. The goal is to ensure that Cloud ASR no longer breaks on cross-origin/browser-networking failure classes that should already be covered by the Cloud fallback model.
 
@@ -36,7 +36,7 @@ Allowed areas:
 
 Out of scope:
 
-- Lite behavior changes
+- Cloud UI behavior changes
 - ASR provider redesign
 - backend ASR job orchestration
 - server-side persistence of remote ASR payloads
@@ -119,7 +119,7 @@ Run at minimum:
 ## Done When
 - Cloud ASR no longer hits a browser-side CORS failure for the approved fallback-eligible request class
 - Cloud reuses `/api/proxy`
-- Lite behavior is unchanged
+- Cloud UI behavior is unchanged
 - local-first behavior is preserved
 - tests prove the corrected fallback behavior
 - the branch is ready for review on the ASR changes zone

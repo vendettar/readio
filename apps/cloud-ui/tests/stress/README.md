@@ -1,13 +1,13 @@
 # Memory Stress Testing
 
-This directory contains scripts for long-running memory stress testing of the Readio Lite app.
+This directory contains scripts for long-running memory stress testing of the Readio Cloud UI app.
 
 ## Running the Test
 
 This test is skipped by default in CI. To run it manually for profiling:
 
 ```bash
-# In apps/lite directory
+# In apps/cloud-ui directory
 npx playwright test tests/stress/memory.test.ts --project=chromium --headed
 ```
 

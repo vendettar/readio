@@ -20,7 +20,7 @@ Provide a conclusive integration stage verifying that `001a` through `001e` comp
 ### Out of Scope
 - documentation sync (left for `001d`)
 - adding new proxy or DB features beyond what was requested in `001a-001e`.
-- frontend rewiring inside `apps/lite`.
+- frontend rewiring inside `apps/cloud-ui`.
 
 ## Required Verifications & Tests
 1. **Routing Automation (`net/http/httptest`)**:

@@ -4,7 +4,7 @@
 - **Docs First**: Before reviewing or proposing changes, read the docs index and only the task-relevant docs under `apps/docs/content/docs/`.
 - **Instruction First**: If the work is tied to an instruction, read the relevant instruction file under `agent/instructions/` before reviewing code.
 - **Deploy/Runtime First**: For anything touching network, proxy, relay, upload, runtime config, or VPS deployment, read the matching deployment/handoff docs before making security claims.
-- **Cloud vs Lite Boundary**: Always distinguish Lite browser-direct behavior from Cloud backend-owned behavior. Do not mix the two threat models.
+- **Cloud vs Cloud UI Boundary**: Always distinguish Cloud UI browser-direct behavior from Cloud backend-owned behavior. Do not mix the two threat models.
 
 ## [Skill Mastery Protocol]
 - **Reality First**: Verify claims against the codebase. Do not report imagined risks that are contradicted by actual request flow, config flow, or deployment flow.

@@ -1,6 +1,6 @@
 {
-  "buildCommand": "pnpm --filter @readio/lite build",
-  "outputDirectory": "apps/lite/dist",
+  "buildCommand": "pnpm --filter @readio/cloud-ui build",
+  "outputDirectory": "apps/cloud-ui/dist",
   "installCommand": "pnpm install",
   "headers": [
     {

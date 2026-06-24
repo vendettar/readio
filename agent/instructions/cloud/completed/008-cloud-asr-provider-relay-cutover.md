@@ -3,7 +3,7 @@
 ## Parent Baseline
 This instruction assumes the following are already complete:
 
-- `003-cloud-lite-full-clone-bootstrap.md`
+- `003-cloud-ui-bootstrap.md`
 - `005-cloud-networking-cutover.md`
 - `006-cloud-media-fallback-default-proxy.md`
 - `007-cloud-asr-fallback-cutover.md`
@@ -24,11 +24,11 @@ After this instruction:
 - Cloud UI submits ASR work to a same-origin Cloud backend relay
 - Cloud backend performs the provider request and returns the normalized transcription result
 - provider credentials remain user-owned and browser-supplied in this phase unless a later instruction explicitly changes the secret model
-- Lite behavior remains unchanged
-- Cloud UI remains Lite-equivalent in product behavior
+- Cloud UI behavior remains unchanged
+- Cloud UI remains Cloud UI-equivalent in product behavior
 
 ## Problem Statement
-Cloud currently still leaks Lite-style browser networking in one critical ASR segment:
+Cloud currently still leaks Cloud UI-style browser networking in one critical ASR segment:
 
 - the media input fetch can fall back through `/api/proxy`
 - but the actual ASR provider transcription request is still browser-direct
@@ -66,7 +66,7 @@ Allowed areas:
 
 Out of scope:
 
-- Lite behavior changes
+- Cloud UI behavior changes
 - backend ASR queue workers
 - server-side persistence of uploaded audio
 - object storage / Redis / media caches
@@ -147,7 +147,7 @@ For Cloud only:
 
 Do not:
 
-- change Lite provider transport
+- change Cloud UI provider transport
 - route Cloud provider calls back through `/api/proxy`
 - duplicate provider result parsing logic unnecessarily across frontend and backend without justification
 
@@ -218,7 +218,7 @@ Switch Cloud UI provider submission to the backend relay:
 - Cloud-only cutover
 - preserve current blob preparation and cooldown/retry behavior
 - preserve abort/stale-request handling
-- keep Lite unchanged
+- keep Cloud UI unchanged
 
 ### `008d-cloud-asr-relay-regression-coverage.md`
 Add deterministic coverage proving:
@@ -252,7 +252,7 @@ Synchronize docs and lifecycle if the relay becomes the durable Cloud ASR contra
 - background workers
 - new backend framework
 - generic multipart passthrough proxying
-- Lite-to-Cloud cross-imports
+- Cloud UI-to-Cloud cross-imports
 
 ## Tests
 Add the minimum tests needed to prove the relay cutover.
@@ -307,7 +307,7 @@ Record the decision that Cloud ASR provider submission uses a dedicated backend 
 ## Done When
 - Cloud ASR provider transcription requests are same-origin backend-relayed
 - browser-side Cloud ASR no longer directly calls provider transcription endpoints
-- Lite behavior is unchanged
+- Cloud UI behavior is unchanged
 - local-first audio/blob assumptions are preserved
 - user-provided ASR keys remain transient request inputs rather than persisted server-side state
 - tests prove same-origin relay ownership and error semantics

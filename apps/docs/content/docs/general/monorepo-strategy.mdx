@@ -23,7 +23,7 @@ This document outlines the current role of `apps/cloud-ui`, `apps/cloud-api`, an
 
 ### Frontend/Backend Split
 - **Current State**: `apps/cloud-api` is the Go `net/http` backend. It directly serves the built `apps/cloud-ui/dist` output and owns same-origin backend relays.
-- **Current Frontend**: `apps/cloud-ui` is the active web frontend. It is no longer described as a temporary Lite artifact.
+- **Current Frontend**: `apps/cloud-ui` is the active web frontend. It is no longer described as a temporary old frontend artifact.
 - **Future Direction**: If Cloud later grows into a broader multi-user web product, shared presentation logic may move into dedicated shared packages. Current docs must describe the code that exists today.
 
 ### Planned Features (P2/P3)

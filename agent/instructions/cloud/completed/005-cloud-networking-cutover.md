@@ -1,19 +1,19 @@
 # Instruction 005: Cloud Networking Cutover [COMPLETED]
 
 ## Objective
-Starting from the completed `003` bootstrap clone, migrate `apps/cloud-ui` away from Lite's browser-direct networking model and move Cloud networking ownership into `apps/cloud-api`.
+Starting from the completed `003` bootstrap clone, migrate `apps/cloud-ui` away from Cloud UI's browser-direct networking model and move Cloud networking ownership into `apps/cloud-api`.
 
 At the end of this instruction family:
 
-- `apps/cloud-ui` keeps the same frontend product experience as Lite
+- `apps/cloud-ui` keeps the same frontend product experience as Cloud UI
 - `apps/cloud-ui` no longer depends on browser-direct Apple/feed networking for Cloud-specific discovery flows
 - `apps/cloud-api` owns the Cloud networking boundary
 - Cloud Settings removes the `CORS Proxy` block only after the backend migration is ready
 
 ## Parent Baseline
-This instruction assumes `003-cloud-lite-full-clone-bootstrap.md` is already complete:
+This instruction assumes `003-cloud-ui-bootstrap.md` is already complete:
 
-- `apps/cloud-ui` is a Lite-equivalent frontend clone
+- `apps/cloud-ui` is a Cloud UI-equivalent frontend clone
 - `apps/cloud-api` serves the built Cloud frontend
 - Cloud runs through Go on port `8080`
 
@@ -44,7 +44,7 @@ Allowed areas across the `005` family:
 Out of scope unless a child instruction explicitly allows it:
 
 - redesigning pages
-- changing Lite networking behavior
+- changing Cloud UI networking behavior
 - broad shared-UI extraction
 - Cloud-only branding or route divergence
 - replacing local persistence with server persistence
@@ -65,8 +65,8 @@ Do not collapse these into a single mixed change.
 ## Cross-Cutting Requirements
 Across all `005` child instructions:
 
-- `apps/cloud-ui` must not import from `apps/lite`
-- Cloud frontend UI must remain Lite-equivalent
+- `apps/cloud-ui` must not import from `apps/cloud-ui`
+- Cloud frontend UI must remain Cloud UI-equivalent
 - Cloud backend endpoints must return Cloud-owned JSON contracts
 - browser-direct Apple/feed requests must be removed only when the equivalent backend path is ready
 - tests must move with each cutover step

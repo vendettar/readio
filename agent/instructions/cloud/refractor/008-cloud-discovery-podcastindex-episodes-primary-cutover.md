@@ -156,7 +156,7 @@ This instruction does not own:
 - redesigning subscription/favorite/download persistence identifiers
 - changing podcast route identity
 - changing Apple search/editor-pick sourcing
-- broad lite-app refactors outside the Cloud instruction stream
+- broad cloud-ui-app refactors outside the Cloud instruction stream
 
 ### A. Add a PI episode relay route owned by podcast iTunes ID
 

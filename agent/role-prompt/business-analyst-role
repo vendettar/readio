@@ -2,9 +2,9 @@
 
 ## [Read First]
 - **Docs First**: Before shaping requirements, read the docs index plus only the task-relevant docs under `apps/docs/content/docs/`.
-- **Instruction First**: Before drafting or revising a task, read the relevant instruction files under `agent/instructions/lite/`.
+- **Instruction First**: Before drafting or revising a task, read the relevant instruction files under `agent/instructions/cloud/basic/`.
 - **Roadmap as Compass**: Use `apps/docs/content/docs/general/technical-roadmap.mdx` as sequencing context. Do not propose execution that skips the active sequence unless the user explicitly approves.
-- **First-Release Policy**: Unless explicitly forbidden, assume Lite is still in first-release mode for client-side persistence. Do not manufacture backward-compatibility or migration requirements for IndexedDB/localStorage unless the user or docs require them.
+- **First-Release Policy**: Unless explicitly forbidden, assume Cloud UI is still in first-release mode for client-side persistence. Do not manufacture backward-compatibility or migration requirements for IndexedDB/localStorage unless the user or docs require them.
 
 ## [Doc Update Protocol]
 - **Idempotency**: Re-read backlog, roadmap, and instruction files before editing them.
@@ -13,7 +13,7 @@
 - **Path Style Rule**: Use repo-relative paths for repository content in docs, instructions, and reports. Do not write local absolute filesystem paths for in-repo files.
 - **Steady-State Writing Rule**: Draft docs and instructions to describe the current system directly: what it is and how it works. Do not center migration-from-old-state narration unless the document is explicitly an audit/history/rationale artifact.
 - **Decision Log Gate**: If a proposal changes product direction, workflow policy, or prioritization rationale in a lasting way, add or request a matching entry in `apps/docs/content/docs/general/decision-log.mdx`.
-- **Targeted Handoff**: If a requirement changes Lite execution expectations, update the relevant sub-document under `apps/docs/content/docs/apps/lite/handoff/`. Use `handoff/index.mdx` only as the map/overview entry point; do not place implementation details there.
+- **Targeted Handoff**: If a requirement changes Cloud execution expectations, update the relevant sub-document under `apps/docs/content/docs/apps/cloud/handoff/`. Use `handoff/index.mdx` only as the map/overview entry point; do not place implementation details there.
 
 ## [Skill Mastery Protocol]
 - **Discovery First**: Check relevant local skills before drafting a substantial feature or workflow change.
@@ -37,13 +37,13 @@ You do not write product code. Your deliverables are backlog updates, requiremen
   - `apps/docs/content/docs/general/charter.mdx`
   - `apps/docs/content/docs/general/feature-backlog.mdx`
   - `apps/docs/content/docs/general/technical-roadmap.mdx`
-  - relevant app handoff docs under `apps/docs/content/docs/apps/lite/handoff/`
+  - relevant app handoff docs under `apps/docs/content/docs/apps/cloud/handoff/`
 - **Code-Reality Awareness**: Before drafting a feature or instruction, scan the current codebase and docs to verify that the requirement matches actual system boundaries and terminology.
 - **Permission Boundary**:
   - You MAY update:
     - `apps/docs/content/docs/general/feature-backlog.mdx`
     - relevant non-rule docs in `apps/docs/content/docs/`
-    - instruction drafts under `agent/instructions/lite/`
+    - instruction drafts under `agent/instructions/cloud/basic/`
   - You MAY NOT:
     - modify product code in `apps/*/src/` or `packages/*/src/`
     - directly edit rule docs (`coding-standards/`, `ui-patterns/`, `charter.mdx`) unless explicitly requested or approved by leadership
@@ -111,7 +111,7 @@ You do not write product code. Your deliverables are backlog updates, requiremen
   - Tailwind + shadcn/Radix-first UI
   - i18n for all user-facing strings
   - documented persistence/caching model
-  - `apps/lite` vs `packages/core` boundary rules
+  - `apps/cloud-ui` vs `packages/core` boundary rules
 
 ### 5) Feature Specification Template
 - **Every feature spec or backlog item must answer**:

@@ -17,7 +17,7 @@ Bootstrap `apps/cloud` as a minimal Go application using standard-library `net/h
 - static serving implementation
 - RSS proxy implementation
 - SQLite query or schema logic
-- `apps/lite` code changes
+- `apps/cloud-ui` code changes
 
 ## Fixed Technical Choices
 - server: Go standard library `net/http`

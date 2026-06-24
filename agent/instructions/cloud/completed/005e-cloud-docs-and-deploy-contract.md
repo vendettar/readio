@@ -11,7 +11,7 @@ After this instruction:
 
 - Cloud docs describe Go-owned networking correctly
 - deployment/runtime docs match the actual Cloud contract
-- handoff docs stop describing Cloud as a pure Lite-networking clone
+- handoff docs stop describing Cloud as a pure Cloud UI-networking clone
 
 ## Required Work
 Review and update the relevant docs under:
@@ -46,5 +46,5 @@ If deployment workflow/runtime assumptions changed, sync:
 ## Completion
 - Completed by: Codex execution worker
 - Reviewed by: Codex reviewer
-- Commands: reran `go test ./...` in `apps/cloud-api`; reran `pnpm -C apps/cloud-ui build`; `git diff --check`; `ruby -e 'require "yaml"; YAML.load_file(".github/workflows/cd-cloud.yml")'`; `rg -n "Build Cloud UI and Cloud API|新主机 VPS 启动|PORT=8080|READIO_CLOUD_UI_DIST_DIR|READIO_CLOUD_DB_PATH|systemctl restart|systemctl is-active|Apple|backend-owned|same-origin|CORS Proxy|READIO_PORT|Lite and Cloud" apps/docs/content/docs/apps/cloud .github/workflows/cd-cloud.yml agent/instructions/cloud/005e-cloud-docs-and-deploy-contract.md`
+- Commands: reran `go test ./...` in `apps/cloud-api`; reran `pnpm -C apps/cloud-ui build`; `git diff --check`; `ruby -e 'require "yaml"; YAML.load_file(".github/workflows/cd-cloud.yml")'`; `rg -n "Build Cloud UI and Cloud API|新主机 VPS 启动|PORT=8080|READIO_CLOUD_UI_DIST_DIR|READIO_CLOUD_DB_PATH|systemctl restart|systemctl is-active|Apple|backend-owned|same-origin|CORS Proxy|READIO_PORT|Cloud UI and Cloud" apps/docs/content/docs/apps/cloud .github/workflows/cd-cloud.yml agent/instructions/cloud/005e-cloud-docs-and-deploy-contract.md`
 - Date: 2026-03-27

@@ -38,7 +38,7 @@
    - 这会混淆 build failure、artifact failure、deploy failure 的边界。
 
 3. **monorepo required gate 还没有被正式定义**
-   - `apps/lite`、`apps/cloud-ui`、`apps/cloud-api`、`packages/core` 都是生产关键产物，但 CI 还不是按这一组明确建模。
+   - `apps/docs`、`apps/cloud-ui`、`apps/cloud-api`、`packages/core` 都是生产关键产物，但 CI 还不是按这一组明确建模。
 
 4. **根脚本与专项检查的职责还不够明确**
    - 根 `pnpm lint/build/test/typecheck` 是有价值的统一入口
@@ -53,7 +53,7 @@
 ### Existing workflows
 
 - `/Users/Leo_Qiu/Documents/dev/readio/.github/workflows/ci.yml`
-  - 当前主要是 Lite checks + Cloud API Go lint
+  - 当前主要是 Cloud UI checks + Cloud API Go lint
   - 已补入 `apps/cloud-ui` typecheck/build
   - 但还不是正式的 monorepo PR gate contract
 
@@ -61,7 +61,7 @@
   - 当前仍是 build + deploy 混合型 workflow
 
 - `/Users/Leo_Qiu/Documents/dev/readio/.github/workflows/cd-pages.yml`
-  - 当前独立负责 Lite / Pages deploy
+  - 当前独立负责 Cloud UI / Pages deploy
 
 ### Existing root scripts
 
@@ -190,7 +190,7 @@
 ### D. `deploy-pages.yml`
 
 职责：
-- Lite / Pages build + deploy only
+- Cloud UI / Pages build + deploy only
 
 不得混入 Cloud deploy concerns。
 
@@ -200,7 +200,7 @@
 
 当前仓库至少应明确以下 required targets：
 
-- `apps/lite`
+- `apps/docs`
 - `apps/cloud-ui`
 - `apps/cloud-api`
 - `packages/core`
@@ -337,7 +337,7 @@ first-pass 建议 required matrix 如下：
 
 ### JavaScript / TypeScript
 
-- `apps/lite`
+- `apps/cloud-ui`
   - lint
   - typecheck
   - build

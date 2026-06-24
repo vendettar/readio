@@ -33,7 +33,7 @@ At minimum inspect:
 - `apps/cloud-ui/src/lib/fetchUtils.ts`
 - `apps/cloud-api/main.go`
 
-Use current Lite behavior only as a comparison point where needed. Do not assume Lite and Cloud are still identical in the ASR path.
+Use current Cloud UI behavior only as a comparison point where needed. Do not assume Cloud UI and Cloud are still identical in the ASR path.
 
 ## Required Audit Output
 Create a short implementation-facing classification matrix covering at minimum:

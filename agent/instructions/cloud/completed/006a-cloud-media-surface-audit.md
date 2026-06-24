@@ -4,7 +4,7 @@
 - `006-cloud-media-fallback-default-proxy.md`
 
 ## Objective
-Produce the exact media request inventory for Cloud by using Lite's current media handling as the baseline contract.
+Produce the exact media request inventory for Cloud by using Cloud UI's current media handling as the baseline contract.
 
 This instruction does not implement fallback yet. It identifies which request classes:
 
@@ -23,24 +23,24 @@ After this instruction:
 - later child instructions can implement backend fallback without guessing
 
 ## Baseline Sources To Audit
-Use current Lite behavior as the authoritative baseline. The audit must explicitly inspect and classify these paths:
+Use current Cloud UI behavior as the authoritative baseline. The audit must explicitly inspect and classify these paths:
 
 - primary audio element source assignment
-  - `apps/lite/src/hooks/useAudioElementSync.ts`
-  - `apps/lite/src/components/AppShell/GlobalAudioController.tsx`
+  - `apps/cloud-ui/src/hooks/useAudioElementSync.ts`
+  - `apps/cloud-ui/src/components/AppShell/GlobalAudioController.tsx`
 - local-versus-remote playback source resolution
-  - `apps/lite/src/lib/player/playbackSource.ts`
+  - `apps/cloud-ui/src/lib/player/playbackSource.ts`
 - tracking URL normalization and unwrap behavior
-  - `apps/lite/src/lib/networking/urlUtils.ts`
+  - `apps/cloud-ui/src/lib/networking/urlUtils.ts`
 - foreground audio prefetch
-  - `apps/lite/src/hooks/useForegroundAudioPrefetch.ts`
-  - `apps/lite/src/lib/audioPrefetch.ts`
+  - `apps/cloud-ui/src/hooks/useForegroundAudioPrefetch.ts`
+  - `apps/cloud-ui/src/lib/audioPrefetch.ts`
 - download HEAD sizing and GET streaming
-  - `apps/lite/src/lib/downloadService.ts`
-  - `apps/lite/src/lib/fetchUtils.ts`
+  - `apps/cloud-ui/src/lib/downloadService.ts`
+  - `apps/cloud-ui/src/lib/fetchUtils.ts`
 - remote transcript fetch paths
-  - `apps/lite/src/lib/remoteTranscript.ts`
-  - `apps/lite/src/lib/fetchUtils.ts`
+  - `apps/cloud-ui/src/lib/remoteTranscript.ts`
+  - `apps/cloud-ui/src/lib/fetchUtils.ts`
 - remote playback orchestration and download/transcript interplay
   - `apps/cloud-ui/src/lib/player/remotePlayback.ts`
 
@@ -61,7 +61,7 @@ Create a short implementation-facing classification matrix covering at minimum t
 For each class, record:
 
 - request initiator
-- current browser behavior in Lite
+- current browser behavior in Cloud UI
 - current Cloud behavior
 - whether `fetchWithFallback` is already involved
 - whether user-configured proxy fallback exists today
@@ -132,17 +132,17 @@ At minimum, identify likely coverage targets for:
 - backend range proxy behavior
 
 ## Verification
-1. Re-open all Lite baseline files listed in this instruction
+1. Re-open all Cloud UI baseline files listed in this instruction
 2. Re-open the current Cloud equivalents before writing the audit classification
-3. `rg -n "fetchWithFallback|audio\\.src|Range:|method: 'HEAD'|unwrapPodcastTrackingUrl" apps/lite/src apps/cloud-ui/src`
+3. `rg -n "fetchWithFallback|audio\\.src|Range:|method: 'HEAD'|unwrapPodcastTrackingUrl" apps/cloud-ui/src apps/cloud-ui/src`
 
 ## Done When
 - every Cloud media-relevant request class is classified
 - fallback candidates are explicit and narrow
-- later child instructions can proceed without guessing Lite media behavior
+- later child instructions can proceed without guessing Cloud UI media behavior
 
 ## Completion
 - Completed by: Codex execution worker
 - Reviewed by: Codex reviewer
-- Commands: `sed`, `rg -n "fetchWithFallback|audio\\.src|Range:|method: 'HEAD'|unwrapPodcastTrackingUrl" apps/lite/src apps/cloud-ui/src`
+- Commands: `sed`, `rg -n "fetchWithFallback|audio\\.src|Range:|method: 'HEAD'|unwrapPodcastTrackingUrl" apps/cloud-ui/src apps/cloud-ui/src`
 - Date: 2026-03-28

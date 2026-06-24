@@ -10,12 +10,12 @@ title: Apple Discovery API
 
 ## PWA 与 iOS 集成（应用元数据 + 分享）
 
-- **Manifest**：由 `vite-plugin-pwa` 生成为 `manifest.json`，唯一事实来源是 `apps/lite/vite.config.ts` 的 `VitePWA.manifest`。不要维护手动的 `apps/lite/public/manifest.json`。
-- **iOS Meta 标签**：`apps/lite/index.html` 包含：
+- **Manifest**：由 `vite-plugin-pwa` 生成为 `manifest.json`，唯一事实来源是 `apps/cloud-ui/vite.config.ts` 的 `VitePWA.manifest`。不要维护手动的 `apps/cloud-ui/public/manifest.json`。
+- **iOS Meta 标签**：`apps/cloud-ui/index.html` 包含：
   - `apple-mobile-web-app-capable`
   - `apple-mobile-web-app-status-bar-style`
   - `apple-touch-icon`
-- **原生分享**：`apps/lite/src/components/Player/ShareButton.tsx` 使用 `navigator.share` 传入标题与 URL，桌面端回退为剪贴板复制。
+- **原生分享**：`apps/cloud-ui/src/components/Player/ShareButton.tsx` 使用 `navigator.share` 传入标题与 URL，桌面端回退为剪贴板复制。
 
 ## 1. 热门榜单 (Apple Podcasts RSS API)
 

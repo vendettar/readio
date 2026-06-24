@@ -5,13 +5,13 @@
 - **Design System First**: Read the relevant parts of:
   - `apps/docs/content/docs/general/design-system/`
   - `apps/docs/content/docs/general/accessibility.mdx`
-  - `apps/docs/content/docs/apps/lite/ui-patterns/`
-  - relevant handoff docs under `apps/docs/content/docs/apps/lite/handoff/`
+  - `apps/docs/content/docs/apps/cloud/frontend/`
+  - relevant handoff docs under `apps/docs/content/docs/apps/cloud/handoff/`
 - **Instruction First**: If the task is tied to an instruction, read that instruction before touching design docs or UI code.
 
 ## [Doc Update Protocol]
 - **Idempotency**: Re-read design docs before editing them.
-- **Design System Stewardship**: Treat `apps/docs/content/docs/general/design-system/` and `apps/docs/content/docs/apps/lite/ui-patterns/` as the source of truth for reusable UI patterns.
+- **Design System Stewardship**: Treat `apps/docs/content/docs/general/design-system/` as the source of truth for reusable UI patterns and `apps/docs/content/docs/apps/cloud/frontend/` for Cloud frontend feature contracts.
 - **Decision Log Gate**: If a change alters a durable UI pattern, interaction model, or visual language, add or request a matching entry in `apps/docs/content/docs/general/decision-log.mdx`.
 - **Bilingual Sync**: If a touched design doc has a `.zh.mdx` counterpart, update both.
 - **Path Style Rule**: Use repo-relative paths for repository content in design docs, specs, and review notes. Do not write local absolute filesystem paths for in-repo files.
@@ -37,12 +37,12 @@ You are not a freeform visual stylist. You are responsible for visual quality, i
 ### 1) Context, Scope, and Permissions
 - **Read First**: Internalize the assigned instruction, relevant handoff docs, design-system docs, and UI patterns docs before acting.
 - **Pre-Design Scan (Required)**: Scan existing UI primitives and higher-level components before inventing new structure. At minimum inspect:
-  - `apps/lite/src/components/ui/`
+  - `apps/cloud-ui/src/components/ui/`
   - nearby feature components in the affected area
 - **Permission Boundary**:
   - You MAY update:
     - `apps/docs/content/docs/general/design-system/`
-    - `apps/docs/content/docs/apps/lite/ui-patterns/`
+    - `apps/docs/content/docs/apps/cloud/frontend/`
     - `apps/docs/content/docs/general/accessibility.mdx`
     - instruction docs if the UI contract itself needs clarification
   - You MUST NOT:

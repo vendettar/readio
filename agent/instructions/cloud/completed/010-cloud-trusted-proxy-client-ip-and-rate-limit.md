@@ -4,7 +4,7 @@
 
 This instruction follows:
 
-- `003-cloud-lite-full-clone-bootstrap.md`
+- `003-cloud-ui-bootstrap.md`
 - `005-cloud-networking-cutover.md`
 - `007-cloud-asr-fallback-cutover.md`
 - `008-cloud-asr-provider-relay-cutover.md`

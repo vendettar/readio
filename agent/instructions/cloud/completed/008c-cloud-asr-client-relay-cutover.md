@@ -16,7 +16,7 @@ After this instruction:
 - Cloud browser code no longer directly submits transcription requests to Groq / Deepgram / Qwen / Volcengine endpoints
 - Cloud uses the backend relay for provider submission
 - local blob/downloaded blob input preparation remains browser-local
-- Lite behavior remains unchanged
+- Cloud UI behavior remains unchanged
 
 ## Frontend Work
 In `apps/cloud-ui`, cut only the provider submission layer over to the same-origin relay.
@@ -29,7 +29,7 @@ Candidate areas likely to change include:
 
 ## Required Behavior
 - Cloud-only path uses same-origin relay
-- Lite path remains browser-direct
+- Cloud UI path remains browser-direct
 - existing blob preparation remains local/browser-owned
 - existing cooldown / retry policy semantics remain aligned
 - stale track switch / abort semantics remain valid
@@ -47,7 +47,7 @@ At minimum preserve the distinction between:
 
 ## Forbidden Shortcuts
 - do not route provider submission through `/api/proxy`
-- do not change Lite provider transport
+- do not change Cloud UI provider transport
 - do not move browser-local persistence into the backend
 - do not add Cloud-only UI controls
 
@@ -67,7 +67,7 @@ At minimum, add or update Cloud frontend tests proving:
 
 ## Done When
 - Cloud ASR provider submission is relay-owned
-- Lite remains unchanged
+- Cloud UI remains unchanged
 - Cloud browser code no longer directly calls provider transcription endpoints in the cut-over path
 
 ## Completion

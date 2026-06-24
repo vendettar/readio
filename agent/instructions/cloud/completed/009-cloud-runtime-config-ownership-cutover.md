@@ -2,18 +2,18 @@
 
 ## Goal
 
-Move `apps/cloud-ui` away from Lite's front-end-heavy runtime config model and establish a Cloud-specific config ownership model:
+Move `apps/cloud-ui` away from Cloud UI's front-end-heavy runtime config model and establish a Cloud-specific config ownership model:
 
 - server-owned config lives in `apps/cloud-api` runtime environment
 - browser-public runtime config is emitted by `apps/cloud-api` as `/env.js`
 - browser-local/user-local config stays in browser storage/runtime
 - `apps/cloud-ui/public/env.js` becomes dev/default-template only, not the production source of truth
 
-This instruction exists because Cloud is no longer a browser-direct Lite app clone. It is now a backend-owned product surface with same-origin API/runtime boundaries. The runtime config model must reflect that.
+This instruction exists because Cloud is no longer a browser-direct Cloud UI app clone. It is now a backend-owned product surface with same-origin API/runtime boundaries. The runtime config model must reflect that.
 
 ## Problem Statement
 
-The current Cloud app still inherits Lite's assumption that most runtime config originates from front-end static files:
+The current Cloud app still inherits Cloud UI's assumption that most runtime config originates from front-end static files:
 
 - `apps/cloud-ui/public/env.js`
 - `apps/cloud-ui/public/env.local.js`
@@ -234,8 +234,8 @@ Do not reopen code scope here unless reviewer finds a concrete mismatch with `00
 
 Do not:
 
-- redesign Lite config ownership
-- convert Lite to backend-generated `/env.js`
+- redesign Cloud UI config ownership
+- convert Cloud UI to backend-generated `/env.js`
 - redesign all front-end settings storage
 - implement auth/accounts/session systems
 - introduce strong secret guarantees for browser-visible fields

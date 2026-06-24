@@ -34,7 +34,7 @@ Update:
 Must capture:
 - shift to Go + SQLite for `apps/cloud`
 - rejection of prior Hono / Spring Boot direction for this phase
-- frontend reuse strategy: `apps/cloud` serves built `apps/lite/dist`
+- frontend reuse strategy: `apps/cloud` serves built `apps/cloud-ui/dist`
 
 ### 2. Monorepo Strategy
 Update:
@@ -110,11 +110,11 @@ Return:
 - Completed by: Codex
 - Commands:
   - `git diff --check -- apps/docs/content/docs/general/decision-log.mdx apps/docs/content/docs/general/decision-log.zh.mdx`
-  - `rg -n "D116|Go \`net/http\`|apps/lite/dist|Spring Boot / Hono|SQLite" apps/docs/content/docs/general/decision-log.mdx apps/docs/content/docs/general/decision-log.zh.mdx`
+  - `rg -n "D116|Go \`net/http\`|apps/cloud-ui/dist|Spring Boot / Hono|SQLite" apps/docs/content/docs/general/decision-log.mdx apps/docs/content/docs/general/decision-log.zh.mdx`
   - `git diff --check -- apps/docs/content/docs/general/monorepo-strategy.mdx apps/docs/content/docs/general/monorepo-strategy.zh.mdx`
-  - `rg -n "Gin|Fiber|Spring Boot|Hono|net/http|SQLite|apps/lite/dist|Future Direction|未来方向" apps/docs/content/docs/general/monorepo-strategy.mdx apps/docs/content/docs/general/monorepo-strategy.zh.mdx`
+  - `rg -n "Gin|Fiber|Spring Boot|Hono|net/http|SQLite|apps/cloud-ui/dist|Future Direction|未来方向" apps/docs/content/docs/general/monorepo-strategy.mdx apps/docs/content/docs/general/monorepo-strategy.zh.mdx`
   - `git diff --check -- apps/docs/content/docs/apps/cloud/README.mdx apps/docs/content/docs/apps/cloud/README.zh.mdx`
-  - `rg -n "Spring Boot|Hono|net/http|apps/lite/dist|handoff|SQLite" apps/docs/content/docs/apps/cloud/README.mdx apps/docs/content/docs/apps/cloud/README.zh.mdx`
+  - `rg -n "Spring Boot|Hono|net/http|apps/cloud-ui/dist|handoff|SQLite" apps/docs/content/docs/apps/cloud/README.mdx apps/docs/content/docs/apps/cloud/README.zh.mdx`
   - `git diff --check -- apps/docs/content/docs/apps/cloud/handoff/index.mdx apps/docs/content/docs/apps/cloud/handoff/index.zh.mdx`
   - `rg -n "Cloud Handoff|Cloud 交接|Current Purpose|当前目的|Static Serving Strategy|静态服务策略|RSS Proxy Contract|SQLite Bootstrap Status|Boundaries|边界" apps/docs/content/docs/apps/cloud/handoff/index.mdx apps/docs/content/docs/apps/cloud/handoff/index.zh.mdx`
   - `pnpm --dir apps/docs build` (blocked by existing `apps/docs/.next/lock`)

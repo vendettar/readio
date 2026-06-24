@@ -18,7 +18,7 @@ After this instruction:
 
 - `apps/cloud-api` owns upstream Apple requests for these flows
 - `apps/cloud-ui` calls only same-origin endpoints for these flows
-- frontend UI remains the same as Lite
+- frontend UI remains the same as Cloud UI
 
 ## Backend Work
 Add or harden same-origin endpoints in `apps/cloud-api` for:
@@ -40,7 +40,7 @@ Requirements:
 In `apps/cloud-ui`:
 
 - replace browser-direct networking for the above flows
-- keep route/page/UI behavior aligned with Lite
+- keep route/page/UI behavior aligned with Cloud UI
 - do not fork page structure to make the cutover easier
 
 ## Tests
@@ -57,7 +57,7 @@ At minimum:
 
 ## Done When
 - Cloud top lists and lookup/detail flows are backend-owned
-- UI remains Lite-equivalent
+- UI remains Cloud UI-equivalent
 - tests for the changed flows pass
 
 ## Completion

@@ -6,12 +6,12 @@
 ## Objective
 Finish the Cloud frontend runtime transition after backend-owned networking paths exist.
 
-This is the step that removes Lite-only browser-direct networking assumptions from Cloud.
+This is the step that removes Cloud UI-only browser-direct networking assumptions from Cloud.
 
 ## Goal
 After this instruction:
 
-- Cloud frontend runtime config no longer requires Lite browser-direct networking settings for migrated flows
+- Cloud frontend runtime config no longer requires Cloud UI browser-direct networking settings for migrated flows
 - Cloud Settings removes the `CORS Proxy` block
 - Cloud frontend defaults and runtime docs reflect backend-owned networking
 
@@ -21,13 +21,13 @@ In `apps/cloud-ui`:
 - switch runtime config defaults for migrated discovery/search/feed flows to same-origin backend endpoints
 - remove Cloud dependency on `READIO_CORS_PROXY_*` for the migrated Cloud experience
 - remove the `CORS Proxy` settings block from Cloud Settings
-- keep the rest of Settings visually and behaviorally aligned with Lite
+- keep the rest of Settings visually and behaviorally aligned with Cloud UI
 
 Do not:
 
 - redesign Settings
 - add Cloud marketing copy in place of the removed block
-- remove unrelated Lite-equivalent settings behavior
+- remove unrelated Cloud UI-equivalent settings behavior
 
 ## Tests
 At minimum:
@@ -39,12 +39,12 @@ At minimum:
 ## Verification
 1. `pnpm -C apps/cloud-ui build`
 2. `pnpm -C apps/cloud-ui test:run -- --runInBand`
-3. targeted import/config searches showing Cloud no longer depends on Lite CORS proxy settings for migrated paths
+3. targeted import/config searches showing Cloud no longer depends on Cloud UI CORS proxy settings for migrated paths
 
 ## Done When
 - Cloud Settings removes `CORS Proxy`
 - migrated Cloud networking no longer depends on browser-direct proxy config
-- the rest of Cloud Settings stays Lite-equivalent
+- the rest of Cloud Settings stays Cloud UI-equivalent
 
 ## Completion
 - Completed by: Turing

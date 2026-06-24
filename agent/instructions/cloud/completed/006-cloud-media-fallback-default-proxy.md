@@ -1,11 +1,11 @@
 # Instruction 006: Cloud Media Fallback Default Proxy [COMPLETED]
 
 ## Objective
-Remove the remaining Lite-style uncertainty in Cloud media access without forcing all media traffic through the backend.
+Remove the remaining Cloud UI-style uncertainty in Cloud media access without forcing all media traffic through the backend.
 
 Cloud media behavior should become:
 
-- browser-direct first, matching Lite's low-cost path when the upstream media host allows it
+- browser-direct first, matching Cloud UI's low-cost path when the upstream media host allows it
 - automatic fallback to `apps/cloud-api` only when direct browser access fails for Cloud-relevant cross-origin reasons
 - no required user-configured CORS proxy in Cloud
 - no server-side persistence or server-side cache for media payloads
@@ -15,13 +15,13 @@ This instruction family treats `apps/cloud-api` as Cloud's built-in default medi
 ## Parent Baseline
 This instruction assumes the following are already complete:
 
-- `003-cloud-lite-full-clone-bootstrap.md`
+- `003-cloud-ui-bootstrap.md`
 - `005-cloud-networking-cutover.md`
 
 Cloud already owns discovery/search/feed networking. This instruction covers the remaining media layer behavior: audio media, audio-adjacent fetches, and browser-side fallbacks that still vary by upstream host.
 
 ## Problem Statement
-Cloud currently removes the need for a user-configured CORS proxy for discovery/search/feed, but media access still retains Lite's source-dependent uncertainty:
+Cloud currently removes the need for a user-configured CORS proxy for discovery/search/feed, but media access still retains Cloud UI's source-dependent uncertainty:
 
 - some episode audio URLs are playable browser-direct
 - some redirected audio hosts reject JS fetches due to missing CORS headers
@@ -38,17 +38,17 @@ Do not turn Cloud into a mandatory media relay by default.
 
 Cloud media policy after this instruction family:
 
-1. Try the Lite-equivalent browser-direct path first.
+1. Try the Cloud UI-equivalent browser-direct path first.
 2. If the direct path succeeds, keep it.
 3. If the direct path fails for cross-origin / browser-networking reasons, retry through `apps/cloud-api`.
 
-This applies to Cloud only. Do not change Lite behavior in this instruction family.
+This applies to Cloud only. Do not change Cloud UI behavior in this instruction family.
 
 This is a deliberate cost/bandwidth tradeoff, not an architectural truth.
 For this phase, Cloud prefers:
 
 - lower backend bandwidth
-- preserving the Lite-equivalent direct path when it already works
+- preserving the Cloud UI-equivalent direct path when it already works
 
 over:
 
@@ -62,7 +62,7 @@ Out of scope for `006`:
 - redesigning the player UI
 - replacing browser media playback with server-owned persistent streaming
 - adding service-side media caching
-- changing Lite product behavior
+- changing Cloud UI product behavior
 - introducing user accounts or server-side playback state
 - building a media CDN
 - adding DRM, tokenized signed URLs, or multi-tenant media controls
@@ -70,14 +70,14 @@ Out of scope for `006`:
 ## Required Architecture Constraints
 The implementation must preserve these constraints:
 
-- `apps/cloud-ui` remains Lite-equivalent in UI and route structure
+- `apps/cloud-ui` remains Cloud UI-equivalent in UI and route structure
 - browser-direct media remains the first-choice path
 - `apps/cloud-api` becomes the built-in Cloud fallback proxy for media fetches that need it
 - backend media proxying is pass-through only for this phase
 - no backend media persistence, no disk cache, no object storage
 - no change to the existing browser-local download/storage model
 - clearing browser site data must still remove local downloads/transcripts/settings exactly as today
-- `Range` and seek semantics must remain compatible with the current Lite player behavior
+- `Range` and seek semantics must remain compatible with the current Cloud UI player behavior
 - fallback logic must be narrow and explicit, not "route every media request through backend just in case"
 
 The existing Cloud proxy surface to reuse in this instruction family is:
@@ -117,7 +117,7 @@ Allowed areas across the `006` family:
 
 Out of scope unless a child instruction explicitly allows it:
 
-- `apps/lite/**`
+- `apps/cloud-ui/**`
 - shared architectural rewrites unrelated to media fallback
 - deployment redesign beyond what the media fallback contract requires
 
@@ -147,7 +147,7 @@ Use `apps/cloud-api` as the Cloud default fallback proxy for media-related reque
 ### Rationale
 - preserves the low-cost direct path when upstream media hosts already work in the browser
 - removes the need for users to configure a separate proxy for Cloud
-- keeps Cloud aligned with Lite's local-first storage model
+- keeps Cloud aligned with Cloud UI's local-first storage model
 - avoids prematurely forcing all media bytes through the backend
 - limits backend scope to fallback ownership instead of full media distribution ownership
 
@@ -237,7 +237,7 @@ Child instructions must not introduce:
 - server-side media databases
 - background media sync workers
 - new frontend networking libraries
-- Lite-to-Cloud cross-imports
+- Cloud UI-to-Cloud cross-imports
 
 ## Required Patterns
 Child instructions should prefer:
@@ -255,7 +255,7 @@ Child instructions should prefer:
 - Cloud users no longer need a separately configured CORS proxy for supported media fallback paths
 - direct browser media access remains the first-choice path
 - Cloud backend fallback activates only when direct media access fails for supported browser/cross-origin reasons
-- seek and range behavior remain compatible with current Lite expectations
+- seek and range behavior remain compatible with current Cloud UI expectations
 - no backend media persistence or caching is introduced
 - Cloud docs and runtime contract accurately describe the fallback-first architecture
 

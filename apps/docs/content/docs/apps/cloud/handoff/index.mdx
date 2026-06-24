@@ -22,7 +22,7 @@ Use the Cloud handoff tree as the SSOT for app-level frontend/backend contracts:
 
 ## 1. Current Purpose
 
-- Build `apps/cloud-ui` as a full Lite-equivalent frontend clone.
+- Build `apps/cloud-ui` as a full current Cloud frontend.
 - Deploy production `apps/cloud-ui` through Cloudflare Pages on `www.readio.top` / `readio.top`.
 - Deploy production `apps/cloud-api` on the VPS behind `api.readio.top`; colocated deployments may still serve `apps/cloud-ui/dist` from `apps/cloud-api`.
 - Keep discovery flows backend-owned through `apps/cloud-api`, including search, top, Editor's Picks batch lookup, podcast lookup, and PI episode-list lookup. Production reaches these routes through `VITE_API_BASE_URL`.
@@ -64,7 +64,7 @@ Use the Cloud handoff tree as the SSOT for app-level frontend/backend contracts:
 
 ## 5. Boundaries
 
-- Do describe Cloud as a Lite-equivalent frontend clone deployed to Cloudflare Pages in production, with the Go backend deployed separately on the VPS.
+- Do describe Cloud as a current Cloud frontend deployed to Cloudflare Pages in production, with the Go backend deployed separately on the VPS.
 - Do describe discovery requests as backend-owned flows reached through `VITE_API_BASE_URL` in production, including search, top, Editor's Picks batch lookup, podcast lookup, and PI episode-list lookup.
 - Do describe Cloud Settings as no longer including the `CORS Proxy` block.
 - Do describe Cloud media as browser-direct first, with backend fallback only for approved failure classes.

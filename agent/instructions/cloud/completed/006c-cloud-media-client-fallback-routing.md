@@ -16,7 +16,7 @@ After this instruction:
 - direct browser media access remains first-choice
 - Cloud backend fallback is used only where required
 - the client does not over-proxy media requests that already work browser-direct
-- Lite behavior remains unchanged
+- Cloud UI behavior remains unchanged
 
 ## Frontend Work
 In `apps/cloud-ui`, implement request-type-specific fallback behavior for only the classes approved by `006a`.
@@ -85,14 +85,14 @@ If native `<audio>` playback fallback is implemented, the child instruction must
 - narrow wrappers around existing media fetch points
 - explicit fallback URL builder for Cloud backend media requests
 - request-class-specific retry policy
-- clear guardrails so Lite code is not modified by accident
+- clear guardrails so Cloud UI code is not modified by accident
 - explicit separation between native media-element fallback and JS fetch fallback
 
 ## Forbidden Shortcuts
 - do not globally route every media URL through the backend
 - do not remove direct browser playback first
 - do not add Cloud-only UI controls to expose the fallback
-- do not mutate Lite proxy settings behavior as part of this instruction
+- do not mutate Cloud UI proxy settings behavior as part of this instruction
 
 ## Tests
 At minimum, add or update Cloud frontend tests proving:

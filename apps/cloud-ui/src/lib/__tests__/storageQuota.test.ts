@@ -74,8 +74,8 @@ describe('storage quota checks', () => {
       },
     })
 
-    sessionStorage.setItem('readio-lite:quota-last-percent', JSON.stringify(79))
-    sessionStorage.setItem('readio-lite:quota-warned', JSON.stringify(false))
+    sessionStorage.setItem('readio-cloud-ui:quota-last-percent', JSON.stringify(79))
+    sessionStorage.setItem('readio-cloud-ui:quota-warned', JSON.stringify(false))
 
     await checkStorageQuota()
 
@@ -102,8 +102,8 @@ describe('storage quota checks', () => {
       },
     })
 
-    sessionStorage.setItem('readio-lite:quota-last-percent', JSON.stringify(79))
-    sessionStorage.setItem('readio-lite:quota-warned', JSON.stringify(false))
+    sessionStorage.setItem('readio-cloud-ui:quota-last-percent', JSON.stringify(79))
+    sessionStorage.setItem('readio-cloud-ui:quota-warned', JSON.stringify(false))
 
     await checkStorageQuota({ mode: 'silent' })
 
@@ -150,8 +150,8 @@ describe('storage quota checks', () => {
       .mocked(StorageRepository.getStorageInfo)
       .mockReturnValueOnce(deferred.promise)
 
-    sessionStorage.setItem('readio-lite:quota-last-percent', JSON.stringify(79))
-    sessionStorage.setItem('readio-lite:quota-warned', JSON.stringify(false))
+    sessionStorage.setItem('readio-cloud-ui:quota-last-percent', JSON.stringify(79))
+    sessionStorage.setItem('readio-cloud-ui:quota-warned', JSON.stringify(false))
 
     const silentFirst = checkStorageQuota({ mode: 'silent' })
     const userSecond = checkStorageQuota({ mode: 'user' })

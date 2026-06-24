@@ -102,7 +102,7 @@ Do not:
 
 - update roadmap
 - close the parent instruction
-- redesign Lite config ownership
+- redesign Cloud UI config ownership
 - move user API keys to the backend
 - redesign general settings storage
 - mix in unrelated ASR/media/discovery changes

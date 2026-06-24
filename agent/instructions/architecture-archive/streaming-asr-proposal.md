@@ -1,6 +1,6 @@
 # Readio Streaming ASR Architecture Proposal (Whisper Streaming)
 
-*Note: This document archives a proposal for a streaming ASR architecture. It has been evaluated and intentionally deferred for the "Lite" (pure frontend/Serverless) version due to engineering complexity, client-side performance constraints, and API rate limiting risks. It serves as a blueprint for future "Pro" versions involving a dedicated backend or commercial SaaS ASR integration.*
+*Note: This document archives a proposal for a streaming ASR architecture. It has been evaluated and intentionally deferred for the "Cloud UI" (pure frontend/Serverless) version due to engineering complexity, client-side performance constraints, and API rate limiting risks. It serves as a blueprint for future "Pro" versions involving a dedicated backend or commercial SaaS ASR integration.*
 
 ---
 
@@ -140,17 +140,17 @@ Whisper 不强制“下载完成再转录”。 那只是最简单实现方式�
 ---
 ---
 
-# 架构师评估与 Lite 版暂缓说明 (Architectural Review & Lite Version Deferral)
+# 架构师评估与 Cloud UI 版暂缓说明 (Architectural Review & Cloud UI Version Deferral)
 
-**评估结论**：纯算法与后端工程理论上非常优秀。但**不适合当前的 Readio Lite（纯前端/无后端环境）**。
+**评估结论**：纯算法与后端工程理论上非常优秀。但**不适合当前的 Readio Cloud UI（纯前端/无后端环境）**。
 
-### 为什么在 Lite 版中强行落地极度危险？
+### 为什么在 Cloud UI 版中强行落地极度危险？
 
 1. **客户端 VAD 的性能与体积噩梦**
    要在浏览器里跑深度学习模型（如 Silero VAD），必须引入 WASM 依赖并加载模型权重，同时需要开辟 Web Worker 实时解码 PCM裸流进行推理。这将让一个轻量级 Web App 变得极度沉重，设备发热且不仅耗电。
 
 2. **第三方 API 的“自杀式并发（DDoS）”**
-   Lite 版目前的流控是一集播客 1 次 API 请求。如果按照“每15秒切块流式发送”，一小时的播客将瞬间向 Groq / OpenAI 发送 240 次独立的高频 HTTP 请求。绝大多数免费或基础层的第三方 API 会在几分钟内触发 `429 Too Many Requests` 限流，导致功能断崖式崩溃。
+   Cloud UI 版目前的流控是一集播客 1 次 API 请求。如果按照“每15秒切块流式发送”，一小时的播客将瞬间向 Groq / OpenAI 发送 240 次独立的高频 HTTP 请求。绝大多数免费或基础层的第三方 API 会在几分钟内触发 `429 Too Many Requests` 限流，导致功能断崖式崩溃。
 
 3. **DAI 广告时间轴漂移（致命伤）**
    流式方案主张“不等待下载，边下边播，同时后台发流给ASR”。在播客生态中，由于动态广告插入（DAI），“播放器拿到的音频串流”和“用代码后台获取的音频串流”大概率会被塞入**时常不同的广告**。如果不同步等待同一份物理文件落盘，即使有最完美的 VAD，转出来的字幕也会和播放的声音完全脱节。
@@ -159,6 +159,6 @@ Whisper 不强制“下载完成再转录”。 那只是最简单实现方式�
    用前端切片流实现平滑播放，需要手动用 MSE (Media Source Extensions) 给音频缓冲区喂数据，以绕过浏览器默认的流媒体拉取策略。这在 iOS Safari 等移动端兼容性极差，容易引发爆音与卡顿。
 
 ### 路线图建议 (Roadmap Guidance)
-当前 Lite 版继续坚持 **Instruction 124 的阻塞式全量架构（等待下载与转译完成）** 以确保绝对的时间轴对齐与低客诉率。
+当前 Cloud UI 版继续坚持 **Instruction 124 的阻塞式全量架构（等待下载与转译完成）** 以确保绝对的时间轴对齐与低客诉率。
 
 本方案封存在此目录。当 Readio 演进出独立的 Node.js / Python 音视频处理微服务，或引入具备原生 WebSocket Streaming 接口的商业级 ASR SaaS (如 Deepgram) 时，即可解封此架构并实现极致体验。

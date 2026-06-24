@@ -1,4 +1,4 @@
-// apps/lite/src/hooks/__tests__/useSelection.test.ts
+// apps/cloud-ui/src/hooks/__tests__/useSelection.test.ts
 import { act, renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { useSelectionActions } from '../selection/useSelectionActions'

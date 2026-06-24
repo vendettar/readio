@@ -202,7 +202,7 @@ Reviewer 必须重点检查：
 
 ## Non-goals
 
-- 不做 Lite 版本适配（仅限 Cloud UI）
+- 不做 Cloud UI 版本适配（仅限 Cloud UI）
 - 不做内容区域的响应式重排（sidebar 是唯一问题）
 - 不做横屏/竖屏特殊处理
 - 不做 PWA/安装提示

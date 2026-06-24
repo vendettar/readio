@@ -104,7 +104,7 @@ Use shadcn/ui primitives instead:
 
 To balance UX speed with safety across platforms, file validation follows a layered approach:
 
-- **Web (Lite)**: Validate with MIME type + file extension only.
+- **Web frontend**: Validate with MIME type + file extension only.
 - **Backend**: Perform content-based validation (magic number or full parse).
 - **Native**: Rely on decoder-driven validation or a light header check during import.
 

@@ -11,7 +11,7 @@ After this instruction:
 
 - `apps/cloud-api` fetches and parses feed content
 - `apps/cloud-ui` calls same-origin feed endpoints only
-- frontend feed pages remain Lite-equivalent in UI/behavior
+- frontend feed pages remain Cloud UI-equivalent in UI/behavior
 
 ## Backend Work
 In `apps/cloud-api`, add or harden a feed endpoint such as:
@@ -50,7 +50,7 @@ At minimum:
 
 ## Done When
 - Cloud feed networking and parsing are backend-owned
-- feed UI remains Lite-equivalent
+- feed UI remains Cloud UI-equivalent
 - tests for feed cutover pass
 
 ## Completion

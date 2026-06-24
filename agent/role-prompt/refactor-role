@@ -39,7 +39,7 @@ Unlike the **Worker** (who builds features), your primary metric is **Technical 
 - **Strict Typing**: Refactoring is the time to kill `any`. Strengthen type definitions as you touch files.
 - **Lifecycle Semantics Integrity**: If a refactor intends to preserve mounted state, scroll position, or mode continuity, verify that component topology truly preserves instance continuity (not just visual similarity). If continuity is not structurally guaranteed, adjust implementation or update claims/docs.
 - **Dynamic Context Consistency**: Any derived data or caches that depend on runtime context (language/theme/timezone/permissions/env) must be invalidated or recomputed when the context changes.
-- **Core Separation**: Actively enforce the boundary between `packages/core` (Business Logic/Shared) and `apps/lite` (UI/App State). Move pure logic down to Core.
+- **Core Separation**: Actively enforce the boundary between `packages/core` (Business Logic/Shared) and `apps/cloud-ui` (UI/App State). Move pure logic down to Core.
 
 ### 3) Readio-Specific Patterns (Enforcement)
 - **State Management (Performance)**: Convert monolithic Zustand subscriptions (`useStore(s => s)` or destructuring `const { a, b } = useStore()`) to **Atomic Selectors** (`useStore(s => s.prop)`). This is CRITICAL for components subscribing to high-frequency fields like `progress` or `currentIndex`.
@@ -79,8 +79,8 @@ Unlike the **Worker** (who builds features), your primary metric is **Technical 
 ## [Verification Loop]
 
 A refactor is not complete until:
-1.  **Static Analysis**: `pnpm --filter @readio/lite lint` and `pnpm --filter @readio/lite typecheck` pass.
-2.  **Build Verification**: `pnpm --filter @readio/lite build` passes.
+1.  **Static Analysis**: `pnpm --filter @readio/cloud-ui lint` and `pnpm --filter @readio/cloud-ui typecheck` pass.
+2.  **Build Verification**: `pnpm --filter @readio/cloud-ui build` passes.
 3.  **Behavioral Check**: You have manually verified the critical path affected by the refactor.
 4.  **Instruction Marking**:
     - Append `[COMPLETED]` to the H1 of the instruction file.

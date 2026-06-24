@@ -10,14 +10,14 @@ This child instruction covers:
 
 - podcast search
 - episode search
-- keeping the rest of Lite-equivalent search UI intact
+- keeping the rest of Cloud UI-equivalent search UI intact
 
 ## Goal
 After this instruction:
 
 - `apps/cloud-api` owns Apple search requests
 - `apps/cloud-ui` search pages and command/search surfaces use same-origin APIs
-- Cloud search keeps the same frontend product behavior as Lite except for networking ownership
+- Cloud search keeps the same frontend product behavior as Cloud UI except for networking ownership
 
 ## Backend Work
 Add or harden same-origin endpoints in `apps/cloud-api` for:
@@ -37,7 +37,7 @@ Requirements:
 In `apps/cloud-ui`:
 
 - cut over search networking to same-origin APIs
-- preserve Lite-equivalent UI composition and local search surfaces that do not require backend ownership
+- preserve Cloud UI-equivalent UI composition and local search surfaces that do not require backend ownership
 - do not replace search UI with a simplified Cloud-specific version
 
 ## Tests
@@ -54,7 +54,7 @@ At minimum:
 
 ## Done When
 - Cloud search networking is backend-owned
-- search UI remains Lite-equivalent
+- search UI remains Cloud UI-equivalent
 - tests for search cutover pass
 
 ## Completion

@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 
 test.describe('Memory Stress Test', () => {
   // This test is skipped by default as it is a long-running manual profiling tool
-  // Run with: npx playwright test apps/lite/tests/stress/memory.test.ts --project=chromium --headed
+  // Run with: npx playwright test apps/cloud-ui/tests/stress/memory.test.ts --project=chromium --headed
   test.skip('long running memory stress test', async ({ page }) => {
     // 2 hours timeout
     test.setTimeout(2 * 60 * 60 * 1000)

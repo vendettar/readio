@@ -1,7 +1,7 @@
 # Instruction: 001c - Cloud RSS Proxy [COMPLETED]
 
 ## Goal
-Implement the minimal app-owned RSS proxy for `apps/cloud` so Lite can stop depending on public browser-side CORS proxies for expected RSS/XML fetches.
+Implement the minimal app-owned RSS proxy for `apps/cloud` so Cloud UI can stop depending on public browser-side CORS proxies for expected RSS/XML fetches.
 
 ## Depends On
 - `agent/instructions/cloud/001a-cloud-go-app-scaffold.md`
@@ -19,7 +19,7 @@ Implement the minimal app-owned RSS proxy for `apps/cloud` so Lite can stop depe
 - POST/PUT/etc proxying
 - discovery API proxying beyond the defined RSS fetch use case
 - auth/user/session concerns
-- frontend rewiring in `apps/lite` (e.g., hiding the CORS PROXY section in `SettingsPage` when running in cloud mode—this is mathematically a Phase 2 / Frontend Adoption task).
+- frontend rewiring in `apps/cloud-ui` (e.g., hiding the CORS PROXY section in `SettingsPage` when running in cloud mode—this is mathematically a Phase 2 / Frontend Adoption task).
 
 ## Required Proxy Contract
 

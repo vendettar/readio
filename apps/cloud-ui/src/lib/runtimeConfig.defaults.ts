@@ -20,7 +20,7 @@ export const DEFAULTS = {
   EN_DICTIONARY_API_TRANSPORT: 'direct',
   MAX_AUDIO_CACHE_GB: 10,
   DICT_CACHE_MAX_ENTRIES: 500,
-  DICT_CACHE_KEY: 'readio-lite-dict-cache',
+  DICT_CACHE_KEY: 'readio-cloud-ui-dict-cache',
   SAVE_PROGRESS_INTERVAL_MS: 5000,
   MIN_ZOOM: 0.5,
   MAX_ZOOM: 3.0,

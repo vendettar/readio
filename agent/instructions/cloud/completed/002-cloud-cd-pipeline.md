@@ -1,14 +1,14 @@
 # Instruction: 002 - Cloud CD Pipeline [COMPLETED]
 
 ## Goal
-Establish a Continuous Deployment (CD) pipeline using GitHub Actions to automatically build and deploy the Readio Cloud monolith (Go Backend + Static Lite UI) to a remote VPS. This ensures the 1C1G server is protected from heavy build loads (Node/Vite OOM risks) by strictly adhering to an "Off-Server Compilation" strategy.
+Establish a Continuous Deployment (CD) pipeline using GitHub Actions to automatically build and deploy the Readio Cloud monolith (Go Backend + Static Cloud UI UI) to a remote VPS. This ensures the 1C1G server is protected from heavy build loads (Node/Vite OOM risks) by strictly adhering to an "Off-Server Compilation" strategy.
 
 ## Scope
 
 ### In Scope
 - Create a dedicated `.github/workflows/cd-cloud.yml`.
 - Configure trigger rules (e.g., push to `main` with specific path changes, or via release tags/manual dispatch).
-- Heterogeneous runner setup: Node.js (for `apps/lite` build) and Go (for `apps/cloud` build).
+- Heterogeneous runner setup: Node.js (for `apps/cloud-ui` build) and Go (for `apps/cloud` build).
 - Cross-compilation of the Go static binary (`CGO_ENABLED=0 GOOS=linux GOARCH=amd64`).
 - Secure artifact transfer to the remote VPS (e.g., via `appleboy/scp-action` or `rsync`).
 - Remote service restart (e.g., via `appleboy/ssh-action`).
@@ -39,7 +39,7 @@ Establish a Continuous Deployment (CD) pipeline using GitHub Actions to automati
 
 ## Repository Reality Check
 - Root `package.json` does **not** provide a `make` script. Do not reference `pnpm make` in the implementation.
-- `apps/lite` already has a real build entry and may be invoked via `pnpm -C apps/lite build` or an equivalent repo-level wrapper.
+- `apps/cloud-ui` already has a real build entry and may be invoked via `pnpm -C apps/cloud-ui build` or an equivalent repo-level wrapper.
 - `apps/cloud/package.json` already has a `build` script. Prefer repository-real commands over ad hoc undocumented shell sequences.
 - `apps/docs/content/docs/apps/cloud/deployment.mdx` does **not** currently exist. This task should treat it as a new documentation artifact to create.
 
@@ -48,9 +48,9 @@ Establish a Continuous Deployment (CD) pipeline using GitHub Actions to automati
 ### 1. Build Phase
 - Checkout code.
 - Setup `pnpm` and Node.js.
-- Run a repository-real Lite build command to generate `apps/lite/dist`.
-  - Preferred: `pnpm -C apps/lite build`
-  - Acceptable: `pnpm lite:build`
+- Run a repository-real Cloud UI build command to generate `apps/cloud-ui/dist`.
+  - Preferred: `pnpm -C apps/cloud-ui build`
+  - Acceptable: `pnpm cloud-ui:build`
 - Setup Go environment.
 - Run a repository-real Cloud build command in `apps/cloud`.
   - Preferred build contract: `CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o readio-cloud .`
@@ -60,7 +60,7 @@ Establish a Continuous Deployment (CD) pipeline using GitHub Actions to automati
 - The workflow must not rely on an ambiguous default production trigger.
 - Required policy:
   - support `workflow_dispatch`
-  - if `push` to `main` is enabled, restrict it with path filters relevant to `apps/cloud`, `apps/lite`, and deployment workflow/docs files
+  - if `push` to `main` is enabled, restrict it with path filters relevant to `apps/cloud`, `apps/cloud-ui`, and deployment workflow/docs files
   - define a deployment `concurrency` group so only one cloud deploy runs at a time
 - Preferred production hardening:
   - use a protected GitHub Environment for production deployment secrets and optional approval
@@ -68,7 +68,7 @@ Establish a Continuous Deployment (CD) pipeline using GitHub Actions to automati
 
 ### 2. Transfer Phase (Safe Sync)
 - Define the target deployment path convention.
-- Transfer ONLY the `readio-cloud` binary and the `apps/lite/dist` folder.
+- Transfer ONLY the `readio-cloud` binary and the `apps/cloud-ui/dist` folder.
 - **CRITICAL RULE**: Do not wipe the deployment directory on the VPS before transfer, as this would destroy the production SQLite `.db` file.
 
 ### 2a. Remote Directory Contract
@@ -156,8 +156,8 @@ Establish a Continuous Deployment (CD) pipeline using GitHub Actions to automati
   - `sed -n '1,220p' apps/docs/content/docs/apps/cloud/deployment.mdx`
   - `sed -n '1,220p' apps/docs/content/docs/apps/cloud/deployment.zh.mdx`
   - `git diff --check -- .github/workflows/cd-cloud.yml apps/docs/content/docs/apps/cloud/deployment.mdx apps/docs/content/docs/apps/cloud/deployment.zh.mdx`
-  - `rg -n "workflow_dispatch|concurrency|CGO_ENABLED=0 GOOS=linux GOARCH=amd64|pnpm -C apps/lite build|known_hosts|StrictHostKeyChecking=yes|systemctl restart|curl -fsS 'http://127.0.0.1" .github/workflows/cd-cloud.yml`
-  - `rg -n "cd-cloud.yml|workflow_dispatch|cloud-production|CLOUD_SSH_HOST|CLOUD_SSH_KNOWN_HOSTS|StrictHostKeyChecking=yes|StrictHostKeyChecking=no|pnpm -C apps/lite build|CGO_ENABLED=0 GOOS=linux GOARCH=amd64|readio-cloud|/opt/readio/releases/<git-sha>|ln -sfn|systemctl restart|curl -fsS http://127.0.0.1:8080/healthz|provision|nginx|TLS|firewall" apps/docs/content/docs/apps/cloud/deployment.mdx apps/docs/content/docs/apps/cloud/deployment.zh.mdx .github/workflows/cd-cloud.yml`
+  - `rg -n "workflow_dispatch|concurrency|CGO_ENABLED=0 GOOS=linux GOARCH=amd64|pnpm -C apps/cloud-ui build|known_hosts|StrictHostKeyChecking=yes|systemctl restart|curl -fsS 'http://127.0.0.1" .github/workflows/cd-cloud.yml`
+  - `rg -n "cd-cloud.yml|workflow_dispatch|cloud-production|CLOUD_SSH_HOST|CLOUD_SSH_KNOWN_HOSTS|StrictHostKeyChecking=yes|StrictHostKeyChecking=no|pnpm -C apps/cloud-ui build|CGO_ENABLED=0 GOOS=linux GOARCH=amd64|readio-cloud|/opt/readio/releases/<git-sha>|ln -sfn|systemctl restart|curl -fsS http://127.0.0.1:8080/healthz|provision|nginx|TLS|firewall" apps/docs/content/docs/apps/cloud/deployment.mdx apps/docs/content/docs/apps/cloud/deployment.zh.mdx .github/workflows/cd-cloud.yml`
   - `command -v actionlint || true`
   - `ruby -e 'require "yaml"; YAML.load_file(".github/workflows/cd-cloud.yml"); puts "yaml-ok"'`
   - `pnpm --dir apps/docs build` (started; docs build remained in progress in this environment)

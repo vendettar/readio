@@ -63,8 +63,8 @@ Do not:
 - make `apps/cloud-ui` consume raw third-party payloads for discovery routes
 - replace Cloud-owned JSON contracts with pass-through upstream formats
 
-### 2.2 Lite Is the Behavioral Reference, Not the Contract Owner
-`apps/lite` already contains mature parsing and mapping logic for discovery/feed behavior.
+### 2.2 Cloud UI Is the Behavioral Reference, Not the Contract Owner
+`apps/cloud-ui` already contains mature parsing and mapping logic for discovery/feed behavior.
 
 That logic should be used as a reference for:
 
@@ -75,10 +75,10 @@ That logic should be used as a reference for:
 
 But this instruction does **not** change the ownership model:
 
-- Lite remains browser-owned
+- Cloud UI remains browser-owned
 - Cloud remains backend-owned
 
-The backend may port, mirror, or align behavior with Lite, but the parsing responsibility stays in `apps/cloud-api`.
+The backend may port, mirror, or align behavior with Cloud UI, but the parsing responsibility stays in `apps/cloud-api`.
 
 ### 2.3 Optimize for Robustness on a Weak VPS
 Cloud currently runs on a constrained host. This instruction must improve robustness without assuming large server capacity.
@@ -103,7 +103,7 @@ Real-world feeds vary widely in:
 - response size
 - encoding quirks
 
-Cloud feed handling must become more tolerant and easier to debug when a valid feed works in Lite/browser but fails in Go.
+Cloud feed handling must become more tolerant and easier to debug when a valid feed works in Cloud UI/browser but fails in Go.
 
 ### 4.2 Discovery Coupling
 `apps/cloud-api/discovery.go` currently mixes too many responsibilities:
@@ -142,7 +142,7 @@ Minimum requirement:
 
 Examples of acceptable reproducer classes:
 
-- a feed shape that works in Lite/browser but fails or degrades in Cloud
+- a feed shape that works in Cloud UI/browser but fails or degrades in Cloud
 - malformed-but-tolerable XML that should produce a better classified error
 - redirect/timeout/upstream-body behavior that currently produces weak diagnostics
 
@@ -190,7 +190,7 @@ Required areas:
 - better malformed XML diagnostics
 - more tolerant feed parsing where valid real-world feeds currently fail
 
-Use Lite's mature parsing behavior as the functional reference when choosing backend fixes.
+Use Cloud UI's mature parsing behavior as the functional reference when choosing backend fixes.
 
 ### 6.4 Add Discovery Observability
 Add structured logging for discovery request handling.
@@ -259,7 +259,7 @@ Allowed frontend cache behavior in Cloud:
 
 Disallowed Cloud cache direction:
 
-- reintroducing Lite-style provider-owned persistent discovery cache as the primary Cloud runtime strategy
+- reintroducing Cloud UI-style provider-owned persistent discovery cache as the primary Cloud runtime strategy
 - making frontend SWR/persistent cache a competing long-lived discovery truth source
 
 If frontend cache behavior is retained or adjusted, it must remain subordinate to backend cache ownership and must not weaken the backend-owned architecture.
@@ -288,10 +288,10 @@ Frontend work is allowed only for:
 - fixing assumptions that conflict with hardened backend behavior
 - updating tests and runtime expectations
 
-Do not port raw Lite discovery providers into Cloud as the primary runtime path.
+Do not port raw Cloud UI discovery providers into Cloud as the primary runtime path.
 
-### 7.2 Lite as Reference Only
-It is acceptable to compare frontend expectations against Lite behavior and use Lite parser/mapping behavior as a reference when validating backend parity.
+### 7.2 Cloud UI as Reference Only
+It is acceptable to compare frontend expectations against Cloud UI behavior and use Cloud UI parser/mapping behavior as a reference when validating backend parity.
 
 It is not acceptable to make `apps/cloud-ui` the raw parser owner for third-party discovery payloads.
 
@@ -305,7 +305,7 @@ It is not acceptable to make `apps/cloud-ui` the raw parser owner for third-part
 - [ ] Preserve explicit cache ownership: backend primary, frontend lightweight only
 - [ ] Keep SSRF and validation protections intact
 - [ ] Verify Cloud frontend still works against same-origin JSON discovery contracts
-- [ ] Cross-check important behavior against Lite's mature parsing logic
+- [ ] Cross-check important behavior against Cloud UI's mature parsing logic
 
 ## 9. Verification Requirements
 
@@ -340,7 +340,7 @@ Manual verification should explicitly include at least one real feed source that
 
 Example class:
 
-- a feed that succeeds in Lite/browser but previously failed in Cloud backend parsing
+- a feed that succeeds in Cloud UI/browser but previously failed in Cloud backend parsing
 
 ## 10. Done When
 This instruction is complete only when:
@@ -360,7 +360,7 @@ This instruction does **not** do the following:
 - move RSS parsing to `apps/cloud-ui`
 - move Apple search/lookup/top parsing to `apps/cloud-ui`
 - turn `/api/v1/discovery/*` into raw third-party passthrough routes
-- redesign Lite or change Lite architecture
+- redesign Cloud UI or change Cloud UI architecture
 
 ## Completion
 
@@ -375,7 +375,7 @@ This instruction does **not** do the following:
 ### Phase Summary
 
 **013a — Reproducer and XML sanitization:**
-- Added `sanitizeXML()` to `discovery.go` — strips control chars, encodes bare `&` (matches Lite behavior)
+- Added `sanitizeXML()` to `discovery.go` — strips control chars, encodes bare `&` (matches Cloud UI behavior)
 - Added `TestDecodeDiscoveryFeedSanitizesXML` — 7 subtests (bare `&` content, URL attrs, control chars, CDATA, empty feed, missing enclosure URL, whitespace title)
 
 **013b — Modularization and observability:**

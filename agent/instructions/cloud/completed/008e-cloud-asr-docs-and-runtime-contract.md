@@ -31,7 +31,7 @@ Documentation must not over-claim:
 
 - do not say "all media goes through the backend"
 - do not say "`/api/proxy` handles provider transcription"
-- do not imply that Lite has the same relay ownership
+- do not imply that Cloud UI has the same relay ownership
 - do not imply server-side persistence or background ASR jobs
 
 ## Likely Files

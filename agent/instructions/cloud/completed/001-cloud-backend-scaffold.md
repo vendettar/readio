@@ -1,18 +1,18 @@
 # Instruction Template (Cloud)
 
-> **⚠️ CRITICAL**: This is the foundational backend scaffolding for the Cloud version. Do NOT modify `apps/lite` business logic yet, only configure the backend to support it.
+> **⚠️ CRITICAL**: This is the foundational backend scaffolding for the Cloud version. Do NOT modify `apps/cloud-ui` business logic yet, only configure the backend to support it.
 > **Prerequisites**: Read `apps/docs/content/docs/general/monorepo-strategy.mdx` before starting.
 
 # Task: Scaffold Cloud Backend (Go + SQLite + Static Serving)
 
 ## Objective
-Initialize the `apps/cloud` backend to serve as a self-hosted entry point for the Readio app. This includes setting up a Go server using the standard-library `net/http`, serving the `apps/lite` frontend, providing a server-side RSS fetch proxy to replace public CORS proxies, and scaffolding a SQLite database connection for future data sync. 
+Initialize the `apps/cloud` backend to serve as a self-hosted entry point for the Readio app. This includes setting up a Go server using the standard-library `net/http`, serving the `apps/cloud-ui` frontend, providing a server-side RSS fetch proxy to replace public CORS proxies, and scaffolding a SQLite database connection for future data sync.
 *(Note: This phase only provides server capabilities; it DOES NOT wire the frontend to use them yet).*
 
 ## Decision Log
 - **Required / Waived**: Required. The following must be explicitly updated in `decision-log.mdx`:
   1. The strategic shift to **Golang and SQLite** (overriding the prior Hono/Spring Boot specs).
-  2. The **Frontend Reuse Strategy**: `apps/cloud` acts as a pure backend serving the compiled `apps/lite/dist` statically for early deployment phases. UI duplication is strongly forbidden until shared component extraction (`packages/ui`) occurs.
+  2. The **Frontend Reuse Strategy**: `apps/cloud` acts as a pure backend serving the compiled `apps/cloud-ui/dist` statically for early deployment phases. UI duplication is strongly forbidden until shared component extraction (`packages/ui`) occurs.
 
 ## Bilingual Sync
 - **Required / Not applicable**: Required (for all Doc Sync subtasks, including README and Handoffs).
@@ -23,8 +23,8 @@ Initialize the `apps/cloud` backend to serve as a self-hosted entry point for th
 - **routing**: High Risk. SPA fallback priority vs `/api/*` resolution is highly prone to collision.
 - **logging**: Medium Risk. Must enforce Go 1.21+ `log/slog` for structured logs instead of silent failures.
 - **network**: High Risk. RSS proxy introduces SSRF vulnerabilities; strict timeout, UA identity, and internal-network rejection are mandatory.
-- **storage**: Medium Risk. Executable-relative resolution of `apps/lite/dist` and SQLite file paths needed to avoid CWD brittleness.
-- **UI state**: Low-Medium Risk. Strict ban on altering `apps/lite` business logic in this phase to prevent state corruption.
+- **storage**: Medium Risk. Executable-relative resolution of `apps/cloud-ui/dist` and SQLite file paths needed to avoid CWD brittleness.
+- **UI state**: Low-Medium Risk. Strict ban on altering `apps/cloud-ui` business logic in this phase to prevent state corruption.
 - **tests**: High Risk. Manual verification is insufficient for infrastructure. Minimal `httptest` automation is required for proxy and routing safety.
 
 ## Implementation Mode (Strict Execution Sequence)
@@ -48,7 +48,7 @@ This scaffold instruction is too broad for a safe one-pass implementation. It MU
 ## Required Backend Contracts
 
 ### Static Serving Contract
-- Backend serves `apps/lite/dist` as the frontend artifact in early cloud phases. path must be resilient (ENV config or executable-relative), NOT a brittle `../lite/dist` CWD hardcode.
+- Backend serves `apps/cloud-ui/dist` as the frontend artifact in early cloud phases. path must be resilient (ENV config or executable-relative), NOT a brittle `../cloud-ui/dist` CWD hardcode.
 - Non-API routes may fallback to `index.html`.
 - API routes must be resolved before SPA fallback.
 

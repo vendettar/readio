@@ -16,7 +16,7 @@ After this instruction:
 - `Range` and seek behavior are explicitly tested
 - direct success versus fallback activation is proven
 - player-state transitions remain recoverable
-- download and transcript flows remain aligned with Lite expectations
+- download and transcript flows remain aligned with Cloud UI expectations
 
 The regression suite must not rely only on whichever real-world upstream host happens to fail today.
 At least one fallback-required path must be tested through deterministic mocked/controlled fixtures.

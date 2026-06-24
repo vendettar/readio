@@ -5,7 +5,7 @@ title: Cloud Media Fallback Audit
 # Cloud Media Fallback Audit
 
 ## Scope
-This audit uses Lite's current media handling as the baseline contract and classifies the Cloud media surfaces that still vary by upstream host or request type.
+This audit uses current Cloud media handling as the baseline contract and classifies the Cloud media surfaces that still vary by upstream host or request type.
 
 It distinguishes:
 
@@ -30,16 +30,16 @@ It distinguishes:
 
 ## Classification Matrix
 
-| Request class | Request initiator | Lite behavior | Current Cloud behavior | `fetchWithFallback` involved | User-configured proxy fallback today | Cloud backend fallback should exist | Safe fallback trigger | Reasons not to fallback |
+| Request class | Request initiator | Frontend behavior | Current Cloud behavior | `fetchWithFallback` involved | User-configured proxy fallback today | Cloud backend fallback should exist | Safe fallback trigger | Reasons not to fallback |
 |---|---|---|---|---|---|---|---|---|
 | Primary remote audio playback through native `<audio>` | `useAudioElementSync` via `GlobalAudioController` sets `audio.src` | Browser-direct media-element load; `blob:` when local download exists | Browser-direct first, then one same-origin proxied-URL retry if the direct media-element load errors | No | Not user-configurable in Cloud; fallback uses only the built-in same-origin proxy route | Yes, but only as an explicit proxied media URL retry, not a generic JS fetch fallback | Direct native audio error on the current track before a proxy retry has already been attempted | Native audio transport is not a JS retry target; retries must stay bounded to one proxied URL attempt per track, must not claim support for authenticated external proxies, and must not introduce backend caching |
-| Foreground audio prefetch using JS `fetch` with `Range` | `useForegroundAudioPrefetch` -> `AudioPrefetchScheduler` | Direct `fetch` with `Range`; no proxy fallback | Same as Lite | No | No visible Cloud UI proxy; no active user-facing proxy config | Yes, but only for approved browser/CORS/network failures and only for this request class | Direct `fetch` fails with CORS/network failure or the upstream does not support the partial-content request | Prefetch is an optimization; it should not force all playback bytes through the backend |
+| Foreground audio prefetch using JS `fetch` with `Range` | `useForegroundAudioPrefetch` -> `AudioPrefetchScheduler` | Direct `fetch` with `Range`; no proxy fallback | Same frontend behavior | No | No visible Cloud UI proxy; no active user-facing proxy config | Yes, but only for approved browser/CORS/network failures and only for this request class | Direct `fetch` fails with CORS/network failure or the upstream does not support the partial-content request | Prefetch is an optimization; it should not force all playback bytes through the backend |
 | Download sizing via `HEAD` | `downloadService.executeDownload` | `fetchWithFallback` direct-first, then proxy if configured | Same code path; Cloud UI hides the proxy section, but the plumbing still exists in config/state | Yes | Not user-visible in Cloud, but dormant config plumbing remains | Yes | Direct request fails with network/CORS/timeout or upstream 5xx after the direct attempt | None, beyond preserving body cancellation and not caching |
-| Download transfer via `GET` | `downloadService.executeDownload` | `fetchWithFallback` direct-first, then proxy if configured; stream to IndexedDB | Same code path as Lite | Yes | Not user-visible in Cloud, but dormant config plumbing remains | Yes | Direct request fails with network/CORS/timeout or upstream 5xx after the direct attempt | Do not add server-side media persistence or caching |
-| Remote transcript fetch | `fetchAndPersistRemoteTranscript` via `fetchTextWithFallback` | Direct-first text fetch with proxy fallback; transcript cached locally after fetch | Same code path as Lite | Yes | Not user-visible in Cloud, but dormant config plumbing remains | Yes | Direct request fails with network/CORS/timeout or upstream 5xx after the direct attempt | Do not collapse parse failures into transport failures; keep parsing isolated |
-| Media fetches triggered during playback startup | `remotePlayback` delegates into `downloadEpisode` / `fetchRemoteAudioBlob` when the startup path needs media bytes | Startup itself is mostly source resolution; any actual media fetch inherits the download/transcript behavior | Same as Lite | Sometimes, depending on the startup branch | Same as the delegated class | Yes, but only through the delegated request class; startup itself is not a new transport | The delegated branch's fallback trigger | Plain source resolution that does not fetch bytes should stay browser-local |
-| Local `blob:` playback | `playbackSource.resolvePlaybackSource` | Browser-local object URL from IndexedDB download | Same as Lite | No | No | No | None | Must remain browser-only and never be proxied |
-| Tracking URL unwrap paths | `unwrapPodcastTrackingUrl` in `playbackSource`, `downloadService`, `remoteTranscript` | Canonicalization only; no network by itself | Same as Lite | No | No | Preserve as preprocessing only | Not a transport fallback trigger | Unwrapping is not a network request; it feeds the later request classes and must stay deterministic |
+| Download transfer via `GET` | `downloadService.executeDownload` | `fetchWithFallback` direct-first, then proxy if configured; stream to IndexedDB | Same frontend code path | Yes | Not user-visible in Cloud, but dormant config plumbing remains | Yes | Direct request fails with network/CORS/timeout or upstream 5xx after the direct attempt | Do not add server-side media persistence or caching |
+| Remote transcript fetch | `fetchAndPersistRemoteTranscript` via `fetchTextWithFallback` | Direct-first text fetch with proxy fallback; transcript cached locally after fetch | Same frontend code path | Yes | Not user-visible in Cloud, but dormant config plumbing remains | Yes | Direct request fails with network/CORS/timeout or upstream 5xx after the direct attempt | Do not collapse parse failures into transport failures; keep parsing isolated |
+| Media fetches triggered during playback startup | `remotePlayback` delegates into `downloadEpisode` / `fetchRemoteAudioBlob` when the startup path needs media bytes | Startup itself is mostly source resolution; any actual media fetch inherits the download/transcript behavior | Same frontend behavior | Sometimes, depending on the startup branch | Same as the delegated class | Yes, but only through the delegated request class; startup itself is not a new transport | The delegated branch's fallback trigger | Plain source resolution that does not fetch bytes should stay browser-local |
+| Local `blob:` playback | `playbackSource.resolvePlaybackSource` | Browser-local object URL from IndexedDB download | Same frontend behavior | No | No | No | None | Must remain browser-only and never be proxied |
+| Tracking URL unwrap paths | `unwrapPodcastTrackingUrl` in `playbackSource`, `downloadService`, `remoteTranscript` | Canonicalization only; no network by itself | Same frontend behavior | No | No | Preserve as preprocessing only | Not a transport fallback trigger | Unwrapping is not a network request; it feeds the later request classes and must stay deterministic |
 
 ## Risk Notes
 
@@ -51,13 +51,13 @@ It distinguishes:
 ## Test Targets For Later Child Instructions
 
 - `apps/cloud-ui/src/lib/__tests__/audioPrefetch.test.ts`
-- `apps/lite/src/lib/__tests__/audioPrefetch.test.ts`
+- `apps/cloud-ui/src/lib/__tests__/audioPrefetch.test.ts`
 - `apps/cloud-ui/src/lib/__tests__/fetchUtils.test.ts`
-- `apps/lite/src/lib/__tests__/fetchUtils.test.ts`
+- `apps/cloud-ui/src/lib/__tests__/fetchUtils.test.ts`
 - `apps/cloud-ui/src/lib/__tests__/downloadService.regression.test.ts`
-- `apps/lite/src/lib/__tests__/downloadService.regression.test.ts`
+- `apps/cloud-ui/src/lib/__tests__/downloadService.regression.test.ts`
 - `apps/cloud-ui/src/lib/__tests__/remoteTranscript.test.ts`
-- `apps/lite/src/lib/__tests__/remoteTranscript.test.ts`
+- `apps/cloud-ui/src/lib/__tests__/remoteTranscript.test.ts`
 - `apps/cloud-ui/src/lib/player/__tests__/playbackSource.test.ts`
 - `apps/cloud-ui/src/lib/player/__tests__/remotePlayback.test.ts`
 - `apps/cloud-api` handler tests for media proxy `Range`, `206`, `416`, timeout, and redirect behavior

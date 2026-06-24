@@ -1,7 +1,7 @@
-# Instruction Template (Lite)
+# Instruction Template (Cloud)
 
 > **⚠️ CRITICAL**: You MUST preserve the current UI/UX layout and styling. Do NOT change visual appearance unless explicitly instructed.
-> **Prerequisites**: Read the relevant handoff + coding-standards docs before starting.
+> **Prerequisites**: Read the relevant handoff docs plus `apps/docs/content/docs/apps/cloud/handoff/standards.mdx` before starting.
 
 # Task: <Title>
 
@@ -23,8 +23,8 @@
 
 ---
 ## Documentation
-- Update `apps/docs/content/docs/apps/lite/handoff/<target>.mdx`
-- Update `apps/docs/content/docs/apps/lite/handoff/index.mdx` (status only)
+- Update `apps/docs/content/docs/apps/cloud/handoff/<target>.mdx`
+- Update `apps/docs/content/docs/apps/cloud/handoff/index.mdx` (status only)
 - Update `apps/docs/content/docs/general/decision-log.mdx` when Decision Log is Required
 - Update `apps/docs/content/docs/general/feature-backlog.mdx` if item exists
 - Update `apps/docs/content/docs/general/technical-roadmap.mdx` (after Reviewer sign-off)

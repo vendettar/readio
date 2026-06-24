@@ -54,7 +54,7 @@ Readio is committed to user data sovereignty and absolute security.
 - **POST-only client**: All client proxy calls use POST JSON body `{ "url": "..." }`. No GET fallback.
 - **Response policy**: Return `403` for policy violations (disallowed origin/upstream).
 
-**Lite-Side Guardrails**:
+**Frontend Guardrails**:
 - Force custom proxy mode to POST JSON contract; no runtime GET mode.
 - Fix auth header name to `x-proxy-token` to match Worker CORS allow-headers and avoid preflight mismatches.
 - Validate that proxy auth value is present when auth header is configured.
