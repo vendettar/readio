@@ -20,6 +20,7 @@ import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts'
 import { useNetworkStatus } from '../hooks/useNetworkStatus'
 import { useReportWebVitals } from '../hooks/usePerformance'
 import { usePwaUpdate } from '../hooks/usePwaUpdate'
+import { APP_NAVIGATION_EVENT, parseAppNavigationRequest } from '../lib/appNavigation'
 import { logError } from '../lib/logger'
 import { toast } from '../lib/toast'
 import { usePlayerStore } from '../store/playerStore'
@@ -58,13 +59,12 @@ function RootLayout() {
   // Handle global navigation requests from non-component code
   useEffect(() => {
     const handleNavigate = (event: Event) => {
-      const customEvent = event as CustomEvent<{ to: string; hash?: string }>
-      if (customEvent.detail) {
-        void router.navigate(customEvent.detail)
-      }
+      const request = parseAppNavigationRequest((event as CustomEvent<unknown>).detail)
+      if (!request) return
+      void router.navigate(request)
     }
-    window.addEventListener('readio:navigate', handleNavigate)
-    return () => window.removeEventListener('readio:navigate', handleNavigate)
+    window.addEventListener(APP_NAVIGATION_EVENT, handleNavigate)
+    return () => window.removeEventListener(APP_NAVIGATION_EVENT, handleNavigate)
   }, [router])
 
   // Initialize global keyboard shortcuts

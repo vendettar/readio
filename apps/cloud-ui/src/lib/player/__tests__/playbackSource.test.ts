@@ -3,11 +3,8 @@ import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest'
 
 import { findDownloadedTrack } from '../../downloadService'
 import { PlaybackRepository } from '../../repositories/PlaybackRepository'
-import {
-  __dropPlaybackSourceObjectUrl,
-  __resetPlaybackSourceCache,
-  resolvePlaybackSource,
-} from '../playbackSource'
+import { __resetPlaybackSourceCache, resolvePlaybackSource } from '../playbackSource'
+import { __resetPlaybackBlobUrlOwnerForTests, revokePlaybackBlobUrl } from '../playerBlobUrls'
 
 vi.mock('../../downloadService', () => ({
   findDownloadedTrack: vi.fn(),
@@ -23,6 +20,7 @@ describe('resolvePlaybackSource', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     __resetPlaybackSourceCache()
+    __resetPlaybackBlobUrlOwnerForTests()
 
     // Mock only URL.createObjectURL and URL.revokeObjectURL
     vi.spyOn(global.URL, 'createObjectURL').mockImplementation(
@@ -118,7 +116,7 @@ describe('resolvePlaybackSource', () => {
     expect(second.url).toBe('blob:url-1')
     expect(global.URL.createObjectURL).toHaveBeenCalledTimes(1)
 
-    __dropPlaybackSourceObjectUrl(first.url)
+    revokePlaybackBlobUrl(first.url)
 
     const third = await resolvePlaybackSource('https://example.com/audio.mp3')
     expect(third.url).toBe('blob:url-2')

@@ -2,6 +2,7 @@ import { findDownloadedTrack } from '../downloadService'
 import { logError } from '../logger'
 import { normalizePodcastAudioUrl, unwrapPodcastTrackingUrl } from '../networking/urlUtils'
 import { PlaybackRepository } from '../repositories/PlaybackRepository'
+import { createPlaybackBlobUrl, isPlaybackBlobUrlActive } from './playerBlobUrls'
 
 // Singleton check (Instruction 124) to avoid redundant Blob URL creation for repeats
 let lastResolved: { normalizedUrl: string; objectUrl: string } | null = null
@@ -22,7 +23,11 @@ export async function resolvePlaybackSource(sourceUrl: string): Promise<Playback
 
     // Use cached singleton if it's identical
     if (lastResolved && lastResolved.normalizedUrl === normalizedUrl) {
-      return { url: lastResolved.objectUrl, trackId: track.id }
+      if (!isPlaybackBlobUrlActive(lastResolved.objectUrl)) {
+        lastResolved = null
+      } else {
+        return { url: lastResolved.objectUrl, trackId: track.id }
+      }
     }
 
     const audioBlobRecord = await PlaybackRepository.getAudioBlob(track.audioId)
@@ -30,7 +35,7 @@ export async function resolvePlaybackSource(sourceUrl: string): Promise<Playback
       return { url: unwrapPodcastTrackingUrl(sourceUrl), trackId: track.id }
     }
 
-    const objectUrl = URL.createObjectURL(audioBlobRecord.blob)
+    const objectUrl = createPlaybackBlobUrl(audioBlobRecord.blob)
     lastResolved = { normalizedUrl, objectUrl }
 
     return { url: objectUrl, trackId: track.id, createdObjectUrl: true }
@@ -45,10 +50,4 @@ export async function resolvePlaybackSource(sourceUrl: string): Promise<Playback
 
 export function __resetPlaybackSourceCache() {
   lastResolved = null
-}
-
-export function __dropPlaybackSourceObjectUrl(objectUrl: string): void {
-  if (lastResolved?.objectUrl === objectUrl) {
-    lastResolved = null
-  }
 }

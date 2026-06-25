@@ -1,4 +1,5 @@
 import { useTranscriptStore } from '../store/transcriptStore'
+import { requestAppNavigation } from './appNavigation'
 import { ASRClientError, type ASRProvider } from './asr'
 import {
   type AsrConfigErrorCode,
@@ -132,11 +133,7 @@ async function resolveAsrApiKeyAndSettings(): Promise<
 // Bypassing TanStack Router via pushState is brittle and can break with base path changes.
 // We use a custom event to request navigation from the UI layer to avoid circular dependencies.
 function navigateToSettingsAsrSection(): void {
-  window.dispatchEvent(
-    new CustomEvent('readio:navigate', {
-      detail: { to: '/settings', hash: 'asr' },
-    })
-  )
+  requestAppNavigation({ to: '/settings', hash: 'asr' })
 }
 
 async function tryApplyFingerprintCache(

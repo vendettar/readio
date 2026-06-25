@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { sanitizeHtml } from '../htmlUtils'
+import { sanitizeHtml, stripHtml } from '../htmlUtils'
 
 describe('htmlUtils - sanitizeHtml', () => {
   it('should strip <style> tags', () => {
@@ -38,5 +38,30 @@ describe('htmlUtils - sanitizeHtml', () => {
     const clean = sanitizeHtml(dirty)
     expect(clean).toContain('target="_blank"')
     expect(clean).toContain('rel="noopener noreferrer"')
+  })
+})
+
+describe('htmlUtils - stripHtml', () => {
+  it('extracts text after removing unsafe HTML and event attributes', () => {
+    const dirty =
+      'Safe <img src=x onerror="alert(1)"> text <script>alert("xss")</script><style>body{color:red}</style><link rel="stylesheet" href="evil.css">'
+
+    expect(stripHtml(dirty)).toBe('Safe text')
+  })
+
+  it('decodes HTML entities while returning plain text', () => {
+    expect(stripHtml('<p>Tom &amp; Jerry&nbsp; &lt;3</p>')).toBe('Tom & Jerry <3')
+  })
+
+  it('preserves semantic line breaks without keeping markup', () => {
+    const dirty = '<p>One<br>Two</p><div>Three</div><ul><li>Four</li></ul>'
+
+    expect(stripHtml(dirty, { preserveLineBreaks: true })).toBe('One\nTwo\n\nThree\nFour')
+  })
+
+  it('handles malformed HTML safely', () => {
+    const dirty = '<p>Open <strong>tag<img src=x onerror=alert(1)> tail'
+
+    expect(stripHtml(dirty)).toBe('Open tag tail')
   })
 })

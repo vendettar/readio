@@ -11,6 +11,7 @@ import { Button } from '../components/ui/button'
 import { EmptyState } from '../components/ui/empty-state'
 import { HiddenFileInput } from '../components/ui/hidden-file-input'
 import { useViewDensity } from '../hooks/useViewDensity'
+import { requestAppNavigation } from '../lib/appNavigation'
 import { buildFavoriteKey, buildFavoriteKeyFromFavorite } from '../lib/db/favoriteIdentity'
 import { mapPodcastDownloadToFavoriteInputs } from '../lib/db/favoriteMappers'
 import type { FileSubtitle, PodcastDownload } from '../lib/db/types'
@@ -293,11 +294,7 @@ export default function DownloadsPage() {
       if (!result.ok) {
         if (result.reason === RETRANSCRIBE_DOWNLOAD_REASON.UNCONFIGURED) {
           toast.errorKey('asrKeyInvalid')
-          window.dispatchEvent(
-            new CustomEvent('readio:navigate', {
-              detail: { to: '/settings', hash: 'asr' },
-            })
-          )
+          requestAppNavigation({ to: '/settings', hash: 'asr' })
         }
         return
       }

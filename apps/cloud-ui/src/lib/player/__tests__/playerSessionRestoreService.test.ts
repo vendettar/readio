@@ -1,6 +1,7 @@
 import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DB } from '../../dexieDb'
+import { __resetPlaybackBlobUrlOwnerForTests } from '../playerBlobUrls'
 import { loadPlayerSessionRestore } from '../session/playerSessionRestoreService'
 
 vi.mock('../../logger', () => ({
@@ -37,6 +38,7 @@ describe('loadPlayerSessionRestore', () => {
   beforeEach(async () => {
     await DB.clearAllData()
     vi.clearAllMocks()
+    __resetPlaybackBlobUrlOwnerForTests()
   })
 
   it('returns an empty result when there is no resumable session', async () => {

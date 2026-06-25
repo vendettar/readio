@@ -1,7 +1,7 @@
 import { isAbortLikeError } from '../lib/fetchUtils'
 import { warn } from '../lib/logger'
 import type { EpisodeMetadata } from '../lib/player/playbackMetadata'
-import { revokePlaybackBlobUrls } from '../lib/player/playerBlobUrls'
+import { createPlaybackBlobUrl, revokePlaybackBlobUrls } from '../lib/player/playerBlobUrls'
 import {
   MANUAL_PLAYBACK_AUDIO_PERSIST_REASON,
   persistManualPlaybackAudio,
@@ -49,7 +49,7 @@ export function createPlayerStoreBlobLoadState(
   }
 ): ReturnType<typeof buildPlayerStoreBlobLoadState> {
   return buildPlayerStoreBlobLoadState(state, {
-    url: URL.createObjectURL(input.blob),
+    url: createPlaybackBlobUrl(input.blob),
     title: input.title,
     coverArt: input.coverArt,
     sessionId: input.sessionId,

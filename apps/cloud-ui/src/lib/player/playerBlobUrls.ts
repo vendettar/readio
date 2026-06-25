@@ -1,17 +1,40 @@
-import { __dropPlaybackSourceObjectUrl } from './playbackSource'
+const activePlaybackBlobUrls = new Set<string>()
+
+function isBlobUrl(url: unknown): url is string {
+  return typeof url === 'string' && url.startsWith('blob:')
+}
+
+export function createPlaybackBlobUrl(blob: Blob): string {
+  const url = URL.createObjectURL(blob)
+  activePlaybackBlobUrls.add(url)
+  return url
+}
+
+export function registerPlaybackBlobUrl(url: string): string {
+  if (isBlobUrl(url)) {
+    activePlaybackBlobUrls.add(url)
+  }
+  return url
+}
+
+export function isPlaybackBlobUrlActive(url: string): boolean {
+  return activePlaybackBlobUrls.has(url)
+}
 
 export function revokePlaybackBlobUrl(url: string): void {
+  if (!isBlobUrl(url) || !activePlaybackBlobUrls.has(url)) return
+
   try {
     URL.revokeObjectURL(url)
   } catch {
     // Ignore revocation errors.
   } finally {
-    __dropPlaybackSourceObjectUrl(url)
+    activePlaybackBlobUrls.delete(url)
   }
 }
 
 export function revokePlaybackBlobUrls(urls: readonly string[]): void {
-  urls.forEach((url) => {
+  Array.from(new Set(urls)).forEach((url) => {
     revokePlaybackBlobUrl(url)
   })
 }
@@ -20,12 +43,16 @@ export function collectPlaybackBlobUrls(
   audioUrl: string | null,
   coverArt: string | Blob | null
 ): string[] {
-  const blobUrls: string[] = []
-  if (audioUrl?.startsWith('blob:')) {
-    blobUrls.push(audioUrl)
+  const blobUrls = new Set<string>()
+  if (isBlobUrl(audioUrl)) {
+    blobUrls.add(registerPlaybackBlobUrl(audioUrl))
   }
-  if (typeof coverArt === 'string' && coverArt.startsWith('blob:')) {
-    blobUrls.push(coverArt)
+  if (isBlobUrl(coverArt)) {
+    blobUrls.add(registerPlaybackBlobUrl(coverArt))
   }
-  return blobUrls
+  return Array.from(blobUrls)
+}
+
+export function __resetPlaybackBlobUrlOwnerForTests(): void {
+  activePlaybackBlobUrls.clear()
 }

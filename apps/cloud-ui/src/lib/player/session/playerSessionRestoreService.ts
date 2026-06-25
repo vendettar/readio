@@ -5,6 +5,7 @@ import { log, warn } from '../../logger'
 import { DownloadsRepository } from '../../repositories/DownloadsRepository'
 import { FilesRepository } from '../../repositories/FilesRepository'
 import { PlaybackRepository } from '../../repositories/PlaybackRepository'
+import { createPlaybackBlobUrl } from '../playerBlobUrls'
 import {
   buildRestoredLocalBlobState,
   buildRestoredRemoteSessionState,
@@ -42,7 +43,7 @@ async function loadLocalBlobState(
   const file = new File([audioData.blob], audioData.filename, {
     type: audioData.type,
   })
-  const audioUrl = URL.createObjectURL(file)
+  const audioUrl = createPlaybackBlobUrl(file)
   const artwork = await resolveTrackArtwork(localTrackId ?? session.localTrackId)
 
   return buildRestoredLocalBlobState({

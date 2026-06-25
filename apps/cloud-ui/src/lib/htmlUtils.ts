@@ -5,6 +5,8 @@ const BR_REGEX = /<br\s*\/?>/gi
 const P_CLOSE_REGEX = /<\/p>/gi
 const DIV_CLOSE_REGEX = /<\/div>/gi
 const LI_CLOSE_REGEX = /<\/li>/gi
+const BLOCKED_ELEMENT_CONTENT_REGEX =
+  /<(script|style|link)\b[^>]*>[\s\S]*?<\/\1>|<(script|style|link)\b[^>]*\/?>/gi
 const MULTI_SPACE_REGEX = /[ \t]+/g
 const MULTI_NEWLINE_REGEX = /\n\s*\n\s*\n+/g
 const ALL_WHITESPACE_REGEX = /\s+/g
@@ -16,8 +18,13 @@ const ALL_WHITESPACE_REGEX = /\s+/g
 export function stripHtml(html: string, options: { preserveLineBreaks?: boolean } = {}): string {
   if (!html) return ''
 
+  const safeHtml =
+    typeof document === 'undefined'
+      ? html.replace(BLOCKED_ELEMENT_CONTENT_REGEX, '')
+      : sanitizeHtml(html)
+
   // Replace block-level tags with newlines if we want to preserve structure
-  let processedHtml = html
+  let processedHtml = safeHtml
   if (options.preserveLineBreaks) {
     processedHtml = processedHtml
       .replace(BR_REGEX, '\n')

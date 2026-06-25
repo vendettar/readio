@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useImageObjectUrl } from '../../hooks/useImageObjectUrl'
 import { usePlayerController } from '../../hooks/usePlayerController'
 import { useZoom } from '../../hooks/useZoom'
+import { requestAppNavigation } from '../../lib/appNavigation'
 import { useDownloadProgressStore } from '../../lib/downloadService'
 import { normalizePodcastAudioUrl } from '../../lib/networking/urlUtils'
 import {
@@ -171,11 +172,7 @@ export function ReadingContent({
     if (variant === 'docked') {
       toMini()
     }
-    window.dispatchEvent(
-      new CustomEvent('readio:navigate', {
-        detail: { to: '/settings', hash: 'asr' },
-      })
-    )
+    requestAppNavigation({ to: '/settings', hash: 'asr' })
   }, [toMini, variant])
 
   // Subtitle synchronization

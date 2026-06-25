@@ -136,6 +136,17 @@ interface SelectionMenuProps {
   open?: boolean
 }
 
+type SelectionMenuSurface = 'contextMenu' | 'rangeActionMenu'
+
+type SelectionMenuItem = {
+  key: 'copy' | 'search' | 'lookup'
+  icon: typeof Copy
+  label: string
+  onClick: () => void
+  visible: boolean
+  className?: string
+}
+
 /**
  * Shared arrow component for floating menus
  */
@@ -176,6 +187,48 @@ function MenuArrow({
         side === 'right' && 'border-t-0 border-r-0'
       )}
     />
+  )
+}
+
+function SelectionMenuItems({
+  items,
+  onClose,
+  skipRestoreRef,
+  surface,
+  surfaceId,
+}: {
+  items: SelectionMenuItem[]
+  onClose: SelectionMenuProps['onClose']
+  skipRestoreRef: React.MutableRefObject<boolean>
+  surface: SelectionMenuSurface
+  surfaceId: number
+}) {
+  return (
+    <div className="relative z-10 flex flex-col gap-0.5 p-1">
+      {items.map((item) => {
+        const Icon = item.icon
+        return (
+          <DropdownMenuItem
+            key={item.key}
+            className={cn(
+              'flex cursor-default select-none items-center justify-between gap-3 rounded-sm px-3 py-2 text-sm whitespace-nowrap outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+              item.className
+            )}
+            onSelect={(e) => {
+              e.preventDefault()
+              if (item.key === 'lookup') {
+                skipRestoreRef.current = true
+              }
+              item.onClick()
+              onClose({ reason: 'dismiss', surface, surfaceId })
+            }}
+          >
+            {item.label}
+            <Icon size={16} className="ms-auto shrink-0 opacity-70" />
+          </DropdownMenuItem>
+        )
+      })}
+    </div>
   )
 }
 
@@ -358,31 +411,13 @@ export function WordContextMenu({
           }}
         >
           <MenuArrow context={context} arrowRef={arrowRef} />
-          <div className="relative z-10 flex flex-col gap-0.5 p-1">
-            {visibleMenuItems.map((item) => {
-              const Icon = item.icon
-              return (
-                <DropdownMenuItem
-                  key={item.key}
-                  className={cn(
-                    'flex cursor-default select-none items-center justify-between gap-3 rounded-sm px-3 py-2 text-sm whitespace-nowrap outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
-                    item.className
-                  )}
-                  onSelect={(e) => {
-                    e.preventDefault()
-                    if (item.key === 'lookup') {
-                      skipRestoreRef.current = true
-                    }
-                    item.onClick()
-                    onClose({ reason: 'dismiss', surface: 'contextMenu', surfaceId })
-                  }}
-                >
-                  {item.label}
-                  <Icon size={16} className="ms-auto shrink-0 opacity-70" />
-                </DropdownMenuItem>
-              )
-            })}
-          </div>
+          <SelectionMenuItems
+            items={visibleMenuItems}
+            onClose={onClose}
+            skipRestoreRef={skipRestoreRef}
+            surface="contextMenu"
+            surfaceId={surfaceId}
+          />
         </DropdownMenuContent>
       </DropdownMenu>
     </FloatingPortal>
@@ -509,31 +544,13 @@ export function RangeActionMenu({
           }}
         >
           <MenuArrow context={context} arrowRef={arrowRef} />
-          <div className="relative z-10 flex flex-col gap-0.5 p-1">
-            {visibleMenuItems.map((item) => {
-              const Icon = item.icon
-              return (
-                <DropdownMenuItem
-                  key={item.key}
-                  className={cn(
-                    'flex cursor-default select-none items-center justify-between gap-3 rounded-sm px-3 py-2 text-sm whitespace-nowrap outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
-                    item.className
-                  )}
-                  onSelect={(e) => {
-                    e.preventDefault()
-                    if (item.key === 'lookup') {
-                      skipRestoreRef.current = true
-                    }
-                    item.onClick()
-                    onClose({ reason: 'dismiss', surface: 'rangeActionMenu', surfaceId })
-                  }}
-                >
-                  {item.label}
-                  <Icon size={16} className="ms-auto shrink-0 opacity-70" />
-                </DropdownMenuItem>
-              )
-            })}
-          </div>
+          <SelectionMenuItems
+            items={visibleMenuItems}
+            onClose={onClose}
+            skipRestoreRef={skipRestoreRef}
+            surface="rangeActionMenu"
+            surfaceId={surfaceId}
+          />
         </DropdownMenuContent>
       </DropdownMenu>
     </FloatingPortal>

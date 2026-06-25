@@ -16,6 +16,7 @@ import { useFilePlayback } from '../../hooks/useFilePlayback'
 import { useFileProcessing } from '../../hooks/useFileProcessing'
 import { useFilesData } from '../../hooks/useFilesData'
 import { useViewDensity } from '../../hooks/useViewDensity'
+import { requestAppNavigation } from '../../lib/appNavigation'
 import type { FileSubtitle } from '../../lib/db/types'
 import { snapCenterCursor } from '../../lib/dnd/modifiers'
 import { getDragPreviewWidthClass } from '../../lib/dnd/previewSizing'
@@ -172,11 +173,7 @@ export default function FilesFolderPage() {
       if (!result.ok) {
         if (result.reason === RETRANSCRIBE_FILE_REASON.UNCONFIGURED) {
           toast.errorKey('asrKeyInvalid')
-          window.dispatchEvent(
-            new CustomEvent('readio:navigate', {
-              detail: { to: '/settings', hash: 'asr' },
-            })
-          )
+          requestAppNavigation({ to: '/settings', hash: 'asr' })
         }
         return
       }

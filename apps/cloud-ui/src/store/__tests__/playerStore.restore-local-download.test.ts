@@ -2,6 +2,7 @@ import { act, renderHook } from '@testing-library/react'
 import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DB } from '../../lib/dexieDb'
+import { __resetPlaybackBlobUrlOwnerForTests } from '../../lib/player/playerBlobUrls'
 import { usePlayerStore } from '../playerStore'
 import { usePlayerSurfaceStore } from '../playerSurfaceStore'
 
@@ -53,6 +54,7 @@ describe('playerStore - Session Restore Prefer Local Download', () => {
     })
     await DB.clearAllData()
     vi.clearAllMocks()
+    __resetPlaybackBlobUrlOwnerForTests()
   })
 
   it('restores from local blob when remote session matches a later download', async () => {
@@ -130,6 +132,39 @@ describe('playerStore - Session Restore Prefer Local Download', () => {
     expect(result.current.progress).toBe(60)
     expect(result.current.sessionId).toBe('session-remote-2')
     expect(usePlayerSurfaceStore.getState().canDockedRestore).toBe(true)
+  })
+
+  it('does not create or revoke blob URLs for remote fallback restore', async () => {
+    const remoteUrl = 'https://example.com/episodes/remote-only.mp3'
+
+    await DB.createPlaybackSession({
+      id: 'session-remote-only',
+      audioUrl: remoteUrl,
+      progress: 12,
+      source: 'explore',
+      title: 'Remote Only Episode',
+      artworkUrl: 'https://example.com/remote-only-cover.jpg',
+      showTitle: 'Remote Only Podcast',
+      episodeGuid: 'remote-only-guid',
+      podcastItunesId: 'remote-only-podcast-id',
+      countryAtSave: 'us',
+    })
+
+    const { result } = renderHook(() => usePlayerStore())
+
+    await act(async () => {
+      await result.current.restoreSession()
+    })
+
+    expect(result.current.audioUrl).toBe(remoteUrl)
+    expect(result.current.activeBlobUrls).toEqual([])
+    expect(URL.createObjectURL).not.toHaveBeenCalled()
+
+    act(() => {
+      result.current.reset()
+    })
+
+    expect(URL.revokeObjectURL).not.toHaveBeenCalled()
   })
 
   it('falls back to remote when download record exists but blob is missing', async () => {
@@ -241,6 +276,40 @@ describe('playerStore - Session Restore Prefer Local Download', () => {
     expect(result.current.duration).toBe(240)
     expect(result.current.sessionId).toBe('session-local')
     expect(usePlayerSurfaceStore.getState().canDockedRestore).toBe(true)
+  })
+
+  it('releases a restored local blob URL once when the player resets', async () => {
+    const mockBlob = new Blob(['local audio'], { type: 'audio/mp3' })
+    const audioId = await DB.addAudioBlob(mockBlob, 'local-file.mp3')
+
+    await DB.createPlaybackSession({
+      id: 'session-local-release',
+      audioId,
+      audioFilename: 'local-file.mp3',
+      hasAudioBlob: true,
+      progress: 12,
+      durationSeconds: 120,
+      source: 'local',
+      title: 'local-file.mp3',
+    })
+
+    const { result } = renderHook(() => usePlayerStore())
+
+    await act(async () => {
+      await result.current.restoreSession()
+    })
+
+    expect(result.current.audioUrl).toBe('blob:mock-local-url')
+    expect(result.current.activeBlobUrls).toEqual(['blob:mock-local-url'])
+    expect(URL.createObjectURL).toHaveBeenCalledTimes(1)
+
+    act(() => {
+      result.current.reset()
+      result.current.reset()
+    })
+
+    expect(URL.revokeObjectURL).toHaveBeenCalledTimes(1)
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-local-url')
   })
 
   it('preserves session identity and progress after local preference', async () => {
